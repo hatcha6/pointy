@@ -19,12 +19,18 @@ from decimal import Decimal
 
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from django.db.migrations.recorder import MigrationRecorder
 from django.test import TransactionTestCase
 
 MIGRATE_FROM = ("inventory", "0014_warehouse_stockvaluationbin_stockledgerentry")
 MIGRATE_TO = ("inventory", "0015_seed_valuation_opening_balances")
 #: The last purchasing migration that does not depend on warehouses, and so
 #: the furthest the database is rewound on that side.
+#:
+#: Used only to rebuild a *historical model* — never to roll the database
+#: forward again. Rewinding ``inventory`` to 0014 unapplies migrations in
+#: ``sales`` and ``operations`` as well, which this pin says nothing about, and
+#: that gap is precisely what made the old ``tearDown`` wrong.
 PURCHASING_AT = ("purchasing", "0031_backfill_purchase_receipt_lifecycle")
 
 
@@ -38,10 +44,52 @@ class OpeningBalanceMigrationTests(TransactionTestCase):
         self._migrate([MIGRATE_FROM])
 
     def tearDown(self):
-        # Leave the database at the latest state so the next test in the run
-        # does not inherit a half-migrated schema.
-        self._migrate([MIGRATE_TO])
+        """Put the schema back the way this file found it — all the way.
+
+        This used to migrate to ``MIGRATE_TO``, which is the migration *under
+        test* and not the tip of the tree. Rewinding ``inventory`` to 0014 and
+        then rolling forward only as far as 0015 leaves every later migration
+        unapplied, and the next ``TransactionTestCase`` in the run inherits a
+        schema missing two years of columns and tables — failing somewhere else
+        entirely, with an error that says nothing about this file. It stayed
+        hidden because the full ``manage.py test apps`` run happens to order the
+        suites so nothing lands after it; ``test apps.inventory apps.core`` does
+        not, and eight tests in ``apps.core`` died on a missing
+        ``inventory_stockitem.warehouse_id``.
+
+        So: forward to every leaf in the graph, not to a pinned name. There is
+        no list here to keep up to date, because a list is what went stale.
+        """
+        self._migrate_to_leaves()
+        self._assert_schema_is_at_the_leaves()
         super().tearDown()
+
+    def _migrate_to_leaves(self):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def _assert_schema_is_at_the_leaves(self):
+        """Every migration the tree has is applied again, or say which is not.
+
+        Asserted rather than assumed, and asserted *here* rather than in one
+        test, so that a future pin of ``MIGRATE_TO`` — or a rewind that reaches
+        an app nobody listed — fails in this file instead of in whichever suite
+        happens to run next.
+        """
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        applied = set(MigrationRecorder(connection).applied_migrations())
+        missing = sorted(set(executor.loader.graph.nodes) - applied)
+        # ``assertFalse`` rather than ``assertEqual(missing, [])``: the useful
+        # output is the list itself, and a sequence diff against an empty list
+        # only buries it under "Diff is 1457 characters long".
+        self.assertFalse(
+            missing,
+            "this test rewound the schema and did not put it back; the next "
+            "TransactionTestCase in the run will inherit it. Unapplied: "
+            + ", ".join(f"{app}.{name}" for app, name in missing),
+        )
 
     def _historical(self, app_label, model_name):
         """The model as the *database* currently has it, not as the code does.
