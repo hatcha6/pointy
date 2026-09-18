@@ -684,6 +684,19 @@ class StockLedgerEntry(TimeStampedModel):
         OPENING = "opening", "Opening balance"
         TRANSFER = "transfer", "Warehouse transfer"
         TRANSFER_RECEIPT = "transfer_receipt", "Warehouse transfer receipt"
+        # A consignment sale is a purchase and a sale in one transaction. This
+        # is the purchase half: value-only, quantity zero, posted immediately
+        # before the issue so the value leaving the ledger is value that
+        # entered it. Without it, ten thousand dinars leave a ledger they were
+        # never added to and a variant's cumulative value drifts negative.
+        CONSIGNMENT_COST = "consignment_cost", "Consignment cost"
+        # Goods arriving that the shop does not own, and the same goods going
+        # back. Their own voucher types rather than "manual adjustment": a
+        # consignment intake is a real event a real person performed, and a
+        # stock history that called it an adjustment would be lying about the
+        # only interesting thing in it.
+        CONSIGNMENT_INTAKE = "consignment_intake", "Consignment intake"
+        CONSIGNMENT_RETURN = "consignment_return", "Consignment returned to owner"
 
     variant = models.ForeignKey(
         ProductVariant,
@@ -843,10 +856,16 @@ class StockUnit(TimeStampedModel):
     )
 
     # --- consignment (الأمانات) -------------------------------------------
-    # Columns only. The agreement, the payable, the custody exposure and the
-    # incident are a later phase; what lands here is the one fact valuation
-    # needs from day one — goods the shop holds but does not own contribute
-    # nothing to stock value while still counting as stock on hand.
+    # Goods the shop holds but does not own: they contribute nothing to stock
+    # value while still counting as stock on hand, because the watch really is
+    # on the shelf and really is somebody else's.
+    #
+    # The terms below are **per-unit overrides**: ``None`` means "whatever the
+    # agreement says". One consignor signs one page for eight handbags and then
+    # names a different reserve on the one that is nearly new, and both of those
+    # are ordinary. ``consignor`` stays denormalised and is checked equal to
+    # ``agreement.consignor``, so the payables screen and the POS picker never
+    # join to read who is owed.
     is_consignment = models.BooleanField(default=False)
     consignor = models.ForeignKey(
         "customers.Customer",
@@ -855,8 +874,37 @@ class StockUnit(TimeStampedModel):
         blank=True,
         related_name="consignment_units",
     )
+    agreement = models.ForeignKey(
+        "inventory.ConsignmentAgreement",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="units",
+    )
+    #: The agreed worth of *this* article, printed on the voucher. Custody
+    #: exposure and any future claim are measured against it.
     declared_value = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    consignor_payout_mode = models.CharField(max_length=16, blank=True)
+    consignor_payout_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    consignor_commission_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    consignor_reserve_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    #: Stamped when the money is actually handed over. Until then the payable is
+    #: derived from the sale — never stored, so it cannot drift from it.
+    consignor_paid_at = models.DateTimeField(null=True, blank=True)
+    consignor_payout = models.ForeignKey(
+        "inventory.ConsignorPayout",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="units",
     )
 
     # --- provenance --------------------------------------------------------
@@ -965,6 +1013,12 @@ class StockUnit(TimeStampedModel):
                 name="stockunit_bin_idx",
             ),
             models.Index(fields=["batch", "status"], name="stockunit_batch_idx"),
+            # The payables screen's only query: sold consignments nobody has
+            # been paid for yet, oldest first.
+            models.Index(
+                fields=["is_consignment", "status", "consignor_paid_at"],
+                name="stockunit_payable_idx",
+            ),
         ]
         permissions = [
             ("reprice_stockunit", "Can change an identified unit's price"),
@@ -981,6 +1035,19 @@ class StockUnit(TimeStampedModel):
         return self.status in StockUnit.ON_HAND_STATUSES
 
     @property
+    def acquisition_cost(self):
+        """What this article cost the shop to have: landed cost plus refurb.
+
+        The one definition of the arithmetic, and deliberately *not* the same
+        question as :attr:`stock_value`. For a consignment the two diverge at
+        exactly one instant: on the shelf it is worth nothing to the shop
+        because the shop does not own it, and at the moment of sale its payout
+        is stamped here and posted to the ledger, so the margin on that sale is
+        real money the shop earned.
+        """
+        return Decimal(self.incoming_rate) + Decimal(self.refurb_cost)
+
+    @property
     def stock_value(self):
         """What this unit contributes to stock value.
 
@@ -990,7 +1057,7 @@ class StockUnit(TimeStampedModel):
         """
         if self.is_consignment:
             return Decimal("0")
-        return Decimal(self.incoming_rate) + Decimal(self.refurb_cost)
+        return self.acquisition_cost
 
     def save(self, *args, **kwargs):
         """Normalise both identifiers so the stored form and the searched form
@@ -1540,3 +1607,284 @@ class StockTransferReceiptLine(TimeStampedModel):
 
     class Meta:
         ordering = ["id"]
+
+
+class ConsignmentAgreementQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class ConsignmentAgreement(DocumentMixin, TimeStampedModel):
+    """The shop's promise about goods it holds but does not own.
+
+    A thing that is printed, numbered and signed by two people is a document,
+    not six columns on the object it covers — and a consignor who walks in with
+    eight handbags signs one page, not eight. Registered in ``apps.documents``
+    (draft → submitted → cancelled, freeze and reversal per
+    ``document-lifecycle``): submitting it is what starts custody, and
+    cancelling it is refused once any of its units has moved.
+
+    The liability clause is stored as it was **printed**, copied from the
+    shop's editable per-policy sentence at submit and never re-read afterwards.
+    A shop that rewords its voucher next year has not reworded the agreements it
+    already signed, and that column is the difference between a contract and a
+    template.
+    """
+
+    class PayoutMode(models.TextChoices):
+        FIXED = "fixed", "Fixed payout"
+        COMMISSION = "commission", "Commission percentage"
+
+    class Liability(models.TextChoices):
+        """Ordered by ascending shop exposure; the default is what Libyan
+        consignment vouchers already print."""
+
+        OWNER_RISK = "owner_risk", "الأمانة على مسؤولية صاحبها"
+        SHOP_LIABLE_EXCEPT_FM = (
+            "shop_liable_except_fm",
+            "المحل ضامن ما عدا الظروف القاهرة",
+        )
+        SHOP_LIABLE = "shop_liable", "المحل ضامن"
+
+    objects = ConsignmentAgreementQuerySet.as_manager()
+
+    consignor = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.PROTECT,
+        related_name="consignment_agreements",
+    )
+    number = models.CharField(max_length=32, unique=True, blank=True)
+    signed_at = models.DateTimeField(default=timezone.now)
+    #: Goods to be collected by. Drives the "past its term" list, never an
+    #: automatic disposal: whose watch it is does not change because a date
+    #: passed (§17.8).
+    expires_on = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    attachments = GenericRelation(
+        "attachments.Attachment",
+        content_type_field="owner_content_type",
+        object_id_field="owner_object_id",
+        related_query_name="consignment_agreements",
+    )
+
+    # --- default terms, overridable per unit -------------------------------
+    payout_mode = models.CharField(
+        max_length=16, choices=PayoutMode.choices, default=PayoutMode.FIXED
+    )
+    payout_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    commission_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    reserve_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+
+    # --- custody policy, printed on the voucher whichever it is ------------
+    liability_policy = models.CharField(
+        max_length=24, choices=Liability.choices, default=Liability.OWNER_RISK
+    )
+    #: Bounds any claim; null means the unit's declared value is the bound.
+    liability_cap = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    liability_clause = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="consignment_agreements",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-signed_at", "-id"]
+        indexes = [
+            models.Index(fields=["consignor", "-signed_at"], name="consign_party_idx"),
+            models.Index(fields=["doc_status", "-signed_at"], name="consign_status_idx"),
+        ]
+        permissions = [
+            (
+                "manage_consignmentagreement",
+                "Can write consignment agreements and their payout terms",
+            ),
+            (
+                "disburse_consignment_payout",
+                "Can pay a consignor what a sold consignment owes them",
+            ),
+            (
+                "view_consignment_liability",
+                "Can see consignment payables and open claims",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            from django.db import transaction
+
+            from apps.documents.numbering import (
+                CONSIGNMENT_AGREEMENT_SERIES,
+                next_document_number,
+            )
+
+            # Numbered from a counter, not from the primary key: two people sign
+            # this page and both keep a copy, so a gap in the series is a page
+            # somebody can claim was torn out (``gapless-document-numbering``).
+            with transaction.atomic():
+                issued_at = self.signed_at or timezone.now()
+                self.number = (
+                    f"A{issued_at:%Y%m%d}"
+                    f"{next_document_number(CONSIGNMENT_AGREEMENT_SERIES):05d}"
+                )
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None and "number" not in update_fields:
+                    kwargs["update_fields"] = [*update_fields, "number"]
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.number or f"consignment agreement {self.pk}"
+
+
+class ConsignorPayoutQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class ConsignorPayout(DocumentMixin, TimeStampedModel):
+    """Money handed to a consignor for goods of theirs the shop sold.
+
+    Its own document type, deliberately: it is not an ``Expense`` (the shop
+    bought nothing) and not a ``SupplierPayment`` (the consignor is not a
+    supplier). Both of those already carry exclusion rules in
+    ``treasury/position.py`` for the drawer pay-outs they generate, and reusing
+    one would file consignment money under the wrong component and misreport
+    the category it landed in.
+    """
+
+    class Method(models.TextChoices):
+        CASH = "cash", "Cash from the register"
+        BANK = "bank", "Bank transfer"
+
+    objects = ConsignorPayoutQuerySet.as_manager()
+
+    consignor = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.PROTECT,
+        related_name="consignment_payouts",
+    )
+    number = models.CharField(max_length=32, unique=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    method = models.CharField(max_length=16, choices=Method.choices, default=Method.CASH)
+    paid_at = models.DateTimeField(default=timezone.now)
+    reference = models.CharField(max_length=120, blank=True)
+    notes = models.TextField(blank=True)
+    register_session = models.ForeignKey(
+        "sales.RegisterSession",
+        on_delete=models.PROTECT,
+        related_name="consignor_payouts",
+        null=True,
+        blank=True,
+    )
+    cash_movement = models.ForeignKey(
+        "sales.RegisterCashMovement",
+        on_delete=models.SET_NULL,
+        related_name="consignor_payouts",
+        null=True,
+        blank=True,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="consignor_payouts",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-paid_at", "-id"]
+        indexes = [
+            models.Index(fields=["consignor", "-paid_at"], name="payout_party_idx"),
+            models.Index(fields=["doc_status", "-paid_at"], name="payout_status_idx"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            from django.db import transaction
+
+            from apps.documents.numbering import (
+                CONSIGNOR_PAYOUT_SERIES,
+                next_document_number,
+            )
+
+            with transaction.atomic():
+                issued_at = self.paid_at or timezone.now()
+                self.number = (
+                    f"CP{issued_at:%Y%m%d}"
+                    f"{next_document_number(CONSIGNOR_PAYOUT_SERIES):05d}"
+                )
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None and "number" not in update_fields:
+                    kwargs["update_fields"] = [*update_fields, "number"]
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.number or f"consignor payout {self.pk}"
+
+
+class UnitAttributeDefinition(TimeStampedModel):
+    """One typed field a shop wants recorded about articles of a given kind.
+
+    Narrow on purpose. The general case — a metadata engine — is an explicit
+    anti-goal; what a used-goods trade genuinely needs is *battery health is a
+    percentage, and it sorts*. Values live in ``StockUnit.attributes`` (one
+    JSONB column, one row, no join), validated against these definitions on
+    write.
+    """
+
+    class DataType(models.TextChoices):
+        TEXT = "text", "Text"
+        NUMBER = "number", "Number"
+        PERCENT = "percent", "Percent"
+        MONEY = "money", "Money"
+        DATE = "date", "Date"
+        CHOICE = "choice", "Choice"
+        BOOL = "bool", "Yes / no"
+
+    asset_type = models.ForeignKey(
+        "customers.AssetType",
+        on_delete=models.CASCADE,
+        related_name="unit_attributes",
+    )
+    key = models.SlugField(max_length=48)
+    label = models.CharField(max_length=80)
+    data_type = models.CharField(
+        max_length=16, choices=DataType.choices, default=DataType.TEXT
+    )
+    #: ``[{"value": ..., "label": ...}]`` for ``choice``.
+    choices = models.JSONField(default=list, blank=True)
+    suffix = models.CharField(max_length=16, blank=True)
+    is_required = models.BooleanField(default=False)
+    show_in_picker = models.BooleanField(default=True)
+    show_on_label = models.BooleanField(default=False)
+    show_on_receipt = models.BooleanField(default=False)
+    is_filterable = models.BooleanField(default=False)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["asset_type", "key"], name="unit_attribute_key_unique"
+            )
+        ]
+        permissions = [
+            (
+                "manage_unitattributedefinition",
+                "Can define which facts a kind of article records",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.asset_type_id}.{self.key}"

@@ -30770,6 +30770,426 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'سيُحذف متجر التدريب بكل ما فيه.'**
   String get lessonExitConfirmMessage;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحقات الأمانات'**
+  String get consignmentPayablesTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحقات الأمانات'**
+  String get consignmentPayablesDrawerLabel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم صاحب الأمانة أو رقم الجهاز'**
+  String get consignmentPayablesSearchHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لا مستحقات معلّقة'**
+  String get consignmentPayablesEmptyTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'كل أمانة بيعت تم صرف مستحقاتها لصاحبها.'**
+  String get consignmentPayablesEmptyBody;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحقات لأصحابها'**
+  String get consignmentFigurePayable;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة المحل'**
+  String get consignmentFigureCommission;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أمانات في العهدة'**
+  String get consignmentFigureCustody;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة البضاعة'**
+  String get consignmentFigureStockValue;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'صرف المستحقات'**
+  String get consignmentDisburseAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سند الصرف الواحد يخص صاحب أمانة واحدًا.'**
+  String get consignmentPayoutOneConsignor;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة صرف {amount}'**
+  String consignmentPayoutMethodTitle(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدًا من الصندوق'**
+  String get consignmentPayoutCash;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'يُسجَّل صرف نقدي من الوردية المفتوحة.'**
+  String get consignmentPayoutCashHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل بنكي'**
+  String get consignmentPayoutBank;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بيعت آجل — متبقٍ {amount}'**
+  String consignmentSoldOnCredit(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, zero{اليوم} one{منذ يوم} two{منذ يومين} few{منذ {days} أيام} many{منذ {days} يومًا} other{منذ {days} يوم}}'**
+  String consignmentWaitingDays(int days);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة إرسال الرسالة'**
+  String get consignmentResendSms;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أُدرجت الرسالة في قائمة الإرسال.'**
+  String get consignmentSmsQueued;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الرسالة.'**
+  String get consignmentSmsFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الصرف بالسند {number}'**
+  String consignmentDisburseDone(String number);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر صرف المستحقات — تأكد من وجود وردية مفتوحة.'**
+  String get consignmentDisburseFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر هذا الجهاز'**
+  String get stockUnitOwnPrice;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الصنف'**
+  String get stockUnitVariantPrice;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أمانة'**
+  String get stockUnitConsignmentBadge;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الضمان حتى {date}'**
+  String stockUnitWarrantyUntil(String date);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات الأمانة'**
+  String get stockUnitConsignmentSection;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'صاحب الأمانة'**
+  String get stockUnitConsignor;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'القيمة المقدّرة'**
+  String get stockUnitDeclaredValue;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المستحق لصاحبها'**
+  String get stockUnitPayoutOwed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرفت في'**
+  String get stockUnitPayoutPaidOn;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات الجهاز'**
+  String get stockUnitFactsSection;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المستودع'**
+  String get stockUnitWarehouse;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام في المخزون'**
+  String get stockUnitDaysHeld;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الشراء'**
+  String get stockUnitCost;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الإصلاح'**
+  String get stockUnitRefurbCost;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة الإجمالية'**
+  String get stockUnitTotalCost;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ البيع'**
+  String get stockUnitSoldOn;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع'**
+  String get stockUnitSoldFor;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة والملحقات'**
+  String get stockUnitAttributesSection;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الجهاز'**
+  String get stockUnitTimelineSection;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل السعر'**
+  String get stockUnitRepriceAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تعديل السعر.'**
+  String get stockUnitRepriceFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شطب الجهاز'**
+  String get stockUnitWriteOffAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الشطب'**
+  String get stockUnitWriteOffReason;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر شطب الجهاز.'**
+  String get stockUnitWriteOffFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام أمانة'**
+  String get consignmentIntakeTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'صاحب الأمانة'**
+  String get consignmentIntakeConsignor;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الاحتساب'**
+  String get consignmentIntakePayoutMode;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ ثابت'**
+  String get consignmentIntakeFixed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة عمولة'**
+  String get consignmentIntakeCommission;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المتفق عليه'**
+  String get consignmentIntakePayoutRate;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة العمولة %'**
+  String get consignmentIntakeCommissionPct;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل سعر بيع'**
+  String get consignmentIntakeReserve;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'القيمة المقدّرة'**
+  String get consignmentIntakeDeclaredValue;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المسؤولية عن الأمانة'**
+  String get consignmentIntakeLiability;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'على مسؤولية صاحبها'**
+  String get consignmentIntakeLiabilityOwner;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المحل ضامن عدا الظروف القاهرة'**
+  String get consignmentIntakeLiabilityExceptFm;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المحل ضامن'**
+  String get consignmentIntakeLiabilityShop;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة صنف'**
+  String get consignmentIntakeAddItem;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'توقيع السند واستلام البضاعة'**
+  String get consignmentIntakeConfirm;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تسجيل السند.'**
+  String get consignmentIntakeFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يسمح النظام ببيعها بأقل من {amount}'**
+  String consignmentIntakeFloorHint(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أمانة مُصروفة عادت'**
+  String get returnConsignmentTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم صرف مستحقات صاحب هذه الأمانة. ماذا تريد أن تفعل؟'**
+  String get returnConsignmentBody;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'يشتريها المحل بما دُفع'**
+  String get returnConsignmentBuyIn;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعود أمانة ويُطالَب صاحبها بالمبلغ'**
+  String get returnConsignmentReopen;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{أمانة واحدة} two{أمانتان} few{{count} أمانات} other{{count} أمانة}}'**
+  String consignmentPayoutSelected(int count);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'منها مستحقات أمانات: {amount}'**
+  String treasuryConsignorPayableTitle(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{أمانة واحدة في العهدة} two{أمانتان في العهدة} few{{count} أمانات في العهدة} other{{count} أمانة في العهدة}} بقيمة مقدّرة {amount}'**
+  String treasuryCustodyHeld(int count, String amount);
 }
 
 class _AppLocalizationsDelegate

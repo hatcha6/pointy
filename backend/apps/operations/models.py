@@ -185,6 +185,23 @@ class Job(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     warranty_days = models.PositiveIntegerField(default=0)
+    # Refurbishment: the article on the shop's own shelf that this work is being
+    # done to, as opposed to ``job_assets``, which are the customer's property.
+    # A used-goods trader buys a handset at 1200, spends 150 on a screen, and
+    # must not then sell it at 1300 — so when a job with this target completes,
+    # its materials and labour capitalise into ``StockUnit.refurb_cost`` and the
+    # loss guard starts comparing the asking price against the truth.
+    stock_unit = models.ForeignKey(
+        "inventory.StockUnit",
+        on_delete=models.SET_NULL,
+        related_name="refurb_jobs",
+        blank=True,
+        null=True,
+    )
+    #: What this job actually capitalised, stamped when it completed. Stored so
+    #: reopening or re-completing a job cannot add the same 150 twice.
+    capitalised_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    capitalised_at = models.DateTimeField(blank=True, null=True)
     # Production fields: what this job produces, and at what computed cost.
     bom = models.ForeignKey(
         BillOfMaterials,

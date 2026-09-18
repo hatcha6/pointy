@@ -59,6 +59,10 @@ COMPONENT_PAYROLL = "payroll"
 COMPONENT_COMMISSION = "commission"
 COMPONENT_TRANSFER_IN = "transfer_in"
 COMPONENT_TRANSFER_OUT = "transfer_out"
+# Money handed to the owner of goods the shop sold on their behalf. Its own
+# code, deliberately: filing it under expenses or supplier payments would put
+# other people's money in a category the shop reads as its own spending.
+COMPONENT_CONSIGNOR_PAYOUT = "consignor_payout"
 
 # Which payment methods land in which kind of account. Every derived flow is
 # routed by method, because no money row carries an account of its own yet.
@@ -115,8 +119,9 @@ def _cash_components(*, start, end):
             created_at__lt=end_dt,
         )
     )
-    # Standalone pay-outs only — one that paid an expense or a POS cash
-    # purchase is already counted as that expense / supplier payment.
+    # Standalone pay-outs only — one that paid an expense, a POS cash purchase
+    # or a consignor is already counted as that expense / supplier payment /
+    # consignor payout.
     drawer_out = _sum(
         RegisterCashMovement.objects.filter(
             movement_type=RegisterCashMovement.MovementType.PAY_OUT,
@@ -124,6 +129,7 @@ def _cash_components(*, start, end):
             created_at__lt=end_dt,
             expense__isnull=True,
             supplier_payment__isnull=True,
+            consignor_payouts__isnull=True,
         )
     )
     expenses = _sum(
@@ -135,6 +141,7 @@ def _cash_components(*, start, end):
     )
     suppliers = _supplier_outflow(CASH_METHODS, start_dt, end_dt)
     payroll = _payroll_outflow(start, end)
+    consignors = _consignor_outflow("cash", start_dt, end_dt)
 
     return [
         _component(COMPONENT_SALES, sales, direction="in"),
@@ -143,6 +150,7 @@ def _cash_components(*, start, end):
         _component(COMPONENT_EXPENSES, -expenses, direction="out"),
         _component(COMPONENT_SUPPLIERS, -suppliers, direction="out"),
         _component(COMPONENT_PAYROLL, -payroll, direction="out"),
+        _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out"),
     ]
 
 
@@ -170,13 +178,28 @@ def _bank_components(*, start, end):
         )
     )
     suppliers = _supplier_outflow(BANK_METHODS, start_dt, end_dt)
+    consignors = _consignor_outflow("bank", start_dt, end_dt)
 
     return [
         _component(COMPONENT_SALES, sales, direction="in"),
         _component(COMPONENT_COMMISSION, -commission, direction="out"),
         _component(COMPONENT_EXPENSES, -expenses, direction="out"),
         _component(COMPONENT_SUPPLIERS, -suppliers, direction="out"),
+        _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out"),
     ]
+
+
+def _consignor_outflow(method, start_dt, end_dt):
+    """Money paid out to the owners of consigned goods, by this route."""
+    from apps.inventory.models import ConsignorPayout
+
+    return _sum(
+        ConsignorPayout.objects.live().filter(
+            method=method,
+            paid_at__gte=start_dt,
+            paid_at__lt=end_dt,
+        )
+    )
 
 
 def _supplier_outflow(methods, start_dt, end_dt):
@@ -356,7 +379,35 @@ def treasury_position(*, as_of=None):
         )
         for account in accounts
     ]
-    return {"accounts": positions, "totals": _totals(positions), "as_of": as_of}
+    return {
+        "accounts": positions,
+        "totals": _totals(positions),
+        "as_of": as_of,
+        # An **overlay**, never a component. The cash in the drawer really is
+        # there; what is untrue is that all of it is the shop's. Subtracting a
+        # consignor payable from the money position would double-count it the
+        # moment the payout is actually made, so this sits beneath the total and
+        # says how much of it is spoken for (§5.8).
+        "obligations": obligations(as_of=as_of),
+    }
+
+
+def obligations(*, as_of=None):
+    """What the shop is holding that belongs to somebody else.
+
+    Derived on read from the units' own sales and their own payout rows, never
+    stored — which is the whole reason it cannot drift from them.
+    """
+    from apps.inventory import consignment
+
+    # ``as_of`` is a date; the rows it bounds are timestamps, so the day is
+    # taken whole rather than cut off at midnight-minus-one-microsecond.
+    bound = day_range_end(as_of) if as_of is not None else None
+    return {
+        "consignor_payable": consignment.consignor_payable(as_of=bound),
+        "consignor_claims_open": consignment.consignor_claims_open(bound),
+        "custody": consignment.custody_exposure(bound),
+    }
 
 
 def treasury_statement(*, start, end):

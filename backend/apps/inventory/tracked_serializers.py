@@ -124,6 +124,9 @@ class StockUnitSerializer(CostMaskedSerializer):
     variant_name = serializers.CharField(source="variant.full_name", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
     batch_code = serializers.CharField(source="batch.display_code", read_only=True)
+    consignor_name = serializers.CharField(
+        source="consignor.full_name", read_only=True, default=""
+    )
     batch_expiry_date = serializers.DateField(
         source="batch.expiry_date", read_only=True
     )
@@ -151,7 +154,10 @@ class StockUnitSerializer(CostMaskedSerializer):
             "sold_price",
             "is_consignment",
             "consignor",
+            "consignor_name",
+            "agreement",
             "declared_value",
+            "consignor_paid_at",
             "batch",
             "batch_code",
             "batch_expiry_date",
@@ -185,6 +191,50 @@ class StockUnitSerializer(CostMaskedSerializer):
         it is one figure here rather than two the client has to add up.
         """
         return unit.stock_value
+
+    def validate_attributes(self, value):
+        """Coerce the typed facts against this article's own definitions.
+
+        Numbers arrive as numbers, choices are checked against their list, and
+        a key nobody defines any more is dropped rather than refused — a shop
+        that deleted a definition has not invalidated the articles that carried
+        it.
+        """
+        from .unit_attributes import validate_attributes
+
+        product = getattr(getattr(self.instance, "variant", None), "product", None)
+        asset_type_id = getattr(product, "asset_type_id", None)
+        if asset_type_id is None:
+            return value
+        return validate_attributes(
+            value, asset_type_id=asset_type_id, partial=True
+        )
+
+
+class BulkRepriceSerializer(serializers.Serializer):
+    """Either a price, or a percentage move — never both and never neither."""
+
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), allow_empty=False
+    )
+    price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True
+    )
+    #: Signed: ``-15`` marks down by fifteen percent, ``+10`` marks up.
+    percent = serializers.DecimalField(
+        max_digits=6, decimal_places=2, required=False, allow_null=True
+    )
+
+    def validate(self, attrs):
+        price = attrs.get("price")
+        percent = attrs.get("percent")
+        if (price is None) == (percent is None):
+            raise serializers.ValidationError(
+                {"price": "حدّد سعرًا ثابتًا أو نسبة تغيير، لا الاثنين."}
+            )
+        if price is not None and price < 0:
+            raise serializers.ValidationError({"price": "السعر لا يكون سالبًا."})
+        return attrs
 
 
 class StockUnitLookupSerializer(serializers.Serializer):

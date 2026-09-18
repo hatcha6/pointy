@@ -745,6 +745,12 @@ def _add_expected_stock(purchase_order, *, created_by):
 
 
 def _seeded_purchase_line(purchase_order, line_data):
+    # ``units`` is a capture payload, not a column: the counter purchase reads
+    # it off the line and hands it to the receipt (see
+    # ``_counter_purchase_receipt_lines``). Dropped here rather than in each
+    # caller so an ordinary purchase order that happens to carry one is saved
+    # rather than refused with a TypeError.
+    line_data = {key: value for key, value in line_data.items() if key != "units"}
     line = PurchaseLine(purchase_order=purchase_order, **line_data)
     line.net_line_total = line.line_total
     line.net_unit_cost = line.unit_cost
@@ -2247,6 +2253,25 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
     return payment
 
 
+def _counter_purchase_receipt_lines(purchase_order, captures):
+    """Pair each captured identifier list with the line it was scanned against.
+
+    ``None`` when nothing was captured at all, which is every counter purchase
+    of anything a shop counts rather than identifies — and which makes
+    ``receive_purchase_order`` take its ordinary default-everything path.
+    """
+    if not any(captures):
+        return None
+    lines = list(purchase_order.lines.select_related("variant__product").order_by("id"))
+    rows = []
+    for line, captured in zip(lines, captures):
+        row = {"line": line, "accepted_quantity": line.outstanding_quantity}
+        if captured:
+            row["units"] = captured
+        rows.append(row)
+    return rows
+
+
 @transaction.atomic
 def create_pos_cash_purchase(*, request, validated_data):
     """One-tap drawer purchase from the sell screen: create → submit → receive
@@ -2286,6 +2311,12 @@ def create_pos_cash_purchase(*, request, validated_data):
 
     lines_data = validated_data.pop("lines", [])
     landed_cost_entries_data = validated_data.pop("landed_cost_entries", None)
+    # The counter purchase is the one flow where ordering and receiving are the
+    # same act — a shop buying a handset off a walk-in scans the IMEI while the
+    # seller is still standing there — so the identifiers ride in on the order's
+    # own lines and are handed to the receipt below. Stripped here because they
+    # belong to the receipt, not to the order line.
+    captures = [line.pop("units", None) for line in lines_data]
 
     # Hard stop, with no acknowledgement path: a cashier cannot judge whether
     # 130.00 per loaf is plausible and has no permission to override it. In the
@@ -2324,7 +2355,11 @@ def create_pos_cash_purchase(*, request, validated_data):
         )
 
     purchase_order = submit_purchase_order(purchase_order, request=request)
-    purchase_order = receive_purchase_order(purchase_order, request=request)
+    purchase_order = receive_purchase_order(
+        purchase_order,
+        request=request,
+        lines_data=_counter_purchase_receipt_lines(purchase_order, captures),
+    )
 
     created_by = purchase_created_by(request)
     if purchase_order.total > 0:

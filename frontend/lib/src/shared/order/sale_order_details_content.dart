@@ -30,8 +30,9 @@ typedef SaleOrderReturnAction =
     Future<bool> Function(
       SaleOrder order,
       List<SaleReturnLineDraft> lines,
-      String reason,
-    );
+      String reason, {
+      String? consignmentAction,
+    });
 
 /// Records a payment against a debt (credit) invoice. Returns true on success.
 typedef SaleOrderRecordPaymentAction = Future<bool> Function(SaleOrder order);
@@ -436,16 +437,72 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
       return;
     }
 
+    // A paid-out consignment coming back is the one return with a real
+    // question in it, and it is asked once, here, rather than left for each
+    // shop to invent an answer to (§5.8).
+    String? consignmentAction;
+    if (_returnTouchesPaidConsignment(result.lines)) {
+      consignmentAction = await _askConsignmentAction();
+      if (consignmentAction == null) {
+        return;
+      }
+    }
+
     await _runAdjustment(
-      () => widget.onReturn!(widget.order, [
-        for (final selection in result.lines)
-          SaleReturnLineDraft(
-            lineId: selection.lineId,
-            quantity: selection.quantity,
-          ),
-      ], result.reason),
+      () => widget.onReturn!(
+        widget.order,
+        [
+          for (final selection in result.lines)
+            SaleReturnLineDraft(
+              lineId: selection.lineId,
+              quantity: selection.quantity,
+            ),
+        ],
+        result.reason,
+        consignmentAction: consignmentAction,
+      ),
       successMessage: l10n.saleReturnSuccess,
       errorMessage: l10n.saleReturnError,
+    );
+  }
+
+  bool _returnTouchesPaidConsignment(List<AdjustmentLineSelection> selections) {
+    final selectedIds = {for (final selection in selections) selection.lineId};
+    for (final line in widget.order.lines) {
+      if (!selectedIds.contains(line.id)) {
+        continue;
+      }
+      if (line.identifiers.any((row) => row.needsConsignmentDecision)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<String?> _askConsignmentAction() async {
+    final l10n = AppLocalizations.of(context)!;
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.returnConsignmentTitle),
+        content: Text(l10n.returnConsignmentBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.cancelButton),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(ConsignmentReturnAction.reopen),
+            child: Text(l10n.returnConsignmentReopen),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(ConsignmentReturnAction.buyIn),
+            child: Text(l10n.returnConsignmentBuyIn),
+          ),
+        ],
+      ),
     );
   }
 

@@ -47,7 +47,9 @@ import 'data/repositories/sale_repository.dart';
 import 'data/repositories/sales_channel_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
 import 'data/repositories/stock_count_repository.dart';
+import 'data/repositories/consignment_repository.dart';
 import 'data/repositories/tracked_stock_repository.dart';
+import 'features/inventory/view_models/consignment_view_model.dart';
 import 'features/inventory/view_models/tracked_stock_view_model.dart';
 import 'data/repositories/fx_repository.dart';
 import 'data/repositories/subscription_repository.dart';
@@ -170,6 +172,8 @@ class PointyAppDependencies {
     stockCountRepository = StockCountRepository(service);
     trackedStockRepository = TrackedStockRepository(service);
     trackedStockViewModel = TrackedStockViewModel(trackedStockRepository);
+    consignmentRepository = ConsignmentRepository(service);
+    consignmentViewModel = ConsignmentViewModel(consignmentRepository);
     subscriptionRepository = SubscriptionRepository(service);
     fxRepository = FxRepository(service);
     dashboardFxViewModel = DashboardFxViewModel(fxRepository);
@@ -395,6 +399,8 @@ class PointyAppDependencies {
   late final StockCountRepository stockCountRepository;
   late final TrackedStockRepository trackedStockRepository;
   late final TrackedStockViewModel trackedStockViewModel;
+  late final ConsignmentRepository consignmentRepository;
+  late final ConsignmentViewModel consignmentViewModel;
   late final SubscriptionRepository subscriptionRepository;
   late final FxRepository fxRepository;
   late final MessagingRepository messagingRepository;

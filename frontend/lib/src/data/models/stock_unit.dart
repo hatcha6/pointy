@@ -27,6 +27,12 @@ class StockUnit {
     this.variantName = '',
     this.isIdentified = true,
     this.isConsignment = false,
+    this.consignorId,
+    this.consignorName = '',
+    this.agreementId,
+    this.declaredValue,
+    this.consignorPaidAt,
+    this.warrantyExpiresOn,
     this.listPrice,
     this.soldPrice,
     this.incomingRate,
@@ -58,6 +64,25 @@ class StockUnit {
   final bool isIdentified;
   final bool isConsignment;
 
+  /// Whose goods these are, when they are not the shop's. Denormalised onto the
+  /// unit rather than joined through the agreement, so the payables screen and
+  /// the POS picker can both name the owner without a second read.
+  final int? consignorId;
+  final String consignorName;
+  final int? agreementId;
+
+  /// What this article was agreed to be worth at intake — the number a custody
+  /// claim is measured against, not what it cost (which is nothing).
+  final double? declaredValue;
+
+  /// When its owner actually collected. Null while the payout is still owed.
+  final DateTime? consignorPaidAt;
+
+  /// Stamped at the sale, from the product's warranty days. Stored rather than
+  /// derived so a corrected setting next month cannot silently re-cover a
+  /// handset that went out of cover last week.
+  final DateTime? warrantyExpiresOn;
+
   /// This article's own asking price. Null means the variant's price stands.
   final double? listPrice;
   final double? soldPrice;
@@ -82,6 +107,18 @@ class StockUnit {
 
   /// Whether the reader was allowed to see what this article cost.
   bool get showsCost => totalCost != null;
+
+  /// A sold consignment whose owner has not collected yet.
+  bool get awaitsPayout =>
+      isConsignment &&
+      status == StockUnitStatus.sold &&
+      consignorPaidAt == null;
+
+  /// Whether this article is still under the warranty it was sold with.
+  bool get isUnderWarranty {
+    final expires = warrantyExpiresOn;
+    return expires != null && !expires.isBefore(DateTime.now());
+  }
 
   /// How long this article has been sitting on the shelf, which is what a
   /// used-goods trader is actually buying the picker for: stock ages, and an
@@ -109,6 +146,12 @@ class StockUnit {
       variantName: json['variant_name']?.toString() ?? '',
       isIdentified: json['is_identified'] != false,
       isConsignment: json['is_consignment'] == true,
+      consignorId: _intOrNull(json['consignor']),
+      consignorName: json['consignor_name']?.toString() ?? '',
+      agreementId: _intOrNull(json['agreement']),
+      declaredValue: _doubleOrNull(json['declared_value']),
+      consignorPaidAt: _dateOrNull(json['consignor_paid_at']),
+      warrantyExpiresOn: _dateOrNull(json['warranty_expires_on']),
       listPrice: _doubleOrNull(json['list_price']),
       soldPrice: _doubleOrNull(json['sold_price']),
       incomingRate: _doubleOrNull(json['incoming_rate']),

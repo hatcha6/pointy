@@ -73,6 +73,7 @@ import '../models/stock_count.dart';
 import '../models/stock_count_draft.dart';
 import '../models/stock_count_line.dart';
 import '../models/stock_item.dart';
+import '../models/consignment.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
 import '../models/stock_movement.dart';
@@ -137,6 +138,7 @@ import 'sales_channel_api_client.dart';
 import 'server_state_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
+import 'consignment_api_client.dart';
 import 'tracked_stock_api_client.dart';
 import 'user_api_client.dart';
 import '../../core/app_version.dart';
@@ -190,6 +192,7 @@ class PosApiService {
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
     _trackedStock = TrackedStockApiClient(_session);
+    _consignment = ConsignmentApiClient(_session);
     _ai = AiApiClient(_session);
     _companion = CompanionApiClient(_session);
     _surveillance = SurveillanceApiClient(_session);
@@ -270,6 +273,7 @@ class PosApiService {
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
   late final TrackedStockApiClient _trackedStock;
+  late final ConsignmentApiClient _consignment;
   late final AiApiClient _ai;
   late final CompanionApiClient _companion;
   late final SurveillanceApiClient _surveillance;
@@ -1217,6 +1221,80 @@ class PosApiService {
 
   Future<StockUnit> fetchStockUnit(int unitId) {
     return _trackedStock.fetchUnit(unitId);
+  }
+
+  Future<StockUnit> writeOffStockUnit(int unitId, {required String reason}) {
+    return _trackedStock.writeOffUnit(unitId, reason: reason);
+  }
+
+  Future<int> bulkRepriceStockUnits({
+    required List<int> unitIds,
+    double? price,
+    double? percent,
+  }) {
+    return _trackedStock.bulkReprice(
+      unitIds: unitIds,
+      price: price,
+      percent: percent,
+    );
+  }
+
+  // --- الأمانات ------------------------------------------------------------
+
+  Future<ConsignmentPayablePage> fetchConsignmentPayables({int? consignorId}) {
+    return _consignment.fetchPayables(consignorId: consignorId);
+  }
+
+  Future<ConsignmentPosition> fetchConsignmentPosition({
+    DateTime? start,
+    DateTime? end,
+  }) {
+    return _consignment.fetchPosition(start: start, end: end);
+  }
+
+  Future<ConsignorPayout> disburseConsignmentPayout({
+    required int unitId,
+    List<int> alsoUnitIds = const [],
+    String method = 'cash',
+    String reference = '',
+  }) {
+    return _consignment.disburse(
+      unitId: unitId,
+      alsoUnitIds: alsoUnitIds,
+      method: method,
+      reference: reference,
+    );
+  }
+
+  Future<bool> resendConsignorSms(int unitId) {
+    return _consignment.resendSaleSms(unitId);
+  }
+
+  Future<StockUnit> returnUnitToConsignor(int unitId, {String note = ''}) {
+    return _consignment.returnToConsignor(unitId, note: note);
+  }
+
+  Future<List<ConsignmentAgreement>> fetchConsignmentAgreements({
+    int? consignorId,
+    bool openOnly = false,
+  }) {
+    return _consignment.fetchAgreements(
+      consignorId: consignorId,
+      openOnly: openOnly,
+    );
+  }
+
+  Future<ConsignmentAgreement> createConsignmentAgreement(
+    Map<String, Object?> body,
+  ) {
+    return _consignment.createAgreement(body);
+  }
+
+  Future<ConsignmentAgreement> submitConsignmentAgreement(
+    int agreementId, {
+    required List<ConsignmentIntakeItem> items,
+  }) {
+    return _consignment.submitAgreement(agreementId, items: items);
   }
 
   Future<List<StockAllocationEntry>> fetchStockUnitHistory(int unitId) {

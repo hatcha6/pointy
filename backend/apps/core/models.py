@@ -54,6 +54,32 @@ class IdempotencyRecord(TimeStampedModel):
         return f"{self.owner_key} {self.method} {self.path} {self.key}"
 
 
+#: The three consignment liability clauses as a Libyan shop actually prints
+#: them. These are *seed* text: a shop with a lawyer edits them, and each signed
+#: agreement keeps the wording it was printed with (§5.8).
+CONSIGNMENT_CLAUSE_OWNER_RISK = (
+    "الأمانة على مسؤولية صاحبها، والمحل غير مسؤول عن أي تلف أو فقدان."
+)
+CONSIGNMENT_CLAUSE_SHOP_LIABLE_EXCEPT_FM = (
+    "المحل ضامن للأمانة ما عدا الظروف القاهرة من حريق أو فيضان أو اضطرابات."
+)
+CONSIGNMENT_CLAUSE_SHOP_LIABLE = (
+    "المحل ضامن للأمانة حتى تسليمها لصاحبها أو بيعها."
+)
+
+#: What the consignor is sent the moment their goods sell. Placeholders are
+#: filled by ``apps.inventory.consignment``; an unknown one is left as written
+#: rather than crashing a checkout.
+CONSIGNMENT_SALE_SMS_TEMPLATE = (
+    "مرحباً {consignor_name}،\n"
+    "تم بحمد الله بيع أمانتكم ({product_name} - رقم: {code}) "
+    "بالفاتورة رقم #{invoice_number}.\n"
+    "المبلغ الصافي المستحق لكم: {payout_amount} د.ل.\n"
+    "نرجو التفضل بزيارة المحل لاستلام المبلغ.\n"
+    "شكراً لثقتكم بنا."
+)
+
+
 class ShopSettingsQuerySet(models.QuerySet):
     def update(self, **kwargs):
         # ``.filter(pk=1).update(...)`` skips post_save, so it must drop the
@@ -210,6 +236,40 @@ class ShopSettings(TimeStampedModel):
         default="fefo",
     )
     default_expiry_warning_days = models.PositiveIntegerField(default=30)
+    # --- consignment (الأمانات) -------------------------------------------
+    # A consignor whose watch sold this morning should hear about it this
+    # morning; that is most of what a consignment module is judged on.
+    consignment_auto_sms_on_sale = models.BooleanField(default=True)
+    consignment_default_liability_policy = models.CharField(
+        max_length=24,
+        choices=[
+            ("owner_risk", "الأمانة على مسؤولية صاحبها"),
+            ("shop_liable_except_fm", "المحل ضامن ما عدا الظروف القاهرة"),
+            ("shop_liable", "المحل ضامن"),
+        ],
+        default="owner_risk",
+    )
+    # The three clauses as the shop prints them. The enum above is structural;
+    # these words are the contract, and they are copied onto each agreement at
+    # submit so re-wording the template next year does not re-word the pages
+    # people have already signed.
+    consignment_clause_owner_risk = models.TextField(
+        blank=True, default=CONSIGNMENT_CLAUSE_OWNER_RISK
+    )
+    consignment_clause_shop_liable_except_fm = models.TextField(
+        blank=True, default=CONSIGNMENT_CLAUSE_SHOP_LIABLE_EXCEPT_FM
+    )
+    consignment_clause_shop_liable = models.TextField(
+        blank=True, default=CONSIGNMENT_CLAUSE_SHOP_LIABLE
+    )
+    consignment_require_declared_value = models.BooleanField(default=True)
+    #: Days after which an uncollected payout starts reminding. 0 disables it.
+    #: It never expires and never becomes the shop's — that is a legal question
+    #: and not a product one, so the system's answer is deliberately *no*.
+    consignment_unclaimed_payout_reminder_days = models.PositiveIntegerField(default=30)
+    consignment_sale_sms_template = models.TextField(
+        blank=True, default=CONSIGNMENT_SALE_SMS_TEMPLATE
+    )
     # Stock-count variance review thresholds. A counted line is flagged for
     # review only when the gap is at least ``min_units`` AND at least
     # ``percent`` of the expected quantity (see apps.inventory.services).

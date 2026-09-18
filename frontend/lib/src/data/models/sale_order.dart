@@ -856,6 +856,8 @@ class SaleLineIdentifier {
     this.batchCode = '',
     this.expiryDate,
     this.quantity = 1,
+    this.isConsignment = false,
+    this.consignorPaid = false,
   });
 
   /// ``unit`` for an article with its own number, ``batch`` for a cohort.
@@ -864,8 +866,15 @@ class SaleLineIdentifier {
   final String batchCode;
   final DateTime? expiryDate;
   final double quantity;
+  final bool isConsignment;
+
+  /// Whether this consignment's owner has already collected. The returns desk
+  /// only has a question to ask when both of these are true — the money has
+  /// gone out and the goods have come back.
+  final bool consignorPaid;
 
   bool get isUnit => kind == 'unit';
+  bool get needsConsignmentDecision => isConsignment && consignorPaid;
 
   factory SaleLineIdentifier.fromJson(Map<String, Object?> json) {
     return SaleLineIdentifier(
@@ -874,6 +883,8 @@ class SaleLineIdentifier {
       batchCode: json['batch_code']?.toString() ?? '',
       expiryDate: DateTime.tryParse(json['expiry_date']?.toString() ?? ''),
       quantity: double.tryParse(json['quantity']?.toString() ?? '') ?? 1,
+      isConsignment: json['is_consignment'] == true,
+      consignorPaid: json['consignor_paid'] == true,
     );
   }
 }
@@ -1043,17 +1054,37 @@ class SaleVoidDraft {
 }
 
 class SaleReturnDraft {
-  const SaleReturnDraft({required this.lines, this.reason = ''});
+  const SaleReturnDraft({
+    required this.lines,
+    this.reason = '',
+    this.consignmentAction,
+  });
 
   final List<SaleReturnLineDraft> lines;
   final String reason;
 
+  /// Only consulted when a returned article is a consignment whose owner has
+  /// already been paid, and then it is the whole question: `buy_in` (the shop
+  /// keeps the watch it paid for) or `reopen` (it goes back on the shelf as the
+  /// consignor's, with a receivable against them). Null lets the backend's
+  /// default stand.
+  final String? consignmentAction;
+
   Map<String, Object?> toJson() {
     return {
       'reason': reason,
+      'consignment_action': ?consignmentAction,
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
     };
   }
+}
+
+/// The two defensible answers when a paid-out consignment comes back.
+class ConsignmentReturnAction {
+  const ConsignmentReturnAction._();
+
+  static const buyIn = 'buy_in';
+  static const reopen = 'reopen';
 }
 
 class SaleReturnLineDraft {

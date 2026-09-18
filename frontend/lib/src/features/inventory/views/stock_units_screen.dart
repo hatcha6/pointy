@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/components/components.dart';
@@ -12,6 +13,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/tracked_stock_view_model.dart';
+import 'stock_unit_detail_screen.dart';
 
 /// Every article this shop has identified, and what became of it.
 ///
@@ -19,9 +21,14 @@ import '../view_models/tracked_stock_view_model.dart';
 /// asking *"where is this one?"*, and a burst guard that rolled its digits back
 /// would make the answer arrive as a search for nothing.
 class StockUnitsScreen extends StatefulWidget {
-  const StockUnitsScreen({super.key, required this.viewModel});
+  const StockUnitsScreen({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final TrackedStockViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   State<StockUnitsScreen> createState() => _StockUnitsScreenState();
@@ -175,30 +182,27 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final unit = viewModel.units[index];
-        return _UnitRow(
-          unit: unit,
-          onTap: () => _openHistory(context, viewModel, unit),
-        );
+        return _UnitRow(unit: unit, onTap: () => _openDetail(context, unit));
       },
     );
   }
 
-  Future<void> _openHistory(
-    BuildContext context,
-    TrackedStockViewModel viewModel,
-    StockUnit unit,
-  ) async {
-    final history = await viewModel.unitHistory(unit.id);
-    if (!context.mounted) {
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (context) => _UnitHistorySheet(unit: unit, history: history),
+  Future<void> _openDetail(BuildContext context, StockUnit unit) async {
+    // A row opens the article, not a sheet of its movements: the page a
+    // warranty claim or a police question is answered from has the timeline on
+    // it, and everything else besides.
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => StockUnitDetailScreen(
+          viewModel: widget.viewModel,
+          unit: unit,
+          capabilities: widget.capabilities,
+        ),
+      ),
     );
+    if (context.mounted) {
+      unawaited(widget.viewModel.loadUnits());
+    }
   }
 
   String _statusLabel(AppLocalizations l10n, String status) {
@@ -263,86 +267,6 @@ class _UnitRow extends StatelessWidget {
                     formatMoney(unit.listPrice!),
                     style: theme.textTheme.titleSmall,
                   )),
-    );
-  }
-}
-
-/// Where this article has been, in one query.
-///
-/// The whole reason an allocation is a row rather than a text field on a sale
-/// line: the life of an IMEI is a list, and it reads in the order it happened.
-class _UnitHistorySheet extends StatelessWidget {
-  const _UnitHistorySheet({required this.unit, required this.history});
-
-  final StockUnit unit;
-  final List<StockAllocationEntry> history;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(unit.code, style: theme.textTheme.titleMedium),
-            if (unit.productName.isNotEmpty)
-              Text(
-                unit.productName,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                ),
-              ),
-            const Divider(height: 20),
-            if (history.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Text(
-                  l10n.stockUnitHistoryEmpty,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                ),
-              )
-            else
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: history.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final entry = history[index];
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        entry.isIncoming
-                            ? Icons.south_west_outlined
-                            : Icons.north_east_outlined,
-                        size: 18,
-                      ),
-                      title: Text(entry.voucherType),
-                      subtitle: Text(
-                        [
-                          if (entry.postingAt != null)
-                            formatDateTime(entry.postingAt!),
-                          if (entry.warehouseName.isNotEmpty)
-                            entry.warehouseName,
-                          if (entry.batchCode.isNotEmpty) entry.batchCode,
-                        ].join(' · '),
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 }

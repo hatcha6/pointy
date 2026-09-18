@@ -302,15 +302,36 @@ class IdentifiedValuation:
     shape of the column underneath it. The rate stored is ``value / qty``, which
     is what a report means by "what is this variant worth here on average" — but
     nothing ever *consumes* at that rate, which is the entire point.
+
+    **Unowned quantity.** Consigned goods are on the shelf and are not the
+    shop's: they count in quantity and contribute nothing to value. That would
+    leave ``value / qty`` reporting a variant with three owned handsets at 1,200
+    and seven consigned ones as worth 360 apiece — and every report that
+    multiplies a rate by a quantity wrong by a factor of three. So the engine
+    carries the unowned count explicitly and keeps it **out of the divisor**;
+    the state row grows a third element to say so, and a state written without
+    one reads back exactly as it always did.
     """
 
     def __init__(self, state=None):
-        bins = [[_decimal(qty), _decimal(rate)] for qty, rate in (state or [])]
-        self.qty = sum((b[QTY] for b in bins), ZERO)
-        self.value = sum((b[QTY] * b[RATE] for b in bins), ZERO)
+        self.qty = ZERO
+        self.value = ZERO
+        self.unowned = ZERO
+        for row in state or []:
+            qty = _decimal(row[QTY])
+            rate = _decimal(row[RATE])
+            unowned = _decimal(row[2]) if len(row) > 2 else ZERO
+            self.qty += qty
+            self.unowned += unowned
+            # The stored rate is per *owned* unit, so the value it stands for is
+            # the owned quantity times it. Round-trips exactly, and degenerates
+            # to ``qty * rate`` the moment nothing is consigned.
+            self.value += (qty - unowned) * rate
 
     @property
     def state(self):
+        if self.unowned:
+            return [[self.qty, self.valuation_rate, self.unowned]]
         return [[self.qty, self.valuation_rate]]
 
     def get_total_stock_and_value(self):
@@ -320,19 +341,40 @@ class IdentifiedValuation:
         )
 
     @property
-    def valuation_rate(self) -> Decimal:
-        if self.qty == ZERO:
-            return ZERO
-        return self.value / self.qty
+    def owned_qty(self) -> Decimal:
+        return self.qty - self.unowned
 
-    def add_stock(self, qty, rate) -> None:
+    @property
+    def valuation_rate(self) -> Decimal:
+        owned = self.owned_qty
+        if owned <= ZERO:
+            return ZERO
+        return self.value / owned
+
+    def add_stock(self, qty, rate, unowned=ZERO) -> None:
         qty = _decimal(qty)
         if qty <= ZERO:
             return
+        unowned = _decimal(unowned)
         self.qty = round_off_if_near_zero(self.qty + qty)
-        self.value = round_off_if_near_zero(self.value + qty * _decimal(rate))
+        self.unowned = round_off_if_near_zero(self.unowned + unowned)
+        self.value = round_off_if_near_zero(
+            self.value + (qty - unowned) * _decimal(rate)
+        )
 
-    def remove_stock(self, qty, outgoing_rate=ZERO, rate_generator=None):
+    def add_value(self, value, released=ZERO) -> None:
+        """Acquire value without acquiring quantity.
+
+        What a consignment sale does in the instant before its issue: the watch
+        was already on the shelf and already counted, and now — because it has
+        sold — the shop owes ten thousand for it. ``released`` is how much of the
+        unowned quantity has just become owned, so the rate's divisor grows with
+        the value rather than after it.
+        """
+        self.unowned = round_off_if_near_zero(self.unowned - _decimal(released))
+        self.value = round_off_if_near_zero(self.value + _decimal(value))
+
+    def remove_stock(self, qty, outgoing_rate=ZERO, rate_generator=None, unowned=ZERO):
         """Issue ``qty`` at the rate the allocation decided.
 
         ``outgoing_rate`` is not an optimisation hint here as it is for the queue
@@ -340,17 +382,23 @@ class IdentifiedValuation:
         and falls back to the blended rate so a mis-wired path degrades to a
         wrong-but-bounded number rather than a crash; the guard test in
         ``test_tracking_guards`` is what stops that path existing.
+
+        ``unowned`` is how many of the leaving articles never belonged to the
+        shop — a consigned watch handed back to its owner, which reduces the
+        count without touching the value.
         """
         qty = _decimal(qty)
         if qty <= ZERO:
             return []
+        unowned = _decimal(unowned)
         rate = _decimal(outgoing_rate)
-        if rate == ZERO:
+        if rate == ZERO and unowned < qty:
             rate = self.valuation_rate
             if rate == ZERO and rate_generator is not None:
                 rate = _decimal(rate_generator())
         self.qty = round_off_if_near_zero(self.qty - qty)
-        self.value = round_off_if_near_zero(self.value - qty * rate)
+        self.unowned = round_off_if_near_zero(self.unowned - unowned)
+        self.value = round_off_if_near_zero(self.value - (qty - unowned) * rate)
         return [[qty, rate]]
 
 
@@ -393,14 +441,17 @@ def state_rows(state):
     """Engine state as JSON-column rows, keeping full Decimal precision.
 
     Stored as strings rather than numbers so a rate never round-trips through a
-    float and comes back a hair different.
+    float and comes back a hair different. A row carries a third element only
+    when some of the quantity is not the shop's — consigned goods, which count
+    on the shelf and stay out of the rate's divisor (§5.8) — so a state written
+    by any other engine reads back exactly as it always did.
     """
-    return [[str(qty), str(rate)] for qty, rate in state]
+    return [[str(value) for value in row] for row in state]
 
 
 def dump_state(state) -> str:
     """Serialise engine state for a JSON column, without float drift."""
-    return json.dumps([[str(qty), str(rate)] for qty, rate in state])
+    return json.dumps([[str(value) for value in row] for row in state])
 
 
 def load_state(raw):
@@ -408,4 +459,4 @@ def load_state(raw):
     if not raw:
         return []
     rows = json.loads(raw) if isinstance(raw, str) else raw
-    return [[Decimal(str(qty)), Decimal(str(rate))] for qty, rate in rows]
+    return [[Decimal(str(value)) for value in row] for row in rows]

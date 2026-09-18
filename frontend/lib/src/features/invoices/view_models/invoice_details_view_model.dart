@@ -385,11 +385,16 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   Future<bool> returnItems(
     SaleOrder order,
     List<SaleReturnLineDraft> lines,
-    String reason,
-  ) async {
+    String reason, {
+    String? consignmentAction,
+  }) async {
     final result = await _saleRepository.returnItems(
       saleOrderId: order.id,
-      draft: SaleReturnDraft(lines: lines, reason: reason),
+      draft: SaleReturnDraft(
+        lines: lines,
+        reason: reason,
+        consignmentAction: consignmentAction,
+      ),
     );
     return _handleOrderAdjustmentResult(
       result,

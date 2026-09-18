@@ -179,12 +179,24 @@ def _write_bin(bin_row, engine, previous_rate):
     bin_row.state = state_rows(engine.state)
     bin_row.quantity = _quantize_quantity(quantity)
     bin_row.stock_value = _quantize_rate(value)
-    if quantity != ZERO:
+    # The engine's own rate, not ``value / quantity``: they differ by exactly
+    # the consigned goods on the shelf, which count in the quantity and must
+    # stay out of the rate's divisor. A variant holding three owned handsets at
+    # 1,200 beside seven consigned watches is worth 1,200 apiece, and a bin
+    # that said 360 would make every report that multiplies a rate by a
+    # quantity wrong by a factor of three (§5.8, invariant 9).
+    rate = engine.valuation_rate
+    if quantity != ZERO and rate != ZERO:
+        bin_row.valuation_rate = _quantize_rate(rate)
+    elif quantity != ZERO and value != ZERO:
         bin_row.valuation_rate = _quantize_rate(value / quantity)
     else:
         # Emptying the shelf must not erase what the goods cost: the rate is
-        # what the next sale falls back on if stock goes negative.
-        bin_row.valuation_rate = previous_rate
+        # what the next sale falls back on if stock goes negative. Goods worth
+        # nothing — a shelf of consignments — keep a zero, which is true.
+        bin_row.valuation_rate = (
+            ZERO if quantity != ZERO and value == ZERO else previous_rate
+        )
     return quantity, value
 
 
@@ -300,6 +312,12 @@ def post_movement_valuations(
                 "serials — refused by construction."
             )
 
+        # Goods on the shelf that the shop does not own. They count, and they are
+        # worth nothing to it — so they must stay out of the rate's divisor, or a
+        # variant holding three owned handsets and seven consigned watches
+        # reports every handset as worth a third of what it cost (§5.8).
+        unowned = plan.consigned_quantity if plan is not None else ZERO
+
         if delta > 0:
             if plan is not None:
                 rate = plan.rate
@@ -308,21 +326,68 @@ def post_movement_valuations(
                 if rate is None:
                     rate = previous_rate or fallbacks.get(movement.variant_id) or ZERO
             rate = Decimal(rate)
-            engine.add_stock(delta, rate)
-            value_change = delta * rate
+            engine.add_stock(delta, rate, **({"unowned": unowned} if unowned else {}))
+            value_change = (Decimal(delta) - unowned) * rate
         else:
             quantity = -delta
             fallback = previous_rate or fallbacks.get(movement.variant_id) or ZERO
+            # The purchase half of a consignment sale, posted *before* the
+            # issue: at the instant we sold it, we acquired it for the payout.
+            # Without it, ten thousand dinars leave a ledger they never entered
+            # and the variant's cumulative value drifts negative — invisible
+            # until a year of consignment sales has gone by.
+            if plan is not None and plan.consignment_cost:
+                engine.add_value(plan.consignment_cost, released=unowned)
+                balance_quantity, balance_value = _write_bin(
+                    bin_row, engine, previous_rate
+                )
+                entries.append(
+                    StockLedgerEntry(
+                        variant_id=movement.variant_id,
+                        warehouse_id=warehouse_id,
+                        movement=None,
+                        posting_at=posting_at,
+                        quantity_change=ZERO,
+                        valuation_rate=_quantize_rate(plan.rate),
+                        value_change=_quantize_rate(plan.consignment_cost),
+                        balance_quantity=_quantize_quantity(balance_quantity),
+                        balance_value=_quantize_rate(balance_value),
+                        state=bin_row.state,
+                        method=method,
+                        voucher_type=(
+                            StockLedgerEntry.VoucherType.CONSIGNMENT_COST
+                        ),
+                        voucher_id=voucher_id,
+                        note=movement.note,
+                    )
+                )
+                # Those units are the shop's now, bought and paid for at the
+                # payout; the issue below removes them like any owned stock.
+                unowned = ZERO
+                previous_rate = bin_row.valuation_rate
             consumed = engine.remove_stock(
                 quantity,
                 # An identified issue costs what the allocated articles cost, and
                 # nothing else gets a vote — §3.4, and the reason ERPNext had to
-                # un-ship batch-wise valuation twice.
-                outgoing_rate=plan.rate if plan is not None else ZERO,
+                # un-ship batch-wise valuation twice. When part of what is
+                # leaving was never the shop's, only the owned part carries a
+                # rate — a consigned watch handed back takes no value with it,
+                # because it never brought any.
+                outgoing_rate=(
+                    (plan.owned_rate if unowned else plan.rate)
+                    if plan is not None
+                    else ZERO
+                ),
                 rate_generator=lambda fallback=fallback: fallback,
+                **({"unowned": unowned} if unowned else {}),
             )
             rate = consumed_unit_cost(consumed)
             value_change = -consumed_cost(consumed)
+            if unowned:
+                value_change = -(
+                    (Decimal(quantity) - unowned) * Decimal(plan.owned_rate)
+                )
+                rate = plan.rate
 
         balance_quantity, balance_value = _write_bin(bin_row, engine, previous_rate)
         rates[movement.variant_id] = rate

@@ -1159,6 +1159,52 @@ def gross_profit_total(*, revenue, sold_cost, refund_total, adjustments) -> Deci
     ).quantize(Decimal("0.01"))
 
 
+class TradeIn(TimeStampedModel):
+    """Links the two legs of a trade-in into one audited operation.
+
+    The purchase of the article the customer handed over and the sale of the one
+    they walked out with are two real documents, each correct on its own; this
+    row is what makes the pair discoverable as the single thing that actually
+    happened. Deliberately the same shape as :class:`OrderExchange`, which
+    solved the same problem for return-and-replace.
+    """
+
+    purchase_order = models.OneToOneField(
+        "purchasing.PurchaseOrder",
+        on_delete=models.PROTECT,
+        related_name="trade_in",
+    )
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.PROTECT,
+        related_name="trade_in",
+    )
+    register_session = models.ForeignKey(
+        RegisterSession,
+        on_delete=models.PROTECT,
+        related_name="trade_ins",
+    )
+    #: What the incoming article was valued at, what the outgoing sale came to,
+    #: and what the customer actually settled (positive = they paid the
+    #: difference).
+    trade_in_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    sale_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    net_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="trade_ins",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"trade-in {self.purchase_order_id} → {self.order_id}"
+
+
 class OrderExchange(TimeStampedModel):
     """Links the two legs of a sales exchange into one audited operation.
 

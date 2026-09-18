@@ -5,11 +5,14 @@ from apps.core.admin_mixins import AppendOnlyAuditAdminMixin
 
 from .models import (
     StockAllocation,
+    ConsignmentAgreement,
+    ConsignorPayout,
     StockBatch,
     StockBatchBalance,
     StockItem,
     StockMovement,
     StockUnit,
+    UnitAttributeDefinition,
 )
 
 
@@ -160,6 +163,8 @@ class StockUnitAdmin(admin.ModelAdmin):
         "sold_order_line",
         "customer",
         "consignor",
+        "agreement",
+        "consignor_payout",
         "asset",
     )
     readonly_fields = ("code_normalized", "secondary_code_normalized")
@@ -206,3 +211,58 @@ class StockAllocationAdmin(AppendOnlyAuditAdminMixin, admin.ModelAdmin):
         "variant",
         "warehouse",
     )
+
+
+@admin.register(ConsignmentAgreement)
+class ConsignmentAgreementAdmin(admin.ModelAdmin):
+    """The signed سند.
+
+    ``liability_clause`` is editable here and nowhere else in the product on
+    purpose: it is the wording of a contract two people signed, and correcting a
+    typo in it is a deliberate act with a person behind it, not a settings
+    screen.
+    """
+
+    list_display = (
+        "number",
+        "consignor",
+        "payout_mode",
+        "payout_rate",
+        "liability_policy",
+        "doc_status",
+        "signed_at",
+    )
+    list_filter = ("doc_status", "payout_mode", "liability_policy")
+    search_fields = ("number", "consignor__full_name", "consignor__phone")
+    raw_id_fields = ("consignor", "created_by")
+    readonly_fields = ("number",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("consignor")
+
+
+@admin.register(ConsignorPayout)
+class ConsignorPayoutAdmin(admin.ModelAdmin):
+    list_display = ("number", "consignor", "amount", "method", "paid_at")
+    list_filter = ("method", "doc_status")
+    search_fields = ("number", "consignor__full_name", "reference")
+    raw_id_fields = ("consignor", "register_session", "cash_movement", "created_by")
+    readonly_fields = ("number",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("consignor")
+
+
+@admin.register(UnitAttributeDefinition)
+class UnitAttributeDefinitionAdmin(admin.ModelAdmin):
+    list_display = (
+        "asset_type",
+        "key",
+        "label",
+        "data_type",
+        "is_required",
+        "show_in_picker",
+        "display_order",
+    )
+    list_filter = ("asset_type", "data_type", "is_required", "is_filterable")
+    search_fields = ("key", "label")

@@ -11,6 +11,7 @@ stop a lot from being sold.
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 
 import django_filters
 from django.db.models import Prefetch, Q, Sum
@@ -91,6 +92,37 @@ class StockUnitFilter(django_filters.FilterSet):
         return queryset.exclude(status__in=StockUnit.ON_HAND_STATUSES)
 
 
+def _warranty_answer(unit):
+    """What a counter needs when somebody puts a handset on the desk.
+
+    ``None`` for an article nobody ever sold, because "no warranty" and "we have
+    never seen this" are different answers and only one of them is true.
+    """
+    if unit is None or unit.sold_at is None:
+        return None
+    today = timezone.localdate()
+    expires_on = unit.warranty_expires_on
+    from apps.operations.models import Job
+
+    # Repairs the shop did to this article, whichever side it was on: work it
+    # did while the handset was its own stock, and work it did on the same
+    # handset once the customer owned it. ERPNext keeps a stored
+    # ``maintenance_status``; this is derived, because a stored one is wrong the
+    # day after the warranty expires.
+    worked_on = Q(stock_unit=unit)
+    if unit.asset_id:
+        worked_on |= Q(job_assets__asset_id=unit.asset_id)
+    repairs = Job.objects.filter(worked_on).distinct().count()
+    return {
+        "sold_at": unit.sold_at,
+        "customer": unit.customer_id,
+        "expires_on": expires_on,
+        "is_covered": expires_on is not None and expires_on >= today,
+        "days_remaining": (expires_on - today).days if expires_on else None,
+        "repair_count": repairs,
+    }
+
+
 class StockUnitViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -116,6 +148,12 @@ class StockUnitViewSet(
         "update": ("inventory.change_stockunit",),
         "partial_update": ("inventory.change_stockunit",),
         "identify": ("inventory.add_stockunit",),
+        "bulk_reprice": ("inventory.reprice_stockunit",),
+        "write_off": ("inventory.write_off_stockunit",),
+        "consignment_payables": ("inventory.view_consignment_liability",),
+        "disburse_payout": ("inventory.disburse_consignment_payout",),
+        "resend_consignor_sms": ("inventory.view_consignment_liability",),
+        "return_to_consignor": ("inventory.manage_consignmentagreement",),
     }
     filterset_class = StockUnitFilter
     # Keyset-friendly and stable: newest arrival first, id as the tiebreak. The
@@ -174,6 +212,11 @@ class StockUnitViewSet(
         code = serializer.validated_data["code"]
         unit = tracking.find_live_unit(code)
         history = tracking.historical_units(code)
+        # A counter lookup by IMEI is usually a warranty question, so the answer
+        # comes with the answer: sold on X to Y, covered until Z, repaired
+        # twice. Derived, never stored — ERPNext keeps a ``maintenance_status``
+        # column and it is wrong the day after the warranty expires.
+        subject = unit or (history[0] if history else None)
         return Response(
             {
                 "unit": (
@@ -184,6 +227,7 @@ class StockUnitViewSet(
                 "history": StockUnitSerializer(
                     history, many=True, context={"request": request}
                 ).data,
+                "warranty": _warranty_answer(subject),
             }
         )
 
@@ -264,6 +308,167 @@ class StockUnitViewSet(
                     "identifier_warnings"
                 ],
             }
+        )
+
+
+    # -- pricing and disposal ------------------------------------------------
+
+    @action(detail=False, methods=["post"], url_path="bulk-reprice")
+    def bulk_reprice(self, request):
+        """Re-price a shelf's worth of articles in one write.
+
+        A used-goods trader marks down every handset over ninety days old at
+        once, and doing that a row at a time is how it does not get done.
+        Follows the bulk-operations pattern: explicit ids, one statement, and
+        the count of what actually changed.
+        """
+        from .tracked_serializers import BulkRepriceSerializer
+
+        serializer = BulkRepriceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        units = list(
+            StockUnit.objects.filter(
+                pk__in=data["ids"], status__in=StockUnit.ON_HAND_STATUSES
+            ).select_related("variant")
+        )
+        price = data.get("price")
+        percent = data.get("percent")
+        changed = []
+        for unit in units:
+            if price is not None:
+                new_price = price
+            else:
+                # A markdown reads off whatever the article is actually asking
+                # today — its own price if it has one, the variant's if not —
+                # because a percentage of a price nobody quoted is a number
+                # nobody chose.
+                base = unit.list_price
+                if base is None:
+                    base = unit.variant.unit_price
+                new_price = (base * (Decimal("100") + percent) / Decimal("100")).quantize(
+                    Decimal("0.01")
+                )
+                new_price = max(new_price, Decimal("0.00"))
+            if unit.list_price != new_price:
+                unit.list_price = new_price
+                changed.append(unit)
+        if changed:
+            StockUnit.objects.bulk_update(changed, ["list_price", "updated_at"])
+        return Response({"updated": len(changed), "requested": len(data["ids"])})
+
+    @action(detail=True, methods=["post"], url_path="write-off")
+    def write_off(self, request, pk=None):
+        """Take an article off the shelf because it is gone, or broken.
+
+        Stock leaves, so this is a movement rather than a status flip: the bin
+        drops by one and the ledger says why. A shop that could set the status
+        alone would have a unit nobody can find and a quantity that still counts
+        it.
+        """
+        from .tracked_writeoff import write_off_unit
+
+        unit = self.get_object()
+        reason = (request.data or {}).get("reason", "")
+        if not str(reason).strip():
+            raise serializers.ValidationError({"reason": "اذكر سبب الشطب."})
+        unit = write_off_unit(unit, reason=str(reason).strip(), request=request)
+        return Response(
+            StockUnitSerializer(unit, context={"request": request}).data
+        )
+
+    # -- consignment ---------------------------------------------------------
+
+    @action(detail=False, methods=["get"], url_path="consignment-payables")
+    def consignment_payables(self, request):
+        """مستحقات الأمانات — sold goods nobody has been paid for."""
+        from . import consignment as figures
+        from .consignment_serializers import ConsignmentPayableSerializer
+
+        rows = (
+            figures.payable_units(
+                consignor=request.query_params.get("consignor") or None
+            )
+            .select_related(
+                "variant",
+                "variant__product",
+                "consignor",
+                "sold_order_line",
+                "sold_order_line__order",
+            )
+            .order_by("sold_at", "id")
+        )
+        return Response(
+            {
+                "results": ConsignmentPayableSerializer(
+                    rows, many=True, context={"request": request}
+                ).data,
+                "total_due": figures.consignor_payable(),
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="disburse-payout")
+    def disburse_payout(self, request, pk=None):
+        """Hand this consignor their money, and close the payable.
+
+        ``units`` in the body settles several of the same consignor's articles
+        on one voucher, which is what a counter actually does: the owner of
+        eight handbags collects for three of them and signs once.
+        """
+        from . import consignment_service
+        from .consignment_serializers import (
+            ConsignorPayoutSerializer,
+            DisbursePayoutSerializer,
+        )
+
+        unit = self.get_object()
+        payload = dict(request.data or {})
+        payload.setdefault("units", [])
+        payload["units"] = sorted({int(unit.pk), *map(int, payload["units"] or [])})
+        serializer = DisbursePayoutSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        payout = consignment_service.disburse_payout(
+            # Ids, not rows: the service locks them inside its own transaction,
+            # and a queryset evaluated here would take no lock at all.
+            unit_ids=serializer.validated_data["units"],
+            method=serializer.validated_data["method"],
+            reference=serializer.validated_data["reference"],
+            notes=serializer.validated_data["notes"],
+            request=request,
+        )
+        return Response(
+            ConsignorPayoutSerializer(payout, context={"request": request}).data
+        )
+
+    @action(detail=True, methods=["post"], url_path="resend-consignor-sms")
+    def resend_consignor_sms(self, request, pk=None):
+        """Send the "your goods sold" message again.
+
+        Idempotent by the same dedup key the sale used, so tapping it twice
+        queues one message rather than two.
+        """
+        from . import consignment_service
+
+        unit = self.get_object()
+        message = consignment_service.resend_sale_sms(unit)
+        return Response(
+            {
+                "queued": message is not None,
+                "status": getattr(message, "status", ""),
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="return-to-consignor")
+    def return_to_consignor(self, request, pk=None):
+        """Give unsold goods back to the person who left them."""
+        from . import consignment_service
+
+        unit = self.get_object()
+        unit = consignment_service.return_to_consignor(
+            unit, request=request, note=(request.data or {}).get("note", "")
+        )
+        return Response(
+            StockUnitSerializer(unit, context={"request": request}).data
         )
 
 

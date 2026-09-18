@@ -144,6 +144,49 @@ class TrackedStockViewModel extends ChangeNotifier {
     return false;
   }
 
+  /// One article, re-read. The detail screen asks after every write rather
+  /// than patching its own copy: a unit's cost and status are decided by
+  /// services, and a screen that guessed at the outcome would occasionally
+  /// guess wrong.
+  Future<StockUnit?> unitById(int unitId) async {
+    final result = await _repository.loadUnit(unitId);
+    return switch (result) {
+      Ok<StockUnit>(:final value) => value,
+      Error<StockUnit>() => null,
+    };
+  }
+
+  Future<StockUnit?> reprice(int unitId, double price) async {
+    final result = await _repository.repriceUnit(unitId, price);
+    if (result case Ok<StockUnit>(:final value)) {
+      _replaceUnit(value);
+      return value;
+    }
+    return null;
+  }
+
+  Future<StockUnit?> writeOff(int unitId, String reason) async {
+    final result = await _repository.writeOffUnit(unitId, reason: reason);
+    if (result case Ok<StockUnit>(:final value)) {
+      _replaceUnit(value);
+      return value;
+    }
+    return null;
+  }
+
+  Future<bool> resendConsignorSms(int unitId) async {
+    final result = await _repository.resendConsignorSms(unitId);
+    return result is Ok<bool> && result.value;
+  }
+
+  void _replaceUnit(StockUnit unit) {
+    _units = [
+      for (final row in _units)
+        if (row.id == unit.id) unit else row,
+    ];
+    notifyListeners();
+  }
+
   Future<List<StockAllocationEntry>> unitHistory(int unitId) async {
     final result = await _repository.loadUnitHistory(unitId);
     return switch (result) {

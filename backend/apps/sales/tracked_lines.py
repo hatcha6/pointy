@@ -46,6 +46,12 @@ def order_line_identifiers(line) -> list:
                         else ""
                     ),
                     "quantity": "1",
+                    # So the returns desk can ask the one question it has to ask
+                    # before taking a consigned article back: its owner has
+                    # already been paid, and somebody has to decide whether the
+                    # shop keeps what it paid for (§5.8).
+                    "is_consignment": unit.is_consignment,
+                    "consignor_paid": unit.consignor_paid_at is not None,
                 }
             )
         return rows

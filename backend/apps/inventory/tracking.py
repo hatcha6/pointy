@@ -177,6 +177,12 @@ class TrackedPlan:
     allocations: list = field(default_factory=list)
     #: Units this plan will create (a receipt), unsaved until applied.
     new_units: list = field(default_factory=list)
+    #: Value the shop acquires in the same instant it issues — the purchase half
+    #: of a consignment sale (§5.8). Set by the sale once it has stamped each
+    #: consigned unit's payout; read by the valuation pass, which posts it as a
+    #: quantity-zero ledger entry immediately before the issue so the value
+    #: leaving the ledger is value that entered it.
+    consignment_cost: Decimal = ZERO
 
     @property
     def quantity(self) -> Decimal:
@@ -185,6 +191,35 @@ class TrackedPlan:
     @property
     def value(self) -> Decimal:
         return _rate(sum((a.value for a in self.allocations), ZERO))
+
+    def _consigned(self, consigned: bool):
+        for allocation in self.allocations:
+            unit = allocation.unit
+            if bool(unit is not None and unit.is_consignment) is consigned:
+                yield allocation
+
+    @property
+    def consigned_quantity(self) -> Decimal:
+        """How much of this movement is goods the shop does not own."""
+        return _q(
+            sum((Decimal(a.quantity) for a in self._consigned(True)), ZERO)
+        )
+
+    @property
+    def owned_rate(self) -> Decimal:
+        """The blended rate of the part of this movement the shop owns.
+
+        Not the same as :attr:`rate` the moment one allocation is a consigned
+        article carrying a zero: a movement of one owned handset at 1,200 and
+        one consigned watch blends to 600, and 600 is the right figure for the
+        *ledger entry* and the wrong one for deciding how much value left the
+        bin.
+        """
+        quantity = _q(sum((Decimal(a.quantity) for a in self._consigned(False)), ZERO))
+        if quantity == ZERO:
+            return ZERO
+        value = _rate(sum((a.value for a in self._consigned(False)), ZERO))
+        return _rate(value / quantity)
 
     @property
     def rate(self) -> Decimal:
@@ -1238,6 +1273,95 @@ def _plan_lot_issue(
 # ---------------------------------------------------------------------------
 # Applying a plan
 # ---------------------------------------------------------------------------
+
+
+def plan_return(*, units, warehouse=None, variant=None):
+    """Bring identified articles that were sold back onto the shelf.
+
+    Not a receipt: nothing is created, because the articles already exist and
+    have a history. What is planned is the *allocation* — one ``in`` row per
+    article, at the cost it left at, which is still written on the row. Valuing
+    a return at today's rate would book a profit or loss on a sale that was
+    simply undone.
+
+    Refuses an article that is already back, which today is prevented only by
+    quantity arithmetic: return the same handset twice and the shelf gains two
+    of a thing there is one of.
+    """
+    units = list(units)
+    if not units:
+        return None
+    variant = variant or units[0].variant
+    mode = mode_of(variant)
+    if mode == Product.TrackingMode.QUANTITY:
+        return None
+    warehouse_id = (
+        getattr(warehouse, "pk", warehouse)
+        or units[0].warehouse_id
+        or Warehouse.default_id()
+    )
+    plan = TrackedPlan(
+        mode=mode,
+        direction=StockAllocation.Direction.IN,
+        warehouse_id=warehouse_id,
+    )
+    for unit in units:
+        if unit.status in StockUnit.LIVE_STATUSES:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        f"الوحدة {unit.code} عادت إلى المخزون بالفعل — "
+                        "لا يمكن إرجاعها مرتين."
+                    ),
+                    "stock_unit": unit.pk,
+                    "status": unit.status,
+                }
+            )
+        plan.allocations.append(
+            Allocation(
+                quantity=ONE,
+                rate=_rate(unit.stock_value),
+                unit=unit,
+                batch=unit.batch,
+                balance=(
+                    lock_balance(batch=unit.batch, warehouse=warehouse_id)
+                    if unit.batch_id
+                    else None
+                ),
+            )
+        )
+    return plan
+
+
+def apply_return(plan, *, at=None, warehouse_id=None):
+    """Put the returned articles back, and restart their clock.
+
+    ``in_stock_since`` is reset rather than preserved: aging asks how long
+    *this* spell on the shelf has run, and a handset that sold in March and came
+    back in September is not six months old on the shelf.
+    """
+    if plan is None or not plan.allocations:
+        return plan
+    at = at or timezone.now()
+    for allocation in plan.allocations:
+        if allocation.unit is not None:
+            stamps = {
+                "in_stock_since": at,
+                "sold_at": None,
+                "sold_price": None,
+                "customer": None,
+            }
+            if warehouse_id is not None:
+                stamps["warehouse_id"] = warehouse_id
+            transition_unit(allocation.unit, StockUnit.Status.IN_STOCK, **stamps)
+        if allocation.balance is not None:
+            receive_into_balance(
+                balance=allocation.balance,
+                quantity=allocation.quantity,
+                rate=allocation.rate,
+                at=at,
+            )
+    return plan
 
 
 def apply_receipt(plan, *, at=None):

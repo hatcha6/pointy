@@ -17798,4 +17798,265 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get lessonExitConfirmMessage => 'سيُحذف متجر التدريب بكل ما فيه.';
+
+  @override
+  String get consignmentPayablesTitle => 'مستحقات الأمانات';
+
+  @override
+  String get consignmentPayablesDrawerLabel => 'مستحقات الأمانات';
+
+  @override
+  String get consignmentPayablesSearchHint =>
+      'ابحث باسم صاحب الأمانة أو رقم الجهاز';
+
+  @override
+  String get consignmentPayablesEmptyTitle => 'لا مستحقات معلّقة';
+
+  @override
+  String get consignmentPayablesEmptyBody =>
+      'كل أمانة بيعت تم صرف مستحقاتها لصاحبها.';
+
+  @override
+  String get consignmentFigurePayable => 'مستحقات لأصحابها';
+
+  @override
+  String get consignmentFigureCommission => 'عمولة المحل';
+
+  @override
+  String get consignmentFigureCustody => 'أمانات في العهدة';
+
+  @override
+  String get consignmentFigureStockValue => 'قيمة البضاعة';
+
+  @override
+  String get consignmentDisburseAction => 'صرف المستحقات';
+
+  @override
+  String get consignmentPayoutOneConsignor =>
+      'سند الصرف الواحد يخص صاحب أمانة واحدًا.';
+
+  @override
+  String consignmentPayoutMethodTitle(String amount) {
+    return 'طريقة صرف $amount';
+  }
+
+  @override
+  String get consignmentPayoutCash => 'نقدًا من الصندوق';
+
+  @override
+  String get consignmentPayoutCashHint =>
+      'يُسجَّل صرف نقدي من الوردية المفتوحة.';
+
+  @override
+  String get consignmentPayoutBank => 'تحويل بنكي';
+
+  @override
+  String consignmentSoldOnCredit(String amount) {
+    return 'بيعت آجل — متبقٍ $amount';
+  }
+
+  @override
+  String consignmentWaitingDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'منذ $days يوم',
+      many: 'منذ $days يومًا',
+      few: 'منذ $days أيام',
+      two: 'منذ يومين',
+      one: 'منذ يوم',
+      zero: 'اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get consignmentResendSms => 'إعادة إرسال الرسالة';
+
+  @override
+  String get consignmentSmsQueued => 'أُدرجت الرسالة في قائمة الإرسال.';
+
+  @override
+  String get consignmentSmsFailed => 'تعذّر إرسال الرسالة.';
+
+  @override
+  String consignmentDisburseDone(String number) {
+    return 'تم الصرف بالسند $number';
+  }
+
+  @override
+  String get consignmentDisburseFailed =>
+      'تعذّر صرف المستحقات — تأكد من وجود وردية مفتوحة.';
+
+  @override
+  String get stockUnitOwnPrice => 'سعر هذا الجهاز';
+
+  @override
+  String get stockUnitVariantPrice => 'سعر الصنف';
+
+  @override
+  String get stockUnitConsignmentBadge => 'أمانة';
+
+  @override
+  String stockUnitWarrantyUntil(String date) {
+    return 'الضمان حتى $date';
+  }
+
+  @override
+  String get stockUnitConsignmentSection => 'بيانات الأمانة';
+
+  @override
+  String get stockUnitConsignor => 'صاحب الأمانة';
+
+  @override
+  String get stockUnitDeclaredValue => 'القيمة المقدّرة';
+
+  @override
+  String get stockUnitPayoutOwed => 'المستحق لصاحبها';
+
+  @override
+  String get stockUnitPayoutPaidOn => 'صُرفت في';
+
+  @override
+  String get stockUnitFactsSection => 'بيانات الجهاز';
+
+  @override
+  String get stockUnitWarehouse => 'المستودع';
+
+  @override
+  String get stockUnitDaysHeld => 'أيام في المخزون';
+
+  @override
+  String get stockUnitCost => 'تكلفة الشراء';
+
+  @override
+  String get stockUnitRefurbCost => 'تكلفة الإصلاح';
+
+  @override
+  String get stockUnitTotalCost => 'التكلفة الإجمالية';
+
+  @override
+  String get stockUnitSoldOn => 'تاريخ البيع';
+
+  @override
+  String get stockUnitSoldFor => 'سعر البيع';
+
+  @override
+  String get stockUnitAttributesSection => 'الحالة والملحقات';
+
+  @override
+  String get stockUnitTimelineSection => 'سجل الجهاز';
+
+  @override
+  String get stockUnitRepriceAction => 'تعديل السعر';
+
+  @override
+  String get stockUnitRepriceFailed => 'تعذّر تعديل السعر.';
+
+  @override
+  String get stockUnitWriteOffAction => 'شطب الجهاز';
+
+  @override
+  String get stockUnitWriteOffReason => 'سبب الشطب';
+
+  @override
+  String get stockUnitWriteOffFailed => 'تعذّر شطب الجهاز.';
+
+  @override
+  String get consignmentIntakeTitle => 'استلام أمانة';
+
+  @override
+  String get consignmentIntakeConsignor => 'صاحب الأمانة';
+
+  @override
+  String get consignmentIntakePayoutMode => 'طريقة الاحتساب';
+
+  @override
+  String get consignmentIntakeFixed => 'مبلغ ثابت';
+
+  @override
+  String get consignmentIntakeCommission => 'نسبة عمولة';
+
+  @override
+  String get consignmentIntakePayoutRate => 'المبلغ المتفق عليه';
+
+  @override
+  String get consignmentIntakeCommissionPct => 'نسبة العمولة %';
+
+  @override
+  String get consignmentIntakeReserve => 'أقل سعر بيع';
+
+  @override
+  String get consignmentIntakeDeclaredValue => 'القيمة المقدّرة';
+
+  @override
+  String get consignmentIntakeLiability => 'المسؤولية عن الأمانة';
+
+  @override
+  String get consignmentIntakeLiabilityOwner => 'على مسؤولية صاحبها';
+
+  @override
+  String get consignmentIntakeLiabilityExceptFm =>
+      'المحل ضامن عدا الظروف القاهرة';
+
+  @override
+  String get consignmentIntakeLiabilityShop => 'المحل ضامن';
+
+  @override
+  String get consignmentIntakeAddItem => 'إضافة صنف';
+
+  @override
+  String get consignmentIntakeConfirm => 'توقيع السند واستلام البضاعة';
+
+  @override
+  String get consignmentIntakeFailed => 'تعذّر تسجيل السند.';
+
+  @override
+  String consignmentIntakeFloorHint(String amount) {
+    return 'لن يسمح النظام ببيعها بأقل من $amount';
+  }
+
+  @override
+  String get returnConsignmentTitle => 'أمانة مُصروفة عادت';
+
+  @override
+  String get returnConsignmentBody =>
+      'تم صرف مستحقات صاحب هذه الأمانة. ماذا تريد أن تفعل؟';
+
+  @override
+  String get returnConsignmentBuyIn => 'يشتريها المحل بما دُفع';
+
+  @override
+  String get returnConsignmentReopen => 'تعود أمانة ويُطالَب صاحبها بالمبلغ';
+
+  @override
+  String consignmentPayoutSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أمانة',
+      few: '$count أمانات',
+      two: 'أمانتان',
+      one: 'أمانة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String treasuryConsignorPayableTitle(String amount) {
+    return 'منها مستحقات أمانات: $amount';
+  }
+
+  @override
+  String treasuryCustodyHeld(int count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أمانة في العهدة',
+      few: '$count أمانات في العهدة',
+      two: 'أمانتان في العهدة',
+      one: 'أمانة واحدة في العهدة',
+    );
+    return '$_temp0 بقيمة مقدّرة $amount';
+  }
 }

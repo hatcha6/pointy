@@ -250,3 +250,72 @@ class IdentifiedStockCostTests(SimpleTestCase):
             "What a lot balance is worth is StockBatchBalance.stock_value. "
             f"Offending lines: {offenders}",
         )
+
+
+class ConsignmentFiguresTests(SimpleTestCase):
+    """The four consignment figures have one definition each.
+
+    A shop holding forty consigned watches has four numbers that must agree with
+    each other and with the ledger: the stock value (zero), the cash collected
+    (ordinary payments), what is owed to the owners, and what the shop earned.
+    Nothing is stored — every one of them is derived from the units' own sales
+    and their own payout rows, which is the only reason they cannot drift.
+
+    The risk this guard covers is the familiar one: the payables screen, the
+    treasury overlay, the consignment report and the AI tools all want "what do
+    we owe", and the fourth one to want it writes the subtraction out again.
+    """
+
+    ALLOWED = {
+        # The definitions themselves.
+        "apps/inventory/consignment.py",
+        # The oracle models this independently, on purpose (.ai/oracle.md).
+        "apps/sales/business_simulation.py",
+    }
+
+    def test_no_surface_restates_a_commission_payout(self):
+        """``sold_price × (1 − pct/100)`` belongs to ``consignor_payout_due``."""
+        offenders = _offending_files(
+            r"(1\s*-\s*[\w.]*commission_pct\s*/\s*100)"
+            r"|(commission_pct\s*/\s*(?:Decimal\(['\"])?100)",
+            self.ALLOWED,
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "A consignor's payout is consignment.consignor_payout_due. "
+            f"Offending lines: {offenders}",
+        )
+
+    def test_no_surface_restates_the_shop_commission(self):
+        """``sold_price − payout`` belongs to ``shop_consignment_commission``."""
+        offenders = _offending_files(
+            r"sold_price\s*-\s*[\w.()]*payout",
+            self.ALLOWED | {"apps/reports/builders/identified.py"},
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "The shop's earning on a consignment is "
+            "consignment.shop_consignment_commission. "
+            f"Offending lines: {offenders}",
+        )
+
+    def test_the_payout_floor_has_one_definition(self):
+        """``max(reserve, payout_rate)`` belongs to ``payout_floor``.
+
+        The one figure in this module that is a *refusal* rather than a report:
+        under a fixed payout it is not overridable, because selling below it
+        loses the shop its own money rather than merely its commission. A second
+        copy is a second place that can quietly become advisory.
+        """
+        offenders = _offending_files(
+            r"max\([^)]*reserve_price[^)]*payout_rate",
+            self.ALLOWED,
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "The consignment price floor is consignment.payout_floor. "
+            f"Offending lines: {offenders}",
+        )

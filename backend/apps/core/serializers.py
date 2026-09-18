@@ -579,6 +579,27 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "logo_attachment",
             "updated_at",
             "valuation_method_change_acknowledged",
+            # Identified stock. The master switches shipped with Phase A as
+            # columns nothing could edit; a shop entering a serialized or
+            # lot-tracked trade turns them on here.
+            "enable_serialized_inventory",
+            "enable_batch_tracking",
+            "serialized_capture_later_allowed",
+            "serialized_require_customer_for_asset",
+            "prevent_selling_expired_batches",
+            "batch_auto_pick_strategy",
+            "default_expiry_warning_days",
+            # الأمانات. The three clauses are the contract, not a label derived
+            # from the enum — a shop with a lawyer pastes its own words in, and
+            # each signed agreement keeps the wording it was printed with.
+            "consignment_auto_sms_on_sale",
+            "consignment_default_liability_policy",
+            "consignment_clause_owner_risk",
+            "consignment_clause_shop_liable_except_fm",
+            "consignment_clause_shop_liable",
+            "consignment_require_declared_value",
+            "consignment_unclaimed_payout_reminder_days",
+            "consignment_sale_sms_template",
         ]
         # ``books_locked_through`` is read-only here on purpose: closing a
         # period is a bookkeeping act with its own permission and its own audit

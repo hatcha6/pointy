@@ -103,6 +103,15 @@ enum AppCapability {
   /// serials, and neither should have to see the other's screen.
   viewStockUnits,
   viewStockBatches,
+
+  /// الأمانات. Split from the unit list on purpose: a shop can let its counter
+  /// staff see what is owed and hand it over — that is where a consignor turns
+  /// up — while writing the voucher stays with whoever takes the goods in.
+  viewConsignmentPayables,
+  disburseConsignmentPayout,
+  manageConsignmentAgreement,
+  repriceStockUnit,
+  writeOffStockUnit,
   useAiAssistant,
 
   /// The in-app learning library.
@@ -246,6 +255,36 @@ class AuthorizationCapabilities {
         'inventory.view_stockbatch',
       ])) {
         capabilities.add(AppCapability.viewStockBatches);
+      }
+      if (_hasAny(user, const [
+        'view_consignment_liability',
+        'inventory.view_consignment_liability',
+      ])) {
+        capabilities.add(AppCapability.viewConsignmentPayables);
+      }
+      if (_hasAny(user, const [
+        'disburse_consignment_payout',
+        'inventory.disburse_consignment_payout',
+      ])) {
+        capabilities.add(AppCapability.disburseConsignmentPayout);
+      }
+      if (_hasAny(user, const [
+        'manage_consignmentagreement',
+        'inventory.manage_consignmentagreement',
+      ])) {
+        capabilities.add(AppCapability.manageConsignmentAgreement);
+      }
+      if (_hasAny(user, const [
+        'reprice_stockunit',
+        'inventory.reprice_stockunit',
+      ])) {
+        capabilities.add(AppCapability.repriceStockUnit);
+      }
+      if (_hasAny(user, const [
+        'write_off_stockunit',
+        'inventory.write_off_stockunit',
+      ])) {
+        capabilities.add(AppCapability.writeOffStockUnit);
       }
       if (_hasAny(user, const [
         'apply_stockcount',
@@ -906,6 +945,14 @@ class AuthorizationCapabilities {
   bool get canViewStock => allows(AppCapability.viewStock);
   bool get canViewStockUnits => allows(AppCapability.viewStockUnits);
   bool get canViewStockBatches => allows(AppCapability.viewStockBatches);
+  bool get canViewConsignmentPayables =>
+      allows(AppCapability.viewConsignmentPayables);
+  bool get canDisburseConsignmentPayout =>
+      allows(AppCapability.disburseConsignmentPayout);
+  bool get canManageConsignmentAgreement =>
+      allows(AppCapability.manageConsignmentAgreement);
+  bool get canRepriceStockUnit => allows(AppCapability.repriceStockUnit);
+  bool get canWriteOffStockUnit => allows(AppCapability.writeOffStockUnit);
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
   bool get canCountStock => allows(AppCapability.countStock);
   bool get canApplyStockCount => allows(AppCapability.applyStockCount);

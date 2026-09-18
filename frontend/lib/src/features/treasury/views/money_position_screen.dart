@@ -139,6 +139,14 @@ class _MoneyPositionBody extends StatelessWidget {
         children: [
           _TotalsHero(totals: totals),
           SizedBox(height: spacing.md),
+          // Beneath the total, never inside it: the cash really is in the
+          // drawer, and what is untrue is that all of it is the shop's.
+          // Subtracting it here would double-count the money the moment the
+          // payout is actually made.
+          if (!viewModel.position!.obligations.isEmpty) ...[
+            _ObligationsCallout(obligations: viewModel.position!.obligations),
+            SizedBox(height: spacing.md),
+          ],
           ..._callouts(context, l10n, totals),
           _QuickActions(viewModel: viewModel),
           SizedBox(height: spacing.lg),
@@ -224,6 +232,31 @@ class _MoneyPositionBody extends StatelessWidget {
 }
 
 /// The one number the owner came for, with its two halves beside it.
+/// *منها مستحقات أمانات* — how much of the money on this page is spoken for.
+class _ObligationsCallout extends StatelessWidget {
+  const _ObligationsCallout({required this.obligations});
+
+  final MoneyObligations obligations;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return PointyDetailCallout(
+      icon: Icons.handshake_outlined,
+      tone: PointyCalloutTone.warning,
+      title: l10n.treasuryConsignorPayableTitle(
+        formatMoney(obligations.consignorPayable),
+      ),
+      message: obligations.custodyUnitCount > 0
+          ? l10n.treasuryCustodyHeld(
+              obligations.custodyUnitCount,
+              formatMoney(obligations.custodyDeclaredValue),
+            )
+          : null,
+    );
+  }
+}
+
 class _TotalsHero extends StatelessWidget {
   const _TotalsHero({required this.totals});
 

@@ -515,6 +515,134 @@ def check_lot_balances_match_allocations(tracked=None) -> list:
 
 #: Every check, in the order of the plan's §5.4. A caller that wants one runs
 #: one; the oracle and the integrity suite run them all.
+# ---------------------------------------------------------------------------
+# 9, 10. Consignment: counted, not valued, and never valued out of nothing
+# ---------------------------------------------------------------------------
+
+
+def check_consignment_rate(tracked=None) -> list:
+    """9. A consigned unit counts in quantity and is out of the rate's divisor.
+
+    The trap this exists for: a variant holding three owned handsets at 1,200
+    and seven consigned watches would otherwise report a valuation rate of 360,
+    and every report that multiplies a rate by a quantity would be wrong by a
+    factor of three. So the rule is ``valuation_rate × COUNT(owned units) ==
+    stock_value`` — the divisor is what the shop owns, and the quantity is what
+    is on the shelf.
+    """
+    tracked = tracked if tracked is not None else _tracked_variants()
+    if not tracked:
+        return []
+    unit_modes = {
+        variant_id
+        for variant_id, (mode, _) in tracked.items()
+        if mode in (Product.TrackingMode.SERIAL, Product.TrackingMode.SERIAL_BATCH)
+    }
+    if not unit_modes:
+        return []
+    owned = defaultdict(Decimal)
+    for row in (
+        StockUnit.objects.filter(
+            variant_id__in=unit_modes,
+            status__in=StockUnit.ON_HAND_STATUSES,
+            is_consignment=False,
+        )
+        .values("variant_id", "warehouse_id")
+        .annotate(total=Count("id"))
+    ):
+        owned[(row["variant_id"], row["warehouse_id"])] += row["total"]
+
+    problems = []
+    for bin_row in StockValuationBin.objects.filter(variant_id__in=unit_modes):
+        _, label = tracked[bin_row.variant_id]
+        count = owned.get((bin_row.variant_id, bin_row.warehouse_id), ZERO)
+        expected = Decimal(bin_row.valuation_rate) * count
+        if not _close(bin_row.stock_value, expected, Decimal("0.01")):
+            problems.append(
+                f"[9] {label} @ warehouse {bin_row.warehouse_id}: rate "
+                f"{bin_row.valuation_rate} over {count} owned units is "
+                f"{expected}, but the bin is worth {bin_row.stock_value} — "
+                "consigned goods have diluted the rate."
+            )
+    return problems
+
+
+def check_consignment_cost_entries(tracked=None) -> list:
+    """10. Every consignment sale posts the purchase half that pays for it.
+
+    A consigned unit enters the ledger at ``+1 @ 0`` and leaves it at
+    ``-1 @ payout``: ten thousand dinars of value leaving a ledger they never
+    entered. ``StockValuationBin`` self-heals because it is derived;
+    ``StockLedgerEntry`` is append-only and does not, so without the
+    ``consignment_cost`` entry the two quietly stop agreeing and a variant's
+    cumulative stock value drifts negative over a year of consignment sales.
+
+    Checked entirely inside the ledger, which is the only way it can stay true
+    across a return: each ``consignment_cost`` entry must be immediately
+    followed by the issue it pays for, of exactly the opposite value, and no
+    entry's running balance may be negative.
+    """
+    tracked = tracked if tracked is not None else _tracked_variants()
+    if not tracked:
+        return []
+    variants_with_cost = set(
+        StockLedgerEntry.objects.filter(
+            variant_id__in=tracked,
+            voucher_type=StockLedgerEntry.VoucherType.CONSIGNMENT_COST,
+        ).values_list("variant_id", flat=True)
+    )
+    if not variants_with_cost:
+        return []
+
+    problems = []
+    entries = (
+        StockLedgerEntry.objects.filter(variant_id__in=variants_with_cost)
+        .order_by("variant_id", "warehouse_id", "posting_at", "id")
+        .values(
+            "id",
+            "variant_id",
+            "warehouse_id",
+            "voucher_type",
+            "value_change",
+            "balance_value",
+        )
+    )
+    by_place = defaultdict(list)
+    for entry in entries:
+        by_place[(entry["variant_id"], entry["warehouse_id"])].append(entry)
+
+    for (variant_id, warehouse_id), rows in by_place.items():
+        _, label = tracked[variant_id]
+        for index, entry in enumerate(rows):
+            if Decimal(entry["balance_value"]) < -TOLERANCE:
+                problems.append(
+                    f"[10] {label} @ warehouse {warehouse_id}: ledger entry "
+                    f"{entry['id']} leaves cumulative value at "
+                    f"{entry['balance_value']} — value has left a ledger it "
+                    "never entered."
+                )
+            if entry["voucher_type"] != StockLedgerEntry.VoucherType.CONSIGNMENT_COST:
+                continue
+            following = rows[index + 1] if index + 1 < len(rows) else None
+            if following is None:
+                problems.append(
+                    f"[10] {label}: consignment_cost entry {entry['id']} pays "
+                    "for an issue that was never posted."
+                )
+                continue
+            if not _close(
+                Decimal(entry["value_change"]),
+                -Decimal(following["value_change"]),
+                Decimal("0.01"),
+            ):
+                problems.append(
+                    f"[10] {label}: consignment_cost entry {entry['id']} put in "
+                    f"{entry['value_change']} but the issue it precedes took "
+                    f"out {following['value_change']}."
+                )
+    return problems
+
+
 CHECKS = (
     check_bin_quantity,
     check_bin_value,
@@ -525,6 +653,8 @@ CHECKS = (
     check_serial_batch_mirror,
     check_balance_denormalisation,
     check_lot_balances_match_allocations,
+    check_consignment_rate,
+    check_consignment_cost_entries,
 )
 
 
@@ -563,6 +693,8 @@ __all__ = [
     "check_balance_denormalisation",
     "check_bin_quantity",
     "check_bin_value",
+    "check_consignment_cost_entries",
+    "check_consignment_rate",
     "check_identity_uniqueness",
     "check_ledger_allocations",
     "check_lot_balances_match_allocations",

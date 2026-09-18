@@ -63,6 +63,14 @@ PERMISSION_CATALOG = [
             _perm("inventory.adjust_batch_balance", "تعديل رصيد دفعة", "تعديل كمية دفعة داخل مستودع معيّن."),
             _perm("inventory.quarantine_batch", "حجر الدفعة وتفعيل أمر الاستدعاء", "إيقاف بيع دفعة في كل الفروع فورًا."),
             _perm("inventory.override_expired_batch_sale", "تجاوز حظر بيع الدفعات منتهية الصلاحية", "السماح ببيع دفعة انتهت صلاحيتها."),
+            _perm("inventory.view_consignmentagreement", "عرض سندات الأمانات", "الاطلاع على سندات استلام الأمانات وشروطها."),
+            _perm("inventory.manage_consignmentagreement", "تحرير سندات الأمانات", "استلام الأمانات وتحديد شروط العمولة والمسؤولية."),
+            # Deciding what the shop owes somebody moves money; seeing that it
+            # owes it does not. The pair is split for the same reason the stock
+            # count splits counting from applying.
+            _perm("inventory.disburse_consignment_payout", "صرف مستحقات الأمانات", "تسليم صاحب الأمانة مستحقاته من الصندوق."),
+            _perm("inventory.view_consignment_liability", "عرض مستحقات الأمانات", "الاطلاع على المستحقات والمطالبات القائمة."),
+            _perm("inventory.manage_unitattributedefinition", "إدارة خصائص الوحدات", "تعريف حقول الحالة والملحقات لكل نوع صنف."),
         ],
     },
     {

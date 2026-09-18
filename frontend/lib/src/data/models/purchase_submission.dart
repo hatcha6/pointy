@@ -561,6 +561,7 @@ class PurchaseOrderDraft {
               unitCostInCurrency: isForeign ? line.unitCost : null,
               unit: line.unitCode,
               expiryDate: line.expiryDate,
+              units: line.units,
             ),
           )
           .toList(growable: false),
@@ -801,6 +802,7 @@ class PurchaseDraftLine {
     this.unitFactor = 1,
     this.unitAllowsFractional = false,
     this.expiryDate,
+    this.units = const [],
   });
 
   final ProductVariant variant;
@@ -823,6 +825,9 @@ class PurchaseDraftLine {
   /// the quantity keyboard.
   final bool unitAllowsFractional;
   final DateTime? expiryDate;
+
+  /// Identifiers scanned at the counter; see [PurchaseOrderLineDraft.units].
+  final List<ReceiptUnitCapture> units;
 
   double get subtotal => unitCost * quantity;
 
@@ -896,6 +901,7 @@ class PurchaseOrderLineDraft {
     this.unit = '',
     this.expiryDate,
     this.unitCostInCurrency,
+    this.units = const [],
   });
 
   final int variantId;
@@ -912,6 +918,13 @@ class PurchaseOrderLineDraft {
   /// base-currency order.
   final double? unitCostInCurrency;
 
+  /// Identifiers captured at the counter, for the one flow where ordering and
+  /// receiving are the same act: a shop buying a handset off a walk-in seller
+  /// scans the IMEI while the person is still standing there. Ignored by every
+  /// other purchase path, and empty for everything a shop counts rather than
+  /// identifies.
+  final List<ReceiptUnitCapture> units;
+
   Map<String, Object?> toJson() {
     final normalizedUnit = unit.trim();
     return {
@@ -923,6 +936,7 @@ class PurchaseOrderLineDraft {
       if (unitCostInCurrency != null)
         'unit_cost_in_currency': unitCostInCurrency!.toStringAsFixed(2),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
+      if (units.isNotEmpty) 'units': [for (final unit in units) unit.toJson()],
     };
   }
 }

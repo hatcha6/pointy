@@ -138,6 +138,13 @@ CASHIER_PERMISSION_CODES = (
     # easier to grant later than to claw back.
     "inventory.view_stockunit",
     "inventory.view_stockbatch",
+    # The counter is where a consignor turns up to collect, so the cashier can
+    # see what is owed and hand it over. It is audited, it prints a voucher both
+    # parties sign, and a shop that would rather it were a manager's job revokes
+    # it per user.
+    "inventory.view_consignmentagreement",
+    "inventory.view_consignment_liability",
+    "inventory.disburse_consignment_payout",
     "sales.add_order",
     "sales.view_order",
     "sales.add_registersession",
@@ -330,6 +337,11 @@ SUPERVISOR_PERMISSION_CODES = (
     "inventory.view_stockbatch",
     "inventory.manage_batches",
     "inventory.adjust_batch_balance",
+    # Taking somebody's watch in on consignment is stock work: the clerk writes
+    # the voucher, a manager settles anything that goes wrong with it.
+    "inventory.view_consignmentagreement",
+    "inventory.manage_consignmentagreement",
+    "inventory.view_consignment_liability",
     # Receiving stock against purchase orders.
     "purchasing.view_purchaseorder",
     "purchasing.receive_purchaseorder",

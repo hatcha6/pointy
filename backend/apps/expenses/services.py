@@ -283,15 +283,19 @@ def _expense_rows(start, end):
 
 def _register_payout_rows(start_dt, end_dt):
     # Standalone pay-outs only: a pay-out linked to an Expense is already
-    # represented by its expense row, and one linked to a SupplierPayment (POS
-    # cash purchase) by its purchase-order row — excluding both here avoids
-    # double counting.
+    # represented by its expense row, one linked to a SupplierPayment (POS cash
+    # purchase) by its purchase-order row, and one paying a consignor by its own
+    # payout document — excluding all three here avoids double counting. A
+    # consignor payout is also not the shop spending money: it is handing over
+    # money that was never the shop's, and an expenses ledger that showed it as
+    # a cost would overstate what the shop spent by the whole of it.
     queryset = RegisterCashMovement.objects.filter(
         movement_type=RegisterCashMovement.MovementType.PAY_OUT,
         created_at__gte=start_dt,
         created_at__lt=end_dt,
         expense__isnull=True,
         supplier_payment__isnull=True,
+        consignor_payouts__isnull=True,
     )
     return [
         _row(

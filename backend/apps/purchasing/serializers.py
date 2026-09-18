@@ -222,6 +222,59 @@ class _PurchaseLineVariantField(serializers.PrimaryKeyRelatedField):
         return super().to_internal_value(data)
 
 
+class ReceiptUnitCaptureSerializer(serializers.Serializer):
+    """One identified article, as the receiver scanned or typed it.
+
+    Everything but ``code`` is optional, and ``code`` itself is optional too —
+    a blank row is a placeholder the shop owes an identifier for, which is what
+    ``serialized_capture_later_allowed`` buys.
+    """
+
+    code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    secondary_code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    supplier_code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    identifier_kind = serializers.ChoiceField(
+        choices=[kind for kind, _label in IdentifierKind.CHOICES],
+        required=False,
+    )
+    unit_cost = serializers.DecimalField(
+        max_digits=18, decimal_places=6, required=False, allow_null=True
+    )
+    list_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True
+    )
+    attributes = serializers.DictField(required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    batch_code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+
+    def validate(self, attrs):
+        """Warn about an identifier that looks wrong; never wall it off.
+
+        A failed IMEI Luhn is almost always a keying error, and catching it at
+        receipt beats catching it at a warranty claim two years later — but a
+        guard that blocks a legitimate oddity gets disabled, and a disabled guard
+        catches nothing. So the warnings ride back on the row and the client
+        decides, exactly as ``purchase-cost-guard`` does for a mistyped cost.
+        """
+        code = attrs.get("code")
+        if code:
+            attrs["identifier_warnings"] = [
+                warning.__dict__
+                for warning in check_identifier(
+                    code, kind=attrs.get("identifier_kind") or IdentifierKind.SERIAL
+                )
+            ]
+        return attrs
+
+
 class PurchaseLineSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = _PurchaseLineVariantField(
@@ -243,6 +296,12 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         source="variant.product.tracking_mode",
         read_only=True,
     )
+    # Identifiers captured at the counter, for the one flow where ordering and
+    # receiving are the same act: a shop buying a handset off a walk-in seller
+    # scans the IMEI while the person is still standing there. Write-only and
+    # stripped before the line is written — the units belong to the receipt the
+    # POS cash purchase immediately makes, not to the order line.
+    units = ReceiptUnitCaptureSerializer(many=True, required=False, write_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discount_amount = serializers.DecimalField(
         max_digits=10,
@@ -362,6 +421,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "effective_line_total",
             "net_line_total",
             "line_total",
+            "units",
         ]
         read_only_fields = (
             "id",
@@ -1927,59 +1987,6 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
             request=self.context.get("request"),
             **validated_data,
         )
-
-
-class ReceiptUnitCaptureSerializer(serializers.Serializer):
-    """One identified article, as the receiver scanned or typed it.
-
-    Everything but ``code`` is optional, and ``code`` itself is optional too —
-    a blank row is a placeholder the shop owes an identifier for, which is what
-    ``serialized_capture_later_allowed`` buys.
-    """
-
-    code = serializers.CharField(
-        max_length=120, required=False, allow_blank=True, trim_whitespace=True
-    )
-    secondary_code = serializers.CharField(
-        max_length=120, required=False, allow_blank=True, trim_whitespace=True
-    )
-    supplier_code = serializers.CharField(
-        max_length=120, required=False, allow_blank=True, trim_whitespace=True
-    )
-    identifier_kind = serializers.ChoiceField(
-        choices=[kind for kind, _label in IdentifierKind.CHOICES],
-        required=False,
-    )
-    unit_cost = serializers.DecimalField(
-        max_digits=18, decimal_places=6, required=False, allow_null=True
-    )
-    list_price = serializers.DecimalField(
-        max_digits=10, decimal_places=2, required=False, allow_null=True
-    )
-    attributes = serializers.DictField(required=False)
-    notes = serializers.CharField(required=False, allow_blank=True)
-    batch_code = serializers.CharField(
-        max_length=120, required=False, allow_blank=True, trim_whitespace=True
-    )
-
-    def validate(self, attrs):
-        """Warn about an identifier that looks wrong; never wall it off.
-
-        A failed IMEI Luhn is almost always a keying error, and catching it at
-        receipt beats catching it at a warranty claim two years later — but a
-        guard that blocks a legitimate oddity gets disabled, and a disabled guard
-        catches nothing. So the warnings ride back on the row and the client
-        decides, exactly as ``purchase-cost-guard`` does for a mistyped cost.
-        """
-        code = attrs.get("code")
-        if code:
-            attrs["identifier_warnings"] = [
-                warning.__dict__
-                for warning in check_identifier(
-                    code, kind=attrs.get("identifier_kind") or IdentifierKind.SERIAL
-                )
-            ]
-        return attrs
 
 
 class ReceiptBatchCaptureSerializer(serializers.Serializer):

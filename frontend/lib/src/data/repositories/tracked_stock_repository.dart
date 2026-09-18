@@ -114,6 +114,19 @@ class TrackedStockRepository {
     );
   }
 
+  /// Take an article off the shelf because it is gone, or broken.
+  ///
+  /// A movement, not a status flip: the bin drops by one and the ledger records
+  /// why, which is the difference between a unit nobody can find and a quantity
+  /// that still counts it.
+  Future<Result<StockUnit>> writeOffUnit(int unitId, {required String reason}) {
+    return Result.guard(() => _service.writeOffStockUnit(unitId, reason: reason));
+  }
+
+  Future<Result<bool>> resendConsignorSms(int unitId) {
+    return Result.guard(() => _service.resendConsignorSms(unitId));
+  }
+
   Future<Result<StockBatchPage>> loadBatches({
     int? variantId,
     int? productId,

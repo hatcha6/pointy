@@ -117,6 +117,12 @@ from apps.core.relay_views import (
     RelayInstallationView,
     RelayPairingView,
 )
+from apps.inventory.consignment_views import (
+    ConsignmentAgreementViewSet,
+    ConsignmentPositionView,
+    ConsignorPayoutViewSet,
+    UnitAttributeDefinitionViewSet,
+)
 from apps.inventory.tracked_views import StockBatchViewSet, StockUnitViewSet
 from apps.catalog.views import ResolveBarcodeView
 from apps.inventory.views import (
@@ -194,6 +200,19 @@ router.register("warehouses", WarehouseViewSet, basename="warehouse")
 router.register("stock-transfers", StockTransferViewSet, basename="stock-transfer")
 router.register("stock-units", StockUnitViewSet, basename="stock-unit")
 router.register("stock-batches", StockBatchViewSet, basename="stock-batch")
+router.register(
+    "consignment-agreements",
+    ConsignmentAgreementViewSet,
+    basename="consignment-agreement",
+)
+router.register(
+    "consignor-payouts", ConsignorPayoutViewSet, basename="consignor-payout"
+)
+router.register(
+    "unit-attribute-definitions",
+    UnitAttributeDefinitionViewSet,
+    basename="unit-attribute-definition",
+)
 router.register("orders", OrderViewSet)
 router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)
@@ -332,6 +351,13 @@ urlpatterns = [
         "api/resolve-barcode/",
         ResolveBarcodeView.as_view(),
         name="resolve-barcode",
+    ),
+    # الأمانات: stock value, cash collected, what is owed, and what the shop
+    # earned — in one read, from one module, so nothing restates them.
+    path(
+        "api/inventory/consignment-position/",
+        ConsignmentPositionView.as_view(),
+        name="consignment-position",
     ),
     # The "what changed" counters clients poll while idle. Redis-only, 304 on
     # an unchanged vector — see apps.core.state_views.

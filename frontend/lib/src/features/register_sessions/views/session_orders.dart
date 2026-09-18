@@ -721,6 +721,7 @@ class SessionOrderTile extends StatelessWidget {
     SaleOrder order, {
     required List<SaleReturnLineDraft> lines,
     String reason,
+    String? consignmentAction,
   })?
   onReturn;
 
@@ -767,8 +768,12 @@ class SessionOrderTile extends StatelessWidget {
             : (order, reason) => onVoid!(order, reason: reason),
         onReturn: onReturn == null
             ? null
-            : (order, lines, reason) =>
-                  onReturn!(order, lines: lines, reason: reason),
+            : (order, lines, reason, {consignmentAction}) => onReturn!(
+                order,
+                lines: lines,
+                reason: reason,
+                consignmentAction: consignmentAction,
+              ),
       ),
     );
   }

@@ -26,6 +26,12 @@ class ReportRun(TimeStampedModel):
         DISCOUNT_AUDIT = "discount_audit", "Discounts, voids and returns"
         SALES_BY_STAFF = "sales_by_staff", "Sales by staff and hour"
         MONTH_END_PACK = "month_end_pack", "Month-end pack"
+        # Identified stock: the four questions a quantity-only ledger cannot be
+        # made to answer at all.
+        UNIT_AGING = "unit_aging", "Identified stock aging"
+        UNIT_MARGIN = "unit_margin", "Margin per identified article"
+        UNIT_LEDGER = "unit_ledger", "One article's life"
+        CONSIGNMENT_LEDGER = "consignment_ledger", "Consignment ledger and payables"
 
     class OutputFormat(models.TextChoices):
         JSON = "json", "JSON"

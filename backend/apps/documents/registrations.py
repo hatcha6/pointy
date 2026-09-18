@@ -431,3 +431,86 @@ def _register_stock_transfer_receipt():
 
 _register_stock_transfer()
 _register_stock_transfer_receipt()
+
+
+def _register_consignment_agreement():
+    from apps.inventory import consignment_documents
+    from apps.inventory.models import ConsignmentAgreement
+
+    registry.register(
+        key="consignment_agreement",
+        label="سند استلام أمانة",
+        model=ConsignmentAgreement,
+        number_field="number",
+        # Custody, not money: signing for somebody's watch settles nothing, so
+        # nothing dates it in the money registry. The payout that eventually
+        # follows is its own document and carries its own date.
+        money_date_field=None,
+        # The terms are argued over across a counter before anybody signs, and
+        # that argument is the draft.
+        has_draft_state=True,
+        draft_effects=(),
+        # Submitting it is what starts custody: the goods come onto the shelf
+        # and the shop's promise about them begins.
+        submit_effects=("stock_ledger", "consignor_liability"),
+        # Put right by taking the goods back and signing a new page. Never
+        # amended: the clause on a signed voucher is not a figure anybody gets
+        # to revise afterwards.
+        corrections=(Correction.COUNTER,),
+        mutable_after_submit=("notes", "expires_on"),
+        derived_fields=(),
+        # Refused outright once any of its units has moved — see the reversal.
+        blocks_cancel=(),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "inventory.manage_consignmentagreement",
+            Transition.CANCEL: "inventory.manage_consignmentagreement",
+            Transition.EDIT: "inventory.manage_consignmentagreement",
+        },
+        correction_window=None,
+        reverse=consignment_documents.reverse_agreement,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
+def _register_consignor_payout():
+    from apps.inventory import consignment_documents
+    from apps.inventory.models import ConsignorPayout
+
+    registry.register(
+        key="consignor_payout",
+        label="سند صرف أمانة",
+        model=ConsignorPayout,
+        number_field="number",
+        money_date_field="paid_at",
+        has_draft_state=False,
+        draft_effects=(),
+        # Its own component in the money position, under the same
+        # standalone-pay-out rule the expenses flow follows — never an expense
+        # and never a supplier payment, both of which would file consignment
+        # money under a category it does not belong to.
+        submit_effects=("consignor_liability", "money_position", "register_payout"),
+        corrections=(Correction.COUNTER, Correction.ALLOW_AFTER_SUBMIT),
+        mutable_after_submit=("reference", "notes"),
+        derived_fields=(),
+        blocks_cancel=(),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "inventory.disburse_consignment_payout",
+            Transition.CANCEL: "inventory.disburse_consignment_payout",
+            Transition.EDIT: "inventory.disburse_consignment_payout",
+        },
+        correction_window=None,
+        reverse=consignment_documents.reverse_payout,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
+_register_consignment_agreement()
+_register_consignor_payout()

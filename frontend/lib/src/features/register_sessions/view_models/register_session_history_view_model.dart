@@ -663,10 +663,15 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     SaleOrder order, {
     required List<SaleReturnLineDraft> lines,
     String reason = '',
+    String? consignmentAction,
   }) async {
     final result = await _saleRepository.returnItems(
       saleOrderId: order.id,
-      draft: SaleReturnDraft(lines: lines, reason: reason),
+      draft: SaleReturnDraft(
+        lines: lines,
+        reason: reason,
+        consignmentAction: consignmentAction,
+      ),
     );
     return _handleOrderAdjustmentResult(
       result,

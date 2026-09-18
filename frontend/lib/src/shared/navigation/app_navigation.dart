@@ -22,6 +22,7 @@ enum AppNavigationDestination {
   stockCount,
   stockUnits,
   stockBatches,
+  consignmentPayables,
   registerSessions,
   cameras,
   employees,
@@ -63,6 +64,8 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.stockCount => AppCapability.countStock,
     AppNavigationDestination.stockUnits => AppCapability.viewStockUnits,
     AppNavigationDestination.stockBatches => AppCapability.viewStockBatches,
+    AppNavigationDestination.consignmentPayables =>
+      AppCapability.viewConsignmentPayables,
     AppNavigationDestination.registerSessions =>
       AppCapability.viewRegisterSessions,
     AppNavigationDestination.cameras => AppCapability.watchCamerasLive,

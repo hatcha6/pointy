@@ -277,6 +277,14 @@ def transition_job(
         update_fields += ["status", "completed_at"]
 
     job.save(update_fields=update_fields)
+    if to_stage.is_terminal and job.stock_unit_id is not None:
+        # The screen this job fitted is now part of what the handset cost, so
+        # the loss guard starts comparing the asking price against the truth
+        # (§5.6). Done after the save, because it writes the job's own
+        # capitalisation stamps.
+        from .refurbishment import capitalise
+
+        capitalise(job)
     JobStageEvent.objects.create(
         job=job,
         from_stage=from_stage,
@@ -420,6 +428,14 @@ def reopen_job(*, job, request=None, note=""):
             "updated_at",
         ]
     )
+    if job.stock_unit_id is not None:
+        # Back on the bench means the work is no longer finished, so the cost it
+        # put on the article comes off again. Leaving it there would have the
+        # loss guard refusing a perfectly good price on a handset that never got
+        # the screen.
+        from .refurbishment import release
+
+        release(job)
     record_domain_event(
         name="operations.job.reopened",
         event_type=AnalyticsEvent.EventType.AUDIT,

@@ -86,7 +86,10 @@ class UnitStatusHasOneWriterTests(SimpleTestCase):
     def test_no_other_module_writes_a_unit_status(self):
         offenders = _offenders(
             r"(StockUnit\.objects[\w.()\[\]\"', ]*\.update\([^)]*status=)"
-            r"|(\bunit\.status\s*=)",
+            # ``=`` but not ``==``: reading a unit's status is ordinary, and a
+            # guard that cannot tell a comparison from an assignment sends
+            # everybody to the allow-list, which is how a guard stops guarding.
+            r"|(\bunit\.status\s*=(?!=))",
             self.ALLOWED,
         )
         self.assertEqual(

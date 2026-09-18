@@ -15,12 +15,7 @@ Future<void> showSaleOrderDetailsSheet(
   SaleOrderDetailLoader? loadDetail,
   Future<bool> Function(SaleOrder order)? onReprint,
   Future<bool> Function(SaleOrder order, String reason)? onVoid,
-  Future<bool> Function(
-    SaleOrder order,
-    List<SaleReturnLineDraft> lines,
-    String reason,
-  )?
-  onReturn,
+  SaleOrderReturnAction? onReturn,
 }) {
   return showAdaptiveModalBottomSheet<void>(
     context: context,
@@ -55,12 +50,7 @@ class _SaleOrderDetailsSheetBody extends StatefulWidget {
   final SaleOrderDetailLoader? loadDetail;
   final Future<bool> Function(SaleOrder order)? onReprint;
   final Future<bool> Function(SaleOrder order, String reason)? onVoid;
-  final Future<bool> Function(
-    SaleOrder order,
-    List<SaleReturnLineDraft> lines,
-    String reason,
-  )?
-  onReturn;
+  final SaleOrderReturnAction? onReturn;
 
   @override
   State<_SaleOrderDetailsSheetBody> createState() =>

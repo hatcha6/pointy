@@ -131,7 +131,16 @@ BUILDERS = {}
 def _load():
     if BUILDERS:
         return BUILDERS
-    from .builders import cash, inventory, people, profit, purchasing, receivables, sales
+    from .builders import (
+        cash,
+        identified,
+        inventory,
+        people,
+        profit,
+        purchasing,
+        receivables,
+        sales,
+    )
     from .models import ReportRun
 
     Type = ReportRun.ReportType
@@ -156,6 +165,10 @@ def _load():
             Type.PRODUCT_MARGIN: sales.product_margin,
             Type.DISCOUNT_AUDIT: sales.discount_audit,
             Type.SALES_BY_STAFF: sales.sales_by_staff,
+            Type.UNIT_AGING: identified.unit_aging,
+            Type.UNIT_MARGIN: identified.unit_margin,
+            Type.UNIT_LEDGER: identified.unit_ledger,
+            Type.CONSIGNMENT_LEDGER: identified.consignment_ledger,
         }
     )
     return BUILDERS

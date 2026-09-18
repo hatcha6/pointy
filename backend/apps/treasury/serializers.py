@@ -216,7 +216,29 @@ class TreasuryTotalsSerializer(serializers.Serializer):
         return _money(totals["total"])
 
 
+class ConsignmentCustodySerializer(serializers.Serializer):
+    unit_count = serializers.IntegerField()
+    declared_value = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class TreasuryObligationsSerializer(serializers.Serializer):
+    """What the shop is holding that belongs to somebody else.
+
+    An **overlay**, never a component. The cash in the drawer really is there;
+    what is untrue is that all of it is the shop's. Subtracting this from the
+    money position would double-count it the moment the payout is made, so the
+    screen renders it beneath the total as *منها مستحقات أمانات* (§5.8).
+    """
+
+    consignor_payable = serializers.DecimalField(max_digits=14, decimal_places=2)
+    consignor_claims_open = serializers.DecimalField(
+        max_digits=14, decimal_places=2
+    )
+    custody = ConsignmentCustodySerializer()
+
+
 class TreasuryPositionSerializer(serializers.Serializer):
     as_of = serializers.DateField()
     accounts = AccountPositionSerializer(many=True)
     totals = TreasuryTotalsSerializer()
+    obligations = TreasuryObligationsSerializer()

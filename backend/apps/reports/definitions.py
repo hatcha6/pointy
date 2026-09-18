@@ -184,6 +184,42 @@ REPORT_DEFINITIONS = {
             ReportType.REGISTER_CLOSURE,
         ),
     ),
+    ReportType.UNIT_AGING: ReportDefinition(
+        key=ReportType.UNIT_AGING,
+        category="inventory",
+        permissions=("inventory.view_stockunit",),
+        headline=("unit_count", "capital_on_shelf", "stale_unit_count", "oldest_days"),
+        # What is on the shelf *now*, and for how long. A window would answer a
+        # question nobody asks: an article's age is measured from today.
+        point_in_time=True,
+    ),
+    ReportType.UNIT_MARGIN: ReportDefinition(
+        key=ReportType.UNIT_MARGIN,
+        category="inventory",
+        # Reads what every article cost, so it takes the cost permission rather
+        # than the list one: this report *is* the cost mask's subject matter.
+        permissions=("inventory.view_stockunit_cost",),
+        headline=("units_sold", "revenue", "gross_profit", "loss_making_units"),
+    ),
+    ReportType.UNIT_LEDGER: ReportDefinition(
+        key=ReportType.UNIT_LEDGER,
+        category="inventory",
+        permissions=("inventory.view_stockunit",),
+        headline=("status", "spell_count", "event_count"),
+        required_params=("code",),
+        point_in_time=True,
+    ),
+    ReportType.CONSIGNMENT_LEDGER: ReportDefinition(
+        key=ReportType.CONSIGNMENT_LEDGER,
+        category="inventory",
+        permissions=("inventory.view_consignment_liability",),
+        headline=(
+            "consignor_payable",
+            "shop_commission",
+            "custody_unit_count",
+            "custody_declared_value",
+        ),
+    ),
 }
 
 

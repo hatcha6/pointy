@@ -25,6 +25,7 @@ from apps.discounts.cache import (
 from apps.discounts.models import DiscountRule
 from apps.discounts.services import rounding_metadata_payload
 from .tracked_lines import order_line_identifiers
+from .tracked_return import BUY_IN, CONSIGNMENT_ACTIONS
 from .models import (
     Order,
     OrderExchange,
@@ -864,6 +865,26 @@ def _variant_pks(raw_lines):
             continue
 
 
+def load_line_stock_units(raw_lines):
+    """``{pk: unit}`` for every identified article the raw cart lines name.
+
+    Runs before field validation, like the variant preload above, so anything
+    that is not a plain pk is skipped here and left for the field to reject.
+    """
+    from apps.inventory.models import StockUnit
+
+    ids = set()
+    for raw_line in raw_lines:
+        for value in raw_line.get("stock_units") or []:
+            try:
+                ids.add(int(value))
+            except (TypeError, ValueError):
+                continue
+    if not ids:
+        return {}
+    return StockUnit.objects.in_bulk(ids)
+
+
 class CheckoutLineListSerializer(serializers.ListSerializer):
     """Resolve every cart line's variant in one bulk load, before the lines
     validate.
@@ -882,9 +903,16 @@ class CheckoutLineListSerializer(serializers.ListSerializer):
 
     def to_internal_value(self, data):
         self.preloaded_variants = {}
-        if isinstance(data, list) and len(data) >= MIN_LINES_TO_PRELOAD:
+        self.preloaded_units = {}
+        if isinstance(data, list):
             lines = [line for line in data if isinstance(line, dict)]
-            self.preloaded_variants = load_line_variants(_variant_pks(lines))
+            if len(data) >= MIN_LINES_TO_PRELOAD:
+                self.preloaded_variants = load_line_variants(_variant_pks(lines))
+            # Unconditionally, unlike the variants above: a serialized cart is
+            # very often one line, and that line's price comes off the article
+            # rather than off the product (§5.7). One query, and none at all for
+            # the shop that identifies nothing.
+            self.preloaded_units = load_line_stock_units(lines)
         return super().to_internal_value(data)
 
 
@@ -977,8 +1005,40 @@ class CheckoutLineSerializer(serializers.Serializer):
         # per-unit price (the selected unit's price + modifier deltas) rides on the
         # line data so the discount engine and OrderLine creation both use it.
         delta = self._validate_and_price_modifiers(variant, attrs.get("modifiers", []))
-        attrs["effective_unit_price"] = unit_sale_price(variant, resolved) + delta
+        # ``is None``, not ``or``: a unit priced at zero is a real thing — a
+        # warranty replacement handed over at no charge — and ``or`` would
+        # quietly charge the variant's price for it.
+        asking = self._unit_asking_price(attrs, resolved)
+        if asking is None:
+            asking = unit_sale_price(variant, resolved)
+        attrs["effective_unit_price"] = asking + delta
         return attrs
+
+    def _unit_asking_price(self, attrs, resolved):
+        """This particular article's own price, when it has one.
+
+        ``line price = unit.list_price ?? variant unit price``. Two handsets of
+        the same model were bought at two prices and sell at two prices, and
+        that is the ordinary case in a used-goods trade rather than an
+        exception. Everything downstream — FX, the discount engine, the loss
+        guard, every report — sees a resolved price and needs to know nothing
+        about units, which is the point of resolving it here.
+
+        Only for a line sold in the base unit: a serialized article is one
+        thing, and a per-carton price for a single handset is a contradiction
+        rather than a case to handle.
+        """
+        units = getattr(self.parent, "preloaded_units", None)
+        if not units or resolved.factor != 1:
+            return None
+        named = [
+            units.get(unit_id)
+            for unit_id in (attrs.get("stock_units") or [])
+        ]
+        named = [unit for unit in named if unit is not None]
+        if len(named) != 1:
+            return None
+        return named[0].list_price
 
     def _validate_and_price_modifiers(self, variant, selections):
         # ``.all()`` + a Python filter (not ``.filter(is_active=True)``, which
@@ -1070,6 +1130,11 @@ class CheckoutSerializer(serializers.Serializer):
         allow_empty=True,
         required=False,
     )
+    # The old handset the customer is handing over as part of the payment. A
+    # normal purchase-order payload: one supplier (them), one line at the agreed
+    # value, and the identifier captured on that line. Absent from every sale
+    # that is only a sale.
+    trade_in = serializers.JSONField(required=False, write_only=True)
     payment_method = serializers.ChoiceField(required=False, choices=[])
     amount_received = serializers.DecimalField(
         max_digits=10,
@@ -1258,10 +1323,32 @@ class CheckoutSerializer(serializers.Serializer):
         attrs["discount_result"] = discount_result
         attrs["coupon_codes"] = coupon_codes
         attrs["payments"] = payments
+        if attrs.get("trade_in"):
+            attrs["trade_in"] = self._validated_trade_in(attrs["trade_in"])
         return attrs
 
+    def _validated_trade_in(self, payload):
+        """Run the incoming article through the purchasing serializer.
+
+        Not a parallel shape: the same validation any counter purchase takes,
+        including the cost guard that blocks an implausible figure outright and
+        the unit conversion that keeps a pack cost from being read as a piece
+        cost. A trade-in is a purchase, so it is validated as one.
+        """
+        from apps.purchasing.serializers import PurchaseOrderSerializer
+
+        serializer = PurchaseOrderSerializer(
+            data=payload, context={**self.context, "pos_cash_purchase": True}
+        )
+        try:
+            serializer.is_valid(raise_exception=True)
+        except serializers.ValidationError as error:
+            raise serializers.ValidationError({"trade_in": error.detail}) from None
+        return serializer.validated_data
+
     def create(self, validated_data):
-        return checkout_order(
+        trade_in = validated_data.get("trade_in")
+        sale = lambda: checkout_order(  # noqa: E731 - deferred so a trade-in can wrap it
             register_session=self.context["register_session"],
             lines_data=validated_data["lines"],
             payments_data=validated_data["payments"],
@@ -1274,6 +1361,34 @@ class CheckoutSerializer(serializers.Serializer):
             due_date_supplied="due_date" in validated_data,
             reserve_stock=validated_data.get("reserve_stock", False),
             request=self.context.get("request"),
+        )
+        if not trade_in:
+            return sale()
+        # The customer handed a handset over as part of the payment. That is a
+        # purchase and a sale in one act, and both have to stand or fall
+        # together — so the sale runs inside the trade-in's transaction rather
+        # than beside it.
+        from .trade_in import record_trade_in, refuse_trade_in_above_sale
+
+        refuse_trade_in_above_sale(
+            trade_in_total=self._trade_in_total(trade_in),
+            sale_total=validated_data["computed_total"],
+        )
+        _, order = record_trade_in(
+            purchase_payload=trade_in,
+            checkout=sale,
+            request=self.context.get("request"),
+        )
+        return order
+
+    @staticmethod
+    def _trade_in_total(purchase_payload):
+        return sum(
+            (
+                Decimal(str(line["unit_cost"])) * Decimal(str(line["quantity"]))
+                for line in purchase_payload.get("lines", [])
+            ),
+            Decimal("0.00"),
         )
 
 
@@ -1642,6 +1757,14 @@ class OrderVoidSerializer(OrderAdjustmentSerializer):
 
 class OrderReturnSerializer(OrderAdjustmentSerializer):
     lines = OrderAdjustmentLineInputSerializer(many=True, allow_empty=False)
+    # Only consulted when a returned article is a consignment whose owner has
+    # already been paid, and then it is the whole question: does the shop keep
+    # the watch it paid ten thousand for, or does it go back on the shelf as the
+    # consignor's with a receivable against them? Both are defensible; the
+    # default is the one where the shop owns what it paid for (§5.8).
+    consignment_action = serializers.ChoiceField(
+        choices=CONSIGNMENT_ACTIONS, required=False, default=BUY_IN
+    )
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -1657,6 +1780,7 @@ class OrderReturnSerializer(OrderAdjustmentSerializer):
             reason=self.validated_data.get("reason", ""),
             request=self.context.get("request"),
             register_session=self.context.get("adjustment_register_session"),
+            consignment_action=self.validated_data.get("consignment_action", BUY_IN),
         )
 
 

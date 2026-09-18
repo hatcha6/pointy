@@ -86,6 +86,7 @@ import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/inventory/view_models/transfers_view_model.dart';
+import 'features/inventory/views/consignment_payables_screen.dart';
 import 'features/inventory/views/stock_batches_screen.dart';
 import 'features/inventory/views/stock_units_screen.dart';
 import 'features/settings/view_models/warehouses_view_model.dart';
@@ -285,6 +286,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.stockCount => stockCountRouteBuilder,
       AppNavigationDestination.stockUnits => stockUnitsRouteBuilder,
       AppNavigationDestination.stockBatches => stockBatchesRouteBuilder,
+      AppNavigationDestination.consignmentPayables =>
+        consignmentPayablesRouteBuilder,
       AppNavigationDestination.registerSessions => registerSessionsRouteBuilder,
       AppNavigationDestination.cameras => camerasRouteBuilder,
       AppNavigationDestination.employees => employeePayrollRouteBuilder,
@@ -1155,7 +1158,10 @@ class _AuthenticatedRoutes implements AppNavigation {
   Widget stockUnitsRouteBuilder(BuildContext routeContext) {
     return _screen(
       'stock_units',
-      StockUnitsScreen(viewModel: dependencies.trackedStockViewModel),
+      StockUnitsScreen(
+        viewModel: dependencies.trackedStockViewModel,
+        capabilities: capabilities,
+      ),
     );
   }
 
@@ -1163,6 +1169,19 @@ class _AuthenticatedRoutes implements AppNavigation {
     return _screen(
       'stock_batches',
       StockBatchesScreen(viewModel: dependencies.trackedStockViewModel),
+    );
+  }
+
+  Widget consignmentPayablesRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'consignment_payables',
+      ConsignmentPayablesScreen(
+        viewModel: dependencies.consignmentViewModel,
+        repository: dependencies.consignmentRepository,
+        catalog: dependencies.catalogRepository,
+        contacts: dependencies.contactRepository,
+        capabilities: capabilities,
+      ),
     );
   }
 

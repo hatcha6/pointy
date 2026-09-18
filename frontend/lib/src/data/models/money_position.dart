@@ -252,16 +252,54 @@ class MoneyPositionTotals {
   }
 }
 
+/// What the shop is holding that belongs to somebody else.
+///
+/// An **overlay**, never a component. The cash in the drawer really is there;
+/// what is untrue is that all of it is the shop's — so this renders beneath the
+/// total as *منها مستحقات أمانات* and is never subtracted from it. Subtracting
+/// it would double-count the money the moment the payout is actually made.
+class MoneyObligations {
+  const MoneyObligations({
+    this.consignorPayable = 0,
+    this.claimsOpen = 0,
+    this.custodyUnitCount = 0,
+    this.custodyDeclaredValue = 0,
+  });
+
+  final double consignorPayable;
+  final double claimsOpen;
+  final int custodyUnitCount;
+  final double custodyDeclaredValue;
+
+  bool get isEmpty =>
+      consignorPayable == 0 && claimsOpen == 0 && custodyUnitCount == 0;
+
+  factory MoneyObligations.fromJson(Map<String, Object?> json) {
+    final custody = json['custody'];
+    final custodyMap = custody is Map
+        ? custody.cast<String, Object?>()
+        : const <String, Object?>{};
+    return MoneyObligations(
+      consignorPayable: _moneyFromJson(json['consignor_payable']),
+      claimsOpen: _moneyFromJson(json['consignor_claims_open']),
+      custodyUnitCount: _intFromJson(custodyMap['unit_count']),
+      custodyDeclaredValue: _moneyFromJson(custodyMap['declared_value']),
+    );
+  }
+}
+
 class MoneyPosition {
   const MoneyPosition({
     required this.accounts,
     required this.totals,
     this.asOf,
+    this.obligations = const MoneyObligations(),
   });
 
   final List<MoneyAccountPosition> accounts;
   final MoneyPositionTotals totals;
   final DateTime? asOf;
+  final MoneyObligations obligations;
 
   bool get isEmpty => accounts.isEmpty;
 
@@ -287,6 +325,9 @@ class MoneyPosition {
         (json['totals'] as Map?)?.cast<String, Object?>() ?? const {},
       ),
       asOf: _dateTimeFromJson(json['as_of']),
+      obligations: MoneyObligations.fromJson(
+        (json['obligations'] as Map?)?.cast<String, Object?>() ?? const {},
+      ),
     );
   }
 }

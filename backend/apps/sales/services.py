@@ -3,7 +3,7 @@ from datetime import timedelta
 from decimal import Decimal, ROUND_DOWN
 
 from django.db import transaction
-from django.db.models import Prefetch, Sum, prefetch_related_objects
+from django.db.models import Prefetch, Q, Sum, prefetch_related_objects
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -43,6 +43,12 @@ from apps.inventory.services import (
     stock_snapshot,
 )
 from . import documents as sales_documents
+from .tracked_return import BUY_IN, return_units_for_line
+from .tracked_sale import (
+    finish_sold_units,
+    lines_by_variant,
+    stamp_consignment_payouts,
+)
 from .models import (
     Order,
     OrderAdjustment,
@@ -425,6 +431,152 @@ def sale_cost_basis(variants, *, warehouse=None):
     )
 
 
+#: Where the cart's resolved units are parked for the rest of the request. The
+#: loss guard and the consignment floor both walk the same lines a moment apart,
+#: and the cashier is waiting on both.
+_UNITS_ATTR = "_pointy_named_units"
+
+
+def units_named_by_lines(lines_data):
+    """Every identified article the cart named, by id and by normalised code.
+
+    One query for the whole cart, and none at all for a cart that named none —
+    which is every cart in a shop that does not track units. Returned as a pair
+    of maps because the picker sends ids and a scanner sends a code, and both
+    reach the same article.
+
+    Memoised on the cart's first line for the life of the request: the loss
+    guard, the consignment floor and the checkout itself ask the same question
+    within a few microseconds of each other, and asking it three times is three
+    round trips on the busiest write path in the shop.
+    """
+    from apps.inventory.identity import normalize_identifier
+
+    anchor = lines_data[0] if lines_data else None
+    if isinstance(anchor, dict) and _UNITS_ATTR in anchor:
+        return anchor[_UNITS_ATTR]
+
+    ids = set()
+    codes = set()
+    for line_data in lines_data:
+        ids.update(line_data.get("stock_units") or [])
+        codes.update(
+            normalize_identifier(code)
+            for code in (line_data.get("stock_unit_codes") or [])
+        )
+    codes.discard("")
+    if not ids and not codes:
+        if isinstance(anchor, dict):
+            anchor[_UNITS_ATTR] = ({}, {})
+        return {}, {}
+    query = Q()
+    if ids:
+        query |= Q(pk__in=ids)
+    if codes:
+        query |= Q(code_normalized__in=codes, status__in=StockUnit.LIVE_STATUSES)
+    units = (
+        StockUnit.objects.filter(query)
+        .select_related("variant", "variant__product", "agreement", "consignor")
+    )
+    by_id = {}
+    by_code = {}
+    for unit in units:
+        by_id[unit.pk] = unit
+        by_code[unit.code_normalized] = unit
+    if isinstance(anchor, dict):
+        anchor[_UNITS_ATTR] = (by_id, by_code)
+    return by_id, by_code
+
+
+def line_units(line_data, by_id, by_code):
+    """The articles one cart line names, in the order it named them."""
+    from apps.inventory.identity import normalize_identifier
+
+    units = []
+    for unit_id in line_data.get("stock_units") or []:
+        unit = by_id.get(unit_id)
+        if unit is not None:
+            units.append(unit)
+    for code in line_data.get("stock_unit_codes") or []:
+        unit = by_code.get(normalize_identifier(code))
+        if unit is not None and unit not in units:
+            units.append(unit)
+    return units
+
+
+def validate_consignment_floor(lines_data, discount_result=None, *, settings=None):
+    """Refuse a fixed-payout consignment sold below what it will cost.
+
+    ``prevent_selling_at_loss`` compares an asking price against
+    ``StockUnit.stock_value``, and a consigned article's is **zero until the
+    instant of sale** — so on precisely the goods where losing money is easiest,
+    the guard that exists to stop it is switched off. A fixed-payout bag with a
+    1,200 payout sold at 900 collects 900 and owes 1,200.
+
+    This is therefore not the loss guard and is not gated on the loss guard's
+    setting: under a fixed payout the floor is ``max(reserve, payout)`` and it
+    is **not overridable**, because selling below it loses the shop its own
+    money rather than merely its commission. It is enforced here — server-side,
+    at checkout — because the till is not the only caller. Commission mode needs
+    no arithmetic floor: the payout scales with the price, so its reserve
+    protects the consignor and stays advisory.
+    """
+    from apps.inventory import consignment as consignment_service
+
+    by_id, by_code = units_named_by_lines(lines_data)
+    if not by_id and not by_code:
+        return
+    discount_by_line_key = (
+        discount_allocations_by_line_key(discount_result)
+        if discount_result is not None
+        else {}
+    )
+    refusals = []
+    for line_data in lines_data:
+        units = [unit for unit in line_units(line_data, by_id, by_code)
+                 if unit.is_consignment]
+        if not units:
+            continue
+        quantity = Decimal(line_data["quantity"])
+        unit_price = money(
+            line_data.get("effective_unit_price", line_data["variant"].unit_price)
+        )
+        line_subtotal = money(unit_price * quantity)
+        discount_total = min(
+            money(discount_by_line_key.get(checkout_line_key(line_data), Decimal("0.00"))),
+            line_subtotal,
+        )
+        # What one article on this line actually fetches, after whatever the
+        # discount engine took off it. A percentage discount on a fixed-payout
+        # line eats the shop's commission first and its own money second, and
+        # this is what stops it.
+        net = money((line_subtotal - discount_total) / quantity) if quantity else Decimal("0.00")
+        for unit in units:
+            floor = consignment_service.payout_floor(unit)
+            if floor > 0 and net < floor:
+                refusals.append(
+                    {
+                        "variant": line_data["variant"].pk,
+                        "variant_id": line_data["variant"].pk,
+                        "variant_name": line_data["variant"].full_name,
+                        "stock_unit": unit.pk,
+                        "code": unit.code,
+                        "price": f"{net:.2f}",
+                        "floor": f"{floor:.2f}",
+                    }
+                )
+    if refusals:
+        raise serializers.ValidationError(
+            {
+                "code": "consignment_below_payout",
+                "detail": (
+                    "لا يمكن بيع أمانة بسعر أقل من المبلغ المستحق لصاحبها."
+                ),
+                "consignment": refusals,
+            }
+        )
+
+
 def checkout_loss_lines(lines_data, discount_result=None, *, warehouse=None):
     discount_by_line_key = (
         discount_allocations_by_line_key(discount_result)
@@ -436,6 +588,11 @@ def checkout_loss_lines(lines_data, discount_result=None, *, warehouse=None):
     cost_by_variant = sale_cost_basis(
         [line_data["variant"] for line_data in lines_data], warehouse=warehouse
     )
+    # An identified article costs what *it* cost, never what the bin averages:
+    # a used-goods trader's two handsets of the same model were bought at two
+    # prices, and the guard that compares an asking price against a blend is a
+    # guard that lets the expensive one go out at the cheap one's floor.
+    by_id, by_code = units_named_by_lines(lines_data)
     loss_lines = []
     for line_data in lines_data:
         variant = line_data["variant"]
@@ -445,6 +602,12 @@ def checkout_loss_lines(lines_data, discount_result=None, *, warehouse=None):
         unit_factor = Decimal(line_data.get("unit_factor", 1))
         base_cost = cost_by_variant.get(variant.pk) or Decimal("0.00")
         unit_cost = money(base_cost * unit_factor)
+        named = line_units(line_data, by_id, by_code) if (by_id or by_code) else []
+        if named:
+            unit_cost = money(
+                max((unit.stock_value for unit in named), default=Decimal("0.00"))
+                * unit_factor
+            )
         if quantity <= 0 or unit_cost <= 0:
             continue
 
@@ -696,6 +859,7 @@ def checkout_order(
         discount_result=discount_result,
         warehouse=warehouse_id,
     )
+    validate_consignment_floor(lines_data, discount_result, settings=settings)
     # Quotations (عرض سعر) never move stock; standard and credit (آجل) sales
     # deduct on-hand at issue. A quotation may instead hold stock via a
     # reservation (reserve_stock_for_quote, below).
@@ -754,7 +918,9 @@ def checkout_order(
         # carry a partial (or zero) down-payment; PaymentSerializer only flips
         # the order to PAID once cumulative payments reach the total, so a
         # partial leaves it OPEN with a balance owed.
-        record_sale_stock_movements(order, stock_adjustments, request=request)
+        record_sale_stock_movements(
+            order, stock_adjustments, request=request, settings=settings
+        )
         for payment_data in payments_data:
             serializer_data = {
                 "order": order.pk,
@@ -945,7 +1111,7 @@ def prepare_sale_stock_adjustments_for_order(order):
     )
 
 
-def record_sale_stock_movements(order, stock_adjustments, *, request=None):
+def record_sale_stock_movements(order, stock_adjustments, *, request=None, settings=None):
     # Deduct every line's stock and write its ledger row in two statements
     # rather than two per line: this runs inside the cashier's checkout, and a
     # 12-line cart used to pay 24 round trips here. The per-line arithmetic is
@@ -956,6 +1122,7 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
     movements = []
 
     sold_at = timezone.now()
+    order_lines = lines_by_variant(order)
     for variant, stock_item, quantity in stock_adjustments:
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
@@ -967,6 +1134,11 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
         # ``prepare_sale_stock_adjustments``; this is where it is spent.
         plan = tracking.plan_on(variant)
         if plan is not None:
+            # Before anything is issued: a consigned article's cost becomes the
+            # payout its terms have just earned. The plan carries the total into
+            # the valuation pass, which posts it as the purchase half of this
+            # sale (§5.8).
+            stamp_consignment_payouts(plan, order_lines.get(variant.pk))
             tracking.apply_issue(
                 plan,
                 status=StockUnit.Status.SOLD,
@@ -994,7 +1166,7 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
         voucher_id=order.pk,
     )
     _stamp_ledger_cost_on_lines(order, created)
-    _stamp_sold_units_on_lines(order, created)
+    finish_sold_units(order, created, settings=settings, request=request)
 
 
 def _stamp_ledger_cost_on_lines(order, movements):
@@ -1031,41 +1203,6 @@ def _stamp_ledger_cost_on_lines(order, movements):
         OrderLine.objects.bulk_update(updated, ["unit_cost", "updated_at"])
 
 
-
-def _stamp_sold_units_on_lines(order, movements):
-    """Name the invoice on every identified article this sale issued.
-
-    "Where has this IMEI been" is one query over allocations; "which invoice
-    sold it" should not be a second. When the same variant appears on two lines
-    of one invoice the units all take the first of them — both lines belong to
-    the same sale, so every question this column answers has the same answer
-    either way.
-    """
-    tracked = [
-        movement
-        for movement in movements
-        if getattr(movement, "tracked_plan", None) is not None
-    ]
-    if not tracked:
-        return
-    lines = {}
-    for line in order.lines.all():
-        lines.setdefault(line.variant_id, line)
-    updates = []
-    for movement in tracked:
-        line = lines.get(movement.variant_id)
-        for allocation in movement.tracked_plan.allocations:
-            unit = allocation.unit
-            if unit is None:
-                continue
-            unit.sold_order_line = line
-            if line is not None:
-                unit.sold_price = line.unit_price
-            updates.append(unit)
-    if updates:
-        StockUnit.objects.bulk_update(
-            updates, ["sold_order_line", "sold_price", "updated_at"]
-        )
 
 def reserve_stock_for_quote(order, *, settings=None, warehouse=None):
     """Place an ACTIVE hold on each stockable line of a quotation: bump the
@@ -1802,6 +1939,7 @@ def create_order_adjustment(
     request=None,
     register_session=None,
     created_by=None,
+    consignment_action=BUY_IN,
 ):
     from apps.payments.models import Payment
     from apps.payments.serializers import payment_commission_values
@@ -1840,12 +1978,22 @@ def create_order_adjustment(
             unit_price=line.unit_price,
             discount_total=discount_total,
         )
+        # A serialized line returns *that* article — the handset with that IMEI,
+        # not "one of those" — which is also what stops the same one being
+        # returned twice (§6.4).
+        tracked_plan = return_units_for_line(
+            line,
+            quantize_quantity(Decimal(quantity) * line.unit_factor),
+            consignment_action=consignment_action,
+            request=request,
+        )
         record_return_stock_movement(
             order=order,
             variant=line.variant,
             # Returned quantity is in the line's transacted unit; stock is base.
             quantity=quantize_quantity(Decimal(quantity) * line.unit_factor),
             created_by=created_by,
+            tracked_plan=tracked_plan,
         )
 
     # One negative payment per original tender so each method's ledger and the
@@ -2002,7 +2150,14 @@ def void_order(
 
 @transaction.atomic
 def return_order_items(
-    *, order, lines, reason, request=None, register_session=None, allow_window_override=False
+    *,
+    order,
+    lines,
+    reason,
+    request=None,
+    register_session=None,
+    allow_window_override=False,
+    consignment_action=BUY_IN,
 ):
     locked_order = Order.objects.select_for_update().get(pk=order.pk)
     validate_order_adjustment_allowed(
@@ -2021,6 +2176,7 @@ def return_order_items(
         reason=reason,
         request=request,
         register_session=register_session,
+        consignment_action=consignment_action,
     )
 
     # A sale whose every line has come back is spent. That has always been the
@@ -2173,7 +2329,7 @@ def exchange_order_items(
 
 
 def record_return_stock_movement(
-    *, order, variant, quantity, created_by, warehouse=None
+    *, order, variant, quantity, created_by, warehouse=None, tracked_plan=None
 ):
     # Goods come back to the shelves the till that took them back serves.
     # Defaults to the shop's one place, which is where they left from for every
@@ -2194,6 +2350,9 @@ def record_return_stock_movement(
         # today's rate. Valuing a return at the current rate would book a
         # profit or loss on a sale that was simply undone.
         unit_cost=returned_line_base_unit_cost(order, variant),
+        # ...unless the articles themselves say what they cost, in which case
+        # they do and the line's average does not get a vote.
+        tracked_plan=tracked_plan,
         voucher_type=StockLedgerEntry.VoucherType.SALE_RETURN,
         voucher_id=order.pk,
     )

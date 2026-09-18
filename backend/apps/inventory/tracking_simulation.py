@@ -38,12 +38,15 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.catalog.models import Product
+from apps.customers.models import Customer
 from apps.sales.models import RegisterSession
 from apps.sales.services import checkout_order
 
+from . import consignment_service
 from .identity import normalize_identifier
 from .integrity import tracking_invariant_violations
 from .models import (
+    ConsignmentAgreement,
     StockBatch,
     StockBatchBalance,
     StockItem,
@@ -93,6 +96,14 @@ class OracleUnit:
     cost: Decimal
     lot_code: str | None = None
     live: bool = True
+    #: Goods the shop holds and does not own. They stand on the shelf and are
+    #: counted like anything else; they are worth nothing *to the shop*, and
+    #: they are the reason :meth:`TrackedStockOracle.stock_value` is not simply
+    #: a sum over everything live.
+    consigned: bool = False
+    #: What the shop will owe their owner when they sell. Carried here so the
+    #: model can predict the cost of the sale without being told it.
+    payout: Decimal = ZERO
 
 
 class TrackedStockOracle:
@@ -137,6 +148,18 @@ class TrackedStockOracle:
             lot.quantity[warehouse_id] += Decimal(len(codes))
             lot.value[warehouse_id] += Decimal(cost) * Decimal(len(codes))
 
+    def take_in_consignment(self, *, variant_id, warehouse_id, codes, payout):
+        """Somebody else's goods, onto the shop's shelf."""
+        for code in codes:
+            self.units[normalize_identifier(code)] = OracleUnit(
+                code=normalize_identifier(code),
+                variant_id=variant_id,
+                warehouse_id=warehouse_id,
+                cost=ZERO,
+                consigned=True,
+                payout=Decimal(payout),
+            )
+
     def receive_lot(self, *, variant_id, warehouse_id, code, quantity, rate,
                     expiry_date=None):
         lot = self.lot(variant_id, code, expiry_date=expiry_date)
@@ -146,6 +169,12 @@ class TrackedStockOracle:
     def issue_unit(self, code):
         unit = self.units[normalize_identifier(code)]
         unit.live = False
+        if unit.consigned:
+            # A consignment sale is a purchase and a sale at once: at the
+            # instant it sold, the shop acquired it for the payout. The model
+            # says so independently of the backend, which is the only way this
+            # check means anything.
+            unit.cost = unit.payout
         if unit.lot_code:
             lot = self.lots[self.key(unit.variant_id, unit.lot_code)]
             rate = lot.rate(unit.warehouse_id)
@@ -206,11 +235,24 @@ class TrackedStockOracle:
             ZERO,
         )
 
+    def owned_units(self, variant_id, warehouse_id):
+        return [
+            unit
+            for unit in self.live_units(variant_id, warehouse_id)
+            if not unit.consigned
+        ]
+
     def stock_value(self, variant_id, warehouse_id) -> Decimal:
+        """What the goods here are worth **to this shop**.
+
+        Consigned articles contribute nothing, however much they are worth to
+        the person who left them — which is why this is a sum over the owned
+        ones while :meth:`on_hand` counts them all.
+        """
         mode = self.modes[variant_id]
         if mode in (Product.TrackingMode.SERIAL, Product.TrackingMode.SERIAL_BATCH):
             return sum(
-                (unit.cost for unit in self.live_units(variant_id, warehouse_id)),
+                (unit.cost for unit in self.owned_units(variant_id, warehouse_id)),
                 ZERO,
             )
         return sum(
@@ -261,6 +303,7 @@ class TrackedStockSimulation:
         # cache, so the id the oracle compares against is the one the shop is
         # actually writing into.
         self.warehouse_id = Warehouse.default_id()
+        self.consignor = Customer.objects.create(full_name="مودِع المحاكاة")
 
     # -- helpers ---------------------------------------------------------
 
@@ -461,6 +504,97 @@ class TrackedStockSimulation:
             payments_data=[{"method": "cash", "amount": Decimal("5.00") * quantity}],
         )
 
+    def take_in_consignment(self):
+        """Somebody leaves goods the shop will sell for them.
+
+        The operation the oracle exists to check: these count on the shelf and
+        are worth nothing to the shop, and at the instant one sells its payout
+        becomes its cost. Get any of that wrong and the model and the shop
+        disagree about stock value within a few operations.
+        """
+        variant = self.products[Product.TrackingMode.SERIAL]
+        count = self.random.randint(1, 2)
+        payout = Decimal(self.random.randrange(80000, 120000)) / Decimal("100")
+        codes = [self._next("CNS") for _ in range(count)]
+        agreement = ConsignmentAgreement.objects.create(
+            consignor=self.consignor,
+            payout_mode=ConsignmentAgreement.PayoutMode.FIXED,
+            payout_rate=payout,
+        )
+        consignment_service.take_into_consignment(
+            agreement=agreement,
+            items=[
+                {
+                    "variant": variant,
+                    "code": code,
+                    "declared_value": payout,
+                    # Priced above the payout, or the floor refuses every sale
+                    # and the operation never exercises anything.
+                    "list_price": payout + Decimal("500.00"),
+                }
+                for code in codes
+            ],
+            warehouse=self.warehouse_id,
+        )
+        self.oracle.take_in_consignment(
+            variant_id=variant.pk,
+            warehouse_id=self.warehouse_id,
+            codes=codes,
+            payout=payout,
+        )
+
+    def sell_a_consignment(self):
+        """The till names a consigned article and rings it up.
+
+        Its own operation rather than a hope that ``sell_serial`` reaches one:
+        the picker takes the oldest first and a consignment taken in today is
+        the newest thing on the shelf, so left to chance this path never runs
+        and the payout-becomes-cost rule is never checked.
+        """
+        variant = self.products[Product.TrackingMode.SERIAL]
+        held = [
+            unit
+            for unit in self.oracle.live_units(variant.pk, self.warehouse_id)
+            if unit.consigned
+        ]
+        if not held:
+            return
+        chosen = self.random.choice(held)
+        # Above the payout, because the floor refuses anything below it and
+        # refusing every sale would exercise nothing.
+        price = chosen.payout + Decimal("500.00")
+        checkout_order(
+            register_session=self._session(),
+            lines_data=[
+                {
+                    "variant": variant,
+                    "quantity": Decimal("1"),
+                    "effective_unit_price": price,
+                    "stock_unit_codes": [chosen.code],
+                }
+            ],
+            payments_data=[{"method": "cash", "amount": price}],
+        )
+        self.oracle.issue_unit(chosen.code)
+
+    def return_a_consignment(self):
+        """The owner takes their goods back before they sell."""
+        held = [
+            unit
+            for unit in self.oracle.live_units(
+                self.products[Product.TrackingMode.SERIAL].pk, self.warehouse_id
+            )
+            if unit.consigned
+        ]
+        if not held:
+            return
+        chosen = self.random.choice(held)
+        unit = StockUnit.objects.get(code_normalized=chosen.code)
+        consignment_service.return_to_consignor(unit)
+        # No value leaves, because none ever arrived — the model records the
+        # departure and nothing else.
+        self.oracle.units[chosen.code].live = False
+
     def quarantine_a_lot(self):
         candidates = [
             lot
@@ -496,6 +630,9 @@ class TrackedStockSimulation:
         ("sell_batch", 3),
         ("sell_quantity", 1),
         ("quarantine_a_lot", 1),
+        ("take_in_consignment", 2),
+        ("sell_a_consignment", 2),
+        ("return_a_consignment", 1),
     )
 
     def step(self):

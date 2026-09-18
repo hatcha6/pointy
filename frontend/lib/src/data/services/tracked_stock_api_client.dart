@@ -131,6 +131,44 @@ class TrackedStockApiClient {
     );
   }
 
+  Future<StockUnit> writeOffUnit(int unitId, {required String reason}) async {
+    final response = await _session.post(
+      'stock-units/$unitId/write-off/',
+      body: {'reason': reason},
+    );
+    _session.ensureSuccess(response, 'Unit write-off failed with status');
+    return StockUnit.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Re-price a shelf's worth of articles in one write.
+  ///
+  /// [percent] is signed: -15 marks down by fifteen percent. A used-goods
+  /// trader marks down every handset over ninety days old at once, and doing
+  /// that a row at a time is how it does not get done.
+  Future<int> bulkReprice({
+    required List<int> unitIds,
+    double? price,
+    double? percent,
+  }) async {
+    final response = await _session.post(
+      'stock-units/bulk-reprice/',
+      body: {
+        'ids': unitIds,
+        'price': ?price,
+        'percent': ?percent,
+      },
+    );
+    _session.ensureSuccess(response, 'Bulk reprice failed with status');
+    final body = _session.decodedBody(response);
+    if (body is Map<String, Object?>) {
+      final updated = body['updated'];
+      return updated is num ? updated.toInt() : 0;
+    }
+    return 0;
+  }
+
   Future<StockBatchPage> fetchBatches({
     int? variantId,
     int? productId,

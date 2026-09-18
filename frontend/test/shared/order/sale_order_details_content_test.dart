@@ -178,7 +178,7 @@ void main() {
         _wrap(
           SaleOrderDetailsContent(
             order: _standardInvoice(status: 'void', returnedQuantity: 2),
-            onReturn: (_, _, _) async => true,
+            onReturn: (_, _, _, {consignmentAction}) async => true,
             onVoid: (_, _) async => true,
           ),
         ),
@@ -199,7 +199,7 @@ void main() {
           _wrap(
             SaleOrderDetailsContent(
               order: _standardInvoice(status: 'paid', returnedQuantity: 0),
-              onReturn: (_, _, _) async => true,
+              onReturn: (_, _, _, {consignmentAction}) async => true,
               onVoid: (_, _) async => true,
             ),
           ),

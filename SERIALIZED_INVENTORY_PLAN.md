@@ -1,13 +1,15 @@
 # Serialized & Batch Inventory (IMEI / Serial / Lot / Expiry) — Architecture Plan
 
-**Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17)
-**Status:** **Phases A and B shipped** — the shared allocation core and ledger,
-and the shop operating both from the client (§15). Phases C–E remain proposed.
-Three things in this document were changed by building it, and each is marked
+**Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17,
+Phase C shipped 2026-09-18)
+**Status:** **Phases A, B and C shipped** — the shared allocation core and
+ledger, the shop operating both from the client, and the used-goods trade with
+consignment carrying a real liability (§15). Phases D–E remain proposed.
+Five things in this document were changed by building it, and each is marked
 **CORRECTED** or **DEFERRED** in place rather than quietly rewritten: the batch
 bin's treatment of a quarantined lot (§5.3), landed-cost re-stamping on
-identified stock (§5.5), and the till's own knowledge of its warehouse (§15,
-Phase B).
+identified stock (§5.5), the till's own knowledge of its warehouse (§15,
+Phase B), the shape of invariant 10 (§5.4), and the trade-in's tender (§6.2).
 **Roadmap slot:** Promotes and unifies Gap #13 ("Serial-number tracking", sized M)
 and Gap #14 ("Batch & lot tracking with FEFO/expiry", sized M). This plan combines
 them because they share 80% of the underlying ledger allocation architecture,
@@ -1246,7 +1248,14 @@ For every serialized/batch variant and every warehouse:
    from the divisor of `valuation_rate` — §5.8
 10. Every consignment sale posts a `consignment_cost` entry whose `value_change`
     equals the issue it precedes, so cumulative ledger value on a consigned
-    variant never goes negative — §5.8
+    variant never goes negative — §5.8.
+    **CORRECTED 2026-09-18:** checked entirely inside the ledger — the entry is
+    followed by the issue it pays for, of exactly the opposite value — rather
+    than against the units' current state. The first wording compared the posted
+    entries against the payouts on units that are *currently* sold, and a
+    customer return makes a correct ledger fail it: the unit stops being sold,
+    the entry stays posted, and the two stop agreeing for a reason that is not a
+    bug
 11. For a `serial_batch` variant,
     `balance.remaining_quantity == COUNT(live units WHERE batch = b AND warehouse = w)`.
     The pack is counted once — §5.3
@@ -2828,9 +2837,12 @@ this on the day it installs rather than after it buys hardware.
   and batch *detail* screens (a list row opens the life timeline instead), the
   companion camera as a DataMatrix scanner, and the price-checker's identifier
   lookup. All four are additive surfaces over an API that already exists; none
-  is load-bearing for the two deals this phase is about.
+  is load-bearing for the two deals this phase is about. *(The unit detail
+  screen landed in Phase C, where the consignment badge and the payout resend
+  gave it a job; the other three are still out.)*
 
-**Phase C — the used-goods trade & consignment (≈2.5 weeks).**
+**Phase C — the used-goods trade & consignment (≈2.5 weeks). SHIPPED
+2026-09-18.**
 Per-unit pricing everywhere, per-unit cost split, counter purchase and trade-in,
 `ConsignmentAgreement` intake and voucher, the `consignment_cost` ledger entry
 and the fixed-payout floor (§5.8 — both are correctness, not polish, and belong
@@ -2840,16 +2852,97 @@ the treasury obligations overlay, automated customer sale SMS notification via
 attribute definitions and the attribute UI, aging and per-unit margin reports,
 refurb capitalisation, returns and warranty lookup.
 
+*What actually landed, and where it differs from the paragraph above.*
+
+- **The valuation engine learned what it does not own.** `IdentifiedValuation`
+  now carries an *unowned* quantity beside its quantity and value, and keeps it
+  out of the rate's divisor. Without it a variant holding three owned handsets
+  at 1,200 beside seven consigned watches reports every handset as worth 360,
+  and every report that multiplies a rate by a quantity is wrong by a factor of
+  three. The state row grows a third element to say so, and a state written by
+  any other engine reads back exactly as it always did.
+- **`consignment_cost` is posted by the valuation pass, not by the sale.** The
+  sale stamps each consigned unit's payout and hands the total to the plan; the
+  pass posts the quantity-zero entry immediately before the issue it pays for.
+  That is the only place that knows the ledger entry is about to be written, and
+  writing it anywhere else would be writing it *near* the issue rather than
+  before it.
+- **CORRECTED — invariant 10 is a statement about the ledger, not about the
+  units.** It was first written as "Σ consignment_cost equals Σ payout over sold
+  consigned units", which is true until the first customer return: the unit
+  stops being sold, the entry stays posted, and a correct ledger starts failing
+  its own invariant. It now reads entirely inside the ledger — each
+  `consignment_cost` entry is followed by the issue it pays for, of exactly the
+  opposite value, and no running balance is negative — which survives returns,
+  buy-ins and reopened consignments because all three are themselves entries.
+- **CORRECTED — a trade-in needs no new tender.** §6.2 asks for "one document,
+  one register entry", and the tempting reading is a new payment method. It is
+  not needed: a counter purchase already pays out of the drawer and a sale
+  already pays into it, and `RegisterSession.expected_cash` nets the two — so a
+  1,400 sale against a 500 trade-in leaves the till expecting 900 more than it
+  started with, arrived at from two documents that are each true on their own. A
+  `TradeIn` row links them, exactly as `OrderExchange` links a return to its
+  replacement. A trade-in worth *more* than the sale is refused rather than
+  handled: paying a customer the difference in cash for goods the shop has not
+  resold is how a till is emptied by somebody bringing in stolen handsets, and
+  it belongs in a counter purchase the shop makes deliberately.
+- **The cheapest-unit rule needed no code.** §5.7 rules that a pooled
+  promotion's free item lands on the cheapest unit. `_pooled_units` has been
+  most-expensive-first since promotions shipped and `_buy_x_get_y_allocations`
+  already rewards the tail, so once each serialized line carries its own price
+  the rule holds by construction. What landed is the test that says so, which is
+  what stops it quietly changing.
+- **The oracle took the goods in too.** §14.3's randomized model now runs
+  consignment intake, sale and return-to-owner alongside the four modes, and
+  says for itself that the shelf counts them and the stock value does not. That
+  is the check with teeth: the simulated shop and the model of it are built from
+  different code, and the rate-dilution bug of invariant 9 is exactly the shape
+  the oracle catches and a hand-written test agrees with by accident.
+- **A return of a sale that predates tracking comes back as a placeholder.**
+  A product can hold anonymous quantity, reach zero, and then be switched to
+  serial — and a customer can still walk back in with something sold before the
+  switch. Refusing the refund is wrong and letting the quantity rise with no
+  article behind it breaks invariant 1, so the goods return as *unidentified*
+  units: counted, on the missing-identifier worklist, and refused by the till
+  until somebody scans them. Exactly the shape *capture later* already uses,
+  which is the argument for having built it that way.
+- **Phase A's settings were columns nothing could edit.**
+  `enable_serialized_inventory` and the six beside it shipped on the model and
+  were never put on the settings API, so a shop could only get them through a
+  shop-type preset. They are exposed now, along with the consignment block —
+  and the three liability clauses in particular have to be editable, because
+  §10's whole point is that the printed words are the shop's and not ours.
+- **What a sold article cost is its own definition.** `StockUnit.stock_value`
+  answers *"what does this add to the shelf"* and returns zero for a
+  consignment; `StockUnit.acquisition_cost` answers *"what did this cost the
+  shop"* and, for a sold consignment, is the payout. Both are on the model and
+  registered in the money-definitions guard, with three new patterns — the
+  commission payout, the shop's commission and the price floor — so the fourth
+  surface that wants one has to import it.
+- **DEFERRED, and honestly out:** per-unit photos (§17.2 is still open, and the
+  answer changes the capture sheet's shape), the per-consignor statement *screen*
+  (the endpoint is built and the report carries it), the consignment position
+  dashboard card (the figures render on the payables screen), unit attribute
+  *editing* from the client (definitions are seeded, validated and exposed; the
+  editor screen is not), and a per-unit warranty date override (§17.3 —
+  `warranty_days` on the product is what shipped). None is load-bearing for the
+  trade this phase is about.
+
 **Phase D — safety, recall & warehouse operations (≈2 weeks).**
-`ConsignmentIncident`, claims and settlement, custody exposure and the unclaimed-payout
-aging (§6.2.2), the per-consignor statement,
+`ConsignmentIncident`, claims and settlement, the unclaimed-payout aging
+(§6.2.2) and the per-consignor statement *screen*,
 emergency batch quarantine (`is_locked`), traceability recall audit & consumer SMS safety broadcast,
 expiry watchlist & markdown discount suggestions, batch-aware and serialized transfers,
-stock count (serialized scan-the-shelf and batch variance count), write-off flows,
+stock count (serialized scan-the-shelf and batch variance count),
 opening identification for both serials and batches, price-checker lookup (with
 the cost-free kiosk serializer of §13), the surveillance link from a unit's
 timeline and an incident to the footage of the moment (§8.3), AI tools and
 dashboard cards.
+*Phase C took two bites out of this list: custody exposure is derived and shown
+(`consignment.custody_exposure`, on the payables screen and in the treasury
+overlay), and the write-off flow landed with the unit detail screen. What is
+left of the consignment side is the incident — the path a consignment module is
+actually judged on — and the statement as a page rather than an endpoint.*
 
 **Phase E — migration (≈1 week, runs in parallel with C).**
 The collapse tool of §12, against the prospect's real export.

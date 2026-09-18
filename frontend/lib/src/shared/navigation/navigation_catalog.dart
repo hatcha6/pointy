@@ -225,6 +225,20 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           label: l10n.stockBatchesDrawerLabel,
           keywords: const ['batch', 'lot', 'expiry', 'دفعات', 'صلاحية', 'لوط'],
         ),
+        NavCatalogEntry(
+          destination: AppNavigationDestination.consignmentPayables,
+          icon: Icons.handshake_outlined,
+          selectedIcon: Icons.handshake,
+          label: l10n.consignmentPayablesDrawerLabel,
+          keywords: const [
+            'consignment',
+            'payable',
+            'payout',
+            'أمانات',
+            'مستحقات',
+            'صرف',
+          ],
+        ),
       ],
     ),
     NavCatalogGroup(

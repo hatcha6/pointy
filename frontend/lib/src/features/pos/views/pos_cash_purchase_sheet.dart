@@ -11,6 +11,8 @@ import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/receipt_capture.dart';
+import '../../inventory/views/unit_capture_sheet.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
@@ -222,6 +224,25 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
     _prefillLastCost(line);
   }
 
+  /// The scan-and-fill loop, reused exactly as receiving uses it.
+  ///
+  /// One widget, several callers: what differs between buying forty handsets
+  /// from a distributor and buying one off a walk-in is the paperwork, not the
+  /// act of reading a number off a box.
+  Future<void> _captureIdentifiers(_CashPurchaseLine line) async {
+    final captured = await showUnitCaptureSheet(
+      context,
+      productLabel: line.product.name,
+      expectedCount: line.quantity.round(),
+      lineUnitCost: line.unitCost ?? 0,
+      initial: line.units,
+    );
+    if (captured == null || !mounted) {
+      return;
+    }
+    setState(() => line.units = captured);
+  }
+
   Future<void> _prefillLastCost(_CashPurchaseLine line) async {
     final result = await widget.purchaseRepository.loadLastProductCost(
       line.product.id,
@@ -303,7 +324,12 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
       (line) =>
           line.quantity > 0 &&
           (line.unitCost ?? -1) >= 0 &&
-          (!line.product.tracksExpiry || line.expiryDate != null),
+          (!line.product.tracksExpiry || line.expiryDate != null) &&
+          // A serialized article bought over the counter is refused without its
+          // number, here rather than at the server: the seller is standing in
+          // front of the cashier and the handset is in their hand, which is the
+          // only moment the number is free to get.
+          line.identifiersComplete,
     );
   }
 
@@ -328,6 +354,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
           unitFactor: line.unit.factorToBase,
           unitAllowsFractional: line.unit.allowsFractional,
           expiryDate: line.expiryDate,
+          units: line.units,
         ),
     ];
     final result = await widget.purchaseRepository.submitPosCashPurchase(
@@ -629,6 +656,9 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
           onExpiryChanged: (date) => setState(() => line.expiryDate = date),
           onRemove: () => _removeLine(line),
           onTotalDirty: () => setState(() {}),
+          onCaptureIdentifiers: line.needsIdentifiers
+              ? () => _captureIdentifiers(line)
+              : null,
         );
       },
     );
@@ -713,6 +743,17 @@ class _CashPurchaseLine {
   double? lastBaseCost;
   DateTime? expiryDate;
   int revision = 0;
+
+  /// The identifiers scanned off the goods the customer is handing over. The
+  /// counter purchase is the one flow where ordering and receiving are the same
+  /// act, so they are captured here rather than at a receiving bay the article
+  /// will never see.
+  List<ReceiptUnitCapture> units = const [];
+
+  bool get needsIdentifiers => product.trackingMode.tracksUnits;
+
+  bool get identifiersComplete =>
+      !needsIdentifiers || units.length == quantity.round();
 }
 
 class _CashPurchaseLineRow extends StatefulWidget {
@@ -726,6 +767,7 @@ class _CashPurchaseLineRow extends StatefulWidget {
     required this.onExpiryChanged,
     required this.onRemove,
     required this.onTotalDirty,
+    this.onCaptureIdentifiers,
   });
 
   final _CashPurchaseLine line;
@@ -736,6 +778,10 @@ class _CashPurchaseLineRow extends StatefulWidget {
   final ValueChanged<DateTime?> onExpiryChanged;
   final VoidCallback onRemove;
   final VoidCallback onTotalDirty;
+
+  /// Null for anything a shop counts rather than identifies, which is how this
+  /// row stays exactly as it was for the bread and the cooking oil.
+  final VoidCallback? onCaptureIdentifiers;
 
   @override
   State<_CashPurchaseLineRow> createState() => _CashPurchaseLineRowState();
@@ -890,6 +936,31 @@ class _CashPurchaseLineRowState extends State<_CashPurchaseLineRow> {
                         : _isoDate(line.expiryDate!),
                   ),
                   onPressed: widget.enabled ? _pickExpiry : null,
+                ),
+              ),
+            ),
+          if (widget.onCaptureIdentifiers != null)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: ActionChip(
+                  avatar: Icon(
+                    Icons.qr_code_2_outlined,
+                    size: 18,
+                    color: line.identifiersComplete
+                        ? colors.mutedInk
+                        : colors.danger,
+                  ),
+                  label: Text(
+                    l10n.unitCaptureProgress(
+                      line.units.length,
+                      line.quantity.round(),
+                    ),
+                  ),
+                  onPressed: widget.enabled
+                      ? widget.onCaptureIdentifiers
+                      : null,
                 ),
               ),
             ),

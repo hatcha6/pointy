@@ -142,19 +142,33 @@ class PurchaseOrderNumberSeedTests(TestCase):
         from apps.documents.numbering import DocumentNumberSeries
 
         supplier = Supplier.objects.create(name="مورد")
-        PurchaseOrder.objects.create(supplier=supplier, order_number="P20260916000418")
-        PurchaseOrder.objects.create(supplier=supplier, order_number="P20260916000419")
+        orders = [
+            PurchaseOrder.objects.create(
+                supplier=supplier, order_number="P20260916000418"
+            ),
+            PurchaseOrder.objects.create(
+                supplier=supplier, order_number="P20260916000419"
+            ),
+        ]
         DocumentNumberSeries.objects.filter(pk=PURCHASE_ORDER_SERIES).delete()
 
         self.seed.seed(registry, None)
 
+        # The highest the series has actually reached — the migration takes the
+        # larger of the id and the trailing number, on purpose. Written as a
+        # maximum rather than as ``419`` because a test database's primary-key
+        # sequence does not roll back with the transaction: whichever tests ran
+        # before this one have already pushed the ids past the numbers, and an
+        # absolute assertion here breaks whenever somebody adds a test that
+        # happens to raise a purchase order.
+        reached = max(419, *(order.id for order in orders))
         self.assertEqual(
             DocumentNumberSeries.objects.get(pk=PURCHASE_ORDER_SERIES).last_value,
-            419,
+            reached,
         )
         self.assertEqual(
             _tail(PurchaseOrder.objects.create(supplier=supplier).order_number),
-            420,
+            reached + 1,
             "the next order is the next one, not P...000001",
         )
 

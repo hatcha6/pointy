@@ -67,6 +67,13 @@ PURCHASE_ORDER_SERIES = "purchase_order"
 #: count discrepancy is traced back to the movement that caused it.
 STOCK_TRANSFER_SERIES = "stock_transfer"
 
+#: سند استلام أمانة — signed by two people and kept by both, so a hole in the
+#: series is a page somebody can claim was torn out.
+CONSIGNMENT_AGREEMENT_SERIES = "consignment_agreement"
+
+#: سند صرف أمانة — the receipt a consignor signs for their money.
+CONSIGNOR_PAYOUT_SERIES = "consignor_payout"
+
 
 def next_document_number(key: str) -> int:
     """The next number in [key], reserved for this transaction only.
