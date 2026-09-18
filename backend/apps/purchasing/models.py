@@ -824,6 +824,24 @@ class PurchaseLine(TimeStampedModel):
         return (self.effective_unit_cost / factor).quantize(Decimal("0.01"))
 
     @property
+    def effective_base_unit_cost_exact(self) -> Decimal:
+        """The same figure at the precision the ledger actually stores.
+
+        ``effective_base_unit_cost`` rounds to money because that is what a
+        screen shows and what a price comparison means. Stock does not: a
+        100.00 carton of twelve is 8.33 on a label and 8.333333 in the bin, and
+        rounding before the multiply books 99.96 of stock value against 100.00
+        paid — four qirsh per carton, which on a thousand-carton delivery is a
+        difference against the payable that nothing explains. ``incoming_rate``
+        and ``StockMovement.unit_cost`` are six-place columns for this reason,
+        so give them six places.
+        """
+        factor = self.unit_factor or Decimal("1")
+        if factor <= 0:
+            return self.effective_unit_cost
+        return (self.effective_unit_cost / factor).quantize(Decimal("0.000001"))
+
+    @property
     def effective_line_total(self):
         return (
             self.net_line_total + self.allocated_landed_cost

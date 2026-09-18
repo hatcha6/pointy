@@ -418,20 +418,40 @@ def _value_warnings(elements: dict) -> list:
     return warnings
 
 
-def _as_date(value):
+def _century_of(two_digit_year: int, *, today=None) -> int:
+    """GS1's sliding 51-year window, anchored on the current year.
+
+    From the General Specifications: the difference between the encoded year
+    and the current year decides the century — 51 to 99 years ahead is read as
+    the past, 0 to 50 ahead as the future. Implemented as "pick the candidate
+    century whose distance from now is at most 50".
+    """
+    current = (today or date.today()).year
+    base = current - current % 100
+    candidates = (base + two_digit_year - 100, base + two_digit_year, base + two_digit_year + 100)
+    return min(candidates, key=lambda year: (abs(year - current), -year))
+
+
+def _as_date(value, *, today=None):
     """``YYMMDD`` as a date, with GS1's own two rules about the odd parts.
 
     ``DD = 00`` means "the end of that month", which is how a pack that expires
     in a month rather than on a day is encoded — and reading it as an invalid
-    date would refuse a perfectly ordinary box. The century follows GS1's
-    51-year window: ``49`` is 2049 and ``50`` is 1950.
+    date would refuse a perfectly ordinary box.
+
+    The century follows GS1's **sliding** window, which is defined against the
+    current year and not against a fixed cut: a two-digit year more than 50
+    years ahead of now belongs to the previous century, everything else to this
+    one. A hardcoded ``49/50`` boundary is right for exactly one year and drifts
+    afterwards — today it reads a pack marked ``50`` as **1950**, i.e. expired
+    since before the shop existed, when GS1 says 2050.
     """
     if not value or not _DATE.match(value):
         return None
     year = int(value[0:2])
     month = int(value[2:4])
     day = int(value[4:6])
-    year += 2000 if year <= 49 else 1900
+    year = _century_of(year, today=today)
     if month < 1 or month > 12:
         return None
     if day == 0:

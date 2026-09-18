@@ -64,17 +64,50 @@ class IdentifierKind:
 
 
 def normalize_identifier(value) -> str:
-    """The canonical form of an identifier: NFKC, stripped, upper-cased.
+    """The canonical form of an identifier: NFKC, digit-folded, stripped, upper.
 
     Blank in, blank out — a unit without a secondary code stores an empty
     string rather than a sentinel, so the index over it stays honest.
+
+    **NFKC is not a digit fold**, and on an Arabic-first till that matters more
+    than anywhere else. ``٣٥١٢٣٤…`` typed on an Arabic keyboard is a different
+    string from the ``351234…`` the scanner reads off the same box, and NFKC
+    leaves U+0660–0669 exactly where they are. Worse, Python's ``str.isdigit``
+    and ``int()`` both accept them, so the IMEI validator's Luhn branch passes
+    and says the number is fine — the one check whose job is to catch a keying
+    error waves it through. The shop ends up with two live units for one
+    handset, and the partial unique index cannot object because the strings
+    genuinely differ. So every decimal digit is folded to ASCII first, which
+    covers Arabic-Indic, Eastern Arabic-Indic (Persian, U+06F0–06F9) and every
+    other decimal script Unicode knows about.
     """
     if value is None:
         return ""
     text = unicodedata.normalize("NFKC", str(value)).strip()
     if not text:
         return ""
+    text = _fold_digits(text)
     return "".join(char for char in text if char not in _STRIPPED).upper()
+
+
+def _fold_digits(text: str) -> str:
+    """Every decimal digit to its ASCII counterpart, everything else untouched.
+
+    ``unicodedata.digit`` answers for any character Unicode classifies as a
+    decimal digit, so this needs no per-script table and cannot fall behind one.
+    """
+    if text.isascii():
+        return text
+    out = []
+    for char in text:
+        if char.isdigit() and not char.isascii():
+            try:
+                out.append(str(unicodedata.digit(char)))
+                continue
+            except (TypeError, ValueError):
+                pass
+        out.append(char)
+    return "".join(out)
 
 
 def luhn_check(digits: str) -> bool:

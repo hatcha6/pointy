@@ -77,9 +77,31 @@ class ParsingTests(SimpleTestCase):
         scan = gs1.parse("0103453120000011" + "17251200")
         self.assertEqual(scan.expiry_date, date(2025, 12, 31))
 
-    def test_the_century_follows_gs1s_own_window(self):
-        self.assertEqual(gs1.parse("17490101").expiry_date, date(2049, 1, 1))
-        self.assertEqual(gs1.parse("17500101").expiry_date, date(1950, 1, 1))
+    def test_the_century_follows_gs1s_own_sliding_window(self):
+        """Anchored on the current year, not on a fixed 49/50 cut.
+
+        The cut was right for one year and drifted afterwards: in 2026 it read a
+        pack marked ``50`` as 1950 — expired before the shop existed — where
+        GS1 says 2050. The rule is that 0 to 50 years ahead is the future and
+        51 to 99 ahead is the past, so it is pinned here against three
+        different "today"s rather than against whichever one happens to be.
+        """
+        self.assertEqual(
+            gs1._century_of(50, today=date(2026, 6, 1)), 2050
+        )
+        self.assertEqual(
+            gs1._century_of(76, today=date(2026, 6, 1)), 2076
+        )
+        # 51 years ahead flips to the previous century.
+        self.assertEqual(
+            gs1._century_of(77, today=date(2026, 6, 1)), 1977
+        )
+        self.assertEqual(
+            gs1._century_of(99, today=date(2026, 6, 1)), 1999
+        )
+        # And it keeps working once the century turns.
+        self.assertEqual(gs1._century_of(0, today=date(2050, 6, 1)), 2100)
+        self.assertEqual(gs1._century_of(50, today=date(1999, 6, 1)), 1950)
 
     def test_a_three_digit_ai_is_read_before_the_two_digit_one(self):
         """``240`` before ``24``, or everything after it shifts by a digit."""

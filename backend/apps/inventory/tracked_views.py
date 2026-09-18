@@ -21,6 +21,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.catalog.models import VariantOptionValue
 from apps.core.permissions import HasPointyPermission
 
 from . import tracking
@@ -34,6 +35,21 @@ from .tracked_serializers import (
     StockUnitLookupSerializer,
     StockUnitSerializer,
 )
+
+
+def _variant_option_values():
+    """The prefetch every tracked list needs and neither one had.
+
+    Both serializers render ``variant.full_name``, which falls through to
+    ``option_values_label`` for a default variant — whose name is empty by
+    construction — so a page of fifty units cost fifty extra selects. The same
+    Prefetch ``OrderQuerySet.with_serializer_relations`` uses, for the same
+    reason and against the same table.
+    """
+    return Prefetch(
+        "variant__option_values",
+        queryset=VariantOptionValue.objects.select_related("option"),
+    )
 
 
 def _selling_warehouse_id(request):
@@ -163,12 +179,16 @@ class StockUnitViewSet(
     search_fields = ("code", "secondary_code", "supplier_code")
 
     def get_queryset(self):
-        query = StockUnit.objects.select_related(
-            "variant",
-            "variant__product",
-            "warehouse",
-            "batch",
-        ).order_by(*self.ordering)
+        query = (
+            StockUnit.objects.select_related(
+                "variant",
+                "variant__product",
+                "warehouse",
+                "batch",
+            )
+            .prefetch_related(_variant_option_values())
+            .order_by(*self.ordering)
+        )
         if self.request.query_params.get("for_sale") in ("1", "true", "True"):
             # The till's own shelf: in stock, identified, here. Everything the
             # picker must not offer is excluded by the query rather than by the
@@ -178,6 +198,13 @@ class StockUnitViewSet(
                 warehouse_id=_selling_warehouse_id(self.request),
                 status=StockUnit.Status.IN_STOCK,
                 is_identified=True,
+            )
+            # ...including the lot's own state. Offering a quarantined pack and
+            # then refusing it at checkout teaches a cashier that the picker
+            # lies; a recall should simply take those packs off the list.
+            query = query.filter(
+                Q(batch__isnull=True)
+                | Q(batch__is_locked=False, batch__status=StockBatch.Status.ACTIVE)
             )
         return query
 
@@ -545,7 +572,9 @@ class StockBatchViewSet(
             StockBatch.objects.select_related(
                 "variant", "variant__product", "supplier"
             )
-            .prefetch_related(Prefetch("balances", queryset=balances))
+            .prefetch_related(
+                Prefetch("balances", queryset=balances), _variant_option_values()
+            )
             .annotate(
                 on_hand=Sum(
                     "balances__remaining_quantity",

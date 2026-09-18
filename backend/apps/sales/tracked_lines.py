@@ -84,6 +84,14 @@ def _units_of(line):
     return StockUnit.objects.filter(sold_order_line=line).select_related("batch")
 
 
+#: Where one order's ``out`` allocations are cached while its lines serialize.
+#: A lot allocation has no per-line foreign key — it belongs to the *movement*,
+#: one per variant per sale — so it cannot be prefetched the way units are.
+#: Fetching the order's allocations once and grouping them in Python turns a
+#: query per tracked line into a query per order.
+_ALLOCATIONS_ATTR = "_pointy_sale_allocations"
+
+
 def _allocations_of(line):
     """The ``out`` allocations this line's sale wrote for this variant.
 
@@ -97,16 +105,25 @@ def _allocations_of(line):
     order_id = getattr(line, "order_id", None)
     if order_id is None:
         return []
-    return (
-        StockAllocation.objects.filter(
-            voucher_type=StockLedgerEntry.VoucherType.SALE,
-            voucher_id=order_id,
-            variant_id=line.variant_id,
-            direction=StockAllocation.Direction.OUT,
+
+    order = getattr(line, "order", None)
+    cached = getattr(order, _ALLOCATIONS_ATTR, None) if order is not None else None
+    if cached is None:
+        rows = (
+            StockAllocation.objects.filter(
+                voucher_type=StockLedgerEntry.VoucherType.SALE,
+                voucher_id=order_id,
+                direction=StockAllocation.Direction.OUT,
+            )
+            .select_related("batch")
+            .order_by("id")
         )
-        .select_related("batch")
-        .order_by("id")
-    )
+        cached = {}
+        for row in rows:
+            cached.setdefault(row.variant_id, []).append(row)
+        if order is not None:
+            setattr(order, _ALLOCATIONS_ATTR, cached)
+    return cached.get(line.variant_id, [])
 
 
 __all__ = ["order_line_identifiers"]

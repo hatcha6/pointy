@@ -33,7 +33,7 @@ from .models import (
     StockTransferReceiptLine,
     Warehouse,
 )
-from .oversell import may_oversell
+from .oversell import may_oversell_document
 from .services import (
     build_stock_movement,
     create_stock_movements,
@@ -167,7 +167,9 @@ def dispatch_transfer(transfer, *, request=None, actor=None):
 
     # ERPNext's ``test_future_negative_sle``, at the source end: a move cannot
     # take out what is not there unless this place is allowed to go below zero.
-    if not may_oversell(locked.source):
+    if not may_oversell_document(
+        locked.source, variants=[line.variant for line in lines]
+    ):
         short = []
         for line in lines:
             available = rows[(line.variant_id, locked.source_id)].quantity_on_hand
@@ -364,7 +366,9 @@ def reverse_transfer_receipt(receipt, *, at, actor, reason="", context=None):
     # Refuses when the goods are no longer there to send back — stock that has
     # already been sold from the destination cannot be un-received, only
     # returned. ERPNext's ``test_negative_batch`` guards the same corner.
-    if not may_oversell(transfer.destination):
+    if not may_oversell_document(
+        transfer.destination, variants=[line.variant for line in lines]
+    ):
         for line in lines:
             available = rows[(line.variant_id, transfer.destination_id)].quantity_on_hand
             if available < line.quantity:

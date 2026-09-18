@@ -352,21 +352,33 @@ def discard_expiring_stock_batches(*, receipt_lines, warehouse=None):
     )
     if not batches:
         return 0
-    balances = StockBatchBalance.objects.filter(batch__in=batches)
+    # Scoped, and actually used: the queryset below was built with this filter
+    # and then ignored, so cancelling a receipt in one branch zeroed — or
+    # deleted — the same lot's share in every other. The receipt only ever put
+    # goods on one shelf, so it can only take them off that one.
+    scoped = StockBatchBalance.objects.filter(batch__in=batches)
     if warehouse is not None:
-        balances = balances.filter(warehouse_id=resolve_warehouse_id(warehouse))
+        scoped = scoped.filter(warehouse_id=resolve_warehouse_id(warehouse))
+    scoped.update(remaining_quantity=0, updated_at=timezone.now())
     removed = 0
     for batch in batches:
+        # A lot that has been allocated against survives at zero: its history is
+        # the recall report's only witness. One that has not, and holds nothing
+        # anywhere any more, was a claim about a delivery that did not happen.
         if batch.allocations.exists():
-            batch.balances.update(remaining_quantity=0, updated_at=timezone.now())
+            continue
+        if batch.balances.filter(remaining_quantity__gt=0).exists():
             continue
         batch.balances.all().delete()
         batch.delete()
         removed += 1
+    for batch in batches:
+        if batch.pk is not None:
+            tracking.mirror_legacy_batch_totals(batch.pk)
     return removed
 
 
-def consume_expiring_stock_batches(*, variant, quantity, warehouse=None):
+def consume_expiring_stock_batches(*, variant, quantity, warehouse):
     """Draw down the earliest-expiring cohorts of this variant **in this place**.
 
     Warehouse-aware, which the old version could not be: it consumed a lot in
@@ -379,6 +391,14 @@ def consume_expiring_stock_batches(*, variant, quantity, warehouse=None):
     an allocation, planned and costed by ``apps.inventory.tracking`` — so this
     stays what it always was: the expiry-alert feature's bookkeeping, and
     nothing to do with valuation.
+
+    ``warehouse`` is **required**, and deliberately has no default. It defaulted
+    to the shop's main place for one release, and four of the five callers
+    simply did not pass it — so a stock count in Branch #2 drew its shrink out
+    of the main store's lot, or out of nothing at all, and neither said so.
+    Every caller already holds the ``StockItem`` whose quantity it just changed;
+    its ``warehouse_id`` is the answer, and a caller that cannot name a place is
+    a caller that does not yet know which stock it moved.
     """
     if quantity <= 0:
         return 0

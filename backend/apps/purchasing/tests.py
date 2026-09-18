@@ -22,6 +22,7 @@ from apps.inventory.models import (
     StockItem,
     StockMovement,
     StockValuationBin,
+    Warehouse,
 )
 from apps.inventory.services import (
     consume_expiring_stock_batches,
@@ -2017,7 +2018,9 @@ class PurchaseOrderApiTests(TestCase):
             StockBatchBalance.objects.order_by("expiry_date", "id")
         )
 
-        consumed = consume_expiring_stock_batches(variant=self.variant, quantity=4)
+        consumed = consume_expiring_stock_batches(
+            variant=self.variant, quantity=4, warehouse=Warehouse.default_id()
+        )
 
         self.assertEqual(consumed, 4)
         balances[0].refresh_from_db()

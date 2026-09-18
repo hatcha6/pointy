@@ -16,19 +16,23 @@ codebase rather than two.
 from .models import Warehouse
 
 
-def may_oversell(warehouse=None, *, settings=None, variant=None) -> bool:
+def may_oversell(warehouse=None, *, variant, settings=None) -> bool:
     """Whether a write may drive this place's stock below zero.
 
     Resolve it **once per document**, not once per line: a cart, a receipt or a
     job consumes from a single location, and asking per line would put a query
     on the cashier's critical path for an answer that cannot change mid-cart.
 
-    ``variant`` is the one input that comes *ahead* of every other. Identified
-    stock cannot go negative under any setting, because a negative serialized
-    balance is a claim to hold an article with no identifier — and the moment
-    one exists, the picker, the recall report and the bin all disagree about
-    what is on the shelf. ERPNext allowed it, then removed the special case in
-    v15; this refuses by construction instead.
+    ``variant`` is the one input that comes *ahead* of every other, and it is
+    **required** for that reason. Identified stock cannot go negative under any
+    setting, because a negative serialized balance is a claim to hold an article
+    with no identifier — and the moment one exists, the picker, the recall
+    report and the bin all disagree about what is on the shelf. ERPNext allowed
+    it, then removed the special case in v15; this refuses by construction
+    instead. It carried a ``None`` default for one release and three of the four
+    callers took it, so the refusal that is the whole point of the argument
+    never fired outside the till. Pass ``None`` explicitly for a write that
+    genuinely spans variants — and then be sure it cannot be tracked.
     """
     if variant is not None:
         from .tracking import is_tracked
@@ -79,4 +83,25 @@ def _policy_of(warehouse):
     return stored or Warehouse.OversellPolicy.SHOP_DEFAULT
 
 
-__all__ = ["may_oversell"]
+def may_oversell_document(warehouse=None, *, variants, settings=None) -> bool:
+    """The same question for a document that moves several variants at once.
+
+    A transfer, a receipt or a count resolves the policy **once**, not once per
+    line — but "once" must still account for every line, because one identified
+    variant in the document is enough to forbid going negative for all of it.
+    Resolving per line would put the refusal in the wrong place anyway: the
+    document either may drive this place below zero or it may not.
+
+    ``modes_for`` answers in a single query for anything not already preloaded,
+    and in none at all for the callers that selected ``variant__product``.
+    """
+    from .tracking import modes_for
+    from apps.catalog.models import Product
+
+    modes = modes_for(list(variants))
+    if any(mode != Product.TrackingMode.QUANTITY for mode in modes.values()):
+        return False
+    return may_oversell(warehouse, variant=None, settings=settings)
+
+
+__all__ = ["may_oversell", "may_oversell_document"]

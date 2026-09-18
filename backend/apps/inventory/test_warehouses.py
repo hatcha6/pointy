@@ -205,21 +205,21 @@ class OversellPolicyTests(TestCase):
 
     def test_a_warehouse_with_no_opinion_follows_the_shop(self):
         self.settings.allow_overselling = True
-        self.assertTrue(may_oversell(self.showroom, settings=self.settings))
+        self.assertTrue(may_oversell(self.showroom, variant=None, settings=self.settings))
         self.settings.allow_overselling = False
-        self.assertFalse(may_oversell(self.showroom, settings=self.settings))
+        self.assertFalse(may_oversell(self.showroom, variant=None, settings=self.settings))
 
     def test_a_warehouse_may_refuse_what_the_shop_allows(self):
         """The case #12651 asks for: a showroom that will not sell what it has
         not got, in a shop that tolerates it elsewhere."""
         self.settings.allow_overselling = True
         self.showroom.allow_overselling = Warehouse.OversellPolicy.REFUSE
-        self.assertFalse(may_oversell(self.showroom, settings=self.settings))
+        self.assertFalse(may_oversell(self.showroom, variant=None, settings=self.settings))
 
     def test_a_warehouse_may_allow_what_the_shop_refuses(self):
         self.settings.allow_overselling = False
         self.store.allow_overselling = Warehouse.OversellPolicy.ALLOW
-        self.assertTrue(may_oversell(self.store, settings=self.settings))
+        self.assertTrue(may_oversell(self.store, variant=None, settings=self.settings))
 
     def test_a_stock_row_resolves_the_policy_of_the_place_it_is_in(self):
         self.settings.allow_overselling = False
@@ -231,7 +231,7 @@ class OversellPolicyTests(TestCase):
         row = StockItem.objects.create(
             variant=product.default_variant, warehouse=self.store
         )
-        self.assertTrue(may_oversell(row, settings=self.settings))
+        self.assertTrue(may_oversell(row, variant=None, settings=self.settings))
 
     def test_only_one_function_decides_whether_stock_may_go_below_zero(self):
         """The census that stops #45414 happening here.

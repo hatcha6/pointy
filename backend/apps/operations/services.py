@@ -512,12 +512,18 @@ def _job_material_unit_cost(variant):
     that has never been valued; ``latest_sale_unit_cost`` is kept underneath it
     only for produced goods, which were never purchased at all.
     """
-    from apps.sales.services import latest_sale_unit_cost, sale_cost_basis
+    from apps.sales.services import latest_sale_unit_cost, money, sale_cost_basis
 
     cost = sale_cost_basis([variant]).get(variant.pk)
     if cost is None:
-        return latest_sale_unit_cost(variant)
-    return cost
+        cost = latest_sale_unit_cost(variant)
+    # Rounded here rather than by the column. ``JobMaterial.unit_cost`` holds two
+    # places and the ledger's rate holds six, so handing it the rate unrounded
+    # let Postgres pick the rounding — half away from zero — while every other
+    # money figure in the shop is rounded by ``money()``. The two only disagree
+    # on an exact half, which is precisely the case nobody notices until a
+    # repair's margin is a qirsh off the identical part sold over the counter.
+    return None if cost is None else money(cost)
 
 
 @transaction.atomic
@@ -602,7 +608,7 @@ def _consume_material(material, *, request=None):
         variant=variant, warehouse=selling_warehouse_id(request)
     )
     if (
-        not may_oversell(stock_item, settings=settings)
+        not may_oversell(stock_item, variant=variant, settings=settings)
         and stock_item.quantity_on_hand < material.quantity
     ):
         raise serializers.ValidationError(
@@ -621,7 +627,11 @@ def _consume_material(material, *, request=None):
     before = stock_snapshot(stock_item)
     stock_item.quantity_on_hand -= material.quantity
     save_stock_item_quantities(stock_item)
-    consume_expiring_stock_batches(variant=variant, quantity=material.quantity)
+    consume_expiring_stock_batches(
+        variant=variant,
+        quantity=material.quantity,
+        warehouse=stock_item.warehouse_id,
+    )
     movement = create_stock_movement(
         variant=variant,
         stock_item=stock_item,

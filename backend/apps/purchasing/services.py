@@ -1442,11 +1442,11 @@ def apply_receipt_stock_changes(
                 before=before,
                 # Net of discounts and landed costs: what this stock actually
                 # cost to put on the shelf is what it is worth on it.
-                unit_cost=line.effective_base_unit_cost,
+                unit_cost=line.effective_base_unit_cost_exact,
                 tracked_plan=(
                     capture.take(
                         quantity=accepted_expected_base,
-                        rate=line.effective_base_unit_cost,
+                        rate=line.effective_base_unit_cost_exact,
                     )
                     if capture is not None
                     else None
@@ -1468,11 +1468,11 @@ def apply_receipt_stock_changes(
                 note=f"زيادة توريد {locked_order.order_number}",
                 created_by=created_by,
                 before=before,
-                unit_cost=line.effective_base_unit_cost,
+                unit_cost=line.effective_base_unit_cost_exact,
                 tracked_plan=(
                     capture.take(
                         quantity=accepted_overage_base,
-                        rate=line.effective_base_unit_cost,
+                        rate=line.effective_base_unit_cost_exact,
                     )
                     if capture is not None
                     else None
@@ -1677,14 +1677,14 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             # Batches are consumed in base units by FEFO, so store base units.
             quantity=line.to_base_quantity(accepted_quantity),
             warehouse=locked_order.warehouse_id,
-            unit_cost=line.effective_base_unit_cost,
+            unit_cost=line.effective_base_unit_cost_exact,
         )
         if capture.is_tracked:
             capture.bind_receipt_line(receipt_line)
             damaged_units.extend(
                 capture.create_damaged_units(
                     quantity=line.to_base_quantity(damaged_quantity),
-                    rate=line.effective_base_unit_cost,
+                    rate=line.effective_base_unit_cost_exact,
                 )
             )
             captures.append(capture)
@@ -1904,7 +1904,11 @@ def record_purchase_adjustment_stock_movements(
         base_quantity = line.to_base_quantity(quantity)
         stock_item.quantity_on_hand -= base_quantity
         save_stock_item_quantities(stock_item)
-        consume_expiring_stock_batches(variant=line.variant, quantity=base_quantity)
+        consume_expiring_stock_batches(
+            variant=line.variant,
+            quantity=base_quantity,
+            warehouse=stock_item.warehouse_id,
+        )
         create_stock_movement(
             variant=line.variant,
             stock_item=stock_item,

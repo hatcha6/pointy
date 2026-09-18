@@ -1036,7 +1036,12 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
     # location and the answer cannot change mid-cart, so asking per line would
     # put a query on the cashier's critical path for nothing.
     overselling_allowed = may_oversell(
-        warehouse or next(iter(locked_items.values()), None), settings=settings
+        warehouse or next(iter(locked_items.values()), None),
+        # The cart's own tracked lines are refused individually below, at
+        # the point where each one's plan is made, so the document-level
+        # answer here is about the place rather than the goods.
+        variant=None,
+        settings=settings,
     )
     for variant_id in sorted(quantities_by_variant):
         variant = variants_by_id[variant_id]

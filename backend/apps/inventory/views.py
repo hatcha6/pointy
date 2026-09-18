@@ -166,7 +166,11 @@ class StockMovementViewSet(
                 StockMovement.Type.DECREASE,
                 StockMovement.Type.DAMAGED,
             ):
-                consume_expiring_stock_batches(variant=variant, quantity=quantity)
+                consume_expiring_stock_batches(
+                    variant=variant,
+                    quantity=quantity,
+                    warehouse=stock_item.warehouse_id,
+                )
             movement = serializer.save(
                 stock_item=stock_item,
                 variant=variant,
@@ -612,6 +616,7 @@ class StockCountViewSet(
                     consume_expiring_stock_batches(
                         variant=line.variant,
                         quantity=abs(delta),
+                        warehouse=stock_item.warehouse_id,
                     )
                 movement = create_stock_movement(
                     stock_item=stock_item,

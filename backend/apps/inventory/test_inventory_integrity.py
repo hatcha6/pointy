@@ -162,7 +162,11 @@ class ExpiryFifoTests(TestCase):
             variant=self.variant, days=10, quantity="3", supplier=self.supplier
         )
 
-        consumed = consume_expiring_stock_batches(variant=self.variant, quantity=2)
+        consumed = consume_expiring_stock_batches(
+            variant=self.variant,
+            quantity=2,
+            warehouse=Warehouse.default_id(),
+        )
 
         self.assertEqual(consumed, Decimal("2"))
         earlier.refresh_from_db()
@@ -180,7 +184,11 @@ class ExpiryFifoTests(TestCase):
         )
 
         # 4 > the first batch's 3, so it spills into the second.
-        consumed = consume_expiring_stock_batches(variant=self.variant, quantity=4)
+        consumed = consume_expiring_stock_batches(
+            variant=self.variant,
+            quantity=4,
+            warehouse=Warehouse.default_id(),
+        )
 
         self.assertEqual(consumed, Decimal("4"))
         earlier.refresh_from_db()
@@ -198,7 +206,11 @@ class ExpiryFifoTests(TestCase):
             variant=self.variant, days=15, quantity="3", supplier=self.supplier
         )
 
-        consumed = consume_expiring_stock_batches(variant=self.variant, quantity=10)
+        consumed = consume_expiring_stock_batches(
+            variant=self.variant,
+            quantity=10,
+            warehouse=Warehouse.default_id(),
+        )
 
         self.assertEqual(consumed, Decimal("5"))
         first.refresh_from_db()
@@ -223,7 +235,11 @@ class ExpiryFifoTests(TestCase):
             created_offset_seconds=60,
         )
 
-        consumed = consume_expiring_stock_batches(variant=self.variant, quantity=4)
+        consumed = consume_expiring_stock_batches(
+            variant=self.variant,
+            quantity=4,
+            warehouse=Warehouse.default_id(),
+        )
 
         self.assertEqual(consumed, Decimal("4"))
         older.refresh_from_db()
@@ -239,7 +255,11 @@ class ExpiryFifoTests(TestCase):
             variant=plain_variant, days=10, quantity="5", supplier=self.supplier
         )
 
-        consumed = consume_expiring_stock_batches(variant=plain_variant, quantity=3)
+        consumed = consume_expiring_stock_batches(
+            variant=plain_variant,
+            quantity=3,
+            warehouse=Warehouse.default_id(),
+        )
 
         self.assertEqual(consumed, 0)
         batch.refresh_from_db()
@@ -251,11 +271,18 @@ class ExpiryFifoTests(TestCase):
         )
 
         self.assertEqual(
-            consume_expiring_stock_batches(variant=self.variant, quantity=0), 0
+            consume_expiring_stock_batches(
+                variant=self.variant,
+                quantity=0,
+                warehouse=Warehouse.default_id(),
+            ),
+            0,
         )
         self.assertEqual(
             consume_expiring_stock_batches(
-                variant=self.variant, quantity=Decimal("-2")
+                variant=self.variant,
+                quantity=Decimal("-2"),
+                warehouse=Warehouse.default_id(),
             ),
             0,
         )

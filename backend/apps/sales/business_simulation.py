@@ -719,6 +719,18 @@ class PoLineRec:
         return even2(self.effective_unit_cost / self.unit_factor)
 
     @property
+    def effective_base_unit_cost_exact(self) -> Decimal:
+        """Six places, mirroring ``PurchaseLine.effective_base_unit_cost_exact``.
+
+        Derived here from the same inputs rather than read from the backend —
+        the whole point of the oracle is that it computes the number it is
+        checking, not that it agrees with itself.
+        """
+        return (self.effective_unit_cost / self.unit_factor).quantize(
+            Decimal("0.000001")
+        )
+
+    @property
     def outstanding(self) -> int:
         return max(
             self.quantity - (self.recv_accepted + self.recv_damaged + self.recv_cancelled),
@@ -3471,11 +3483,14 @@ class Simulation:
         # receipt keeps the rate from before the whole batch. That kept rate is
         # what the next sale of the variant snapshots as its cost, so the two
         # disagree about what the goods cost from then on.
+        # The *exact* per-base-unit cost, not the two-place display figure: a
+        # carton of twelve at 100.00 is 8.333333 in the bin, and modelling it as
+        # 8.33 makes the oracle expect 99.96 of stock value for 100.00 paid.
         self.oracle.value_receipt(
-            vid, accepted_expected_base, line.effective_base_unit_cost
+            vid, accepted_expected_base, line.effective_base_unit_cost_exact
         )
         self.oracle.value_receipt(
-            vid, accepted_overage_base, line.effective_base_unit_cost
+            vid, accepted_overage_base, line.effective_base_unit_cost_exact
         )
         # expected decremented (clamped at 0) for accepted_expected, damaged, cancelled
         for packs in (accepted_expected, damaged_expected, cancelled_expected):

@@ -353,11 +353,21 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
         ``applied_discounts``/``exchanges`` cost a query per order. Extend this
         method — not a caller's own list — when the serializer grows a field.
         """
+        from apps.inventory.models import StockUnit
+
         return self.with_list_serializer_relations().prefetch_related(
             "lines__variant__product",
             Prefetch(
                 "lines__variant__option_values",
                 queryset=VariantOptionValue.objects.select_related("option"),
+            ),
+            # The identifiers a tracked line issued. ``order_line_identifiers``
+            # looks for exactly this cache key and falls back to a query per
+            # line without it — which lands on the checkout response, in the one
+            # market segment the feature was built for.
+            Prefetch(
+                "lines__stock_units",
+                queryset=StockUnit.objects.select_related("batch").order_by("id"),
             ),
         )
 

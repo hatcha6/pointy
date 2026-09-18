@@ -32,7 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from django.db.models import Sum, Value
+from django.db.models import Q, Sum, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
 from rest_framework import serializers
@@ -61,6 +61,7 @@ from .models import (
 ZERO = Decimal("0")
 ONE = Decimal("1")
 QUANTITY_PRECISION = Decimal("0.001")
+MONEY_PRECISION = Decimal("0.01")
 RATE_PRECISION = Decimal("0.000001")
 
 #: Where a plan rides between ``prepare`` and ``record``. Carried on the variant
@@ -76,6 +77,11 @@ def _q(value) -> Decimal:
 
 def _rate(value) -> Decimal:
     return Decimal(value).quantize(RATE_PRECISION)
+
+
+def _money(value) -> Decimal:
+    """Two places, because this is what somebody typed or was charged."""
+    return Decimal(value).quantize(MONEY_PRECISION)
 
 
 # ---------------------------------------------------------------------------
@@ -649,12 +655,30 @@ def lock_units(unit_ids):
     }
 
 
-def available_units(*, variant, warehouse, limit=None, batch_ids=None):
+def available_units(
+    *,
+    variant,
+    warehouse,
+    limit=None,
+    batch_ids=None,
+    allow_expired=False,
+    today=None,
+    include_unsellable_lots=False,
+):
     """Sellable units of this variant here, oldest first.
 
     Oldest first because that is what a used-goods trader wants sold — stock
     ages, and an unsold handset loses value every week. Served by
     ``stockunit_picker_idx``.
+
+    **The lot's own sellability is part of "available".** A quarantined or
+    expired lot is filtered out here, in SQL, exactly as ``pick_balances`` does
+    for the lot path — because the alternative is what shipped: the picker
+    returned the oldest pack regardless, ``_refuse_unsellable_lots`` then raised
+    on it, and a pharmacy that quarantined one lot could no longer sell the drug
+    *at all*, with sixty good packs on the shelf. Skipping is what a recall
+    means; refusing is what naming that lot by hand means, and that refusal
+    still stands for a unit the cashier picked deliberately.
     """
     warehouse_id = getattr(warehouse, "pk", warehouse) or Warehouse.default_id()
     query = StockUnit.objects.filter(
@@ -665,6 +689,23 @@ def available_units(*, variant, warehouse, limit=None, batch_ids=None):
     )
     if batch_ids:
         query = query.filter(batch_id__in=batch_ids)
+    # A unit with no lot has no lot to be unsellable. ``include_unsellable_lots``
+    # is for the caller that has already found nothing and now needs to say why.
+    if not include_unsellable_lots:
+        query = query.filter(Q(batch__isnull=True) | Q(batch__is_locked=False))
+        query = query.filter(
+            Q(batch__isnull=True) | Q(batch__status=StockBatch.Status.ACTIVE)
+        )
+    if (
+        not include_unsellable_lots
+        and not allow_expired
+        and variant.product.prevent_selling_expired
+    ):
+        query = query.filter(
+            Q(batch__isnull=True)
+            | Q(batch__expiry_date__isnull=True)
+            | Q(batch__expiry_date__gte=today or timezone.localdate())
+        )
     query = query.order_by("in_stock_since", "id")
     if limit is not None:
         query = query[:limit]
@@ -1080,15 +1121,15 @@ def _refuse_unbalanced_lot_costs(batch_rows, *, rate, quantity):
         ),
         ZERO,
     )
-    expected = _rate(Decimal(rate) * Decimal(quantity))
-    if _rate(total) != expected:
+    expected = _money(Decimal(rate) * Decimal(quantity))
+    if _money(total) != expected:
         raise serializers.ValidationError(
             {
                 "detail": (
-                    f"مجموع تكاليف الدفعات ({_rate(total)}) لا يساوي إجمالي "
+                    f"مجموع تكاليف الدفعات ({_money(total)}) لا يساوي إجمالي "
                     f"السطر ({expected})."
                 ),
-                "captured": str(_rate(total)),
+                "captured": str(_money(total)),
                 "expected": str(expected),
             }
         )
@@ -1105,15 +1146,19 @@ def _refuse_unbalanced_costs(unit_rows, *, count, rate, quantity):
     if not declared or len(declared) != len(unit_rows) or len(unit_rows) != count:
         return
     total = sum((Decimal(row["unit_cost"]) for row in declared), ZERO)
-    expected = _rate(Decimal(rate) * Decimal(quantity))
-    if _rate(total) != expected:
+    # Compared as money, not as a six-place rate. The receiver types dinars,
+    # and the line's own total is dinars; a carton of twelve at 100.00 has a
+    # base-unit rate of 8.333333, and 8.333333 × 12 is 99.999996 — so an honest
+    # 40 + 30 + 30 was refused for a hundredth that the backend introduced.
+    expected = _money(Decimal(rate) * Decimal(quantity))
+    if _money(total) != expected:
         raise serializers.ValidationError(
             {
                 "detail": (
-                    f"مجموع تكاليف الوحدات ({_rate(total)}) لا يساوي إجمالي "
+                    f"مجموع تكاليف الوحدات ({_money(total)}) لا يساوي إجمالي "
                     f"السطر ({expected})."
                 ),
-                "captured": str(_rate(total)),
+                "captured": str(_money(total)),
                 "expected": str(expected),
             }
         )
@@ -1248,11 +1293,32 @@ def _plan_unit_issue(
                 warehouse=warehouse_id,
                 limit=count,
                 batch_ids=batch_ids,
+                allow_expired=allow_expired,
             ).values_list("pk", flat=True)
         )
         locked = lock_units(candidate_ids)
         units = [locked[unit_id] for unit_id in candidate_ids if unit_id in locked]
         if len(units) < count and not allow_short:
+            # Short because the good packs ran out, or short because the only
+            # packs here are quarantined or expired? The cashier needs to be
+            # told which — "لا توجد وحدات كافية" in front of a full shelf of
+            # recalled stock is the answer that sends them looking in the back.
+            # So when nothing sellable is left, re-ask without the lot filter
+            # and let the lot's own refusal speak.
+            blocked = (
+                available_units(
+                    variant=variant,
+                    warehouse=warehouse_id,
+                    batch_ids=batch_ids,
+                    allow_expired=True,
+                    include_unsellable_lots=True,
+                )
+                .exclude(pk__in=candidate_ids)
+                .select_related("batch", "variant", "variant__product")[
+                    : count - len(units)
+                ]
+            )
+            _refuse_unsellable_lots(list(blocked), allow_expired=allow_expired)
             raise serializers.ValidationError(
                 {
                     "detail": (
