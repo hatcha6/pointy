@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/consignment.dart';
 import '../../../data/models/stock_batch.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
@@ -264,6 +265,51 @@ class TrackedStockViewModel extends ChangeNotifier {
       Ok<List<StockAllocationEntry>>(:final value) => value,
       Error<List<StockAllocationEntry>>() => const [],
     };
+  }
+
+  /// `allocations ∪ events`, in time order (§6.9).
+  ///
+  /// Falls back to empty rather than to an error: a unit whose movements
+  /// render and whose price-change trail does not is a worse screen than one
+  /// without the trail, and it is nowhere near as bad as no screen at all.
+  Future<List<StockUnitTimelineEntry>> unitTimeline(int unitId) async {
+    final result = await _repository.loadUnitTimeline(unitId);
+    return switch (result) {
+      Ok<List<StockUnitTimelineEntry>>(:final value) => value,
+      Error<List<StockUnitTimelineEntry>>() => const [],
+    };
+  }
+
+  Future<List<ConsignmentIncident>> unitIncidents(int unitId) async {
+    final result = await _repository.loadUnitIncidents(unitId);
+    return switch (result) {
+      Ok<List<ConsignmentIncident>>(:final value) => value,
+      Error<List<ConsignmentIncident>>() => const [],
+    };
+  }
+
+  /// Write down what happened to somebody else's goods (§6.2.2).
+  ///
+  /// Returns the error text rather than swallowing it: the one refusal a
+  /// person will actually hit here — the goods have already left the shelf —
+  /// is worth reading.
+  Future<String?> reportIncident(
+    int unitId,
+    ConsignmentIncidentDraft draft,
+  ) async {
+    final result = await _repository.reportIncident(unitId, draft);
+    if (result case Ok<ConsignmentIncident>()) {
+      final fresh = await _repository.loadUnit(unitId);
+      if (fresh case Ok<StockUnit>(:final value)) {
+        _replaceUnit(value);
+      }
+      notifyListeners();
+      return null;
+    }
+    final failure = result is Error<ConsignmentIncident>
+        ? result.exception.toString()
+        : '';
+    return failure.isEmpty ? null : failure;
   }
 
   Future<List<StockAllocationEntry>> batchHistory(int batchId) async {

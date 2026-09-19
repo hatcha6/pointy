@@ -202,3 +202,78 @@ __all__ = [
     "stock_movement_values",
     "stock_position_by_variant",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Goods that will expire before they sell
+# ---------------------------------------------------------------------------
+
+#: How hard to cut, by how close the date is. A shop that discounts a week
+#: before expiry has already lost the sale; one that discounts ninety days out
+#: has given away margin it did not need to.
+MARKDOWN_LADDER = (
+    (7, Decimal("0.50")),
+    (14, Decimal("0.35")),
+    (30, Decimal("0.20")),
+    (60, Decimal("0.10")),
+)
+
+
+def expiry_markdown_suggestions(batches):
+    """``{batch_id: suggestion}`` — what to cut, and what it saves.
+
+    Advice, never an action. Two things bound it and both matter:
+
+    * **The floor is cost.** Selling below what the goods cost turns a
+      write-off into a smaller write-off plus a customer who now expects that
+      price; the ladder is clamped so the suggested price never goes under the
+      lot's own incoming rate.
+    * **The saving is the write-off avoided**, not the discount given. What
+      the shop is comparing is *sell it at 6 or bin it at 10*, and a report
+      that showed the discount as a loss would argue for doing nothing.
+    """
+    from django.utils import timezone
+
+    today = timezone.localdate()
+    suggestions = {}
+    for batch in batches:
+        if batch.expiry_date is None:
+            continue
+        remaining = sum(
+            (balance.remaining_quantity for balance in batch.balances.all()),
+            Decimal("0"),
+        )
+        if remaining <= 0:
+            continue
+        days_left = (batch.expiry_date - today).days
+        cut = next(
+            (
+                fraction
+                for horizon, fraction in MARKDOWN_LADDER
+                if days_left <= horizon
+            ),
+            None,
+        )
+        if cut is None:
+            continue
+        price = Decimal(batch.variant.unit_price or 0)
+        cost = max(
+            (balance.incoming_rate for balance in batch.balances.all()),
+            default=Decimal("0"),
+        )
+        suggested = (price * (Decimal("1") - cut)).quantize(Decimal("0.01"))
+        floored = max(suggested, Decimal(cost).quantize(Decimal("0.01")))
+        suggestions[batch.pk] = {
+            "days_left": days_left,
+            "discount_pct": float(cut * 100),
+            "current_price": price,
+            "suggested_price": floored,
+            "at_cost_floor": floored > suggested,
+            "quantity": remaining,
+            # Sell it at the suggested price or bin it at cost: this is what
+            # the second outcome costs, which is the number worth acting on.
+            "write_off_avoided": (Decimal(cost) * remaining).quantize(
+                Decimal("0.01")
+            ),
+        }
+    return suggestions

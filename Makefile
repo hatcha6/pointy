@@ -130,7 +130,7 @@ ENDURANCE_WORKERS ?= 4
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
 	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run backend-run-remote \
 	backend-load-test backend-stress-test backend-endurance-test \
-	backend-tracked-simulation backend-stock-integrity \
+	backend-tracked-simulation backend-stock-integrity backend-contract-gate \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview \
@@ -262,6 +262,15 @@ backend-tracked-simulation: backend-env backend-install ## Run the identified-st
 # data. Exits non-zero when one does not hold, so it can go on a schedule.
 backend-stock-integrity: backend-env backend-install ## Check the identified-stock invariants against the database.
 	$(MANAGE) check_stock_integrity
+
+# Read-only, and the gate on any **contract** migration — one that removes
+# something the previous release still writes. It asks the relay whether every
+# installation is past a given version. Exit 0 means the removal is safe;
+# anything else names what is holding it shut.
+CONTRACT_FLOOR ?=
+backend-contract-gate: backend-env backend-install ## Is the whole fleet past a version? (CONTRACT_FLOOR=x.y.z)
+	@test -n "$(CONTRACT_FLOOR)" || { echo "set CONTRACT_FLOOR=<the version the removal is safe past>"; exit 2; }
+	$(MANAGE) check_fleet_minimum_version --floor "$(CONTRACT_FLOOR)"
 
 backend-endurance-test: backend-env backend-install ## Run a long checkout endurance test against a running API server.
 	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(ENDURANCE_DURATION)" --workers "$(ENDURANCE_WORKERS)" $(LOAD_EXTRA)

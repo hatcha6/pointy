@@ -252,10 +252,20 @@ func (s HTTPServer) handleFleetStatus(w http.ResponseWriter, r *http.Request) {
 			LastUpdateAt:    installation.LastUpdateAt,
 		})
 	}
+	// The floor a contract migration has to clear. A schema change that
+	// removes something the previous release still writes cannot ship until
+	// every installation is past the release that stopped writing it — and
+	// this endpoint is where that stops being a hope and becomes a query
+	// (`zero-downtime-updates`, §15.1 R3).
+	minimum, unknown := control.MinimumFleetVersion(installations)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"installations": views,
-		"channels":      targetList,
-		"count":         len(views),
+		"installations":   views,
+		"channels":        targetList,
+		"count":           len(views),
+		"minimum_version": minimum,
+		// Counted, never assumed current: a box that has not phoned home is
+		// the one most likely to be running last year's build.
+		"unknown_version_count": unknown,
 	})
 }
 

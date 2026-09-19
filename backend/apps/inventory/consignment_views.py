@@ -9,6 +9,7 @@ arithmetic would be a fifth definition of a number that has exactly one.
 from __future__ import annotations
 
 import django_filters
+from django.db.models import Count
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -20,14 +21,18 @@ from apps.core.permissions import HasPointyPermission
 from . import consignment as figures
 from . import consignment_service
 from .consignment_serializers import (
+    AssessIncidentSerializer,
     ConsignmentAgreementSerializer,
+    ConsignmentIncidentSerializer,
     ConsignmentIntakeSerializer,
     ConsignmentPayableSerializer,
     ConsignorPayoutSerializer,
+    SettleIncidentSerializer,
     UnitAttributeDefinitionSerializer,
 )
 from .models import (
     ConsignmentAgreement,
+    ConsignmentIncident,
     ConsignorPayout,
     StockUnit,
     UnitAttributeDefinition,
@@ -199,6 +204,133 @@ class ConsignorPayoutViewSet(
                 "units__variant__option_values__option",
             )
             .order_by(*self.ordering)
+        )
+
+
+class ConsignmentIncidentFilter(django_filters.FilterSet):
+    open_only = django_filters.BooleanFilter(method="filter_open")
+    unassessed = django_filters.BooleanFilter(method="filter_unassessed")
+    consignor = django_filters.NumberFilter(field_name="unit__consignor_id")
+
+    class Meta:
+        model = ConsignmentIncident
+        fields = ("kind", "responsibility", "resolution", "agreement")
+
+    def filter_open(self, queryset, name, value):
+        if value is None:
+            return queryset
+        query = {"resolution__in": ConsignmentIncident.OPEN_RESOLUTIONS}
+        return queryset.filter(**query) if value else queryset.exclude(**query)
+
+    def filter_unassessed(self, queryset, name, value):
+        if value is None:
+            return queryset
+        return queryset.filter(
+            is_assessed=not value,
+            resolution__in=ConsignmentIncident.OPEN_RESOLUTIONS,
+        )
+
+
+class ConsignmentIncidentViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
+    """محضر حادث أمانة — the record, the assessment and the settlement.
+
+    Created from the unit rather than here: an incident is always *about* a
+    specific article, and a create endpoint that took a unit id would be a
+    second way in with its own chance to forget the write-off.
+    """
+
+    serializer_class = ConsignmentIncidentSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("inventory.view_consignment_liability",),
+        "retrieve": ("inventory.view_consignment_liability",),
+        "assess": ("inventory.manage_consignmentincident",),
+        "settle": ("inventory.disburse_consignment_payout",),
+        "claims": ("inventory.view_consignment_liability",),
+    }
+    filterset_class = ConsignmentIncidentFilter
+    ordering = ("-discovered_at", "-id")
+    search_fields = (
+        "number",
+        "unit__code",
+        "unit__consignor__full_name",
+        "narrative",
+    )
+
+    def get_queryset(self):
+        return (
+            ConsignmentIncident.objects.select_related(
+                "unit",
+                "unit__variant",
+                "unit__variant__product",
+                "unit__consignor",
+                "agreement",
+                "reported_by",
+            )
+            .prefetch_related("unit__variant__option_values__option")
+            .order_by(*self.ordering)
+        )
+
+    @action(detail=True, methods=["post"])
+    def assess(self, request, pk=None):
+        """Who is responsible, and what that comes to."""
+        from . import custody
+
+        serializer = AssessIncidentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        incident = custody.assess_incident(
+            self.get_object(),
+            responsibility=serializer.validated_data["responsibility"],
+            assessed_value=serializer.validated_data.get("assessed_value"),
+            note=serializer.validated_data.get("note", ""),
+            request=request,
+        )
+        return Response(
+            self.get_serializer(self.get_queryset().get(pk=incident.pk)).data
+        )
+
+    @action(detail=True, methods=["post"])
+    def settle(self, request, pk=None):
+        """Close it — paid, replaced, waived, insured or no claim."""
+        from . import custody
+
+        serializer = SettleIncidentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        incident = custody.settle_incident(
+            self.get_object(),
+            resolution=serializer.validated_data["resolution"],
+            method=serializer.validated_data["method"],
+            replacement_unit=serializer.validated_data.get("replacement_unit"),
+            reference=serializer.validated_data.get("reference", ""),
+            notes=serializer.validated_data.get("notes", ""),
+            request=request,
+        )
+        return Response(
+            self.get_serializer(self.get_queryset().get(pk=incident.pk)).data
+        )
+
+    @action(detail=False, methods=["get"])
+    def claims(self, request):
+        """The claims report: what is owed, what nobody has priced yet.
+
+        Two figures and never one. An incident with an undetermined
+        responsibility carries a zero nobody chose, and adding it to a total
+        would say the shop had accepted a liability it has not.
+        """
+        return Response(
+            {
+                "open_value": figures.consignor_claims_open(),
+                "unassessed_count": figures.consignor_claims_unassessed(),
+                "open_count": figures.open_incidents().count(),
+                "by_responsibility": {
+                    row["responsibility"]: row["total"]
+                    for row in figures.open_incidents()
+                    .values("responsibility")
+                    .annotate(total=Count("id"))
+                },
+            }
         )
 
 

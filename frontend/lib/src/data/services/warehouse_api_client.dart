@@ -1,4 +1,5 @@
 import '../models/stock_transfer.dart';
+import '../models/stock_unit.dart';
 import '../models/warehouse.dart';
 import 'api_session.dart';
 
@@ -25,7 +26,10 @@ class WarehouseApiClient {
       'warehouses/',
       body: warehouse.toCreateJson(),
     );
-    _session.ensureSuccess(response, 'Creating the warehouse failed with status');
+    _session.ensureSuccess(
+      response,
+      'Creating the warehouse failed with status',
+    );
     return Warehouse.fromJson(
       (_session.decodedBody(response) as Map).cast<String, Object?>(),
     );
@@ -44,7 +48,10 @@ class WarehouseApiClient {
 
   Future<void> deleteWarehouse(int id) async {
     final response = await _session.delete('warehouses/$id/');
-    _session.ensureSuccess(response, 'Deleting the warehouse failed with status');
+    _session.ensureSuccess(
+      response,
+      'Deleting the warehouse failed with status',
+    );
   }
 
   /// Where every unit of one product is sitting.
@@ -68,7 +75,10 @@ class WarehouseApiClient {
   /// answers with the shop's default when the device has no row.
   Future<RegisterProfile> fetchMyRegisterProfile() async {
     final response = await _session.get('register-profiles/me/');
-    _session.ensureSuccess(response, 'Register profile request failed with status');
+    _session.ensureSuccess(
+      response,
+      'Register profile request failed with status',
+    );
     return RegisterProfile.fromJson(
       (_session.decodedBody(response) as Map).cast<String, Object?>(),
     );
@@ -85,7 +95,10 @@ class WarehouseApiClient {
         if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
       },
     );
-    _session.ensureSuccess(response, 'Saving the till warehouse failed with status');
+    _session.ensureSuccess(
+      response,
+      'Saving the till warehouse failed with status',
+    );
     return RegisterProfile.fromJson(
       (_session.decodedBody(response) as Map).cast<String, Object?>(),
     );
@@ -156,16 +169,35 @@ class WarehouseApiClient {
       'stock-transfers/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Creating the transfer failed with status');
+    _session.ensureSuccess(
+      response,
+      'Creating the transfer failed with status',
+    );
     return StockTransfer.fromJson(
       (_session.decodedBody(response) as Map).cast<String, Object?>(),
     );
   }
 
-  Future<StockTransfer> dispatchTransfer(int id) async {
+  /// Send a draft transfer on its way.
+  ///
+  /// ``picks`` maps a line id to the identified stock that line is carrying —
+  /// which handsets, and out of which lots. A serialized line is refused
+  /// without one, deliberately: the van driver has already physically chosen
+  /// five, and a system that picked a different five would make the far end's
+  /// *«sent 5, arrived 4»* reconciliation a lie about which one is gone.
+  Future<StockTransfer> dispatchTransfer(
+    int id, {
+    Map<int, TransferLinePick> picks = const {},
+  }) async {
     final response = await _session.post(
       'stock-transfers/$id/dispatch/',
-      body: const <String, Object?>{},
+      body: <String, Object?>{
+        if (picks.isNotEmpty)
+          'picks': {
+            for (final entry in picks.entries)
+              '${entry.key}': entry.value.toJson(),
+          },
+      },
     );
     _session.ensureSuccess(response, 'Sending the transfer failed with status');
     return StockTransfer.fromJson(
@@ -179,11 +211,17 @@ class WarehouseApiClient {
     int id,
     Map<int, double> lines, {
     String note = '',
+    Map<int, TransferLinePick> picks = const {},
   }) async {
     final response = await _session.post(
       'stock-transfers/$id/receive/',
       body: <String, Object?>{
         if (note.trim().isNotEmpty) 'note': note.trim(),
+        if (picks.isNotEmpty)
+          'picks': {
+            for (final entry in picks.entries)
+              '${entry.key}': entry.value.toJson(),
+          },
         'lines': [
           for (final entry in lines.entries)
             <String, Object?>{
@@ -193,7 +231,10 @@ class WarehouseApiClient {
         ],
       },
     );
-    _session.ensureSuccess(response, 'Receiving the transfer failed with status');
+    _session.ensureSuccess(
+      response,
+      'Receiving the transfer failed with status',
+    );
     return StockTransfer.fromJson(
       (_session.decodedBody(response) as Map).cast<String, Object?>(),
     );
@@ -204,7 +245,10 @@ class WarehouseApiClient {
       'stock-transfers/$id/cancel/',
       body: <String, Object?>{'reason': reason},
     );
-    _session.ensureSuccess(response, 'Cancelling the transfer failed with status');
+    _session.ensureSuccess(
+      response,
+      'Cancelling the transfer failed with status',
+    );
     return StockTransfer.fromJson(
       (_session.decodedBody(response) as Map).cast<String, Object?>(),
     );

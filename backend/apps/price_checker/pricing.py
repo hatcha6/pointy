@@ -64,6 +64,13 @@ class PriceResult:
     # "this cheese is 40.00 a kilo".
     label_quantity: Decimal | None = None
     label_total: Decimal | None = None
+    # Set only when the scanned code was a serial/IMEI that resolved to a live
+    # article. The kiosk answers *this handset* rather than *this model*, which
+    # for a used-goods shelf where every unit is priced on its own is the whole
+    # difference between a useful answer and a misleading one (§5.7).
+    stock_unit_id: int | None = None
+    unit_code: str = ""
+    unit_attributes: tuple = field(default_factory=tuple)
 
     @property
     def has_discount(self) -> bool:
@@ -95,6 +102,48 @@ def _primary_image_attachment(variant: ProductVariant) -> Attachment | None:
         if attachment is not None:
             return attachment
     return None
+
+
+def _live_unit(code: str):
+    """The article this identifier names, if one is on a shelf right now.
+
+    Deliberately narrow: only ``in_stock``. A kiosk that answered for a sold
+    handset would be quoting a price for something the shop no longer has, and
+    a customer reading it is standing in front of the shelf.
+    """
+    from apps.inventory.models import StockUnit
+    from apps.inventory.tracking import find_live_unit
+
+    unit = find_live_unit(code)
+    if unit is None or unit.status != StockUnit.Status.IN_STOCK:
+        return None
+    if not unit.is_identified:
+        return None
+    return unit
+
+
+def _display_attributes(unit):
+    """The article's own facts, for a kiosk — and never a cost among them.
+
+    Read off ``StockUnit.attributes``, which holds what the shop chose to
+    record about this kind of thing (battery health, mileage, condition). The
+    definitions carry the labels; anything the shop has since removed from the
+    definitions is dropped rather than shown as a raw key.
+    """
+    if unit is None or not unit.attributes:
+        return ()
+    from apps.inventory.models import UnitAttributeDefinition
+
+    labels = dict(
+        UnitAttributeDefinition.objects.filter(
+            key__in=list(unit.attributes)
+        ).values_list("key", "label")
+    )
+    return tuple(
+        {"key": key, "label": labels[key], "value": str(value)}
+        for key, value in unit.attributes.items()
+        if key in labels
+    )
 
 
 def lookup_price(
@@ -159,6 +208,16 @@ def lookup_price(
                 .first()
             )
     scale_match = None
+    unit_row = None
+    if variant is None:
+        # An IMEI or a serial. A used-goods shelf prices every article on its
+        # own (§5.7), so «كم سعر هذا الآيفون» has as many answers as there are
+        # handsets — and the one the customer is holding is the only one worth
+        # giving. Looked for only after the ordinary barcode paths have
+        # missed, so a shop selling Coca-Cola never pays for it.
+        unit_row = _live_unit(code)
+        if unit_row is not None:
+            variant = unit_row.variant
     if variant is None:
         # A weighing scale's own label: an in-store prefix, the item's short
         # code, and the weight (or price) it measured. Only the shop's
@@ -173,6 +232,10 @@ def lookup_price(
         return PriceResult.not_found(code)
 
     unit_amount = variant.unit_price
+    if unit_row is not None and unit_row.list_price is not None:
+        # This article's own asking price, which is the point of asking about
+        # this article.
+        unit_amount = unit_row.list_price
     if matched_unit is not None:
         unit_amount = (
             matched_unit.price
@@ -256,4 +319,7 @@ def lookup_price(
         image_token=image_token,
         label_quantity=label.quantity if label is not None else None,
         label_total=label_total,
+        stock_unit_id=unit_row.pk if unit_row is not None else None,
+        unit_code=unit_row.code if unit_row is not None else "",
+        unit_attributes=_display_attributes(unit_row),
     )

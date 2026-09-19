@@ -226,6 +226,13 @@ class StockTransferLineSerializer(serializers.ModelSerializer):
     outstanding_quantity = serializers.DecimalField(
         max_digits=12, decimal_places=3, read_only=True, coerce_to_string=False
     )
+    # So the dispatch sheet knows to ask for identifiers. The client cannot
+    # derive it — a transfer line names a variant, and the mode lives on the
+    # product — and a sheet that guessed would either nag every grocer or let a
+    # phone shop send five unnamed handsets.
+    tracking_mode = serializers.CharField(
+        source="variant.product.tracking_mode", read_only=True
+    )
 
     class Meta:
         model = StockTransferLine
@@ -234,6 +241,7 @@ class StockTransferLineSerializer(serializers.ModelSerializer):
             "variant",
             "variant_sku",
             "variant_name",
+            "tracking_mode",
             "quantity",
             "unit",
             "unit_factor",

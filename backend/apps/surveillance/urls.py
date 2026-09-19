@@ -15,6 +15,7 @@ from .views import (
     CameraSnapshotView,
     CameraStillView,
     InvoiceFootageView,
+    MomentFootageView,
     SurveillanceStatusView,
 )
 
@@ -58,5 +59,13 @@ urlpatterns = [
         "surveillance/orders/<int:order_id>/footage/",
         InvoiceFootageView.as_view(),
         name="surveillance-invoice-footage",
+    ),
+    # One route for the two moments Phase D added: the sale a serialized
+    # article left on, and the minute a consigned camera turned out to be
+    # broken. Both are a timestamp and a label, which is all the player needs.
+    path(
+        "surveillance/<slug:subject>/<int:subject_id>/footage/",
+        MomentFootageView.as_view(),
+        name="surveillance-moment-footage",
     ),
 ]

@@ -4,9 +4,12 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product_variant.dart';
+import '../../../data/models/stock_batch.dart';
 import '../../../data/models/stock_count.dart';
+import '../../../data/models/stock_count_draft.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/stock_count_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../companion/companion_scan_listener.dart';
 import '../../companion/companion_scope.dart';
@@ -22,6 +25,7 @@ import '../view_models/stock_count_session_view_model.dart';
 import 'stock_count_add_replace_sheet.dart';
 import 'stock_count_item_search_sheet.dart';
 import 'stock_count_reconciliation_screen.dart';
+import 'stock_count_scan_shelf.dart';
 import 'stock_count_ui.dart';
 import 'stock_count_variance_prompt.dart';
 
@@ -34,12 +38,17 @@ class StockCountCountingScreen extends StatefulWidget {
     required this.stockCountRepository,
     required this.catalogRepository,
     required this.capabilities,
+    this.trackedStockRepository,
   });
 
   final StockCount session;
   final StockCountRepository stockCountRepository;
   final CatalogRepository catalogRepository;
   final AuthorizationCapabilities capabilities;
+
+  /// Only used to list a lot-tracked item's lots. Optional so the previews and
+  /// the tests that count anonymous stock need not supply one.
+  final TrackedStockRepository? trackedStockRepository;
 
   @override
   State<StockCountCountingScreen> createState() =>
@@ -56,6 +65,7 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
       widget.stockCountRepository,
       widget.catalogRepository,
       session: widget.session,
+      trackedStockRepository: widget.trackedStockRepository,
     );
   }
 
@@ -74,6 +84,46 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
       _showSnack(AppLocalizations.of(context)!.stockCountScanMiss);
       _viewModel.acknowledgeScanMiss();
     }
+    await _handleUnknownScan();
+  }
+
+  /// A code nothing in the shop has ever answered to.
+  ///
+  /// It cannot name its own product, so the person holding the thing does.
+  /// Dismissing is a legitimate answer too — the finding is already recorded
+  /// and the reconciliation screen still lists it.
+  Future<void> _handleUnknownScan() async {
+    final code = _viewModel.unknownCode;
+    if (code == null || !mounted) {
+      return;
+    }
+    final pick = await showDialog<bool>(
+      context: context,
+      builder: (context) => StockCountUnknownScanPrompt(
+        code: code,
+        onPick: () => Navigator.of(context).pop(true),
+        onDismiss: () => Navigator.of(context).pop(false),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (pick != true) {
+      _viewModel.dismissUnknownScan();
+      return;
+    }
+    final variant = await showStockCountItemSearchSheet(
+      context,
+      catalogRepository: widget.catalogRepository,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (variant == null) {
+      _viewModel.dismissUnknownScan();
+      return;
+    }
+    await _viewModel.attachUnknownScan(variant);
   }
 
   Future<void> _openCamera() async {
@@ -101,6 +151,11 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
       return;
     }
     _viewModel.selectVariant(variant);
+  }
+
+  Future<void> _onScanIdentifier(String code) async {
+    await _viewModel.recordIdentifier(code);
+    await _handleUnknownScan();
   }
 
   Future<void> _onSave() async {
@@ -221,6 +276,16 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
                   progress: _viewModel.progress,
                   variant: _viewModel.currentVariant,
                   input: _viewModel.input,
+                  countsByScan: _viewModel.countsByScan,
+                  countsByLot: _viewModel.countsByLot,
+                  lots: _viewModel.lotsForCurrent,
+                  selectedLotId: _viewModel.selectedLotId,
+                  onLotSelected: _viewModel.selectLot,
+                  scannedForCurrent: _viewModel.scannedForCurrent,
+                  scans: _viewModel.scans,
+                  lastScan: _viewModel.lastScan,
+                  isBusy: _viewModel.isResolving || _viewModel.isSaving,
+                  onScanIdentifier: _onScanIdentifier,
                   onSearch: _openSearch,
                   onCamera: _openCamera,
                   onDigit: _viewModel.appendDigit,
@@ -261,6 +326,16 @@ class StockCountCountingBody extends StatelessWidget {
     required this.onBackspace,
     required this.onClear,
     required this.footer,
+    this.countsByScan = false,
+    this.scannedForCurrent = 0,
+    this.scans = const [],
+    this.lastScan,
+    this.onScanIdentifier,
+    this.isBusy = false,
+    this.countsByLot = false,
+    this.lots = const [],
+    this.selectedLotId,
+    this.onLotSelected,
   });
 
   final StockCount session;
@@ -277,6 +352,23 @@ class StockCountCountingBody extends StatelessWidget {
   final VoidCallback onClear;
   final Widget footer;
 
+  /// Whether this item is counted by scanning its articles rather than by
+  /// typing a number (§6.6). Decided by the product's tracking mode, never by
+  /// a shop-wide setting: the same pharmacy counts serialised imports and
+  /// anonymous local stock off the same shelf.
+  final bool countsByScan;
+  final int scannedForCurrent;
+  final List<StockCountScanResult> scans;
+  final StockCountScanResult? lastScan;
+  final ValueChanged<String>? onScanIdentifier;
+  final bool isBusy;
+
+  /// Whether this item is counted one lot at a time.
+  final bool countsByLot;
+  final List<StockBatch> lots;
+  final int? selectedLotId;
+  final ValueChanged<int?>? onLotSelected;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -287,20 +379,38 @@ class StockCountCountingBody extends StatelessWidget {
           total: total,
           progress: progress,
         ),
-        Expanded(
-          child: variant == null
-              ? _ScanPanel(onSearch: onSearch, onCamera: onCamera)
-              : _ItemAndKeypad(
-                  variant: variant!,
-                  input: input,
-                  onDigit: onDigit,
-                  onDecimal: onDecimal,
-                  onBackspace: onBackspace,
-                  onClear: onClear,
-                ),
-        ),
+        Expanded(child: _body(context)),
         footer,
       ],
+    );
+  }
+
+  Widget _body(BuildContext context) {
+    final current = variant;
+    if (current == null) {
+      return _ScanPanel(onSearch: onSearch, onCamera: onCamera);
+    }
+    if (countsByScan) {
+      return StockCountScanShelfPanel(
+        variant: current,
+        scannedForCurrent: scannedForCurrent,
+        scans: scans,
+        lastScan: lastScan,
+        isBusy: isBusy,
+        onScan: onScanIdentifier ?? (_) {},
+      );
+    }
+    return _ItemAndKeypad(
+      variant: current,
+      input: input,
+      onDigit: onDigit,
+      onDecimal: onDecimal,
+      onBackspace: onBackspace,
+      onClear: onClear,
+      countsByLot: countsByLot,
+      lots: lots,
+      selectedLotId: selectedLotId,
+      onLotSelected: onLotSelected,
     );
   }
 }
@@ -467,6 +577,10 @@ class _ItemAndKeypad extends StatelessWidget {
     required this.onDecimal,
     required this.onBackspace,
     required this.onClear,
+    this.countsByLot = false,
+    this.lots = const [],
+    this.selectedLotId,
+    this.onLotSelected,
   });
 
   final ProductVariant variant;
@@ -475,6 +589,10 @@ class _ItemAndKeypad extends StatelessWidget {
   final VoidCallback onDecimal;
   final VoidCallback onBackspace;
   final VoidCallback onClear;
+  final bool countsByLot;
+  final List<StockBatch> lots;
+  final int? selectedLotId;
+  final ValueChanged<int?>? onLotSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -504,7 +622,20 @@ class _ItemAndKeypad extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: _ItemPanel(variant: variant, input: input),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _ItemPanel(variant: variant, input: input),
+                        if (countsByLot) ...[
+                          SizedBox(height: spacing.lg),
+                          _LotPicker(
+                            lots: lots,
+                            selectedLotId: selectedLotId,
+                            onSelected: onLotSelected,
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                   SizedBox(width: spacing.xl),
                   SizedBox(width: 360, child: keypad),
@@ -520,6 +651,14 @@ class _ItemAndKeypad extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _ItemPanel(variant: variant, input: input),
+              if (countsByLot) ...[
+                SizedBox(height: spacing.lg),
+                _LotPicker(
+                  lots: lots,
+                  selectedLotId: selectedLotId,
+                  onSelected: onLotSelected,
+                ),
+              ],
               SizedBox(height: spacing.lg),
               Center(
                 child: ConstrainedBox(
@@ -531,6 +670,39 @@ class _ItemAndKeypad extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Which lot is being counted. §6.6: the variance is against **that lot's**
+/// balance in this room, and the lot's stock elsewhere is neither shown nor
+/// touched — so a line that does not name one is refused rather than guessed.
+class _LotPicker extends StatelessWidget {
+  const _LotPicker({
+    required this.lots,
+    required this.selectedLotId,
+    required this.onSelected,
+  });
+
+  final List<StockBatch> lots;
+  final int? selectedLotId;
+  final ValueChanged<int?>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return DropdownButtonFormField<int>(
+      initialValue: selectedLotId,
+      decoration: InputDecoration(
+        labelText: l10n.stockCountLotPick,
+        helperText: selectedLotId == null ? l10n.stockCountLotRequired : null,
+        prefixIcon: const Icon(Icons.inventory_2_outlined),
+      ),
+      items: [
+        for (final lot in lots)
+          DropdownMenuItem(value: lot.id, child: Text(lot.displayCode)),
+      ],
+      onChanged: onSelected,
     );
   }
 }

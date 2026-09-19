@@ -42,6 +42,22 @@ def write_off_unit(unit, *, reason, request=None, status=StockUnit.Status.WRITTE
         raise serializers.ValidationError(
             {"detail": f"الوحدة {unit.code} ليست في المخزون ({unit.status})."}
         )
+    if unit.is_consignment:
+        # §6.8. Its own rate is zero, so this action would move no money and
+        # record no claim — a shop that lost somebody else's camera would have
+        # written off a liability by filling in a reason box. Losing our own
+        # stock costs stock value; losing someone else's costs cash we have not
+        # yet been asked for. Two different events, two different screens.
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    f"الوحدة {unit.code} أمانة — سجّل محضر حادث عهدة "
+                    "بدل الشطب."
+                ),
+                "stock_unit": unit.pk,
+                "use_endpoint": "stock-units/{id}/report-incident",
+            }
+        )
     at = timezone.now()
     plan = tracking.plan_issue(
         variant=unit.variant,

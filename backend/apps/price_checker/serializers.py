@@ -118,4 +118,24 @@ def price_result_payload(
             ],
         }
     )
+    if result.stock_unit_id is not None:
+        # §13: **cost never leaves the kiosk.** This block is written out by
+        # hand, field by field, rather than serialized from the unit — the
+        # kiosk is unauthenticated on the LAN, so there is no user for a
+        # permission to mask, and a filtered view of the authenticated
+        # serializer is one careless ``fields = "__all__"`` away from
+        # publishing what the shop paid for every phone on its shelf to
+        # anybody on the wifi. ``KIOSK_UNIT_KEYS`` below is asserted by name in
+        # a guard test.
+        payload["unit"] = {
+            "code": result.unit_code,
+            "attributes": [dict(row) for row in result.unit_attributes],
+        }
     return payload
+
+
+#: Every key the kiosk may ever publish about one identified article. Named
+#: here so a guard test can assert the response's key set rather than trusting
+#: that nobody widened a serializer (§13).
+KIOSK_UNIT_KEYS = frozenset({"code", "attributes"})
+KIOSK_UNIT_ATTRIBUTE_KEYS = frozenset({"key", "label", "value"})

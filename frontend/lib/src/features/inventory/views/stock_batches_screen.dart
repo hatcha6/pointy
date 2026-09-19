@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/stock_batch.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
@@ -11,6 +12,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/units.dart';
 import '../view_models/tracked_stock_view_model.dart';
+import 'batch_recall_screen.dart';
 
 /// The lots this shop has held, and where their goods are now.
 ///
@@ -19,9 +21,19 @@ import '../view_models/tracked_stock_view_model.dart';
 /// exists to make possible: a recall is one row to act on, and "where is Lot A?"
 /// is a panel underneath it rather than a search for rows that share a name.
 class StockBatchesScreen extends StatefulWidget {
-  const StockBatchesScreen({super.key, required this.viewModel});
+  const StockBatchesScreen({
+    super.key,
+    required this.viewModel,
+    this.repository,
+    this.canQuarantine = false,
+  });
 
   final TrackedStockViewModel viewModel;
+
+  /// For the recall screen behind a row. Optional so a shop that never
+  /// recalls anything pays nothing for it.
+  final TrackedStockRepository? repository;
+  final bool canQuarantine;
 
   @override
   State<StockBatchesScreen> createState() => _StockBatchesScreenState();
@@ -154,8 +166,32 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
       itemBuilder: (context, batch) => _BatchCard(
         batch: batch,
         onToggleQuarantine: () => _toggleQuarantine(context, batch),
+        onOpenRecall: widget.repository == null
+            ? null
+            : () => _openRecall(context, batch),
       ),
     );
+  }
+
+  /// Where this lot came from, where it is, and who has the rest (§6.8.1).
+  Future<void> _openRecall(BuildContext context, StockBatch batch) async {
+    final repository = widget.repository;
+    if (repository == null) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => BatchRecallScreen(
+          batch: batch,
+          repository: repository,
+          canQuarantine: widget.canQuarantine,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    await widget.viewModel.loadBatches();
   }
 
   Future<void> _toggleQuarantine(BuildContext context, StockBatch batch) async {
@@ -199,10 +235,15 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
 }
 
 class _BatchCard extends StatelessWidget {
-  const _BatchCard({required this.batch, required this.onToggleQuarantine});
+  const _BatchCard({
+    required this.batch,
+    required this.onToggleQuarantine,
+    this.onOpenRecall,
+  });
 
   final StockBatch batch;
   final VoidCallback onToggleQuarantine;
+  final VoidCallback? onOpenRecall;
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +321,11 @@ class _BatchCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
                 const Spacer(),
+                if (onOpenRecall != null)
+                  TextButton(
+                    onPressed: onOpenRecall,
+                    child: Text(l10n.recallTitle),
+                  ),
                 TextButton(
                   onPressed: onToggleQuarantine,
                   child: Text(

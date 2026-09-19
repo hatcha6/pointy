@@ -21,6 +21,7 @@ from django.utils import timezone
 
 from apps.catalog.models import Product
 from apps.core.backup import backup_health
+from apps.core.models import ShopSettings
 from apps.core.dispatch import enqueue_best_effort
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule
@@ -48,6 +49,13 @@ MANAGED_CODES = (
     "inventory.low_stock",
     "inventory.position_untrusted",
     "inventory.expiring_batch",
+    # Phase D. Three things a shop that identifies its stock has to be told
+    # about without going looking: goods on the shelf that nothing has named,
+    # a claim on somebody else's property that nobody has priced, and money in
+    # the drawer that belongs to a consignor who never came back.
+    "inventory.missing_identifiers",
+    "inventory.open_custody_claims",
+    "inventory.unclaimed_payouts",
     "purchasing.overdue_order",
     "printing.failed_job",
     "printing.stale_agent",
@@ -75,6 +83,18 @@ NOTIFICATION_AUDIENCE_RULES = {
     },
     "inventory.expiring_batch": {
         "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
+        "manager_only": True,
+    },
+    "inventory.missing_identifiers": {
+        "permissions": ("inventory.view_stockunit",),
+        "manager_only": False,
+    },
+    "inventory.open_custody_claims": {
+        "permissions": ("inventory.view_consignment_liability",),
+        "manager_only": True,
+    },
+    "inventory.unclaimed_payouts": {
+        "permissions": ("inventory.view_consignment_liability",),
         "manager_only": True,
     },
     "purchasing.overdue_order": {
@@ -121,6 +141,7 @@ def sync_business_notifications(now=None):
     desired = []
     desired.extend(_inventory_notifications(now))
     desired.extend(_expiry_notifications(now))
+    desired.extend(_identified_stock_notifications(now))
     desired.extend(_purchasing_notifications(now))
     desired.extend(_printing_notifications(now))
     desired.extend(_sales_notifications(now))
@@ -570,6 +591,99 @@ def _expiry_notifications(now):
                 },
             )
         )
+    return specs
+
+
+def _identified_stock_notifications(now):
+    """Phase D's three: unnamed goods, unpriced claims, uncollected money.
+
+    All three are things a shop only discovers by opening a screen it has no
+    reason to open. The worklist is the one a till enforces — a unit with no
+    identifier cannot be sold — so a shop that ignores it discovers the
+    problem at a counter with a customer waiting.
+    """
+    from apps.inventory import consignment as consignment_figures
+    from apps.inventory.models import StockUnit
+
+    specs = []
+
+    owing = StockUnit.objects.filter(
+        is_identified=False, status__in=StockUnit.LIVE_STATUSES
+    ).count()
+    if owing:
+        specs.append(
+            _spec(
+                code="inventory.missing_identifiers",
+                category=BusinessNotification.Category.INVENTORY,
+                severity=BusinessNotification.Severity.WARNING,
+                fingerprint="inventory.missing_identifiers",
+                entity_type="inventory.stockunit",
+                entity_id="",
+                payload={"count": owing},
+            )
+        )
+
+    open_incidents = consignment_figures.open_incidents()
+    unassessed = open_incidents.filter(is_assessed=False).count()
+    open_count = open_incidents.count()
+    if open_count:
+        specs.append(
+            _spec(
+                code="inventory.open_custody_claims",
+                category=BusinessNotification.Category.INVENTORY,
+                # An unpriced claim is the urgent half: it is an argument that
+                # has not been had yet, and it gets harder with every week.
+                severity=(
+                    BusinessNotification.Severity.WARNING
+                    if unassessed
+                    else BusinessNotification.Severity.INFO
+                ),
+                fingerprint="inventory.open_custody_claims",
+                entity_type="inventory.consignmentincident",
+                entity_id="",
+                payload={
+                    "count": open_count,
+                    "unassessed": unassessed,
+                    "value": float(consignment_figures.consignor_claims_open()),
+                },
+            )
+        )
+
+    settings_row = ShopSettings.load()
+    reminder_days = int(
+        getattr(settings_row, "consignment_unclaimed_payout_reminder_days", 0) or 0
+    )
+    if reminder_days > 0:
+        cutoff = now - timedelta(days=reminder_days)
+        stale = [
+            unit
+            for unit in consignment_figures.payable_units()
+            if unit.sold_at is not None and unit.sold_at <= cutoff
+        ]
+        if stale:
+            specs.append(
+                _spec(
+                    code="inventory.unclaimed_payouts",
+                    category=BusinessNotification.Category.INVENTORY,
+                    severity=BusinessNotification.Severity.INFO,
+                    fingerprint="inventory.unclaimed_payouts",
+                    entity_type="inventory.stockunit",
+                    entity_id="",
+                    payload={
+                        "count": len(stale),
+                        "days": reminder_days,
+                        "value": float(
+                            sum(
+                                (
+                                    consignment_figures.consignor_payout_due(unit)
+                                    for unit in stale
+                                ),
+                                Decimal("0.00"),
+                            )
+                        ),
+                    },
+                )
+            )
     return specs
 
 

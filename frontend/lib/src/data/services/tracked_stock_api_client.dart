@@ -1,3 +1,4 @@
+import '../models/consignment.dart';
 import '../models/stock_batch.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
@@ -154,11 +155,7 @@ class TrackedStockApiClient {
   }) async {
     final response = await _session.post(
       'stock-units/bulk-reprice/',
-      body: {
-        'ids': unitIds,
-        'price': ?price,
-        'percent': ?percent,
-      },
+      body: {'ids': unitIds, 'price': ?price, 'percent': ?percent},
     );
     _session.ensureSuccess(response, 'Bulk reprice failed with status');
     final body = _session.decodedBody(response);
@@ -232,12 +229,198 @@ class TrackedStockApiClient {
     );
   }
 
-  Future<StockBatchPage> fetchExpiryWatchlist({int days = 30}) async {
+  /// Lots expiring soon, each with its markdown suggestion (§6.8.1's quieter
+  /// sibling). Returns the raw decoded body as well so the caller can read the
+  /// per-row ``markdown`` block the page serializer adds.
+  Future<(StockBatchPage, Map<int, ExpiryMarkdownSuggestion>)>
+  fetchExpiryWatchlist({int days = 30}) async {
     final response = await _session.get(
       'stock-batches/expiry-watchlist/',
       query: {'days': '$days'},
     );
     _session.ensureSuccess(response, 'Expiry watchlist failed with status');
-    return StockBatchPage.fromJson(_session.decodedBody(response));
+    final decoded = _session.decodedBody(response);
+    final page = StockBatchPage.fromJson(decoded);
+    final suggestions = <int, ExpiryMarkdownSuggestion>{};
+    for (final row in resultsFromDecoded(decoded)) {
+      final markdown = row['markdown'];
+      final id = (row['id'] as num?)?.toInt();
+      if (id != null && markdown is Map<String, Object?>) {
+        suggestions[id] = ExpiryMarkdownSuggestion.fromJson(markdown);
+      }
+    }
+    return (page, suggestions);
+  }
+
+  Future<BatchRecallReport> fetchRecallReport(int batchId) async {
+    final response = await _session.get(
+      'stock-batches/$batchId/recall-report/',
+    );
+    _session.ensureSuccess(response, 'Recall report failed with status');
+    return BatchRecallReport.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<RecallNotifyResult> notifyAffectedCustomers(int batchId) async {
+    final response = await _session.post(
+      'stock-batches/$batchId/notify-affected/',
+      body: const <String, Object?>{},
+    );
+    _session.ensureSuccess(response, 'Recall alert failed with status');
+    return RecallNotifyResult.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  // -- custody (§6.2.2) ----------------------------------------------------
+
+  Future<ConsignmentIncident> reportIncident(
+    int unitId,
+    ConsignmentIncidentDraft draft,
+  ) async {
+    final response = await _session.post(
+      'stock-units/$unitId/report-incident/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Recording the incident failed with status',
+    );
+    return ConsignmentIncident.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<List<ConsignmentIncident>> fetchUnitIncidents(int unitId) async {
+    final response = await _session.get('stock-units/$unitId/incidents/');
+    _session.ensureSuccess(response, 'Unit incidents failed with status');
+    return resultsFromDecoded(
+      _session.decodedBody(response),
+    ).map(ConsignmentIncident.fromJson).toList(growable: false);
+  }
+
+  Future<List<ConsignmentIncident>> fetchIncidents({
+    bool openOnly = false,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'consignment-incidents/',
+      query: {'page': '$page', if (openOnly) 'open_only': 'true'},
+    );
+    _session.ensureSuccess(response, 'Incidents request failed with status');
+    return resultsFromDecoded(
+      _session.decodedBody(response),
+    ).map(ConsignmentIncident.fromJson).toList(growable: false);
+  }
+
+  Future<ConsignmentIncident> assessIncident(
+    int incidentId, {
+    required String responsibility,
+    double? assessedValue,
+    String note = '',
+  }) async {
+    final response = await _session.post(
+      'consignment-incidents/$incidentId/assess/',
+      body: <String, Object?>{
+        'responsibility': responsibility,
+        if (assessedValue != null)
+          'assessed_value': assessedValue.toStringAsFixed(2),
+        if (note.trim().isNotEmpty) 'note': note.trim(),
+      },
+    );
+    _session.ensureSuccess(response, 'Assessing the claim failed with status');
+    return ConsignmentIncident.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<ConsignmentIncident> settleIncident(
+    int incidentId, {
+    required String resolution,
+    String method = 'cash',
+    int? replacementUnitId,
+    String reference = '',
+    String notes = '',
+  }) async {
+    final response = await _session.post(
+      'consignment-incidents/$incidentId/settle/',
+      body: <String, Object?>{
+        'resolution': resolution,
+        'method': method,
+        'replacement_unit': ?replacementUnitId,
+        if (reference.trim().isNotEmpty) 'reference': reference.trim(),
+        if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+    _session.ensureSuccess(response, 'Settling the claim failed with status');
+    return ConsignmentIncident.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<UnclaimedPayoutAging> fetchUnclaimedPayouts() async {
+    final response = await _session.get('stock-units/unclaimed-payouts/');
+    _session.ensureSuccess(
+      response,
+      'Unclaimed payouts request failed with status',
+    );
+    return UnclaimedPayoutAging.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  // -- opening identification (§6.10) --------------------------------------
+
+  Future<List<OpeningIdentificationRow>> fetchOpeningWorklist() async {
+    final response = await _session.get('stock-units/opening-worklist/');
+    _session.ensureSuccess(response, 'Opening worklist failed with status');
+    final decoded = _session.decodedBody(response);
+    if (decoded is! List) {
+      return const [];
+    }
+    return decoded
+        .whereType<Map<String, Object?>>()
+        .map(OpeningIdentificationRow.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<int> identifyOpeningStock({
+    required int variantId,
+    List<Map<String, Object?>> units = const [],
+    List<Map<String, Object?>> batches = const [],
+    bool captureLater = false,
+  }) async {
+    final response = await _session.post(
+      'stock-units/identify-opening/',
+      body: <String, Object?>{
+        'variant': variantId,
+        if (units.isNotEmpty) 'units': units,
+        if (batches.isNotEmpty) 'batches': batches,
+        if (captureLater) 'capture_later': true,
+      },
+    );
+    _session.ensureSuccess(
+      response,
+      'Opening identification failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    if (decoded is Map<String, Object?>) {
+      return (decoded['identified'] as num?)?.toInt() ?? 0;
+    }
+    return 0;
+  }
+
+  Future<List<StockUnitTimelineEntry>> fetchUnitTimeline(int unitId) async {
+    final response = await _session.get('stock-units/$unitId/timeline/');
+    _session.ensureSuccess(response, 'Unit timeline failed with status');
+    final decoded = _session.decodedBody(response);
+    if (decoded is! List) {
+      return const [];
+    }
+    return decoded
+        .whereType<Map<String, Object?>>()
+        .map(StockUnitTimelineEntry.fromJson)
+        .toList(growable: false);
   }
 }

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/stock_transfer.dart';
+import '../../../data/models/stock_unit.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -12,6 +14,7 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/transfers_view_model.dart';
 import 'transfer_composer_sheet.dart';
 import 'transfer_receive_sheet.dart';
+import 'transfer_unit_pick_sheet.dart';
 
 /// Stock moving between the shop's own places.
 ///
@@ -24,6 +27,7 @@ class TransfersScreen extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.repository,
+    this.trackedStockRepository,
   });
 
   final TransfersViewModel viewModel;
@@ -31,6 +35,10 @@ class TransfersScreen extends StatefulWidget {
   /// Handed to the composer so its product picker can ask what the source
   /// actually holds.
   final WarehouseRepository repository;
+
+  /// Only for picking which handsets are in the van. Optional: a shop whose
+  /// products are all counted by number never opens that sheet.
+  final TrackedStockRepository? trackedStockRepository;
 
   @override
   State<TransfersScreen> createState() => _TransfersScreenState();
@@ -189,7 +197,23 @@ class _TransfersScreenState extends State<TransfersScreen> {
   Future<void> _send(BuildContext context, StockTransfer transfer) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final error = await widget.viewModel.send(transfer);
+    var picks = const <int, TransferLinePick>{};
+    final tracked = widget.trackedStockRepository;
+    if (transferNeedsUnitPicks(transfer) && tracked != null) {
+      // Which handsets, before the van leaves. The backend refuses a
+      // serialized line that named nothing, so asking here is the difference
+      // between a sheet and an error.
+      final chosen = await showTransferUnitPickSheet(
+        context,
+        transfer: transfer,
+        repository: tracked,
+      );
+      if (chosen == null) {
+        return;
+      }
+      picks = chosen;
+    }
+    final error = await widget.viewModel.send(transfer, picks: picks);
     messenger.showSnackBar(
       SnackBar(
         content: Text(error ?? l10n.transferSent(transfer.destinationName)),

@@ -33,6 +33,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.streaming import aiter_in_thread
 from apps.sales.models import Order
@@ -1075,6 +1076,82 @@ class CameraRecordingsView(_CameraViewMixin, APIView):
                 ).data,
             }
         )
+
+
+class MomentFootageView(APIView):
+    """What to play for one moment in time, whatever put it on the clock.
+
+    §8.3, and no new integration: the invoice view below already knows how to
+    turn a timestamp into a window and a list of cameras. This is the same
+    answer for the two moments Phase D added — the sale a serialized article
+    left on, and the minute somebody discovered a consigned camera was broken.
+
+    A warranty dispute, an insurance claim, a police question, or an owner
+    asking who was at the counter when a 12,000-dinar handset went out: those
+    are exactly the sales anybody ever wants to re-watch, and the row already
+    holds the timestamp.
+    """
+
+    permission_classes = [IsAuthenticated, HasSurveillancePermission]
+    required_permission = "surveillance.view_playback"
+
+    def get(self, request, subject, subject_id):
+        anchor, label = self._anchor(subject, subject_id)
+        shop_settings = ShopSettings.load()
+        pre = int(
+            getattr(
+                shop_settings,
+                "surveillance_pre_roll_seconds",
+                services.DEFAULT_PRE_ROLL_SECONDS,
+            )
+        )
+        post = int(
+            getattr(
+                shop_settings,
+                "surveillance_post_roll_seconds",
+                services.DEFAULT_POST_ROLL_SECONDS,
+            )
+        )
+        start = anchor - timedelta(seconds=pre)
+        end = anchor + timedelta(seconds=post)
+        cameras = list(services.checkout_cameras())
+        playback_available = transcode.ffmpeg_available() and any(
+            camera.recorder.driver_capabilities["playback"] for camera in cameras
+        )
+        return Response(
+            {
+                "subject": subject,
+                "subject_id": subject_id,
+                "label": label,
+                "occurred_at": anchor,
+                "start": start,
+                "end": end,
+                "playback_available": playback_available,
+                "cameras": InvoiceFootageCameraSerializer(cameras, many=True).data,
+            }
+        )
+
+    def _anchor(self, subject, subject_id):
+        """The moment to centre on, and what to call it."""
+        from apps.inventory.models import ConsignmentIncident, StockUnit
+
+        if subject == "stock-unit":
+            unit = get_object_or_404(
+                StockUnit.objects.select_related("sold_order_line__order"),
+                pk=subject_id,
+            )
+            order = getattr(
+                getattr(unit, "sold_order_line", None), "order", None
+            )
+            if order is None:
+                raise Http404("هذه الوحدة لم تُبَع بعد.")
+            return order.created_at, f"{unit.code} — {order.receipt_number}"
+        if subject == "consignment-incident":
+            incident = get_object_or_404(ConsignmentIncident, pk=subject_id)
+            # ``discovered_at`` and never ``occurred_on``: the shop knows when
+            # somebody noticed, and often does not know when it happened.
+            return incident.discovered_at, incident.number
+        raise Http404("موضوع غير معروف.")
 
 
 class InvoiceFootageView(APIView):

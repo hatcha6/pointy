@@ -453,11 +453,22 @@ class CustomerReturnTests(ConsignmentTestCase):
 
         unit.refresh_from_db()
         self.assertTrue(unit.is_consignment)
-        # Worth nothing to the shop — it does not own the watch. The payout
-        # stays on the row because it is the only record of what the shop
-        # handed over, and what it is now owed back (``consignor_receivable``).
+        # Worth nothing to the shop — it does not own the watch.
         self.assertEqual(unit.stock_value, Decimal("0"))
-        self.assertEqual(unit.incoming_rate, Decimal("10000.000000"))
+        # **The money the shop handed over is now an advance**, not a cost.
+        # It used to be left on ``incoming_rate`` with the paid stamp still
+        # standing, which read as a receivable right up until the article
+        # re-sold — at which point the re-sale overwrote the rate and the
+        # stamp kept a new payable from opening, and both obligations
+        # vanished at once (§15.3). The advance survives the second sale;
+        # ``incoming_rate`` goes back to being what a consignment's cost
+        # always is until it sells: zero.
+        self.assertEqual(unit.consignor_advance, Decimal("10000.00"))
+        self.assertEqual(unit.incoming_rate, Decimal("0.000000"))
+        self.assertIsNone(unit.consignor_paid_at)
+        self.assertEqual(
+            figures.consignor_receivable(), Decimal("10000.00")
+        )
         self.assertEqual(tracking_invariant_violations(), [])
 
     def test_an_article_already_back_on_the_shelf_cannot_be_returned_again(self):

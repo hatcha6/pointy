@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/stock_transfer.dart';
+import '../models/stock_unit.dart';
 import '../models/warehouse.dart';
 import '../services/pos_api_service.dart';
 
@@ -59,16 +60,22 @@ class WarehouseRepository {
     return Result.guard(() => _service.createTransfer(draft));
   }
 
-  Future<Result<StockTransfer>> dispatchTransfer(int id) {
-    return Result.guard(() => _service.dispatchTransfer(id));
+  Future<Result<StockTransfer>> dispatchTransfer(
+    int id, {
+    Map<int, TransferLinePick> picks = const {},
+  }) {
+    return Result.guard(() => _service.dispatchTransfer(id, picks: picks));
   }
 
   Future<Result<StockTransfer>> receiveTransfer(
     int id,
     Map<int, double> lines, {
     String note = '',
+    Map<int, TransferLinePick> picks = const {},
   }) {
-    return Result.guard(() => _service.receiveTransfer(id, lines, note: note));
+    return Result.guard(
+      () => _service.receiveTransfer(id, lines, note: note, picks: picks),
+    );
   }
 
   Future<Result<StockTransfer>> cancelTransfer(int id, String reason) {

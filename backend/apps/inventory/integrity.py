@@ -33,6 +33,7 @@ from .models import (
     StockLedgerEntry,
     StockUnit,
     StockValuationBin,
+    Warehouse,
 )
 
 ZERO = Decimal("0")
@@ -58,6 +59,46 @@ def _tracked_variants():
     return {pk: (mode, sku) for pk, mode, sku in rows}
 
 
+def counts_toward_bin(status, warehouse_id, transit_id=None) -> bool:
+    """Does this article count toward the stock row of the place it names?
+
+    Goods in a van are somewhere, and where they are is the transit location.
+    ``in_transit`` is deliberately outside ``ON_HAND_STATUSES`` — nothing may
+    sell it, and the POS picker, the oversell guard and every report read that
+    set — but the transit warehouse's stock row carries its quantity and value
+    for the length of the journey, so that is the one place its units count.
+    A unit whose row still said the source while its quantity had moved to
+    transit would make *both* bins wrong at once.
+
+    One function rather than the same condition in three invariants: the three
+    disagreeing is exactly how invariant 1 would pass while 4 and 9 failed.
+    """
+    if status in StockUnit.ON_HAND_STATUSES:
+        return True
+    return status == StockUnit.Status.IN_TRANSIT and warehouse_id == (
+        transit_id if transit_id is not None else Warehouse.transit_id()
+    )
+
+
+def _tracked_since():
+    """``{variant_id: when this product started carrying identity}``.
+
+    A shop that switches a product on after two years of trading has two years
+    of ledger entries with no allocations under them — correctly, because
+    there were no articles to name. Judging those by today's mode would report
+    a permanent violation for a shop that did everything right, which is worse
+    than no check at all: an invariant nobody can ever get to green is one
+    nobody reads.
+    """
+    from apps.catalog.models import ProductVariant
+
+    return dict(
+        ProductVariant.objects.exclude(
+            product__tracking_mode=Product.TrackingMode.QUANTITY
+        ).values_list("pk", "product__tracking_since")
+    )
+
+
 # ---------------------------------------------------------------------------
 # 1-3. The quantity buckets agree with the things they are counting
 # ---------------------------------------------------------------------------
@@ -78,13 +119,14 @@ def check_bin_quantity(tracked=None) -> list:
     unit_counts = defaultdict(Decimal)
     reserved_counts = defaultdict(Decimal)
     expected_counts = defaultdict(Decimal)
+    transit_id = Warehouse.transit_id()
     for row in (
         StockUnit.objects.filter(variant_id__in=tracked)
         .values("variant_id", "warehouse_id", "status")
         .annotate(total=Count("id"))
     ):
         key = (row["variant_id"], row["warehouse_id"])
-        if row["status"] in StockUnit.ON_HAND_STATUSES:
+        if counts_toward_bin(row["status"], row["warehouse_id"], transit_id):
             unit_counts[key] += row["total"]
         if row["status"] == StockUnit.Status.RESERVED:
             reserved_counts[key] += row["total"]
@@ -161,11 +203,15 @@ def check_bin_value(tracked=None) -> list:
     if not tracked:
         return []
     problems = []
+    transit_id = Warehouse.transit_id()
     unit_values = defaultdict(Decimal)
     for unit in StockUnit.objects.filter(
-        variant_id__in=tracked, status__in=StockUnit.ON_HAND_STATUSES
-    ).only("variant_id", "warehouse_id", "incoming_rate", "refurb_cost",
+        variant_id__in=tracked,
+        status__in=[*StockUnit.ON_HAND_STATUSES, StockUnit.Status.IN_TRANSIT],
+    ).only("variant_id", "warehouse_id", "status", "incoming_rate", "refurb_cost",
            "is_consignment"):
+        if not counts_toward_bin(unit.status, unit.warehouse_id, transit_id):
+            continue
         unit_values[(unit.variant_id, unit.warehouse_id)] += unit.stock_value
 
     # Quarantined lots are valued like any other goods on the shelf — see the
@@ -212,12 +258,27 @@ def check_ledger_allocations(tracked=None) -> list:
     if not tracked:
         return []
     problems = []
+    since = _tracked_since()
     entries = (
         StockLedgerEntry.objects.filter(variant_id__in=tracked)
         .annotate(allocated=Sum("allocations__quantity"))
-        .values("id", "variant_id", "quantity_change", "allocated", "voucher_type")
+        .values(
+            "id",
+            "variant_id",
+            "quantity_change",
+            "allocated",
+            "voucher_type",
+            "posting_at",
+        )
     )
     for entry in entries:
+        started = since.get(entry["variant_id"])
+        if started is not None and entry["posting_at"] < started:
+            # Before this product was tracked. There were no articles, so
+            # there are no allocations, and that is the truth rather than a
+            # defect. Opening identification (§6.10) is what gives the *stock*
+            # names; it does not rewrite the history of how it arrived.
+            continue
         mode, label = tracked[entry["variant_id"]]
         moved = abs(Decimal(entry["quantity_change"]))
         allocated = Decimal(entry["allocated"] or 0)
@@ -540,16 +601,22 @@ def check_consignment_rate(tracked=None) -> list:
     }
     if not unit_modes:
         return []
+    transit_id = Warehouse.transit_id()
     owned = defaultdict(Decimal)
     for row in (
         StockUnit.objects.filter(
             variant_id__in=unit_modes,
-            status__in=StockUnit.ON_HAND_STATUSES,
+            status__in=[
+                *StockUnit.ON_HAND_STATUSES,
+                StockUnit.Status.IN_TRANSIT,
+            ],
             is_consignment=False,
         )
-        .values("variant_id", "warehouse_id")
+        .values("variant_id", "warehouse_id", "status")
         .annotate(total=Count("id"))
     ):
+        if not counts_toward_bin(row["status"], row["warehouse_id"], transit_id):
+            continue
         owned[(row["variant_id"], row["warehouse_id"])] += row["total"]
 
     problems = []

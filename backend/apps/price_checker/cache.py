@@ -76,6 +76,12 @@ def lookup_price_cached(barcode: str, *, with_image: bool = False) -> PriceResul
         return cached
 
     result = lookup_price(barcode, with_image=with_image)
+    if result.stock_unit_id is not None:
+        # An answer about one article is not cacheable behind the catalog
+        # version: the catalog does not change when that handset sells, and a
+        # kiosk quoting a price for something already in a customer's bag is
+        # worse than a kiosk that took an extra query.
+        return result
     try:
         cache.set(key, result, ttl)
     except Exception:  # noqa: BLE001

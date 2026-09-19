@@ -465,6 +465,28 @@ class JobMaterial(TimeStampedModel):
     )
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    #: The serialized part that was fitted, when the part has a number of its
+    #: own. Which screen went into which handset is exactly the question a
+    #: warranty claim asks six months later, and the job consuming it is the
+    #: last moment anybody can answer it (§6.7). Null for everything counted by
+    #: quantity, which is most materials in most shops.
+    stock_unit = models.ForeignKey(
+        "inventory.StockUnit",
+        on_delete=models.PROTECT,
+        related_name="consumed_by_jobs",
+        blank=True,
+        null=True,
+    )
+    #: The lot it came out of, for a batch-tracked material. Left to FEFO when
+    #: nobody said otherwise, which is what the shelf itself would have handed
+    #: over.
+    batch = models.ForeignKey(
+        "inventory.StockBatch",
+        on_delete=models.PROTECT,
+        related_name="consumed_by_jobs",
+        blank=True,
+        null=True,
+    )
     consumed_at = models.DateTimeField(blank=True, null=True)
     reversed_at = models.DateTimeField(blank=True, null=True)
     stock_movement = models.ForeignKey(

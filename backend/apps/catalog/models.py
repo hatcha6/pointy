@@ -162,6 +162,14 @@ class Product(TimeStampedModel):
         default=TrackingMode.QUANTITY,
         db_index=True,
     )
+    #: When this product started being tracked, stamped the first time its mode
+    #: leaves ``quantity``. Nothing reads it to decide behaviour; the integrity
+    #: checks read it to decide **blame**. A shop that switches a product on
+    #: after two years of trading has two years of ledger entries with no
+    #: allocations under them — correctly, because there were no articles to
+    #: name — and an invariant that judged them by today's mode would report a
+    #: permanent violation for a shop that did everything right.
+    tracking_since = models.DateTimeField(null=True, blank=True, editable=False)
     # What kind of identified thing this is, for identifier labels and (later)
     # per-unit attributes. Reuses the shop-editable registry the workshop side
     # already maintains rather than inventing a second one.
@@ -301,6 +309,14 @@ class Product(TimeStampedModel):
             update_fields = kwargs.get("update_fields")
             if update_fields is not None:
                 kwargs["update_fields"] = {*update_fields, "tracks_expiry"}
+        # Stamped once, the first time this product is tracked at all, and
+        # never cleared: history before it genuinely has no articles to name
+        # and the integrity checks must not judge it as if it did.
+        if self.is_tracked and self.tracking_since is None:
+            self.tracking_since = timezone.now()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "tracking_since"}
         return super().save(*args, **kwargs)
 
     @property

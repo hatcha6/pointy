@@ -401,37 +401,6 @@ def lock_balance(*, batch, warehouse, variant=None):
     )
 
 
-def mirror_legacy_batch_totals(batch_id):
-    """Keep the pre-split columns on the lot current — §15.1 R1, nothing more.
-
-    The balance is the truth; this is a copy the *previous* release reads, and
-    it exists only so that a rollback during an update window finds numbers it
-    recognises. ``remaining_quantity`` is the sum across every place the lot
-    sits, which is what the single-warehouse column used to mean.
-
-    Delete this together with the columns in the contract release.
-    """
-    if not batch_id:
-        return
-    remaining = _q(
-        StockBatchBalance.objects.filter(batch_id=batch_id).aggregate(
-            total=Sum("remaining_quantity")
-        )["total"]
-        or ZERO
-    )
-    StockBatch.objects.filter(pk=batch_id).update(
-        remaining_quantity=remaining,
-        # Never the sum of the balances' own ``received``: a transfer receives
-        # into the destination and issues from the source, so summing that
-        # column would book 125 received for 100 goods that only ever arrived
-        # once. It is a high-water mark, which is what the single-warehouse
-        # column meant. ``updated_at`` is deliberately not bumped either — a lot
-        # is not a place, and moving goods between places changes nothing about
-        # the lot (`test_moving_stock_between_places_does_not_touch_the_lot`).
-        received_quantity=Greatest("received_quantity", Value(remaining)),
-    )
-
-
 def _resync_balance(balance):
     """Re-read the quantities this write is about to compute from.
 
@@ -500,7 +469,6 @@ def receive_into_balance(*, balance, quantity, rate, at=None):
             "updated_at",
         ]
     )
-    mirror_legacy_batch_totals(balance.batch_id)
     return balance
 
 
@@ -512,7 +480,6 @@ def issue_from_balance(*, balance, quantity):
     _resync_balance(balance)
     balance.remaining_quantity = _q(Decimal(balance.remaining_quantity) - quantity)
     balance.save(update_fields=["remaining_quantity", "updated_at"])
-    mirror_legacy_batch_totals(balance.batch_id)
     return balance
 
 
@@ -1630,6 +1597,502 @@ def apply_lot_drawdown(plan):
                 balance=allocation.balance, quantity=allocation.quantity
             )
     return plan
+
+
+
+
+# ---------------------------------------------------------------------------
+# The paths that move a bin without itemising anything
+# ---------------------------------------------------------------------------
+#
+# A transfer, a stock count, a manual adjustment and a job's materials all
+# change what is on a shelf without a document that names articles. Until Phase
+# D they simply raised on a tracked product, which was the right failure and an
+# unusable one. What follows is the single answer for all four, and it is not
+# one rule but two, because the two directions are not symmetrical:
+#
+#   * **Leaving** — a lot is answerable (FEFO says which cohort went); a
+#     serialized article is not. Guessing an IMEI would put a made-up number in
+#     the ledger, so the caller must name the units and is told to scan.
+#   * **Arriving** — both are answerable. Goods that turn up with no paperwork
+#     get a lot, or a placeholder unit on the missing-identifier worklist, at
+#     the shelf's own rate. That is the same shape a return of a pre-tracking
+#     sale already uses (§15.2), and it keeps invariant 1 true for goods that
+#     are physically present.
+
+
+def adjustment_needs_identifiers(variant) -> bool:
+    """Would a decrease of this variant refuse for want of a scan?"""
+    return tracks_units(mode_of(variant))
+
+
+def plan_adjustment(
+    *,
+    variant,
+    warehouse,
+    delta,
+    rate=None,
+    units=None,
+    batches=None,
+    at=None,
+    placeholder_key="",
+    allow_expired=True,
+    what="هذه الحركة",
+):
+    """The allocation behind a bin change no document itemised.
+
+    ``delta`` is signed — negative takes stock off the shelf, positive puts it
+    on. ``units`` names articles for a serialized decrease (ids, codes, or
+    capture rows for an increase) and ``batches`` names lots. ``rate`` is what
+    arriving goods are worth; the caller passes the bin's own rate, because
+    nothing here may invent a cost.
+
+    Returns ``None`` for an untracked variant, which is what keeps every
+    existing caller paying nothing.
+    """
+    mode = mode_of(variant)
+    if mode == Product.TrackingMode.QUANTITY:
+        return None
+    delta = _q(delta)
+    if delta == ZERO:
+        return None
+    at = at or timezone.now()
+    warehouse_id = getattr(warehouse, "pk", warehouse) or Warehouse.default_id()
+
+    if delta > ZERO:
+        return plan_receipt(
+            variant=variant,
+            warehouse=warehouse_id,
+            quantity=delta,
+            rate=rate or ZERO,
+            units=units,
+            batches=_adjustment_receipt_lots(batches, quantity=delta),
+            at=at,
+            # An article that arrives with nobody to name it is counted and put
+            # on the worklist rather than refused. Refusing would leave the
+            # shelf holding goods the system says are not there, which is the
+            # one outcome worse than an unnamed unit.
+            capture_later=True,
+            placeholder_key=placeholder_key or f"ADJ-{int(at.timestamp())}",
+        )
+
+    quantity = -delta
+    if tracks_units(mode):
+        named = _adjustment_unit_ids(units)
+        if not named:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        f"{what} تخص صنفًا مسلسلًا — امسح معرّفات الوحدات "
+                        "الخارجة بدل إدخال كمية."
+                    ),
+                    "variant": getattr(variant, "pk", variant),
+                    "tracking_mode": mode,
+                }
+            )
+        if len(named) != int(quantity):
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        f"تم تحديد {len(named)} وحدة لكمية قدرها {quantity}."
+                    ),
+                    "named": len(named),
+                    "quantity": str(quantity),
+                }
+            )
+        return plan_issue(
+            variant=variant,
+            warehouse=warehouse_id,
+            quantity=quantity,
+            unit_ids=named,
+            allow_expired=allow_expired,
+            allow_short=False,
+        )
+    named_lots = _adjustment_batch_ids(batches)
+    if named_lots:
+        # A count of one lot on one shelf is a variance against *that* balance
+        # (§6.6). FEFO is the answer only when nobody said which cohort went.
+        return plan_issue(
+            variant=variant,
+            warehouse=warehouse_id,
+            quantity=quantity,
+            batch_ids=named_lots,
+            allow_expired=allow_expired,
+            allow_short=False,
+        )
+    return plan_lot_drawdown(
+        variant=variant,
+        warehouse=warehouse_id,
+        quantity=quantity,
+        allow_expired=allow_expired,
+    )
+
+
+def _adjustment_receipt_lots(batches, *, quantity):
+    """Lot rows for an arrival, from ids or from capture rows.
+
+    A count that finds more of Lot A than the balance says must land in **Lot
+    A**, not in a generated cohort named after the minute the count was
+    applied. So an id resolves to the lot's own code before the receipt planner
+    ever sees it.
+    """
+    rows = []
+    for item in batches or []:
+        if isinstance(item, dict) and item.get("code"):
+            rows.append(dict(item))
+            continue
+        pk = None
+        if isinstance(item, StockBatch):
+            pk = item.pk
+        elif isinstance(item, dict):
+            pk = item.get("id") or getattr(item.get("batch"), "pk", item.get("batch"))
+        elif isinstance(item, int):
+            pk = item
+        if pk is None:
+            continue
+        lot = StockBatch.objects.filter(pk=pk).first()
+        if lot is None:
+            continue
+        row = {"code": lot.code, "expiry_date": lot.expiry_date}
+        if isinstance(item, dict) and item.get("quantity") is not None:
+            row["quantity"] = item["quantity"]
+        rows.append(row)
+    if len(rows) == 1 and rows[0].get("quantity") is None:
+        rows[0]["quantity"] = quantity
+    return rows or None
+
+
+def _adjustment_batch_ids(batches):
+    """``batches`` as lot primary keys, however the caller spelled them."""
+    ids = []
+    for item in batches or []:
+        if isinstance(item, StockBatch):
+            ids.append(item.pk)
+        elif isinstance(item, dict):
+            if item.get("id") is not None:
+                ids.append(item["id"])
+            elif item.get("batch") is not None:
+                ids.append(getattr(item["batch"], "pk", item["batch"]))
+        elif isinstance(item, int):
+            ids.append(item)
+    return ids
+
+
+def _adjustment_unit_ids(units):
+    """``units`` as primary keys, however the caller spelled them."""
+    ids = []
+    for item in units or []:
+        if isinstance(item, StockUnit):
+            ids.append(item.pk)
+        elif isinstance(item, dict):
+            if item.get("id") is not None:
+                ids.append(item["id"])
+            elif item.get("unit") is not None:
+                ids.append(getattr(item["unit"], "pk", item["unit"]))
+        elif isinstance(item, int):
+            ids.append(item)
+    return ids
+
+
+def apply_adjustment(plan, *, status=None, at=None, **stamps):
+    """Write what :func:`plan_adjustment` decided.
+
+    One call for both directions so a caller never has to ask which apply it
+    wants — getting that wrong is how a receipt gets issued.
+    """
+    if plan is None or not plan.allocations:
+        return plan
+    if plan.direction == StockAllocation.Direction.IN:
+        return apply_receipt(plan, at=at)
+    if tracks_units(plan.mode):
+        return apply_issue(
+            plan,
+            status=status or StockUnit.Status.WRITTEN_OFF,
+            at=at,
+            **stamps,
+        )
+    return apply_lot_drawdown(plan)
+
+
+# ---------------------------------------------------------------------------
+# Moving identified stock between the shop's own places
+# ---------------------------------------------------------------------------
+#
+# A transfer is two documents and a transit location (see ``transfers.py``), so
+# it is four legs of identified stock: out of the source, onto the road, off the
+# road, into the destination. Each leg is a separate valuation because a
+# valuation run rebuilds one bin and a bin belongs to one warehouse.
+#
+# **A unit in transit lives at the transit location.** §6.5 says the warehouse
+# flips "only at receipt", and the sentence it is protecting — goods in a van
+# are sellable nowhere — is kept: nothing sells out of transit, because no
+# register sells from it. What the sentence cannot survive is invariant 1,
+# which counts units per warehouse against that warehouse's stock row: a unit
+# whose row still says the source, while its quantity has moved to transit,
+# makes *both* bins wrong at once. So the column moves with the goods, and the
+# status is what says they are on the road.
+
+
+def plan_dispatch(
+    *,
+    variant,
+    warehouse,
+    quantity,
+    unit_ids=None,
+    unit_codes=None,
+    batch_ids=None,
+    allow_expired=True,
+):
+    """What leaves the source when a transfer is sent.
+
+    Identical to a sale's issue in every respect except where the goods end up,
+    which is why it is the same planner: the source does not care whether the
+    handset is going to a customer or to the other branch, and the rate its own
+    queue produces is what both must be valued at.
+    """
+    return plan_issue(
+        variant=variant,
+        warehouse=warehouse,
+        quantity=quantity,
+        unit_ids=unit_ids,
+        unit_codes=unit_codes,
+        batch_ids=batch_ids,
+        allow_expired=allow_expired,
+        allow_short=False,
+    )
+
+
+def mirror_plan_into(plan, *, warehouse, variant=None):
+    """The arrival leg of a move, built from the departure leg.
+
+    The same articles, at the same rates, at another place — which is the whole
+    of "an internal move books no profit", expressed as a data structure rather
+    than as a rule somebody has to remember. A lot's balance at the new place is
+    opened here if this lot has never been there before; the ``StockBatch`` row
+    is not read, not copied and not written (§4.7).
+    """
+    if plan is None or not plan.allocations:
+        return None
+    warehouse_id = getattr(warehouse, "pk", warehouse) or Warehouse.default_id()
+    mirrored = TrackedPlan(
+        mode=plan.mode,
+        direction=StockAllocation.Direction.IN,
+        warehouse_id=warehouse_id,
+    )
+    for allocation in plan.allocations:
+        mirrored.allocations.append(
+            Allocation(
+                quantity=allocation.quantity,
+                rate=allocation.rate,
+                unit=allocation.unit,
+                batch=allocation.batch,
+                balance=(
+                    lock_balance(
+                        batch=allocation.batch,
+                        warehouse=warehouse_id,
+                        variant=variant
+                        or getattr(allocation.unit, "variant", None)
+                        or allocation.batch.variant,
+                    )
+                    if allocation.batch is not None
+                    else None
+                ),
+                source_key=allocation.source_key,
+            )
+        )
+    return mirrored
+
+
+def apply_dispatch(plan, *, transit_warehouse=None, at=None):
+    """Take the goods off the source shelf and put them on the road."""
+    if plan is None or not plan.allocations:
+        return plan
+    at = at or timezone.now()
+    transit_id = (
+        getattr(transit_warehouse, "pk", transit_warehouse)
+        if transit_warehouse is not None
+        else Warehouse.transit_id()
+    )
+    for allocation in plan.allocations:
+        if allocation.unit is not None:
+            transition_unit(
+                allocation.unit,
+                StockUnit.Status.IN_TRANSIT,
+                warehouse_id=transit_id,
+            )
+        if allocation.balance is not None:
+            issue_from_balance(
+                balance=allocation.balance, quantity=allocation.quantity
+            )
+    return plan
+
+
+def apply_arrival(plan, *, warehouse=None, status=None, at=None):
+    """Take the goods off the road and put them on a shelf.
+
+    Used for both the transit leg of a dispatch (``status`` stays
+    ``in_transit``) and the destination leg of a receipt (``in_stock``), so the
+    two ends of a move cannot drift apart.
+    """
+    if plan is None or not plan.allocations:
+        return plan
+    at = at or timezone.now()
+    warehouse_id = (
+        getattr(warehouse, "pk", warehouse)
+        if warehouse is not None
+        else plan.warehouse_id
+    )
+    for allocation in plan.allocations:
+        if allocation.unit is not None:
+            stamps = {"warehouse_id": warehouse_id}
+            if status == StockUnit.Status.IN_STOCK:
+                # A unit arriving somewhere starts that shelf's clock, the same
+                # as a returned one does: aging asks how long *this* spell has
+                # run (§ plan_return).
+                stamps["in_stock_since"] = at
+            transition_unit(
+                allocation.unit, status or allocation.unit.status, **stamps
+            )
+        if allocation.balance is not None:
+            receive_into_balance(
+                balance=allocation.balance,
+                quantity=allocation.quantity,
+                rate=allocation.rate,
+                at=at,
+            )
+    return plan
+
+
+def plan_off_road(
+    *, variant, warehouse, quantity, unit_ids=None, unit_codes=None, batch_ids=None
+):
+    """What one receiving line takes out of transit.
+
+    Deliberately **not** ``plan_issue``: that one asks whether the goods are
+    *sellable*, and nothing on a road is. A quarantined lot must still be able
+    to land — stranding a recalled pallet in a van is not a safety measure —
+    and a unit whose status is ``in_transit`` is by definition not ``in_stock``.
+    The one thing this does refuse is taking out more than was put on the road.
+    """
+    mode = mode_of(variant)
+    if mode == Product.TrackingMode.QUANTITY:
+        return None
+    warehouse_id = getattr(warehouse, "pk", warehouse) or Warehouse.transit_id()
+    quantity = _q(quantity)
+    plan = TrackedPlan(
+        mode=mode,
+        direction=StockAllocation.Direction.OUT,
+        warehouse_id=warehouse_id,
+    )
+    if quantity <= ZERO:
+        return plan
+
+    if tracks_units(mode):
+        chosen = []
+        for code in unit_codes or []:
+            unit = find_live_unit(code, variant=variant)
+            if unit is None or unit.status != StockUnit.Status.IN_TRANSIT:
+                raise serializers.ValidationError(
+                    {
+                        "detail": f"الوحدة {code} ليست ضمن الشحنة على الطريق.",
+                        "code": str(code),
+                    }
+                )
+            chosen.append(unit.pk)
+        chosen.extend(int(unit_id) for unit_id in (unit_ids or []))
+        _refuse_repeated_units(chosen)
+        if chosen:
+            locked = lock_units(chosen)
+            units = [locked[unit_id] for unit_id in chosen if unit_id in locked]
+            for unit in units:
+                if unit.status != StockUnit.Status.IN_TRANSIT:
+                    raise serializers.ValidationError(
+                        {
+                            "detail": (
+                                f"الوحدة {unit.code} ليست على الطريق "
+                                f"({unit.status})."
+                            ),
+                            "stock_unit": unit.pk,
+                        }
+                    )
+        else:
+            units = units_in_transit(variant=variant, quantity=quantity)
+        if len(units) != int(quantity):
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        f"على الطريق {len(units)} وحدة من أصل {int(quantity)}."
+                    ),
+                    "available": len(units),
+                    "requested": int(quantity),
+                }
+            )
+        for unit in units:
+            plan.allocations.append(
+                Allocation(
+                    quantity=ONE,
+                    rate=_rate(unit.stock_value),
+                    unit=unit,
+                    batch=unit.batch,
+                    balance=(
+                        lock_balance(batch=unit.batch, warehouse=warehouse_id)
+                        if unit.batch_id
+                        else None
+                    ),
+                )
+            )
+        return plan
+
+    rows = StockBatchBalance.objects.select_for_update().filter(
+        variant=variant, warehouse_id=warehouse_id, remaining_quantity__gt=0
+    )
+    if batch_ids:
+        rows = rows.filter(batch_id__in=batch_ids)
+    remaining = quantity
+    for balance in rows.order_by("expiry_date", "first_received_at", "id"):
+        if remaining <= ZERO:
+            break
+        take = _q(min(Decimal(balance.remaining_quantity), remaining))
+        if take <= ZERO:
+            continue
+        plan.allocations.append(
+            Allocation(
+                quantity=take,
+                rate=_rate(balance.incoming_rate),
+                batch=balance.batch,
+                balance=balance,
+            )
+        )
+        remaining = _q(remaining - take)
+    if remaining > ZERO:
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    f"على الطريق {quantity - remaining} فقط من أصل {quantity}."
+                ),
+                "available": str(quantity - remaining),
+                "requested": str(quantity),
+            }
+        )
+    return plan
+
+
+def units_in_transit(*, variant, quantity, transfer_units=None):
+    """The articles a transfer put on the road, for its receiving leg.
+
+    ``transfer_units`` is what the dispatch recorded. A receipt that arrives in
+    two loads takes them in the order they were sent, which for a van full of
+    identical handsets is the only order anybody can defend.
+    """
+    rows = (
+        StockUnit.objects.select_for_update(of=("self",))
+        .filter(variant=variant, status=StockUnit.Status.IN_TRANSIT)
+        .select_related("batch")
+        .order_by("pk")
+    )
+    if transfer_units:
+        rows = rows.filter(pk__in=[getattr(u, "pk", u) for u in transfer_units])
+    return list(rows[: int(quantity)])
 
 
 def plan_receipt_reversal(

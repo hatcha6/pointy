@@ -2445,6 +2445,8 @@ _TOOL_LABELS = {
     "record_supplier_payment": "تسجيل دفعة مورّد",
     "match_invoice_products": "مطابقة منتجات الفاتورة",
     "suggest_sale_price": "اقتراح سعر",
+    "lookup_stock_unit": "بحث عن جهاز",
+    "stock_unit_ageing": "أعمار الأجهزة",
     ASK_USER_TOOL_NAME: "بانتظار ردك",
 }
 
@@ -2792,6 +2794,12 @@ _TOOLS = {
     ),
     "suggest_sale_price": lambda user, args: suggest_sale_price(
         user=user, unit_cost=args.get("unit_cost")
+    ),
+    "lookup_stock_unit": lambda user, args: lookup_stock_unit(
+        user=user, code=args.get("code")
+    ),
+    "stock_unit_ageing": lambda user, args: stock_unit_ageing(
+        user=user, days=args.get("days", 90), warehouse=args.get("warehouse")
     ),
 }
 
@@ -3184,7 +3192,162 @@ def action_tool_definitions():
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_stock_unit",
+                "description": (
+                    "ابحث عن جهاز أو قطعة بالمعرّف (IMEI أو رقم تسلسلي): هل هي في "
+                    "المخزون الآن، وأين، وبكم — أو هل سبق بيعها ومتى. استخدمه عندما "
+                    "يسأل المستخدم عن رقم بعينه مثل «أين الجهاز 3512…؟»."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "المعرّف كما قُرئ أو كُتب.",
+                        }
+                    },
+                    "required": ["code"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "stock_unit_ageing",
+                "description": (
+                    "كم جهازًا معرّفًا بقي على الرف أكثر من مدة معيّنة، وأقدمها. "
+                    "استخدمه لأسئلة مثل «كم جهاز عندنا أكثر من ٩٠ يوم؟»."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "عدد الأيام على الرف (افتراضي ٩٠).",
+                        },
+                        "warehouse": {
+                            "type": "integer",
+                            "description": "رقم المستودع، أو اتركه للكل.",
+                        },
+                    },
+                    "required": [],
+                    "additionalProperties": False,
+                },
+            },
+        },
     ]
+
+
+def lookup_stock_unit(*, user, code):
+    """*«أين الجهاز 3512…؟»* — one identifier, answered (§8.4).
+
+    Three outcomes, which is the whole of §4.4: an article on a shelf right
+    now (here it is, and here is the shelf), one the shop has sold or written
+    off (we had this — same device?), or nothing at all. A used-goods shop
+    asks this question at the counter with the customer standing there, so the
+    answer carries the deep link rather than making them go and find it.
+
+    Read-only, and it carries no cost: the same rule as the kiosk, for the
+    weaker but still real reason that a chat transcript is forwarded.
+    """
+    from apps.inventory.tracking import find_live_unit, historical_units
+
+    code = str(code or "").strip()
+    if not code:
+        return {"ok": False, "error": "missing_code"}
+    if not user.has_perm("inventory.view_stockunit"):
+        return {"ok": False, "error": "forbidden"}
+
+    def _row(unit):
+        return {
+            "id": unit.pk,
+            "code": unit.code,
+            "secondary_code": unit.secondary_code,
+            "product": unit.variant.full_name,
+            "status": unit.status,
+            "warehouse": getattr(unit.warehouse, "name", ""),
+            "list_price": (
+                str(unit.list_price)
+                if unit.list_price is not None
+                else str(unit.variant.unit_price)
+            ),
+            "in_stock_since": (
+                unit.in_stock_since.isoformat() if unit.in_stock_since else None
+            ),
+            "days_on_shelf": (
+                (timezone.now() - unit.in_stock_since).days
+                if unit.in_stock_since
+                else None
+            ),
+            "sold_at": unit.sold_at.isoformat() if unit.sold_at else None,
+            "is_consignment": unit.is_consignment,
+            "attributes": unit.attributes or {},
+            "link": f"pointy://stock-unit/{unit.pk}",
+        }
+
+    live = find_live_unit(code)
+    history = historical_units(code)
+    return {
+        "ok": True,
+        "code": code,
+        "unit": _row(live) if live is not None else None,
+        "history": [_row(unit) for unit in history],
+        "found": live is not None or bool(history),
+    }
+
+
+def stock_unit_ageing(*, user, days=90, warehouse=None):
+    """*«كم جهاز عندنا أكثر من ٩٠ يوم؟»* — the ageing question (§8.4).
+
+    Counted rather than listed by default: a used-goods shop with four hundred
+    handsets does not want four hundred rows in a chat reply, it wants the
+    number and then the twenty worst.
+    """
+    from apps.inventory.models import StockUnit
+
+    if not user.has_perm("inventory.view_stockunit"):
+        return {"ok": False, "error": "forbidden"}
+    try:
+        days = max(int(days), 0)
+    except (TypeError, ValueError):
+        days = 90
+    cutoff = timezone.now() - timedelta(days=days)
+    rows = StockUnit.objects.filter(
+        status__in=StockUnit.ON_HAND_STATUSES, in_stock_since__lte=cutoff
+    ).select_related("variant", "variant__product", "warehouse")
+    if warehouse:
+        rows = rows.filter(warehouse_id=warehouse)
+    total = rows.count()
+    worst = list(rows.order_by("in_stock_since")[:20])
+    return {
+        "ok": True,
+        "days": days,
+        "count": total,
+        "units": [
+            {
+                "id": unit.pk,
+                "code": unit.code,
+                "product": unit.variant.full_name,
+                "days_on_shelf": (
+                    (timezone.now() - unit.in_stock_since).days
+                    if unit.in_stock_since
+                    else None
+                ),
+                "list_price": (
+                    str(unit.list_price)
+                    if unit.list_price is not None
+                    else str(unit.variant.unit_price)
+                ),
+                "warehouse": unit.warehouse.name,
+                "link": f"pointy://stock-unit/{unit.pk}",
+            }
+            for unit in worst
+        ],
+    }
 
 
 def render_ui(*, surface_id, components, title=None, data=None):

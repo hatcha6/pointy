@@ -137,6 +137,8 @@ class ConsignmentPayable {
     this.soldAt,
     this.soldPrice,
     this.payoutDue = 0,
+    this.advance = 0,
+    this.netDue = 0,
     this.invoiceNumber = '',
     this.invoiceBalanceDue,
     this.soldOnCredit = false,
@@ -153,6 +155,17 @@ class ConsignmentPayable {
   final DateTime? soldAt;
   final double? soldPrice;
   final double payoutDue;
+
+  /// Money already handed to this consignor **for this article** — because a
+  /// paid-out consignment came back and was reopened rather than bought in.
+  /// Shown beside the payout rather than instead of it: a row that showed
+  /// only [netDue] would read as though the watch had earned 1,600 (§15.3).
+  final double advance;
+
+  /// What the counter actually hands over: [payoutDue] less [advance],
+  /// floored at zero. Negative would mean the consignor owes the shop, which
+  /// is a receivable and never a negative payable.
+  final double netDue;
   final String invoiceNumber;
 
   /// What the shop's own customer still owes on the invoice this sold under.
@@ -181,6 +194,11 @@ class ConsignmentPayable {
       soldAt: _dateOrNull(json['sold_at']),
       soldPrice: _doubleOrNull(json['sold_price']),
       payoutDue: _doubleOrNull(json['payout_due']) ?? 0,
+      advance: _doubleOrNull(json['advance']) ?? 0,
+      netDue:
+          _doubleOrNull(json['net_due']) ??
+          _doubleOrNull(json['payout_due']) ??
+          0,
       invoiceNumber: json['invoice_number']?.toString() ?? '',
       invoiceBalanceDue: _doubleOrNull(json['invoice_balance_due']),
       soldOnCredit: json['sold_on_credit'] == true,
@@ -239,6 +257,7 @@ class ConsignmentPosition {
     this.payable = 0,
     this.receivable = 0,
     this.claimsOpen = 0,
+    this.claimsUnassessed = 0,
     this.shopCommission = 0,
     this.custodyUnitCount = 0,
     this.custodyDeclaredValue = 0,
@@ -253,6 +272,12 @@ class ConsignmentPosition {
   /// another owes 10,000.
   final double receivable;
   final double claimsOpen;
+
+  /// Incidents nobody has put a figure on. A **count**, never folded into
+  /// [claimsOpen]: an undetermined incident carries a zero nobody chose, and
+  /// adding it to a money total would say the shop had accepted a liability
+  /// it has not (§6.2.2).
+  final int claimsUnassessed;
   final double shopCommission;
   final int custodyUnitCount;
   final double custodyDeclaredValue;
@@ -267,6 +292,7 @@ class ConsignmentPosition {
       payable: _doubleOrNull(json['consignor_payable']) ?? 0,
       receivable: _doubleOrNull(json['consignor_receivable']) ?? 0,
       claimsOpen: _doubleOrNull(json['consignor_claims_open']) ?? 0,
+      claimsUnassessed: _intOf(json['consignor_claims_unassessed']),
       shopCommission: _doubleOrNull(json['shop_commission']) ?? 0,
       custodyUnitCount: _intOf(custodyMap['unit_count']),
       custodyDeclaredValue: _doubleOrNull(custodyMap['declared_value']) ?? 0,
@@ -406,6 +432,8 @@ class ConsignorPayoutLine {
     this.soldAt,
     this.soldPrice,
     this.payoutDue = 0,
+    this.advanceOffset = 0,
+    this.paidHere = 0,
   });
 
   final int unitId;
@@ -413,16 +441,30 @@ class ConsignorPayoutLine {
   final String productName;
   final DateTime? soldAt;
   final double? soldPrice;
+
+  /// What this article earned its owner — the gross.
   final double payoutDue;
 
+  /// How much of that this voucher settled against money already handed
+  /// over. Without it a voucher for 1,600 lists a line claiming a payout of
+  /// 9,600 and no explanation of the difference: a document that does not
+  /// foot.
+  final double advanceOffset;
+
+  /// What this voucher actually paid for this line.
+  final double paidHere;
+
   factory ConsignorPayoutLine.fromJson(Map<String, Object?> json) {
+    final due = _doubleOrNull(json['payout_due']) ?? 0;
     return ConsignorPayoutLine(
       unitId: _intOf(json['unit']),
       code: json['code']?.toString() ?? '',
       productName: json['product_name']?.toString() ?? '',
       soldAt: _dateOrNull(json['sold_at']),
       soldPrice: _doubleOrNull(json['sold_price']),
-      payoutDue: _doubleOrNull(json['payout_due']) ?? 0,
+      payoutDue: due,
+      advanceOffset: _doubleOrNull(json['advance_offset']) ?? 0,
+      paidHere: _doubleOrNull(json['paid_here']) ?? due,
     );
   }
 }
@@ -452,4 +494,239 @@ DateTime? _dateOrNull(Object? value) {
     return null;
   }
   return DateTime.tryParse(text)?.toLocal();
+}
+
+/// محضر حادث أمانة — something happened to goods the shop was holding.
+///
+/// §6.2.2. The record is made the moment somebody notices, in their own
+/// words, before anybody has decided who is responsible: *undetermined* is the
+/// honest state on day one and nothing downstream may require it to be
+/// resolved before the row can exist.
+class ConsignmentIncident {
+  const ConsignmentIncident({
+    required this.id,
+    required this.number,
+    required this.unitId,
+    required this.kind,
+    required this.discoveredAt,
+    this.unitCode = '',
+    this.productName = '',
+    this.consignorId,
+    this.consignorName = '',
+    this.consignorPhone = '',
+    this.agreementId,
+    this.agreementNumber = '',
+    this.liabilityPolicy = ConsignmentLiability.ownerRisk,
+    this.liabilityCap = 0,
+    this.declaredValue = 0,
+    this.occurredOn,
+    this.reportedByName = '',
+    this.narrative = '',
+    this.responsibility = ConsignmentResponsibility.undetermined,
+    this.assessedValue = 0,
+    this.isAssessed = false,
+    this.suggestedValue = 0,
+    this.resolution = ConsignmentResolution.pending,
+    this.resolvedAt,
+    this.settlementRef = '',
+    this.isOpen = true,
+    this.daysOpen = 0,
+  });
+
+  final int id;
+  final String number;
+  final int unitId;
+  final String unitCode;
+  final String productName;
+  final int? consignorId;
+  final String consignorName;
+  final String consignorPhone;
+  final int? agreementId;
+  final String agreementNumber;
+
+  /// The policy the consignor actually signed — read from the agreement, not
+  /// from the shop's current default. Changing the setting changes the next
+  /// voucher, never a claim on a page already in force.
+  final String liabilityPolicy;
+  final double liabilityCap;
+  final double declaredValue;
+  final String kind;
+  final DateTime? occurredOn;
+  final DateTime discoveredAt;
+  final String reportedByName;
+  final String narrative;
+  final String responsibility;
+  final double assessedValue;
+
+  /// Whether anybody has actually decided. An unassessed incident's zero is
+  /// not the same zero as an assessed nothing.
+  final bool isAssessed;
+
+  /// What the liability matrix says, shown beside the typed assessment rather
+  /// than instead of it: the matrix is a default the shop can argue away
+  /// from, and showing both is what makes the argument visible.
+  final double suggestedValue;
+  final String resolution;
+  final DateTime? resolvedAt;
+  final String settlementRef;
+  final bool isOpen;
+  final int daysOpen;
+
+  factory ConsignmentIncident.fromJson(Map<String, Object?> json) {
+    DateTime? when(Object? value) =>
+        value == null ? null : DateTime.tryParse('$value');
+    return ConsignmentIncident(
+      id: _intOf(json['id']),
+      number: json['number']?.toString() ?? '',
+      unitId: _intOf(json['unit']),
+      unitCode: json['unit_code']?.toString() ?? '',
+      productName: json['product_name']?.toString() ?? '',
+      consignorId: (json['consignor'] as num?)?.toInt(),
+      consignorName: json['consignor_name']?.toString() ?? '',
+      consignorPhone: json['consignor_phone']?.toString() ?? '',
+      agreementId: (json['agreement'] as num?)?.toInt(),
+      agreementNumber: json['agreement_number']?.toString() ?? '',
+      liabilityPolicy:
+          json['liability_policy']?.toString() ??
+          ConsignmentLiability.ownerRisk,
+      liabilityCap: _doubleOrNull(json['liability_cap']) ?? 0,
+      declaredValue: _doubleOrNull(json['declared_value']) ?? 0,
+      kind: json['kind']?.toString() ?? '',
+      occurredOn: when(json['occurred_on']),
+      discoveredAt: when(json['discovered_at']) ?? DateTime.now(),
+      reportedByName: json['reported_by_name']?.toString() ?? '',
+      narrative: json['narrative']?.toString() ?? '',
+      responsibility:
+          json['responsibility']?.toString() ??
+          ConsignmentResponsibility.undetermined,
+      assessedValue: _doubleOrNull(json['assessed_value']) ?? 0,
+      isAssessed: json['is_assessed'] == true,
+      suggestedValue: _doubleOrNull(json['suggested_value']) ?? 0,
+      resolution:
+          json['resolution']?.toString() ?? ConsignmentResolution.pending,
+      resolvedAt: when(json['resolved_at']),
+      settlementRef: json['settlement_ref']?.toString() ?? '',
+      isOpen: json['is_open'] == true,
+      daysOpen: _intOf(json['days_open']),
+    );
+  }
+}
+
+/// What happened. Five answers, because a dispute is not a loss.
+class ConsignmentIncidentKind {
+  const ConsignmentIncidentKind._();
+
+  static const damaged = 'damaged';
+  static const lost = 'lost';
+  static const stolen = 'stolen';
+  static const destroyed = 'destroyed';
+  static const dispute = 'dispute';
+
+  static const all = [damaged, lost, stolen, destroyed, dispute];
+}
+
+/// Who is responsible. Five answers including *undetermined*, which is the
+/// honest one on day one and must be representable.
+class ConsignmentResponsibility {
+  const ConsignmentResponsibility._();
+
+  static const shop = 'shop';
+  static const consignor = 'consignor';
+  static const thirdParty = 'third_party';
+  static const forceMajeure = 'force_majeure';
+  static const undetermined = 'undetermined';
+
+  static const all = [undetermined, shop, thirdParty, forceMajeure, consignor];
+}
+
+/// How a claim was closed. ``pending`` is the only one that leaves money
+/// outstanding.
+class ConsignmentResolution {
+  const ConsignmentResolution._();
+
+  static const pending = 'pending';
+  static const paid = 'paid';
+  static const replaced = 'replaced';
+  static const waived = 'waived';
+  static const insured = 'insured';
+  static const noClaim = 'no_claim';
+
+  static const closing = [paid, replaced, waived, insured, noClaim];
+}
+
+/// What one draft incident says before it is written.
+class ConsignmentIncidentDraft {
+  const ConsignmentIncidentDraft({
+    required this.kind,
+    required this.narrative,
+    this.occurredOn,
+    this.responsibility,
+    this.cameraId,
+  });
+
+  final String kind;
+  final String narrative;
+  final DateTime? occurredOn;
+  final String? responsibility;
+  final int? cameraId;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'kind': kind,
+      'narrative': narrative,
+      if (occurredOn != null)
+        'occurred_on': occurredOn!.toIso8601String().split('T').first,
+      'responsibility': ?responsibility,
+      'camera': ?cameraId,
+    };
+  }
+}
+
+/// Money in the drawer that belongs to somebody who never came back.
+///
+/// The normal case, not the edge. What it is **not** is income: nothing in
+/// this system ever converts an unclaimed payout into the shop's money on a
+/// timer.
+class UnclaimedPayoutAging {
+  const UnclaimedPayoutAging({required this.buckets, required this.lines});
+
+  final Map<String, UnclaimedPayoutBucket> buckets;
+  final List<ConsignmentPayable> lines;
+
+  factory UnclaimedPayoutAging.fromJson(Map<String, Object?> json) {
+    final raw = json['buckets'];
+    final buckets = <String, UnclaimedPayoutBucket>{};
+    if (raw is Map<String, Object?>) {
+      for (final entry in raw.entries) {
+        final value = entry.value;
+        if (value is Map<String, Object?>) {
+          buckets[entry.key] = UnclaimedPayoutBucket.fromJson(value);
+        }
+      }
+    }
+    final lines = json['lines'];
+    return UnclaimedPayoutAging(
+      buckets: buckets,
+      lines: lines is List
+          ? lines
+                .whereType<Map<String, Object?>>()
+                .map(ConsignmentPayable.fromJson)
+                .toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+class UnclaimedPayoutBucket {
+  const UnclaimedPayoutBucket({required this.count, required this.value});
+
+  final int count;
+  final double value;
+
+  factory UnclaimedPayoutBucket.fromJson(Map<String, Object?> json) {
+    return UnclaimedPayoutBucket(
+      count: _intOf(json['count']),
+      value: _doubleOrNull(json['value']) ?? 0,
+    );
+  }
 }

@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/consignment.dart';
 import '../models/stock_batch.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
@@ -120,7 +121,9 @@ class TrackedStockRepository {
   /// why, which is the difference between a unit nobody can find and a quantity
   /// that still counts it.
   Future<Result<StockUnit>> writeOffUnit(int unitId, {required String reason}) {
-    return Result.guard(() => _service.writeOffStockUnit(unitId, reason: reason));
+    return Result.guard(
+      () => _service.writeOffStockUnit(unitId, reason: reason),
+    );
   }
 
   Future<Result<bool>> resendConsignorSms(int unitId) {
@@ -175,7 +178,110 @@ class TrackedStockRepository {
     );
   }
 
-  Future<Result<StockBatchPage>> loadExpiryWatchlist({int days = 30}) {
+  Future<Result<(StockBatchPage, Map<int, ExpiryMarkdownSuggestion>)>>
+  loadExpiryWatchlist({int days = 30}) {
     return Result.guard(() => _service.fetchExpiryWatchlist(days: days));
+  }
+
+  // -- recall (§6.8.1) -----------------------------------------------------
+
+  Future<Result<BatchRecallReport>> loadRecallReport(int batchId) {
+    return Result.guard(() => _service.fetchRecallReport(batchId));
+  }
+
+  /// One tap, one message each, to everybody the shop can reach.
+  Future<Result<RecallNotifyResult>> notifyAffectedCustomers(int batchId) {
+    return Result.guard(() => _service.notifyAffectedCustomers(batchId));
+  }
+
+  // -- custody (§6.2.2) ----------------------------------------------------
+
+  Future<Result<ConsignmentIncident>> reportIncident(
+    int unitId,
+    ConsignmentIncidentDraft draft,
+  ) {
+    return Result.guard(
+      () => _service.reportConsignmentIncident(unitId, draft),
+    );
+  }
+
+  Future<Result<List<ConsignmentIncident>>> loadUnitIncidents(int unitId) {
+    return Result.guard(() => _service.fetchUnitIncidents(unitId));
+  }
+
+  Future<Result<List<ConsignmentIncident>>> loadIncidents({
+    bool openOnly = false,
+    int page = 1,
+  }) {
+    return Result.guard(
+      () => _service.fetchConsignmentIncidents(openOnly: openOnly, page: page),
+    );
+  }
+
+  Future<Result<ConsignmentIncident>> assessIncident(
+    int incidentId, {
+    required String responsibility,
+    double? assessedValue,
+    String note = '',
+  }) {
+    return Result.guard(
+      () => _service.assessConsignmentIncident(
+        incidentId,
+        responsibility: responsibility,
+        assessedValue: assessedValue,
+        note: note,
+      ),
+    );
+  }
+
+  Future<Result<ConsignmentIncident>> settleIncident(
+    int incidentId, {
+    required String resolution,
+    String method = 'cash',
+    int? replacementUnitId,
+    String reference = '',
+    String notes = '',
+  }) {
+    return Result.guard(
+      () => _service.settleConsignmentIncident(
+        incidentId,
+        resolution: resolution,
+        method: method,
+        replacementUnitId: replacementUnitId,
+        reference: reference,
+        notes: notes,
+      ),
+    );
+  }
+
+  Future<Result<UnclaimedPayoutAging>> loadUnclaimedPayouts() {
+    return Result.guard(() => _service.fetchUnclaimedPayouts());
+  }
+
+  // -- opening identification (§6.10) --------------------------------------
+
+  Future<Result<List<OpeningIdentificationRow>>> loadOpeningWorklist() {
+    return Result.guard(() => _service.fetchOpeningWorklist());
+  }
+
+  Future<Result<int>> identifyOpeningStock({
+    required int variantId,
+    List<Map<String, Object?>> units = const [],
+    List<Map<String, Object?>> batches = const [],
+    bool captureLater = false,
+  }) {
+    return Result.guard(
+      () => _service.identifyOpeningStock(
+        variantId: variantId,
+        units: units,
+        batches: batches,
+        captureLater: captureLater,
+      ),
+    );
+  }
+
+  /// `allocations ∪ events`, in time order (§6.9).
+  Future<Result<List<StockUnitTimelineEntry>>> loadUnitTimeline(int unitId) {
+    return Result.guard(() => _service.fetchStockUnitTimeline(unitId));
   }
 }

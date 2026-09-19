@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -372,9 +374,6 @@ def discard_expiring_stock_batches(*, receipt_lines, warehouse=None):
         batch.balances.all().delete()
         batch.delete()
         removed += 1
-    for batch in batches:
-        if batch.pk is not None:
-            tracking.mirror_legacy_batch_totals(batch.pk)
     return removed
 
 
@@ -442,3 +441,54 @@ def stock_count_needs_review(*, expected, counted, min_units, percent):
         return True
     gap_fraction_pct = (gap / abs(expected)) * 100
     return gap_fraction_pct >= percent
+
+
+def allocate_adjustment(
+    *,
+    variant,
+    warehouse,
+    delta,
+    units=None,
+    batches=None,
+    status=None,
+    at=None,
+    placeholder_key="",
+    what="هذه الحركة",
+):
+    """Name the identified stock behind a bin change, and move it.
+
+    The one door for the four paths that change a shelf without a document that
+    itemises anything — a transfer, a stock count, a manual adjustment and a
+    job's materials. Each of them used to raise on a tracked product, because
+    ``post_movement_valuations`` refuses a tracked movement that names nothing
+    (ERPNext #42997) and refusing is better than drifting. This is what teaches
+    them to name it.
+
+    Returns the plan, which the caller **must** hand to its movement as
+    ``tracked_plan``; a plan that is applied and not carried leaves the units
+    moved and the ledger silent, which is the same corruption by a longer road.
+    """
+    from .valuation_service import valuation_unit_costs
+
+    warehouse_id = resolve_warehouse_id(warehouse)
+    delta = Decimal(delta)
+    rate = None
+    if delta > 0 and tracking.is_tracked(variant):
+        # Goods arriving by a route that paid nothing are worth what the rest of
+        # that shelf is worth. Asked for only when something is actually
+        # arriving on a tracked variant, so no other caller pays for it.
+        rate = valuation_unit_costs(
+            [getattr(variant, "pk", variant)], warehouse=warehouse_id
+        ).get(getattr(variant, "pk", variant))
+    plan = tracking.plan_adjustment(
+        variant=variant,
+        warehouse=warehouse_id,
+        delta=delta,
+        rate=rate,
+        units=units,
+        batches=batches,
+        at=at,
+        placeholder_key=placeholder_key,
+        what=what,
+    )
+    return tracking.apply_adjustment(plan, status=status, at=at)

@@ -1,3 +1,4 @@
+import 'tracking_mode.dart';
 import 'warehouse.dart';
 
 /// Goods moving from one of the shop's places to another.
@@ -98,12 +99,18 @@ class StockTransferLine {
     this.baseQuantity = 0,
     this.receivedQuantity = 0,
     this.outstandingQuantity = 0,
+    this.trackingMode = TrackingMode.quantity,
   });
 
   final int id;
   final int variantId;
   final String variantName;
   final String variantSku;
+
+  /// How closely this line's product is identified. The dispatch sheet asks
+  /// for identifiers only when the answer says articles have names — a shop
+  /// that sells Coca-Cola must not be able to tell this shipped.
+  final TrackingMode trackingMode;
 
   /// In the line's own unit — two cartons, not twenty-four pieces.
   final double quantity;
@@ -131,6 +138,7 @@ class StockTransferLine {
       baseQuantity: number(json['base_quantity']),
       receivedQuantity: number(json['received_quantity']),
       outstandingQuantity: number(json['outstanding_quantity']),
+      trackingMode: TrackingMode.fromWire(json['tracking_mode']),
     );
   }
 }

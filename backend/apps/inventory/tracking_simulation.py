@@ -42,6 +42,7 @@ from apps.customers.models import Customer
 from apps.sales.models import RegisterSession
 from apps.sales.services import checkout_order
 
+from . import consignment as figures
 from . import consignment_service
 from .identity import normalize_identifier
 from .integrity import tracking_invariant_violations
@@ -104,6 +105,9 @@ class OracleUnit:
     #: What the shop will owe their owner when they sell. Carried here so the
     #: model can predict the cost of the sale without being told it.
     payout: Decimal = ZERO
+    #: What the most recent sale of this article earned its owner. Undone on
+    #: a reopen, because that sale no longer exists.
+    last_earned: Decimal = ZERO
 
 
 class TrackedStockOracle:
@@ -113,6 +117,22 @@ class TrackedStockOracle:
         self.units: dict = {}
         self.lots: dict = {}
         self.modes: dict = {}
+        # -- the consignment money, from the cash flows and nothing else ----
+        #
+        # Deliberately **not** a second copy of ``payable − advance``: an
+        # oracle that reimplements the formula proves only that it was typed
+        # twice. These two are what the shop was *told to do* — this much was
+        # earned by selling other people's goods, this much was handed across
+        # the counter — and the identity they support is
+        #
+        #     consignor_payable() − consignor_receivable() == earned − handed
+        #
+        # per consignor and in total, whatever route the articles took. That
+        # is the check that catches §15.3's bug: after a reopen and a re-sale
+        # at a different price the old code reported nothing owed and nothing
+        # owing, while the shop had earned 9,600 and handed over 8,000.
+        self.consignor_earned: Decimal = ZERO
+        self.consignor_handed_over: Decimal = ZERO
 
     # -- writing ---------------------------------------------------------
 
@@ -166,7 +186,7 @@ class TrackedStockOracle:
         lot.quantity[warehouse_id] += Decimal(quantity)
         lot.value[warehouse_id] += Decimal(quantity) * Decimal(rate)
 
-    def issue_unit(self, code):
+    def issue_unit(self, code, *, earns=None):
         unit = self.units[normalize_identifier(code)]
         unit.live = False
         if unit.consigned:
@@ -174,7 +194,9 @@ class TrackedStockOracle:
             # instant it sold, the shop acquired it for the payout. The model
             # says so independently of the backend, which is the only way this
             # check means anything.
-            unit.cost = unit.payout
+            unit.cost = unit.payout if earns is None else Decimal(earns)
+            unit.last_earned = unit.cost
+            self.consignor_earned += unit.cost
         if unit.lot_code:
             lot = self.lots[self.key(unit.variant_id, unit.lot_code)]
             rate = lot.rate(unit.warehouse_id)
@@ -191,6 +213,55 @@ class TrackedStockOracle:
 
     def quarantine(self, variant_id, code):
         self.lots[self.key(variant_id, code)].sellable = False
+
+    def move_unit(self, code, warehouse_id):
+        """One article, at another of the shop's places.
+
+        Nothing is created and nothing is destroyed — which is exactly what
+        the model has to say independently, because a transfer that quietly
+        gained or lost value at one end is the failure this run exists to
+        catch. The cost travels with the article.
+        """
+        unit = self.units[normalize_identifier(code)]
+        unit.warehouse_id = warehouse_id
+        return unit.cost
+
+    def move_lot(self, *, variant_id, code, source_id, destination_id, quantity):
+        """A lot's goods at another place, at the rate they left at.
+
+        The lot itself does not move (§4.7): one row, a map of places. The
+        model says so by construction, so a design that drifts back toward one
+        lot per warehouse fails here rather than in a review.
+        """
+        lot = self.lots[self.key(variant_id, code)]
+        rate = lot.rate(source_id)
+        quantity = Decimal(quantity)
+        lot.quantity[source_id] -= quantity
+        lot.value[source_id] -= quantity * rate
+        lot.quantity[destination_id] += quantity
+        lot.value[destination_id] += quantity * rate
+        return rate
+
+    def pay_consignor(self, amount):
+        """Money across the counter. The only thing that reduces the debt."""
+        self.consignor_handed_over += Decimal(amount)
+
+    def reopen_consignment(self, code):
+        """The sale is undone, so what it earned is un-earned.
+
+        The money already handed over is **not** un-handed — it is still
+        gone, which is precisely the situation §15.3 is about.
+        """
+        unit = self.units[normalize_identifier(code)]
+        self.consignor_earned -= unit.last_earned
+        unit.last_earned = ZERO
+        unit.live = True
+        unit.cost = ZERO
+
+    def retire_unit(self, code):
+        """Off the shelf, by a route that is not a sale: written off, damaged,
+        missing at a count. The shelf loses it and the shop loses its value."""
+        return self.issue_unit(code)
 
     # -- reading ---------------------------------------------------------
 
@@ -303,7 +374,23 @@ class TrackedStockSimulation:
         # cache, so the id the oracle compares against is the one the shop is
         # actually writing into.
         self.warehouse_id = Warehouse.default_id()
+        # A second place, so a transfer has somewhere to go. The whole of §6.5
+        # is invisible in a one-warehouse shop, and invariant 1 counts units
+        # **per warehouse** — so a run that never opened a second one could
+        # not have caught a leg that valued the goods at the wrong end.
+        self.branch_id = Warehouse.objects.create(
+            name="فرع المحاكاة", code="sim-branch"
+        ).pk
+        self.transit_id = Warehouse.transit_id()
+        self.warehouse_id = Warehouse.default_id()
+        self.places = (self.warehouse_id, self.branch_id, self.transit_id)
         self.consignor = Customer.objects.create(full_name="مودِع المحاكاة")
+        from django.contrib.auth import get_user_model
+
+        self.cashier = get_user_model().objects.create_user(
+            username=f"sim-cashier-{self.random.randint(1, 10**9)}",
+            password="x",
+        )
 
     # -- helpers ---------------------------------------------------------
 
@@ -586,7 +673,88 @@ class TrackedStockSimulation:
             ],
             payments_data=[{"method": "cash", "amount": price}],
         )
-        self.oracle.issue_unit(chosen.code)
+        # Under a commission the payout is a share of *this* price, which is
+        # not the projection the model made at intake — so the model is told
+        # what the sale earned rather than assuming.
+        self.oracle.issue_unit(chosen.code, earns=self._earned_by(chosen, price))
+
+    def pay_a_consignor(self):
+        """The owner comes in and collects."""
+        owed = [
+            unit
+            for unit in self.oracle.units.values()
+            if unit.consigned and not unit.live and unit.last_earned > ZERO
+        ]
+        if not owed:
+            return
+        chosen = self.random.choice(owed)
+        row = StockUnit.objects.filter(
+            code_normalized=chosen.code,
+            status=StockUnit.Status.SOLD,
+            consignor_paid_at__isnull=True,
+        ).first()
+        if row is None:
+            return
+        self._consignor_session()
+        payout = consignment_service.disburse_payout(
+            unit_ids=[row.pk], request=self._consignor_request()
+        )
+        if payout is not None:
+            self.oracle.pay_consignor(payout.amount)
+
+    def reopen_a_consignment(self):
+        """A customer brings back a consignment and the owner keeps it here.
+
+        The path §15.3 was written about. Weighted low because it is rare in
+        a shop and expensive here — but it has to run, because the bug it
+        surfaces is invisible until the article sells a *second* time.
+        """
+        from apps.sales.services import return_order_items
+
+        sold = [
+            unit
+            for unit in self.oracle.units.values()
+            if unit.consigned and not unit.live and unit.last_earned > ZERO
+        ]
+        if not sold:
+            return
+        chosen = self.random.choice(sold)
+        row = StockUnit.objects.filter(
+            code_normalized=chosen.code, status=StockUnit.Status.SOLD
+        ).select_related("sold_order_line__order").first()
+        line = getattr(row, "sold_order_line", None)
+        order = getattr(line, "order", None)
+        if order is None:
+            return
+        return_order_items(
+            order=order,
+            lines=[(line, 1)],
+            reason="محاكاة إرجاع",
+            consignment_action="reopen",
+            register_session=self._session(),
+        )
+        self.oracle.reopen_consignment(chosen.code)
+
+    def _earned_by(self, unit, price):
+        """What this sale earns the owner, from the terms the model holds."""
+        row = StockUnit.objects.filter(code_normalized=unit.code).first()
+        if row is None:
+            return unit.payout
+        return figures.consignor_payout_due(row, sold_price=price)
+
+    def _consignor_session(self):
+        from apps.sales.models import RegisterSession
+
+        if RegisterSession.open_for(self.cashier) is None:
+            RegisterSession.objects.create(
+                owner=self.cashier,
+                owner_key=f"user:{self.cashier.pk}",
+                status=RegisterSession.Status.OPEN,
+                opening_cash=ZERO,
+            )
+
+    def _consignor_request(self):
+        return type("R", (), {"user": self.cashier})()
 
     def return_a_consignment(self):
         """The owner takes their goods back before they sell."""
@@ -624,6 +792,172 @@ class TrackedStockSimulation:
         row.save(update_fields=["status", "is_locked", "updated_at"])
         self.oracle.quarantine(lot.variant_id, lot.code)
 
+    def transfer_to_branch(self):
+        """Send goods to the other place, and take them off the road there.
+
+        Both legs in one operation, deliberately: what the model can predict
+        is where the goods end up and what they are worth, and a half-finished
+        transfer would only be a statement about the transit location. The
+        four legs still run — out of the source, onto the road, off the road,
+        into the destination — and each is valued separately by the engine.
+        """
+        from apps.inventory import transfers as transfer_services
+        from apps.inventory.models import StockTransfer
+
+        mode = self.random.choice(
+            [
+                Product.TrackingMode.SERIAL,
+                Product.TrackingMode.BATCH,
+                Product.TrackingMode.SERIAL_BATCH,
+            ]
+        )
+        variant = self.products[mode]
+        picks = {}
+        if mode == Product.TrackingMode.BATCH:
+            lots = self.oracle.sellable_lots(
+                variant.pk, self.warehouse_id, today=self.today
+            )
+            if not lots:
+                return
+            lot = lots[0]
+            quantity = min(
+                lot.quantity[self.warehouse_id], Decimal(self.random.randint(1, 5))
+            )
+            if quantity <= ZERO:
+                return
+        else:
+            available = [
+                unit
+                for unit in self.oracle.live_units(variant.pk, self.warehouse_id)
+                if not unit.consigned and self._lot_is_sellable(
+                    unit.variant_id, unit.lot_code
+                )
+            ]
+            if not available:
+                return
+            chosen = available[: self.random.randint(1, min(2, len(available)))]
+            quantity = Decimal(len(chosen))
+            unit_ids = list(
+                StockUnit.objects.filter(
+                    code_normalized__in=[unit.code for unit in chosen],
+                    status=StockUnit.Status.IN_STOCK,
+                ).values_list("pk", flat=True)
+            )
+            if len(unit_ids) != len(chosen):
+                return
+
+        transfer = StockTransfer.objects.create(
+            source_id=self.warehouse_id, destination_id=self.branch_id
+        )
+        line = transfer.lines.create(variant=variant, quantity=quantity)
+        if mode != Product.TrackingMode.BATCH:
+            picks = {str(line.pk): {"unit_ids": unit_ids}}
+        transfer_services.dispatch_transfer(transfer, picks=picks)
+        transfer_services.receive_transfer(
+            transfer, lines=[(line, quantity)], picks=picks
+        )
+
+        if mode == Product.TrackingMode.BATCH:
+            self.oracle.move_lot(
+                variant_id=variant.pk,
+                code=lot.code,
+                source_id=self.warehouse_id,
+                destination_id=self.branch_id,
+                quantity=quantity,
+            )
+        else:
+            for unit in chosen:
+                if unit.lot_code:
+                    self.oracle.move_lot(
+                        variant_id=variant.pk,
+                        code=unit.lot_code,
+                        source_id=self.warehouse_id,
+                        destination_id=self.branch_id,
+                        quantity=Decimal("1"),
+                    )
+                self.oracle.move_unit(unit.code, self.branch_id)
+
+    def adjust_down(self):
+        """A shelf that changed by hand. Named units, or the earliest lot."""
+        from apps.inventory.models import StockLedgerEntry, StockMovement
+        from apps.inventory.services import (
+            allocate_adjustment,
+            create_stock_movement,
+            lock_stock_item,
+            save_stock_item_quantities,
+            stock_snapshot,
+        )
+
+        mode = self.random.choice(
+            [Product.TrackingMode.SERIAL, Product.TrackingMode.BATCH]
+        )
+        variant = self.products[mode]
+        if mode == Product.TrackingMode.SERIAL:
+            available = [
+                unit
+                for unit in self.oracle.live_units(variant.pk, self.warehouse_id)
+                if not unit.consigned
+            ]
+            if not available:
+                return
+            chosen = [available[0]]
+            quantity = Decimal("1")
+            unit_ids = list(
+                StockUnit.objects.filter(
+                    code_normalized=chosen[0].code,
+                    status=StockUnit.Status.IN_STOCK,
+                ).values_list("pk", flat=True)
+            )
+            if not unit_ids:
+                return
+        else:
+            lots = self.oracle.sellable_lots(
+                variant.pk, self.warehouse_id, today=self.today
+            )
+            if not lots:
+                return
+            lot = lots[0]
+            quantity = min(
+                lot.quantity[self.warehouse_id], Decimal(self.random.randint(1, 3))
+            )
+            if quantity <= ZERO:
+                return
+            unit_ids = None
+
+        stock_item = lock_stock_item(
+            variant=variant, warehouse=self.warehouse_id
+        )
+        before = stock_snapshot(stock_item)
+        stock_item.quantity_on_hand -= quantity
+        save_stock_item_quantities(stock_item)
+        plan = allocate_adjustment(
+            variant=variant,
+            warehouse=self.warehouse_id,
+            delta=-quantity,
+            units=unit_ids,
+        )
+        create_stock_movement(
+            variant=variant,
+            stock_item=stock_item,
+            movement_type=StockMovement.Type.DECREASE,
+            quantity=quantity,
+            note="محاكاة تسوية",
+            created_by=None,
+            before=before,
+            voucher_type=StockLedgerEntry.VoucherType.ADJUSTMENT,
+            tracked_plan=plan,
+        )
+
+        if mode == Product.TrackingMode.SERIAL:
+            self.oracle.retire_unit(chosen[0].code)
+        else:
+            self.oracle.issue_lot(
+                variant_id=variant.pk,
+                warehouse_id=self.warehouse_id,
+                code=lot.code,
+                quantity=quantity,
+            )
+
     def _lot_is_sellable(self, variant_id, code):
         if not code:
             return True
@@ -644,6 +978,14 @@ class TrackedStockSimulation:
         ("take_in_consignment", 2),
         ("sell_a_consignment", 2),
         ("return_a_consignment", 1),
+        # §15.3's path: collect, then take the article back, then sell it
+        # again. The bug it surfaces is invisible until the *second* sale.
+        ("pay_a_consignor", 2),
+        ("reopen_a_consignment", 1),
+        # Phase D's prerequisite: the two paths that used to raise outright on
+        # a tracked product because they named nothing.
+        ("transfer_to_branch", 2),
+        ("adjust_down", 1),
     )
 
     def step(self):
@@ -666,6 +1008,7 @@ class TrackedStockSimulation:
     # -- checking --------------------------------------------------------
 
     def check(self):
+        self._check_consignment_money()
         self._check_units()
         self._check_lots()
         self._check_bins()
@@ -673,19 +1016,60 @@ class TrackedStockSimulation:
         if violations:
             self._fail("invariants violated:\n  - " + "\n  - ".join(violations))
 
+    def _check_consignment_money(self):
+        """What the shop owes, less what it is owed, is what it has not paid.
+
+        The identity holds however the articles got there — sold, collected,
+        returned, reopened, re-sold at another price — because both sides are
+        built from different things: the left from the rows, the right from
+        the cash the run actually moved. §15.3's bug fails this immediately:
+        the old code reported nothing owed and nothing owing on a watch whose
+        owner had earned 9,600 and taken 8,000.
+        """
+        payable = figures.consignor_payable()
+        receivable = figures.consignor_receivable()
+        expected = self.oracle.consignor_earned - self.oracle.consignor_handed_over
+        if abs((payable - receivable) - expected) > self.TOLERANCE:
+            self._fail(
+                f"consignment money disagrees: the shop says it owes {payable} "
+                f"and is owed {receivable} (net {payable - receivable}), the "
+                f"model says {self.oracle.consignor_earned} was earned and "
+                f"{self.oracle.consignor_handed_over} handed over "
+                f"(net {expected})"
+            )
+
     def _check_units(self):
+        # ``in_transit`` counts too, at the transit location: goods in a van
+        # are somewhere, and a run that treated them as gone would report a
+        # dispatched handset as missing rather than as travelling.
         live = {
-            unit.code_normalized
+            unit.code_normalized: unit.warehouse_id
             for unit in StockUnit.objects.filter(
-                status__in=StockUnit.ON_HAND_STATUSES
+                status__in=[
+                    *StockUnit.ON_HAND_STATUSES,
+                    StockUnit.Status.IN_TRANSIT,
+                ]
             )
         }
-        expected = {unit.code for unit in self.oracle.units.values() if unit.live}
-        if live != expected:
-            missing = sorted(expected - live)
-            extra = sorted(live - expected)
+        expected = {
+            unit.code: unit.warehouse_id
+            for unit in self.oracle.units.values()
+            if unit.live
+        }
+        if set(live) != set(expected):
+            missing = sorted(set(expected) - set(live))
+            extra = sorted(set(live) - set(expected))
             self._fail(
                 f"units on the shelf disagree — missing {missing}, unexpected {extra}"
+            )
+        misplaced = [
+            code for code, place in expected.items() if live[code] != place
+        ]
+        if misplaced:
+            self._fail(
+                f"units are in the wrong place — {sorted(misplaced)}: shop says "
+                f"{[live[code] for code in sorted(misplaced)]}, model says "
+                f"{[expected[code] for code in sorted(misplaced)]}"
             )
 
     def _check_lots(self):
@@ -741,29 +1125,34 @@ class TrackedStockSimulation:
                     )
 
     def _check_bins(self):
+        # Every place, not only the main one. A transfer that valued the goods
+        # correctly at the source and wrongly at the far end is invisible to a
+        # check that only ever looks at the source, and that is the whole
+        # failure mode §6.5 is about.
         for mode, variant in self.products.items():
             if mode == Product.TrackingMode.QUANTITY:
                 continue
-            item = StockItem.objects.filter(
-                variant=variant, warehouse_id=self.warehouse_id
-            ).first()
-            expected_quantity = self.oracle.on_hand(variant.pk, self.warehouse_id)
-            held = item.quantity_on_hand if item else ZERO
-            if abs(Decimal(held) - expected_quantity) > self.TOLERANCE:
-                self._fail(
-                    f"{variant.sku}: on hand is {held}, model says "
-                    f"{expected_quantity}"
-                )
-            bin_row = StockValuationBin.objects.filter(
-                variant=variant, warehouse_id=self.warehouse_id
-            ).first()
-            expected_value = self.oracle.stock_value(variant.pk, self.warehouse_id)
-            value = bin_row.stock_value if bin_row else ZERO
-            if abs(Decimal(value) - expected_value) > self.TOLERANCE:
-                self._fail(
-                    f"{variant.sku}: stock value is {value}, model says "
-                    f"{expected_value}"
-                )
+            for place in self.places:
+                item = StockItem.objects.filter(
+                    variant=variant, warehouse_id=place
+                ).first()
+                expected_quantity = self.oracle.on_hand(variant.pk, place)
+                held = item.quantity_on_hand if item else ZERO
+                if abs(Decimal(held) - expected_quantity) > self.TOLERANCE:
+                    self._fail(
+                        f"{variant.sku} @ warehouse {place}: on hand is {held}, "
+                        f"model says {expected_quantity}"
+                    )
+                bin_row = StockValuationBin.objects.filter(
+                    variant=variant, warehouse_id=place
+                ).first()
+                expected_value = self.oracle.stock_value(variant.pk, place)
+                value = bin_row.stock_value if bin_row else ZERO
+                if abs(Decimal(value) - expected_value) > self.TOLERANCE:
+                    self._fail(
+                        f"{variant.sku} @ warehouse {place}: stock value is "
+                        f"{value}, model says {expected_value}"
+                    )
 
     # -- driving ---------------------------------------------------------
 

@@ -9,6 +9,7 @@ import '../../../data/models/stock_count.dart';
 import '../../../data/models/stock_count_draft.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/stock_count_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -28,6 +29,7 @@ class StockCountSessionsScreen extends StatefulWidget {
     required this.catalogRepository,
     required this.capabilities,
     required this.navigation,
+    this.trackedStockRepository,
   });
 
   final StockCountSessionsViewModel viewModel;
@@ -35,6 +37,10 @@ class StockCountSessionsScreen extends StatefulWidget {
   final CatalogRepository catalogRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
+
+  /// Passed through to the counting screen for the lot picker. Optional: a
+  /// shop that tracks nothing never asks for it.
+  final TrackedStockRepository? trackedStockRepository;
 
   @override
   State<StockCountSessionsScreen> createState() =>
@@ -56,6 +62,7 @@ class _StockCountSessionsScreenState extends State<StockCountSessionsScreen> {
           stockCountRepository: widget.stockCountRepository,
           catalogRepository: widget.catalogRepository,
           capabilities: widget.capabilities,
+          trackedStockRepository: widget.trackedStockRepository,
         ),
       ),
     );

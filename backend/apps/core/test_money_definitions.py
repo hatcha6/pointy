@@ -319,3 +319,79 @@ class ConsignmentFiguresTests(SimpleTestCase):
             "The consignment price floor is consignment.payout_floor. "
             f"Offending lines: {offenders}",
         )
+
+
+class CustodyClaimFiguresTests(SimpleTestCase):
+    """Phase D's two new money questions, each with one answer.
+
+    *How much of this drawer is not mine* is asked by the payables screen, the
+    treasury overlay, the claims report and the consignment position, and the
+    fourth surface to want it is the one that writes the sum out again. Both
+    figures are derived on read from the incident rows, which is the only
+    reason they cannot drift from them.
+    """
+
+    ALLOWED = {
+        "apps/inventory/consignment.py",
+        "apps/inventory/consignment_service.py",
+        "apps/inventory/custody.py",
+        "apps/sales/business_simulation.py",
+    }
+
+    def test_no_surface_sums_open_claims_for_itself(self):
+        """Σ over unresolved incidents belongs to ``consignor_claims_open``."""
+        offenders = _offending_files(
+            r"Sum\(\s*[\"']assessed_value[\"']",
+            self.ALLOWED,
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "Open consignment claims are consignment.consignor_claims_open. "
+            f"Offending lines: {offenders}",
+        )
+
+    def test_no_surface_nets_a_payout_against_an_advance_for_itself(self):
+        """``payout_due − advance`` belongs to ``consignment.net_due``.
+
+        The figure that did not exist until §15.3 was closed, and the one
+        most likely to be written out again: the payables screen, the
+        disbursement, the voucher's own lines and the statement all want
+        *"what does the counter actually hand over"*, and a fourth copy is a
+        fourth chance to forget the floor — which is what stops one
+        consignor's over-collection paying down another's money.
+        """
+        offenders = _offending_files(
+            r"consignor_advance\s*[-+]|[-+]\s*[\w.]*consignor_advance",
+            self.ALLOWED
+            | {
+                # The serializers read the *stored* figure to display it, and
+                # the voucher reads what it settled off its own events; both
+                # are reporting the number, not deriving it.
+                "apps/inventory/consignment_serializers.py",
+                "apps/inventory/consignment_documents.py",
+            },
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "Netting a payout against an advance is consignment.net_due. "
+            f"Offending lines: {offenders}",
+        )
+
+    def test_no_surface_derives_a_liability_bound_for_itself(self):
+        """``cap ?? declared_value`` belongs to ``custody.liability_bound``.
+
+        The bound is a term both parties signed, and a second copy is a second
+        place that can quietly stop honouring the cap on somebody's page.
+        """
+        offenders = _offending_files(
+            r"liability_cap\s+(?:or|if)\s",
+            self.ALLOWED,
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "What a claim is bounded by is custody.liability_bound. "
+            f"Offending lines: {offenders}",
+        )

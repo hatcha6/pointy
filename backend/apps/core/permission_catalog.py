@@ -70,6 +70,12 @@ PERMISSION_CATALOG = [
             # count splits counting from applying.
             _perm("inventory.disburse_consignment_payout", "صرف مستحقات الأمانات", "تسليم صاحب الأمانة مستحقاته من الصندوق."),
             _perm("inventory.view_consignment_liability", "عرض مستحقات الأمانات", "الاطلاع على المستحقات والمطالبات القائمة."),
+            # Writing down what happened to somebody else's goods is a low bar
+            # on purpose — whoever *noticed* has to be able to record it, at
+            # the time, before anybody has decided who is responsible (§6.2.2).
+            # Paying the claim is the separate, higher one above, for the same
+            # reason the stock count splits counting from applying.
+            _perm("inventory.manage_consignmentincident", "تسجيل حوادث العهدة وتقديرها", "كتابة محضر تلف أو فقدان أمانة وتقدير قيمته."),
             _perm("inventory.manage_unitattributedefinition", "إدارة خصائص الوحدات", "تعريف حقول الحالة والملحقات لكل نوع صنف."),
         ],
     },

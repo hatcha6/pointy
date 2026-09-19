@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import django_filters
 from django.db import IntegrityError, transaction
 from django.db.models import Count, F, Prefetch, Q
@@ -28,8 +30,10 @@ from .models import (
     StockMovement,
     StockTransfer,
     StockTransferLine,
+    StockUnit,
     Warehouse,
 )
+from . import stock_count_tracking
 from . import transfers as transfer_services
 from .serializers import (
     StockItemSerializer,
@@ -39,13 +43,14 @@ from .serializers import (
     WarehouseSerializer,
 )
 from .services import (
-    consume_expiring_stock_batches,
+    allocate_adjustment,
     create_stock_movement,
     lock_stock_item,
     save_stock_item_quantities,
     stock_count_needs_review,
     stock_snapshot,
 )
+from .valuation_service import post_movement_valuations
 from .stock_count_serializers import (
     StockCountDetailSerializer,
     StockCountLineInputSerializer,
@@ -54,6 +59,18 @@ from .stock_count_serializers import (
     StockCountSerializer,
     StockCountStartSerializer,
 )
+
+
+def _selling_warehouse_id(request):
+    """Where the till making this request actually keeps its stock.
+
+    Imported inside the call for the same reason ``tracked_views`` does it:
+    ``apps.sales`` imports this app, and a module-level import the other way
+    would close the circle.
+    """
+    from apps.sales.registers import selling_warehouse_id
+
+    return selling_warehouse_id(request)
 
 
 class StockItemFilter(django_filters.FilterSet):
@@ -144,9 +161,14 @@ class StockMovementViewSet(
         quantity = serializer.validated_data["quantity"]
         movement_type = serializer.validated_data["movement_type"]
 
+        payload = self.request.data or {}
         with transaction.atomic():
-            stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-                variant=variant,
+            # ``get_or_create(variant=...)`` was a ``MultipleObjectsReturned``
+            # waiting for the second warehouse: a variant has one stock row per
+            # place, and this endpoint asked for "the" one. The register's own
+            # location is the answer, the same one every other write uses.
+            stock_item = lock_stock_item(
+                variant=variant, warehouse=_selling_warehouse_id(self.request)
             )
             before = {
                 "on_hand": stock_item.quantity_on_hand,
@@ -162,17 +184,25 @@ class StockMovementViewSet(
                     "updated_at",
                 ],
             )
-            if movement_type in (
-                StockMovement.Type.DECREASE,
-                StockMovement.Type.DAMAGED,
-            ):
-                # Returns the allocation plan, which this path does not yet
-                # carry onto its movement — see the note on the function.
-                consume_expiring_stock_batches(
-                    variant=variant,
-                    quantity=quantity,
-                    warehouse=stock_item.warehouse_id,
-                )
+            # Which identified articles this adjustment moved. A shelf that
+            # changes by hand is still a shelf, so a tracked product is named
+            # here or the adjustment is refused — and the plan travels onto the
+            # movement, because applying it without carrying it is the same
+            # drift by a longer road.
+            plan = allocate_adjustment(
+                variant=variant,
+                warehouse=stock_item.warehouse_id,
+                delta=after["on_hand"] - before["on_hand"],
+                units=payload.get("units"),
+                batches=payload.get("batches"),
+                status=(
+                    StockUnit.Status.DAMAGED
+                    if movement_type == StockMovement.Type.DAMAGED
+                    else StockUnit.Status.WRITTEN_OFF
+                ),
+                placeholder_key=f"MV-{variant.pk}",
+                what="هذه التسوية",
+            )
             movement = serializer.save(
                 stock_item=stock_item,
                 variant=variant,
@@ -183,6 +213,16 @@ class StockMovementViewSet(
                 committed_after=after["committed"],
                 expected_before=before["expected"],
                 expected_after=after["expected"],
+            )
+            # A manual adjustment never reached the ledger at all: the shelf
+            # moved, the bin did not, and the shop's stock value quietly
+            # stopped matching its stock. It is a voucher like any other.
+            movement.tracked_plan = plan
+            post_movement_valuations(
+                [movement],
+                voucher_type=StockLedgerEntry.VoucherType.ADJUSTMENT,
+                voucher_id=movement.pk,
+                warehouse=stock_item.warehouse_id,
             )
             record_domain_event(
                 name="inventory.manual_movement.created",
@@ -276,6 +316,8 @@ class StockCountViewSet(
         "reconciliation": ("inventory.view_stockcount",),
         "start": ("inventory.add_stockcount",),
         "count": ("inventory.add_stockcount", "inventory.change_stockcount"),
+        "scan": ("inventory.add_stockcount", "inventory.change_stockcount"),
+        "scan_reconciliation": ("inventory.view_stockcount",),
         "cancel": ("inventory.change_stockcount",),
         "apply": ("inventory.apply_stockcount",),
     }
@@ -426,6 +468,7 @@ class StockCountViewSet(
         variant = input_serializer.validated_data["variant"]
         counted_quantity = input_serializer.validated_data["counted_quantity"]
         mode = input_serializer.validated_data["mode"]
+        batch = input_serializer.validated_data.get("batch")
 
         stock_count = self.get_object()
         if stock_count.status != StockCount.Status.IN_PROGRESS:
@@ -439,18 +482,52 @@ class StockCountViewSet(
                 {"variant": "This product is not stock-tracked."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if stock_count_tracking.counts_by_scan(variant):
+            # Counting a *number* of serialized articles is meaningless: two
+            # handsets of one model are not interchangeable, and the count that
+            # matters is which ones are on the shelf.
+            return Response(
+                {
+                    "variant": (
+                        "هذا الصنف مسلسل — امسح معرّف كل وحدة موجودة "
+                        "بدل إدخال كمية."
+                    ),
+                    "tracking_mode": variant.product.tracking_mode,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if batch is not None and batch.variant_id != variant.pk:
+            return Response(
+                {"batch": "هذه الدفعة ليست من هذا الصنف."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if batch is None and stock_count_tracking.counts_by_lot(variant):
+            return Response(
+                {
+                    "batch": (
+                        "هذا الصنف مُدار بالدفعات — اختر الدفعة التي تعدّها."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         shop_settings = ShopSettings.load()
         with transaction.atomic():
             stock_item = lock_stock_item(
                 variant=variant, warehouse=stock_count.warehouse_id
             )
-            expected = stock_item.quantity_on_hand
             existing = (
                 StockCountLine.objects.select_for_update()
-                .filter(stock_count=stock_count, variant=variant)
+                .filter(stock_count=stock_count, variant=variant, batch=batch)
                 .first()
             )
+            if batch is not None:
+                line_stub = StockCountLine(batch=batch)
+                expected = stock_count_tracking.lot_line_expected(
+                    stock_count, line_stub
+                )
+            else:
+                expected = stock_item.quantity_on_hand
             if existing is not None and mode == "add":
                 new_counted = existing.counted_quantity + counted_quantity
             else:
@@ -464,6 +541,7 @@ class StockCountViewSet(
             line, _ = StockCountLine.objects.update_or_create(
                 stock_count=stock_count,
                 variant=variant,
+                batch=batch,
                 defaults={
                     "counted_quantity": new_counted,
                     "expected_quantity": expected,
@@ -477,6 +555,119 @@ class StockCountViewSet(
                 line,
                 context=self.get_serializer_context(),
             ).data
+        )
+
+    @action(detail=True, methods=["post"])
+    def scan(self, request, pk=None):
+        """One article, read off the shelf (§6.6).
+
+        For a serialized variant this replaces ``count`` entirely: nobody types
+        a number, because "4" is not an answer to *which four*. The response is
+        deliberately thin — what was scanned, and what it is — and says nothing
+        about whether it was expected. Telling a counter mid-count that one is a
+        surprise turns a blind count into a search for the number the system
+        wanted.
+        """
+        stock_count = self.get_object()
+        if stock_count.status != StockCount.Status.IN_PROGRESS:
+            return Response(
+                {"detail": "Stock count is not in progress."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        payload = request.data or {}
+        code = payload.get("code", "")
+        variant = None
+        if payload.get("variant"):
+            variant = ProductVariant.objects.filter(
+                pk=payload["variant"]
+            ).first()
+        with transaction.atomic():
+            scan, created = stock_count_tracking.record_scan(
+                stock_count,
+                code=code,
+                variant=variant,
+                actor=stock_count_owner(request),
+            )
+        return Response(
+            {
+                "id": scan.pk,
+                "code": scan.code,
+                "created": created,
+                "unit": scan.unit_id,
+                "variant": scan.variant_id,
+                "variant_name": (
+                    scan.variant.full_name if scan.variant_id else ""
+                ),
+                "known": scan.unit_id is not None,
+                "line": (
+                    StockCountLineSerializer(
+                        scan.line, context=self.get_serializer_context()
+                    ).data
+                    if scan.line_id
+                    else None
+                ),
+            },
+            status=(
+                status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            ),
+        )
+
+    @action(detail=True, methods=["get"], url_path="scan-reconciliation")
+    def scan_reconciliation(self, request, pk=None):
+        """The four findings a scanned count produces, by name (§6.6)."""
+        stock_count = self.get_object()
+        found = stock_count_tracking.reconcile_scans(stock_count)
+        return Response(
+            {
+                "expected": found["expected"],
+                "scanned": found["scanned"],
+                "missing": [
+                    {
+                        "id": unit.pk,
+                        "code": unit.code,
+                        "variant": unit.variant_id,
+                        "variant_name": unit.variant.full_name,
+                        "value": str(unit.stock_value),
+                    }
+                    for unit in found["missing"]
+                ],
+                "unknown": [
+                    {"id": scan.pk, "code": scan.code} for scan in found["unknown"]
+                ],
+                "relocated": [
+                    {
+                        "id": scan.pk,
+                        "code": scan.code,
+                        "unit": scan.unit_id,
+                        "warehouse": scan.unit.warehouse_id,
+                        "warehouse_name": scan.unit.warehouse.name,
+                    }
+                    for scan in found["relocated"]
+                ],
+                "resurrected": [
+                    {
+                        "id": scan.pk,
+                        "code": scan.code,
+                        "unit": scan.unit_id,
+                        "status": scan.unit.status,
+                    }
+                    for scan in found["resurrected"]
+                ],
+                "lots": [
+                    {
+                        "line": row["line"].pk,
+                        "batch": row["line"].batch_id,
+                        "batch_code": row["line"].batch.code,
+                        "variant": row["line"].variant_id,
+                        "variant_name": row["line"].variant.full_name,
+                        "remaining": str(row["remaining"]),
+                        "counted": str(row["counted"]),
+                        "variance": str(row["variance"]),
+                        "new_here": row["new_here"],
+                    }
+                    for row in stock_count_tracking.reconcile_lots(stock_count)
+                ],
+            }
         )
 
     @action(detail=True, methods=["get"])
@@ -566,24 +757,86 @@ class StockCountViewSet(
                     status=status.HTTP_409_CONFLICT,
                 )
 
-            lines = stock_count.lines.select_for_update().select_related(
+            # Two things that are not variances, settled before anything is:
+            # an article standing in this room whose row said another branch,
+            # and one the books had written off. Both are records being put
+            # right rather than stock being created or destroyed, and doing
+            # them first is what stops the same handset counting as *missing
+            # there* and *found here*.
+            stock_count_tracking.resurrect_and_relocate(
+                stock_count, actor=request.user
+            )
+
+            lines = stock_count.lines.select_for_update(
+                # ``of="self"`` because the lot is nullable and Postgres
+                # refuses ``FOR UPDATE`` on the nullable side of an outer join
+                # (``postgres-for-update-nullable-join``). The rows being
+                # locked are the count's own lines anyway.
+                of=("self",)
+            ).select_related(
                 "variant",
                 "variant__product",
+                "batch",
             )
             for line in lines:
                 stock_item = lock_stock_item(
                     variant=line.variant, warehouse=stock_count.warehouse_id
                 )
-                current_on_hand = stock_item.quantity_on_hand
+                if stock_count_tracking.counts_by_scan(line.variant):
+                    # The shelf is the scans, not a number somebody typed, and
+                    # both sides are written — **never netted**. One handset
+                    # missing and one unrecognised article found is a shelf
+                    # that counts the same either way, and a net of zero would
+                    # write nothing at all: the missing one still in stock, the
+                    # found one still not existing.
+                    line.expected_quantity = Decimal(
+                        stock_count_tracking.expected_units(
+                            stock_count, variant=line.variant
+                        ).count()
+                    )
+                    line.on_hand_at_apply = stock_item.quantity_on_hand
+                    line.stale_at_apply = (
+                        stock_item.quantity_on_hand != line.expected_quantity
+                    )
+                    if line.stale_at_apply:
+                        stale_lines += 1
+                    movement = stock_count_tracking.apply_scanned_line(
+                        stock_count, line, actor=request.user
+                    )
+                    line.movement = movement
+                    line.applied = True
+                    line.save(
+                        update_fields=[
+                            "movement",
+                            "applied",
+                            "stale_at_apply",
+                            "on_hand_at_apply",
+                            "expected_quantity",
+                            "updated_at",
+                        ]
+                    )
+                    if movement is not None:
+                        applied_movements += 1
+                    continue
+                if line.batch_id:
+                    # Per balance (§6.6): the lot's stock elsewhere is neither
+                    # shown nor touched.
+                    line.expected_quantity = stock_count_tracking.lot_line_expected(
+                        stock_count, line
+                    )
+                    current_on_hand = line.expected_quantity
+                    delta = line.counted_quantity - line.expected_quantity
+                else:
+                    current_on_hand = stock_item.quantity_on_hand
+                    # Apply the DISCREPANCY the count found, not "set to
+                    # counted": this composes correctly with any sale that
+                    # landed mid-count.
+                    delta = line.counted_quantity - line.expected_quantity
                 line.on_hand_at_apply = current_on_hand
                 # Flag (never freeze) lines whose stock moved since counting.
                 line.stale_at_apply = current_on_hand != line.expected_quantity
                 if line.stale_at_apply:
                     stale_lines += 1
-
-                # Apply the DISCREPANCY the count found, not "set to counted":
-                # this composes correctly with any sale that landed mid-count.
-                delta = line.counted_quantity - line.expected_quantity
                 if delta == 0:
                     line.applied = True
                     line.movement = None
@@ -593,6 +846,7 @@ class StockCountViewSet(
                             "movement",
                             "stale_at_apply",
                             "on_hand_at_apply",
+                            "expected_quantity",
                             "updated_at",
                         ]
                     )
@@ -614,12 +868,14 @@ class StockCountViewSet(
                         )
                 stock_item.quantity_on_hand = stock_item.quantity_on_hand + delta
                 save_stock_item_quantities(stock_item)
-                if movement_type == StockMovement.Type.DECREASE:
-                    consume_expiring_stock_batches(
-                        variant=line.variant,
-                        quantity=abs(delta),
-                        warehouse=stock_item.warehouse_id,
-                    )
+                plan = allocate_adjustment(
+                    variant=line.variant,
+                    warehouse=stock_item.warehouse_id,
+                    delta=delta,
+                    batches=[line.batch_id] if line.batch_id else None,
+                    placeholder_key=f"SC-{stock_count.pk}-{line.pk}",
+                    what="هذا الجرد",
+                )
                 movement = create_stock_movement(
                     stock_item=stock_item,
                     movement_type=movement_type,
@@ -630,6 +886,7 @@ class StockCountViewSet(
                     variant=line.variant,
                     voucher_type=StockLedgerEntry.VoucherType.STOCK_COUNT,
                     voucher_id=stock_count.pk,
+                    tracked_plan=plan,
                 )
                 line.movement = movement
                 line.applied = True
@@ -639,6 +896,7 @@ class StockCountViewSet(
                         "applied",
                         "stale_at_apply",
                         "on_hand_at_apply",
+                        "expected_quantity",
                         "updated_at",
                     ]
                 )
@@ -769,8 +1027,12 @@ class StockTransferViewSet(
     # request goes through, and shadowing it breaks the whole viewset silently.
     @action(detail=True, methods=["post"], url_path="dispatch")
     def send_off(self, request, pk=None):
+        # ``picks`` is ``{line_id: {"unit_ids"|"unit_codes"|"batch_ids": [...]}}``
+        # — which handsets, and out of which lots, this van is carrying.
         transfer = transfer_services.dispatch_transfer(
-            self.get_object(), request=request
+            self.get_object(),
+            request=request,
+            picks=(request.data or {}).get("picks"),
         )
         return Response(self.get_serializer(transfer).data)
 
@@ -794,6 +1056,7 @@ class StockTransferViewSet(
             lines=rows,
             request=request,
             note=request.data.get("note", ""),
+            picks=(request.data or {}).get("picks"),
         )
         transfer.refresh_from_db()
         return Response(self.get_serializer(transfer).data)

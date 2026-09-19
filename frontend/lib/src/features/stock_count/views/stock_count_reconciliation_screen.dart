@@ -13,6 +13,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/units.dart';
 import '../view_models/stock_count_reconciliation_view_model.dart';
+import 'stock_count_findings.dart';
 import 'stock_count_ui.dart';
 
 /// The finish screen: only the lines that differ, then a manager-gated Apply.
@@ -124,15 +125,7 @@ class _StockCountReconciliationScreenState
               onLoadMore: () async {},
               padding: spacing.pagePadding,
               separatorBuilder: (_, _) => SizedBox(height: spacing.sm),
-              header: lines.isEmpty
-                  ? null
-                  : Padding(
-                      padding: EdgeInsetsDirectional.only(bottom: spacing.lg),
-                      child: _SummaryCard(
-                        session: widget.session,
-                        lines: lines,
-                      ),
-                    ),
+              header: _header(context, lines, spacing),
               emptyBuilder: (context) => _MatchedState(),
               errorBuilder: (context) => PointyErrorState(
                 title: l10n.stockCountReconciliationLoadError,
@@ -151,6 +144,36 @@ class _StockCountReconciliationScreenState
           bottomNavigationBar: _buildBottom(context, l10n, lines.length),
         );
       },
+    );
+  }
+
+  /// The variance summary, and — for a count that scanned anything — the
+  /// four named lists a scanned count produces. Both, because a session can
+  /// hold anonymous lines and identified ones at once: the same pharmacy
+  /// counts serialised imports and local stock off one shelf.
+  Widget? _header(
+    BuildContext context,
+    List<StockCountLine> lines,
+    AdaptiveSpacing spacing,
+  ) {
+    final findings = _viewModel.findings;
+    final showFindings = _viewModel.hasFindings && findings != null;
+    if (lines.isEmpty && !showFindings) {
+      return null;
+    }
+    return Padding(
+      padding: EdgeInsetsDirectional.only(bottom: spacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (lines.isNotEmpty)
+            _SummaryCard(session: widget.session, lines: lines),
+          if (showFindings) ...[
+            if (lines.isNotEmpty) SizedBox(height: spacing.lg),
+            StockCountFindingsCard(findings: findings),
+          ],
+        ],
+      ),
     );
   }
 

@@ -46,6 +46,7 @@ import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
 import '../../inventory/views/transfers_screen.dart';
 import '../../inventory/view_models/transfers_view_model.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import 'warehouses_page.dart';
 import 'messaging_settings_page.dart';
@@ -65,6 +66,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.warehousesViewModel,
     required this.transfersViewModel,
     required this.warehouseRepository,
+    this.trackedStockRepository,
     required this.priceCheckersViewModel,
     required this.cameraSettingsViewModel,
     required this.scalesViewModel,
@@ -87,6 +89,9 @@ class ShopSettingsScreen extends StatelessWidget {
   final WarehousesViewModel warehousesViewModel;
   final TransfersViewModel transfersViewModel;
   final WarehouseRepository warehouseRepository;
+
+  /// Only for picking which handsets a transfer is carrying.
+  final TrackedStockRepository? trackedStockRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
   final ScalesViewModel scalesViewModel;
@@ -140,6 +145,7 @@ class ShopSettingsScreen extends StatelessWidget {
               warehousesViewModel: warehousesViewModel,
               transfersViewModel: transfersViewModel,
               warehouseRepository: warehouseRepository,
+              trackedStockRepository: trackedStockRepository,
               priceCheckersViewModel: priceCheckersViewModel,
               cameraSettingsViewModel: cameraSettingsViewModel,
               scalesViewModel: scalesViewModel,
@@ -175,6 +181,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.warehousesViewModel,
     required this.transfersViewModel,
     required this.warehouseRepository,
+    this.trackedStockRepository,
     required this.priceCheckersViewModel,
     required this.cameraSettingsViewModel,
     required this.scalesViewModel,
@@ -202,6 +209,9 @@ class _ShopSettingsBody extends StatelessWidget {
   final WarehousesViewModel warehousesViewModel;
   final TransfersViewModel transfersViewModel;
   final WarehouseRepository warehouseRepository;
+
+  /// Only for picking which handsets a transfer is carrying.
+  final TrackedStockRepository? trackedStockRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
   final ScalesViewModel scalesViewModel;
@@ -254,6 +264,7 @@ class _ShopSettingsBody extends StatelessWidget {
       warehousesViewModel: warehousesViewModel,
       transfersViewModel: transfersViewModel,
       warehouseRepository: warehouseRepository,
+      trackedStockRepository: trackedStockRepository,
       priceCheckersViewModel: priceCheckersViewModel,
       cameraSettingsViewModel: cameraSettingsViewModel,
       scalesViewModel: scalesViewModel,
@@ -286,6 +297,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.warehousesViewModel,
     required this.transfersViewModel,
     required this.warehouseRepository,
+    this.trackedStockRepository,
     required this.priceCheckersViewModel,
     required this.cameraSettingsViewModel,
     required this.scalesViewModel,
@@ -314,6 +326,9 @@ class _ShopSettingsForm extends StatefulWidget {
   final WarehousesViewModel warehousesViewModel;
   final TransfersViewModel transfersViewModel;
   final WarehouseRepository warehouseRepository;
+
+  /// Only for picking which handsets a transfer is carrying.
+  final TrackedStockRepository? trackedStockRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
   final ScalesViewModel scalesViewModel;
@@ -1639,6 +1654,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         builder: (routeContext) => TransfersScreen(
           viewModel: widget.transfersViewModel,
           repository: widget.warehouseRepository,
+          trackedStockRepository: widget.trackedStockRepository,
         ),
       ),
     );

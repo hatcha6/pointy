@@ -263,3 +263,228 @@ DateTime? _dateOrNull(Object? value) {
   }
   return DateTime.tryParse(text)?.toLocal();
 }
+
+/// Everything a recall needs about one lot, in one answer (§6.8.1).
+///
+/// Answered against **one lot row**, whatever branches its goods passed
+/// through — which is the whole argument for the identity/balance split. A
+/// recall under a warehouse-scoped batch table had to find the pieces by
+/// string-matching a code.
+class BatchRecallReport {
+  const BatchRecallReport({
+    required this.batchId,
+    required this.batchCode,
+    required this.productName,
+    required this.isLocked,
+    required this.status,
+    required this.inward,
+    required this.remaining,
+    required this.outward,
+    required this.subLots,
+    required this.customersReachable,
+    required this.customersUnreachable,
+    required this.walkInSales,
+    this.expiryDate,
+  });
+
+  final int batchId;
+  final String batchCode;
+  final String productName;
+  final bool isLocked;
+  final String status;
+  final DateTime? expiryDate;
+
+  /// Supplier, delivery, order, quantity.
+  final List<RecallInwardRow> inward;
+
+  /// Every warehouse still holding any of it, awaiting return or disposal.
+  final List<RecallRemainingRow> remaining;
+
+  /// Who walked out with the rest. Under `serial_batch` this names the exact
+  /// pack, which is what lets a pharmacist tell a customer whether *their*
+  /// box is the recalled one.
+  final List<RecallOutwardRow> outward;
+
+  /// Sub-lots created by repacking, swept by the same report.
+  final List<({int id, String code})> subLots;
+
+  final int customersReachable;
+  final int customersUnreachable;
+
+  /// Sales with no customer on the invoice. Counted rather than quietly
+  /// dropped: that is the number that tells a pharmacist to put a sign up.
+  final int walkInSales;
+
+  factory BatchRecallReport.fromJson(Map<String, Object?> json) {
+    List<T> rows<T>(String key, T Function(Map<String, Object?>) build) {
+      final raw = json[key];
+      if (raw is! List) {
+        return <T>[];
+      }
+      return raw.whereType<Map<String, Object?>>().map(build).toList();
+    }
+
+    return BatchRecallReport(
+      batchId: (json['batch'] as num?)?.toInt() ?? 0,
+      batchCode: json['batch_code']?.toString() ?? '',
+      productName: json['product_name']?.toString() ?? '',
+      isLocked: json['is_locked'] == true,
+      status: json['status']?.toString() ?? '',
+      expiryDate: json['expiry_date'] == null
+          ? null
+          : DateTime.tryParse('${json['expiry_date']}'),
+      inward: rows('inward', RecallInwardRow.fromJson),
+      remaining: rows('remaining', RecallRemainingRow.fromJson),
+      outward: rows('outward', RecallOutwardRow.fromJson),
+      subLots: rows(
+        'sub_lots',
+        (row) => (
+          id: (row['id'] as num?)?.toInt() ?? 0,
+          code: row['code']?.toString() ?? '',
+        ),
+      ),
+      customersReachable: (json['customers_reachable'] as num?)?.toInt() ?? 0,
+      customersUnreachable:
+          (json['customers_unreachable'] as num?)?.toInt() ?? 0,
+      walkInSales: (json['walk_in_sales'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class RecallInwardRow {
+  const RecallInwardRow({
+    required this.batchCode,
+    required this.supplierName,
+    required this.quantity,
+    this.receivedAt,
+  });
+
+  final String batchCode;
+  final String supplierName;
+  final double quantity;
+  final DateTime? receivedAt;
+
+  factory RecallInwardRow.fromJson(Map<String, Object?> json) {
+    return RecallInwardRow(
+      batchCode: json['batch_code']?.toString() ?? '',
+      supplierName: json['supplier_name']?.toString() ?? '',
+      quantity: double.tryParse('${json['quantity']}') ?? 0,
+      receivedAt: DateTime.tryParse('${json['received_at']}'),
+    );
+  }
+}
+
+class RecallRemainingRow {
+  const RecallRemainingRow({
+    required this.batchCode,
+    required this.warehouseName,
+    required this.remaining,
+    required this.isSellable,
+  });
+
+  final String batchCode;
+  final String warehouseName;
+  final double remaining;
+  final bool isSellable;
+
+  factory RecallRemainingRow.fromJson(Map<String, Object?> json) {
+    return RecallRemainingRow(
+      batchCode: json['batch_code']?.toString() ?? '',
+      warehouseName: json['warehouse_name']?.toString() ?? '',
+      remaining: double.tryParse('${json['remaining']}') ?? 0,
+      isSellable: json['is_sellable'] == true,
+    );
+  }
+}
+
+class RecallOutwardRow {
+  const RecallOutwardRow({
+    required this.invoiceNumber,
+    required this.quantity,
+    this.soldAt,
+    this.unitCode = '',
+    this.customerName = '',
+    this.customerPhone = '',
+  });
+
+  final String invoiceNumber;
+  final double quantity;
+  final DateTime? soldAt;
+  final String unitCode;
+  final String customerName;
+  final String customerPhone;
+
+  factory RecallOutwardRow.fromJson(Map<String, Object?> json) {
+    return RecallOutwardRow(
+      invoiceNumber: json['invoice_number']?.toString() ?? '',
+      quantity: double.tryParse('${json['quantity']}') ?? 0,
+      soldAt: DateTime.tryParse('${json['sold_at']}'),
+      unitCode: json['unit_code']?.toString() ?? '',
+      customerName: json['customer_name']?.toString() ?? '',
+      customerPhone: json['customer_phone']?.toString() ?? '',
+    );
+  }
+}
+
+/// What the recall broadcast did. Deduplicated per customer per recall: a
+/// pharmacist who taps twice must not frighten the same person twice.
+class RecallNotifyResult {
+  const RecallNotifyResult({
+    required this.queued,
+    required this.unreachable,
+    required this.walkInSales,
+  });
+
+  final int queued;
+  final int unreachable;
+  final int walkInSales;
+
+  factory RecallNotifyResult.fromJson(Map<String, Object?> json) {
+    return RecallNotifyResult(
+      queued: (json['queued'] as num?)?.toInt() ?? 0,
+      unreachable: (json['unreachable'] as num?)?.toInt() ?? 0,
+      walkInSales: (json['walk_in_sales'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// What to cut, and what it saves. Advice, never an action — nothing here
+/// changes a price.
+class ExpiryMarkdownSuggestion {
+  const ExpiryMarkdownSuggestion({
+    required this.daysLeft,
+    required this.discountPct,
+    required this.currentPrice,
+    required this.suggestedPrice,
+    required this.quantity,
+    required this.writeOffAvoided,
+    required this.atCostFloor,
+  });
+
+  final int daysLeft;
+  final double discountPct;
+  final double currentPrice;
+  final double suggestedPrice;
+  final double quantity;
+
+  /// The write-off avoided, not the discount given: the shop is choosing
+  /// between *sell it at 6* and *bin it at 10*, and a report that showed the
+  /// discount as a loss would argue for doing nothing.
+  final double writeOffAvoided;
+
+  /// Whether the ladder's price was clamped up to the lot's own cost.
+  final bool atCostFloor;
+
+  factory ExpiryMarkdownSuggestion.fromJson(Map<String, Object?> json) {
+    double number(Object? value) => double.tryParse('$value') ?? 0;
+    return ExpiryMarkdownSuggestion(
+      daysLeft: (json['days_left'] as num?)?.toInt() ?? 0,
+      discountPct: number(json['discount_pct']),
+      currentPrice: number(json['current_price']),
+      suggestedPrice: number(json['suggested_price']),
+      quantity: number(json['quantity']),
+      writeOffAvoided: number(json['write_off_avoided']),
+      atCostFloor: json['at_cost_floor'] == true,
+    );
+  }
+}

@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.catalog.models import ProductCategory, ProductVariant
 from apps.catalog.serializers import ProductVariantSerializer
-from .models import StockCount, StockCountLine
+from .models import StockBatch, StockCount, StockCountLine
 
 
 class StockCountLineSerializer(serializers.ModelSerializer):
@@ -31,6 +31,7 @@ class StockCountLineSerializer(serializers.ModelSerializer):
             "id",
             "stock_count",
             "variant",
+            "batch",
             "counted_quantity",
             "expected_quantity",
             "variance",
@@ -158,5 +159,12 @@ class StockCountLineInputSerializer(serializers.Serializer):
         max_digits=12,
         decimal_places=3,
         min_value=0,
+    )
+    #: Which lot was counted, for a batch-tracked variant. §6.6: the counter is
+    #: standing in one room counting the packs of **one lot** on one shelf, and
+    #: a line that did not name the lot would be a variance against a total the
+    #: counter never looked at.
+    batch = serializers.PrimaryKeyRelatedField(
+        queryset=StockBatch.objects.all(), required=False, allow_null=True
     )
     mode = serializers.ChoiceField(choices=["add", "replace"], default="replace")

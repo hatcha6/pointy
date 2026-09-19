@@ -353,6 +353,10 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.lowStock => Icons.production_quantity_limits_outlined,
       BusinessAlertType.stockPositionUntrusted => Icons.rule_folder_outlined,
       BusinessAlertType.expiringStock => Icons.event_busy_outlined,
+      BusinessAlertType.missingIdentifiers => Icons.qr_code_scanner_outlined,
+      BusinessAlertType.openCustodyClaims =>
+        Icons.report_gmailerrorred_outlined,
+      BusinessAlertType.unclaimedPayouts => Icons.savings_outlined,
       BusinessAlertType.overduePurchases => Icons.event_busy_outlined,
       BusinessAlertType.printFailures => Icons.print_disabled_outlined,
       BusinessAlertType.stalePrintAgents => Icons.wifi_off_outlined,
@@ -399,6 +403,12 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationStockUntrustedTitle,
       BusinessAlertType.expiringStock =>
         l10n.smartNotificationExpiringStockTitle,
+      BusinessAlertType.missingIdentifiers =>
+        l10n.smartNotificationMissingIdentifiersTitle,
+      BusinessAlertType.openCustodyClaims =>
+        l10n.smartNotificationCustodyClaimsTitle,
+      BusinessAlertType.unclaimedPayouts =>
+        l10n.smartNotificationUnclaimedPayoutsTitle,
       BusinessAlertType.overduePurchases =>
         l10n.smartNotificationOverduePurchasesTitle,
       BusinessAlertType.printFailures =>
@@ -432,6 +442,18 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationStockUntrustedMessage(alert.count),
       BusinessAlertType.expiringStock =>
         l10n.smartNotificationExpiringStockMessage(alert.count, alert.days),
+      BusinessAlertType.missingIdentifiers =>
+        l10n.smartNotificationMissingIdentifiersMessage(alert.count),
+      BusinessAlertType.openCustodyClaims =>
+        l10n.smartNotificationCustodyClaimsMessage(
+          alert.count,
+          // A **count** and not a figure: an incident nobody has assessed
+          // carries a zero nobody chose, and a money total that folded it in
+          // would say the shop had accepted a liability it has not (§6.2.2).
+          _intPayload(alert, 'unassessed'),
+        ),
+      BusinessAlertType.unclaimedPayouts =>
+        l10n.smartNotificationUnclaimedPayoutsMessage(alert.count, alert.days),
       BusinessAlertType.overduePurchases =>
         l10n.smartNotificationOverduePurchasesMessage(
           alert.count,
@@ -496,6 +518,9 @@ class _NotificationAlertRow extends StatelessWidget {
         alert.primaryLabel.isEmpty || alert.occurredAt == null
             ? ''
             : _expiringStockDetail(l10n),
+      BusinessAlertType.missingIdentifiers ||
+      BusinessAlertType.openCustodyClaims ||
+      BusinessAlertType.unclaimedPayouts => '',
       BusinessAlertType.printFailures => alert.secondaryLabel,
       BusinessAlertType.suspectedCashierActivity => alert.detailLabel,
       BusinessAlertType.expiringDiscounts =>
@@ -537,4 +562,14 @@ class _NotificationAlertRow extends StatelessWidget {
       context,
     );
   }
+}
+
+/// One integer off an alert's payload, for the counts that are specific to a
+/// single alert type and do not deserve a column on every one of them.
+int _intPayload(BusinessAlert alert, String key) {
+  final value = alert.payload[key];
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse('$value') ?? 0;
 }

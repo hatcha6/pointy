@@ -239,6 +239,8 @@ class TreasuryObligationsSerializer(serializers.Serializer):
     consignor_claims_open = serializers.DecimalField(
         max_digits=14, decimal_places=2
     )
+    #: «N مطالبة قيد التقدير» — open incidents nobody has put a figure on.
+    consignor_claims_unassessed = serializers.IntegerField()
     custody = ConsignmentCustodySerializer()
 
 

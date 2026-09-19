@@ -410,6 +410,12 @@ def obligations(*, as_of=None):
         # single figure hiding two people is how a drawer comes up short.
         "consignor_receivable": consignment.consignor_receivable(as_of=bound),
         "consignor_claims_open": consignment.consignor_claims_open(bound),
+        # A count, not a number. An incident nobody has assessed yet is a
+        # liability the shop has not accepted, and folding a placeholder zero
+        # into a money figure would state that it had (§6.2.2).
+        "consignor_claims_unassessed": consignment.consignor_claims_unassessed(
+            bound
+        ),
         "custody": consignment.custody_exposure(bound),
     }
 

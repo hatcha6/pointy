@@ -1,4 +1,5 @@
 import asyncio
+import json
 import socket
 from datetime import timedelta
 from decimal import Decimal
@@ -804,3 +805,66 @@ class UnmatchedScanWorklistTests(TestCase):
         self.assertEqual(
             client.get(self.url).status_code, status.HTTP_403_FORBIDDEN
         )
+
+
+class KioskNeverPublishesCostTests(TestCase):
+    """§13. The kiosk is unauthenticated on the LAN, so there is no user to mask.
+
+    A permission check is the wrong mechanism here, and a filtered view of the
+    authenticated serializer is one careless ``fields = "__all__"`` away from
+    publishing what the shop paid for every phone on its shelf to anybody on
+    the wifi. So the unit block is written out by hand and its key set is
+    asserted here, by name.
+    """
+
+    def setUp(self):
+        from apps.catalog.models import Product
+        from apps.inventory.tracked_testing import receive, tracked_product
+
+        self.product = tracked_product(
+            name="آيفون", sku="KIOSK-1", mode=Product.TrackingMode.SERIAL,
+            unit_price="1800.00",
+        )
+        self.variant = self.product.default_variant
+        receive(
+            variant=self.variant,
+            quantity=1,
+            unit_cost="1200.00",
+            units=[{"code": "358240051111110", "list_price": Decimal("1750.00")}],
+        )
+
+    def test_a_scanned_imei_answers_for_that_handset(self):
+        from apps.price_checker.pricing import lookup_price
+
+        result = lookup_price("358240051111110")
+
+        self.assertTrue(result.found)
+        self.assertEqual(result.unit_code, "358240051111110")
+        # This handset's own asking price, not the model's: a used-goods shelf
+        # prices every article on its own (§5.7).
+        self.assertEqual(result.final_price, Decimal("1750.00"))
+
+    def test_the_payload_carries_no_cost_by_any_name(self):
+        from apps.price_checker.pricing import lookup_price
+        from apps.price_checker.serializers import (
+            KIOSK_UNIT_KEYS,
+            price_result_payload,
+        )
+
+        payload = price_result_payload(lookup_price("358240051111110"))
+
+        self.assertEqual(set(payload["unit"]), KIOSK_UNIT_KEYS)
+        flattened = json.dumps(payload, default=str)
+        for forbidden in ("incoming_rate", "refurb_cost", "1200", "cost"):
+            self.assertNotIn(forbidden, flattened)
+
+    def test_a_sold_handset_is_not_quoted_at_all(self):
+        """The customer reading it is standing in front of the shelf."""
+        from apps.inventory.models import StockUnit
+        from apps.price_checker.pricing import lookup_price
+
+        unit = StockUnit.objects.get(code="358240051111110")
+        unit.status = StockUnit.Status.SOLD
+        unit.save(update_fields=["status", "updated_at"])
+
+        self.assertFalse(lookup_price("358240051111110").found)

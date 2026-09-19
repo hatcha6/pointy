@@ -210,6 +210,19 @@ class RelayControlClient:
             return {"relay_token": self.config.access_token}
         return {"admin": True}
 
+    def get_fleet_status(self, *, timeout=None):
+        """Every installation, its version, and the floor they collectively set.
+
+        Admin-scoped: an on-prem backend holds only its own token and has no
+        business reading the fleet. This is for the operator deciding whether a
+        **contract** migration may ship — one that removes something the
+        previous release still writes — which is a fleet-wide question and
+        never a per-shop one (§15.1 R3, ``zero-downtime-updates``).
+        """
+        return self._request(
+            "GET", "/v1/fleet/status", admin=True, timeout=timeout
+        )
+
     def get_installation(self, installation_id, *, timeout=None):
         return self._request(
             "GET",
@@ -776,3 +789,15 @@ def connector_setup_token_hash(raw_token):
 
 def _connector_setup_seed_token():
     return str(getattr(settings, "POINTY_RELAY_CONNECTOR_SETUP_TOKEN", "")).strip()
+
+
+def fleet_status(*, client=None, timeout=None):
+    """The operator's view of every installation's version.
+
+    Its one caller is the contract-release gate
+    (``manage.py check_batch_split_contract``), and it raises rather than
+    returning a default on any failure: a gate that answers "probably fine"
+    when it could not reach the relay is not a gate.
+    """
+    client = client or RelayControlClient()
+    return client.get_fleet_status(timeout=timeout)

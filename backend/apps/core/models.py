@@ -121,6 +121,10 @@ class ShopSettings(TimeStampedModel):
         LIFO = "lifo", "Last in, first out (LIFO)"
 
     shop_name = models.CharField(max_length=120, default="نقطة البيع")
+    #: The number a customer calls back on. Printed on a safety recall alert
+    #: (§6.8.1), where a message telling somebody to stop using a medicine and
+    #: giving them nobody to ask is worse than no message.
+    shop_phone = models.CharField(max_length=32, blank=True)
     # The shop's vertical, chosen in the first-run setup wizard. Empty until
     # then; drives the preset defaults but every setting stays editable after.
     shop_type = models.CharField(max_length=32, blank=True, default="")

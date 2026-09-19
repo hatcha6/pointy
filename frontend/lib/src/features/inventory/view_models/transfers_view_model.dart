@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/stock_transfer.dart';
+import '../../../data/models/stock_unit.dart';
 import '../../../data/models/warehouse.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 
@@ -70,6 +71,10 @@ class TransfersViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// ``picks`` maps a line id to the identified stock it carries. A newly
+  /// created draft has no line ids yet, so a serialized transfer is created
+  /// first and sent from the list — which is also how a shop works: the van is
+  /// loaded after the paperwork.
   Future<String?> create(
     StockTransferDraft draft, {
     bool sendNow = false,
@@ -85,9 +90,15 @@ class TransfersViewModel extends ChangeNotifier {
     });
   }
 
-  Future<String?> send(StockTransfer transfer) {
+  Future<String?> send(
+    StockTransfer transfer, {
+    Map<int, TransferLinePick> picks = const {},
+  }) {
     return _mutate(() async {
-      final result = await _repository.dispatchTransfer(transfer.id);
+      final result = await _repository.dispatchTransfer(
+        transfer.id,
+        picks: picks,
+      );
       return result is Error<StockTransfer> ? _message(result) : null;
     });
   }
@@ -96,12 +107,14 @@ class TransfersViewModel extends ChangeNotifier {
     StockTransfer transfer,
     Map<int, double> lines, {
     String note = '',
+    Map<int, TransferLinePick> picks = const {},
   }) {
     return _mutate(() async {
       final result = await _repository.receiveTransfer(
         transfer.id,
         lines,
         note: note,
+        picks: picks,
       );
       return result is Error<StockTransfer> ? _message(result) : null;
     });

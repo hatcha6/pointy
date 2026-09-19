@@ -119,6 +119,7 @@ from apps.core.relay_views import (
 )
 from apps.inventory.consignment_views import (
     ConsignmentAgreementViewSet,
+    ConsignmentIncidentViewSet,
     ConsignmentPositionView,
     ConsignorPayoutViewSet,
     UnitAttributeDefinitionViewSet,
@@ -207,6 +208,11 @@ router.register(
 )
 router.register(
     "consignor-payouts", ConsignorPayoutViewSet, basename="consignor-payout"
+)
+router.register(
+    "consignment-incidents",
+    ConsignmentIncidentViewSet,
+    basename="consignment-incident",
 )
 router.register(
     "unit-attribute-definitions",

@@ -1370,12 +1370,95 @@ class PosApiService {
     return _trackedStock.setBatchQuarantine(batchId, locked: locked);
   }
 
-  Future<StockBatchPage> fetchExpiryWatchlist({int days = 30}) {
+  Future<(StockBatchPage, Map<int, ExpiryMarkdownSuggestion>)>
+  fetchExpiryWatchlist({int days = 30}) {
     return _trackedStock.fetchExpiryWatchlist(days: days);
   }
 
+  Future<BatchRecallReport> fetchRecallReport(int batchId) =>
+      _trackedStock.fetchRecallReport(batchId);
+
+  Future<RecallNotifyResult> notifyAffectedCustomers(int batchId) =>
+      _trackedStock.notifyAffectedCustomers(batchId);
+
+  Future<ConsignmentIncident> reportConsignmentIncident(
+    int unitId,
+    ConsignmentIncidentDraft draft,
+  ) => _trackedStock.reportIncident(unitId, draft);
+
+  Future<List<ConsignmentIncident>> fetchUnitIncidents(int unitId) =>
+      _trackedStock.fetchUnitIncidents(unitId);
+
+  Future<List<ConsignmentIncident>> fetchConsignmentIncidents({
+    bool openOnly = false,
+    int page = 1,
+  }) => _trackedStock.fetchIncidents(openOnly: openOnly, page: page);
+
+  Future<ConsignmentIncident> assessConsignmentIncident(
+    int incidentId, {
+    required String responsibility,
+    double? assessedValue,
+    String note = '',
+  }) => _trackedStock.assessIncident(
+    incidentId,
+    responsibility: responsibility,
+    assessedValue: assessedValue,
+    note: note,
+  );
+
+  Future<ConsignmentIncident> settleConsignmentIncident(
+    int incidentId, {
+    required String resolution,
+    String method = 'cash',
+    int? replacementUnitId,
+    String reference = '',
+    String notes = '',
+  }) => _trackedStock.settleIncident(
+    incidentId,
+    resolution: resolution,
+    method: method,
+    replacementUnitId: replacementUnitId,
+    reference: reference,
+    notes: notes,
+  );
+
+  Future<UnclaimedPayoutAging> fetchUnclaimedPayouts() =>
+      _trackedStock.fetchUnclaimedPayouts();
+
+  Future<List<OpeningIdentificationRow>> fetchOpeningWorklist() =>
+      _trackedStock.fetchOpeningWorklist();
+
+  Future<int> identifyOpeningStock({
+    required int variantId,
+    List<Map<String, Object?>> units = const [],
+    List<Map<String, Object?>> batches = const [],
+    bool captureLater = false,
+  }) => _trackedStock.identifyOpeningStock(
+    variantId: variantId,
+    units: units,
+    batches: batches,
+    captureLater: captureLater,
+  );
+
+  Future<List<StockUnitTimelineEntry>> fetchStockUnitTimeline(int unitId) =>
+      _trackedStock.fetchUnitTimeline(unitId);
+
   Future<List<StockCountLine>> fetchStockCountReconciliation(int countId) {
     return _stockCounts.fetchReconciliation(countId);
+  }
+
+  Future<StockCountScanResult> scanStockCount(
+    int countId,
+    String code, {
+    int? variantId,
+  }) {
+    return _stockCounts.scan(countId, code, variantId: variantId);
+  }
+
+  Future<StockCountScanReconciliation> fetchStockCountScanReconciliation(
+    int countId,
+  ) {
+    return _stockCounts.fetchScanReconciliation(countId);
   }
 
   Future<StockCount> applyStockCount(
@@ -2693,14 +2776,17 @@ class PosApiService {
   Future<StockTransfer> createTransfer(StockTransferDraft draft) =>
       _warehouses.createTransfer(draft);
 
-  Future<StockTransfer> dispatchTransfer(int id) =>
-      _warehouses.dispatchTransfer(id);
+  Future<StockTransfer> dispatchTransfer(
+    int id, {
+    Map<int, TransferLinePick> picks = const {},
+  }) => _warehouses.dispatchTransfer(id, picks: picks);
 
   Future<StockTransfer> receiveTransfer(
     int id,
     Map<int, double> lines, {
     String note = '',
-  }) => _warehouses.receiveTransfer(id, lines, note: note);
+    Map<int, TransferLinePick> picks = const {},
+  }) => _warehouses.receiveTransfer(id, lines, note: note, picks: picks);
 
   Future<StockTransfer> cancelTransfer(int id, String reason) =>
       _warehouses.cancelTransfer(id, reason);

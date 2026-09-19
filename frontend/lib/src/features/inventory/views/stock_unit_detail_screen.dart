@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/consignment.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -12,6 +13,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/tracked_stock_view_model.dart';
+import 'consignment_incident_sheet.dart';
 
 /// One article of stock, and what became of it.
 ///
@@ -39,6 +41,12 @@ class StockUnitDetailScreen extends StatefulWidget {
 class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
   late StockUnit _unit = widget.unit;
   List<StockAllocationEntry> _history = const [];
+
+  /// `allocations ∪ events` (§6.9). Loaded beside the allocations rather than
+  /// instead of them: an older backend answers 404 here and the screen still
+  /// renders the movements, which is the half that matters most.
+  List<StockUnitTimelineEntry> _timelineEntries = const [];
+  List<ConsignmentIncident> _incidents = const [];
   bool _isLoading = true;
 
   @override
@@ -50,11 +58,17 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
   Future<void> _reload() async {
     final history = await widget.viewModel.unitHistory(_unit.id);
     final fresh = await widget.viewModel.unitById(_unit.id);
+    final timeline = await widget.viewModel.unitTimeline(_unit.id);
+    final incidents = widget.unit.isConsignment
+        ? await widget.viewModel.unitIncidents(_unit.id)
+        : const <ConsignmentIncident>[];
     if (!mounted) {
       return;
     }
     setState(() {
       _history = history;
+      _timelineEntries = timeline;
+      _incidents = incidents;
       _unit = fresh ?? _unit;
       _isLoading = false;
     });
@@ -95,6 +109,8 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
           ],
           _actions(context, l10n),
           const SizedBox(height: 16),
+          _incidentsSection(context, l10n),
+          if (_incidents.isNotEmpty) const SizedBox(height: 16),
           _timeline(context, l10n),
         ],
       ),
@@ -249,8 +265,16 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
 
   Widget _actions(BuildContext context, AppLocalizations l10n) {
     final canReprice = widget.capabilities.canRepriceStockUnit;
-    final canWriteOff = widget.capabilities.canWriteOffStockUnit;
-    if (!canReprice && !canWriteOff) {
+    // §6.8: a consigned article is never written off through this button. Its
+    // own rate is zero, so the action would move no money and record no
+    // claim, and a shop that lost somebody else's camera would have written
+    // off a liability by filling in a reason box. The backend refuses it too;
+    // hiding it here is so nobody is offered the wrong door.
+    final canWriteOff =
+        widget.capabilities.canWriteOffStockUnit && !_unit.isConsignment;
+    final canReportIncident =
+        widget.capabilities.canManageConsignmentIncident && _unit.isConsignment;
+    if (!canReprice && !canWriteOff && !canReportIncident) {
       return const SizedBox.shrink();
     }
     return Wrap(
@@ -269,8 +293,67 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
             icon: const Icon(Icons.delete_outline),
             label: Text(l10n.stockUnitWriteOffAction),
           ),
+        if (canReportIncident)
+          OutlinedButton.icon(
+            onPressed: _reportIncident,
+            icon: const Icon(Icons.report_gmailerrorred_outlined),
+            label: Text(l10n.custodyIncidentReport),
+          ),
       ],
     );
+  }
+
+  /// Everything that has ever happened to this article in our care (§6.2.2).
+  Widget _incidentsSection(BuildContext context, AppLocalizations l10n) {
+    if (_incidents.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return PointyDetailSection(
+      title: l10n.custodyIncidentsTitle,
+      icon: Icons.report_gmailerrorred_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final incident in _incidents)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.description_outlined, size: 18),
+              title: Text(
+                '${incident.number} · '
+                '${consignmentIncidentKindLabel(l10n, incident.kind)}',
+              ),
+              subtitle: Text(
+                [
+                  consignmentResponsibilityLabel(l10n, incident.responsibility),
+                  consignmentResolutionLabel(l10n, incident.resolution),
+                  if (!incident.isAssessed && incident.isOpen)
+                    l10n.custodyIncidentUnassessed,
+                ].join(' · '),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _reportIncident() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final draft = await showConsignmentIncidentSheet(context);
+    if (draft == null || !mounted) {
+      return;
+    }
+    final error = await widget.viewModel.reportIncident(_unit.id, draft);
+    if (!mounted) {
+      return;
+    }
+    if (error != null) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    await _reload();
   }
 
   Widget _timeline(BuildContext context, AppLocalizations l10n) {
@@ -307,9 +390,40 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
                       ].join(' · '),
                     ),
                   ),
+                // The things that happened to it and moved no stock (§6.9):
+                // who dropped its price, who scanned it in a count, which
+                // incident it is part of.
+                for (final entry in _timelineEntries.where(
+                  (row) => !row.isAllocation,
+                ))
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.edit_note_outlined, size: 18),
+                    title: Text(_eventLabel(l10n, entry.kind)),
+                    subtitle: Text(
+                      [
+                        formatDateTime(entry.at),
+                        if (entry.actorName.isNotEmpty) entry.actorName,
+                        if (entry.note.isNotEmpty) entry.note,
+                      ].join(' · '),
+                    ),
+                  ),
               ],
             ),
     );
+  }
+
+  static String _eventLabel(AppLocalizations l10n, String kind) {
+    return switch (kind) {
+      'repriced' => l10n.unitTimelineEventRepriced,
+      'identified' => l10n.unitTimelineEventIdentified,
+      'written_off' => l10n.unitTimelineEventWrittenOff,
+      'incident' => l10n.unitTimelineEventIncident,
+      'counted' => l10n.unitTimelineEventCounted,
+      'relocated' => l10n.unitTimelineEventRelocated,
+      _ => kind,
+    };
   }
 
   Future<void> _reprice() async {

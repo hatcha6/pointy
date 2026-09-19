@@ -38,6 +38,10 @@ from .services import (
 ZERO = Decimal("0.00")
 
 
+def _money(value) -> Decimal:
+    return Decimal(value or 0).quantize(ZERO)
+
+
 def _actor(request):
     user = getattr(request, "user", None)
     return user if getattr(user, "is_authenticated", False) else None
@@ -286,9 +290,27 @@ def disburse_payout(
                 {"units": f"سبق صرف مستحقات «{unit.code}»."}
             )
 
-    amount = sum((figures.consignor_payout_due(unit) for unit in units), ZERO)
-    if amount <= ZERO:
+    # **Net of any advance on the same article** (§15.3). A watch whose owner
+    # already collected 8,000, came back and re-sold at a payout of 8,600
+    # settles for 600 — paying the gross would hand over the first 8,000 twice.
+    gross = {unit.pk: figures.consignor_payout_due(unit) for unit in units}
+    offsets = {
+        unit.pk: min(_money(unit.consignor_advance), gross[unit.pk])
+        for unit in units
+    }
+    amount = sum(
+        (gross[unit.pk] - offsets[unit.pk] for unit in units), ZERO
+    )
+    if amount < ZERO:
         raise serializers.ValidationError({"units": "لا يوجد مبلغ مستحق للصرف."})
+    if amount == ZERO:
+        # The advance covered it exactly, which under a fixed payout is the
+        # *ordinary* outcome of a reopened consignment re-selling. No money
+        # moves, so there is no voucher and no drawer movement — but the
+        # obligation is closed and that has to be recorded, which is what the
+        # §6.9 event table is for. Returning ``None`` is the honest answer to
+        # "which payout paid this": none did.
+        return _settle_against_advance(units, offsets, request=request)
 
     created_by = _actor(request)
     session = None
@@ -330,14 +352,64 @@ def disburse_payout(
     for unit in units:
         unit.consignor_paid_at = now
         unit.consignor_payout = payout
+        # Consumed by exactly what it offset, so a second sale of the same
+        # article starts from zero rather than being discounted again.
+        unit.consignor_advance = _money(unit.consignor_advance) - offsets[unit.pk]
     StockUnit.objects.bulk_update(
-        units, ["consignor_paid_at", "consignor_payout", "updated_at"]
+        units,
+        [
+            "consignor_paid_at",
+            "consignor_payout",
+            "consignor_advance",
+            "updated_at",
+        ],
     )
+    _record_advance_settlements(units, offsets, request=request, at=now)
     # No submit call: a payout has no draft state, so it is born submitted —
     # the same as a supplier payment and an expense, and for the same reason.
     # There is no moment at which money has half left the drawer.
     _notify_payout(units, payout, settings=settings)
     return payout
+
+
+def _settle_against_advance(units, offsets, *, request=None):
+    """Close an obligation the advance already paid. No money, still a record.
+
+    The alternative was a zero-value voucher, which burns a number in a
+    gapless series to say nothing happened, and reads on a consignor's
+    statement as if they had collected nothing when in fact they collected it
+    weeks earlier.
+    """
+    now = timezone.now()
+    for unit in units:
+        unit.consignor_paid_at = now
+        unit.consignor_advance = _money(unit.consignor_advance) - offsets[unit.pk]
+    StockUnit.objects.bulk_update(
+        units, ["consignor_paid_at", "consignor_advance", "updated_at"]
+    )
+    _record_advance_settlements(units, offsets, request=request, at=now)
+    return None
+
+
+def _record_advance_settlements(units, offsets, *, request, at):
+    from .stock_count_tracking import record_unit_event
+
+    actor = _actor(request)
+    for unit in units:
+        offset = offsets.get(unit.pk, ZERO)
+        if offset <= ZERO:
+            continue
+        record_unit_event(
+            unit,
+            kind="advance_settled",
+            actor=actor,
+            at=at,
+            from_value=str(offset),
+            to_value=str(_money(unit.consignor_advance)),
+            note="خُصمت من دفعة مقدّمة سابقة",
+            reference_type="consignor_payout",
+            reference_id=unit.consignor_payout_id,
+        )
 
 
 def _notify_payout(units, payout, *, settings):
@@ -454,11 +526,24 @@ def buy_in_returned_consignment(unit, *, request=None):
     which is exactly what happened: the shop owns a watch it paid ten thousand
     for. The consignment closes with it.
     """
-    payout = figures.consignor_payout_due(unit)
+    # What the consignor was *actually* paid, which after a reopen lives on
+    # the advance rather than on the cost column. Projecting it from today's
+    # terms instead would value the shop's own stock at a percentage of a
+    # price nobody has agreed to yet.
+    advance = _money(unit.consignor_advance)
+    payout = advance if advance > ZERO else figures.consignor_payout_due(unit)
     unit.is_consignment = False
     unit.incoming_rate = payout
+    # Keeping the goods settles the advance: there is nothing left to set
+    # against a future sale, because there will not be one.
+    unit.consignor_advance = ZERO
     unit.save(
-        update_fields=["is_consignment", "incoming_rate", "updated_at"]
+        update_fields=[
+            "is_consignment",
+            "incoming_rate",
+            "consignor_advance",
+            "updated_at",
+        ]
     )
     return unit
 
@@ -472,21 +557,57 @@ def reopen_consignment(unit, *, request=None):
     **Nothing was paid yet.** The sale is simply undone, so the payout stamped
     on the article at checkout describes a sale that no longer exists. It goes.
 
-    **The consignor has collected.** Then the payout is the *only* record of how
-    much the shop handed over for an article it no longer has sold, and that is
-    exactly the sum it is now owed back — so it stays on the row, and
-    ``consignment.consignor_receivable`` is what reads it. Zeroing it here is
-    what used to happen, and it left a shop ten thousand dinars down with no
-    screen, figure or report saying so.
+    **The consignor has collected.** Then the money the shop handed over is now
+    an **advance** against whatever this article fetches next, and it is
+    written down as one. What used to happen instead was an *inference*: the
+    old payout was left on ``incoming_rate``, the paid stamp was left standing,
+    and the system trusted that the next sale's payout would happen to equal
+    the last one's. Under a fixed payout it does. Under a commission at a
+    different second price it does not — and the difference vanished in both
+    directions at once, because the re-sale overwrote ``incoming_rate`` and the
+    stamp kept the unit out of the payables. Two obligations, gone at the
+    instant of one sale (§15.3).
+
+    So: the amount moves to ``consignor_advance``, the stamp is cleared so the
+    next sale opens a real payable, and ``incoming_rate`` — which is the
+    *cost* column — goes back to zero, where a consignment's cost belongs
+    until it sells again.
 
     Either way the article is worth nothing to the shop while it sits there:
     ``StockUnit.stock_value`` answers zero for a consignment whatever its rate,
     so the bin, the ledger and the return's own allocation are unaffected.
     """
-    if unit.consignor_payout_id is not None:
-        return unit
+    from .stock_count_tracking import record_unit_event
+
+    paid = _money(unit.incoming_rate)
     unit.incoming_rate = ZERO
-    unit.save(update_fields=["incoming_rate", "updated_at"])
+    if unit.consignor_payout_id is None:
+        unit.save(update_fields=["incoming_rate", "updated_at"])
+        return unit
+
+    unit.consignor_advance = _money(unit.consignor_advance) + paid
+    # The payout FK stays: it is how cancelling that disbursement still finds
+    # the article it paid for. The *stamp* is what gates the payables, and it
+    # is the stamp that is now untrue.
+    unit.consignor_paid_at = None
+    unit.save(
+        update_fields=[
+            "incoming_rate",
+            "consignor_advance",
+            "consignor_paid_at",
+            "updated_at",
+        ]
+    )
+    record_unit_event(
+        unit,
+        kind="advance_opened",
+        actor=_actor(request),
+        from_value=str(paid),
+        to_value=str(unit.consignor_advance),
+        note="إعادة فتح أمانة مدفوعة",
+        reference_type="consignor_payout",
+        reference_id=unit.consignor_payout_id,
+    )
     return unit
 
 

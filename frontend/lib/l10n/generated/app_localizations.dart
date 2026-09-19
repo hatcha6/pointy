@@ -23871,6 +23871,660 @@ abstract class AppLocalizations {
   /// **'الوحدة: {unit}'**
   String stockCountItemUnit(String unit);
 
+  /// No description provided for @stockCountScanShelfTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح كل وحدة موجودة'**
+  String get stockCountScanShelfTitle;
+
+  /// No description provided for @stockCountScanShelfBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الصنف مسلسل — عدّ الكمية بلا معنى. امسح معرّف كل قطعة على الرف.'**
+  String get stockCountScanShelfBody;
+
+  /// How many identifiers the counter has scanned for the current item.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسحتَ {count} وحدة'**
+  String stockCountScanShelfCount(int count);
+
+  /// No description provided for @stockCountScanIdentifierHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب المعرّف'**
+  String get stockCountScanIdentifierHint;
+
+  /// Shown when the same identifier is scanned twice in one count.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبق مسح «{code}» في هذا الجرد.'**
+  String stockCountScanDuplicate(String code);
+
+  /// No description provided for @stockCountScanUnknownTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف غير معروف'**
+  String get stockCountScanUnknownTitle;
+
+  /// Prompt asking the counter which product an unrecognised identifier belongs to.
+  ///
+  /// In ar, this message translates to:
+  /// **'«{code}» لا يخص أي وحدة في السجلات. اختر الصنف الذي يتبع له ليُضاف في الجرد.'**
+  String stockCountScanUnknownBody(String code);
+
+  /// No description provided for @stockCountScanUnknownPick.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الصنف'**
+  String get stockCountScanUnknownPick;
+
+  /// No description provided for @stockCountScanUnknownSkip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل'**
+  String get stockCountScanUnknownSkip;
+
+  /// No description provided for @stockCountFindingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما وجده الجرد'**
+  String get stockCountFindingsTitle;
+
+  /// No description provided for @stockCountFindingsMissing.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفقودة'**
+  String get stockCountFindingsMissing;
+
+  /// No description provided for @stockCountFindingsMissingHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقعة على الرف ولم تُمسح — ستُشطب عند التطبيق.'**
+  String get stockCountFindingsMissingHint;
+
+  /// No description provided for @stockCountFindingsUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معروفة'**
+  String get stockCountFindingsUnknown;
+
+  /// No description provided for @stockCountFindingsUnknownHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُسحت ولم تكن في السجلات — ستُضاف عند التطبيق.'**
+  String get stockCountFindingsUnknownHint;
+
+  /// No description provided for @stockCountFindingsRelocated.
+  ///
+  /// In ar, this message translates to:
+  /// **'في فرع آخر'**
+  String get stockCountFindingsRelocated;
+
+  /// No description provided for @stockCountFindingsRelocatedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'موجودة هنا والسجل يقول فرعًا آخر — تحويل لم يُسجَّل.'**
+  String get stockCountFindingsRelocatedHint;
+
+  /// No description provided for @stockCountFindingsResurrected.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشطوبة وظهرت'**
+  String get stockCountFindingsResurrected;
+
+  /// No description provided for @stockCountFindingsResurrectedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'كانت مشطوبة ووُجدت على الرف.'**
+  String get stockCountFindingsResurrectedHint;
+
+  /// No description provided for @stockCountFindingsLots.
+  ///
+  /// In ar, this message translates to:
+  /// **'فروقات الدفعات'**
+  String get stockCountFindingsLots;
+
+  /// No description provided for @stockCountFindingsLotNew.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة جديدة في هذا المستودع'**
+  String get stockCountFindingsLotNew;
+
+  /// Scanned versus expected article counts on the findings screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسحت {scanned} من {expected}'**
+  String stockCountFindingsScanned(int scanned, int expected);
+
+  /// No description provided for @stockCountLotPick.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدفعة'**
+  String get stockCountLotPick;
+
+  /// No description provided for @stockCountLotRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الصنف مُدار بالدفعات — اختر الدفعة التي تعدّها.'**
+  String get stockCountLotRequired;
+
+  /// No description provided for @transferPickUnitsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد الوحدات المُرسَلة'**
+  String get transferPickUnitsTitle;
+
+  /// No description provided for @transferPickUnitsBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'صنف مسلسل: امسح معرّف كل قطعة تُحمَّل فعليًا. تقرير النقص عند الاستلام يعتمد على هذا.'**
+  String get transferPickUnitsBody;
+
+  /// How many units the dispatcher has picked out of the line quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'{picked} من {needed}'**
+  String transferPickUnitsCount(int picked, int needed);
+
+  /// No description provided for @transferPickUnitsIncomplete.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل تحديد الوحدات قبل الإرسال.'**
+  String get transferPickUnitsIncomplete;
+
+  /// No description provided for @transferReceiveScanTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الوحدات الواصلة'**
+  String get transferReceiveScanTitle;
+
+  /// Shrinkage summary on a short transfer arrival.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسلت {sent} ووصلت {arrived}. الناقصة ما زالت على الطريق.'**
+  String transferReceiveShort(int sent, int arrived);
+
+  /// No description provided for @custodyKindDamaged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تلف'**
+  String get custodyKindDamaged;
+
+  /// No description provided for @custodyKindLost.
+  ///
+  /// In ar, this message translates to:
+  /// **'فقدان'**
+  String get custodyKindLost;
+
+  /// No description provided for @custodyKindStolen.
+  ///
+  /// In ar, this message translates to:
+  /// **'سرقة'**
+  String get custodyKindStolen;
+
+  /// No description provided for @custodyKindDestroyed.
+  ///
+  /// In ar, this message translates to:
+  /// **'إتلاف كامل'**
+  String get custodyKindDestroyed;
+
+  /// No description provided for @custodyKindDispute.
+  ///
+  /// In ar, this message translates to:
+  /// **'خلاف على الحالة'**
+  String get custodyKindDispute;
+
+  /// No description provided for @custodyResponsibilityShop.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحل'**
+  String get custodyResponsibilityShop;
+
+  /// No description provided for @custodyResponsibilityConsignor.
+  ///
+  /// In ar, this message translates to:
+  /// **'صاحب الأمانة'**
+  String get custodyResponsibilityConsignor;
+
+  /// No description provided for @custodyResponsibilityThirdParty.
+  ///
+  /// In ar, this message translates to:
+  /// **'طرف ثالث'**
+  String get custodyResponsibilityThirdParty;
+
+  /// No description provided for @custodyResponsibilityForceMajeure.
+  ///
+  /// In ar, this message translates to:
+  /// **'ظرف قاهر'**
+  String get custodyResponsibilityForceMajeure;
+
+  /// No description provided for @custodyResponsibilityUndetermined.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير محدد'**
+  String get custodyResponsibilityUndetermined;
+
+  /// No description provided for @custodyResolutionPending.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التسوية'**
+  String get custodyResolutionPending;
+
+  /// No description provided for @custodyResolutionPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُدّد نقداً'**
+  String get custodyResolutionPaid;
+
+  /// No description provided for @custodyResolutionReplaced.
+  ///
+  /// In ar, this message translates to:
+  /// **'استُبدل'**
+  String get custodyResolutionReplaced;
+
+  /// No description provided for @custodyResolutionWaived.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنازل صاحبها'**
+  String get custodyResolutionWaived;
+
+  /// No description provided for @custodyResolutionInsured.
+  ///
+  /// In ar, this message translates to:
+  /// **'غطّاه التأمين'**
+  String get custodyResolutionInsured;
+
+  /// No description provided for @custodyResolutionNoClaim.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا مطالبة'**
+  String get custodyResolutionNoClaim;
+
+  /// No description provided for @smartNotificationMissingIdentifiersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات بلا معرّف'**
+  String get smartNotificationMissingIdentifiersTitle;
+
+  /// How many identified-stock units are still owing an identifier.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} وحدة على الرف لم يُسجَّل معرّفها — لن تُباع حتى تُمسح.'**
+  String smartNotificationMissingIdentifiersMessage(int count);
+
+  /// No description provided for @smartNotificationCustodyClaimsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطالبات عهدة مفتوحة'**
+  String get smartNotificationCustodyClaimsTitle;
+
+  /// Open custody incidents, and how many nobody has priced.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} محضر مفتوح، منها {unassessed} قيد التقدير.'**
+  String smartNotificationCustodyClaimsMessage(int count, int unassessed);
+
+  /// No description provided for @smartNotificationUnclaimedPayoutsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحقات لم تُستلَم'**
+  String get smartNotificationUnclaimedPayoutsTitle;
+
+  /// Consignment payouts nobody has collected.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مستحق مضى عليه {days} يومًا ولم يُستلَم.'**
+  String smartNotificationUnclaimedPayoutsMessage(int count, int days);
+
+  /// Money already handed to this consignor for this same article.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبق صرف {amount}'**
+  String consignmentAdvanceChip(String amount);
+
+  /// The gross payout, shown under the net when an advance offsets it.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {amount}'**
+  String consignmentGrossPayout(String amount);
+
+  /// No description provided for @custodyIncidentsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حوادث العهدة'**
+  String get custodyIncidentsTitle;
+
+  /// No description provided for @custodyIncidentReport.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل حادث'**
+  String get custodyIncidentReport;
+
+  /// No description provided for @custodyIncidentKind.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الحادث'**
+  String get custodyIncidentKind;
+
+  /// No description provided for @custodyIncidentNarrative.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماذا حدث؟'**
+  String get custodyIncidentNarrative;
+
+  /// No description provided for @custodyIncidentNarrativeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب ما حدث بكلماتك — هذا هو المحضر.'**
+  String get custodyIncidentNarrativeHint;
+
+  /// No description provided for @custodyIncidentOccurredOn.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الحدوث (إن عُرف)'**
+  String get custodyIncidentOccurredOn;
+
+  /// No description provided for @custodyIncidentDiscovered.
+  ///
+  /// In ar, this message translates to:
+  /// **'وقت الاكتشاف'**
+  String get custodyIncidentDiscovered;
+
+  /// No description provided for @custodyIncidentResponsibility.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسؤولية'**
+  String get custodyIncidentResponsibility;
+
+  /// No description provided for @custodyIncidentUndeterminedNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'«غير محدد» جواب صحيح اليوم — المحضر يُكتب قبل أن يُقرَّر.'**
+  String get custodyIncidentUndeterminedNote;
+
+  /// No description provided for @custodyIncidentAssess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقدير المطالبة'**
+  String get custodyIncidentAssess;
+
+  /// No description provided for @custodyIncidentAssessedValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'القيمة المقدَّرة'**
+  String get custodyIncidentAssessedValue;
+
+  /// The liability matrix's own answer, shown beside the typed assessment.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب السند: {value}'**
+  String custodyIncidentSuggested(String value);
+
+  /// The liability cap from the signed agreement.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأقصى: {value}'**
+  String custodyIncidentCap(String value);
+
+  /// No description provided for @custodyIncidentSettle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوية'**
+  String get custodyIncidentSettle;
+
+  /// No description provided for @custodyIncidentResolution.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة التسوية'**
+  String get custodyIncidentResolution;
+
+  /// No description provided for @custodyIncidentReplacementUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة البديلة'**
+  String get custodyIncidentReplacementUnit;
+
+  /// No description provided for @custodyIncidentUnassessed.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التقدير'**
+  String get custodyIncidentUnassessed;
+
+  /// No description provided for @custodyIncidentOpenClaims.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطالبات مفتوحة'**
+  String get custodyIncidentOpenClaims;
+
+  /// Count of open incidents nobody has put a figure on.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مطالبة قيد التقدير'**
+  String custodyIncidentUnassessedCount(int count);
+
+  /// No description provided for @custodyIncidentWatchFootage.
+  ///
+  /// In ar, this message translates to:
+  /// **'شاهد لحظة الاكتشاف'**
+  String get custodyIncidentWatchFootage;
+
+  /// No description provided for @custodyWriteOffRefused.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الوحدة أمانة — سجّل محضر حادث عهدة بدل الشطب.'**
+  String get custodyWriteOffRefused;
+
+  /// No description provided for @unclaimedPayoutsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحقات لم تُستلَم'**
+  String get unclaimedPayoutsTitle;
+
+  /// No description provided for @unclaimedPayoutsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'المال في الدرج ليس مال المحل. لا يتحوّل إلى إيراد بمرور الوقت.'**
+  String get unclaimedPayoutsHint;
+
+  /// No description provided for @unclaimedPayoutsCurrent.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من ٣٠ يومًا'**
+  String get unclaimedPayoutsCurrent;
+
+  /// No description provided for @unclaimedPayouts30.
+  ///
+  /// In ar, this message translates to:
+  /// **'٣٠ يومًا فأكثر'**
+  String get unclaimedPayouts30;
+
+  /// No description provided for @unclaimedPayouts60.
+  ///
+  /// In ar, this message translates to:
+  /// **'٦٠ يومًا فأكثر'**
+  String get unclaimedPayouts60;
+
+  /// No description provided for @unclaimedPayouts90.
+  ///
+  /// In ar, this message translates to:
+  /// **'٩٠ يومًا فأكثر'**
+  String get unclaimedPayouts90;
+
+  /// No description provided for @recallTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبّع الدفعة'**
+  String get recallTitle;
+
+  /// No description provided for @recallQuarantine.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجر الدفعة'**
+  String get recallQuarantine;
+
+  /// No description provided for @recallRelease.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفع الحجر'**
+  String get recallRelease;
+
+  /// No description provided for @recallInward.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصدر التوريد'**
+  String get recallInward;
+
+  /// No description provided for @recallRemaining.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقّي في المستودعات'**
+  String get recallRemaining;
+
+  /// No description provided for @recallOutward.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات'**
+  String get recallOutward;
+
+  /// No description provided for @recallSubLots.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات فرعية'**
+  String get recallSubLots;
+
+  /// No description provided for @recallNotify.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال تنبيه للمشترين'**
+  String get recallNotify;
+
+  /// How many recall alerts were queued.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال {count} تنبيهًا.'**
+  String recallNotifyQueued(int count);
+
+  /// Buyers on file with no phone number.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مشترٍ بلا رقم هاتف'**
+  String recallUnreachable(int count);
+
+  /// Sales from this lot with no customer on the invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} عملية بيع بلا عميل مسجَّل'**
+  String recallWalkIns(int count);
+
+  /// No description provided for @expiryMarkdownTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقتراح تخفيض'**
+  String get expiryMarkdownTitle;
+
+  /// Suggested markdown for a lot close to expiry.
+  ///
+  /// In ar, this message translates to:
+  /// **'{percent}% — من {from} إلى {to}'**
+  String expiryMarkdownBody(int percent, String from, String to);
+
+  /// The write-off a markdown avoids.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتجنّب شطبًا بقيمة {value}'**
+  String expiryMarkdownSaves(String value);
+
+  /// No description provided for @expiryMarkdownAtCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند حد التكلفة'**
+  String get expiryMarkdownAtCost;
+
+  /// No description provided for @openingIdentifyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعريف الافتتاحي'**
+  String get openingIdentifyTitle;
+
+  /// No description provided for @openingIdentifyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'بضاعة موجودة على الرف بلا معرّفات. المخزون لا يتغيّر — فقط يصبح معروفًا.'**
+  String get openingIdentifyBody;
+
+  /// How many units of a variant are still anonymous.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} بلا معرّف'**
+  String openingIdentifyOutstanding(String count);
+
+  /// No description provided for @openingIdentifyLater.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال المعرّفات لاحقًا'**
+  String get openingIdentifyLater;
+
+  /// Confirmation after an opening identification run.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تعريف {count} وحدة.'**
+  String openingIdentifyDone(int count);
+
+  /// No description provided for @openingIdentifyEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل البضاعة الموجودة معرّفة.'**
+  String get openingIdentifyEmpty;
+
+  /// No description provided for @unitTimelineTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الوحدة'**
+  String get unitTimelineTitle;
+
+  /// No description provided for @unitTimelineWatchSale.
+  ///
+  /// In ar, this message translates to:
+  /// **'شاهد لحظة البيع'**
+  String get unitTimelineWatchSale;
+
+  /// No description provided for @unitTimelineEventRepriced.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير السعر'**
+  String get unitTimelineEventRepriced;
+
+  /// No description provided for @unitTimelineEventIdentified.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال المعرّف'**
+  String get unitTimelineEventIdentified;
+
+  /// No description provided for @unitTimelineEventWrittenOff.
+  ///
+  /// In ar, this message translates to:
+  /// **'شطب'**
+  String get unitTimelineEventWrittenOff;
+
+  /// No description provided for @unitTimelineEventIncident.
+  ///
+  /// In ar, this message translates to:
+  /// **'حادث عهدة'**
+  String get unitTimelineEventIncident;
+
+  /// No description provided for @unitTimelineEventCounted.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرد'**
+  String get unitTimelineEventCounted;
+
+  /// No description provided for @unitTimelineEventRelocated.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل مكان'**
+  String get unitTimelineEventRelocated;
+
   /// No description provided for @stockCountReentryTitle.
   ///
   /// In ar, this message translates to:

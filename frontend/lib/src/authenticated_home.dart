@@ -934,6 +934,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           dependencies.warehouseRepository,
         ),
         warehouseRepository: dependencies.warehouseRepository,
+        trackedStockRepository: dependencies.trackedStockRepository,
         priceCheckersViewModel: PriceCheckersViewModel(
           dependencies.priceCheckerRepository,
         ),
@@ -1151,6 +1152,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         catalogRepository: dependencies.catalogRepository,
         capabilities: capabilities,
         navigation: this,
+        trackedStockRepository: dependencies.trackedStockRepository,
       ),
     );
   }
@@ -1161,6 +1163,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       StockUnitsScreen(
         viewModel: dependencies.trackedStockViewModel,
         capabilities: capabilities,
+        repository: dependencies.trackedStockRepository,
       ),
     );
   }
@@ -1168,7 +1171,11 @@ class _AuthenticatedRoutes implements AppNavigation {
   Widget stockBatchesRouteBuilder(BuildContext routeContext) {
     return _screen(
       'stock_batches',
-      StockBatchesScreen(viewModel: dependencies.trackedStockViewModel),
+      StockBatchesScreen(
+        viewModel: dependencies.trackedStockViewModel,
+        repository: dependencies.trackedStockRepository,
+        canQuarantine: capabilities.canQuarantineBatch,
+      ),
     );
   }
 

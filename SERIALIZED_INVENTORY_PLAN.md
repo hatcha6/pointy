@@ -1,10 +1,15 @@
 # Serialized & Batch Inventory (IMEI / Serial / Lot / Expiry) — Architecture Plan
 
 **Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17,
-Phase C shipped 2026-09-18, A & B reviewed 2026-09-18, C reviewed 2026-09-19)
-**Status:** **Phases A, B and C shipped** — the shared allocation core and
-ledger, the shop operating both from the client, and the used-goods trade with
-consignment carrying a real liability (§15). Phases D–E remain proposed.
+Phase C shipped 2026-09-18, A & B reviewed 2026-09-18, C reviewed 2026-09-19,
+Phase D shipped 2026-09-19)
+**Status:** **Phases A, B, C and D shipped** — the shared allocation core and
+ledger, the shop operating both from the client, the used-goods trade with
+consignment carrying a real liability, and safety, recall and warehouse
+operations (§15). **Phase D's first job was to un-gate the feature**: a
+transfer, a stock count, a manual adjustment and a job's materials all *raised*
+on a tracked product, so no shop could have turned this on. They allocate now.
+Phase E remains proposed.
 Five things in this document were changed by building it, and each is marked
 **CORRECTED** or **DEFERRED** in place rather than quietly rewritten: the batch
 bin's treatment of a quarantined lot (§5.3), landed-cost re-stamping on
@@ -1881,6 +1886,11 @@ The five things this has to be able to say, and where each one says it:
   unresolved incident's `assessed_value`. It sits beside the payable in the
   treasury obligations overlay, because from the owner's side of the counter
   the two are the same question: *how much of this drawer is not mine?*
+  **As shipped it sums only the *assessed* ones**, with
+  `consignor_claims_unassessed` as a count beside it — the zero on an
+  undetermined incident is a zero nobody chose, and a money figure that
+  included it would state a liability the shop has not accepted. Both travel
+  through the overlay together.
 - **Settlement** — paying a claim is the **same disbursement primitive** as
   paying a payout: one register pay-out, one numbered voucher, one SMS, one
   `consignor_paid_at`-style stamp. §6.2.1 step 4 already built it; this reuses
@@ -2093,6 +2103,20 @@ In high-throughput environments like pharmacies and supermarkets, cashiers canno
 `StockTransferLine` gains unit selection. Units go `in_transit` on dispatch and
 `in_stock` at the destination on receipt, with `warehouse` flipping only at
 receipt — so a unit in transit is nowhere sellable, which is the truth.
+
+> **CORRECTED 2026-09-19 — the warehouse moves with the goods.** "Flipping only
+> at receipt" cannot survive invariant 1, which counts units *per warehouse*
+> against that warehouse's stock row: the transfer moves quantity into the
+> transit location, so a unit whose row still says the source makes **both**
+> bins wrong for the length of the journey. What shipped is
+> `source → transit → destination` on the column, with `in_transit` as the
+> status, and `integrity.counts_toward_bin` teaching invariants 1, 4 and 9 that
+> the transit location counts its in-transit units. The sentence this was
+> protecting is still true and is still the point: nothing sells out of
+> transit, because no register sells from it. Also **not auto-picked** — a
+> serialized line names its articles or the dispatch is refused, because the
+> driver has already chosen five and a system that picked a different five
+> would make the reconciliation below a lie about which handset is gone.
 `StockTransferReceipt` reconciles by identifier and surfaces *"sent 5, arrived
 4, missing 351...333"*, which is a shrinkage report a phone shop will actually
 read.
@@ -2124,6 +2148,21 @@ For a serialized variant, counting a number is meaningless. The count becomes:
   restocked; opening-identification proposal)
 
 Apply writes per-unit status changes and ledger entries at each unit's own rate.
+
+> **AMENDED 2026-09-19 — two lists became four, and the extra two are the ones
+> a quantity could never have shown.** A scanned shelf also produces an article
+> standing in *this* room whose row says another branch — a transfer nobody
+> wrote down — and one the books had written off and which turned up. Neither
+> is a variance: nothing is created or destroyed, a record is put right, so
+> both are settled **before** the variance is applied. That ordering is load
+> bearing; without it the same handset counts as *missing there* and *found
+> here* and the shelf gains one. A unit the books say was **sold** is a fifth
+> case and is refused rather than quietly un-sold: the money side of a sale
+> that never left is a person's decision.
+>
+> And a code nothing has ever answered to **cannot name its own product**, so
+> the "opening-identification proposal" is a question rather than a write: the
+> count records the finding and asks the counter what they are holding.
 
 For high-value pocketable stock this is the single most valuable operational
 feature in the plan, and it falls out of the model almost for free because
@@ -2224,6 +2263,12 @@ PATCH  /api/inventory/stock-units/{id}/              price, attributes, notes  (
 POST   /api/inventory/stock-units/bulk-reprice/      {ids[], price | percent}
 POST   /api/inventory/stock-units/{id}/write-off/    {reason}
 GET    /api/inventory/stock-units/summary/           counts by status, aging buckets
+GET    /api/inventory/stock-units/{id}/timeline/     allocations ∪ events (§6.9)
+GET    /api/inventory/stock-units/{id}/incidents/    every custody event on this article
+POST   /api/inventory/stock-units/{id}/report-incident/  §6.2.2, written the moment it is noticed
+GET    /api/inventory/stock-units/unclaimed-payouts/ aged 30/60/90+ since the sale
+GET    /api/inventory/stock-units/opening-worklist/  variants holding unnamed stock (§6.10)
+POST   /api/inventory/stock-units/identify-opening/  name it; nothing moves
 
 POST   /api/purchasing/receipts/{id}/capture-units/  per-line codes+attrs+costs
 POST   /api/purchasing/receipts/{id}/capture-batches/ multi-lot codes+expiries+quantities (into this receipt's warehouse)
@@ -2232,6 +2277,10 @@ GET    /api/purchasing/receipts/missing-identifiers/ the worklist
 
 # consignment (الأمانات):
 GET    /api/inventory/stock-units/consignment-payables/   sold units awaiting customer payout
+                                                          rows carry payout_due, advance and net_due:
+                                                          what it earned, what was already handed over
+                                                          for the same article, and what the counter
+                                                          actually hands over now (§15.3)
 POST   /api/inventory/stock-units/{id}/disburse-payout/   record register pay-out & close payable
 POST   /api/inventory/stock-units/{id}/resend-consignor-sms/ trigger/retry customer sale SMS
 POST   /api/inventory/stock-units/{id}/return-to-consignor/ return unsold unit to consignor
@@ -2240,7 +2289,9 @@ GET    /api/inventory/consignment-agreements/{id}/statement/ one consignor: in, 
 GET    /api/inventory/consignment-position/               the four figures of §5.8, as of a date
 GET    /api/inventory/consignment-incidents/              filters: unit, kind, responsibility, resolution
 POST   /api/inventory/consignment-incidents/              record loss/damage/theft (§6.2.2)
+POST   /api/inventory/consignment-incidents/{id}/assess/  who is responsible, and what that comes to
 POST   /api/inventory/consignment-incidents/{id}/settle/  pay, replace, waive or close with no claim
+GET    /api/inventory/consignment-incidents/claims/       open value, and the count nobody has priced
 
 # batches & lots (الدفعات وتواريخ الصلاحية) — the LOT is the resource:
 GET    /api/inventory/stock-batches/                      filters: variant, status, is_expired, is_near_expiry,
@@ -2254,18 +2305,27 @@ POST   /api/inventory/stock-batches/lookup/               {variant, code} → th
 POST   /api/inventory/stock-batches/{id}/quarantine/      emergency recall / stop-sale
 POST   /api/inventory/stock-batches/{id}/release-quarantine/
 GET    /api/inventory/stock-batches/{id}/recall-report/   traceability: customers, invoices, remaining stock
-POST   /api/inventory/stock-batches/{id}/notify-recall/   broadcast safety recall SMS to buyers
+POST   /api/inventory/stock-batches/{id}/notify-affected/ broadcast safety recall SMS to buyers
+                                                          (named ``notify-recall`` in the first draft)
 GET    /api/inventory/stock-batches/expiry-watchlist/     batches expiring within N days
 
 # extended for consignment obligations:
-GET    /api/treasury/position/       response gains  obligations{consignor_payable, consignor_claims_open}
-                                     — an overlay on the total, never subtracted from it (§5.8)
+GET    /api/treasury/position/       response gains  obligations{consignor_payable, consignor_claims_open,
+                                     consignor_claims_unassessed} — an overlay on the total, never
+                                     subtracted from it (§5.8); the last is a **count**, because an
+                                     incident nobody has assessed carries a zero nobody chose
 
 GET    /api/catalog/asset-types/{id}/unit-attributes/
 CRUD   /api/inventory/unit-attribute-definitions/
 
 # extended, not new:
 POST   /api/sales/checkout/          line gains  stock_unit  or  stock_batch  (auto-allocated FEFO)
+POST   /api/stock-counts/{id}/scan/  {code, variant?} — one article off the shelf (§6.6)
+GET    /api/stock-counts/{id}/scan-reconciliation/  missing, unknown, relocated, resurrected, lots
+POST   /api/stock-transfers/{id}/dispatch/  gains  picks{line: {unit_ids|unit_codes|batch_ids}}
+POST   /api/stock-transfers/{id}/receive/   the same, for what actually arrived
+POST   /api/stock-movements/         gains  units[] / batches[] — a manual adjustment names what moved
+GET    /api/surveillance/{subject}/{id}/footage/  stock-unit | consignment-incident (§8.3)
 GET    /api/catalog/resolve-barcode/ resolution gains  stock_unit  and  stock_batch  lookups,
                                      and parses a GS1 DataMatrix into
                                      {variant, batch, unit, expiry} in one call (§6.3)
@@ -2315,6 +2375,10 @@ product's own tracking mode, so a grocery never renders one pixel of it.
 | `features/pos/views/pos_batch_picker_sheet.dart` | Available balances for a variant **in this till's warehouse**: lot code, expiry date, days remaining (color-coded), available quantity. Stock of the same lot in another branch is deliberately absent. |
 | `features/inventory/views/batch_recall_screen.dart` | Recall audit dashboard: list of sold invoices, customers, and one-tap SMS safety broadcast. |
 | `features/settings/views/unit_attributes_screen.dart` | Attribute definitions per asset type. |
+| `features/stock_count/views/stock_count_scan_shelf.dart` | **Shipped Phase D.** The serialized count: no keypad at all, a focus-holding identifier field, and the counter's own running total. Still blind — nothing here says whether a scan was expected. |
+| `features/stock_count/views/stock_count_findings.dart` | **Shipped Phase D.** The four named lists a scanned count produces, plus the per-lot variances. Named rather than netted: −3 on a shelf of handsets is not something anybody can act on. |
+| `features/inventory/views/transfer_unit_pick_sheet.dart` | **Shipped Phase D.** Which handsets are actually in the van. Not auto-picked — see §6.5. |
+| `features/inventory/views/opening_identification_screen.dart` | **Shipped Phase D.** §6.10's guided run: the worklist of variants holding unnamed stock, a scan loop per variant, and *identify later* as a visible choice. |
 
 **Every surface in this table that a scanner points at must declare itself a
 `ScanWedgeTarget`.** `ScanBurstGuard`
@@ -2470,7 +2534,10 @@ All CSV-exportable through the existing streaming export path
 `consignment_sale_sms_template` (Arabic customizable template with `{consignor_name}`, `{product_name}`, `{code}`, `{invoice_number}`, `{payout_amount}`),
 `prevent_selling_expired_batches` (default **True**),
 `batch_auto_pick_strategy` (choices: `fefo`, `fifo`; default `fefo`),
-`default_expiry_warning_days` (default 30).
+`default_expiry_warning_days` (default 30),
+`shop_phone` (**added Phase D**, blank — printed on a recall alert, because a
+message telling somebody to stop using a medicine and giving them nobody to
+ask is worse than no message).
 
 Presets:
 - **Serialized trades**: `phone_repair`, `mobile_trader`, `car_workshop`, `laptops_computers`, `cameras_photo`, `gaming_consoles`, `luxury_watches`, `luxury_handbags`, `jewelry_precious`, `appliances_tv`, `bicycles_ebikes`, `power_tools` turn serialization on.
@@ -2496,8 +2563,12 @@ inventory.view_stockunit_cost         عرض تكلفة الجهاز
 inventory.disburse_consignment_payout صرف مستحقات الأمانات (register payout)
 inventory.view_consignmentagreement   عرض سندات الأمانات
 inventory.manage_consignmentagreement تحرير سندات الأمانات وشروط العمولة
-inventory.record_consignment_incident تسجيل تلف / فقدان أمانة
-inventory.settle_consignment_claim    تسوية مطالبة أمانة (صرف تعويض)
+inventory.manage_consignmentincident  تسجيل حوادث العهدة وتقديرها
+                                      (named `record_consignment_incident` in the first draft;
+                                      settling reuses `disburse_consignment_payout`, because
+                                      paying a claim is the same disbursement primitive as
+                                      paying a payout and a second permission over one act is
+                                      two places to forget — §6.2.2)
 inventory.view_consignment_liability  عرض مستحقات ومطالبات الأمانات
 
 inventory.view_stockbatch             عرض الدفعات وتواريخ الصلاحية
@@ -2648,9 +2719,11 @@ Where the rules live, so they cannot be forgotten by the next caller:
   most valuable test in the plan because the failure it prevents is silent.
 - **Money-definitions guard.** `unit cost`, `refurb cost`, `landed unit cost`,
   `unit list price`, `consignor payout due`, `consignor payable`,
-  `consignor claims open`, `shop consignment commission` and
-  `consignment custody exposure` each get exactly one definition, registered in
-  the existing static guard (`money-definitions-guard`).
+  `consignor claims open`, `shop consignment commission`,
+  `consignment custody exposure` and — since §15.3 was closed —
+  `consignor net due` (`payout_due − advance`, floored per article) each get
+  exactly one definition, registered in the existing static guard
+  (`money-definitions-guard`).
 - **Consignment custody.** A consigned unit cannot be written off through the
   ordinary write-off endpoint — the API refuses and names the incident endpoint,
   so a claim is never skipped by choosing the wrong button (§6.2.2).
@@ -2759,6 +2832,17 @@ payable nobody has checked, and this is the money a shop is holding for someone
 else. This is the harness that proved
 the valuation engine (`oracle-correctness-harness`); a valuation *method* that
 does not go through it is a method nobody has checked.
+
+**Phase D gave it a second place.** Until then the run opened one warehouse,
+which made every word of §6.5 invisible to it and — because invariant 1 counts
+units *per warehouse* — meant a transfer leg that valued the goods correctly at
+the source and wrongly at the far end could not have been caught. The
+simulation now opens a branch, runs a full four-leg transfer of units and of
+lots, and runs a manual adjustment; `_check_bins` walks **every** place rather
+than the main one, and `_check_units` compares where each article is and not
+only that it exists. The model predicts the move by construction — the cost
+travels with the article, the lot row does not move — so a design that drifts
+back toward one lot per warehouse fails here rather than in a review.
 
 ### 14.4 Scaling and upgrade
 
@@ -3010,7 +3094,8 @@ refurb capitalisation, returns and warranty lookup.
   `warranty_days` on the product is what shipped). None is load-bearing for the
   trade this phase is about.
 
-**Phase D — safety, recall & warehouse operations (≈2 weeks).**
+**Phase D — safety, recall & warehouse operations (≈2 weeks). SHIPPED
+2026-09-19.**
 **Two items are now prerequisites rather than scope, both added by the 2026-09-18
 review (§15.2).** First, **transfers, stock count, manual adjustment and
 job-material issue must learn to allocate** — the tripwire in
@@ -3021,6 +3106,9 @@ than following it. Second, **the contract release for the batch split** — drop
 `received_quantity`, `remaining_quantity` and `source_receipt_line`, delete
 `mirror_legacy_batch_totals` and `test_legacy_batch_columns.py`, once the relay
 reports the fleet's minimum version past the release that loosened them.
+*(Shipped with the expand instead — see §15.1's superseded table and Phase D's
+list. The fleet gate it was waiting on was built anyway, generalised, for
+`Product.tracks_expiry`, which genuinely does need it.)*
 Everything below is the original list.
 `ConsignmentIncident`, claims and settlement, the unclaimed-payout aging
 (§6.2.2) and the per-consignor statement *screen*,
@@ -3036,6 +3124,140 @@ dashboard cards.
 overlay), and the write-off flow landed with the unit detail screen. What is
 left of the consignment side is the incident — the path a consignment module is
 actually judged on — and the statement as a page rather than an endpoint.*
+
+*What actually landed, and where it differs from the paragraph above.*
+
+- **The four paths that gated the whole feature now allocate, through one
+  door.** `services.allocate_adjustment` is the single answer for a transfer, a
+  stock count, a manual adjustment and a job's materials, and it is not one
+  rule but two, because the two directions are not symmetrical. **Leaving** —
+  a lot is answerable (FEFO says which cohort went) and a serialized article is
+  not, so the caller names the units or is told to scan. **Arriving** — both
+  are answerable, and goods that turn up with no paperwork become a lot, or a
+  placeholder unit on the missing-identifier worklist, at the shelf's own rate.
+  That asymmetry was already in the code as `plan_lot_drawdown`'s docstring;
+  Phase D is the rest of the sentence.
+- **A manual adjustment never reached the ledger at all.** Not a tracking bug
+  and not new: `StockMovementViewSet.perform_create` saved the movement through
+  its serializer and never called `post_movement_valuations`, so a shop that
+  wrote off damage by hand moved the shelf and left the stock value where it
+  was, for as long as the feature has existed. It posts now. The same endpoint
+  was also a `MultipleObjectsReturned` waiting for the second warehouse — it
+  asked for "the" stock row of a variant — and now uses the register's own
+  location like every other write.
+- **CORRECTED — a unit in transit lives at the transit location.** §6.5 says
+  the warehouse flips "only at receipt", and the sentence that protects —
+  goods in a van are sellable nowhere — is kept, because no register sells from
+  transit. What the literal reading cannot survive is invariant 1, which counts
+  units *per warehouse* against that warehouse's stock row: a unit whose row
+  still says the source while its quantity has moved to transit makes **both**
+  bins wrong at once. So the column moves with the goods and the status is what
+  says they are on the road. `integrity.counts_toward_bin` is the one place
+  that rule lives, shared by invariants 1, 4 and 9 — three copies disagreeing is
+  exactly how invariant 1 would pass while 4 and 9 failed.
+- **A serialized transfer refuses to leave unnamed, and a sale does not.** The
+  till may take the oldest handset off the shelf because the customer is
+  holding whichever one it hands them. A driver has already physically chosen
+  five, and a system that auto-picked a different five would make the far end's
+  *«sent 5, arrived 4, missing 351…333»* a lie about which handset is gone. So
+  `plan_dispatch` is `plan_issue` and the refusal is at the document.
+- **`plan_off_road` is not `plan_issue`, deliberately.** Taking goods out of
+  transit asks whether they are *sellable*, and nothing on a road is: a
+  quarantined pallet must still be able to land, because stranding a recalled
+  lot in a van is not a safety measure.
+- **A scanned count produces four lists, not one number.** §6.6 names two —
+  missing and found — and the shelf produces two more that a quantity could
+  never show: an article standing in this room whose row says another branch (a
+  transfer nobody wrote down) and one the books had written off. Both are
+  settled *before* the variance and are not part of it, because nothing is
+  created or destroyed; a record is put right. A unit the books say was **sold**
+  is refused rather than quietly un-sold — the money side of that is a person's
+  decision.
+- **An unrecognised code cannot name its own product, so the counter does.**
+  §6.6 calls a found-but-unexpected article an "opening-identification
+  proposal". A code nothing has ever answered to carries no variant, so the
+  count records the finding and asks; dismissing is a legitimate answer and the
+  finding stays on the reconciliation either way.
+- **`Product.tracking_since`, which the plan never mentions and the invariants
+  needed.** A shop that switches a product on after two years of trading has two
+  years of ledger entries with no allocations under them — correctly, because
+  there were no articles to name. Invariant 5 judged them by *today's* mode and
+  reported a permanent violation for a shop that had done everything right,
+  which is worse than no check at all: an invariant nobody can get to green is
+  one nobody reads. Opening identification makes this an ordinary event rather
+  than a rare one, which is why it surfaced here.
+- **The claims figure is two numbers and always was going to be.**
+  `consignor_claims_open` sums only *assessed* incidents;
+  `consignor_claims_unassessed` is a **count** beside it. An incident whose
+  responsibility is still `undetermined` carries a zero nobody chose, and
+  folding it into a money total would state a liability the shop has not
+  accepted. The treasury overlay carries both.
+- **The liability matrix is data, not branches** (`custody.LIABILITY_MATRIX`),
+  read from `agreement.liability_policy` and never from the shop's current
+  setting — with a test per row, because each row is an argument somebody will
+  eventually have across a counter.
+- **The contract release shipped with the expand, and the three-release table
+  in §15.1 is superseded.** The columns are gone (`0037`), the dual-write
+  (`mirror_legacy_batch_totals`) is gone, and `test_legacy_batch_columns.py` is
+  gone with them. The argument is not "nobody uses expiry tracking" on its own
+  — a `WHERE tracks_expiry = true` does not save a statement from a dropped
+  column, because Postgres parses the whole statement. It is that the previous
+  release's **sale path returns before building any query**, which is the path
+  the whole dance was protecting; the three paths that do name the columns
+  unconditionally fail recoverably (a retried Celery task, a receipt reversal
+  that rolls back, an admin page). `0037` proves the balances account for every
+  legacy value **on each shop's own database** before dropping anything, rather
+  than trusting a fleet-wide claim.
+  **`Product.tracks_expiry` deliberately did not come with it.** Django selects
+  every concrete field on every model load, so dropping that one makes the
+  previous release fail on *every product read*; it is a genuine contract
+  release and needs the gate. **The gate is built and generalised for it**:
+  `control.MinimumFleetVersion` on the relay, `minimum_version` and
+  `unknown_version_count` on `/v1/fleet/status`, and
+  `manage.py check_fleet_minimum_version --floor x.y.z`, which refuses on a
+  silent installation, an empty fleet and an unreachable relay — not knowing is
+  not the same as being ready.
+- **CLOSED — the reopened-consignment receivable, and it was worse than
+  §15.3 described.** The paragraph there says the difference "goes
+  unrecorded" under a commission. In fact *both* obligations vanished at the
+  instant of the second sale: `stamp_payout` overwrote `incoming_rate`, which
+  is where the receivable was being kept, **and** `consignor_paid_at` stayed
+  stamped, which kept the unit out of the payables. A watch whose owner had
+  collected 8,000 and which re-sold for a payout of 9,600 left the shop owing
+  nothing, owed nothing, and with no screen, figure or report saying
+  otherwise.
+  **`StockUnit.consignor_advance` is the stored figure §15.3 asked for.**
+  Reopening a *paid* consignment moves the money there, clears the stamp so
+  the next sale opens a real payable, and returns `incoming_rate` to what a
+  consignment's cost always is until it sells: zero. One rule —
+  `consignment.net_due` = `payout_due − advance` — and the payable and the
+  receivable are its two floors, **per article**, so an owner who has
+  over-collected on one watch never pays down what a different consignor is
+  owed (§5.8). Disbursement pays the net and consumes the advance by exactly
+  what it offset; a reopened *fixed*-payout unit whose advance covers the
+  re-sale exactly settles with **no voucher and no drawer movement**, because
+  a zero-value voucher burns a number in a gapless series to say nothing
+  happened. What records it instead is §6.9's event table, which is what that
+  table is for; cancelling a payout reads those same events to put back
+  exactly what it moved.
+  **The oracle now proves it, and §14.3's claim that it did was aspirational
+  until now.** The consignment figures had only ever been checked by
+  hand-written tests — which is how a model that agrees with the code by
+  accident stays green. The randomized run tracks what each sale *earned* and
+  what actually crossed the counter, and asserts
+  `consignor_payable() − consignor_receivable() == earned − handed over`.
+  That is derived from the cash flows rather than from the formula, so it is
+  not a second copy of the implementation. Reverting the fix fails it after
+  34 operations: *«the shop says it owes 0.00 and is owed 0.00, the model says
+  1,167.17 was handed over»*.
+- **DEFERRED, and honestly out:** the per-consignor statement as a *screen*
+  (the endpoint has been built since Phase C and the aging now has one, so what
+  is missing is a page over data that exists), the unclaimed-payout **reminder
+  SMS** (the aging, the buckets and the dashboard alert are in; the outbound
+  message on the `apps.messaging` dedup path is not), quarantine/recall from the
+  price-checker kiosk, and the AI generative-UI *unit card* (the two assistant
+  tools and the `pointy://stock-unit/<id>` deep link landed; the catalog item
+  did not).
 
 **Phase E — migration (≈1 week, runs in parallel with C).**
 The collapse tool of §12, against the prospect's real export.
@@ -3100,12 +3322,48 @@ across three releases.**
 | **R2 — flip reads** | reads move to balances; dual-write continues; a verification job asserts the two agree on every batch, shop by shop | the legacy columns are still written, so a rollback to R1 is clean |
 | **R3 — contract** | dual-write stops; `received_quantity`, `remaining_quantity`, `source_receipt_line` dropped; the `in`-allocation backfill that replaces provenance runs | nothing older than R2 is left in the fleet |
 
-**R3 is gated on the fleet, not on one shop.** `relay-remote-update` lets shops
-sit pinned, paused or on a canary, so the contract release cannot ship until the
-fleet's *minimum* version is past R2 — a floor the relay can already report.
-Shipping R3 while one pinned pharmacy is still on R1 is how a shop loses its
-expiry tracking, and the rollout tooling exists precisely so that this is a
-query rather than a hope.
+> **SUPERSEDED 2026-09-19 — R1, R2 and R3 ship as one release, and the reason
+> is narrower than "nobody uses the feature".** This plan has not shipped, and
+> no installation has ever turned expiry tracking on. The premise matters, but
+> it is not on its own the argument, because **a `WHERE tracks_expiry = true`
+> does not save a statement from a dropped column** — Postgres parses the whole
+> thing, so zero matching rows and zero expiry-tracked products are equally
+> fatal to SQL that names one.
+>
+> What does the work is that the previous release's **sale path returns before
+> building any query**: `consume_expiring_stock_batches` opens
+> `if quantity <= 0 or not ...tracks_expiry: return 0`. That is the path the
+> whole three-release dance was protecting — *"a `ProgrammingError` on every
+> sale"* — and with no expiry-tracked product it has never run. Three other
+> places in the previous release name the columns *unconditionally*, and all
+> three fail recoverably rather than destructively: the expiry-alert query
+> (a Celery task — logged, retried, invisible; only with the broker unreachable
+> does it reach the bell poll), reversing a purchase receipt (fails inside its
+> own transaction, retry works), and the Django admin's lot page. The exposure
+> drops from *every sale* to *a background task retries for a minute*, which
+> is an ordinary live update.
+>
+> The data was never the risk: 0026 copies the columns onto the balances before
+> anything drops. `0037` **proves that per shop rather than assuming it** — it
+> reads every lot, compares the legacy column against the sum of its balances,
+> and refuses to drop anything if one disagrees. That is §15.1's own rehearsal
+> check ("every balance equal to the legacy column it replaced at the moment
+> dual-write stops") run on the one database it is actually about.
+>
+> **`Product.tracks_expiry` does NOT come with it**, and §18.4 should be read
+> with that correction. Django selects every concrete field on every model
+> load, so dropping that column makes the previous release fail on **every
+> product read** — the catalog, the till, all of it. No usage argument touches
+> that, because the failure is not in the feature's code path. It waits for a
+> release after this one, behind the gate below.
+
+**A contract release is gated on the fleet, not on one shop.**
+`relay-remote-update` lets shops sit pinned, paused or on a canary, so a
+release that removes something an older one still writes cannot ship until the
+fleet's *minimum* version is past it — a floor the relay reports
+(`control.MinimumFleetVersion`, `minimum_version` on `/v1/fleet/status`) and
+`make backend-contract-gate CONTRACT_FLOOR=x.y.z` turns into an exit code. The
+batch split turned out not to need it; `tracks_expiry` will.
 
 **The blast radius is smaller than it looks.** `consume_expiring_stock_batches`
 returns immediately unless `variant.product.tracks_expiry`, so the whole R1–R3
@@ -3426,6 +3684,14 @@ difference goes unrecorded. Closing it properly means a settlement row rather
 than an inference, which is `ConsignmentIncident`'s neighbourhood and belongs
 with Phase D's claims work rather than with a bug sweep.
 
+> **CLOSED by Phase D (2026-09-19), and it was worse than this paragraph
+> says.** Not merely "unrecorded": *both* obligations vanished at the second
+> sale, because `stamp_payout` overwrote the very column the receivable was
+> being kept in. `StockUnit.consignor_advance` is the settlement row this
+> paragraph asks for — an explicit stored figure, not an inference from a
+> stamp — and `consignment.net_due` is the one rule the payable and the
+> receivable are floors of. See Phase D's list in §15.
+
 ---
 
 ## 16. What we deliberately do not build
@@ -3662,6 +3928,16 @@ The resolution, and it belongs in the R1 migration rather than a later decision:
 - **`tracks_expiry` becomes derived** — `tracking_mode in (batch, serial_batch)`
   — kept as a property for every existing reader, and the column drops in the
   contract release (R3) alongside the batch columns, under the same fleet gate.
+
+  > **CORRECTED 2026-09-19 — it does *not* drop alongside them, and it needs a
+  > stronger gate than they did.** The batch columns went in the same release
+  > as the expand (§15.1) because the previous release's *sale path* returns
+  > before naming them. This column has no such escape: Django selects every
+  > concrete field on every model load, so dropping it makes the previous
+  > release fail on **every product read** — the catalog, the till, all of it —
+  > whether or not any product ever used the flag. It is the one genuine
+  > contract release left in this plan, and it is exactly what
+  > `make backend-contract-gate` exists for.
 - **The product form stops showing it.** One control, `tracking_mode`, decides
   this; a second checkbox that means a subset of the first is how a shop ends up
   with an expiry-tracked product that has no lots.

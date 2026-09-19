@@ -233,38 +233,12 @@ class StockBatch(TimeStampedModel):
     )
     is_locked = models.BooleanField(default=False)
 
-    # --- legacy, kept alive for one release (§15.1 R1) ---------------------
-    # These three are what the lot held before the split, and they are the
-    # source of truth for the release currently in shops: it decrements
-    # ``remaining_quantity`` on the checkout path and joins
-    # ``source_receipt_line`` in the expiry-alert query. The edge nginx runs
-    # that release against this schema for about a minute during an update, so
-    # dropping them here is a 500 on every sale of an expiry-tracked product.
-    #
-    # New code neither reads nor decides anything from them — the balance is the
-    # truth (§4.7) — it only keeps them current so a rollback to the previous
-    # release is clean. They go in the contract release, together with the
-    # dual-write in ``apps.inventory.tracking``. Nullable because the new code
-    # creates lots that never came from a receipt line at all.
-    source_receipt_line = models.ForeignKey(
-        "purchasing.PurchaseReceiptLine",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="legacy_stock_batches",
-    )
-    received_quantity = models.DecimalField(
-        max_digits=12, decimal_places=3, default=0
-    )
-    remaining_quantity = models.DecimalField(
-        max_digits=12, decimal_places=3, default=0
-    )
-
     # --- provenance & genealogy ------------------------------------------
     # Provenance is the ``in`` allocations, which already carry voucher, place,
-    # quantity and rate. ``source_receipt_line`` above is NOT that: it is a
-    # legacy column on its way out, and a lot arriving in three deliveries has
-    # three provenances that it cannot hold.
+    # quantity and rate — and nothing else, since ``source_receipt_line`` was
+    # dropped in 0037. That column could name one delivery; a lot arriving in
+    # three has three provenances, which is why the allocations are the
+    # answer and a foreign key never was.
     supplier = models.ForeignKey(
         "purchasing.Supplier",
         on_delete=models.SET_NULL,
@@ -932,6 +906,23 @@ class StockUnit(TimeStampedModel):
     )
     #: Stamped when the money is actually handed over. Until then the payable is
     #: derived from the sale — never stored, so it cannot drift from it.
+    #: Money already handed to this consignor **for this article**, not yet
+    #: matched against a sale. Written when a paid-out consignment is reopened
+    #: (§15.3): the shop has the money out and the goods back, so what was a
+    #: settled payout becomes an advance against whatever the article fetches
+    #: next.
+    #:
+    #: It exists because the alternative was an *inference* — leaving
+    #: ``consignor_paid_at`` stamped and trusting that the next sale's payout
+    #: would happen to equal the last one's. Under a fixed payout it does.
+    #: Under a commission at a different second price it does not, and the
+    #: difference went unrecorded in both directions: the re-sale overwrote
+    #: ``incoming_rate`` (destroying the receivable) and the stamp kept the
+    #: unit out of the payables (so no new liability opened). Two obligations
+    #: vanished at the instant of one sale.
+    consignor_advance = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0
+    )
     consignor_paid_at = models.DateTimeField(null=True, blank=True)
     consignor_payout = models.ForeignKey(
         "inventory.ConsignorPayout",
@@ -1396,6 +1387,18 @@ class StockCountLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="stock_count_lines",
     )
+    #: Which lot was counted, for a batch-tracked variant. §6.6: a counter is
+    #: standing in one room counting the packs of **one lot** on one shelf, so
+    #: the count is per balance and the variance is against that balance's
+    #: remaining quantity. Null for everything else, which is every line a shop
+    #: that tracks nothing will ever write.
+    batch = models.ForeignKey(
+        "inventory.StockBatch",
+        on_delete=models.PROTECT,
+        related_name="stock_count_lines",
+        blank=True,
+        null=True,
+    )
     counted_quantity = models.DecimalField(max_digits=12, decimal_places=3)
     # Snapshot of on_hand at the moment this line was counted (re-snapshotted on
     # every edit). It backs the variance prompt and the apply-time delta.
@@ -1430,10 +1433,20 @@ class StockCountLine(TimeStampedModel):
     class Meta:
         ordering = ["variant__product__name", "variant__name", "id"]
         constraints = [
+            # Two partial constraints rather than one over three columns: in
+            # Postgres a NULL is never equal to another NULL, so a single
+            # ``(count, variant, batch)`` unique index would let an untracked
+            # variant be counted twice in the same session.
             models.UniqueConstraint(
                 fields=["stock_count", "variant"],
+                condition=Q(batch__isnull=True),
                 name="unique_variant_per_stock_count",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["stock_count", "variant", "batch"],
+                condition=Q(batch__isnull=False),
+                name="unique_lot_line_per_stock_count",
+            ),
         ]
         indexes = [
             models.Index(fields=["stock_count", "needs_review"]),
@@ -1445,6 +1458,142 @@ class StockCountLine(TimeStampedModel):
     @property
     def variance(self):
         return self.counted_quantity - self.expected_quantity
+
+
+class StockCountScan(TimeStampedModel):
+    """One identifier read off one article while counting a shelf.
+
+    §6.6: for a serialized variant, counting a number is meaningless — the
+    count *is* the scan loop. A row per scan rather than a list on the line,
+    because the two lists the count produces (*expected but not scanned* and
+    *scanned but not expected*) are set operations against the units, and a
+    code that resolved to nothing at all is itself a finding worth keeping.
+    """
+
+    stock_count = models.ForeignKey(
+        StockCount,
+        on_delete=models.CASCADE,
+        related_name="scans",
+    )
+    #: The line this scan counts toward. Set once the variant is known, which
+    #: for an unrecognised code is never.
+    line = models.ForeignKey(
+        "inventory.StockCountLine",
+        on_delete=models.CASCADE,
+        related_name="scans",
+        blank=True,
+        null=True,
+    )
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="stock_count_scans",
+        blank=True,
+        null=True,
+    )
+    #: The article this identifier named, if the shop has ever held one.
+    unit = models.ForeignKey(
+        "inventory.StockUnit",
+        on_delete=models.PROTECT,
+        related_name="stock_count_scans",
+        blank=True,
+        null=True,
+    )
+    code = models.CharField(max_length=120)
+    code_normalized = models.CharField(max_length=120, db_index=True, editable=False)
+    #: Where the unit was recorded when the scan happened. A unit standing in
+    #: this room whose row says another branch is a transfer that never got
+    #: written down, and that is a finding, not a variance.
+    found_elsewhere = models.BooleanField(default=False)
+    scanned_at = models.DateTimeField(default=timezone.now)
+    scanned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="stock_count_scans",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-scanned_at", "-id"]
+        constraints = [
+            # Scanning the same handset twice is one handset. The shelf does
+            # not gain one because a counter swept the same box again.
+            models.UniqueConstraint(
+                fields=["stock_count", "code_normalized"],
+                name="unique_scan_per_stock_count",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["stock_count", "variant"], name="scan_count_var_idx"),
+        ]
+
+    def save(self, *args, **kwargs):
+        from .identity import normalize_identifier
+
+        self.code_normalized = normalize_identifier(self.code)
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.stock_count_id}:{self.code}"
+
+
+class StockUnitEvent(TimeStampedModel):
+    """Something that happened to an article and moved no stock.
+
+    §6.9. The allocations answer *where has this been*; these answer *who
+    changed what about it, and when*. Kept apart from ``StockAllocation`` on
+    purpose: an allocation is a row in the ledger's join and must balance, and
+    "somebody dropped the price from 1600 to 1450" must never be able to.
+
+    A unit's history screen is ``allocations ∪ events`` ordered by time.
+    """
+
+    class Kind(models.TextChoices):
+        REPRICED = "repriced", "تغيير السعر"
+        ADVANCE_OPENED = "advance_opened", "تحويل مستحق إلى دفعة مقدّمة"
+        ADVANCE_SETTLED = "advance_settled", "تسوية دفعة مقدّمة"
+        IDENTIFIED = "identified", "إدخال المعرّف"
+        IDENTIFIER_CORRECTED = "identifier_corrected", "تصحيح المعرّف"
+        ATTRIBUTES_EDITED = "attributes_edited", "تعديل الخصائص"
+        REFURB_COST = "refurb_cost", "تكلفة تجديد"
+        WRITTEN_OFF = "written_off", "شطب"
+        NOTE = "note", "ملاحظة"
+        INCIDENT = "incident", "حادث عهدة"
+        COUNTED = "counted", "جرد"
+        RELOCATED = "relocated", "نقل مكان"
+
+    unit = models.ForeignKey(
+        "inventory.StockUnit",
+        on_delete=models.CASCADE,
+        related_name="events",
+    )
+    kind = models.CharField(max_length=24, choices=Kind.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="stock_unit_events",
+        blank=True,
+        null=True,
+    )
+    at = models.DateTimeField(default=timezone.now, db_index=True)
+    from_value = models.CharField(max_length=240, blank=True)
+    to_value = models.CharField(max_length=240, blank=True)
+    note = models.CharField(max_length=240, blank=True)
+    #: What caused it, named loosely on purpose: a stock count, an incident, a
+    #: purchase receipt and a repair job are all legitimate causes and none of
+    #: them should become a nullable column here.
+    reference_type = models.CharField(max_length=32, blank=True)
+    reference_id = models.PositiveBigIntegerField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-at", "-id"]
+        indexes = [
+            models.Index(fields=["unit", "-at"], name="unit_event_time_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.unit_id}:{self.kind}"
 
 
 class StockTransferQuerySet(DocumentQuerySetMixin, models.QuerySet):
@@ -1872,6 +2021,175 @@ class ConsignorPayout(DocumentMixin, TimeStampedModel):
 
     def __str__(self) -> str:
         return self.number or f"consignor payout {self.pk}"
+
+
+class ConsignmentIncidentQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class ConsignmentIncident(DocumentMixin, TimeStampedModel):
+    """Something happened to goods we were holding for someone else.
+
+    §6.2.2, and the path a consignment module is actually judged on. The
+    governing idea is the one ``repair-settlement-custody`` established for the
+    workshop: **money state and custody state are different facts and must be
+    different rows.** A damaged consigned camera is a custody event that *may*
+    also be a money event; which of the two it is, is a judgement somebody
+    makes later, and the record of the event must not wait for that judgement.
+
+    So ``responsibility`` defaults to *undetermined* and nothing downstream may
+    require it to be resolved before the row can be written, ``assessed_value``
+    defaults to zero and zero is a legitimate assessment, and the row is never
+    deleted — it is cancelled through the ``apps.documents`` reversal contract.
+    """
+
+    class Kind(models.TextChoices):
+        DAMAGED = "damaged", "تلف"
+        LOST = "lost", "فقدان"
+        STOLEN = "stolen", "سرقة"
+        DESTROYED = "destroyed", "إتلاف كامل"
+        DISPUTE = "dispute", "خلاف على الحالة"
+
+    class Responsibility(models.TextChoices):
+        SHOP = "shop", "المحل"
+        CONSIGNOR = "consignor", "صاحب الأمانة"
+        THIRD_PARTY = "third_party", "طرف ثالث"
+        FORCE_MAJEURE = "force_majeure", "ظرف قاهر"
+        UNDETERMINED = "undetermined", "غير محدد"
+
+    class Resolution(models.TextChoices):
+        PENDING = "pending", "قيد التسوية"
+        PAID = "paid", "سُدّد نقداً"
+        REPLACED = "replaced", "استُبدل"
+        WAIVED = "waived", "تنازل صاحبها"
+        INSURED = "insured", "غطّاه التأمين"
+        NO_CLAIM = "no_claim", "لا مطالبة"
+
+    #: The resolutions that close a claim. ``pending`` is the only one that
+    #: leaves money outstanding, which is what ``consignor_claims_open`` sums.
+    OPEN_RESOLUTIONS = (Resolution.PENDING,)
+
+    objects = ConsignmentIncidentQuerySet.as_manager()
+
+    number = models.CharField(max_length=32, unique=True, blank=True)
+    unit = models.ForeignKey(
+        "inventory.StockUnit",
+        on_delete=models.PROTECT,
+        related_name="incidents",
+    )
+    agreement = models.ForeignKey(
+        "inventory.ConsignmentAgreement",
+        on_delete=models.PROTECT,
+        related_name="incidents",
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    #: May be unknown — nobody saw the bag go. ``discovered_at`` never is.
+    occurred_on = models.DateField(null=True, blank=True)
+    discovered_at = models.DateTimeField(default=timezone.now)
+    #: Who said so, not who is blamed.
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="reported_consignment_incidents",
+        null=True,
+        blank=True,
+    )
+    narrative = models.TextField()
+    attachments = GenericRelation(
+        "attachments.Attachment",
+        content_type_field="owner_content_type",
+        object_id_field="owner_object_id",
+        related_query_name="consignment_incidents",
+    )
+
+    responsibility = models.CharField(
+        max_length=16,
+        choices=Responsibility.choices,
+        default=Responsibility.UNDETERMINED,
+    )
+    #: What we accept we owe. 0 is a valid answer, and it is not the same zero
+    #: as an unassessed incident's — which is what ``is_assessed`` is for.
+    assessed_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    #: Whether anybody has actually decided. An ``undetermined`` incident
+    #: carries a zero nobody chose, and the claims report shows it as a count
+    #: rather than folding it into a total.
+    is_assessed = models.BooleanField(default=False)
+    resolution = models.CharField(
+        max_length=16, choices=Resolution.choices, default=Resolution.PENDING
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    #: Payout voucher, replacement unit, waiver — whatever closed it.
+    settlement_ref = models.CharField(max_length=64, blank=True)
+    settlement_payout = models.ForeignKey(
+        "inventory.ConsignorPayout",
+        on_delete=models.SET_NULL,
+        related_name="settled_incidents",
+        null=True,
+        blank=True,
+    )
+    replacement_unit = models.ForeignKey(
+        "inventory.StockUnit",
+        on_delete=models.SET_NULL,
+        related_name="replaced_incidents",
+        null=True,
+        blank=True,
+    )
+    #: The camera recording of the moment, when the shop has one (§8.3).
+    camera = models.ForeignKey(
+        "surveillance.Camera",
+        on_delete=models.SET_NULL,
+        related_name="consignment_incidents",
+        null=True,
+        blank=True,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="consignment_incidents",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-discovered_at", "-id"]
+        indexes = [
+            models.Index(fields=["resolution", "-discovered_at"], name="incident_open_idx"),
+            models.Index(fields=["agreement", "-discovered_at"], name="incident_agree_idx"),
+        ]
+        permissions = [
+            (
+                "manage_consignmentincident",
+                "Can record and assess consignment custody incidents",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            from django.db import transaction
+
+            from apps.documents.numbering import (
+                CONSIGNMENT_INCIDENT_SERIES,
+                next_document_number,
+            )
+
+            with transaction.atomic():
+                at = self.discovered_at or timezone.now()
+                self.number = (
+                    f"CI{at:%Y%m%d}"
+                    f"{next_document_number(CONSIGNMENT_INCIDENT_SERIES):05d}"
+                )
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None and "number" not in update_fields:
+                    kwargs["update_fields"] = [*update_fields, "number"]
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
+
+    @property
+    def is_open(self) -> bool:
+        return self.resolution in self.OPEN_RESOLUTIONS
+
+    def __str__(self) -> str:
+        return self.number or f"consignment incident {self.pk}"
 
 
 class UnitAttributeDefinition(TimeStampedModel):

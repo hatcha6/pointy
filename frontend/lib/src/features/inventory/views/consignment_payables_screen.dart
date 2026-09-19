@@ -410,6 +410,22 @@ class ConsignmentPositionCard extends StatelessWidget {
             icon: Icons.undo_outlined,
             accentColor: colors.warning,
           ),
+        // Open claims sit beside the payable because from the owner's side of
+        // the counter the two are the same question: how much of this drawer
+        // is not mine? Shown only when there are any — a permanent zero here
+        // would read as a standing problem rather than the rare one it is.
+        if (position.claimsOpen > 0 || position.claimsUnassessed > 0)
+          PointyMetricGridItem(
+            label: l10n.custodyIncidentOpenClaims,
+            value: formatMoney(position.claimsOpen),
+            // A **count**, never folded into the money: an incident nobody
+            // has assessed carries a zero nobody chose (§6.2.2).
+            subtitle: position.claimsUnassessed > 0
+                ? l10n.custodyIncidentUnassessedCount(position.claimsUnassessed)
+                : null,
+            icon: Icons.report_gmailerrorred_outlined,
+            accentColor: colors.danger,
+          ),
         PointyMetricGridItem(
           label: l10n.consignmentFigureCommission,
           value: formatMoney(position.shopCommission),
@@ -496,11 +512,29 @@ class _PayableCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Text(
-                    formatMoney(row.payoutDue),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colors.primaryStrong,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // What the counter actually hands over. When an advance
+                      // offsets it the gross is printed underneath, because a
+                      // row showing only 1,600 reads as though the watch had
+                      // earned 1,600 (§15.3).
+                      Text(
+                        formatMoney(row.netDue),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colors.primaryStrong,
+                        ),
+                      ),
+                      if (row.advance > 0)
+                        Text(
+                          l10n.consignmentGrossPayout(
+                            formatMoney(row.payoutDue),
+                          ),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -510,6 +544,13 @@ class _PayableCard extends StatelessWidget {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  if (row.advance > 0)
+                    _Chip(
+                      icon: Icons.history_outlined,
+                      label: l10n.consignmentAdvanceChip(
+                        formatMoney(row.advance),
+                      ),
+                    ),
                   if (row.invoiceNumber.isNotEmpty)
                     _Chip(
                       icon: Icons.receipt_long_outlined,

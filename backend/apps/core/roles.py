@@ -342,6 +342,15 @@ SUPERVISOR_PERMISSION_CODES = (
     "inventory.view_consignmentagreement",
     "inventory.manage_consignmentagreement",
     "inventory.view_consignment_liability",
+    # And **writing down** what went wrong is stock work too: whoever noticed
+    # the broken camera has to be able to record it at the time, before
+    # anybody has decided who is responsible. Paying the claim is
+    # ``disburse_consignment_payout``, which this role does not have (§6.2.2).
+    "inventory.manage_consignmentincident",
+    # Stop-sale on a recalled lot, for the same reason: the person who reads
+    # the notice is the person who has to act on it, and waiting for a manager
+    # is the window the recall is about.
+    "inventory.quarantine_batch",
     # Receiving stock against purchase orders.
     "purchasing.view_purchaseorder",
     "purchasing.receive_purchaseorder",
@@ -395,6 +404,9 @@ INVENTORY_CLERK_PERMISSION_CODES = (
     "inventory.view_stockbatch",
     "inventory.manage_batches",
     "inventory.adjust_batch_balance",
+    # The person who reads the recall notice is the person who has to act on
+    # it, and waiting for a manager is the window the recall is about (§6.8.1).
+    "inventory.quarantine_batch",
     "purchasing.view_purchaseorder",
     "purchasing.receive_purchaseorder",
     "purchasing.view_supplier",

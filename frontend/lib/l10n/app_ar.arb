@@ -8508,6 +8508,304 @@
       }
     }
   },
+  "stockCountScanShelfTitle": "امسح كل وحدة موجودة",
+  "stockCountScanShelfBody": "هذا الصنف مسلسل — عدّ الكمية بلا معنى. امسح معرّف كل قطعة على الرف.",
+  "stockCountScanShelfCount": "مسحتَ {count} وحدة",
+  "@stockCountScanShelfCount": {
+    "description": "How many identifiers the counter has scanned for the current item.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stockCountScanIdentifierHint": "امسح أو اكتب المعرّف",
+  "stockCountScanDuplicate": "سبق مسح «{code}» في هذا الجرد.",
+  "@stockCountScanDuplicate": {
+    "description": "Shown when the same identifier is scanned twice in one count.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "stockCountScanUnknownTitle": "معرّف غير معروف",
+  "stockCountScanUnknownBody": "«{code}» لا يخص أي وحدة في السجلات. اختر الصنف الذي يتبع له ليُضاف في الجرد.",
+  "@stockCountScanUnknownBody": {
+    "description": "Prompt asking the counter which product an unrecognised identifier belongs to.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "stockCountScanUnknownPick": "اختر الصنف",
+  "stockCountScanUnknownSkip": "تجاهل",
+  "stockCountFindingsTitle": "ما وجده الجرد",
+  "stockCountFindingsMissing": "مفقودة",
+  "stockCountFindingsMissingHint": "متوقعة على الرف ولم تُمسح — ستُشطب عند التطبيق.",
+  "stockCountFindingsUnknown": "غير معروفة",
+  "stockCountFindingsUnknownHint": "مُسحت ولم تكن في السجلات — ستُضاف عند التطبيق.",
+  "stockCountFindingsRelocated": "في فرع آخر",
+  "stockCountFindingsRelocatedHint": "موجودة هنا والسجل يقول فرعًا آخر — تحويل لم يُسجَّل.",
+  "stockCountFindingsResurrected": "مشطوبة وظهرت",
+  "stockCountFindingsResurrectedHint": "كانت مشطوبة ووُجدت على الرف.",
+  "stockCountFindingsLots": "فروقات الدفعات",
+  "stockCountFindingsLotNew": "دفعة جديدة في هذا المستودع",
+  "stockCountFindingsScanned": "مسحت {scanned} من {expected}",
+  "@stockCountFindingsScanned": {
+    "description": "Scanned versus expected article counts on the findings screen.",
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "stockCountLotPick": "اختر الدفعة",
+  "stockCountLotRequired": "هذا الصنف مُدار بالدفعات — اختر الدفعة التي تعدّها.",
+  "transferPickUnitsTitle": "حدّد الوحدات المُرسَلة",
+  "transferPickUnitsBody": "صنف مسلسل: امسح معرّف كل قطعة تُحمَّل فعليًا. تقرير النقص عند الاستلام يعتمد على هذا.",
+  "transferPickUnitsCount": "{picked} من {needed}",
+  "@transferPickUnitsCount": {
+    "description": "How many units the dispatcher has picked out of the line quantity.",
+    "placeholders": {
+      "picked": {
+        "type": "int"
+      },
+      "needed": {
+        "type": "int"
+      }
+    }
+  },
+  "transferPickUnitsIncomplete": "أكمل تحديد الوحدات قبل الإرسال.",
+  "transferReceiveScanTitle": "امسح الوحدات الواصلة",
+  "transferReceiveShort": "أُرسلت {sent} ووصلت {arrived}. الناقصة ما زالت على الطريق.",
+  "@transferReceiveShort": {
+    "description": "Shrinkage summary on a short transfer arrival.",
+    "placeholders": {
+      "sent": {
+        "type": "int"
+      },
+      "arrived": {
+        "type": "int"
+      }
+    }
+  },
+  "custodyKindDamaged": "تلف",
+  "custodyKindLost": "فقدان",
+  "custodyKindStolen": "سرقة",
+  "custodyKindDestroyed": "إتلاف كامل",
+  "custodyKindDispute": "خلاف على الحالة",
+  "custodyResponsibilityShop": "المحل",
+  "custodyResponsibilityConsignor": "صاحب الأمانة",
+  "custodyResponsibilityThirdParty": "طرف ثالث",
+  "custodyResponsibilityForceMajeure": "ظرف قاهر",
+  "custodyResponsibilityUndetermined": "غير محدد",
+  "custodyResolutionPending": "قيد التسوية",
+  "custodyResolutionPaid": "سُدّد نقداً",
+  "custodyResolutionReplaced": "استُبدل",
+  "custodyResolutionWaived": "تنازل صاحبها",
+  "custodyResolutionInsured": "غطّاه التأمين",
+  "custodyResolutionNoClaim": "لا مطالبة",
+  "smartNotificationMissingIdentifiersTitle": "وحدات بلا معرّف",
+  "smartNotificationMissingIdentifiersMessage": "{count} وحدة على الرف لم يُسجَّل معرّفها — لن تُباع حتى تُمسح.",
+  "@smartNotificationMissingIdentifiersMessage": {
+    "description": "How many identified-stock units are still owing an identifier.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "smartNotificationCustodyClaimsTitle": "مطالبات عهدة مفتوحة",
+  "smartNotificationCustodyClaimsMessage": "{count} محضر مفتوح، منها {unassessed} قيد التقدير.",
+  "@smartNotificationCustodyClaimsMessage": {
+    "description": "Open custody incidents, and how many nobody has priced.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "unassessed": {
+        "type": "int"
+      }
+    }
+  },
+  "smartNotificationUnclaimedPayoutsTitle": "مستحقات لم تُستلَم",
+  "smartNotificationUnclaimedPayoutsMessage": "{count} مستحق مضى عليه {days} يومًا ولم يُستلَم.",
+  "@smartNotificationUnclaimedPayoutsMessage": {
+    "description": "Consignment payouts nobody has collected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "consignmentAdvanceChip": "سبق صرف {amount}",
+  "@consignmentAdvanceChip": {
+    "description": "Money already handed to this consignor for this same article.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "consignmentGrossPayout": "من {amount}",
+  "@consignmentGrossPayout": {
+    "description": "The gross payout, shown under the net when an advance offsets it.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "custodyIncidentsTitle": "حوادث العهدة",
+  "custodyIncidentReport": "تسجيل حادث",
+  "custodyIncidentKind": "نوع الحادث",
+  "custodyIncidentNarrative": "ماذا حدث؟",
+  "custodyIncidentNarrativeHint": "اكتب ما حدث بكلماتك — هذا هو المحضر.",
+  "custodyIncidentOccurredOn": "تاريخ الحدوث (إن عُرف)",
+  "custodyIncidentDiscovered": "وقت الاكتشاف",
+  "custodyIncidentResponsibility": "المسؤولية",
+  "custodyIncidentUndeterminedNote": "«غير محدد» جواب صحيح اليوم — المحضر يُكتب قبل أن يُقرَّر.",
+  "custodyIncidentAssess": "تقدير المطالبة",
+  "custodyIncidentAssessedValue": "القيمة المقدَّرة",
+  "custodyIncidentSuggested": "حسب السند: {value}",
+  "@custodyIncidentSuggested": {
+    "description": "The liability matrix's own answer, shown beside the typed assessment.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "custodyIncidentCap": "الحد الأقصى: {value}",
+  "@custodyIncidentCap": {
+    "description": "The liability cap from the signed agreement.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "custodyIncidentSettle": "تسوية",
+  "custodyIncidentResolution": "طريقة التسوية",
+  "custodyIncidentReplacementUnit": "الوحدة البديلة",
+  "custodyIncidentUnassessed": "قيد التقدير",
+  "custodyIncidentOpenClaims": "مطالبات مفتوحة",
+  "custodyIncidentUnassessedCount": "{count} مطالبة قيد التقدير",
+  "@custodyIncidentUnassessedCount": {
+    "description": "Count of open incidents nobody has put a figure on.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "custodyIncidentWatchFootage": "شاهد لحظة الاكتشاف",
+  "custodyWriteOffRefused": "هذه الوحدة أمانة — سجّل محضر حادث عهدة بدل الشطب.",
+  "unclaimedPayoutsTitle": "مستحقات لم تُستلَم",
+  "unclaimedPayoutsHint": "المال في الدرج ليس مال المحل. لا يتحوّل إلى إيراد بمرور الوقت.",
+  "unclaimedPayoutsCurrent": "أقل من ٣٠ يومًا",
+  "unclaimedPayouts30": "٣٠ يومًا فأكثر",
+  "unclaimedPayouts60": "٦٠ يومًا فأكثر",
+  "unclaimedPayouts90": "٩٠ يومًا فأكثر",
+  "recallTitle": "تتبّع الدفعة",
+  "recallQuarantine": "حجر الدفعة",
+  "recallRelease": "رفع الحجر",
+  "recallInward": "مصدر التوريد",
+  "recallRemaining": "المتبقّي في المستودعات",
+  "recallOutward": "المبيعات",
+  "recallSubLots": "دفعات فرعية",
+  "recallNotify": "إرسال تنبيه للمشترين",
+  "recallNotifyQueued": "تم إرسال {count} تنبيهًا.",
+  "@recallNotifyQueued": {
+    "description": "How many recall alerts were queued.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recallUnreachable": "{count} مشترٍ بلا رقم هاتف",
+  "@recallUnreachable": {
+    "description": "Buyers on file with no phone number.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recallWalkIns": "{count} عملية بيع بلا عميل مسجَّل",
+  "@recallWalkIns": {
+    "description": "Sales from this lot with no customer on the invoice.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "expiryMarkdownTitle": "اقتراح تخفيض",
+  "expiryMarkdownBody": "{percent}% — من {from} إلى {to}",
+  "@expiryMarkdownBody": {
+    "description": "Suggested markdown for a lot close to expiry.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "expiryMarkdownSaves": "يتجنّب شطبًا بقيمة {value}",
+  "@expiryMarkdownSaves": {
+    "description": "The write-off a markdown avoids.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "expiryMarkdownAtCost": "عند حد التكلفة",
+  "openingIdentifyTitle": "التعريف الافتتاحي",
+  "openingIdentifyBody": "بضاعة موجودة على الرف بلا معرّفات. المخزون لا يتغيّر — فقط يصبح معروفًا.",
+  "openingIdentifyOutstanding": "{count} بلا معرّف",
+  "@openingIdentifyOutstanding": {
+    "description": "How many units of a variant are still anonymous.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "openingIdentifyLater": "إدخال المعرّفات لاحقًا",
+  "openingIdentifyDone": "تم تعريف {count} وحدة.",
+  "@openingIdentifyDone": {
+    "description": "Confirmation after an opening identification run.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "openingIdentifyEmpty": "كل البضاعة الموجودة معرّفة.",
+  "unitTimelineTitle": "سجل الوحدة",
+  "unitTimelineWatchSale": "شاهد لحظة البيع",
+  "unitTimelineEventRepriced": "تغيير السعر",
+  "unitTimelineEventIdentified": "إدخال المعرّف",
+  "unitTimelineEventWrittenOff": "شطب",
+  "unitTimelineEventIncident": "حادث عهدة",
+  "unitTimelineEventCounted": "جرد",
+  "unitTimelineEventRelocated": "نقل مكان",
   "stockCountReentryTitle": "الصنف معدود مسبقًا",
   "stockCountReentryBody": "لديك عدّة حالية {current} لهذا الصنف.",
   "@stockCountReentryBody": {

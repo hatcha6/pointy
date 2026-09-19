@@ -74,6 +74,11 @@ CONSIGNMENT_AGREEMENT_SERIES = "consignment_agreement"
 #: سند صرف أمانة — the receipt a consignor signs for their money.
 CONSIGNOR_PAYOUT_SERIES = "consignor_payout"
 
+#: محضر حادث أمانة — the record made at the time something happened to goods
+#: the shop was holding. Numbered for the same reason the agreement is: it is a
+#: document two people, and sometimes a court, will refer to by name.
+CONSIGNMENT_INCIDENT_SERIES = "consignment_incident"
+
 
 def next_document_number(key: str) -> int:
     """The next number in [key], reserved for this transaction only.

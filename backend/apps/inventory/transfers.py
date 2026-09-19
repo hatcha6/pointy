@@ -25,12 +25,14 @@ from apps.documents import trail
 from apps.documents.models import DocumentEvent
 from apps.documents.statuses import DocumentStatus
 
+from . import tracking
 from .models import (
     StockLedgerEntry,
     StockMovement,
     StockTransfer,
     StockTransferReceipt,
     StockTransferReceiptLine,
+    StockUnit,
     Warehouse,
 )
 from .oversell import may_oversell_document
@@ -55,12 +57,14 @@ def _actor(request=None, actor=None):
 def _move(*, pairs, movement_type, note, actor, positive):
     """Apply one leg of a move to a set of locked rows, and build its movements.
 
-    ``pairs`` is ``[(stock_item, base_quantity), ...]``. Returns the unsaved
-    movements, which the caller saves and then values.
+    ``pairs`` is ``[(stock_item, base_quantity, plan), ...]``, where ``plan`` is
+    the identified stock this leg moves and is ``None`` for everything that is
+    not tracked. Returns the unsaved movements, which the caller saves and then
+    values.
     """
     movements = []
     touched = []
-    for stock_item, quantity in pairs:
+    for stock_item, quantity, plan in pairs:
         if quantity <= 0:
             continue
         before = stock_snapshot(stock_item)
@@ -74,6 +78,7 @@ def _move(*, pairs, movement_type, note, actor, positive):
                 note=note,
                 created_by=actor,
                 before=before,
+                tracked_plan=plan,
             )
         )
     save_stock_item_quantities_bulk(touched)
@@ -129,9 +134,83 @@ def _carry(out_pairs, in_pairs, *, note, actor, voucher_type, voucher_id, postin
     return rates
 
 
+def _line_selection(lines, picks):
+    """``picks`` keyed by line id, however the caller spelled the keys."""
+    if not picks:
+        return {}
+    by_line = {}
+    ids = {line.pk for line in lines}
+    for key, value in picks.items():
+        try:
+            line_id = int(key)
+        except (TypeError, ValueError):
+            continue
+        if line_id in ids and isinstance(value, dict):
+            by_line[line_id] = {
+                "unit_ids": value.get("unit_ids") or value.get("units"),
+                "unit_codes": value.get("unit_codes") or value.get("codes"),
+                "batch_ids": value.get("batch_ids") or value.get("batches"),
+            }
+    return by_line
+
+
+def _refuse_unnamed_units(line, chosen):
+    """A serialized line must name its articles before it leaves.
+
+    Not auto-picked, deliberately, and this is the one place a transfer
+    differs from a sale. The till may take the oldest handset off the shelf
+    because the customer is holding whichever one it hands them; a van driver
+    has already physically chosen five, and a system that picked a different
+    five would make the far end's *«sent 5, arrived 4, missing 351…333»*
+    reconciliation a lie about which handset is gone.
+    """
+    if not tracking.tracks_units(tracking.mode_of(line.variant)):
+        return
+    named = len(chosen.get("unit_ids") or []) + len(chosen.get("unit_codes") or [])
+    if named != int(line.base_quantity):
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    f"«{line.variant.full_name}» صنف مسلسل — حدّد "
+                    f"{int(line.base_quantity)} وحدة بالمسح قبل إرسال التحويل."
+                ),
+                "line": line.pk,
+                "variant": line.variant_id,
+                "named": named,
+            }
+        )
+
+
+def _plan_off_the_road(*, line, quantity, transit_id, chosen):
+    """What one receiving line takes out of transit.
+
+    A serialized line takes the very articles the dispatch put on the road —
+    named if the receiver scanned them, and otherwise in the order they were
+    sent. A short delivery is therefore *sent 5, arrived 4, and here is the
+    IMEI of the missing one*, which is a shrinkage report a phone shop will
+    actually read; the outstanding article stays ``in_transit`` until somebody
+    accounts for it.
+    """
+    return tracking.plan_off_road(
+        variant=line.variant,
+        warehouse=transit_id,
+        quantity=quantity,
+        unit_ids=chosen.get("unit_ids"),
+        unit_codes=chosen.get("unit_codes"),
+        batch_ids=chosen.get("batch_ids"),
+    )
+
+
 @transaction.atomic
-def dispatch_transfer(transfer, *, request=None, actor=None):
-    """Send a draft transfer on its way: source -> transit."""
+def dispatch_transfer(transfer, *, request=None, actor=None, picks=None):
+    """Send a draft transfer on its way: source -> transit.
+
+    ``picks`` maps a line's id to the identified stock it moves —
+    ``{"units": [...], "batches": [...]}`` — for the lines whose product
+    has any. A serialized line with nothing named is refused, because
+    which handset went is not derivable and a made-up IMEI in the ledger
+    is worse than a transfer that has to be picked properly.
+    """
     actor = _actor(request, actor)
     locked = (
         StockTransfer.objects.select_for_update()
@@ -189,12 +268,50 @@ def dispatch_transfer(transfer, *, request=None, actor=None):
 
     note = f"تحويل {locked.transfer_number or locked.pk}"
     posting_at = timezone.now()
+    # Which handsets, and out of which lots. A serialized line says so or is
+    # refused — «سيارة فيها خمسة هواتف» is not an answer to *which* five, and
+    # the shrinkage report at the far end is the whole reason to ask.
+    selection = _line_selection(lines, picks)
+    out_plans, in_plans = [], []
+    for line in lines:
+        chosen = selection.get(line.pk, {})
+        _refuse_unnamed_units(line, chosen)
+        out_plan = tracking.plan_dispatch(
+            variant=line.variant,
+            warehouse=locked.source_id,
+            quantity=line.base_quantity,
+            unit_ids=chosen.get("unit_ids"),
+            unit_codes=chosen.get("unit_codes"),
+            batch_ids=chosen.get("batch_ids"),
+        )
+        out_plans.append(out_plan)
+        in_plans.append(
+            tracking.mirror_plan_into(
+                out_plan, warehouse=transit_id, variant=line.variant
+            )
+        )
+    for out_plan in out_plans:
+        tracking.apply_dispatch(out_plan, transit_warehouse=transit_id, at=posting_at)
+    for in_plan in in_plans:
+        # The units have already moved; this receives the lot quantities into
+        # the transit balances so the road's own bin has something under it.
+        tracking.apply_arrival(
+            in_plan, warehouse=transit_id, status=None, at=posting_at
+        )
+
     _carry(
         [
-            (rows[(line.variant_id, locked.source_id)], line.base_quantity)
-            for line in lines
+            (
+                rows[(line.variant_id, locked.source_id)],
+                line.base_quantity,
+                out_plans[index],
+            )
+            for index, line in enumerate(lines)
         ],
-        [(rows[(line.variant_id, transit_id)], line.base_quantity) for line in lines],
+        [
+            (rows[(line.variant_id, transit_id)], line.base_quantity, in_plans[index])
+            for index, line in enumerate(lines)
+        ],
         note=note,
         actor=actor,
         voucher_type=StockLedgerEntry.VoucherType.TRANSFER,
@@ -212,7 +329,9 @@ def dispatch_transfer(transfer, *, request=None, actor=None):
 
 
 @transaction.atomic
-def receive_transfer(transfer, *, lines, request=None, actor=None, note=""):
+def receive_transfer(
+    transfer, *, lines, request=None, actor=None, note="", picks=None
+):
     """Take goods off the road: transit -> destination.
 
     ``lines`` is ``[(StockTransferLine, base_quantity), ...]``. A transfer may
@@ -272,17 +391,53 @@ def receive_transfer(transfer, *, lines, request=None, actor=None, note=""):
     )
 
     label = f"استلام تحويل {locked.transfer_number or locked.pk}"
+    posting_at = timezone.now()
+    selection = _line_selection([line for line, _ in wanted], picks)
+    out_plans, in_plans = [], []
+    for line, quantity in wanted:
+        chosen = selection.get(line.pk, {})
+        out_plan = _plan_off_the_road(
+            line=line,
+            quantity=quantity,
+            transit_id=transit_id,
+            chosen=chosen,
+        )
+        out_plans.append(out_plan)
+        in_plans.append(
+            tracking.mirror_plan_into(
+                out_plan, warehouse=locked.destination_id, variant=line.variant
+            )
+        )
+    for out_plan in out_plans:
+        # Only the lot quantities: the units are transitioned by the arrival,
+        # which is the leg that knows where they landed.
+        tracking.apply_lot_drawdown(out_plan)
+    for in_plan in in_plans:
+        tracking.apply_arrival(
+            in_plan,
+            warehouse=locked.destination_id,
+            status=StockUnit.Status.IN_STOCK,
+            at=posting_at,
+        )
+
     _carry(
-        [(rows[(line.variant_id, transit_id)], quantity) for line, quantity in wanted],
         [
-            (rows[(line.variant_id, locked.destination_id)], quantity)
-            for line, quantity in wanted
+            (rows[(line.variant_id, transit_id)], quantity, out_plans[index])
+            for index, (line, quantity) in enumerate(wanted)
+        ],
+        [
+            (
+                rows[(line.variant_id, locked.destination_id)],
+                quantity,
+                in_plans[index],
+            )
+            for index, (line, quantity) in enumerate(wanted)
         ],
         note=label,
         actor=actor,
         voucher_type=StockLedgerEntry.VoucherType.TRANSFER_RECEIPT,
         voucher_id=receipt.pk,
-        posting_at=timezone.now(),
+        posting_at=posting_at,
     )
 
     for line, quantity in wanted:
@@ -332,9 +487,35 @@ def reverse_transfer(transfer, *, at, actor, reason="", context=None):
         + [(line.variant_id, transfer.source_id) for line, _ in outstanding]
     )
     note = f"إلغاء تحويل {transfer.transfer_number or transfer.pk}"
+    out_plans, in_plans = [], []
+    for line, quantity in outstanding:
+        out_plan = tracking.plan_off_road(
+            variant=line.variant, warehouse=transit_id, quantity=quantity
+        )
+        out_plans.append(out_plan)
+        in_plans.append(
+            tracking.mirror_plan_into(
+                out_plan, warehouse=transfer.source_id, variant=line.variant
+            )
+        )
+    for out_plan in out_plans:
+        tracking.apply_lot_drawdown(out_plan)
+    for in_plan in in_plans:
+        tracking.apply_arrival(
+            in_plan,
+            warehouse=transfer.source_id,
+            status=StockUnit.Status.IN_STOCK,
+            at=at,
+        )
     _carry(
-        [(rows[(line.variant_id, transit_id)], q) for line, q in outstanding],
-        [(rows[(line.variant_id, transfer.source_id)], q) for line, q in outstanding],
+        [
+            (rows[(line.variant_id, transit_id)], q, out_plans[index])
+            for index, (line, q) in enumerate(outstanding)
+        ],
+        [
+            (rows[(line.variant_id, transfer.source_id)], q, in_plans[index])
+            for index, (line, q) in enumerate(outstanding)
+        ],
         note=note,
         actor=actor,
         voucher_type=StockLedgerEntry.VoucherType.TRANSFER,
@@ -383,12 +564,40 @@ def reverse_transfer_receipt(receipt, *, at, actor, reason="", context=None):
                 )
 
     note = f"إلغاء استلام تحويل {transfer.transfer_number or transfer.pk}"
+    out_plans, in_plans = [], []
+    for line in lines:
+        # Back on the road at the destination's own rate, which for identified
+        # stock is each article's own — the same articles going back the way
+        # they came, so nothing is revalued by being un-received.
+        out_plan = tracking.plan_issue(
+            variant=line.variant,
+            warehouse=transfer.destination_id,
+            quantity=line.quantity,
+            allow_expired=True,
+        )
+        out_plans.append(out_plan)
+        in_plans.append(
+            tracking.mirror_plan_into(
+                out_plan, warehouse=transit_id, variant=line.variant
+            )
+        )
+    for out_plan in out_plans:
+        tracking.apply_dispatch(out_plan, transit_warehouse=transit_id, at=at)
+    for in_plan in in_plans:
+        tracking.apply_arrival(in_plan, warehouse=transit_id, status=None, at=at)
     _carry(
         [
-            (rows[(line.variant_id, transfer.destination_id)], line.quantity)
-            for line in lines
+            (
+                rows[(line.variant_id, transfer.destination_id)],
+                line.quantity,
+                out_plans[index],
+            )
+            for index, line in enumerate(lines)
         ],
-        [(rows[(line.variant_id, transit_id)], line.quantity) for line in lines],
+        [
+            (rows[(line.variant_id, transit_id)], line.quantity, in_plans[index])
+            for index, line in enumerate(lines)
+        ],
         note=note,
         actor=actor,
         voucher_type=StockLedgerEntry.VoucherType.TRANSFER_RECEIPT,

@@ -13820,6 +13820,387 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get stockCountScanShelfTitle => 'امسح كل وحدة موجودة';
+
+  @override
+  String get stockCountScanShelfBody =>
+      'هذا الصنف مسلسل — عدّ الكمية بلا معنى. امسح معرّف كل قطعة على الرف.';
+
+  @override
+  String stockCountScanShelfCount(int count) {
+    return 'مسحتَ $count وحدة';
+  }
+
+  @override
+  String get stockCountScanIdentifierHint => 'امسح أو اكتب المعرّف';
+
+  @override
+  String stockCountScanDuplicate(String code) {
+    return 'سبق مسح «$code» في هذا الجرد.';
+  }
+
+  @override
+  String get stockCountScanUnknownTitle => 'معرّف غير معروف';
+
+  @override
+  String stockCountScanUnknownBody(String code) {
+    return '«$code» لا يخص أي وحدة في السجلات. اختر الصنف الذي يتبع له ليُضاف في الجرد.';
+  }
+
+  @override
+  String get stockCountScanUnknownPick => 'اختر الصنف';
+
+  @override
+  String get stockCountScanUnknownSkip => 'تجاهل';
+
+  @override
+  String get stockCountFindingsTitle => 'ما وجده الجرد';
+
+  @override
+  String get stockCountFindingsMissing => 'مفقودة';
+
+  @override
+  String get stockCountFindingsMissingHint =>
+      'متوقعة على الرف ولم تُمسح — ستُشطب عند التطبيق.';
+
+  @override
+  String get stockCountFindingsUnknown => 'غير معروفة';
+
+  @override
+  String get stockCountFindingsUnknownHint =>
+      'مُسحت ولم تكن في السجلات — ستُضاف عند التطبيق.';
+
+  @override
+  String get stockCountFindingsRelocated => 'في فرع آخر';
+
+  @override
+  String get stockCountFindingsRelocatedHint =>
+      'موجودة هنا والسجل يقول فرعًا آخر — تحويل لم يُسجَّل.';
+
+  @override
+  String get stockCountFindingsResurrected => 'مشطوبة وظهرت';
+
+  @override
+  String get stockCountFindingsResurrectedHint =>
+      'كانت مشطوبة ووُجدت على الرف.';
+
+  @override
+  String get stockCountFindingsLots => 'فروقات الدفعات';
+
+  @override
+  String get stockCountFindingsLotNew => 'دفعة جديدة في هذا المستودع';
+
+  @override
+  String stockCountFindingsScanned(int scanned, int expected) {
+    return 'مسحت $scanned من $expected';
+  }
+
+  @override
+  String get stockCountLotPick => 'اختر الدفعة';
+
+  @override
+  String get stockCountLotRequired =>
+      'هذا الصنف مُدار بالدفعات — اختر الدفعة التي تعدّها.';
+
+  @override
+  String get transferPickUnitsTitle => 'حدّد الوحدات المُرسَلة';
+
+  @override
+  String get transferPickUnitsBody =>
+      'صنف مسلسل: امسح معرّف كل قطعة تُحمَّل فعليًا. تقرير النقص عند الاستلام يعتمد على هذا.';
+
+  @override
+  String transferPickUnitsCount(int picked, int needed) {
+    return '$picked من $needed';
+  }
+
+  @override
+  String get transferPickUnitsIncomplete => 'أكمل تحديد الوحدات قبل الإرسال.';
+
+  @override
+  String get transferReceiveScanTitle => 'امسح الوحدات الواصلة';
+
+  @override
+  String transferReceiveShort(int sent, int arrived) {
+    return 'أُرسلت $sent ووصلت $arrived. الناقصة ما زالت على الطريق.';
+  }
+
+  @override
+  String get custodyKindDamaged => 'تلف';
+
+  @override
+  String get custodyKindLost => 'فقدان';
+
+  @override
+  String get custodyKindStolen => 'سرقة';
+
+  @override
+  String get custodyKindDestroyed => 'إتلاف كامل';
+
+  @override
+  String get custodyKindDispute => 'خلاف على الحالة';
+
+  @override
+  String get custodyResponsibilityShop => 'المحل';
+
+  @override
+  String get custodyResponsibilityConsignor => 'صاحب الأمانة';
+
+  @override
+  String get custodyResponsibilityThirdParty => 'طرف ثالث';
+
+  @override
+  String get custodyResponsibilityForceMajeure => 'ظرف قاهر';
+
+  @override
+  String get custodyResponsibilityUndetermined => 'غير محدد';
+
+  @override
+  String get custodyResolutionPending => 'قيد التسوية';
+
+  @override
+  String get custodyResolutionPaid => 'سُدّد نقداً';
+
+  @override
+  String get custodyResolutionReplaced => 'استُبدل';
+
+  @override
+  String get custodyResolutionWaived => 'تنازل صاحبها';
+
+  @override
+  String get custodyResolutionInsured => 'غطّاه التأمين';
+
+  @override
+  String get custodyResolutionNoClaim => 'لا مطالبة';
+
+  @override
+  String get smartNotificationMissingIdentifiersTitle => 'وحدات بلا معرّف';
+
+  @override
+  String smartNotificationMissingIdentifiersMessage(int count) {
+    return '$count وحدة على الرف لم يُسجَّل معرّفها — لن تُباع حتى تُمسح.';
+  }
+
+  @override
+  String get smartNotificationCustodyClaimsTitle => 'مطالبات عهدة مفتوحة';
+
+  @override
+  String smartNotificationCustodyClaimsMessage(int count, int unassessed) {
+    return '$count محضر مفتوح، منها $unassessed قيد التقدير.';
+  }
+
+  @override
+  String get smartNotificationUnclaimedPayoutsTitle => 'مستحقات لم تُستلَم';
+
+  @override
+  String smartNotificationUnclaimedPayoutsMessage(int count, int days) {
+    return '$count مستحق مضى عليه $days يومًا ولم يُستلَم.';
+  }
+
+  @override
+  String consignmentAdvanceChip(String amount) {
+    return 'سبق صرف $amount';
+  }
+
+  @override
+  String consignmentGrossPayout(String amount) {
+    return 'من $amount';
+  }
+
+  @override
+  String get custodyIncidentsTitle => 'حوادث العهدة';
+
+  @override
+  String get custodyIncidentReport => 'تسجيل حادث';
+
+  @override
+  String get custodyIncidentKind => 'نوع الحادث';
+
+  @override
+  String get custodyIncidentNarrative => 'ماذا حدث؟';
+
+  @override
+  String get custodyIncidentNarrativeHint =>
+      'اكتب ما حدث بكلماتك — هذا هو المحضر.';
+
+  @override
+  String get custodyIncidentOccurredOn => 'تاريخ الحدوث (إن عُرف)';
+
+  @override
+  String get custodyIncidentDiscovered => 'وقت الاكتشاف';
+
+  @override
+  String get custodyIncidentResponsibility => 'المسؤولية';
+
+  @override
+  String get custodyIncidentUndeterminedNote =>
+      '«غير محدد» جواب صحيح اليوم — المحضر يُكتب قبل أن يُقرَّر.';
+
+  @override
+  String get custodyIncidentAssess => 'تقدير المطالبة';
+
+  @override
+  String get custodyIncidentAssessedValue => 'القيمة المقدَّرة';
+
+  @override
+  String custodyIncidentSuggested(String value) {
+    return 'حسب السند: $value';
+  }
+
+  @override
+  String custodyIncidentCap(String value) {
+    return 'الحد الأقصى: $value';
+  }
+
+  @override
+  String get custodyIncidentSettle => 'تسوية';
+
+  @override
+  String get custodyIncidentResolution => 'طريقة التسوية';
+
+  @override
+  String get custodyIncidentReplacementUnit => 'الوحدة البديلة';
+
+  @override
+  String get custodyIncidentUnassessed => 'قيد التقدير';
+
+  @override
+  String get custodyIncidentOpenClaims => 'مطالبات مفتوحة';
+
+  @override
+  String custodyIncidentUnassessedCount(int count) {
+    return '$count مطالبة قيد التقدير';
+  }
+
+  @override
+  String get custodyIncidentWatchFootage => 'شاهد لحظة الاكتشاف';
+
+  @override
+  String get custodyWriteOffRefused =>
+      'هذه الوحدة أمانة — سجّل محضر حادث عهدة بدل الشطب.';
+
+  @override
+  String get unclaimedPayoutsTitle => 'مستحقات لم تُستلَم';
+
+  @override
+  String get unclaimedPayoutsHint =>
+      'المال في الدرج ليس مال المحل. لا يتحوّل إلى إيراد بمرور الوقت.';
+
+  @override
+  String get unclaimedPayoutsCurrent => 'أقل من ٣٠ يومًا';
+
+  @override
+  String get unclaimedPayouts30 => '٣٠ يومًا فأكثر';
+
+  @override
+  String get unclaimedPayouts60 => '٦٠ يومًا فأكثر';
+
+  @override
+  String get unclaimedPayouts90 => '٩٠ يومًا فأكثر';
+
+  @override
+  String get recallTitle => 'تتبّع الدفعة';
+
+  @override
+  String get recallQuarantine => 'حجر الدفعة';
+
+  @override
+  String get recallRelease => 'رفع الحجر';
+
+  @override
+  String get recallInward => 'مصدر التوريد';
+
+  @override
+  String get recallRemaining => 'المتبقّي في المستودعات';
+
+  @override
+  String get recallOutward => 'المبيعات';
+
+  @override
+  String get recallSubLots => 'دفعات فرعية';
+
+  @override
+  String get recallNotify => 'إرسال تنبيه للمشترين';
+
+  @override
+  String recallNotifyQueued(int count) {
+    return 'تم إرسال $count تنبيهًا.';
+  }
+
+  @override
+  String recallUnreachable(int count) {
+    return '$count مشترٍ بلا رقم هاتف';
+  }
+
+  @override
+  String recallWalkIns(int count) {
+    return '$count عملية بيع بلا عميل مسجَّل';
+  }
+
+  @override
+  String get expiryMarkdownTitle => 'اقتراح تخفيض';
+
+  @override
+  String expiryMarkdownBody(int percent, String from, String to) {
+    return '$percent% — من $from إلى $to';
+  }
+
+  @override
+  String expiryMarkdownSaves(String value) {
+    return 'يتجنّب شطبًا بقيمة $value';
+  }
+
+  @override
+  String get expiryMarkdownAtCost => 'عند حد التكلفة';
+
+  @override
+  String get openingIdentifyTitle => 'التعريف الافتتاحي';
+
+  @override
+  String get openingIdentifyBody =>
+      'بضاعة موجودة على الرف بلا معرّفات. المخزون لا يتغيّر — فقط يصبح معروفًا.';
+
+  @override
+  String openingIdentifyOutstanding(String count) {
+    return '$count بلا معرّف';
+  }
+
+  @override
+  String get openingIdentifyLater => 'إدخال المعرّفات لاحقًا';
+
+  @override
+  String openingIdentifyDone(int count) {
+    return 'تم تعريف $count وحدة.';
+  }
+
+  @override
+  String get openingIdentifyEmpty => 'كل البضاعة الموجودة معرّفة.';
+
+  @override
+  String get unitTimelineTitle => 'سجل الوحدة';
+
+  @override
+  String get unitTimelineWatchSale => 'شاهد لحظة البيع';
+
+  @override
+  String get unitTimelineEventRepriced => 'تغيير السعر';
+
+  @override
+  String get unitTimelineEventIdentified => 'إدخال المعرّف';
+
+  @override
+  String get unitTimelineEventWrittenOff => 'شطب';
+
+  @override
+  String get unitTimelineEventIncident => 'حادث عهدة';
+
+  @override
+  String get unitTimelineEventCounted => 'جرد';
+
+  @override
+  String get unitTimelineEventRelocated => 'نقل مكان';
+
+  @override
   String get stockCountReentryTitle => 'الصنف معدود مسبقًا';
 
   @override

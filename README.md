@@ -618,16 +618,27 @@ knowing about because the test suite is green in cases where neither is.
 make backend-tracked-simulation                        # 500 random operations
 make backend-tracked-simulation SIM_SEED=7 SIM_OPERATIONS=20000
 make backend-stock-integrity                           # the invariants, on real data
+make backend-contract-gate CONTRACT_FLOOR=2.12.0       # is the fleet past it?
 ```
 
 The simulation drives receipts, sales, transfers and recalls at random against
 an independent model of what the shop should hold, and any disagreement prints
-the operation and reproduces from `SIM_SEED`. `backend-stock-integrity` is the
-other half: it runs the fourteen §5.4 invariants (`apps/inventory/integrity.py`)
-against whatever is actually in the database, is read-only, and exits non-zero
-when one does not hold — so it is safe on a live shop and belongs on a schedule.
-Every defect the Phase A/B review found was found by those checks and missed by
-the suite.
+the operation and reproduces from `SIM_SEED`. It opens two warehouses, so a
+transfer leg that values the goods correctly at the source and wrongly at the
+far end is visible to it. `backend-stock-integrity` is the other half: it runs
+the fourteen §5.4 invariants (`apps/inventory/integrity.py`) against whatever
+is actually in the database, is read-only, and exits non-zero when one does not
+hold — so it is safe on a live shop and belongs on a schedule. Every defect the
+Phase A/B review found was found by those checks and missed by the suite.
+
+`backend-contract-gate` answers one question and only when asked: whether
+every installation in the fleet is past a given version. That is the
+precondition for any **contract** migration — one that removes something the
+previous release still writes — because the edge nginx runs that release
+against the new schema for about a minute (`zero-downtime-updates`) and
+`relay-remote-update` lets shops sit pinned, paused or on a canary. It refuses
+on a silent installation, on an empty fleet and on an unreachable relay: not
+knowing is not the same as being ready.
 
 `--durations` is the profiler. Anything an order of magnitude above its
 neighbours is usually a real `sleep` or an expensive fixture rather than the

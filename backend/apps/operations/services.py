@@ -13,7 +13,7 @@ from apps.inventory.models import StockLedgerEntry, StockMovement
 from apps.inventory.oversell import may_oversell
 from apps.sales.registers import selling_warehouse_id
 from apps.inventory.services import (
-    consume_expiring_stock_batches,
+    allocate_adjustment,
     create_stock_movement,
     lock_stock_item,
     save_stock_item_quantities,
@@ -627,10 +627,17 @@ def _consume_material(material, *, request=None):
     before = stock_snapshot(stock_item)
     stock_item.quantity_on_hand -= material.quantity
     save_stock_item_quantities(stock_item)
-    consume_expiring_stock_batches(
+    # Which lots, or which handsets, this job actually consumed. A serialized
+    # part fitted to a customer's device is a specific part, and the job that
+    # fitted it is the last chance anybody has to say which — so the material
+    # names its units or the job refuses to consume it.
+    plan = allocate_adjustment(
         variant=variant,
-        quantity=material.quantity,
         warehouse=stock_item.warehouse_id,
+        delta=-material.quantity,
+        units=[material.stock_unit_id] if material.stock_unit_id else None,
+        batches=[material.batch_id] if material.batch_id else None,
+        what="هذه المادة",
     )
     movement = create_stock_movement(
         variant=variant,
@@ -641,6 +648,7 @@ def _consume_material(material, *, request=None):
         note=f"مهمة {material.job.job_number}",
         created_by=request_user(request),
         before=before,
+        tracked_plan=plan,
     )
     material.consumed_at = timezone.now()
     material.stock_movement = movement
@@ -669,6 +677,13 @@ def reverse_job_material(*, job, material, request=None):
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += material.quantity
         save_stock_item_quantities(stock_item)
+        plan = allocate_adjustment(
+            variant=variant,
+            warehouse=stock_item.warehouse_id,
+            delta=material.quantity,
+            placeholder_key=f"JOB-{job.pk}",
+            what="هذه المادة",
+        )
         movement = create_stock_movement(
             variant=variant,
             stock_item=stock_item,
@@ -680,6 +695,7 @@ def reverse_job_material(*, job, material, request=None):
             note=f"إرجاع مواد مهمة {job.job_number}",
             created_by=request_user(request),
             before=before,
+            tracked_plan=plan,
         )
         material.reversal_movement = movement
     material.reversed_at = timezone.now()

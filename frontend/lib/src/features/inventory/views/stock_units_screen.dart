@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/stock_unit.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -13,6 +14,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/tracked_stock_view_model.dart';
+import 'opening_identification_screen.dart';
 import 'stock_unit_detail_screen.dart';
 
 /// Every article this shop has identified, and what became of it.
@@ -25,10 +27,15 @@ class StockUnitsScreen extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.capabilities,
+    this.repository,
   });
 
   final TrackedStockViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+
+  /// For the opening-identification run behind the app bar. Optional so a
+  /// shop with nothing anonymous on the shelf pays nothing for it.
+  final TrackedStockRepository? repository;
 
   @override
   State<StockUnitsScreen> createState() => _StockUnitsScreenState();
@@ -66,6 +73,13 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
             title: Text(l10n.stockUnitsTitle),
             isLoading: viewModel.isLoadingUnits,
             actions: [
+              if (widget.repository != null &&
+                  widget.capabilities.canViewStockUnits)
+                IconButton(
+                  tooltip: l10n.openingIdentifyTitle,
+                  onPressed: _openOpeningIdentification,
+                  icon: const Icon(Icons.playlist_add_check_outlined),
+                ),
               IconButton(
                 tooltip: l10n.refreshShopSettingsTooltip,
                 onPressed: viewModel.isLoadingUnits
@@ -79,6 +93,23 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
         );
       },
     );
+  }
+
+  Future<void> _openOpeningIdentification() async {
+    final repository = widget.repository;
+    if (repository == null) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            OpeningIdentificationScreen(repository: repository),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    await widget.viewModel.loadUnits();
   }
 
   Widget _body(

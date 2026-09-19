@@ -38,6 +38,26 @@ class StockCountRepository {
     return Result.guard(() => _service.fetchStockCountReconciliation(countId));
   }
 
+  /// One identifier, read off the shelf. Blind, like the rest of the count:
+  /// the answer says what the code *is*, never whether it was expected.
+  Future<Result<StockCountScanResult>> scan(
+    int countId,
+    String code, {
+    int? variantId,
+  }) {
+    return Result.guard(
+      () => _service.scanStockCount(countId, code, variantId: variantId),
+    );
+  }
+
+  Future<Result<StockCountScanReconciliation>> loadScanReconciliation(
+    int countId,
+  ) {
+    return Result.guard(
+      () => _service.fetchStockCountScanReconciliation(countId),
+    );
+  }
+
   Future<Result<StockCount>> applyCount(
     int countId, {
     required String idempotencyKey,

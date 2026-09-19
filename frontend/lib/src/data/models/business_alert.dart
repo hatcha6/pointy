@@ -27,6 +27,13 @@ enum BusinessAlertType {
   lowStock,
   stockPositionUntrusted,
   expiringStock,
+
+  /// Phase D. Three things a shop that identifies its stock only finds by
+  /// opening a screen it has no reason to open: goods nothing has named, a
+  /// claim nobody has priced, and money in the drawer that is not the shop's.
+  missingIdentifiers,
+  openCustodyClaims,
+  unclaimedPayouts,
   overduePurchases,
   printFailures,
   stalePrintAgents,
@@ -203,6 +210,9 @@ BusinessAlertType _typeFromCode(String code) {
     'inventory.low_stock' => BusinessAlertType.lowStock,
     'inventory.position_untrusted' => BusinessAlertType.stockPositionUntrusted,
     'inventory.expiring_batch' => BusinessAlertType.expiringStock,
+    'inventory.missing_identifiers' => BusinessAlertType.missingIdentifiers,
+    'inventory.open_custody_claims' => BusinessAlertType.openCustodyClaims,
+    'inventory.unclaimed_payouts' => BusinessAlertType.unclaimedPayouts,
     'purchasing.overdue_order' => BusinessAlertType.overduePurchases,
     'printing.failed_job' => BusinessAlertType.printFailures,
     'printing.stale_agent' => BusinessAlertType.stalePrintAgents,
@@ -247,12 +257,17 @@ int _sortScore(BusinessAlertType type) {
     BusinessAlertType.suspectedCashierActivity => 19,
     BusinessAlertType.overduePurchases => 20,
     BusinessAlertType.expiringStock => 22,
+    // Between the stock alerts and the money ones, because that is what they
+    // are: a unit nobody can sell, and other people's money in the drawer.
+    BusinessAlertType.missingIdentifiers => 23,
+    BusinessAlertType.openCustodyClaims => 24,
     BusinessAlertType.registerVariance => 25,
     BusinessAlertType.lowProfitMargin => 28,
     BusinessAlertType.lowStock => 30,
     BusinessAlertType.payrollReady => 32,
     BusinessAlertType.operationsError => 35,
     BusinessAlertType.expiringDiscounts => 60,
+    BusinessAlertType.unclaimedPayouts => 62,
     BusinessAlertType.unknown => 100,
   };
 }
@@ -289,6 +304,11 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.operationsError => payload['name']?.toString() ?? '',
     BusinessAlertType.stockPositionUntrusted ||
     BusinessAlertType.lowProfitMargin ||
+    // Shop-wide counts rather than one row: there is no single article to
+    // name, and naming one of forty would read as if it were the problem.
+    BusinessAlertType.missingIdentifiers ||
+    BusinessAlertType.openCustodyClaims ||
+    BusinessAlertType.unclaimedPayouts ||
     BusinessAlertType.unknown => '',
   };
 }

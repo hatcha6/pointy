@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart'
     show generateAnalyticsEventId;
 import '../../../data/models/stock_count.dart';
+import '../../../data/models/stock_count_draft.dart';
 import '../../../data/models/stock_count_line.dart';
 import '../../../data/repositories/stock_count_repository.dart';
 
@@ -24,6 +25,12 @@ class StockCountReconciliationViewModel extends ChangeNotifier {
   final String _applyIdempotencyKey;
 
   final List<StockCountLine> _lines = [];
+
+  /// What a *scanned* count found, which is four lists rather than a column of
+  /// numbers: missing, unrecognised, standing in the wrong branch, and back
+  /// from the dead. Each one is actionable on its own, which a variance
+  /// quantity never is.
+  StockCountScanReconciliation? _findings;
   bool _isLoading = false;
   bool _hasLoadError = false;
   bool _isApplying = false;
@@ -32,6 +39,18 @@ class StockCountReconciliationViewModel extends ChangeNotifier {
 
   StockCount get session => _session;
   List<StockCountLine> get lines => List.unmodifiable(_lines);
+  StockCountScanReconciliation? get findings => _findings;
+
+  /// Whether this count has anything identified to show. A shop that tracks
+  /// nothing gets exactly the screen it had before.
+  bool get hasFindings {
+    final found = _findings;
+    return found != null &&
+        (found.scanned > 0 ||
+            found.missing.isNotEmpty ||
+            found.lots.isNotEmpty);
+  }
+
   bool get isLoading => _isLoading;
   bool get hasLoadError => _hasLoadError;
   bool get isApplying => _isApplying;
@@ -53,6 +72,11 @@ class StockCountReconciliationViewModel extends ChangeNotifier {
         _lines.clear();
         _hasLoadError = true;
     }
+
+    // Additive: a failure here leaves the ordinary variance list intact rather
+    // than blocking the apply a shop is standing at the counter waiting for.
+    final found = await _repository.loadScanReconciliation(_session.id);
+    _findings = found is Ok<StockCountScanReconciliation> ? found.value : null;
 
     _isLoading = false;
     notifyListeners();

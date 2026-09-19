@@ -370,3 +370,125 @@ DateTime? _dateOrNull(Object? value) {
 
 /// Shared by the models in this file and by [TrackingMode]'s callers.
 TrackingMode trackingModeOf(Object? value) => TrackingMode.fromWire(value);
+
+/// Which identified stock one transfer line is carrying.
+///
+/// A serialized line names its articles or the dispatch is refused (§6.5): the
+/// far end's *«sent 5, arrived 4, missing 351…333»* reconciliation is the
+/// whole reason to ask, and it can only be true if the system moved the same
+/// five handsets the driver did.
+class TransferLinePick {
+  const TransferLinePick({
+    this.unitIds = const [],
+    this.unitCodes = const [],
+    this.batchIds = const [],
+  });
+
+  final List<int> unitIds;
+  final List<String> unitCodes;
+  final List<int> batchIds;
+
+  bool get isEmpty => unitIds.isEmpty && unitCodes.isEmpty && batchIds.isEmpty;
+
+  int get namedUnits => unitIds.length + unitCodes.length;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      if (unitIds.isNotEmpty) 'unit_ids': unitIds,
+      if (unitCodes.isNotEmpty) 'unit_codes': unitCodes,
+      if (batchIds.isNotEmpty) 'batch_ids': batchIds,
+    };
+  }
+}
+
+/// One variant that holds stock nothing has named yet (§6.10).
+class OpeningIdentificationRow {
+  const OpeningIdentificationRow({
+    required this.variantId,
+    required this.variantName,
+    required this.sku,
+    required this.trackingMode,
+    required this.outstanding,
+  });
+
+  final int variantId;
+  final String variantName;
+  final String sku;
+  final String trackingMode;
+
+  /// The gap between the quantity the bin believes and the articles that
+  /// account for it.
+  final double outstanding;
+
+  factory OpeningIdentificationRow.fromJson(Map<String, Object?> json) {
+    return OpeningIdentificationRow(
+      variantId: (json['variant'] as num?)?.toInt() ?? 0,
+      variantName: json['variant_name']?.toString() ?? '',
+      sku: json['sku']?.toString() ?? '',
+      trackingMode: json['tracking_mode']?.toString() ?? '',
+      outstanding: double.tryParse('${json['outstanding']}') ?? 0,
+    );
+  }
+}
+
+/// One row of a unit's life: `allocations ∪ events`, in time order (§6.9).
+///
+/// Two sources on purpose. An allocation has to balance; *«who dropped this
+/// phone's price from 1600 to 1450 and when»* must never be able to, and a
+/// single table would force one of those two to bend.
+class StockUnitTimelineEntry {
+  const StockUnitTimelineEntry({
+    required this.at,
+    required this.source,
+    required this.kind,
+    this.quantity = '',
+    this.rate = '',
+    this.warehouseName = '',
+    this.voucherType = '',
+    this.voucherId,
+    this.actorName = '',
+    this.fromValue = '',
+    this.toValue = '',
+    this.note = '',
+    this.referenceType = '',
+    this.referenceId,
+  });
+
+  final DateTime at;
+
+  /// `allocation` or `event`.
+  final String source;
+  final String kind;
+  final String quantity;
+  final String rate;
+  final String warehouseName;
+  final String voucherType;
+  final int? voucherId;
+  final String actorName;
+  final String fromValue;
+  final String toValue;
+  final String note;
+  final String referenceType;
+  final int? referenceId;
+
+  bool get isAllocation => source == 'allocation';
+
+  factory StockUnitTimelineEntry.fromJson(Map<String, Object?> json) {
+    return StockUnitTimelineEntry(
+      at: DateTime.tryParse('${json['at']}') ?? DateTime.now(),
+      source: json['source']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? '',
+      quantity: json['quantity']?.toString() ?? '',
+      rate: json['rate']?.toString() ?? '',
+      warehouseName: json['warehouse_name']?.toString() ?? '',
+      voucherType: json['voucher_type']?.toString() ?? '',
+      voucherId: (json['voucher_id'] as num?)?.toInt(),
+      actorName: json['actor_name']?.toString() ?? '',
+      fromValue: json['from_value']?.toString() ?? '',
+      toValue: json['to_value']?.toString() ?? '',
+      note: json['note']?.toString() ?? '',
+      referenceType: json['reference_type']?.toString() ?? '',
+      referenceId: (json['reference_id'] as num?)?.toInt(),
+    );
+  }
+}

@@ -7,9 +7,11 @@ import '../../../core/result.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/stock_count.dart';
 import '../../../data/models/stock_count_draft.dart';
+import '../../../data/models/stock_batch.dart';
 import '../../../data/models/stock_count_line.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/stock_count_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 
 /// The one quiet variance question, surfaced once after an entry crosses the
@@ -53,10 +55,12 @@ class StockCountSessionViewModel extends ChangeNotifier {
     this._repository,
     this._catalogRepository, {
     required StockCount session,
+    TrackedStockRepository? trackedStockRepository,
     ScopedJsonStorage entryStorage = const SharedPreferencesScopedJsonStorage(
       'pointy.stockcount.entry.v1',
     ),
   }) : _session = session,
+       _trackedStockRepository = trackedStockRepository,
        _entryStorage = entryStorage {
     _seedFromSession(session);
     unawaited(_restoreEntry());
@@ -64,6 +68,10 @@ class StockCountSessionViewModel extends ChangeNotifier {
 
   final StockCountRepository _repository;
   final CatalogRepository _catalogRepository;
+
+  /// Only for the lot picker. Absent in the previews and in every test that
+  /// counts anonymous stock, which is most of them.
+  final TrackedStockRepository? _trackedStockRepository;
   final ScopedJsonStorage _entryStorage;
 
   final StockCount _session;
@@ -86,6 +94,23 @@ class StockCountSessionViewModel extends ChangeNotifier {
   StockCountVariancePrompt? _pendingVariance;
   StockCountReentryPrompt? _pendingReentry;
 
+  // -- scan-the-shelf (§6.6) ----------------------------------------------
+  // For a serialized variant, counting a *number* is meaningless: two handsets
+  // of one model are not interchangeable, and "4" is not an answer to which
+  // four. So the keypad is replaced by a scan loop, and these hold what it has
+  // read. Still blind: nothing here says whether a scan was expected.
+  final List<StockCountScanResult> _scans = [];
+  StockCountScanResult? _lastScan;
+  String? _unknownCode;
+
+  // -- counting one lot at a time (§6.6) ----------------------------------
+  // A counter is standing in one room counting the packs of one lot on one
+  // shelf, so the variance is against that lot's balance here and the lot's
+  // stock elsewhere is neither shown nor touched.
+  List<StockBatch> _lotsForCurrent = const [];
+  int? _selectedLotId;
+  bool _isLoadingLots = false;
+
   StockCount get session => _session;
   ProductVariant? get currentVariant => _currentVariant;
   String get input => _input;
@@ -95,6 +120,45 @@ class StockCountSessionViewModel extends ChangeNotifier {
   bool get actionError => _actionError;
   StockCountVariancePrompt? get pendingVariance => _pendingVariance;
   StockCountReentryPrompt? get pendingReentry => _pendingReentry;
+
+  /// Identifiers read in this session, newest first.
+  List<StockCountScanResult> get scans => List.unmodifiable(_scans);
+  StockCountScanResult? get lastScan => _lastScan;
+
+  /// A code that resolved to nothing at all. There is no way to know what
+  /// product it is, so the counter is asked — which is §6.6's
+  /// *opening-identification proposal* made actionable instead of a line in a
+  /// report nobody reads.
+  String? get unknownCode => _unknownCode;
+
+  /// Whether the item in hand is counted by scanning rather than by typing.
+  bool get countsByScan => _currentVariant?.trackingMode.tracksUnits ?? false;
+
+  /// Whether the item in hand is counted one lot at a time.
+  bool get countsByLot {
+    final mode = _currentVariant?.trackingMode;
+    return mode != null && mode.tracksLots && !mode.tracksUnits;
+  }
+
+  List<StockBatch> get lotsForCurrent => _lotsForCurrent;
+  int? get selectedLotId => _selectedLotId;
+  bool get isLoadingLots => _isLoadingLots;
+
+  void selectLot(int? lotId) {
+    _selectedLotId = lotId;
+    _input = '';
+    notifyListeners();
+  }
+
+  /// How many of the current variant have been scanned so far. The counter
+  /// needs to see their own progress; they are not being told what to expect.
+  int get scannedForCurrent {
+    final variant = _currentVariant;
+    if (variant == null) {
+      return 0;
+    }
+    return _scans.where((scan) => scan.variantId == variant.id).length;
+  }
 
   int get countedCount => _countedByVariant.length;
   int get expectedCount => _session.expectedLineCount;
@@ -106,7 +170,12 @@ class StockCountSessionViewModel extends ChangeNotifier {
   }
 
   bool get canSubmit =>
-      _currentVariant != null && _parsedInput() != null && !_isSaving;
+      _currentVariant != null &&
+      _parsedInput() != null &&
+      !_isSaving &&
+      // A lot-tracked line that did not say which lot is a variance against a
+      // total the counter never looked at, and the backend refuses it.
+      (!countsByLot || _selectedLotId != null);
 
   void _seedFromSession(StockCount session) {
     _countedByVariant.clear();
@@ -205,12 +274,78 @@ class StockCountSessionViewModel extends ChangeNotifier {
     final result = await _catalogRepository.findProductVariantByBarcode(
       barcode,
     );
-    _isResolving = false;
     if (result is Ok<ProductVariant?> && result.value != null) {
+      _isResolving = false;
       selectVariant(result.value!);
       return;
     }
-    _scanMiss = true;
+    // Not a product barcode. On a shelf of identified goods the next most
+    // likely thing it is, is an article's own number — which is the same
+    // "one scan, one answer, on the miss path" rule the till follows.
+    await _recordIdentifier(barcode);
+    _isResolving = false;
+    notifyListeners();
+  }
+
+  /// Read one article's identifier into the count.
+  ///
+  /// Called both from the scanner (on the miss path above) and from the
+  /// scan-the-shelf surface, where every scan is an identifier by definition.
+  Future<void> recordIdentifier(String code) async {
+    if (code.trim().isEmpty || _isResolving) {
+      return;
+    }
+    _isResolving = true;
+    notifyListeners();
+    await _recordIdentifier(code);
+    _isResolving = false;
+    notifyListeners();
+  }
+
+  Future<void> _recordIdentifier(String code, {int? variantId}) async {
+    final scanned = await _repository.scan(
+      _session.id,
+      code.trim(),
+      variantId: variantId,
+    );
+    switch (scanned) {
+      case Ok<StockCountScanResult>():
+        final scan = scanned.value;
+        _lastScan = scan;
+        _scanMiss = false;
+        if (scan.created) {
+          _scans.insert(0, scan);
+        }
+        if (!scan.known && scan.variantId == null) {
+          // Nothing in the shop has ever answered to this. Ask what it is
+          // rather than dropping it: it is either goods that were never
+          // received or goods that came back and were never restocked, and
+          // both are findings.
+          _unknownCode = scan.code;
+        } else if (scan.variantId != null && _currentVariant == null) {
+          _countedByVariant[scan.variantId!] = 0;
+        }
+      case Error<StockCountScanResult>():
+        _scanMiss = true;
+    }
+  }
+
+  /// Attach the unrecognised code the counter has just identified.
+  Future<void> attachUnknownScan(ProductVariant variant) async {
+    final code = _unknownCode;
+    if (code == null) {
+      return;
+    }
+    _unknownCode = null;
+    _isSaving = true;
+    notifyListeners();
+    await _recordIdentifier(code, variantId: variant.id);
+    _isSaving = false;
+    notifyListeners();
+  }
+
+  void dismissUnknownScan() {
+    _unknownCode = null;
     notifyListeners();
   }
 
@@ -218,12 +353,35 @@ class StockCountSessionViewModel extends ChangeNotifier {
     _currentVariant = variant;
     _input = '';
     _scanMiss = false;
+    _selectedLotId = null;
+    _lotsForCurrent = const [];
+    notifyListeners();
+    if (countsByLot) {
+      unawaited(_loadLots(variant));
+    }
+  }
+
+  Future<void> _loadLots(ProductVariant variant) async {
+    _isLoadingLots = true;
+    notifyListeners();
+    final result = await _trackedStockRepository?.loadSellableBatches(
+      variantId: variant.id,
+    );
+    _isLoadingLots = false;
+    if (result is Ok<StockBatchPage> && _currentVariant?.id == variant.id) {
+      _lotsForCurrent = result.value.batches;
+      if (_lotsForCurrent.length == 1) {
+        _selectedLotId = _lotsForCurrent.first.id;
+      }
+    }
     notifyListeners();
   }
 
   void clearCurrent() {
     _currentVariant = null;
     _input = '';
+    _selectedLotId = null;
+    _lotsForCurrent = const [];
     notifyListeners();
   }
 
@@ -306,6 +464,7 @@ class StockCountSessionViewModel extends ChangeNotifier {
         variantId: variant.id,
         countedQuantity: quantity,
         mode: mode,
+        batchId: countsByLot ? _selectedLotId : null,
       ),
     );
 

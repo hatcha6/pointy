@@ -112,6 +112,16 @@ enum AppCapability {
   manageConsignmentAgreement,
   repriceStockUnit,
   writeOffStockUnit,
+
+  /// Stop-sale on a lot, and the safety broadcast that follows it. Its own
+  /// capability rather than "can edit a lot": quarantining reaches every till
+  /// in every branch in one write, and telling a hundred customers to stop
+  /// using a medicine is not an edit.
+  quarantineBatch,
+
+  /// Recording, assessing and settling what happened to somebody else's
+  /// goods (§6.2.2).
+  manageConsignmentIncident,
   useAiAssistant,
 
   /// The in-app learning library.
@@ -289,6 +299,18 @@ class AuthorizationCapabilities {
         'inventory.manage_consignmentagreement',
       ])) {
         capabilities.add(AppCapability.manageConsignmentAgreement);
+      }
+      if (_hasAny(user, const [
+        'quarantine_batch',
+        'inventory.quarantine_batch',
+      ])) {
+        capabilities.add(AppCapability.quarantineBatch);
+      }
+      if (_hasAny(user, const [
+        'manage_consignmentincident',
+        'inventory.manage_consignmentincident',
+      ])) {
+        capabilities.add(AppCapability.manageConsignmentIncident);
       }
       if (_hasAny(user, const [
         'reprice_stockunit',
@@ -971,6 +993,9 @@ class AuthorizationCapabilities {
       allows(AppCapability.disburseConsignmentPayout);
   bool get canManageConsignmentAgreement =>
       allows(AppCapability.manageConsignmentAgreement);
+  bool get canQuarantineBatch => allows(AppCapability.quarantineBatch);
+  bool get canManageConsignmentIncident =>
+      allows(AppCapability.manageConsignmentIncident);
   bool get canRepriceStockUnit => allows(AppCapability.repriceStockUnit);
   bool get canWriteOffStockUnit => allows(AppCapability.writeOffStockUnit);
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);

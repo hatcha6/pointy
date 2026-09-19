@@ -32,7 +32,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db.models import F, Q, Sum
+from django.db.models import Case, DecimalField, F, Q, Sum, Value, When
+from django.db.models.functions import Greatest
+
+from apps.documents.statuses import DocumentStatus
 
 from .models import ConsignmentAgreement, StockUnit
 
@@ -134,17 +137,56 @@ def consignor_payout_due(unit, *, sold_price=None) -> Decimal:
     return _money(Decimal(price) * (Decimal(100) - pct) / Decimal(100))
 
 
+def net_due(unit) -> Decimal:
+    """What this one article owes, or is owed, right now — signed.
+
+    ``payout_due − advance``, and the one rule the payable and the receivable
+    are both floors of. Positive: the shop owes the consignor. Negative: the
+    consignor owes the shop, because they have already taken more for this
+    article than its latest sale earned them.
+
+    Per **article**, never across a person's other articles and never across
+    people (§5.8). The offset is legitimate here for one reason only: it is
+    the same object, and the money already handed over was handed over *for
+    it*.
+    """
+    if not unit.is_consignment:
+        return ZERO
+    owed = (
+        consignor_payout_due(unit)
+        if unit.status == StockUnit.Status.SOLD and unit.consignor_paid_at is None
+        else ZERO
+    )
+    return _money(owed - _money(unit.consignor_advance))
+
+
+#: ``max(incoming_rate − consignor_advance, 0)``, in SQL.
+#:
+#: The floor is not arithmetic tidiness. Without it a unit whose consignor
+#: over-collected would contribute a *negative* payable, and the sum would
+#: quietly pay down what the shop owes somebody else — the single figure
+#: hiding two people that §5.8 exists to forbid.
+_PAYABLE_PER_UNIT = Greatest(
+    F("incoming_rate") - F("consignor_advance"),
+    Value(ZERO, output_field=DecimalField(max_digits=18, decimal_places=6)),
+)
+
+
 def consignor_payable(*, as_of=None, consignor=None, queryset=None) -> Decimal:
     """Σ payout over units sold and not yet paid for — the shop's liability.
 
     Counts a consignment sold on آجل exactly like one sold for cash: the shop
     owes the consignor whether or not its own customer has paid, and a payable
     that quietly waited on somebody else's invoice would be the wrong number.
+
+    **Net of any advance on that same article** (§15.3). A watch whose owner
+    already collected 8,000, came back, and re-sold for a payout of 8,600
+    leaves the shop owing 600 — not 8,600, and not nothing.
     """
     rows = queryset if queryset is not None else payable_units(
         as_of=as_of, consignor=consignor
     )
-    total = rows.aggregate(total=Sum("incoming_rate"))["total"]
+    total = rows.aggregate(total=Sum(_PAYABLE_PER_UNIT))["total"]
     return _money(total)
 
 
@@ -169,18 +211,23 @@ def payable_units(*, as_of=None, consignor=None):
 
 
 def receivable_units(*, as_of=None, consignor=None):
-    """Paid-for consignments that are back on the shelf.
+    """Articles carrying an advance: money out, and no sale yet that earns it.
 
     The mirror of :func:`payable_units`, and it exists for one situation: a
     customer returns a watch three days after its owner collected ten thousand
     dinars, and the shop chooses to **reopen** the consignment rather than buy
     the article in. The watch is the consignor's again and the money has gone,
     so the debt has simply changed direction.
+
+    **Not filtered to what is on the shelf** (§15.3). It was, and that is
+    precisely how the debt disappeared: the moment the article re-sold it left
+    this queryset, and — because the paid stamp kept it out of
+    :func:`payable_units` too — both obligations vanished at the instant of
+    one sale. An advance outlives the re-sale; what settles it is the payout
+    it is set against, not the article leaving the shelf.
     """
     rows = StockUnit.objects.filter(
-        is_consignment=True,
-        consignor_payout__isnull=False,
-        status__in=StockUnit.ON_HAND_STATUSES,
+        is_consignment=True, consignor_advance__gt=0
     )
     if consignor is not None:
         rows = rows.filter(consignor=getattr(consignor, "pk", consignor))
@@ -189,13 +236,38 @@ def receivable_units(*, as_of=None, consignor=None):
     return rows
 
 
-def consignor_receivable(*, as_of=None, consignor=None, queryset=None) -> Decimal:
-    """Σ what the shop has paid out on goods it no longer has sold.
+#: ``max(advance − what this article's latest sale earns, 0)``, in SQL.
+#:
+#: The same rule as ``_PAYABLE_PER_UNIT`` read from the other end, and floored
+#: for the same reason: an article that owes the shop nothing must not reduce
+#: what another consignor is owed.
+_RECEIVABLE_PER_UNIT = Greatest(
+    F("consignor_advance")
+    - Case(
+        When(
+            status=StockUnit.Status.SOLD,
+            consignor_paid_at__isnull=True,
+            then=F("incoming_rate"),
+        ),
+        default=Value(ZERO),
+        output_field=DecimalField(max_digits=18, decimal_places=6),
+    ),
+    Value(ZERO, output_field=DecimalField(max_digits=18, decimal_places=6)),
+)
 
-    Read off ``incoming_rate``, which is what that article's payout actually
-    was, rather than recomputed from the agreement's terms: under a commission
-    the payout was a share of a price that is now history, and re-deriving it
-    from today's percentage would invent a debt neither party agreed to.
+
+def consignor_receivable(*, as_of=None, consignor=None, queryset=None) -> Decimal:
+    """Σ what the shop has paid out and not yet earned back.
+
+    Read off ``consignor_advance``, which is what that article's payout
+    actually was, rather than recomputed from the agreement's terms: under a
+    commission the payout was a share of a price that is now history, and
+    re-deriving it from today's percentage would invent a debt neither party
+    agreed to.
+
+    Reduced by what the article's *latest* sale earns its owner, because that
+    is what an advance is for — and floored at zero per article, so an
+    over-covered advance never pays down another consignor's money.
 
     Not netted against :func:`consignor_payable` anywhere. A shop that owes one
     consignor 10,000 and is owed 3,000 by another owes 10,000 — a single figure
@@ -204,7 +276,7 @@ def consignor_receivable(*, as_of=None, consignor=None, queryset=None) -> Decima
     rows = queryset if queryset is not None else receivable_units(
         as_of=as_of, consignor=consignor
     )
-    total = rows.aggregate(total=Sum("incoming_rate"))["total"]
+    total = rows.aggregate(total=Sum(_RECEIVABLE_PER_UNIT))["total"]
     return _money(total)
 
 
@@ -246,16 +318,38 @@ def shop_consignment_commission(*, start=None, end=None) -> Decimal:
     return _money(total)
 
 
+def open_incidents(as_of=None):
+    """Custody incidents nobody has settled yet."""
+    from .models import ConsignmentIncident
+
+    rows = ConsignmentIncident.objects.filter(
+        resolution__in=ConsignmentIncident.OPEN_RESOLUTIONS
+    ).exclude(doc_status=DocumentStatus.CANCELLED)
+    if as_of is not None:
+        rows = rows.filter(discovered_at__lte=as_of)
+    return rows
+
+
 def consignor_claims_open(as_of=None) -> Decimal:
     """Σ assessed value over unresolved custody incidents.
 
-    ``ConsignmentIncident`` is the next phase's work (§6.2.2). The figure is
-    defined here now, and returns zero, so the treasury overlay and the
-    consignment screen are shaped for it from the first release rather than
-    growing a field later — and so that when incidents land there is exactly one
-    place that answers this question.
+    **Assessed** is doing real work here. An incident whose responsibility is
+    still ``undetermined`` carries a zero nobody chose, and folding it into a
+    total would state a liability the shop has not accepted. Those appear in
+    the same overlay as a *count* — «N مطالبة قيد التقدير» — which is the
+    honest shape of "something happened and we do not yet know what it costs".
     """
-    return ZERO
+    total = (
+        open_incidents(as_of)
+        .filter(is_assessed=True)
+        .aggregate(total=Sum("assessed_value"))["total"]
+    )
+    return _money(total)
+
+
+def consignor_claims_unassessed(as_of=None) -> int:
+    """How many incidents are open with nobody having decided yet."""
+    return open_incidents(as_of).filter(is_assessed=False).count()
 
 
 def custody_exposure(as_of=None) -> dict:
@@ -285,6 +379,7 @@ def consignment_position(*, start=None, end=None, as_of=None) -> dict:
         "consignor_payable": consignor_payable(as_of=as_of),
         "consignor_receivable": consignor_receivable(as_of=as_of),
         "consignor_claims_open": consignor_claims_open(as_of),
+        "consignor_claims_unassessed": consignor_claims_unassessed(as_of),
         "shop_commission": shop_consignment_commission(start=start, end=end),
         "custody": custody_exposure(as_of),
     }
@@ -453,8 +548,10 @@ __all__ = [
     "consignment_position",
     "consignment_stock_value",
     "consignor_claims_open",
+    "consignor_claims_unassessed",
     "consignor_payable",
     "consignor_payout_due",
+    "net_due",
     "consignor_receivable",
     "custody_exposure",
     "notify_consignor_of_sale",

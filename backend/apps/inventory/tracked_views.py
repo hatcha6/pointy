@@ -17,7 +17,7 @@ import django_filters
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q, Sum
 from django.utils import timezone
-from rest_framework import mixins, serializers, viewsets
+from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -25,7 +25,9 @@ from rest_framework.response import Response
 from apps.catalog.models import VariantOptionValue
 from apps.core.permissions import HasPointyPermission
 
+from . import consignment as figures
 from . import tracking
+from .reporting import expiry_markdown_suggestions
 from .identity import (
     KIND_UNIT,
     TrackingConflict,
@@ -176,6 +178,12 @@ class StockUnitViewSet(
         "disburse_payout": ("inventory.disburse_consignment_payout",),
         "resend_consignor_sms": ("inventory.view_consignment_liability",),
         "return_to_consignor": ("inventory.manage_consignmentagreement",),
+        "report_incident": ("inventory.manage_consignmentincident",),
+        "opening_worklist": ("inventory.view_stockunit",),
+        "identify_opening": ("inventory.add_stockunit",),
+        "incidents": ("inventory.view_consignment_liability",),
+        "unclaimed_payouts": ("inventory.view_consignment_liability",),
+        "timeline": ("inventory.view_stockunit",),
     }
     filterset_class = StockUnitFilter
     # Keyset-friendly and stable: newest arrival first, id as the tiebreak. The
@@ -564,6 +572,199 @@ class StockUnitViewSet(
         )
 
 
+    @action(detail=False, methods=["get"], url_path="opening-worklist")
+    def opening_worklist(self, request):
+        """Every variant holding stock that nothing has named yet (§6.10).
+
+        The screen an opening-identification run starts on, and the one it has
+        to empty before a mode change is allowed.
+        """
+        from .opening import worklist
+
+        category = request.query_params.get("category")
+        return Response(
+            worklist(
+                warehouse=_selling_warehouse_id(request),
+                category=int(category) if category else None,
+            )
+        )
+
+    @action(detail=False, methods=["post"], url_path="identify-opening")
+    def identify_opening(self, request):
+        """Name goods that are already on the shelf. Nothing moves (§6.10).
+
+        The bin is unchanged by construction: the articles are created at the
+        rate the ledger already decided, so forty anonymous handsets become
+        forty named ones worth exactly what the shelf was worth a moment ago.
+        """
+        from apps.catalog.models import ProductVariant
+
+        from .opening import identify_opening_stock
+
+        payload = request.data or {}
+        variant = ProductVariant.objects.filter(pk=payload.get("variant")).first()
+        if variant is None:
+            raise serializers.ValidationError({"variant": "صنف غير معروف."})
+        result = identify_opening_stock(
+            variant=variant,
+            warehouse=_selling_warehouse_id(request),
+            units=payload.get("units"),
+            batches=payload.get("batches"),
+            capture_later=bool(payload.get("capture_later")),
+            actor=request.user if request.user.is_authenticated else None,
+        )
+        return Response(result, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="report-incident")
+    def report_incident(self, request, pk=None):
+        """Write down what happened to somebody else's goods (§6.2.2).
+
+        The moment somebody notices, in their own words, before anybody has
+        decided who is responsible. Responsibility defaults to *undetermined*
+        and that is the honest state on day one.
+        """
+        from . import custody
+        from .consignment_serializers import (
+            ConsignmentIncidentSerializer,
+            ReportIncidentSerializer,
+        )
+
+        serializer = ReportIncidentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        incident = custody.report_incident(
+            unit=self.get_object(),
+            kind=serializer.validated_data["kind"],
+            narrative=serializer.validated_data["narrative"],
+            occurred_on=serializer.validated_data.get("occurred_on"),
+            discovered_at=serializer.validated_data.get("discovered_at"),
+            responsibility=serializer.validated_data.get("responsibility"),
+            camera=serializer.validated_data.get("camera"),
+            request=request,
+        )
+        return Response(
+            ConsignmentIncidentSerializer(
+                incident, context={"request": request}
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"])
+    def incidents(self, request, pk=None):
+        """Everything that has ever happened to this article in our care."""
+        from .consignment_serializers import ConsignmentIncidentSerializer
+
+        unit = self.get_object()
+        rows = unit.incidents.select_related(
+            "agreement", "reported_by", "unit", "unit__consignor", "unit__variant"
+        ).order_by("-discovered_at", "-id")
+        return Response(
+            ConsignmentIncidentSerializer(
+                rows, many=True, context={"request": request}
+            ).data
+        )
+
+    @action(detail=True, methods=["get"])
+    def timeline(self, request, pk=None):
+        """``allocations ∪ events``, in time order (§6.9).
+
+        Where it has been *and* what was done to it. Two queries against two
+        tables that must stay two tables: an allocation has to balance and
+        «who dropped this price from 1600 to 1450» must never be able to.
+        """
+        unit = self.get_object()
+        rows = []
+        for allocation in (
+            StockAllocation.objects.filter(unit=unit)
+            .select_related("batch", "warehouse")
+            .order_by("posting_at", "id")
+        ):
+            rows.append(
+                {
+                    "at": allocation.posting_at,
+                    "source": "allocation",
+                    "kind": allocation.direction,
+                    "quantity": str(allocation.quantity),
+                    "rate": str(allocation.rate),
+                    "warehouse": allocation.warehouse_id,
+                    "warehouse_name": allocation.warehouse.name,
+                    "voucher_type": allocation.voucher_type,
+                    "voucher_id": allocation.voucher_id,
+                    "note": allocation.note,
+                }
+            )
+        for event in unit.events.select_related("actor").order_by("at", "id"):
+            rows.append(
+                {
+                    "at": event.at,
+                    "source": "event",
+                    "kind": event.kind,
+                    "actor": event.actor_id,
+                    "actor_name": getattr(event.actor, "username", ""),
+                    "from_value": event.from_value,
+                    "to_value": event.to_value,
+                    "note": event.note,
+                    "reference_type": event.reference_type,
+                    "reference_id": event.reference_id,
+                }
+            )
+        rows.sort(key=lambda row: row["at"])
+        return Response(rows)
+
+    @action(detail=False, methods=["get"], url_path="unclaimed-payouts")
+    def unclaimed_payouts(self, request):
+        """Money in the drawer that belongs to somebody who never came back.
+
+        The normal case, not the edge: a sale SMS goes out, nobody appears, and
+        ten thousand dinars sits in a drawer belonging to someone else. Aged
+        30/60/90+ since the sale. What this is **not** is income — nothing in
+        this system ever converts an unclaimed payout into the shop's money on
+        a timer (§17).
+        """
+        from .consignment_serializers import ConsignmentPayableSerializer
+
+        now = timezone.now()
+        rows = list(
+            figures.payable_units()
+            .select_related(
+                "consignor", "variant", "variant__product", "sold_order_line__order"
+            )
+            .prefetch_related("variant__option_values__option")
+        )
+        buckets = {"current": [], "d30": [], "d60": [], "d90": []}
+        for unit in rows:
+            days = (now - unit.sold_at).days if unit.sold_at else 0
+            if days >= 90:
+                buckets["d90"].append(unit)
+            elif days >= 60:
+                buckets["d60"].append(unit)
+            elif days >= 30:
+                buckets["d30"].append(unit)
+            else:
+                buckets["current"].append(unit)
+        return Response(
+            {
+                "buckets": {
+                    name: {
+                        "count": len(units),
+                        "value": sum(
+                            (figures.consignor_payout_due(unit) for unit in units),
+                            Decimal("0.00"),
+                        ),
+                    }
+                    for name, units in buckets.items()
+                },
+                "lines": ConsignmentPayableSerializer(
+                    sorted(
+                        rows,
+                        key=lambda unit: unit.sold_at or now,
+                    ),
+                    many=True,
+                    context={"request": request},
+                ).data,
+            }
+        )
+
+
 class StockBatchFilter(django_filters.FilterSet):
     product = django_filters.NumberFilter(field_name="variant__product_id")
     # "Has a balance there", not a scope: a lot is never *in* a warehouse, its
@@ -619,6 +820,8 @@ class StockBatchViewSet(
         "partial_update": ("inventory.manage_batches",),
         "quarantine": ("inventory.quarantine_batch",),
         "release_quarantine": ("inventory.quarantine_batch",),
+        "recall_report": ("inventory.view_stockbatch",),
+        "notify_affected": ("inventory.quarantine_batch",),
     }
     filterset_class = StockBatchFilter
     ordering = ("expiry_date", "id")
@@ -724,7 +927,14 @@ class StockBatchViewSet(
 
     @action(detail=False, methods=["get"], url_path="expiry-watchlist")
     def expiry_watchlist(self, request):
-        """Lots expiring within N days that still have goods somewhere."""
+        """Lots expiring within N days that still have goods somewhere.
+
+        Each row carries a **markdown suggestion** (§6.8.1's quieter sibling):
+        goods that expire on the shelf are a write-off at full cost, and a
+        discount that clears them at any price above cost is money the shop
+        would otherwise burn. The suggestion is advice and never an action —
+        nothing here changes a price.
+        """
         try:
             days = int(request.query_params.get("days", 30))
         except (TypeError, ValueError):
@@ -736,14 +946,43 @@ class StockBatchViewSet(
             .filter(on_hand__gt=0)
         )
         page = self.paginate_queryset(rows)
+        batches = list(page if page is not None else rows)
         serializer = StockBatchSerializer(
-            page if page is not None else rows,
-            many=True,
-            context={"request": request},
+            batches, many=True, context={"request": request}
         )
+        data = list(serializer.data)
+        suggestions = expiry_markdown_suggestions(batches)
+        for row in data:
+            row["markdown"] = suggestions.get(row["id"])
         if page is not None:
-            return self.get_paginated_response(serializer.data)
-        return Response(serializer.data)
+            return self.get_paginated_response(data)
+        return Response(data)
+
+    @action(detail=True, methods=["get"], url_path="recall-report")
+    def recall_report(self, request, pk=None):
+        """Where this lot came from, where it is, and who has the rest (§6.8.1).
+
+        Answered against **one lot row**, whatever branches its goods passed
+        through — which is the whole argument for the identity/balance split.
+        A recall under the warehouse-scoped model had to find the pieces by
+        string-matching a code.
+        """
+        from .recall import recall_report
+
+        return Response(recall_report(self.get_object()))
+
+    @action(detail=True, methods=["post"], url_path="notify-affected")
+    def notify_affected(self, request, pk=None):
+        """Message every customer on file who bought from this lot.
+
+        Deduplicated per customer per recall: a pharmacist who taps twice must
+        not frighten the same person twice about the same goods.
+        """
+        from .recall import notify_affected_customers
+
+        return Response(
+            notify_affected_customers(self.get_object(), actor=request.user)
+        )
 
 
 def _search_payables(rows, term):

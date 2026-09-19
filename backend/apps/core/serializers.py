@@ -516,6 +516,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
         model = ShopSettings
         fields = [
             "shop_name",
+            "shop_phone",
             "shop_type",
             "currency_code",
             "currency_symbol",

@@ -108,6 +108,41 @@ class StockCountApiClient {
     );
   }
 
+  /// One identifier, read off the shelf (§6.6).
+  ///
+  /// [variantId] is for the one case the identifier cannot answer by itself:
+  /// a code nothing in the shop has ever seen. There is no way to know what
+  /// product that is, so the counter says.
+  Future<StockCountScanResult> scan(
+    int countId,
+    String code, {
+    int? variantId,
+  }) async {
+    final response = await _session.post(
+      'stock-counts/$countId/scan/',
+      body: {'code': code, 'variant': ?variantId},
+    );
+    _session.ensureSuccess(response, 'Stock count scan failed with status');
+    return StockCountScanResult.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<StockCountScanReconciliation> fetchScanReconciliation(
+    int countId,
+  ) async {
+    final response = await _session.get(
+      'stock-counts/$countId/scan-reconciliation/',
+    );
+    _session.ensureSuccess(
+      response,
+      'Stock count scan reconciliation failed with status',
+    );
+    return StockCountScanReconciliation.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<StockCount> cancelCount(int countId) async {
     final response = await _session.post('stock-counts/$countId/cancel/');
     _session.ensureSuccess(response, 'Stock count cancel failed with status');

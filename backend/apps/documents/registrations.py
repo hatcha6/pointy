@@ -512,5 +512,56 @@ def _register_consignor_payout():
     )
 
 
+def _register_consignment_incident():
+    from apps.inventory import consignment_documents
+    from apps.inventory.models import ConsignmentIncident
+
+    registry.register(
+        key="consignment_incident",
+        label="محضر حادث أمانة",
+        model=ConsignmentIncident,
+        number_field="number",
+        # Custody, not money. A claim may follow and that claim's payout is
+        # dated in the money registry; the finding itself settles nothing.
+        money_date_field=None,
+        # Born submitted: the whole point of §6.2.2 is that the record is made
+        # at the time, by whoever noticed, before anybody has decided what it
+        # means. A draft would be a finding somebody could sit on.
+        has_draft_state=False,
+        draft_effects=(),
+        submit_effects=("consignor_liability",),
+        corrections=(Correction.COUNTER, Correction.ALLOW_AFTER_SUBMIT),
+        # The assessment and the settlement are exactly what changes after the
+        # fact — that is the design, not a leak.
+        mutable_after_submit=(
+            "responsibility",
+            "assessed_value",
+            "is_assessed",
+            "resolution",
+            "resolved_at",
+            "settlement_ref",
+            "settlement_payout",
+            "replacement_unit",
+            "occurred_on",
+            "camera",
+        ),
+        derived_fields=(),
+        blocks_cancel=(),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "inventory.manage_consignmentincident",
+            Transition.CANCEL: "inventory.manage_consignmentincident",
+            Transition.EDIT: "inventory.manage_consignmentincident",
+        },
+        correction_window=None,
+        reverse=consignment_documents.reverse_incident,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
 _register_consignment_agreement()
 _register_consignor_payout()
+_register_consignment_incident()
