@@ -3357,6 +3357,35 @@ across three releases.**
 > that, because the failure is not in the feature's code path. It waits for a
 > release after this one, behind the gate below.
 
+**The whole plan audited as one live update (2026-09-19).** The question is
+narrow and mechanical: running the *previous* release against this schema for
+about a minute, what can it no longer do? Every migration added since
+`3262afed` — the last release before this plan — was classified, and the table
+of pre-existing models was derived from the migrations' own `CreateModel`s
+rather than listed by hand.
+
+| Hazard | Found | Verdict |
+|---|---|---|
+| **Columns dropped** | 3, all on `StockBatch` | The old sale path returns before naming them; the three paths that do name them fail recoverably (a retried Celery task, a receipt reversal that rolls back, an admin page). See `0037`. |
+| **New `NOT NULL`, no default, on a table it INSERTs into** | 5 | **One was a real break.** `catalog_productvariant.gtin` — Django adds a `CharField(blank=True)` `DEFAULT ''`, backfills, then **drops the default**, so an INSERT that cannot name the column has nothing to fall back on and *creating a product* 500s. `0038` puts the default back on all five. |
+| **Tightened to `NOT NULL` by `AlterField`** | 4 | `stockbatch.code` / `code_normalized` are reachable only from the gated lot-creation path, and are deliberately left without a default — a lot with an empty code is worse than a loud failure on a path that cannot run. `stockbatch.variant` and `reportrun.report_type` are attribute and choices changes the database does not see. |
+| **New constraints on a table it writes** | 3 | `stock_batch_code_unique_per_variant` is behind the same gate. The two `StockCountLine` partial uniques *replace* an equivalent single unique, and an old-release line (no lot, so `batch IS NULL`) lands in the identical rule. |
+| **Index build locks** | 5 small btrees + 3 FK indexes on populated tables | Every index §15.1 warned about — `batch_balance_fefo_idx`, the unit composite, the attributes GIN — is on a table **this release creates**, so the lock it was worried about has nothing to hold. What is left is a few thousand catalog rows: milliseconds. |
+
+`apps/inventory/test_flip_minute_compatibility.py` holds the result as a test
+rather than as this paragraph: it writes a `catalog_productvariant` row naming
+**exactly** the columns that model had at `3262afed`, which is the shape the
+previous release's ORM emits. Reverting `0038` fails it with
+*«null value in column "gtin" … violates not-null constraint»*.
+
+**One precondition is about turning the feature on, not about shipping it, and
+is still not enforced.** §15.1's client-version gate — a till on a
+pre-serialization build cannot pick a unit, so enabling
+`enable_serialized_inventory` while one of a shop's tills is behind gives that
+till a hard 400 on a product it sold yesterday. The setting takes a permission
+and nothing else today. Shipping the release is safe; enabling it in a shop
+with mixed client versions is not, and that gate remains to be built.
+
 **A contract release is gated on the fleet, not on one shop.**
 `relay-remote-update` lets shops sit pinned, paused or on a canary, so a
 release that removes something an older one still writes cannot ship until the
