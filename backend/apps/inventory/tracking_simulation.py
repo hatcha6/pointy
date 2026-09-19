@@ -318,10 +318,21 @@ class TrackedStockSimulation:
             opening_cash=ZERO,
         )
 
+    #: Set by :meth:`run`; 1 means every operation was checked.
+    check_every = 1
+
     def _fail(self, message):
-        raise TrackingSimulationError(
-            f"after {self.operations_run} operations: {message}"
-        )
+        where = f"after {self.operations_run} operations"
+        if self.check_every > 1:
+            # Say so, or a reader takes the operation count for the culprit when
+            # it is only the end of the window the culprit is somewhere inside.
+            first = max(1, self.operations_run - self.check_every + 1)
+            where += (
+                f" (checked every {self.check_every}, so this went wrong "
+                f"somewhere in operations {first}–{self.operations_run}; "
+                f"re-run with --check-every 1 to pin it down)"
+            )
+        raise TrackingSimulationError(f"{where}: {message}")
 
     # -- operations ------------------------------------------------------
 
@@ -678,24 +689,51 @@ class TrackedStockSimulation:
             )
 
     def _check_lots(self):
+        """Every lot the model knows, compared in three queries rather than
+        two per lot plus one per place.
+
+        This used to walk the model's lots and ask the database about each one
+        individually, which made the *check* O(lots) queries and the whole run
+        quadratic: a thousand operations accumulate a few hundred lots, each
+        check re-asks about all of them, and eight hundred operations took seven
+        minutes where two hundred took fifty seconds. Since driving this harness
+        at volume is the entire reason it exists, the check has to cost about
+        the same whether it runs on the tenth operation or the four-thousandth.
+        """
+        if not self.oracle.lots:
+            return
+        variant_ids = {lot.variant_id for lot in self.oracle.lots.values()}
+
+        # One query for every lot row of every variant the model touched, so a
+        # duplicate is visible as a count rather than needing its own lookup.
+        seen = {}
+        for row in StockBatch.objects.filter(variant_id__in=variant_ids).values(
+            "id", "variant_id", "code_normalized"
+        ):
+            key = (row["variant_id"], row["code_normalized"])
+            seen.setdefault(key, []).append(row["id"])
+
         for lot in self.oracle.lots.values():
-            row = StockBatch.objects.filter(
-                variant_id=lot.variant_id, code_normalized=lot.code
-            ).first()
-            if row is None:
+            rows = seen.get((lot.variant_id, lot.code), [])
+            if not rows:
                 self._fail(f"lot {lot.code} is missing from the shop")
             # One code, one lot, permanently — the deliberate opposite of the
             # serialized rule.
-            duplicates = StockBatch.objects.filter(
-                variant_id=lot.variant_id, code_normalized=lot.code
-            ).count()
-            if duplicates != 1:
-                self._fail(f"lot {lot.code} exists {duplicates} times")
+            if len(rows) != 1:
+                self._fail(f"lot {lot.code} exists {len(rows)} times")
+
+        # And one for every balance under them.
+        batch_ids = [ids[0] for ids in seen.values()]
+        held_by = {
+            (row["batch_id"], row["warehouse_id"]): row["remaining_quantity"]
+            for row in StockBatchBalance.objects.filter(
+                batch_id__in=batch_ids
+            ).values("batch_id", "warehouse_id", "remaining_quantity")
+        }
+        for lot in self.oracle.lots.values():
+            batch_id = seen[(lot.variant_id, lot.code)][0]
             for warehouse_id, quantity in lot.quantity.items():
-                balance = StockBatchBalance.objects.filter(
-                    batch=row, warehouse_id=warehouse_id
-                ).first()
-                held = balance.remaining_quantity if balance else ZERO
+                held = held_by.get((batch_id, warehouse_id), ZERO)
                 if abs(Decimal(held) - quantity) > self.TOLERANCE:
                     self._fail(
                         f"lot {lot.code} @ warehouse {warehouse_id}: shop holds "
@@ -729,16 +767,36 @@ class TrackedStockSimulation:
 
     # -- driving ---------------------------------------------------------
 
-    def run(self, operations=200, *, check_every=1):
+    #: How many checks a run performs, whatever its length. Each check reads the
+    #: whole shop, so checking after *every* operation makes the run quadratic —
+    #: which is what stopped anybody driving this at the volume it exists for.
+    #: Holding the count fixed keeps the total linear: a short run still checks
+    #: after every step, and a four-thousand-operation run checks every
+    #: twentieth and at the end.
+    CHECK_BUDGET = 200
+
+    @classmethod
+    def default_check_every(cls, operations) -> int:
+        return max(1, operations // cls.CHECK_BUDGET)
+
+    def run(self, operations=200, *, check_every=None):
+        if check_every is None:
+            check_every = self.default_check_every(operations)
+        self.check_every = check_every
         self.bootstrap()
         for index in range(operations):
             self.step()
             if (index + 1) % check_every == 0:
                 self.check()
+        # Always at the end, whatever the cadence: a run that stopped one
+        # operation before its next check would otherwise prove nothing about
+        # the last thing it did.
         self.check()
         return self
 
 
-def run_tracked_stock_simulation(*, seed=1, operations=200, verbose=False):
+def run_tracked_stock_simulation(
+    *, seed=1, operations=200, verbose=False, check_every=None
+):
     simulation = TrackedStockSimulation(seed=seed, verbose=verbose)
-    return simulation.run(operations)
+    return simulation.run(operations, check_every=check_every)

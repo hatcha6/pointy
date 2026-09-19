@@ -16,6 +16,16 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--seed", type=int, default=1)
         parser.add_argument("--operations", type=int, default=500)
+        parser.add_argument(
+            "--check-every",
+            type=int,
+            default=None,
+            help=(
+                "Check the invariants every N operations. Defaults to a "
+                "cadence that keeps a long run linear; pass 1 to check "
+                "after every operation when pinning a failure down."
+            ),
+        )
         parser.add_argument("--verbose", action="store_true")
 
     def handle(self, *args, **options):
@@ -23,10 +33,12 @@ class Command(BaseCommand):
             seed=options["seed"],
             operations=options["operations"],
             verbose=options["verbose"],
+            check_every=options["check_every"],
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"{simulation.operations_run} operations, "
+                f"{simulation.operations_run} operations "
+                f"(checked every {simulation.check_every}), "
                 f"{len(simulation.oracle.units)} units and "
                 f"{len(simulation.oracle.lots)} lots — the shop and the model agree."
             )
