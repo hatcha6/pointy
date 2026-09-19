@@ -50,7 +50,14 @@ def _user(username, *, permissions=(), manager=False):
     return user
 
 
-class ConsignmentApiTests(TestCase):
+class ConsignmentApiTestCase(TestCase):
+    """The fixture and the helpers, with no tests of their own.
+
+    Split out so the classes below inherit the setup without inheriting each
+    other's tests — subclassing a populated ``TestCase`` re-runs every one of
+    its cases per subclass, which is four copies of this file's slowest work.
+    """
+
     def setUp(self):
         ensure_role_groups()
         self.manager = _user("manager", manager=True)
@@ -118,6 +125,8 @@ class ConsignmentApiTests(TestCase):
             payments_data=[{"method": "cash", "amount": Decimal(price)}],
         )
 
+
+class ConsignmentApiTests(ConsignmentApiTestCase):
     # -- the voucher ---------------------------------------------------------
 
     def test_an_agreement_is_a_draft_until_it_is_signed(self):
@@ -363,3 +372,276 @@ class UnitWriteApiTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ConsignmentSearchTests(ConsignmentApiTestCase):
+    """§6.2.1 asks both lists to be searchable by the owner's name.
+
+    Worth a test of its own because the failure is not a wrong result — it is a
+    500 the moment anybody types, from a field name that does not exist on the
+    model and that nothing but a search request ever evaluates.
+    """
+
+    def test_agreements_are_searchable_by_the_consignor_s_name(self):
+        self._agreement()
+
+        response = self.client.get(
+            reverse("consignment-agreement-list"), {"search": "سالم"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["results"]), 1)
+
+    def test_agreements_are_searchable_by_phone(self):
+        self._agreement()
+
+        response = self.client.get(
+            reverse("consignment-agreement-list"), {"search": "0912345678"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["results"]), 1)
+
+    def test_payouts_are_searchable_by_the_consignor_s_name(self):
+        agreement = self._agreement()
+        self._submit(agreement["id"])
+        unit = StockUnit.objects.get()
+        self._sell(unit)
+        self.client.post(
+            reverse("stock-unit-disburse-payout", args=[unit.pk]),
+            {"method": "bank"},
+            format="json",
+        )
+
+        response = self.client.get(
+            reverse("consignor-payout-list"), {"search": "سالم"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["results"]), 1)
+
+    def test_a_payout_names_the_articles_it_paid_for(self):
+        """A voucher that says «10,000 د.ل» and not which watch is a receipt
+        for nothing."""
+        agreement = self._agreement()
+        self._submit(agreement["id"])
+        unit = StockUnit.objects.get()
+        self._sell(unit)
+        created = self.client.post(
+            reverse("stock-unit-disburse-payout", args=[unit.pk]),
+            {"method": "bank"},
+            format="json",
+        )
+
+        self.assertEqual(created.status_code, status.HTTP_200_OK, created.data)
+        lines = created.data["lines"]
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]["code"], unit.code)
+        self.assertEqual(Decimal(lines[0]["payout_due"]), Decimal("10000.00"))
+
+
+class ConsignmentPayablesPagingTests(ConsignmentApiTestCase):
+    """Fifty unpaid consignments, and the fifty-first.
+
+    The units list learned this already: a hand-rolled list that sends every row
+    grows until it stops, and a screen that filters the page it is holding
+    answers "nothing owing" for a consignor whose row is further down. On a
+    screen about money owed to people that is the worst available wrong answer.
+    """
+
+    def _sell_all(self):
+        """One till, one shift — 55 sessions for one owner is a constraint
+        violation, and also not a thing a shop does."""
+        session = RegisterSession.objects.create(
+            owner=self.manager,
+            owner_key=f"user:{self.manager.pk}",
+            status=RegisterSession.Status.OPEN,
+            opening_cash=Decimal("0.00"),
+        )
+        for unit in StockUnit.objects.filter(
+            status=StockUnit.Status.IN_STOCK
+        ).order_by("id"):
+            checkout_order(
+                register_session=session,
+                lines_data=[
+                    {
+                        "variant": self.variant,
+                        "quantity": Decimal("1"),
+                        "effective_unit_price": Decimal("12000.00"),
+                        "stock_units": [unit.pk],
+                    }
+                ],
+                payments_data=[
+                    {"method": "cash", "amount": Decimal("12000.00")}
+                ],
+            )
+
+    def _sell_many(self, count):
+        agreement = self._agreement()
+        self.client.post(
+            reverse("consignment-agreement-submit", args=[agreement["id"]]),
+            {
+                "items": [
+                    {
+                        "variant": self.variant.pk,
+                        "code": f"ROLEX-{index:03d}",
+                        "declared_value": "12000.00",
+                    }
+                    for index in range(count)
+                ]
+            },
+            format="json",
+        )
+        self._sell_all()
+
+    def test_the_list_is_paged_and_says_there_is_more(self):
+        self._sell_many(55)
+
+        response = self.client.get(
+            reverse("stock-unit-consignment-payables")
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["count"], 55)
+        self.assertEqual(len(response.data["results"]), 50)
+        self.assertIsNotNone(response.data["next"])
+
+    def test_the_headline_is_the_whole_liability_not_the_page_s(self):
+        self._sell_many(55)
+
+        response = self.client.get(reverse("stock-unit-consignment-payables"))
+
+        # 55 watches at a 10,000 fixed payout each.
+        self.assertEqual(
+            Decimal(response.data["total_due"]), Decimal("550000.00")
+        )
+
+    def test_the_fifty_first_is_reachable(self):
+        self._sell_many(55)
+
+        response = self.client.get(
+            reverse("stock-unit-consignment-payables"), {"page": 2}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["results"]), 5)
+
+    def test_search_reaches_a_row_that_is_not_on_the_first_page(self):
+        self._sell_many(55)
+
+        response = self.client.get(
+            reverse("stock-unit-consignment-payables"), {"search": "ROLEX-054"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["code"], "ROLEX-054")
+
+    def test_search_finds_the_owner_by_name(self):
+        self._sell_many(2)
+
+        response = self.client.get(
+            reverse("stock-unit-consignment-payables"), {"search": "سالم"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["results"]), 2)
+
+
+class ConsignmentQueryScalingTests(ConsignmentApiTestCase):
+    """Neither list may pay a query per row.
+
+    The payables screen joins four ways to render one line — the owner, the
+    product, the invoice and its balance — and a payout voucher names the
+    articles it settled. Both are the classic N+1 shape, and both are read at a
+    counter with somebody waiting.
+    """
+
+    def _consign_and_sell(self, count, prefix):
+        agreement = self._agreement()
+        self.client.post(
+            reverse("consignment-agreement-submit", args=[agreement["id"]]),
+            {
+                "items": [
+                    {
+                        "variant": self.variant.pk,
+                        "code": f"{prefix}-{index:03d}",
+                        "declared_value": "12000.00",
+                    }
+                    for index in range(count)
+                ]
+            },
+            format="json",
+        )
+        session = RegisterSession.objects.filter(
+            owner_key=f"user:{self.manager.pk}",
+            status=RegisterSession.Status.OPEN,
+        ).first() or RegisterSession.objects.create(
+            owner=self.manager,
+            owner_key=f"user:{self.manager.pk}",
+            status=RegisterSession.Status.OPEN,
+            opening_cash=Decimal("0.00"),
+        )
+        for unit in StockUnit.objects.filter(
+            status=StockUnit.Status.IN_STOCK
+        ).order_by("id"):
+            checkout_order(
+                register_session=session,
+                lines_data=[
+                    {
+                        "variant": self.variant,
+                        "quantity": Decimal("1"),
+                        "effective_unit_price": Decimal("12000.00"),
+                        "stock_units": [unit.pk],
+                    }
+                ],
+                payments_data=[{"method": "cash", "amount": Decimal("12000.00")}],
+            )
+
+    def _measure(self, url, params=None):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.get(url, params or {})
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(url, params or {})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        return len(ctx.captured_queries)
+
+    def test_the_payables_list_does_not_pay_a_query_per_row(self):
+        url = reverse("stock-unit-consignment-payables")
+        self._consign_and_sell(3, "A")
+        small = self._measure(url)
+        self._consign_and_sell(6, "B")
+        large = self._measure(url)
+
+        self.assertEqual(
+            small,
+            large,
+            f"consignment payables scaled with rows: {small} -> {large} (N+1)",
+        )
+
+    def test_the_payouts_list_does_not_pay_a_query_per_voucher(self):
+        url = reverse("consignor-payout-list")
+        self._consign_and_sell(4, "C")
+        units = list(StockUnit.objects.filter(status=StockUnit.Status.SOLD))
+        for unit in units[:2]:
+            self.client.post(
+                reverse("stock-unit-disburse-payout", args=[unit.pk]),
+                {"method": "bank"},
+                format="json",
+            )
+        small = self._measure(url)
+        for unit in units[2:]:
+            self.client.post(
+                reverse("stock-unit-disburse-payout", args=[unit.pk]),
+                {"method": "bank"},
+                format="json",
+            )
+        large = self._measure(url)
+
+        self.assertEqual(
+            small,
+            large,
+            f"consignor payouts scaled with rows: {small} -> {large} (N+1)",
+        )

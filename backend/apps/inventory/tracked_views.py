@@ -444,7 +444,14 @@ class StockUnitViewSet(
 
     @action(detail=False, methods=["get"], url_path="consignment-payables")
     def consignment_payables(self, request):
-        """مستحقات الأمانات — sold goods nobody has been paid for."""
+        """مستحقات الأمانات — sold goods nobody has been paid for.
+
+        Paged like every other list, and for the reason the units list already
+        learned: a consignment dealer with fifty unpaid articles has a fifty-
+        first, and a screen that sends all of them is a screen that grows until
+        it stops. ``total_due`` is the **whole** liability, not the page's — the
+        headline figure is about the shop, not about what is on screen.
+        """
         from . import consignment as figures
         from .consignment_serializers import ConsignmentPayableSerializer
 
@@ -459,14 +466,36 @@ class StockUnitViewSet(
                 "sold_order_line",
                 "sold_order_line__order",
             )
+            # Two per-row queries hide behind two innocent-looking properties:
+            # ``variant.full_name`` reads the option values, and the invoice's
+            # ``balance_due`` sums its payments in Python. Both are cheap once
+            # and a query per handset otherwise.
+            .prefetch_related(
+                "variant__option_values__option",
+                "sold_order_line__order__payments",
+            )
             .order_by("sold_at", "id")
         )
+        # Searched here rather than in the client, because the client now sees
+        # one page: filtering the page it happens to hold would answer "سالم has
+        # nothing owing" for a consignor whose row is on page three.
+        rows = _search_payables(rows, request.query_params.get("search"))
+        total_due = figures.consignor_payable(queryset=rows)
+        page = self.paginate_queryset(rows)
+        if page is not None:
+            response = self.get_paginated_response(
+                ConsignmentPayableSerializer(
+                    page, many=True, context={"request": request}
+                ).data
+            )
+            response.data["total_due"] = total_due
+            return response
         return Response(
             {
                 "results": ConsignmentPayableSerializer(
                     rows, many=True, context={"request": request}
                 ).data,
-                "total_due": figures.consignor_payable(),
+                "total_due": total_due,
             }
         )
 
@@ -715,3 +744,22 @@ class StockBatchViewSet(
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
+
+
+def _search_payables(rows, term):
+    """Name, phone, identifier or product — whatever the person at the counter
+    said or scanned."""
+    term = (term or "").strip()
+    if not term:
+        return rows
+    from django.db.models import Q
+
+    from .identity import normalize_identifier
+
+    return rows.filter(
+        Q(consignor__full_name__icontains=term)
+        | Q(consignor__phone__icontains=term)
+        | Q(code__icontains=term)
+        | Q(code_normalized__icontains=normalize_identifier(term))
+        | Q(variant__product__name__icontains=term)
+    )

@@ -1241,8 +1241,16 @@ class PosApiService {
 
   // --- الأمانات ------------------------------------------------------------
 
-  Future<ConsignmentPayablePage> fetchConsignmentPayables({int? consignorId}) {
-    return _consignment.fetchPayables(consignorId: consignorId);
+  Future<ConsignmentPayablePage> fetchConsignmentPayables({
+    int? consignorId,
+    int page = 1,
+    String search = '',
+  }) {
+    return _consignment.fetchPayables(
+      consignorId: consignorId,
+      page: page,
+      search: search,
+    );
   }
 
   Future<ConsignmentPosition> fetchConsignmentPosition({

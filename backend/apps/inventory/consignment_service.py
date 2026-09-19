@@ -423,7 +423,6 @@ def return_to_consignor(unit, *, request=None, note=""):
         voucher_id=unit.pk,
         posting_at=at,
     )
-    close_agreement_if_empty(unit.agreement)
     return unit
 
 
@@ -433,12 +432,14 @@ def _decrease():
     return StockMovement.Type.DECREASE
 
 
-def close_agreement_if_empty(agreement):
+def agreement_is_closed(agreement):
     """An agreement is over when the last article it covers has left.
 
-    Not a status column: "are any of its units still here?" is one indexed
-    count, and a stored flag is a second answer that can disagree with the
-    first.
+    A question, not an act — which is why nothing calls it to "close" anything.
+    Not a status column either: "are any of its units still here?" is one
+    indexed existence check, and a stored flag is a second answer that can
+    disagree with the first. The agreements list asks the same question through
+    its ``open_only`` filter, in SQL, over many rows at once.
     """
     return agreement is not None and not StockUnit.objects.filter(
         agreement=agreement, status__in=StockUnit.LIVE_STATUSES
@@ -465,12 +466,25 @@ def buy_in_returned_consignment(unit, *, request=None):
 def reopen_consignment(unit, *, request=None):
     """…or it goes back on the shelf as the consignor's, and they owe the shop.
 
-    The mirror of the payable: the money has already gone out, so a **consignor
-    receivable** opens for it, settled against the next sale or collected back.
-    Modelled as the payout row staying and the unit going back to zero — the
-    amount owed to the shop is ``consignor_payout`` on a unit that is in stock
-    again, which the payables screen reads and shows as a negative line.
+    Two situations wear the same name, and the difference is whether money has
+    left the building.
+
+    **Nothing was paid yet.** The sale is simply undone, so the payout stamped
+    on the article at checkout describes a sale that no longer exists. It goes.
+
+    **The consignor has collected.** Then the payout is the *only* record of how
+    much the shop handed over for an article it no longer has sold, and that is
+    exactly the sum it is now owed back — so it stays on the row, and
+    ``consignment.consignor_receivable`` is what reads it. Zeroing it here is
+    what used to happen, and it left a shop ten thousand dinars down with no
+    screen, figure or report saying so.
+
+    Either way the article is worth nothing to the shop while it sits there:
+    ``StockUnit.stock_value`` answers zero for a consignment whatever its rate,
+    so the bin, the ledger and the return's own allocation are unaffected.
     """
+    if unit.consignor_payout_id is not None:
+        return unit
     unit.incoming_rate = ZERO
     unit.save(update_fields=["incoming_rate", "updated_at"])
     return unit
@@ -492,8 +506,8 @@ def resend_sale_sms(unit, *, settings=None):
 
 
 __all__ = [
+    "agreement_is_closed",
     "buy_in_returned_consignment",
-    "close_agreement_if_empty",
     "disburse_payout",
     "reopen_consignment",
     "resend_sale_sms",

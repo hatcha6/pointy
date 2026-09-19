@@ -724,6 +724,13 @@ class StockLedgerEntry(TimeStampedModel):
         # only interesting thing in it.
         CONSIGNMENT_INTAKE = "consignment_intake", "Consignment intake"
         CONSIGNMENT_RETURN = "consignment_return", "Consignment returned to owner"
+        # A screen fitted to a handset the shop already owns. Value-only,
+        # quantity zero, the same shape as the consignment cost above and for
+        # the same reason: ``refurb_cost`` changes what the article is worth,
+        # the bin is a cache of *this* ledger rather than of the units, and a
+        # capitalisation nobody posted leaves the two disagreeing until the sale
+        # issues value the shelf never took in (§5.6).
+        REFURBISHMENT = "refurbishment", "Refurbishment capitalised"
 
     variant = models.ForeignKey(
         ProductVariant,

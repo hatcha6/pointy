@@ -262,17 +262,27 @@ class MoneyObligations {
   const MoneyObligations({
     this.consignorPayable = 0,
     this.claimsOpen = 0,
+    this.consignorReceivable = 0,
     this.custodyUnitCount = 0,
     this.custodyDeclaredValue = 0,
   });
 
   final double consignorPayable;
+
+  /// The debt running the other way: a consignment that came back after its
+  /// owner had already collected. Shown beside the payable, never netted into
+  /// it — a shop that owes one consignor 10,000 and is owed 3,000 by another
+  /// owes 10,000.
+  final double consignorReceivable;
   final double claimsOpen;
   final int custodyUnitCount;
   final double custodyDeclaredValue;
 
   bool get isEmpty =>
-      consignorPayable == 0 && claimsOpen == 0 && custodyUnitCount == 0;
+      consignorPayable == 0 &&
+      consignorReceivable == 0 &&
+      claimsOpen == 0 &&
+      custodyUnitCount == 0;
 
   factory MoneyObligations.fromJson(Map<String, Object?> json) {
     final custody = json['custody'];
@@ -281,6 +291,7 @@ class MoneyObligations {
         : const <String, Object?>{};
     return MoneyObligations(
       consignorPayable: _moneyFromJson(json['consignor_payable']),
+      consignorReceivable: _moneyFromJson(json['consignor_receivable']),
       claimsOpen: _moneyFromJson(json['consignor_claims_open']),
       custodyUnitCount: _intFromJson(custodyMap['unit_count']),
       custodyDeclaredValue: _moneyFromJson(custodyMap['declared_value']),

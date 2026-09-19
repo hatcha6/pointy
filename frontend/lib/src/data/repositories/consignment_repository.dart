@@ -13,9 +13,17 @@ class ConsignmentRepository {
 
   final PosApiService _service;
 
-  Future<Result<ConsignmentPayablePage>> loadPayables({int? consignorId}) {
+  Future<Result<ConsignmentPayablePage>> loadPayables({
+    int? consignorId,
+    int page = 1,
+    String search = '',
+  }) {
     return Result.guard(
-      () => _service.fetchConsignmentPayables(consignorId: consignorId),
+      () => _service.fetchConsignmentPayables(
+        consignorId: consignorId,
+        page: page,
+        search: search,
+      ),
     );
   }
 

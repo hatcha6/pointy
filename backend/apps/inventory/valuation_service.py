@@ -454,6 +454,71 @@ def post_movement_valuations(
 
 
 
+def post_value_only_entry(
+    *,
+    variant_id,
+    warehouse_id,
+    value,
+    voucher_type,
+    voucher_id=None,
+    note="",
+    posting_at=None,
+):
+    """Change what stock is worth without changing how much of it there is.
+
+    Used when value lands on an article the shop already holds: a screen fitted
+    to a handset (§5.6), and nothing else yet. ``StockValuationBin`` is a cache
+    of the ledger and **not** derived from the units, so a
+    ``StockUnit.refurb_cost`` written on its own leaves the bin behind by the
+    150 it cost and the sale then issues 1,350 out of a shelf that only ever
+    took 1,200 in — the drift §5.8 diagnosed for consignment, one function over.
+
+    Same shape as the ``consignment_cost`` entry: quantity zero, value only,
+    with the bin and the entry written in the same breath. Returns the entry, or
+    ``None`` for a value of nothing.
+    """
+    value = Decimal(value or 0)
+    if value == ZERO:
+        return None
+    from .tracking import mode_of
+
+    posting_at = posting_at or timezone.now()
+    method = method_for_mode(mode_of(variant_id), default=current_method())
+    bins = _load_bins([variant_id], warehouse_id, method=method)
+    bin_row = bins[variant_id]
+    previous_rate = bin_row.valuation_rate
+    engine = _engine_for(bin_row, method)
+    engine.add_value(value)
+    balance_quantity, balance_value = _write_bin(bin_row, engine, previous_rate)
+    entry = StockLedgerEntry.objects.create(
+        variant_id=variant_id,
+        warehouse_id=warehouse_id,
+        movement=None,
+        posting_at=posting_at,
+        quantity_change=ZERO,
+        valuation_rate=_quantize_rate(bin_row.valuation_rate),
+        value_change=_quantize_rate(value),
+        balance_quantity=_quantize_quantity(balance_quantity),
+        balance_value=_quantize_rate(balance_value),
+        state=bin_row.state,
+        method=method,
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        note=note,
+    )
+    bin_row.save(
+        update_fields=[
+            "quantity",
+            "valuation_rate",
+            "stock_value",
+            "state",
+            "method",
+            "updated_at",
+        ]
+    )
+    return entry
+
+
 def _plan_matches(plan, delta) -> bool:
     """Does the plan account for exactly the quantity the movement moved?
 
@@ -520,6 +585,46 @@ def valuation_unit_costs(variant_ids, *, warehouse=None):
     return costs
 
 
+def _released_by(entry, entries, index, unowned):
+    """How much unowned quantity this value-only entry has just bought.
+
+    Only a ``consignment_cost`` releases anything: it is the purchase half of a
+    consignment sale, so the articles the issue after it removes are the shop's
+    by the time it runs. A refurbishment releases nothing — it adds value to
+    goods the shop already owned — and reading the next entry's consigned count
+    for it would quietly hand over a watch that happened to arrive afterwards.
+    """
+    if entry.voucher_type != StockLedgerEntry.VoucherType.CONSIGNMENT_COST:
+        return ZERO
+    if index + 1 >= len(entries):
+        return ZERO
+    return unowned.get(entries[index + 1].pk, ZERO)
+
+
+def _unowned_by_entry(entries, method):
+    """``{ledger entry id: consigned quantity}`` for a replay.
+
+    Only identified stock can be consigned, and only the allocations know which
+    articles were somebody else's — the ledger entry stores a quantity and a
+    value and nothing about ownership. One grouped query for the whole variant.
+    """
+    if method not in ValuationMethod.IDENTIFIED or not entries:
+        return {}
+    from django.db.models import Count
+
+    from .models import StockAllocation
+
+    rows = (
+        StockAllocation.objects.filter(
+            ledger_entry_id__in=[entry.pk for entry in entries],
+            unit__is_consignment=True,
+        )
+        .values("ledger_entry_id")
+        .annotate(total=Count("id"))
+    )
+    return {row["ledger_entry_id"]: Decimal(row["total"]) for row in rows}
+
+
 @transaction.atomic
 def repost_variant(variant_id, *, warehouse_id=None, method=None):
     """Rebuild a variant's valuation by replaying its ledger from the start.
@@ -553,13 +658,40 @@ def repost_variant(variant_id, *, warehouse_id=None, method=None):
     engine = valuation_engine(method)
     previous_rate = ZERO
     updated = []
-    for entry in entries:
+    # How much of each entry was goods the shop did not own. The ledger row does
+    # not record it and the engine cannot infer it, so it is re-derived from the
+    # allocations — without which a replay counts every consigned watch as owned
+    # stock worth nothing and dilutes the variant's rate by exactly the thing
+    # invariant 9 exists to prevent.
+    unowned = _unowned_by_entry(entries, method)
+    for index, entry in enumerate(entries):
         quantity = Decimal(entry.quantity_change)
-        if quantity > 0:
+        consigned = unowned.get(entry.pk, ZERO)
+        if quantity == ZERO:
+            # A value-only entry: the purchase half of a consignment sale, or a
+            # repair capitalised into a handset. **The stored value is the
+            # replay** — nothing else in the database records it — so it is read
+            # rather than recomputed. Recomputing it is what a queue method does
+            # to an issue, and doing it here wrote a zero over the ten thousand
+            # dinars a consignment cost, leaving the sale that follows to take
+            # value out of a ledger that no longer had it.
+            value_change = Decimal(entry.value_change)
+            if hasattr(engine, "add_value"):
+                engine.add_value(value_change, released=_released_by(
+                    entry, entries, index, unowned
+                ))
             rate = Decimal(entry.valuation_rate)
-            engine.add_stock(quantity, rate)
-            value_change = quantity * rate
+        elif quantity > 0:
+            rate = Decimal(entry.valuation_rate)
+            engine.add_stock(
+                quantity, rate, **({"unowned": consigned} if consigned else {})
+            )
+            value_change = (quantity - consigned) * rate
         else:
+            # Released by the value-only entry immediately before it, if there
+            # was one — the same sequencing the live path uses.
+            if index and Decimal(entries[index - 1].quantity_change) == ZERO:
+                consigned = ZERO
             consumed = engine.remove_stock(
                 -quantity,
                 # Replaying identified stock re-uses the rate the allocations
@@ -578,9 +710,17 @@ def repost_variant(variant_id, *, warehouse_id=None, method=None):
                     if method in ValuationMethod.IDENTIFIED
                     else {}
                 ),
+                **({"unowned": consigned} if consigned else {}),
             )
             rate = consumed_unit_cost(consumed)
             value_change = -consumed_cost(consumed)
+            if consigned:
+                # Goods handed back to their owner take no value with them,
+                # because they never brought any.
+                value_change = -(
+                    (-quantity - consigned) * Decimal(entry.valuation_rate)
+                )
+                rate = Decimal(entry.valuation_rate)
 
         balance_quantity, balance_value = engine.get_total_stock_and_value()
         entry.valuation_rate = _quantize_rate(rate)

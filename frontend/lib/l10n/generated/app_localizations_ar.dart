@@ -17820,6 +17820,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get consignmentFigurePayable => 'مستحقات لأصحابها';
 
   @override
+  String get consignmentFigureReceivable => 'مستحقات على أصحابها';
+
+  @override
   String get consignmentFigureCommission => 'عمولة المحل';
 
   @override
@@ -17887,6 +17890,20 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get consignmentDisburseFailed =>
       'تعذّر صرف المستحقات — تأكد من وجود وردية مفتوحة.';
+
+  @override
+  String get consignmentPrintVoucher => 'طباعة سند الاستلام';
+
+  @override
+  String get consignmentPrintPayout => 'طباعة سند الصرف';
+
+  @override
+  String get consignmentPrintFailed => 'تعذّرت الطباعة.';
+
+  @override
+  String consignmentVoucherReady(String number) {
+    return 'سند الاستلام $number جاهز للطباعة';
+  }
 
   @override
   String get stockUnitOwnPrice => 'سعر هذا الجهاز';
@@ -18058,5 +18075,10 @@ class AppLocalizationsAr extends AppLocalizations {
       one: 'أمانة واحدة في العهدة',
     );
     return '$_temp0 بقيمة مقدّرة $amount';
+  }
+
+  @override
+  String treasuryConsignorReceivable(String amount) {
+    return 'ومستحق على أصحاب الأمانات: $amount';
   }
 }

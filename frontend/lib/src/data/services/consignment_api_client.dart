@@ -12,10 +12,18 @@ class ConsignmentApiClient {
 
   final PosApiSession _session;
 
-  Future<ConsignmentPayablePage> fetchPayables({int? consignorId}) async {
+  Future<ConsignmentPayablePage> fetchPayables({
+    int? consignorId,
+    int page = 1,
+    String search = '',
+  }) async {
     final response = await _session.get(
       'stock-units/consignment-payables/',
-      query: {if (consignorId != null) 'consignor': '$consignorId'},
+      query: {
+        if (consignorId != null) 'consignor': '$consignorId',
+        if (page > 1) 'page': '$page',
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+      },
     );
     _session.ensureSuccess(response, 'Consignment payables failed with status');
     return ConsignmentPayablePage.fromJson(_session.decodedBody(response));

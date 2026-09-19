@@ -247,13 +247,26 @@ class _ObligationsCallout extends StatelessWidget {
       title: l10n.treasuryConsignorPayableTitle(
         formatMoney(obligations.consignorPayable),
       ),
-      message: obligations.custodyUnitCount > 0
-          ? l10n.treasuryCustodyHeld(
-              obligations.custodyUnitCount,
-              formatMoney(obligations.custodyDeclaredValue),
-            )
-          : null,
+      message: _message(l10n),
     );
+  }
+
+  /// What is held, and — rarely — what is owed back to the shop. The receivable
+  /// only appears when there is one: a permanent zero beside the payable would
+  /// read as a second thing to chase rather than as the exception it is.
+  String? _message(AppLocalizations l10n) {
+    final parts = <String>[
+      if (obligations.custodyUnitCount > 0)
+        l10n.treasuryCustodyHeld(
+          obligations.custodyUnitCount,
+          formatMoney(obligations.custodyDeclaredValue),
+        ),
+      if (obligations.consignorReceivable > 0)
+        l10n.treasuryConsignorReceivable(
+          formatMoney(obligations.consignorReceivable),
+        ),
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 }
 

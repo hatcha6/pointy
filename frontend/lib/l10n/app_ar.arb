@@ -11351,6 +11351,8 @@
   "@consignmentPayablesEmptyBody": {"description": ""},
   "consignmentFigurePayable": "مستحقات لأصحابها",
   "@consignmentFigurePayable": {"description": ""},
+  "consignmentFigureReceivable": "مستحقات على أصحابها",
+  "@consignmentFigureReceivable": {"description": ""},
   "consignmentFigureCommission": "عمولة المحل",
   "@consignmentFigureCommission": {"description": ""},
   "consignmentFigureCustody": "أمانات في العهدة",
@@ -11383,6 +11385,14 @@
   "@consignmentDisburseDone": {"description": "", "placeholders": {"number": {"type": "String"}}},
   "consignmentDisburseFailed": "تعذّر صرف المستحقات — تأكد من وجود وردية مفتوحة.",
   "@consignmentDisburseFailed": {"description": ""},
+  "consignmentPrintVoucher": "طباعة سند الاستلام",
+  "@consignmentPrintVoucher": {"description": ""},
+  "consignmentPrintPayout": "طباعة سند الصرف",
+  "@consignmentPrintPayout": {"description": ""},
+  "consignmentPrintFailed": "تعذّرت الطباعة.",
+  "@consignmentPrintFailed": {"description": ""},
+  "consignmentVoucherReady": "سند الاستلام {number} جاهز للطباعة",
+  "@consignmentVoucherReady": {"description": "", "placeholders": {"number": {"type": "String"}}},
   "stockUnitOwnPrice": "سعر هذا الجهاز",
   "@stockUnitOwnPrice": {"description": ""},
   "stockUnitVariantPrice": "سعر الصنف",
@@ -11478,5 +11488,7 @@
   "treasuryConsignorPayableTitle": "منها مستحقات أمانات: {amount}",
   "@treasuryConsignorPayableTitle": {"description": "", "placeholders": {"amount": {"type": "String"}}},
   "treasuryCustodyHeld": "{count, plural, one{أمانة واحدة في العهدة} two{أمانتان في العهدة} few{{count} أمانات في العهدة} other{{count} أمانة في العهدة}} بقيمة مقدّرة {amount}",
-  "@treasuryCustodyHeld": {"description": "", "placeholders": {"count": {"type": "int"}, "amount": {"type": "String"}}}
+  "@treasuryCustodyHeld": {"description": "", "placeholders": {"count": {"type": "int"}, "amount": {"type": "String"}}},
+  "treasuryConsignorReceivable": "ومستحق على أصحاب الأمانات: {amount}",
+  "@treasuryConsignorReceivable": {"description": "", "placeholders": {"amount": {"type": "String"}}}
 }

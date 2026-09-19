@@ -78,12 +78,17 @@ class ConsignmentAgreementViewSet(viewsets.ModelViewSet):
     }
     filterset_class = ConsignmentAgreementFilter
     ordering = ("-signed_at", "-id")
-    search_fields = ("number", "consignor__name", "consignor__phone")
+    search_fields = ("number", "consignor__full_name", "consignor__phone")
 
     def get_queryset(self):
         return (
             ConsignmentAgreement.objects.select_related("consignor")
-            .prefetch_related("units__variant__product")
+            # ``variant.full_name`` reads the option values; without them a
+            # detail with eight handbags on it is eight extra queries.
+            .prefetch_related(
+                "units__variant__product",
+                "units__variant__option_values__option",
+            )
             .order_by(*self.ordering)
         )
 
@@ -181,11 +186,19 @@ class ConsignorPayoutViewSet(
     }
     filterset_fields = ("consignor", "method", "doc_status")
     ordering = ("-paid_at", "-id")
-    search_fields = ("number", "consignor__name", "reference")
+    search_fields = ("number", "consignor__full_name", "reference")
 
     def get_queryset(self):
-        return ConsignorPayout.objects.select_related("consignor").order_by(
-            *self.ordering
+        return (
+            ConsignorPayout.objects.select_related("consignor")
+            # The articles ride along: every row prints what it paid for, so a
+            # list of twenty payouts must not be twenty extra queries — the
+            # option values included, because ``full_name`` reads them.
+            .prefetch_related(
+                "units__variant__product",
+                "units__variant__option_values__option",
+            )
+            .order_by(*self.ordering)
         )
 
 

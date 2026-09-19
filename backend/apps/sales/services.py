@@ -45,8 +45,10 @@ from apps.inventory.services import (
 from . import documents as sales_documents
 from .tracked_return import BUY_IN, return_units_for_line
 from .tracked_sale import (
+    attribute_allocations,
     finish_sold_units,
-    lines_by_variant,
+    line_resolver,
+    remember_line_order,
     stamp_consignment_payouts,
 )
 from .models import (
@@ -134,6 +136,9 @@ def create_order_with_lines(
         [line_data["variant"] for line_data in lines_data], warehouse=warehouse
     )
     line_objects_by_key = {}
+    # In cart order, because that is the key each identified article was tagged
+    # with when the issue was planned — before any of these rows existed.
+    lines_in_order = []
     for line_data in lines_data:
         variant = line_data["variant"]
         line_key = checkout_line_key(line_data)
@@ -158,6 +163,8 @@ def create_order_with_lines(
         )
         _persist_order_line_modifiers(line, line_data.get("modifiers", []))
         line_objects_by_key[line_key] = line
+        lines_in_order.append(line)
+    remember_line_order(order, lines_in_order)
     order.recalculate()
     order.save(update_fields=["subtotal", "discount_total", "total", "updated_at"])
     try:
@@ -1007,7 +1014,12 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
     # Which identified articles the till named, per variant. Empty for every
     # untracked cart, and read only when the variant's mode says so.
     selections_by_variant = {}
-    for line_data in lines_data:
+    # And which *line* asked for what, in the order the cart sent them. The
+    # issue is planned per variant, so without this a sale of two handsets of
+    # one model has one plan, two articles and no way back to the two prices
+    # they were rung up at (§5.7).
+    claims_by_variant = {}
+    for line_index, line_data in enumerate(lines_data):
         variant = line_data["variant"]
         if variant.product.is_service or variant.product.is_prepared:
             # Labor/fees have no stock, and made-to-order dishes consume their
@@ -1028,6 +1040,14 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
         selection["unit_ids"].extend(line_data.get("stock_units") or [])
         selection["unit_codes"].extend(line_data.get("stock_unit_codes") or [])
         selection["batch_ids"].extend(line_data.get("stock_batches") or [])
+        claims_by_variant.setdefault(variant.pk, []).append(
+            {
+                "key": str(line_index),
+                "quantity": base_quantity,
+                "unit_ids": list(line_data.get("stock_units") or []),
+                "unit_codes": list(line_data.get("stock_unit_codes") or []),
+            }
+        )
 
     stock_adjustments = []
     shortages = []
@@ -1059,19 +1079,18 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
         # Plan the issue *before* the shortage check, so a cart that names an
         # unavailable unit is refused by the identity rather than by arithmetic.
         if tracked:
-            tracking.attach_plan(
-                variant,
-                tracking.plan_issue(
-                    variant=variant,
-                    warehouse=stock_item.warehouse_id,
-                    quantity=quantity,
-                    # Never short: identified stock has no oversell path at all,
-                    # so a cart that cannot be allocated is refused here rather
-                    # than allowed through to invent a serial number later.
-                    allow_short=False,
-                    **selections_by_variant.get(variant_id, {}),
-                ),
+            plan = tracking.plan_issue(
+                variant=variant,
+                warehouse=stock_item.warehouse_id,
+                quantity=quantity,
+                # Never short: identified stock has no oversell path at all,
+                # so a cart that cannot be allocated is refused here rather
+                # than allowed through to invent a serial number later.
+                allow_short=False,
+                **selections_by_variant.get(variant_id, {}),
             )
+            attribute_allocations(plan, claims_by_variant.get(variant_id))
+            tracking.attach_plan(variant, plan)
         # Sellable = on-hand minus stock held by quotation reservations
         # (quantity_committed). A reservation blocks others from dipping into the
         # held units even though those units are still physically on hand.
@@ -1130,7 +1149,7 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None, setti
     movements = []
 
     sold_at = timezone.now()
-    order_lines = lines_by_variant(order)
+    line_for = line_resolver(order)
     for variant, stock_item, quantity in stock_adjustments:
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
@@ -1148,7 +1167,9 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None, setti
             # payout its terms have just earned. The plan carries the total into
             # the valuation pass, which posts it as the purchase half of this
             # sale (§5.8).
-            stamp_consignment_payouts(plan, order_lines.get(variant.pk))
+            stamp_consignment_payouts(
+                plan, lambda allocation, _v=variant.pk: line_for(allocation, _v)
+            )
             tracking.apply_issue(
                 plan,
                 status=StockUnit.Status.SOLD,
@@ -1175,11 +1196,11 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None, setti
         voucher_type=StockLedgerEntry.VoucherType.SALE,
         voucher_id=order.pk,
     )
-    _stamp_ledger_cost_on_lines(order, created)
+    _stamp_ledger_cost_on_lines(order, created, line_for=line_for)
     finish_sold_units(order, created, settings=settings, request=request)
 
 
-def _stamp_ledger_cost_on_lines(order, movements):
+def _stamp_ledger_cost_on_lines(order, movements, *, line_for=None):
     """Write what the sale actually cost onto its own lines.
 
     Until the stock is issued nobody knows the cost: with FIFO a sale can
@@ -1190,27 +1211,69 @@ def _stamp_ledger_cost_on_lines(order, movements):
 
     Every report reads ``OrderLine.unit_cost``, so correcting it here is what
     makes gross profit true without touching a single report.
+
+    **An identified line costs what its own article cost.** The movement's rate
+    is blended across the variant, which is the right number for the ledger
+    entry and the wrong one for a line: a 1,200 handset and an 800 one sold
+    together would both report 1,000, and a consigned watch beside an owned one
+    would report neither the payout nor the cost. So where an allocation names
+    the line it left on, that allocation's own rate wins.
     """
     rates = {
         movement.variant_id: movement.valuation_rate_applied
         for movement in movements
         if getattr(movement, "valuation_rate_applied", None) is not None
     }
-    if not rates:
+    per_line = _identified_line_costs(movements, line_for=line_for)
+    if not rates and not per_line:
         return
 
-    lines = list(order.lines.filter(variant_id__in=rates))
+    lines = list(order.lines.filter(variant_id__in=rates)) if rates else []
+    lines += [
+        line
+        for line in order.lines.filter(pk__in=per_line)
+        if line.variant_id not in rates
+    ]
     updated = []
     for line in lines:
         # The ledger works in base units; the line is priced in whatever unit
         # was sold, so scale by the factor the line snapshotted.
-        base_rate = rates[line.variant_id]
+        base_rate = per_line.get(line.pk)
+        if base_rate is None:
+            base_rate = rates.get(line.variant_id)
+        if base_rate is None:
+            continue
         unit_cost = money(base_rate * (line.unit_factor or Decimal("1")))
         if unit_cost != line.unit_cost:
             line.unit_cost = unit_cost
             updated.append(line)
     if updated:
         OrderLine.objects.bulk_update(updated, ["unit_cost", "updated_at"])
+
+
+def _identified_line_costs(movements, *, line_for=None):
+    """``{line pk: base-unit rate}`` for the lines whose articles named them."""
+    if line_for is None:
+        return {}
+    totals = {}
+    for movement in movements:
+        plan = getattr(movement, "tracked_plan", None)
+        if plan is None:
+            continue
+        for allocation in plan.allocations:
+            if allocation.unit is None:
+                continue
+            line = line_for(allocation, movement.variant_id)
+            if line is None:
+                continue
+            row = totals.setdefault(line.pk, [Decimal("0"), Decimal("0")])
+            row[0] += Decimal(allocation.quantity)
+            row[1] += Decimal(allocation.value)
+    return {
+        pk: (value / quantity)
+        for pk, (quantity, value) in totals.items()
+        if quantity > 0
+    }
 
 
 

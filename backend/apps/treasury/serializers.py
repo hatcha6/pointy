@@ -231,6 +231,11 @@ class TreasuryObligationsSerializer(serializers.Serializer):
     """
 
     consignor_payable = serializers.DecimalField(max_digits=14, decimal_places=2)
+    #: The debt running the other way — a consignment that came back after its
+    #: owner had already collected. Beside the payable, never netted into it.
+    consignor_receivable = serializers.DecimalField(
+        max_digits=14, decimal_places=2
+    )
     consignor_claims_open = serializers.DecimalField(
         max_digits=14, decimal_places=2
     )

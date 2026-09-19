@@ -453,8 +453,11 @@ class CustomerReturnTests(ConsignmentTestCase):
 
         unit.refresh_from_db()
         self.assertTrue(unit.is_consignment)
-        self.assertEqual(unit.incoming_rate, Decimal("0.000000"))
+        # Worth nothing to the shop — it does not own the watch. The payout
+        # stays on the row because it is the only record of what the shop
+        # handed over, and what it is now owed back (``consignor_receivable``).
         self.assertEqual(unit.stock_value, Decimal("0"))
+        self.assertEqual(unit.incoming_rate, Decimal("10000.000000"))
         self.assertEqual(tracking_invariant_violations(), [])
 
     def test_an_article_already_back_on_the_shelf_cannot_be_returned_again(self):
@@ -518,3 +521,321 @@ def _request_with(session):
 
 
 _USER_SEQUENCE = 0
+
+
+class TwoConsignmentsOnOneInvoiceTests(ConsignmentTestCase):
+    """Two of one model, one invoice, two prices — and two different debts.
+
+    A commission payout is a percentage *of what that article fetched*. The sale
+    plans its issue per variant, so a pair of watches sharing a model share one
+    plan and two allocations, and the price has to follow the allocation rather
+    than the variant — or the second consignor is paid out of the first one's
+    price.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.agreement.payout_mode = ConsignmentAgreement.PayoutMode.COMMISSION
+        self.agreement.payout_rate = None
+        self.agreement.commission_pct = Decimal("20.00")
+        self.agreement.save(
+            update_fields=["payout_mode", "payout_rate", "commission_pct"]
+        )
+
+    def _sell_both(self, first, second):
+        return checkout_order(
+            register_session=_session(),
+            lines_data=[
+                {
+                    "variant": self.variant,
+                    "quantity": Decimal("1"),
+                    "effective_unit_price": Decimal("12000.00"),
+                    "stock_units": [first.pk],
+                },
+                {
+                    "variant": self.variant,
+                    "quantity": Decimal("1"),
+                    "effective_unit_price": Decimal("9000.00"),
+                    "stock_units": [second.pk],
+                },
+            ],
+            payments_data=[{"method": "cash", "amount": Decimal("21000.00")}],
+        )
+
+    def test_each_consignor_is_owed_a_share_of_their_own_price(self):
+        first, second = self._take_in(WATCH_A, WATCH_B)
+
+        self._sell_both(first, second)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(figures.consignor_payout_due(first), Decimal("9600.00"))
+        self.assertEqual(figures.consignor_payout_due(second), Decimal("7200.00"))
+        self.assertEqual(figures.consignor_payable(), Decimal("16800.00"))
+        # And the shop's own earning is the rest of both, not twice the first.
+        self.assertEqual(
+            figures.shop_consignment_commission(), Decimal("4200.00")
+        )
+        assert_tracking_invariants()
+
+    def test_the_ledger_still_balances_across_both(self):
+        first, second = self._take_in(WATCH_A, WATCH_B)
+
+        self._sell_both(first, second)
+
+        self.assertEqual(tracking_invariant_violations(), [])
+        cost = StockLedgerEntry.objects.filter(
+            voucher_type=StockLedgerEntry.VoucherType.CONSIGNMENT_COST
+        ).order_by("id")
+        self.assertEqual(
+            sum((entry.value_change for entry in cost), Decimal("0")),
+            Decimal("16800.000000"),
+        )
+        bin_row = StockValuationBin.objects.get(variant=self.variant)
+        self.assertEqual(bin_row.quantity, Decimal("0.000"))
+        self.assertEqual(bin_row.stock_value, Decimal("0.000000"))
+
+
+class ReopenedConsignmentTests(ConsignmentTestCase):
+    """The debt that runs the other way.
+
+    A customer brings the Rolex back three days after its owner collected ten
+    thousand dinars, and the shop reopens the consignment rather than buying the
+    watch in. The article is the consignor's again, the money is gone, and the
+    shop is owed it. That obligation used to appear nowhere at all — which is
+    the exact failure §5.8 exists to stop, pointed the other way.
+    """
+
+    def _sold_and_paid(self):
+        unit = self._take_in(WATCH_A)[0]
+        order = self._sell(unit, "12000.00")
+        unit.refresh_from_db()
+        consignment_service.disburse_payout(
+            units=[unit], request=_request_with(_session())
+        )
+        return unit, order
+
+    def test_the_shop_is_owed_what_it_paid(self):
+        unit, order = self._sold_and_paid()
+
+        return_order_items(
+            order=order,
+            lines=[(order.lines.get(), 1)],
+            reason="عاد",
+            consignment_action="reopen",
+        )
+
+        self.assertEqual(figures.consignor_receivable(), Decimal("10000.00"))
+        self.assertEqual(
+            figures.consignor_receivable(consignor=self.consignor),
+            Decimal("10000.00"),
+        )
+        # And nothing is owed *to* the consignor any more: that debt was settled
+        # by the payout and is not reopened by the goods coming back.
+        self.assertEqual(figures.consignor_payable(), Decimal("0.00"))
+
+    def test_the_money_position_says_so(self):
+        unit, order = self._sold_and_paid()
+
+        return_order_items(
+            order=order,
+            lines=[(order.lines.get(), 1)],
+            reason="عاد",
+            consignment_action="reopen",
+        )
+
+        overlay = obligations()
+        self.assertEqual(overlay["consignor_receivable"], Decimal("10000.00"))
+        # Beside the payable, never netted into it.
+        self.assertEqual(overlay["consignor_payable"], Decimal("0.00"))
+
+    def test_the_watch_is_still_worth_nothing_to_the_shop(self):
+        """Keeping the payout on the row must not put somebody else's watch
+        into the shop's stock value."""
+        unit, order = self._sold_and_paid()
+
+        return_order_items(
+            order=order,
+            lines=[(order.lines.get(), 1)],
+            reason="عاد",
+            consignment_action="reopen",
+        )
+
+        unit.refresh_from_db()
+        self.assertTrue(unit.is_consignment)
+        self.assertEqual(unit.stock_value, Decimal("0"))
+        bin_row = StockValuationBin.objects.get(variant=self.variant)
+        self.assertEqual(bin_row.stock_value, Decimal("0.000000"))
+        self.assertEqual(tracking_invariant_violations(), [])
+
+    def test_an_unpaid_return_owes_nothing_in_either_direction(self):
+        """Nothing went out, so nothing comes back: the payable simply closes
+        with the sale that created it."""
+        unit = self._take_in(WATCH_A)[0]
+        order = self._sell(unit, "12000.00")
+
+        return_order_items(
+            order=order,
+            lines=[(order.lines.get(), 1)],
+            reason="عاد",
+            consignment_action="reopen",
+        )
+
+        unit.refresh_from_db()
+        self.assertEqual(unit.incoming_rate, Decimal("0.000000"))
+        self.assertEqual(figures.consignor_receivable(), Decimal("0.00"))
+        self.assertEqual(figures.consignor_payable(), Decimal("0.00"))
+        self.assertEqual(tracking_invariant_violations(), [])
+
+    def test_buying_it_in_owes_nothing_back(self):
+        """The other answer: the shop keeps the watch it paid for, so there is
+        no receivable — only owned stock."""
+        unit, order = self._sold_and_paid()
+
+        return_order_items(
+            order=order,
+            lines=[(order.lines.get(), 1)],
+            reason="عاد",
+            consignment_action="buy_in",
+        )
+
+        self.assertEqual(figures.consignor_receivable(), Decimal("0.00"))
+
+
+class AsOfTests(ConsignmentTestCase):
+    """A past money position must carry that day's obligations, not today's.
+
+    `/api/treasury/position/?as_of=` answers with the cash that was in the
+    accounts on a past day and, through the overlay, what the shop owed on it.
+    Bounding the sale by the date and reading "is it paid *now*" mixes the two:
+    a watch sold in August and settled in September vanishes from August's
+    payable, so the drawer and the obligation beside it describe different days.
+    """
+
+    def test_a_payout_made_later_does_not_erase_an_earlier_debt(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        unit = self._take_in(WATCH_A)[0]
+        self._sell(unit, "12000.00")
+        unit.refresh_from_db()
+        sold_at = unit.sold_at
+        consignment_service.disburse_payout(
+            units=[unit], request=_request_with(_session())
+        )
+        # The owner collected three days later, which is the ordinary case and
+        # the one the arithmetic has to survive.
+        collected_at = sold_at + timedelta(days=3)
+        StockUnit.objects.filter(pk=unit.pk).update(consignor_paid_at=collected_at)
+
+        # Today: nothing is owed, the consignor has been paid.
+        self.assertEqual(figures.consignor_payable(), Decimal("0.00"))
+        # The day after the sale and before the payout: ten thousand was owed,
+        # and the money position for that day has to say so.
+        self.assertEqual(
+            figures.consignor_payable(as_of=sold_at + timedelta(days=1)),
+            Decimal("10000.00"),
+        )
+        # On the day it was collected, the debt is closed.
+        self.assertEqual(
+            figures.consignor_payable(as_of=collected_at), Decimal("0.00")
+        )
+        # And before the sale, nothing was owed at all.
+        self.assertEqual(
+            figures.consignor_payable(as_of=sold_at - timedelta(days=1)),
+            Decimal("0.00"),
+        )
+        self.assertLessEqual(sold_at, timezone.now())
+
+
+class RepostTests(ConsignmentTestCase):
+    """Replaying a variant's ledger must not lose the half that has no quantity.
+
+    `repost_variant` walks the entries and asks one question of each: did it add
+    stock or remove it. A ``consignment_cost`` entry does neither — quantity
+    zero, value only — so it fell into the removal branch, removed nothing, and
+    had its stored value **overwritten with zero**. The sale that follows then
+    replays at minus the payout against a ledger that no longer has it, which is
+    precisely the drift §5.8 exists to prevent, reintroduced by the one function
+    whose job is to rebuild the truth.
+
+    Reachable from a landed-cost re-stamp (§5.5), a method change and the
+    `repost_valuation` command, so it is not hypothetical.
+    """
+
+    def _repost(self):
+        from .valuation_service import repost_variant
+
+        return repost_variant(self.variant.pk)
+
+    def test_a_repost_keeps_the_purchase_half_of_a_consignment_sale(self):
+        unit = self._take_in(WATCH_A)[0]
+        self._sell(unit, "12000.00")
+        before = StockLedgerEntry.objects.get(
+            voucher_type=StockLedgerEntry.VoucherType.CONSIGNMENT_COST
+        )
+
+        self._repost()
+
+        after = StockLedgerEntry.objects.get(pk=before.pk)
+        self.assertEqual(after.value_change, before.value_change)
+        self.assertEqual(after.value_change, Decimal("10000.000000"))
+        self.assertEqual(tracking_invariant_violations(), [])
+
+    def test_a_repost_leaves_the_variant_s_cumulative_value_where_it_was(self):
+        unit = self._take_in(WATCH_A)[0]
+        self._sell(unit, "12000.00")
+        total = sum(
+            (
+                entry.value_change
+                for entry in StockLedgerEntry.objects.filter(variant=self.variant)
+            ),
+            Decimal("0"),
+        )
+
+        self._repost()
+
+        replayed = sum(
+            (
+                entry.value_change
+                for entry in StockLedgerEntry.objects.filter(variant=self.variant)
+            ),
+            Decimal("0"),
+        )
+        self.assertEqual(replayed, total)
+        self.assertEqual(replayed, Decimal("0.000000"))
+
+    def test_a_repost_does_not_let_consigned_goods_dilute_the_rate(self):
+        """Invariant 9, after a replay.
+
+        The unowned count lives on the allocations and nowhere on the ledger
+        entry, so a replay that does not read it counts seven consigned watches
+        as owned stock worth nothing and reports three 1,200 handsets at 360.
+        """
+        receive(
+            variant=self.variant,
+            quantity=3,
+            unit_cost="1200.00",
+            units=[{"code": f"OWNED-{index}"} for index in range(3)],
+        )
+        self._take_in(*[f"CONSIGNED-{index}" for index in range(7)])
+
+        self._repost()
+
+        bin_row = StockValuationBin.objects.get(variant=self.variant)
+        self.assertEqual(bin_row.quantity, Decimal("10.000"))
+        self.assertEqual(bin_row.stock_value, Decimal("3600.000000"))
+        self.assertEqual(bin_row.valuation_rate, Decimal("1200.000000"))
+        self.assertEqual(tracking_invariant_violations(), [])
+
+    def test_a_repost_survives_a_consignment_returned_to_its_owner(self):
+        unit = self._take_in(WATCH_A)[0]
+        consignment_service.return_to_consignor(unit)
+
+        self._repost()
+
+        bin_row = StockValuationBin.objects.get(variant=self.variant)
+        self.assertEqual(bin_row.quantity, Decimal("0.000"))
+        self.assertEqual(bin_row.stock_value, Decimal("0.000000"))
+        self.assertEqual(tracking_invariant_violations(), [])

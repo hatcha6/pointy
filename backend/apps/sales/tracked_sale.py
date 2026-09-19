@@ -51,18 +51,118 @@ def net_unit_price(line) -> Decimal:
     return _money(Decimal(line.line_total) / quantity)
 
 
-def lines_by_variant(order) -> dict:
-    """First line per variant. When the same variant appears twice on one
-    invoice every question this mapping answers has the same answer either way:
-    both lines belong to the same sale."""
-    lines = {}
-    for line in order.lines.all():
-        lines.setdefault(line.variant_id, line)
+#: Where an order keeps its lines in the order the cart sent them.
+ORDER_LINES_ATTR = "_pointy_lines_in_cart_order"
+
+
+def remember_line_order(order, lines) -> None:
+    """Keep the cart's own order on the order, as its lines are written.
+
+    The key each identified article was tagged with is its **position in the
+    cart**, decided when the issue was planned — before any of these rows
+    existed to point at. Stashing them here rather than re-reading is one query
+    saved on the cashier's critical path.
+    """
+    if order is not None:
+        setattr(order, ORDER_LINES_ATTR, list(lines))
+
+
+def lines_in_cart_order(order) -> list:
+    """The sale's lines, in the sequence the till sent them.
+
+    Falls back to primary-key order, which is the same sequence — the rows are
+    created in a loop over the cart — and is what the settle-later path (آجل)
+    takes, where the lines existed before this sale was planned.
+    """
+    lines = getattr(order, ORDER_LINES_ATTR, None)
+    if lines is None:
+        lines = list(order.lines.order_by("pk"))
     return lines
 
 
-def stamp_consignment_payouts(plan, line) -> Decimal:
+def lines_by_variant(order, lines=None) -> dict:
+    """First line per variant — the fallback, and only ever the fallback.
+
+    It was once enough: the question was "which sale took this IMEI", and two
+    lines of one variant belong to the same sale either way. It stopped being
+    enough the moment each article carried its own price, because "what did it
+    fetch" and "which line is it printed on" have two different answers on an
+    invoice holding two handsets of the same model. The allocation's own
+    ``source_key`` is what answers those; this remains for allocations nobody
+    attributed — a lot issue, a path with no cart behind it — where naming the
+    variant's first line is still better than naming none.
+    """
+    by_variant = {}
+    for line in lines if lines is not None else order.lines.all():
+        by_variant.setdefault(line.variant_id, line)
+    return by_variant
+
+
+def attribute_allocations(plan, claims) -> None:
+    """Say which cart line each identified article is leaving on.
+
+    A movement is planned per variant, so the plan for two handsets of one model
+    holds two allocations and no idea that the cart asked for them separately,
+    at two prices. This puts that back, by the only two rules there are:
+
+    * an article a line **named** — scanned, or picked from the sheet — belongs
+      to that line, whatever order the planner happened to lock them in;
+    * an article **nobody named** fills the earliest line that still has room,
+      which is the order the cashier rang them up in.
+
+    Lot allocations are deliberately left unattributed: one FEFO allocation can
+    span two lines of the same drug, and splitting it to say otherwise would
+    invent a precision the pick does not have.
+    """
+    if plan is None or not plan.allocations or not claims:
+        return
+    from apps.inventory.identity import normalize_identifier
+
+    by_id = {}
+    by_code = {}
+    for claim in claims:
+        for unit_id in claim.get("unit_ids") or ():
+            by_id.setdefault(int(unit_id), claim["key"])
+        for code in claim.get("unit_codes") or ():
+            by_code.setdefault(normalize_identifier(code), claim["key"])
+
+    room = [[claim["key"], Decimal(claim.get("quantity") or 0)] for claim in claims]
+
+    def _take(key, quantity):
+        for row in room:
+            if row[0] == key:
+                row[1] -= quantity
+                return
+
+    def _earliest(quantity):
+        for row in room:
+            if row[1] >= quantity and row[1] > 0:
+                row[1] -= quantity
+                return row[0]
+        return None
+
+    for allocation in plan.allocations:
+        unit = allocation.unit
+        if unit is None:
+            continue
+        key = by_id.get(unit.pk)
+        if key is None:
+            key = by_code.get(unit.code_normalized)
+        if key is not None:
+            _take(key, Decimal(allocation.quantity))
+        else:
+            key = _earliest(Decimal(allocation.quantity))
+        allocation.source_key = key
+
+
+def stamp_consignment_payouts(plan, line_for) -> Decimal:
     """Fix every consigned article in this plan at the payout it has earned.
+
+    ``line_for`` answers "which line sold this allocation", because under a
+    commission agreement the payout is a percentage **of the price that article
+    fetched** — and two watches of one model on one invoice, at 12,000 and
+    9,000, owe their owners two different numbers. Reading one line for the
+    whole variant would pay the second consignor out of the first one's price.
 
     Returns the total, which the plan carries into the valuation pass as the
     quantity-zero ``consignment_cost`` entry posted immediately before the issue
@@ -70,17 +170,46 @@ def stamp_consignment_payouts(plan, line) -> Decimal:
     """
     if plan is None or not plan.allocations:
         return ZERO
-    price = net_unit_price(line) if line is not None else ZERO
     total = ZERO
     for allocation in plan.allocations:
         unit = allocation.unit
         if unit is None or not unit.is_consignment:
             continue
+        line = line_for(allocation)
+        price = net_unit_price(line) if line is not None else ZERO
         payout = consignment_service.stamp_payout(unit, sold_price=price)
         allocation.rate = payout
         total += payout
     plan.consignment_cost = total
     return total
+
+
+def line_resolver(order):
+    """``(allocation, variant_id) -> OrderLine`` for the sale just written.
+
+    Prefers what the allocation itself says — the cart line that named this
+    article — and falls back to the variant's first line for anything the
+    planner produced with no cart behind it.
+    """
+    # One read of the lines, two views of it: the cashier waits on this.
+    lines = lines_in_cart_order(order)
+    by_key = {str(index): line for index, line in enumerate(lines)}
+    by_variant = lines_by_variant(order, lines)
+
+    def resolve(allocation, variant_id=None):
+        key = getattr(allocation, "source_key", None)
+        if key is not None and key in by_key:
+            return by_key[key]
+        return by_variant.get(
+            variant_id if variant_id is not None else _variant_of(allocation)
+        )
+
+    return resolve
+
+
+def _variant_of(allocation):
+    unit = getattr(allocation, "unit", None)
+    return getattr(unit, "variant_id", None)
 
 
 def finish_sold_units(order, movements, *, settings=None, request=None):
@@ -98,7 +227,7 @@ def finish_sold_units(order, movements, *, settings=None, request=None):
     if not tracked:
         return
     settings = settings or ShopSettings.load()
-    lines = lines_by_variant(order)
+    line_for = line_resolver(order)
     sold_on = timezone.localtime(order.created_at or timezone.now()).date()
 
     updates = []
@@ -109,7 +238,6 @@ def finish_sold_units(order, movements, *, settings=None, request=None):
     # carrying nothing. Reading through the unit would be a query per article on
     # the cashier's critical path, which is what §11's budget exists to stop.
     for movement in tracked:
-        line = lines.get(movement.variant_id)
         variant = getattr(movement, "variant", None)
         product = getattr(variant, "product", None)
         warranty_days = int(getattr(product, "warranty_days", 0) or 0)
@@ -117,6 +245,10 @@ def finish_sold_units(order, movements, *, settings=None, request=None):
             unit = allocation.unit
             if unit is None:
                 continue
+            # The line that asked for *this* article, not the variant's first:
+            # on an invoice holding two handsets of one model, the second is
+            # printed on the second line and fetched the second price.
+            line = line_for(allocation, movement.variant_id)
             unit.sold_order_line = line
             if line is not None:
                 unit.sold_price = net_unit_price(line)
@@ -233,7 +365,11 @@ def tracked_plans(movements):
 
 
 __all__ = [
+    "attribute_allocations",
     "finish_sold_units",
+    "line_resolver",
+    "lines_in_cart_order",
+    "remember_line_order",
     "lines_by_variant",
     "net_unit_price",
     "notify_consignors",

@@ -86,6 +86,7 @@ def capitalise(job, *, at=None):
     unit = StockUnit.objects.select_for_update().get(pk=job.stock_unit_id)
     unit.refurb_cost = Decimal(unit.refurb_cost) + delta
     unit.save(update_fields=["refurb_cost", "updated_at"])
+    _post_to_ledger(unit, delta, job=job, at=at)
     job.capitalised_cost = total
     job.capitalised_at = at or timezone.now()
     job.save(update_fields=["capitalised_cost", "capitalised_at", "updated_at"])
@@ -105,12 +106,50 @@ def release(job):
     from apps.inventory.models import StockUnit
 
     unit = StockUnit.objects.select_for_update().get(pk=job.stock_unit_id)
-    unit.refurb_cost = Decimal(unit.refurb_cost) - _money(job.capitalised_cost)
+    taken_back = _money(job.capitalised_cost)
+    unit.refurb_cost = Decimal(unit.refurb_cost) - taken_back
     unit.save(update_fields=["refurb_cost", "updated_at"])
+    _post_to_ledger(unit, -taken_back, job=job, at=timezone.now())
     job.capitalised_cost = ZERO
     job.capitalised_at = None
     job.save(update_fields=["capitalised_cost", "capitalised_at", "updated_at"])
     return unit
+
+
+def _post_to_ledger(unit, delta, *, job, at=None):
+    """Tell the shelf what the repair did to what this article is worth.
+
+    ``StockValuationBin`` is a cache of the **ledger**, not of the units — the
+    docstring on the model says so — so moving ``refurb_cost`` on its own leaves
+    the bin 150 behind the article it belongs to. Invariant 4 catches that
+    immediately (bin value must equal the sum of its units), and left
+    unaddressed the sale then issues 1,350 out of a shelf that only ever took
+    1,200 in and the variant's cumulative value walks downward with every
+    handset the shop repairs.
+
+    So it posts what a consignment sale posts: a quantity-zero, value-only
+    entry. Two things never reach the shelf and say so here rather than by
+    accident: a **consigned** article is not the shop's to improve and its value
+    is excluded from the bin by construction, and an article that is **no longer
+    on hand** has already had its cost booked by the sale that took it — adding
+    or removing value for it now would move a shelf it has left.
+    """
+    from apps.inventory.valuation_service import post_value_only_entry
+    from apps.inventory.models import StockLedgerEntry, StockUnit
+
+    if unit.is_consignment or delta == ZERO:
+        return None
+    if unit.status not in StockUnit.ON_HAND_STATUSES:
+        return None
+    return post_value_only_entry(
+        variant_id=unit.variant_id,
+        warehouse_id=unit.warehouse_id,
+        value=delta,
+        voucher_type=StockLedgerEntry.VoucherType.REFURBISHMENT,
+        voucher_id=job.pk,
+        note=f"تجديد {unit.code}",
+        posting_at=at,
+    )
 
 
 __all__ = ["capitalise", "materials_cost", "refurb_cost_of", "release", "services_cost"]

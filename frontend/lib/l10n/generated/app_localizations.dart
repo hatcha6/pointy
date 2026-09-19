@@ -30810,6 +30810,12 @@ abstract class AppLocalizations {
   ///
   ///
   /// In ar, this message translates to:
+  /// **'مستحقات على أصحابها'**
+  String get consignmentFigureReceivable;
+
+  ///
+  ///
+  /// In ar, this message translates to:
   /// **'عمولة المحل'**
   String get consignmentFigureCommission;
 
@@ -30902,6 +30908,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذّر صرف المستحقات — تأكد من وجود وردية مفتوحة.'**
   String get consignmentDisburseFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة سند الاستلام'**
+  String get consignmentPrintVoucher;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة سند الصرف'**
+  String get consignmentPrintPayout;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت الطباعة.'**
+  String get consignmentPrintFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سند الاستلام {number} جاهز للطباعة'**
+  String consignmentVoucherReady(String number);
 
   ///
   ///
@@ -31190,6 +31220,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count, plural, one{أمانة واحدة في العهدة} two{أمانتان في العهدة} few{{count} أمانات في العهدة} other{{count} أمانة في العهدة}} بقيمة مقدّرة {amount}'**
   String treasuryCustodyHeld(int count, String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'ومستحق على أصحاب الأمانات: {amount}'**
+  String treasuryConsignorReceivable(String amount);
 }
 
 class _AppLocalizationsDelegate

@@ -173,7 +173,10 @@ class PointyAppDependencies {
     trackedStockRepository = TrackedStockRepository(service);
     trackedStockViewModel = TrackedStockViewModel(trackedStockRepository);
     consignmentRepository = ConsignmentRepository(service);
-    consignmentViewModel = ConsignmentViewModel(consignmentRepository);
+    consignmentViewModel = ConsignmentViewModel(
+      consignmentRepository,
+      shopSettingsRepository: shopSettingsRepository,
+    );
     subscriptionRepository = SubscriptionRepository(service);
     fxRepository = FxRepository(service);
     dashboardFxViewModel = DashboardFxViewModel(fxRepository);

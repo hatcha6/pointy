@@ -377,6 +377,10 @@ def consignment_ledger(context):
         # having forgotten to.
         "consignment_stock_value": money(position["stock_value"]),
         "consignor_payable": money(position["consignor_payable"]),
+        # The debt that runs the other way, on the page beside the one that runs
+        # this way. Never netted into it: a shop that owes one consignor 10,000
+        # and is owed 3,000 by another owes 10,000.
+        "consignor_receivable": money(position["consignor_receivable"]),
         "shop_commission": money(position["shop_commission"]),
         "custody_unit_count": position["custody"]["unit_count"],
         "custody_declared_value": money(position["custody"]["declared_value"]),

@@ -405,6 +405,10 @@ def obligations(*, as_of=None):
     bound = day_range_end(as_of) if as_of is not None else None
     return {
         "consignor_payable": consignment.consignor_payable(as_of=bound),
+        # Shown beside the payable and never netted against it: a shop that owes
+        # one consignor 10,000 and is owed 3,000 by another owes 10,000, and a
+        # single figure hiding two people is how a drawer comes up short.
+        "consignor_receivable": consignment.consignor_receivable(as_of=bound),
         "consignor_claims_open": consignment.consignor_claims_open(bound),
         "custody": consignment.custody_exposure(bound),
     }

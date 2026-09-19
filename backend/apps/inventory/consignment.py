@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db.models import Sum
+from django.db.models import F, Q, Sum
 
 from .models import ConsignmentAgreement, StockUnit
 
@@ -149,17 +149,63 @@ def consignor_payable(*, as_of=None, consignor=None, queryset=None) -> Decimal:
 
 
 def payable_units(*, as_of=None, consignor=None):
-    """Sold consignments nobody has been paid for. The payables screen's query."""
+    """Sold consignments nobody has been paid for. The payables screen's query.
+
+    ``as_of`` reads it **as at that moment**, which means both halves have to
+    move: sold by then, and not yet paid by then. Filtering the sale by the date
+    and the payment by "is it paid now" answers a question nobody asked — a
+    watch sold in August and settled in September would be missing from August's
+    figure, and the money position for a past day would show that day's cash
+    beside today's obligations.
+    """
+    rows = StockUnit.objects.filter(is_consignment=True, status=StockUnit.Status.SOLD)
+    if consignor is not None:
+        rows = rows.filter(consignor=getattr(consignor, "pk", consignor))
+    if as_of is None:
+        return rows.filter(consignor_paid_at__isnull=True)
+    return rows.filter(sold_at__lte=as_of).filter(
+        Q(consignor_paid_at__isnull=True) | Q(consignor_paid_at__gt=as_of)
+    )
+
+
+def receivable_units(*, as_of=None, consignor=None):
+    """Paid-for consignments that are back on the shelf.
+
+    The mirror of :func:`payable_units`, and it exists for one situation: a
+    customer returns a watch three days after its owner collected ten thousand
+    dinars, and the shop chooses to **reopen** the consignment rather than buy
+    the article in. The watch is the consignor's again and the money has gone,
+    so the debt has simply changed direction.
+    """
     rows = StockUnit.objects.filter(
         is_consignment=True,
-        status=StockUnit.Status.SOLD,
-        consignor_paid_at__isnull=True,
+        consignor_payout__isnull=False,
+        status__in=StockUnit.ON_HAND_STATUSES,
     )
     if consignor is not None:
         rows = rows.filter(consignor=getattr(consignor, "pk", consignor))
     if as_of is not None:
-        rows = rows.filter(sold_at__lte=as_of)
+        rows = rows.filter(consignor_paid_at__lte=as_of)
     return rows
+
+
+def consignor_receivable(*, as_of=None, consignor=None, queryset=None) -> Decimal:
+    """Σ what the shop has paid out on goods it no longer has sold.
+
+    Read off ``incoming_rate``, which is what that article's payout actually
+    was, rather than recomputed from the agreement's terms: under a commission
+    the payout was a share of a price that is now history, and re-deriving it
+    from today's percentage would invent a debt neither party agreed to.
+
+    Not netted against :func:`consignor_payable` anywhere. A shop that owes one
+    consignor 10,000 and is owed 3,000 by another owes 10,000 — a single figure
+    hiding two people is the kind of arithmetic that empties a till.
+    """
+    rows = queryset if queryset is not None else receivable_units(
+        as_of=as_of, consignor=consignor
+    )
+    total = rows.aggregate(total=Sum("incoming_rate"))["total"]
+    return _money(total)
 
 
 def consignment_stock_value(warehouse=None) -> Decimal:
@@ -191,9 +237,12 @@ def shop_consignment_commission(*, start=None, end=None) -> Decimal:
         rows = rows.filter(sold_at__gte=start)
     if end is not None:
         rows = rows.filter(sold_at__lte=end)
-    total = ZERO
-    for sold_price, payout in rows.values_list("sold_price", "incoming_rate"):
-        total += _money(sold_price) - _money(payout)
+    # Summed by the database, not by walking the rows: the consignment position
+    # is a screen, this is its headline, and an unwindowed read of it is every
+    # consignment the shop has ever sold.
+    total = rows.aggregate(
+        total=Sum(F("sold_price") - F("incoming_rate"))
+    )["total"]
     return _money(total)
 
 
@@ -229,10 +278,12 @@ def custody_exposure(as_of=None) -> dict:
 
 
 def consignment_position(*, start=None, end=None, as_of=None) -> dict:
-    """The four figures of §5.8, plus custody, in one read."""
+    """The four figures of §5.8, plus custody and the debt that runs the other
+    way, in one read."""
     return {
         "stock_value": consignment_stock_value(),
         "consignor_payable": consignor_payable(as_of=as_of),
+        "consignor_receivable": consignor_receivable(as_of=as_of),
         "consignor_claims_open": consignor_claims_open(as_of),
         "shop_commission": shop_consignment_commission(start=start, end=end),
         "custody": custody_exposure(as_of),
@@ -404,10 +455,12 @@ __all__ = [
     "consignor_claims_open",
     "consignor_payable",
     "consignor_payout_due",
+    "consignor_receivable",
     "custody_exposure",
     "notify_consignor_of_sale",
     "payable_units",
     "payout_floor",
+    "receivable_units",
     "render_payout_sms",
     "render_sale_sms",
     "shop_consignment_commission",

@@ -43,6 +43,14 @@ def record_trade_in(*, purchase_payload, checkout, request):
         request=request, validated_data=purchase_payload
     )
     order = checkout()
+    # Asked again, now that both documents have real totals. The check before
+    # the sale reads the payload's own arithmetic; this one reads what the
+    # purchasing and discount engines actually settled on — unit conversion, a
+    # cost guard, a line discount — and they are not obliged to agree. Raising
+    # here unwinds both legs, which is the point of them sharing a transaction.
+    refuse_trade_in_above_sale(
+        trade_in_total=purchase_order.total, sale_total=order.total
+    )
     _link(purchase_order, order, request=request)
     return purchase_order, order
 

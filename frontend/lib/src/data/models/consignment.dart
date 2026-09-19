@@ -5,6 +5,8 @@
 /// client cached is a payable that can disagree with the ledger.
 library;
 
+import 'stock_unit.dart';
+
 /// How a consignor is paid when their goods sell.
 class ConsignmentPayoutMode {
   const ConsignmentPayoutMode._();
@@ -48,6 +50,7 @@ class ConsignmentAgreement {
     this.liabilityClause = '',
     this.docStatus = 'draft',
     this.unitCount = 0,
+    this.units = const [],
   });
 
   final int id;
@@ -70,6 +73,11 @@ class ConsignmentAgreement {
   final String liabilityClause;
   final String docStatus;
   final int unitCount;
+
+  /// The articles this page covers. Empty on a list row — a list row is not a
+  /// document — and filled on the detail, which is what the printed voucher is
+  /// built from: a signed page has to name the watch it is about.
+  final List<StockUnit> units;
 
   bool get isFixed => payoutMode == ConsignmentPayoutMode.fixed;
   bool get isSubmitted => docStatus == 'submitted';
@@ -108,6 +116,10 @@ class ConsignmentAgreement {
       liabilityClause: json['liability_clause']?.toString() ?? '',
       docStatus: json['doc_status']?.toString() ?? 'draft',
       unitCount: _intOf(json['unit_count']),
+      units: [
+        for (final row in (json['units'] as List<Object?>? ?? const []))
+          if (row is Map<String, Object?>) StockUnit.fromJson(row),
+      ],
     );
   }
 }
@@ -178,11 +190,21 @@ class ConsignmentPayable {
 }
 
 /// A page of payables, with the total the shop actually owes underneath it.
+///
+/// [totalDue] is the whole liability and not this page's share of it: the
+/// headline figure is about the shop, not about what happens to be on screen.
 class ConsignmentPayablePage {
-  const ConsignmentPayablePage({this.rows = const [], this.totalDue = 0});
+  const ConsignmentPayablePage({
+    this.rows = const [],
+    this.totalDue = 0,
+    this.count = 0,
+    this.hasNext = false,
+  });
 
   final List<ConsignmentPayable> rows;
   final double totalDue;
+  final int count;
+  final bool hasNext;
 
   bool get isEmpty => rows.isEmpty;
 
@@ -191,14 +213,17 @@ class ConsignmentPayablePage {
       return const ConsignmentPayablePage();
     }
     final results = decoded['results'];
+    final rows = results is List<Object?>
+        ? results
+              .whereType<Map<String, Object?>>()
+              .map(ConsignmentPayable.fromJson)
+              .toList(growable: false)
+        : const <ConsignmentPayable>[];
     return ConsignmentPayablePage(
-      rows: results is List<Object?>
-          ? results
-                .whereType<Map<String, Object?>>()
-                .map(ConsignmentPayable.fromJson)
-                .toList(growable: false)
-          : const [],
+      rows: rows,
       totalDue: _doubleOrNull(decoded['total_due']) ?? 0,
+      count: _intOrNull(decoded['count']) ?? rows.length,
+      hasNext: decoded['next'] != null,
     );
   }
 }
@@ -212,6 +237,7 @@ class ConsignmentPosition {
   const ConsignmentPosition({
     this.stockValue = 0,
     this.payable = 0,
+    this.receivable = 0,
     this.claimsOpen = 0,
     this.shopCommission = 0,
     this.custodyUnitCount = 0,
@@ -220,6 +246,12 @@ class ConsignmentPosition {
 
   final double stockValue;
   final double payable;
+
+  /// The debt running the other way: a consignment that came back after its
+  /// owner had already collected. Shown beside the payable and never netted
+  /// into it — a shop that owes one consignor 10,000 and is owed 3,000 by
+  /// another owes 10,000.
+  final double receivable;
   final double claimsOpen;
   final double shopCommission;
   final int custodyUnitCount;
@@ -233,6 +265,7 @@ class ConsignmentPosition {
     return ConsignmentPosition(
       stockValue: _doubleOrNull(json['stock_value']) ?? 0,
       payable: _doubleOrNull(json['consignor_payable']) ?? 0,
+      receivable: _doubleOrNull(json['consignor_receivable']) ?? 0,
       claimsOpen: _doubleOrNull(json['consignor_claims_open']) ?? 0,
       shopCommission: _doubleOrNull(json['shop_commission']) ?? 0,
       custodyUnitCount: _intOf(custodyMap['unit_count']),
@@ -319,29 +352,77 @@ class ConsignorPayout {
     required this.id,
     this.number = '',
     this.consignorName = '',
+    this.consignorPhone = '',
     this.amount = 0,
     this.method = 'cash',
     this.paidAt,
     this.reference = '',
+    this.notes = '',
+    this.lines = const [],
   });
 
   final int id;
   final String number;
   final String consignorName;
+  final String consignorPhone;
   final double amount;
   final String method;
   final DateTime? paidAt;
   final String reference;
+  final String notes;
+
+  /// What the money was for. A voucher that says «10,000 د.ل» and does not say
+  /// which watch is a receipt for nothing, so the articles travel on the row
+  /// rather than behind a second call.
+  final List<ConsignorPayoutLine> lines;
+
+  bool get isCash => method == 'cash';
 
   factory ConsignorPayout.fromJson(Map<String, Object?> json) {
     return ConsignorPayout(
       id: _intOf(json['id']),
       number: json['number']?.toString() ?? '',
       consignorName: json['consignor_name']?.toString() ?? '',
+      consignorPhone: json['consignor_phone']?.toString() ?? '',
       amount: _doubleOrNull(json['amount']) ?? 0,
       method: json['method']?.toString() ?? 'cash',
       paidAt: _dateOrNull(json['paid_at']),
       reference: json['reference']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
+      lines: [
+        for (final row in (json['lines'] as List<Object?>? ?? const []))
+          if (row is Map<String, Object?>) ConsignorPayoutLine.fromJson(row),
+      ],
+    );
+  }
+}
+
+/// One article a payout settled.
+class ConsignorPayoutLine {
+  const ConsignorPayoutLine({
+    required this.unitId,
+    this.code = '',
+    this.productName = '',
+    this.soldAt,
+    this.soldPrice,
+    this.payoutDue = 0,
+  });
+
+  final int unitId;
+  final String code;
+  final String productName;
+  final DateTime? soldAt;
+  final double? soldPrice;
+  final double payoutDue;
+
+  factory ConsignorPayoutLine.fromJson(Map<String, Object?> json) {
+    return ConsignorPayoutLine(
+      unitId: _intOf(json['unit']),
+      code: json['code']?.toString() ?? '',
+      productName: json['product_name']?.toString() ?? '',
+      soldAt: _dateOrNull(json['sold_at']),
+      soldPrice: _doubleOrNull(json['sold_price']),
+      payoutDue: _doubleOrNull(json['payout_due']) ?? 0,
     );
   }
 }

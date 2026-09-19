@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/consignment.dart';
+import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/consignment_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
+import '../pdf/consignment_pdf.dart';
 
 /// مستحقات الأمانات, and the position behind it.
 ///
@@ -13,35 +16,41 @@ import '../../../data/repositories/consignment_repository.dart';
 /// adjusting a local number. A screen that decremented its own total after a
 /// payout would be a screen that can disagree with the drawer.
 class ConsignmentViewModel extends ChangeNotifier {
-  ConsignmentViewModel(this._repository);
+  ConsignmentViewModel(
+    this._repository, {
+    ShopSettingsRepository? shopSettingsRepository,
+    ConsignmentDocumentPdfService documents =
+        const ConsignmentDocumentPdfService(),
+  }) : _shopSettings = shopSettingsRepository,
+       _documents = documents;
 
   final ConsignmentRepository _repository;
+  final ShopSettingsRepository? _shopSettings;
+  final ConsignmentDocumentPdfService _documents;
 
   ConsignmentPayablePage _payables = const ConsignmentPayablePage();
   ConsignmentPosition _position = const ConsignmentPosition();
   bool _isLoading = false;
+  bool _isLoadingMore = false;
   bool _isDisbursing = false;
   bool _hasError = false;
+  int _page = 1;
   String _search = '';
   final Set<int> _selected = <int>{};
 
-  List<ConsignmentPayable> get payables {
-    final term = _search.trim().toLowerCase();
-    if (term.isEmpty) {
-      return _payables.rows;
-    }
-    return [
-      for (final row in _payables.rows)
-        if (row.consignorName.toLowerCase().contains(term) ||
-            row.consignorPhone.contains(term) ||
-            row.code.toLowerCase().contains(term) ||
-            row.productName.toLowerCase().contains(term))
-          row,
-    ];
-  }
+  /// The rows as the server answered them.
+  ///
+  /// Deliberately not filtered here any more. The list is paged, so a
+  /// client-side filter searches the page it happens to be holding — which
+  /// answers "سالم is owed nothing" for a consignor whose row is on page three,
+  /// and is the worst possible wrong answer on a screen about money owed to
+  /// people. The search goes to the server with the query.
+  List<ConsignmentPayable> get payables => _payables.rows;
 
   ConsignmentPosition get position => _position;
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMore => _payables.hasNext;
   bool get isDisbursing => _isDisbursing;
   bool get hasError => _hasError;
   bool get isEmpty => _payables.isEmpty;
@@ -80,9 +89,10 @@ class ConsignmentViewModel extends ChangeNotifier {
 
   Future<void> load() async {
     _isLoading = true;
+    _page = 1;
     notifyListeners();
     final results = await Future.wait([
-      _repository.loadPayables(),
+      _repository.loadPayables(page: _page, search: _search),
       _repository.loadPosition(),
     ]);
     switch (results[0]) {
@@ -104,12 +114,50 @@ class ConsignmentViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSearch(String term) {
-    if (_search == term) {
+  /// The next page, appended.
+  ///
+  /// The same guard the units list needed: the scroll extent that asks for this
+  /// fires again while the request is still in flight, and a failed page must
+  /// not look like the end of the list — a consignment dealer with fifty unpaid
+  /// articles has a fifty-first, and silently losing it is how somebody is
+  /// never paid.
+  Future<void> loadMore() async {
+    if (_isLoadingMore || _isLoading || !_payables.hasNext) {
       return;
     }
-    _search = term;
+    _isLoadingMore = true;
     notifyListeners();
+    final result = await _repository.loadPayables(
+      page: _page + 1,
+      search: _search,
+    );
+    switch (result) {
+      case Ok<ConsignmentPayablePage>(:final value):
+        _page += 1;
+        _payables = ConsignmentPayablePage(
+          rows: [..._payables.rows, ...value.rows],
+          // The headline is the shop's whole liability, so it comes from the
+          // server rather than being re-added up from the rows on screen.
+          totalDue: value.totalDue,
+          count: value.count,
+          hasNext: value.hasNext,
+        );
+        _hasError = false;
+      case Error<ConsignmentPayablePage>():
+        _hasError = true;
+    }
+    _isLoadingMore = false;
+    notifyListeners();
+  }
+
+  void setSearch(String term) {
+    final trimmed = term.trim();
+    if (_search == trimmed) {
+      return;
+    }
+    _search = trimmed;
+    _selected.clear();
+    unawaited(load());
   }
 
   void toggle(ConsignmentPayable row) {
@@ -178,6 +226,56 @@ class ConsignmentViewModel extends ChangeNotifier {
         notifyListeners();
         return null;
     }
+  }
+
+  /// Print *سند استلام أمانة* — the page both parties sign.
+  ///
+  /// The clause on it is the one stored when the voucher was submitted, printed
+  /// verbatim. A shop that rewords its template next year has not reworded this
+  /// page, and printing the live template instead would quietly make that
+  /// untrue.
+  Future<bool> printVoucher(ConsignmentAgreement agreement) async {
+    final settings = await _loadShopSettings();
+    return _documents.printVoucher(
+      agreement: agreement,
+      units: agreement.units,
+      shopSettings: settings,
+      shopLogoBytes: await _loadShopLogoBytes(settings),
+    );
+  }
+
+  /// Print *سند صرف أمانة* — the receipt for money handed across the counter.
+  Future<bool> printPayout(ConsignorPayout payout) async {
+    final settings = await _loadShopSettings();
+    return _documents.printPayout(
+      payout: payout,
+      shopSettings: settings,
+      shopLogoBytes: await _loadShopLogoBytes(settings),
+    );
+  }
+
+  Future<ShopSettings?> _loadShopSettings() async {
+    final repository = _shopSettings;
+    if (repository == null) {
+      return null;
+    }
+    final result = await repository.loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) => settings,
+      Error<ShopSettings>() => null,
+    };
+  }
+
+  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
+    final repository = _shopSettings;
+    if (repository == null) {
+      return null;
+    }
+    final result = await repository.loadLogoBytes(settings);
+    return switch (result) {
+      Ok<Uint8List?>(value: final bytes) => bytes,
+      Error<Uint8List?>() => null,
+    };
   }
 
   Future<bool> resendSms(ConsignmentPayable row) async {

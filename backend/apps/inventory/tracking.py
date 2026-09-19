@@ -169,6 +169,13 @@ class Allocation:
     unit: StockUnit | None = None
     batch: StockBatch | None = None
     balance: StockBatchBalance | None = None
+    #: Which cart line asked for this article, when a caller knows. A movement
+    #: is planned per *variant*, so a sale of two handsets of one model carries
+    #: one plan and two allocations — and every per-article fact after that
+    #: (what it fetched, which line it is printed on, what that line cost) is a
+    #: question about the line rather than the variant. ``None`` everywhere the
+    #: caller has no lines: a transfer, an adjustment, a lot issue.
+    source_key: str | None = None
 
     @property
     def value(self) -> Decimal:

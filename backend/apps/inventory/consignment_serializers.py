@@ -171,7 +171,16 @@ class ConsignmentAgreementSerializer(serializers.ModelSerializer):
 
 
 class ConsignorPayoutSerializer(serializers.ModelSerializer):
+    """سند صرف أمانة — and, with it, what the money was for.
+
+    The articles are on the row rather than left to a second call, because this
+    is a document the consignor signs at the counter: a voucher that says
+    "10,000 د.ل" and does not say which watch is a receipt for nothing.
+    """
+
     consignor_name = serializers.CharField(source="consignor.full_name", read_only=True)
+    consignor_phone = serializers.CharField(source="consignor.phone", read_only=True)
+    lines = serializers.SerializerMethodField()
 
     class Meta:
         model = ConsignorPayout
@@ -180,6 +189,7 @@ class ConsignorPayoutSerializer(serializers.ModelSerializer):
             "number",
             "consignor",
             "consignor_name",
+            "consignor_phone",
             "amount",
             "method",
             "paid_at",
@@ -187,9 +197,27 @@ class ConsignorPayoutSerializer(serializers.ModelSerializer):
             "notes",
             "register_session",
             "doc_status",
+            "lines",
             "created_at",
         )
         read_only_fields = fields
+
+    def get_lines(self, payout):
+        # ``.all()`` and not ``.select_related(...)``: a related manager only
+        # uses the view's prefetch when the queryset is untouched, so refining
+        # it here would quietly re-query per voucher and put the list straight
+        # back on an N+1. The joins live on the prefetch instead.
+        return [
+            {
+                "unit": unit.pk,
+                "code": unit.code,
+                "product_name": unit.variant.full_name if unit.variant_id else "",
+                "sold_at": unit.sold_at,
+                "sold_price": unit.sold_price,
+                "payout_due": figures.consignor_payout_due(unit),
+            }
+            for unit in payout.units.all()
+        ]
 
 
 class DisbursePayoutSerializer(serializers.Serializer):

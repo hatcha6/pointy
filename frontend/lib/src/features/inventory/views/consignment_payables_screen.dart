@@ -126,7 +126,10 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
                     prefixIcon: const Icon(Icons.search),
                     hintText: l10n.consignmentPayablesSearchHint,
                   ),
-                  onChanged: viewModel.setSearch,
+                  // On submit rather than on every keystroke: the search is a
+                  // request now, and a scan arrives as a burst followed by
+                  // Enter (`ScanWedgeTarget`), which is exactly one query.
+                  onSubmitted: viewModel.setSearch,
                 ),
               ),
             ],
@@ -142,11 +145,26 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
     AppLocalizations l10n,
     ConsignmentViewModel viewModel,
   ) {
-    if (viewModel.isLoading && viewModel.isEmpty) {
-      return const PointyLoadingArea();
-    }
-    if (viewModel.hasError && viewModel.isEmpty) {
-      return PointyErrorState(
+    final rows = viewModel.payables;
+    final spacing = AdaptiveSpacing.of(context);
+    // PointyDataList owns the load-more trigger. Hand-rolling the list is what
+    // left the units screen showing page one only, and a payables screen that
+    // stops at fifty is a consignor who is never paid.
+    return PointyDataList<ConsignmentPayable>(
+      items: rows,
+      padding: spacing.pagePadding,
+      isLoadingInitial: viewModel.isLoading,
+      isLoadingMore: viewModel.isLoadingMore,
+      hasMore: viewModel.hasMore,
+      onLoadMore: viewModel.loadMore,
+      hasError: viewModel.hasError,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      emptyBuilder: (context) => PointyEmptyState(
+        icon: Icons.handshake_outlined,
+        title: l10n.consignmentPayablesEmptyTitle,
+        message: l10n.consignmentPayablesEmptyBody,
+      ),
+      errorBuilder: (context) => PointyErrorState(
         title: l10n.consignmentPayablesTitle,
         icon: Icons.handshake_outlined,
         action: FilledButton.icon(
@@ -154,31 +172,14 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
           icon: const Icon(Icons.sync),
           label: Text(l10n.retryButton),
         ),
-      );
-    }
-    final rows = viewModel.payables;
-    if (rows.isEmpty) {
-      return PointyEmptyState(
-        icon: Icons.handshake_outlined,
-        title: l10n.consignmentPayablesEmptyTitle,
-        message: l10n.consignmentPayablesEmptyBody,
-      );
-    }
-    final spacing = AdaptiveSpacing.of(context);
-    return ListView.separated(
-      padding: spacing.pagePadding,
-      itemCount: rows.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final row = rows[index];
-        return _PayableCard(
-          row: row,
-          isSelected: viewModel.selected.contains(row.unitId),
-          onTap: () => viewModel.toggle(row),
-          onSelectAll: () => viewModel.selectAllFor(row),
-          onResend: () => _resend(context, viewModel, row),
-        );
-      },
+      ),
+      itemBuilder: (context, row) => _PayableCard(
+        row: row,
+        isSelected: viewModel.selected.contains(row.unitId),
+        onTap: () => viewModel.toggle(row),
+        onSelectAll: () => viewModel.selectAllFor(row),
+        onResend: () => _resend(context, viewModel, row),
+      ),
     );
   }
 
@@ -275,11 +276,43 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
                 ? l10n.consignmentDisburseFailed
                 : l10n.consignmentDisburseDone(payout.number),
           ),
+          // Money has changed hands and both parties sign for it. The receipt
+          // is offered on the same snack bar rather than behind a screen the
+          // cashier would have to go looking for while the owner waits.
+          action: payout == null
+              ? null
+              : SnackBarAction(
+                  label: l10n.consignmentPrintPayout,
+                  onPressed: () => unawaited(
+                    _printPayout(
+                      viewModel,
+                      payout,
+                      messenger,
+                      l10n.consignmentPrintFailed,
+                    ),
+                  ),
+                ),
         ),
       );
   }
 
+  Future<void> _printPayout(
+    ConsignmentViewModel viewModel,
+    ConsignorPayout payout,
+    ScaffoldMessengerState messenger,
+    String failureMessage,
+  ) async {
+    if (await viewModel.printPayout(payout)) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(failureMessage)));
+  }
+
   Future<void> _takeIn() async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
     final agreement = await showConsignmentIntakeSheet(
       context,
       catalog: widget.catalog,
@@ -293,6 +326,35 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
     // stale until it re-reads. Nothing here adjusts its own copy of a number
     // the server owns.
     unawaited(widget.viewModel.load());
+    // And the page both parties sign. The liability clause was copied onto the
+    // agreement at submit *so that it could be printed*; an agreement stored
+    // and never printed is a contract nobody signed.
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.consignmentVoucherReady(agreement.number)),
+          action: SnackBarAction(
+            label: l10n.consignmentPrintVoucher,
+            onPressed: () => unawaited(
+              _printVoucher(agreement, messenger, l10n.consignmentPrintFailed),
+            ),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _printVoucher(
+    ConsignmentAgreement agreement,
+    ScaffoldMessengerState messenger,
+    String failureMessage,
+  ) async {
+    if (await widget.viewModel.printVoucher(agreement)) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(failureMessage)));
   }
 
   Future<void> _resend(
@@ -338,6 +400,16 @@ class ConsignmentPositionCard extends StatelessWidget {
           icon: Icons.account_balance_wallet_outlined,
           accentColor: colors.warning,
         ),
+        // Only when there is one. The ordinary shop never sees this tile, and a
+        // permanent «0.00 د.ل» beside the payable would read as a second thing
+        // to chase rather than as the rare thing it is.
+        if (position.receivable > 0)
+          PointyMetricGridItem(
+            label: l10n.consignmentFigureReceivable,
+            value: formatMoney(position.receivable),
+            icon: Icons.undo_outlined,
+            accentColor: colors.warning,
+          ),
         PointyMetricGridItem(
           label: l10n.consignmentFigureCommission,
           value: formatMoney(position.shopCommission),

@@ -1,7 +1,7 @@
 # Serialized & Batch Inventory (IMEI / Serial / Lot / Expiry) — Architecture Plan
 
 **Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17,
-Phase C shipped 2026-09-18, A & B reviewed 2026-09-18)
+Phase C shipped 2026-09-18, A & B reviewed 2026-09-18, C reviewed 2026-09-19)
 **Status:** **Phases A, B and C shipped** — the shared allocation core and
 ledger, the shop operating both from the client, and the used-goods trade with
 consignment carrying a real liability (§15). Phases D–E remain proposed.
@@ -16,6 +16,12 @@ untrue: the batch split did **not** ship as R1 of §15.1 (§15, Phase A), no
 printed receipt ever carried an identifier (§15, Phase B), the GS1 parser's
 most valuable test could not fail (§15, Phase B), and selling without picking
 is **not** refused (§6.3).
+**Reviewing Phase C found thirteen more** (§15.3). Two of them are claims this
+document makes that were not true of the code: the voucher whose clause is
+stored *"as it was printed"* was never printed at all, and per-unit pricing was
+per-*variant* pricing the moment one invoice held two of the same model — which,
+for the trade Phase C is about, is the ordinary case and not the edge one. Read
+§15.3 before building on any of it.
 **Roadmap slot:** Promotes and unifies Gap #13 ("Serial-number tracking", sized M)
 and Gap #14 ("Batch & lot tracking with FEFO/expiry", sized M). This plan combines
 them because they share 80% of the underlying ledger allocation architecture,
@@ -1320,6 +1326,19 @@ guard for the trade where it matters most.
 
 This is a genuine ERP behaviour (cost of refurbishment capitalises into the
 article) and neither Shopify nor a spreadsheet can do it.
+
+> **CORRECTED 2026-09-19 — "add to `unit.refurb_cost`" is half the write.**
+> As shipped, capitalising wrote the column and nothing else, and
+> `StockValuationBin` is a cache of the **ledger** rather than a projection of
+> the units — its own docstring says so. So the article said 1,350 and the shelf
+> said 1,200, invariant 4 failed the moment any screen was fitted, and the sale
+> then issued 1,350 of value out of a bin that had only ever taken 1,200 in,
+> walking a variant's cumulative value downward with every handset the shop
+> repaired. Exactly the drift §5.8 diagnoses for consignment, one function over,
+> and it survived because none of the four refurbishment tests asserted the
+> invariants that every other test in this phase asserts. Capitalising now posts
+> the same shape a consignment sale posts — a quantity-zero, value-only
+> `REFURBISHMENT` entry — and releasing posts its mirror.
 
 ### 5.7 Per-unit price, and the engines downstream
 
@@ -2895,7 +2914,7 @@ this on the day it installs rather than after it buys hardware.
   gave it a job; the other three are still out.)*
 
 **Phase C — the used-goods trade & consignment (≈2.5 weeks). SHIPPED
-2026-09-18.**
+2026-09-18, reviewed 2026-09-19 (§15.3).**
 Per-unit pricing everywhere, per-unit cost split, counter purchase and trade-in,
 `ConsignmentAgreement` intake and voucher, the `consignment_cost` ledger entry
 and the fixed-payout floor (§5.8 — both are correctness, not polish, and belong
@@ -2972,6 +2991,16 @@ refurb capitalisation, returns and warranty lookup.
   registered in the money-definitions guard, with three new patterns — the
   commission payout, the shop's commission and the price floor — so the fourth
   surface that wants one has to import it.
+- **CORRECTED 2026-09-19 — "`ConsignmentAgreement` intake and voucher" shipped
+  the agreement and not the voucher.** Nothing printed either of §6.2.1's two
+  documents: not the *سند استلام أمانة* both parties sign, not the *سند صرف
+  أمانة* signed when money crosses the counter. The clause this plan insists on
+  storing *as it was printed* was stored and never printed, which is Phase B's
+  receipt-identifier failure repeated exactly (§15.2). Both are built now, and
+  what they say is decided in one place a test can ask.
+- **CORRECTED 2026-09-19 — per-unit pricing was per *variant* pricing whenever
+  one invoice held two of the same model**, which for this trade is the ordinary
+  case. Five consequences, one of them a sale the till refused outright; §15.3.
 - **DEFERRED, and honestly out:** per-unit photos (§17.2 is still open, and the
   answer changes the capture sheet's shape), the per-consignor statement *screen*
   (the endpoint is built and the report carries it), the consignment position
@@ -3230,6 +3259,172 @@ is now fixed at the root: `manage.py check_stock_integrity` runs them read-only
 against a real shop and exits non-zero on a violation, `make backend-stock-integrity`
 and `make backend-tracked-simulation` expose it and the oracle, and both are in the
 README. Run them before building anything else on this foundation.
+
+
+### 15.3 What reviewing Phase C found (2026-09-19)
+
+Thirteen findings, all fixed, plus one gap that is not a defect — the trade-in
+shipped with no test at all. Every finding was reproduced by running it before
+the fix and again after, and the largest of them was found by asking the question
+§15.2 ended on: *what does a real shop do that no test does?* Here it is putting
+**two of the same model on one invoice**, which for a used-phone shop is an
+ordinary Tuesday and which nothing in Phase C had ever exercised.
+
+**One finding is five, and it is the one to read.** A sale plans its issue **per
+variant** — `prepare_sale_stock_adjustments` aggregates the cart by variant, so
+two handsets of one model share one plan and two allocations. Everything after
+that which needed to know *which line* an article left on re-derived it from
+`lines_by_variant`, which returns the variant's **first** line. That was true
+enough in Phase B, where the question was "which sale took this IMEI" and both
+lines belong to the same sale. Phase C changed the question, and the same
+mapping then answered five of them wrongly:
+
+- the second article recorded the **first one's price** — `sold_price`, and with
+  it the per-unit margin report;
+- both articles pointed at the **first line**, so the receipt's per-line
+  identifiers, the printed warranty document and `StockUnit.sold_order_line` all
+  named the wrong handset;
+- **returning the cheaper handset put the expensive one back on the shelf**, and
+  left a sold article that is physically in the customer's hands marked as stock
+  nobody can find. `units_sold_by_line` reads the units off the line, and both
+  were on it;
+- both lines took the movement's **blended cost**, so a 1,200 handset and an
+  800 one sold together each reported 1,000 and per-line gross profit averaged
+  two articles that have nothing to do with each other;
+- under a **commission** agreement the second consignor's payout was computed
+  from the first one's price — and when that made the line look like a loss,
+  `prevent_selling_at_loss` **refused the sale outright at the payment step**. A
+  shop could not sell two consigned watches of one model at two prices at all.
+
+The fix is where the information actually exists: `Allocation` grows a
+`source_key`, `attribute_allocations` tags every unit allocation with the cart
+line that named it (or, for an auto-picked article, the earliest line with room),
+and `finish_sold_units`, `stamp_consignment_payouts` and
+`_stamp_ledger_cost_on_lines` resolve per allocation instead of per variant. Lot
+allocations are deliberately left untagged: one FEFO pick can span two lines of
+one drug, and splitting it would invent a precision the pick does not have.
+
+**Phase B's paper failure, repeated exactly.** §15.2 records that `identifiers`
+reached `OrderLineSerializer` and never reached a receipt. Phase C stores
+`ConsignmentAgreement.liability_clause` *"as it was **printed** and signed"* —
+and **nothing printed it**. There was no voucher, no payout receipt, no PDF, no
+print action, on either surface; §6.2.1's *سند استلام أمانة* and *سند صرف أمانة*
+existed only as sentences in this document. Both are built now
+(`features/inventory/pdf/`), with the content decided in one place
+(`ConsignmentDocumentContent`) that the renderer has no second source for —
+because rendering itself cannot be asserted: an embedded Arabic font writes glyph
+indices, so a byte search of the PDF for «الأمانة» finds nothing whatever the
+page says. The payout receipt could not have named its articles either; the
+serializer had no lines on it.
+
+**The debt that runs the other way.** `reopen_consignment` — the answer the
+returns desk offers when a customer brings back goods whose owner has already
+collected — zeroed `incoming_rate`, which was the **only record of what the shop
+had paid**, and its own docstring claimed *"the payables screen reads it and
+shows a negative line"*. Nothing read it and nothing showed it. A shop could hand
+a consignor ten thousand dinars, take the watch back into consignment, and have
+no screen, figure or report anywhere say it was owed the money. That is §5.8's
+own failure, pointed the other way, so it gets §5.8's own answer: derived, never
+posted. `consignment.consignor_receivable` is the definition, the treasury
+obligations overlay carries it beside the payable and **never nets it into one
+figure** — a shop that owes one consignor 10,000 and is owed 3,000 by another
+owes 10,000.
+
+**A past money position carried today's obligations.**
+`/api/treasury/position/?as_of=` answers with the cash that was in the accounts
+on a past day; `consignor_payable(as_of=)` bounded the *sale* by that date and
+read the *payment* as of now. A watch sold in August and settled in September was
+missing from August's figure, so the drawer and the obligation printed beside it
+described different days.
+
+**The rest, briefly.** Searching either consignment list **500s** —
+`consignor__name`, where the model's field is `full_name`, on a list §6.2.1
+requires to be searchable by name; the failure is not a wrong result but a
+`FieldError` the moment anybody types. The **payables list sent every row** with
+no pagination and then filtered *in the client*, which on a paged list answers
+«سالم has nothing owing» for a consignor whose row is further down — the worst
+available wrong answer on a screen about money owed to people; it is paged now
+and the search is a query. Paging it exposed **two queries per row** hiding
+behind innocent property reads — `variant.full_name` fetches option values and
+an invoice's `balance_due` sums its payments in Python — so both lists take a
+prefetch and a scaling test, the shape `test_list_query_scaling` already uses.
+`shop_consignment_commission` **walked every consignment sale the shop had ever
+made** in Python on every read of the position screen, and is one aggregate now.
+`refuse_trade_in_above_sale` was asked only of the payload's own arithmetic,
+before the purchasing and discount engines had settled the real totals, and is
+now asked again of both documents inside the transaction that unwinds them. And
+`close_agreement_if_empty` was a predicate called as a statement, which is now
+named as the question it is.
+
+**Capitalising a repair wrote the article and not the shelf.** §5.6 says a
+fitted screen adds to `unit.refurb_cost`, and that is what it did — with no
+ledger entry and no bin behind it. `StockValuationBin` is a *cache of the
+ledger*, not a projection of the units, so after any refurbishment the article
+said 1,350 and the shelf said 1,200; **invariant 4 failed immediately**, and the
+sale that followed issued 1,350 of value out of a bin that had only ever taken
+1,200 in. It is the same drift §5.8 diagnoses at length for consignment, one
+function over, and it survived for the reason §15.2 already named: none of the
+four refurbishment tests asserted the invariants that every other test in this
+phase asserts. There is a `REFURBISHMENT` voucher type now, posted the way
+`consignment_cost` is — quantity zero, value only, bin and entry written
+together — and released in mirror when a job is reopened. The migration is a
+`choices` change and nothing else, so it is an ordinary live update (§15.1).
+
+**A repost destroyed the half of the ledger that has no quantity.**
+`repost_variant` rebuilds a variant's valuation by replaying its entries, and it
+asked each one a single question: did this add stock, or remove it? A
+`consignment_cost` entry does neither — quantity zero, value only — so it fell
+into the removal branch, removed nothing, and had its **stored value overwritten
+with zero**. The sale immediately after it then replayed at minus the payout
+against a ledger that no longer had it, so a repost re-created, in one pass,
+exactly the negative drift §5.8 was written to prevent. The same replay also
+lost the *unowned* count — it lives on the allocations and nowhere on the entry
+— so after a repost seven consigned watches counted as owned stock worth
+nothing and three 1,200 handsets beside them reported 360 apiece, which is
+invariant 9 verbatim. Neither is hypothetical: a landed-cost re-stamp (§5.5), a
+method change and `manage.py repost_valuation` all reach it. The replay now
+reads a value-only entry's stored value rather than recomputing it, and
+re-derives the unowned count from the allocations.
+
+**The trade-in had no test at all.** Not one, in either tree — §6.2's whole
+claim, that a trade-in needs no new tender because `expected_cash` nets a
+counter purchase against a sale, was unasserted. It is true, and five tests now
+say so, including the two that matter: the drawer expects exactly the difference,
+and a refused sale takes its purchase down with it.
+
+**What the tools did and did not find, precisely.** §15.2 ended on the lesson
+that the invariants find in seconds what the suite cannot see, and this review
+is the boundary of that claim rather than a contradiction of it.
+
+- **Eleven of the thirteen were invisible to both.** The oracle ran 2,000
+  operations across five seeds and stayed green; the invariants were asserted
+  after every new consignment path and never fired. They could not have: each of
+  those eleven is a place where a **document, a screen or a person** was told the
+  wrong thing while identified stock and the ledger agreed perfectly. An
+  invariant over the ledger is the wrong instrument for "which line is this
+  handset printed on". What worked was reading each claim this plan makes and
+  asking what actually reads it.
+- **The refurbishment one was found by the invariants, the instant anything
+  pointed them at it.** `assert_tracking_invariants()` appears in every Phase C
+  test except the four about refurbishment; adding one line to the first of them
+  failed immediately with invariant 4. That is §15.2's lesson holding exactly,
+  and the standing instruction it implies is narrower and more useful than
+  "run the invariants": **a test of a path that moves stock or value asserts
+  them, or it is not a test of that path.**
+- **The repost one was found by reading.** Building the value-only poster raised
+  the question of what replays a zero-quantity entry, and the answer was
+  nothing.
+
+**One edge is left open, and says so.** §5.8 says a reopened consignment's
+receivable is *"settled against the next sale or collected back"*. Settling
+against the next sale is what the rows already do — `consignor_paid_at` stays
+stamped, so the re-sale opens no new payable and the two obligations cancel —
+and under a **fixed** payout, which is the default and the common case, they
+cancel exactly. Under **commission** at a different second price they do not:
+the shop is owed what it paid and owes a share of a new number, and the
+difference goes unrecorded. Closing it properly means a settlement row rather
+than an inference, which is `ConsignmentIncident`'s neighbourhood and belongs
+with Phase D's claims work rather than with a bug sweep.
 
 ---
 
