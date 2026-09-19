@@ -166,6 +166,8 @@ class StockMovementViewSet(
                 StockMovement.Type.DECREASE,
                 StockMovement.Type.DAMAGED,
             ):
+                # Returns the allocation plan, which this path does not yet
+                # carry onto its movement — see the note on the function.
                 consume_expiring_stock_batches(
                     variant=variant,
                     quantity=quantity,

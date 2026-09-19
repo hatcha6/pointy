@@ -1031,7 +1031,15 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at", "archived_at", "popularity")
+        read_only_fields = (
+            "created_at",
+            "updated_at",
+            "archived_at",
+            "popularity",
+            # Derived from ``tracking_mode``; a write of it is translated
+            # in ``validate`` rather than stored.
+            "tracks_expiry",
+        )
 
     def validate_unit(self, value):
         value = (value or "").strip()
@@ -1040,6 +1048,18 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        # §18.4: one flag, not two. ``tracks_expiry`` is read-only now — it is
+        # whatever ``tracking_mode`` says — but a client that still sends it
+        # gets what it meant rather than a silent no-op, because the product
+        # form and the importer both pre-date the mode.
+        wants_expiry = self.initial_data.get("tracks_expiry")
+        if "tracking_mode" not in attrs and wants_expiry is not None:
+            current = getattr(self.instance, "tracking_mode", None)
+            if wants_expiry in (True, "true", "True", 1, "1"):
+                if current in (None, Product.TrackingMode.QUANTITY):
+                    attrs["tracking_mode"] = Product.TrackingMode.BATCH
+            elif current == Product.TrackingMode.BATCH:
+                attrs["tracking_mode"] = Product.TrackingMode.QUANTITY
         if "tracking_mode" in attrs:
             assert_mode_change_allowed(self.instance, attrs["tracking_mode"])
         base_unit = attrs.get("unit") or getattr(self.instance, "unit", None) or "piece"
@@ -1497,9 +1517,16 @@ class ProductBulkCategorizeSerializer(ProductBulkActionSerializer):
 
 
 class ProductBulkFlagsSerializer(ProductBulkActionSerializer):
-    FLAG_FIELDS = ("is_active", "tracks_expiry", "is_service", "is_prepared")
+    """Bulk flag edits. ``tracks_expiry`` is deliberately not among them.
+
+    It is derived from ``tracking_mode`` (§18.4), and changing a mode re-labels
+    a product's stock history — so it goes one product at a time, through the
+    guard in ``apps.catalog.tracking_modes``, rather than across a multi-select
+    that cannot say what it will do to forty products' ledgers.
+    """
+
+    FLAG_FIELDS = ("is_active", "is_service", "is_prepared")
     is_active = serializers.BooleanField(required=False)
-    tracks_expiry = serializers.BooleanField(required=False)
     is_service = serializers.BooleanField(required=False)
     is_prepared = serializers.BooleanField(required=False)
 

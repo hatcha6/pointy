@@ -5,6 +5,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from apps.catalog.models import Product
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -398,8 +399,11 @@ class BusinessNotificationApiTests(APITestCase):
             sku="ALERT-MILK",
             unit_price=Decimal("6.00"),
         )
-        product.tracks_expiry = True
-        product.save(update_fields=["tracks_expiry", "updated_at"])
+        product.tracking_mode = Product.TrackingMode.BATCH
+        product.expiry_required = True
+        product.save(
+            update_fields=["tracking_mode", "expiry_required", "updated_at"]
+        )
         supplier = Supplier.objects.create(name="مورد الحليب")
         order = PurchaseOrder.objects.create(supplier=supplier)
         purchase_line = order.lines.create(

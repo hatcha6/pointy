@@ -124,6 +124,15 @@ class Product(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # Derived from ``tracking_mode`` and kept only so the release currently in
+    # shops can still read it — it filters on
+    # ``variant__product__tracks_expiry`` in the expiry-alert query and in
+    # purchasing. §18.4: two flags governing one behaviour is how a shop's
+    # expiry tracking stops without anyone noticing, so the mode is the answer
+    # and this column is a mirror of it, written by ``save`` and by nothing
+    # else. It goes in the contract release with the batch columns.
+    #
+    # Read it through the ``tracks_lots`` predicate, never directly.
     tracks_expiry = models.BooleanField(default=False, db_index=True)
 
     class TrackingMode(models.TextChoices):
@@ -169,6 +178,19 @@ class Product(TimeStampedModel):
     # --- batch & expiry policy -------------------------------------------
     # Read when ``tracking_mode`` is batch/serial_batch, or when
     # ``tracks_expiry`` is on.
+    # Does a delivery of this have to say when it goes off?
+    #
+    # This is the half of the old ``tracks_expiry`` that was a real question in
+    # its own right. That flag answered two at once — "does this stock belong to
+    # cohorts" and "does it expire" — and folding it into ``tracking_mode``
+    # (§18.4) answers only the first. Without this, every lot-tracked product
+    # would demand an expiry date at receiving, which is right for milk and
+    # wrong for a paint batch or a run of phone cases that are lot-tracked for
+    # provenance and never go off.
+    #
+    # Set for every product that had ``tracks_expiry`` before the fold, so no
+    # shop's receiving changed on the day it upgraded.
+    expiry_required = models.BooleanField(default=False)
     shelf_life_days = models.PositiveIntegerField(default=0)  # 0 = indefinite
     expiry_warning_days = models.PositiveIntegerField(default=30)
 
@@ -268,6 +290,18 @@ class Product(TimeStampedModel):
                 condition=Q(archived_at__isnull=True),
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        # One flag, not two. ``tracks_expiry`` is whatever the mode says it is,
+        # so a product cannot end up tracking lots while its expiry flag says
+        # otherwise — the four-combination state §18.4 says must not exist.
+        expiry = self.tracks_lots
+        if self.tracks_expiry != expiry:
+            self.tracks_expiry = expiry
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "tracks_expiry"}
+        return super().save(*args, **kwargs)
 
     @property
     def is_archived(self) -> bool:

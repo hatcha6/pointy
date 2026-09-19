@@ -285,8 +285,12 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    # The key keeps its name because the client's question has not changed —
+    # "must this line carry an expiry date?" — but the answer now comes from
+    # ``expiry_required`` rather than from a flag that, since §18.4, means
+    # "this has lots".
     tracks_expiry = serializers.BooleanField(
-        source="variant.product.tracks_expiry",
+        source="variant.product.expiry_required",
         read_only=True,
     )
     # How closely this line's goods are identified, so the receiving sheet knows
@@ -597,7 +601,11 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "expiry_date",
             getattr(self.instance, "expiry_date", None),
         )
-        if variant.product.tracks_expiry and expiry_date is None:
+        # ``expiry_required``, not ``tracks_expiry``: since §18.4 folded the
+        # latter into ``tracking_mode`` it means "this has lots", and a lot is
+        # not a promise that the goods go off. A paint batch and a run of phone
+        # cases are lot-tracked for provenance and have no expiry to type.
+        if variant.product.expiry_required and expiry_date is None:
             raise serializers.ValidationError(
                 {
                     "expiry_date": (
@@ -688,8 +696,12 @@ class PurchaseReceiptLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    # The key keeps its name because the client's question has not changed —
+    # "must this line carry an expiry date?" — but the answer now comes from
+    # ``expiry_required`` rather than from a flag that, since §18.4, means
+    # "this has lots".
     tracks_expiry = serializers.BooleanField(
-        source="variant.product.tracks_expiry",
+        source="variant.product.expiry_required",
         read_only=True,
     )
     received_quantity = _quantity_read_field()
@@ -2185,7 +2197,7 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                 )
             if (
                 accepted_quantity > 0
-                and line.variant.product.tracks_expiry
+                and line.variant.product.expiry_required
                 and expiry_date is None
             ):
                 raise serializers.ValidationError(

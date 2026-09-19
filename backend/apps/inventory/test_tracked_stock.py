@@ -20,6 +20,7 @@ from rest_framework import serializers
 
 from apps.catalog.models import Product
 from apps.core.models import ShopSettings
+from apps.inventory.valuation import ValuationMethod
 from apps.purchasing.models import PurchaseReceipt, Supplier
 from apps.sales.models import RegisterSession
 from apps.sales.services import checkout_order
@@ -962,18 +963,26 @@ class ReceiptCancellationTests(TestCase):
 
 
 class ExpiryCohortCompatibilityTests(TestCase):
-    """``tracks_expiry`` without lot control keeps behaving exactly as it did.
+    """An expiry-tracking product is a lot-tracked product — §18.4.
 
-    The older, quieter feature — a shop that wants "this milk goes off on the
-    12th" and has never heard of a lot number — now runs on the new tables. It
-    still creates no allocations and does not change how the stock is costed.
+    The older, quieter feature was a shop that wanted "this milk goes off on
+    the 12th" and had never heard of a lot number, and it ran on a whole
+    parallel path: anonymous cohorts, generated codes, a drawdown with no
+    allocation behind it. Two implementations of one idea, and the flag that
+    chose between them could disagree with the mode.
+
+    There is one now. What a shop that ticked the box keeps: it never has to
+    type a lot code (the code is still generated and still renders as «بدون رقم
+    دفعة»), the earliest-expiring cohort still goes first, and the shop's own
+    valuation method still governs. What it gains: the drawdown is an
+    allocation, so the ledger can say which cohort left.
     """
 
     def setUp(self):
         self.product = tracked_product(
             name="حليب",
             sku="MILK",
-            mode=Product.TrackingMode.QUANTITY,
+            mode=Product.TrackingMode.BATCH,
             tracks_expiry=True,
             unit_price="3.00",
         )
@@ -987,10 +996,18 @@ class ExpiryCohortCompatibilityTests(TestCase):
             expiry_date=timezone.localdate() + timedelta(days=10),
         )
         lot = StockBatch.objects.get()
+        # Still no lot code to type, and still «بدون رقم دفعة» on screen.
         self.assertTrue(lot.code_is_generated)
         self.assertEqual(lot.display_code, "")
         self.assertEqual(lot.balances.get().remaining_quantity, Decimal("6.000"))
-        self.assertEqual(StockAllocation.objects.count(), 0)
+        # But the arrival is now an allocation, where before it was a cohort
+        # the ledger could not name.
+        self.assertEqual(
+            StockAllocation.objects.filter(
+                direction=StockAllocation.Direction.IN
+            ).count(),
+            1,
+        )
 
     def test_a_sale_draws_the_cohort_down_in_this_warehouse_only(self):
         """The old version consumed a lot in Branch #2 to satisfy a sale in the
@@ -1017,7 +1034,19 @@ class ExpiryCohortCompatibilityTests(TestCase):
         self.assertEqual(here.remaining_quantity, Decimal("4.000"))
         self.assertEqual(elsewhere.remaining_quantity, Decimal("4.000"))
 
-    def test_the_shops_own_valuation_method_still_governs(self):
+    def test_the_lot_governs_the_cost_now_not_the_shop_default(self):
+        """The one thing the fold genuinely changes, stated out loud.
+
+        Before §18.4 an expiry product was ``quantity``-mode and so valued at
+        the shop's own method — a blended shelf average. It is ``batch``-mode
+        now, and §5.1 says the *product* picks the method: BATCH_COST, so the
+        milk that left is costed at what that delivery cost rather than at what
+        the shelf averages.
+
+        That is more accurate and it is a change in reported COGS for a shop
+        that ticked the box years ago, which is exactly why it belongs in a
+        named test rather than in a diff nobody reads.
+        """
         receive(
             variant=self.variant,
             quantity=6,
@@ -1025,7 +1054,10 @@ class ExpiryCohortCompatibilityTests(TestCase):
             expiry_date=timezone.localdate() + timedelta(days=10),
         )
         entry = StockLedgerEntry.objects.filter(variant=self.variant).first()
-        self.assertEqual(entry.method, ShopSettings.load().inventory_valuation_method)
+        self.assertEqual(entry.method, ValuationMethod.BATCH_COST)
+        self.assertNotEqual(
+            entry.method, ShopSettings.load().inventory_valuation_method
+        )
 
 
 class TrackingModeTransitionTests(TestCase):

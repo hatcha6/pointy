@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from apps.catalog.models import Product
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -67,8 +68,13 @@ def _make_expiring_batch(name, sku, *, expiry_date, tracks_expiry=True, remainin
         unit_price=Decimal("6.00"),
     )
     if tracks_expiry != product.tracks_expiry:
-        product.tracks_expiry = tracks_expiry
-        product.save(update_fields=["tracks_expiry", "updated_at"])
+        product.tracking_mode = (
+            Product.TrackingMode.BATCH if tracks_expiry else Product.TrackingMode.QUANTITY
+        )
+        product.expiry_required = tracks_expiry
+        product.save(
+            update_fields=["tracking_mode", "expiry_required", "updated_at"]
+        )
     supplier = Supplier.objects.create(name=f"supplier-{sku}")
     order = PurchaseOrder.objects.create(supplier=supplier)
     purchase_line = order.lines.create(

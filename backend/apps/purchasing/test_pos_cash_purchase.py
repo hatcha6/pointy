@@ -15,7 +15,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import ProductUnit, UnitOfMeasure
+from apps.catalog.models import Product, ProductUnit, UnitOfMeasure
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
@@ -216,8 +216,11 @@ class PosCashPurchaseFlowTests(PosCashPurchaseTestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
 
     def test_expiry_tracked_product_still_requires_expiry_date(self):
-        self.product.tracks_expiry = True
-        self.product.save(update_fields=["tracks_expiry"])
+        self.product.tracking_mode = Product.TrackingMode.BATCH
+        self.product.expiry_required = True
+        self.product.save(
+            update_fields=["tracking_mode", "expiry_required", "updated_at"]
+        )
         self.open_session(self.cashier)
         response = self.post_purchase()
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

@@ -731,6 +731,7 @@ def plan_receipt(
     at=None,
     capture_later=False,
     placeholder_key="",
+    default_expiry=None,
 ):
     """What arriving goods will become: lots, balances and units.
 
@@ -791,6 +792,7 @@ def plan_receipt(
             supplier=supplier,
             at=at,
             placeholder_key=placeholder_key,
+            default_expiry=default_expiry,
         )
     return plan
 
@@ -842,6 +844,7 @@ def _plan_lot_receipt(
     supplier,
     at,
     placeholder_key,
+    default_expiry=None,
 ):
     """``batch`` mode: N goods arrive under one or more lot codes.
 
@@ -853,7 +856,11 @@ def _plan_lot_receipt(
         # An expiry-tracked product with nothing captured still gets a lot, so
         # the ledger and the recall report have something to name. It is marked
         # generated, and the UI says «بدون رقم دفعة».
-        batch_rows = [{"quantity": quantity}]
+        # ...and it carries the delivery's own expiry date. A generated lot
+        # with no expiry silently ends the alerts of the shop that turned
+        # expiry tracking on in the first place — which, since §18.4, is every
+        # shop whose products are lot-tracked for that reason.
+        batch_rows = [{"quantity": quantity, "expiry_date": default_expiry}]
     captured = ZERO
     for index, row in enumerate(batch_rows):
         row_quantity = _q(row.get("quantity", quantity) or ZERO)
@@ -1559,6 +1566,65 @@ def apply_return(plan, *, at=None, warehouse_id=None):
     return plan
 
 
+def plan_lot_drawdown(*, variant, warehouse, quantity, allow_expired=True):
+    """FEFO allocations for stock leaving by a route that names no articles.
+
+    A stock count, a manual adjustment, a job's materials and a purchase return
+    all reduce a bin without anybody choosing *which* goods went. For a lot that
+    is answerable anyway — the earliest-expiring cohort in that place is the one
+    that left, which is what the pre-split expiry drawdown always assumed — so
+    these paths get a real allocation instead of the refusal that
+    ``post_movement_valuations`` would otherwise (rightly) raise.
+
+    ``None`` for a serialized variant, deliberately. Which *handset* left is not
+    derivable, and guessing would put a made-up IMEI in the ledger; that case
+    stays refused until Phase D gives the count a scan-the-shelf loop.
+
+    ``allow_expired`` defaults true: goods that expired on the shelf are exactly
+    what a shrink or a write-off is recording.
+    """
+    mode = mode_of(variant)
+    if not tracks_lots(mode) or tracks_units(mode):
+        return None
+    warehouse_id = getattr(warehouse, "pk", warehouse) or Warehouse.default_id()
+    quantity = _q(quantity)
+    if quantity <= ZERO:
+        return None
+    plan = TrackedPlan(
+        mode=mode,
+        direction=StockAllocation.Direction.OUT,
+        warehouse_id=warehouse_id,
+    )
+    for balance, take in pick_balances(
+        variant=variant,
+        warehouse=warehouse_id,
+        quantity=quantity,
+        allow_expired=allow_expired,
+    ):
+        plan.allocations.append(
+            Allocation(
+                quantity=take,
+                rate=_rate(balance.incoming_rate),
+                batch=balance.batch,
+                balance=balance,
+            )
+        )
+    return plan or None
+
+
+def apply_lot_drawdown(plan):
+    """Spend a :func:`plan_lot_drawdown`. Separate for the same reason every
+    other apply is: the plan is made while the caller can still refuse."""
+    if plan is None or not plan.allocations:
+        return plan
+    for allocation in plan.allocations:
+        if allocation.balance is not None:
+            issue_from_balance(
+                balance=allocation.balance, quantity=allocation.quantity
+            )
+    return plan
+
+
 def plan_receipt_reversal(
     *, variant, warehouse, quantity, receipt_lines, voucher_type, voucher_id
 ):
@@ -1755,6 +1821,7 @@ class ReceiptCapture:
         purchase_line=None,
         source_receipt_line=None,
         capture_later=False,
+        default_expiry=None,
         key="",
     ):
         self.variant = variant
@@ -1766,6 +1833,12 @@ class ReceiptCapture:
         self.purchase_line = purchase_line
         self.source_receipt_line = source_receipt_line
         self.capture_later = capture_later
+        # What the delivery says these goods expire on, when nobody typed a
+        # lot row. Since §18.4 an expiry-tracking product is lot-tracked, so
+        # its receipt goes through the ordinary lot path — and a generated
+        # lot with no expiry silently ends that shop's expiry alerts, which
+        # is the one thing it turned the feature on for.
+        self.default_expiry = default_expiry
         self.key = key
         self.plans = []
         self._unit_cursor = 0
@@ -1798,6 +1871,7 @@ class ReceiptCapture:
             at=at,
             capture_later=self.capture_later,
             placeholder_key=f"{self.key}-{self._sequence}" if self.key else "",
+            default_expiry=self.default_expiry,
         )
         if plan is not None:
             self.plans.append(plan)

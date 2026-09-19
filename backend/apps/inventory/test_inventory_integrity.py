@@ -63,8 +63,11 @@ def _expiring_product(*, sku="EXP", name="حليب", tracks_expiry=True):
         sku=sku, name=name, unit_price=Decimal("1.00")
     )
     if tracks_expiry:
-        product.tracks_expiry = True
-        product.save(update_fields=["tracks_expiry", "updated_at"])
+        product.tracking_mode = Product.TrackingMode.BATCH
+        product.expiry_required = True
+        product.save(
+            update_fields=["tracking_mode", "expiry_required", "updated_at"]
+        )
     StockItem.objects.create(variant=product.default_variant, quantity_on_hand=0)
     return product
 
@@ -168,7 +171,7 @@ class ExpiryFifoTests(TestCase):
             warehouse=Warehouse.default_id(),
         )
 
-        self.assertEqual(consumed, Decimal("2"))
+        self.assertEqual(consumed.quantity, Decimal("2"))
         earlier.refresh_from_db()
         later.refresh_from_db()
         # Earlier-expiry batch is drained before the later one is touched.
@@ -190,7 +193,7 @@ class ExpiryFifoTests(TestCase):
             warehouse=Warehouse.default_id(),
         )
 
-        self.assertEqual(consumed, Decimal("4"))
+        self.assertEqual(consumed.quantity, Decimal("4"))
         earlier.refresh_from_db()
         later.refresh_from_db()
         self.assertEqual(_remaining(earlier), Decimal("0"))
@@ -212,7 +215,7 @@ class ExpiryFifoTests(TestCase):
             warehouse=Warehouse.default_id(),
         )
 
-        self.assertEqual(consumed, Decimal("5"))
+        self.assertEqual(consumed.quantity, Decimal("5"))
         first.refresh_from_db()
         second.refresh_from_db()
         self.assertEqual(_remaining(first), Decimal("0"))
@@ -241,7 +244,7 @@ class ExpiryFifoTests(TestCase):
             warehouse=Warehouse.default_id(),
         )
 
-        self.assertEqual(consumed, Decimal("4"))
+        self.assertEqual(consumed.quantity, Decimal("4"))
         older.refresh_from_db()
         newer.refresh_from_db()
         self.assertEqual(_remaining(older), Decimal("0"))
@@ -261,7 +264,7 @@ class ExpiryFifoTests(TestCase):
             warehouse=Warehouse.default_id(),
         )
 
-        self.assertEqual(consumed, 0)
+        self.assertIsNone(consumed)
         batch.refresh_from_db()
         self.assertEqual(_remaining(batch), Decimal("5"))
 
@@ -270,21 +273,19 @@ class ExpiryFifoTests(TestCase):
             variant=self.variant, days=10, quantity="5", supplier=self.supplier
         )
 
-        self.assertEqual(
+        self.assertIsNone(
             consume_expiring_stock_batches(
                 variant=self.variant,
                 quantity=0,
                 warehouse=Warehouse.default_id(),
-            ),
-            0,
+            )
         )
-        self.assertEqual(
+        self.assertIsNone(
             consume_expiring_stock_batches(
                 variant=self.variant,
                 quantity=Decimal("-2"),
                 warehouse=Warehouse.default_id(),
-            ),
-            0,
+            )
         )
         batch.refresh_from_db()
         self.assertEqual(_remaining(batch), Decimal("5"))

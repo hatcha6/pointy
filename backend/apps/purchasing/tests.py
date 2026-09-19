@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import ProductVariant
+from apps.catalog.models import Product, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
@@ -412,8 +412,15 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(PurchaseOrder.objects.count(), 1)
 
     def test_expiry_tracked_product_requires_purchase_line_expiry_date(self):
-        self.product.tracks_expiry = True
-        self.product.save(update_fields=["tracks_expiry", "updated_at"])
+        self.product.tracking_mode = Product.TrackingMode.BATCH
+        self.product.expiry_required = True
+        self.product.save(
+            update_fields=["tracking_mode", "expiry_required", "updated_at"]
+        )
+        # ``mode_of`` reads the mode off ``variant.product``, so a variant
+        # cached before the change still reports the old one.
+        self.variant.refresh_from_db()
+        self.variant.product = self.product
 
         response = self.client.post(
             reverse("purchaseorder-list"),
@@ -1941,8 +1948,15 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(stock_item.quantity_expected, 0)
 
     def test_receiving_expiry_tracked_stock_creates_batch(self):
-        self.product.tracks_expiry = True
-        self.product.save(update_fields=["tracks_expiry", "updated_at"])
+        self.product.tracking_mode = Product.TrackingMode.BATCH
+        self.product.expiry_required = True
+        self.product.save(
+            update_fields=["tracking_mode", "expiry_required", "updated_at"]
+        )
+        # ``mode_of`` reads the mode off ``variant.product``, so a variant
+        # cached before the change still reports the old one.
+        self.variant.refresh_from_db()
+        self.variant.product = self.product
         expiry_date = timezone.localdate() + timedelta(days=30)
         StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         order = PurchaseOrder.objects.create(supplier=self.supplier)
@@ -1973,7 +1987,13 @@ class PurchaseOrderApiTests(TestCase):
         receipt_line = PurchaseReceipt.objects.get(
             purchase_order=order,
         ).lines.get()
-        batch = StockBatch.objects.get(code=receipt_line_lot_code(receipt_line))
+        # The lot no longer carries the legacy ``RL-<pk>`` code: since §18.4
+        # folded ``tracks_expiry`` into ``tracking_mode`` the delivery goes
+        # through the ordinary lot-receipt path, which generates its own code
+        # and renders it as «بدون رقم دفعة». One lot per delivery either way.
+        batch = StockBatch.objects.get(variant=self.variant)
+        self.assertTrue(batch.code_is_generated)
+        self.assertEqual(batch.display_code, "")
         self.assertEqual(batch.variant, self.variant)
         self.assertEqual(batch.expiry_date, expiry_date)
         # The quantity lives on the balance now: one lot, one row per place.
@@ -1988,8 +2008,15 @@ class PurchaseOrderApiTests(TestCase):
         )
 
     def test_expiring_batches_are_consumed_by_earliest_expiry_first(self):
-        self.product.tracks_expiry = True
-        self.product.save(update_fields=["tracks_expiry", "updated_at"])
+        self.product.tracking_mode = Product.TrackingMode.BATCH
+        self.product.expiry_required = True
+        self.product.save(
+            update_fields=["tracking_mode", "expiry_required", "updated_at"]
+        )
+        # ``mode_of`` reads the mode off ``variant.product``, so a variant
+        # cached before the change still reports the old one.
+        self.variant.refresh_from_db()
+        self.variant.product = self.product
         StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         order = PurchaseOrder.objects.create(supplier=self.supplier)
         first_line = order.lines.create(
@@ -2022,7 +2049,9 @@ class PurchaseOrderApiTests(TestCase):
             variant=self.variant, quantity=4, warehouse=Warehouse.default_id()
         )
 
-        self.assertEqual(consumed, 4)
+        # The drawdown returns its allocation plan now, not a bare count:
+        # a tracked movement that names nothing is refused by the ledger.
+        self.assertEqual(consumed.quantity, Decimal("4"))
         balances[0].refresh_from_db()
         balances[1].refresh_from_db()
         self.assertEqual(balances[0].remaining_quantity, 0)

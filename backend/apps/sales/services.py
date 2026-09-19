@@ -1135,9 +1135,11 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None, setti
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         adjusted_items.append(stock_item)
-        consume_expiring_stock_batches(
-            variant=variant, quantity=quantity, warehouse=stock_item.warehouse_id
-        )
+        # No separate expiry drawdown here any more. A sale plans its own
+        # issue — ``prepare_sale_stock_adjustments`` did it, locks and all —
+        # and since §18.4 folded ``tracks_expiry`` into ``tracking_mode`` the
+        # expiry products are lot-tracked, so calling the cohort drawdown as
+        # well would take the same goods off the shelf twice.
         # The plan was made (and its rows locked) back in
         # ``prepare_sale_stock_adjustments``; this is where it is spent.
         plan = tracking.plan_on(variant)

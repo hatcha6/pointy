@@ -21,8 +21,11 @@ def _expiry_product(sku):
     product = tracked_product(
         name="حليب", sku=sku, mode=Product.TrackingMode.QUANTITY, unit_price="5.00"
     )
-    product.tracks_expiry = True
-    product.save(update_fields=["tracks_expiry", "updated_at"])
+    product.tracking_mode = Product.TrackingMode.BATCH
+    product.expiry_required = True
+    product.save(
+        update_fields=["tracking_mode", "expiry_required", "updated_at"]
+    )
     return product
 
 

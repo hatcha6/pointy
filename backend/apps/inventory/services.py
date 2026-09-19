@@ -401,26 +401,28 @@ def consume_expiring_stock_batches(*, variant, quantity, warehouse):
     a caller that does not yet know which stock it moved.
     """
     if quantity <= 0:
-        return 0
-    product = variant.product
-    if not getattr(product, "tracks_expiry", False) or product.tracks_lots:
-        return 0
-
-    picked = tracking.pick_balances(
+        return None
+    # One implementation, not two. This used to be the *other* expiry
+    # drawdown — a parallel path for products that ticked ``tracks_expiry``
+    # without lot control, decrementing cohorts with no allocation behind them.
+    # §18.4 folded that flag into ``tracking_mode``, so those products are
+    # ``batch`` now and there is exactly one way stock leaves a lot: an
+    # allocation, planned and applied by ``apps.inventory.tracking``.
+    #
+    # Returns the **plan**, which the caller must hand to its movement. That is
+    # not bookkeeping politeness: a tracked movement carrying no allocations is
+    # refused outright by ``post_movement_valuations`` (ERPNext #42997), and
+    # rightly, because a bin that moved with nothing named underneath it is the
+    # silent corruption this whole feature exists to prevent.
+    plan = tracking.plan_lot_drawdown(
         variant=variant,
         warehouse=resolve_warehouse_id(warehouse),
         quantity=quantity,
-        strategy="fefo",
-        # The expiry-alert feature has always drawn the earliest cohort down
-        # first whether or not it had passed; refusing here would change what
-        # the till does for a product whose owner never opted into lot control.
+        # A shrink, a write-off or a return is exactly where goods that expired
+        # on the shelf show up, so an expired lot is a legitimate source here.
         allow_expired=True,
     )
-    consumed = 0
-    for balance, take in picked:
-        tracking.issue_from_balance(balance=balance, quantity=take)
-        consumed += take
-    return consumed
+    return tracking.apply_lot_drawdown(plan)
 
 
 def stock_count_needs_review(*, expected, counted, min_units, percent):

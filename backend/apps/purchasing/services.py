@@ -896,7 +896,7 @@ def _write_purchase_order_with_lines(
         # The order is already submitted, so the new lines take effect as
         # expected stock immediately — hold them to the same bar submit does.
         missing_expiry = purchase_order.lines.filter(
-            variant__product__tracks_expiry=True,
+            variant__product__expiry_required=True,
             expiry_date__isnull=True,
         ).exists()
         if missing_expiry:
@@ -1107,7 +1107,7 @@ def submit_purchase_order(purchase_order, *, request=None):
             {"detail": "Purchase order must include at least one line."}
         )
     missing_expiry = locked_order.lines.filter(
-        variant__product__tracks_expiry=True,
+        variant__product__expiry_required=True,
         expiry_date__isnull=True,
     ).exists()
     if missing_expiry:
@@ -1310,7 +1310,9 @@ def validate_receipt_line_quantities(
 def validate_receipt_line_expiry(line, accepted_quantity, expiry_date):
     if (
         accepted_quantity > 0
-        and line.variant.product.tracks_expiry
+        # ``expiry_required``: see the note in purchasing/serializers.py —
+        # tracking lots is not a promise that the goods go off.
+        and line.variant.product.expiry_required
         and expiry_date is None
     ):
         raise serializers.ValidationError(
@@ -1640,6 +1642,10 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             supplier=locked_order.supplier,
             purchase_line=line,
             capture_later=capture_later,
+            # The delivery's own expiry, for the lot the receipt generates when
+            # nobody typed one. Without it an expiry-tracking shop's alerts go
+            # quiet the day it upgrades.
+            default_expiry=line_data.get("expiry_date") or line.expiry_date,
             key=f"PO{locked_order.pk}L{line.pk}",
         )
         stock_movements.extend(
