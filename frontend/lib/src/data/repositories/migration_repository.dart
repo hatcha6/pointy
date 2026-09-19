@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../core/result.dart';
 import '../models/migration.dart';
+import '../models/migration_collapse.dart';
 import '../services/migration_uploader.dart';
 import '../services/pos_api_service.dart';
 
@@ -80,5 +81,65 @@ class MigrationRepository {
       () =>
           _service.fetchMigrationIssues(runId, page: page, severity: severity),
     );
+  }
+
+  // --- the collapse (§12) ----------------------------------------------
+
+  Future<Result<CollapsePlan>> proposeCollapse(int sourceId) {
+    return Result.guard(() => _service.proposeCollapse(sourceId));
+  }
+
+  Future<Result<CollapsePlan>> loadCollapsePlan(int planId) {
+    return Result.guard(() => _service.fetchCollapsePlan(planId));
+  }
+
+  Future<Result<List<CollapsePlan>>> loadCollapsePlans({int? sourceId}) {
+    return Result.guard(() => _service.fetchCollapsePlans(sourceId: sourceId));
+  }
+
+  Future<Result<List<CollapseCluster>>> loadCollapseClusters(int planId) {
+    return Result.guard(() => _service.fetchCollapseClusters(planId));
+  }
+
+  Future<Result<CollapseCandidatePage>> loadCollapseCandidates(
+    int planId, {
+    int page = 1,
+    String? decision,
+    String? stemKey,
+    bool needsReview = false,
+    String search = '',
+  }) {
+    return Result.guard(
+      () => _service.fetchCollapseCandidates(
+        planId,
+        page: page,
+        decision: decision,
+        stemKey: stemKey,
+        needsReview: needsReview,
+        search: search,
+      ),
+    );
+  }
+
+  Future<Result<({CollapseCandidate candidate, CollapseStats stats})>>
+  updateCollapseCandidate(int candidateId, Map<String, Object?> changes) {
+    return Result.guard(
+      () => _service.updateCollapseCandidate(candidateId, changes),
+    );
+  }
+
+  Future<Result<CollapsePlan>> renameCollapseCluster(
+    int planId, {
+    required String stemKey,
+    required String stem,
+  }) {
+    return Result.guard(
+      () =>
+          _service.renameCollapseCluster(planId, stemKey: stemKey, stem: stem),
+    );
+  }
+
+  Future<Result<CollapsePlan>> approveCollapsePlan(int planId) {
+    return Result.guard(() => _service.approveCollapsePlan(planId));
   }
 }

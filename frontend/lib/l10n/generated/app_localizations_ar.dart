@@ -17161,6 +17161,220 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get collapseTitle => 'دمج الأصناف المتسلسلة';
+
+  @override
+  String get collapseIntroTitle => 'صنف لكل جهاز؟';
+
+  @override
+  String get collapseIntroBody =>
+      'إذا كان نظامك القديم ينشئ صنفًا مستقلًا لكل جهاز، يمكننا قراءة الأسماء وإعادة تجميعها: منتج واحد، خيارات، ووحدة معرّفة لكل جهاز. لا يُكتب شيء قبل موافقتك.';
+
+  @override
+  String get collapseProposeButton => 'افحص الأصناف';
+
+  @override
+  String get collapseRebuildButton => 'أعد الفحص';
+
+  @override
+  String get collapseBuildingTitle => 'جارٍ قراءة الأصناف';
+
+  @override
+  String get collapseBuildingBody =>
+      'نقرأ الأصناف وفواتير الشراء والبيع لنعرف ما الذي يمثّل جهازًا بعينه. يمكنك إغلاق هذه الصفحة والعودة لاحقًا.';
+
+  @override
+  String get collapseFailedTitle => 'تعذر فحص الأصناف';
+
+  @override
+  String collapseHeadline(String products, String units) {
+    return '$products صنفًا ← $units وحدة';
+  }
+
+  @override
+  String get collapseProducts => 'منتجات';
+
+  @override
+  String get collapseVariants => 'خيارات';
+
+  @override
+  String get collapseUnits => 'وحدات معرّفة';
+
+  @override
+  String collapseUnitsSplit(String inStock, String sold) {
+    return '$inStock في المخزون · $sold مباعة';
+  }
+
+  @override
+  String get collapseKept => 'تبقى أصنافًا كما هي';
+
+  @override
+  String collapseNeedsReviewCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count صفًا يحتاج مراجعة',
+      few: '$count صفوف تحتاج مراجعة',
+      two: 'صفان يحتاجان مراجعة',
+      one: 'صف واحد يحتاج مراجعة',
+      zero: 'لا شيء يحتاج مراجعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get collapseProposedProductsTitle => 'المنتجات المقترحة';
+
+  @override
+  String collapseClusterSummary(String units, String variants) {
+    return '$units وحدة · $variants خيار';
+  }
+
+  @override
+  String get collapseFilterNeedsReview => 'يحتاج مراجعة';
+
+  @override
+  String get collapseFilterCollapsing => 'سيصبح وحدات';
+
+  @override
+  String get collapseFilterKept => 'يبقى صنفًا';
+
+  @override
+  String get collapseSearchHint => 'ابحث باسم الصنف القديم';
+
+  @override
+  String get collapseRowsEmpty => 'لا توجد صفوف هنا.';
+
+  @override
+  String get collapseBecomes => 'يصبح';
+
+  @override
+  String get collapseStaysProduct => 'يبقى صنفًا كما هو';
+
+  @override
+  String get collapseUnitInStock => 'في المخزون';
+
+  @override
+  String get collapseUnitSold => 'مباعة';
+
+  @override
+  String get collapseEditTitle => 'مراجعة صنف';
+
+  @override
+  String get collapseEditProductName => 'اسم المنتج';
+
+  @override
+  String get collapseEditProductNameHelp =>
+      'اكتب اسم منتج آخر لدمج هذا الصنف معه.';
+
+  @override
+  String get collapseEditIdentifier => 'المعرّف';
+
+  @override
+  String get collapseEditStorage => 'السعة';
+
+  @override
+  String get collapseEditColour => 'اللون';
+
+  @override
+  String get collapseEditStatus => 'حالة الوحدة';
+
+  @override
+  String get collapseEditKeep => 'اتركه صنفًا عاديًا';
+
+  @override
+  String get collapseEditSave => 'حفظ';
+
+  @override
+  String get collapseRenameClusterTitle => 'تسمية المنتج';
+
+  @override
+  String get collapseApproveButton => 'اعتمد الاقتراح';
+
+  @override
+  String get collapseApprovedTitle => 'تم اعتماد الاقتراح';
+
+  @override
+  String get collapseApprovedBody =>
+      'سيُطبَّق عند النقل. لن تتغير الأصناف حتى تبدأ النقل الفعلي.';
+
+  @override
+  String get collapseAppliedTitle => 'تم تطبيق الدمج';
+
+  @override
+  String get collapseWillEnableSerialized =>
+      'سيُفعَّل تتبّع الأجهزة المعرّفة في المتجر عند النقل.';
+
+  @override
+  String get collapseAssetType => 'نوع الجهاز';
+
+  @override
+  String get collapseNothingToCollapse =>
+      'لم نجد في هذا الملف ما يشبه صنفًا لكل جهاز.';
+
+  @override
+  String get collapseReasonNoIdentifier => 'لا يوجد رقم مميّز في الاسم';
+
+  @override
+  String get collapseReasonNoStem => 'الاسم ليس فيه سوى الرقم';
+
+  @override
+  String get collapseReasonWeakStem => 'ما تبقّى من الاسم قصير جدًا';
+
+  @override
+  String get collapseReasonUnlabelled => 'الرقم غير مسبوق بكلمة تعرّفه';
+
+  @override
+  String get collapseReasonOddLength => 'طول الرقم غير معتاد لـ IMEI';
+
+  @override
+  String get collapseReasonCheckDigit => 'رقم التحقق في IMEI لا يطابق';
+
+  @override
+  String get collapseReasonVinCheckDigit => 'رقم التحقق في رقم الهيكل لا يطابق';
+
+  @override
+  String get collapseReasonSecondIdentifier => 'الاسم يحتوي أكثر من رقم مميّز';
+
+  @override
+  String get collapseReasonSingleton => 'لا يوجد صنف آخر يشبهه';
+
+  @override
+  String get collapseReasonNoCost => 'لا توجد فاتورة شراء لهذا الصنف';
+
+  @override
+  String get collapseReasonGoneWithoutSale => 'خرج من المخزون دون فاتورة بيع';
+
+  @override
+  String get collapseReasonSoldMoreThanOnce =>
+      'بيع أكثر من مرة — ليس جهازًا بعينه';
+
+  @override
+  String get collapseReasonPurchasedMoreThanOnce =>
+      'اشتُري أكثر من مرة — ليس جهازًا بعينه';
+
+  @override
+  String get collapseReasonMoreThanOneOnHand =>
+      'يوجد أكثر من واحد منه في المخزون';
+
+  @override
+  String get collapseReasonDuplicateIdentifier =>
+      'الرقم نفسه موجود في صنف آخر بالمخزون';
+
+  @override
+  String get collapseReasonAlreadyInStock =>
+      'المعرّف موجود بالفعل في مخزون المتجر';
+
+  @override
+  String get collapseReasonMultipleVariants => 'للصنف أكثر من خيار بيع';
+
+  @override
+  String get collapseReasonNotStockKeeping => 'خدمة أو صنف محضّر — لا يُتتبّع';
+
+  @override
+  String get collapseReasonEmptyName => 'لا اسم لهذا الصنف';
+
+  @override
   String get warehousesTitle => 'المخازن';
 
   @override

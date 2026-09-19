@@ -15,6 +15,10 @@ from apps.attendance.views import (
     BioTimeSyncView,
     BioTimeTestConnectionView,
 )
+from apps.migration.collapse_views import (
+    CollapseCandidateViewSet,
+    CollapsePlanViewSet,
+)
 from apps.migration.views import (
     MigrationRunViewSet,
     MigrationSourceViewSet,
@@ -294,6 +298,16 @@ router.register(
     "migration/runs",
     MigrationRunViewSet,
     basename="migration-run",
+)
+router.register(
+    "migration/collapse-plans",
+    CollapsePlanViewSet,
+    basename="migration-collapse-plan",
+)
+router.register(
+    "migration/collapse-candidates",
+    CollapseCandidateViewSet,
+    basename="migration-collapse-candidate",
 )
 router.register(
     "attachment-storage-volumes",

@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Sum
 
 from apps.catalog.models import Product
 
@@ -46,17 +46,25 @@ def _close(left, right, tolerance=TOLERANCE) -> bool:
     return abs(Decimal(left or 0) - Decimal(right or 0)) <= tolerance
 
 
-def _tracked_variants():
-    """``{variant_id: (mode, label)}`` for every variant that carries identity."""
+def _tracked_variants(variants=None):
+    """``{variant_id: (mode, label)}`` for every variant that carries identity.
+
+    ``variants`` narrows the scan to a set of ids, for a caller that has just
+    written a known slice of the catalogue and wants to be told about *its own*
+    work rather than about a violation somewhere else in the shop — a data
+    migration, which cannot ask a person to look, is the case this exists for.
+    """
     from apps.catalog.models import ProductVariant
 
-    rows = (
-        ProductVariant.objects.exclude(
-            product__tracking_mode=Product.TrackingMode.QUANTITY
-        )
-        .values_list("pk", "product__tracking_mode", "sku")
+    rows = ProductVariant.objects.exclude(
+        product__tracking_mode=Product.TrackingMode.QUANTITY
     )
-    return {pk: (mode, sku) for pk, mode, sku in rows}
+    if variants is not None:
+        rows = rows.filter(pk__in=list(variants))
+    return {
+        pk: (mode, sku)
+        for pk, mode, sku in rows.values_list("pk", "product__tracking_mode", "sku")
+    }
 
 
 def counts_toward_bin(status, warehouse_id, transit_id=None) -> bool:
@@ -725,14 +733,16 @@ CHECKS = (
 )
 
 
-def tracking_invariant_violations() -> list:
+def tracking_invariant_violations(variants=None) -> list:
     """Every §5.4 invariant that does not currently hold, as sentences.
 
     The tracked-variant map is resolved once and handed to every check, so
     running the whole set against a real shop costs one catalog scan rather than
-    nine.
+    nine. ``variants`` narrows it — see :func:`_tracked_variants`.
     """
-    tracked = _tracked_variants()
+    tracked = _tracked_variants(variants)
+    if variants is not None and not tracked:
+        return []
     problems = []
     for check in CHECKS:
         problems.extend(check(tracked))

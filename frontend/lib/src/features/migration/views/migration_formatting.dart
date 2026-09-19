@@ -17,7 +17,9 @@ String formatBytes(int bytes) {
     unit++;
   }
   // One decimal below ten, none above: "1.4 جيجابايت", "340 ميجابايت".
-  final text = value >= 10 ? value.round().toString() : value.toStringAsFixed(1);
+  final text = value >= 10
+      ? value.round().toString()
+      : value.toStringAsFixed(1);
   return '$text ${units[unit]}';
 }
 

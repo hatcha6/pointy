@@ -29601,6 +29601,378 @@ abstract class AppLocalizations {
   /// **'{count} سجل'**
   String migrationRecordsImported(String count);
 
+  /// Title of the §12 collapse review screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'دمج الأصناف المتسلسلة'**
+  String get collapseTitle;
+
+  /// Offer shown when a catalogue looks like one product per article.
+  ///
+  /// In ar, this message translates to:
+  /// **'صنف لكل جهاز؟'**
+  String get collapseIntroTitle;
+
+  /// Explains what the collapse does before it is run.
+  ///
+  /// In ar, this message translates to:
+  /// **'إذا كان نظامك القديم ينشئ صنفًا مستقلًا لكل جهاز، يمكننا قراءة الأسماء وإعادة تجميعها: منتج واحد، خيارات، ووحدة معرّفة لكل جهاز. لا يُكتب شيء قبل موافقتك.'**
+  String get collapseIntroBody;
+
+  /// Starts building a collapse proposal.
+  ///
+  /// In ar, this message translates to:
+  /// **'افحص الأصناف'**
+  String get collapseProposeButton;
+
+  /// Rebuilds the proposal from the file.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعد الفحص'**
+  String get collapseRebuildButton;
+
+  /// Shown while the proposal is being built.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ قراءة الأصناف'**
+  String get collapseBuildingTitle;
+
+  /// Reassures that building continues on the server.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقرأ الأصناف وفواتير الشراء والبيع لنعرف ما الذي يمثّل جهازًا بعينه. يمكنك إغلاق هذه الصفحة والعودة لاحقًا.'**
+  String get collapseBuildingBody;
+
+  /// Shown when building the proposal failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر فحص الأصناف'**
+  String get collapseFailedTitle;
+
+  /// The headline the whole screen exists to say.
+  ///
+  /// In ar, this message translates to:
+  /// **'{products} صنفًا ← {units} وحدة'**
+  String collapseHeadline(String products, String units);
+
+  /// Metric label.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتجات'**
+  String get collapseProducts;
+
+  /// Metric label.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات'**
+  String get collapseVariants;
+
+  /// Metric label.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات معرّفة'**
+  String get collapseUnits;
+
+  /// Breakdown of the proposed units.
+  ///
+  /// In ar, this message translates to:
+  /// **'{inStock} في المخزون · {sold} مباعة'**
+  String collapseUnitsSplit(String inStock, String sold);
+
+  /// Metric label for rows the collapse leaves alone.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبقى أصنافًا كما هي'**
+  String get collapseKept;
+
+  /// How many rows are below the confidence threshold.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا شيء يحتاج مراجعة} one{صف واحد يحتاج مراجعة} two{صفان يحتاجان مراجعة} few{{count} صفوف تحتاج مراجعة} other{{count} صفًا يحتاج مراجعة}}'**
+  String collapseNeedsReviewCount(int count);
+
+  /// Section header above the cluster list.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات المقترحة'**
+  String get collapseProposedProductsTitle;
+
+  /// One proposed product's contents.
+  ///
+  /// In ar, this message translates to:
+  /// **'{units} وحدة · {variants} خيار'**
+  String collapseClusterSummary(String units, String variants);
+
+  /// Review list filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج مراجعة'**
+  String get collapseFilterNeedsReview;
+
+  /// Review list filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيصبح وحدات'**
+  String get collapseFilterCollapsing;
+
+  /// Review list filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبقى صنفًا'**
+  String get collapseFilterKept;
+
+  /// Search field placeholder.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم الصنف القديم'**
+  String get collapseSearchHint;
+
+  /// Empty state for the review list.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد صفوف هنا.'**
+  String get collapseRowsEmpty;
+
+  /// Label between the old name and the proposal.
+  ///
+  /// In ar, this message translates to:
+  /// **'يصبح'**
+  String get collapseBecomes;
+
+  /// Shown on a row the collapse leaves alone.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبقى صنفًا كما هو'**
+  String get collapseStaysProduct;
+
+  /// Proposed unit status.
+  ///
+  /// In ar, this message translates to:
+  /// **'في المخزون'**
+  String get collapseUnitInStock;
+
+  /// Proposed unit status.
+  ///
+  /// In ar, this message translates to:
+  /// **'مباعة'**
+  String get collapseUnitSold;
+
+  /// Title of the per-row edit sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة صنف'**
+  String get collapseEditTitle;
+
+  /// Edit field label; typing an existing name merges the two.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المنتج'**
+  String get collapseEditProductName;
+
+  /// Explains that renaming is how two clusters merge.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب اسم منتج آخر لدمج هذا الصنف معه.'**
+  String get collapseEditProductNameHelp;
+
+  /// Edit field label for IMEI/serial.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعرّف'**
+  String get collapseEditIdentifier;
+
+  /// Edit field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعة'**
+  String get collapseEditStorage;
+
+  /// Edit field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'اللون'**
+  String get collapseEditColour;
+
+  /// Edit field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة الوحدة'**
+  String get collapseEditStatus;
+
+  /// Toggle that opts a row out of the collapse.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه صنفًا عاديًا'**
+  String get collapseEditKeep;
+
+  /// Saves one edited row.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get collapseEditSave;
+
+  /// Dialog title for renaming a proposed product.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسمية المنتج'**
+  String get collapseRenameClusterTitle;
+
+  /// Approves the proposal; nothing is written until the import runs.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتمد الاقتراح'**
+  String get collapseApproveButton;
+
+  /// Shown once the plan is approved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم اعتماد الاقتراح'**
+  String get collapseApprovedTitle;
+
+  /// Explains that approval alone writes nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُطبَّق عند النقل. لن تتغير الأصناف حتى تبدأ النقل الفعلي.'**
+  String get collapseApprovedBody;
+
+  /// Shown after the import used the plan.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تطبيق الدمج'**
+  String get collapseAppliedTitle;
+
+  /// Warns that applying the plan turns the feature on.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُفعَّل تتبّع الأجهزة المعرّفة في المتجر عند النقل.'**
+  String get collapseWillEnableSerialized;
+
+  /// Which kind of identified thing these become.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الجهاز'**
+  String get collapseAssetType;
+
+  /// Empty result for a catalogue that is already normal.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم نجد في هذا الملف ما يشبه صنفًا لكل جهاز.'**
+  String get collapseNothingToCollapse;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد رقم مميّز في الاسم'**
+  String get collapseReasonNoIdentifier;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم ليس فيه سوى الرقم'**
+  String get collapseReasonNoStem;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما تبقّى من الاسم قصير جدًا'**
+  String get collapseReasonWeakStem;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم غير مسبوق بكلمة تعرّفه'**
+  String get collapseReasonUnlabelled;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'طول الرقم غير معتاد لـ IMEI'**
+  String get collapseReasonOddLength;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التحقق في IMEI لا يطابق'**
+  String get collapseReasonCheckDigit;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التحقق في رقم الهيكل لا يطابق'**
+  String get collapseReasonVinCheckDigit;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم يحتوي أكثر من رقم مميّز'**
+  String get collapseReasonSecondIdentifier;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد صنف آخر يشبهه'**
+  String get collapseReasonSingleton;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فاتورة شراء لهذا الصنف'**
+  String get collapseReasonNoCost;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'خرج من المخزون دون فاتورة بيع'**
+  String get collapseReasonGoneWithoutSale;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع أكثر من مرة — ليس جهازًا بعينه'**
+  String get collapseReasonSoldMoreThanOnce;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتُري أكثر من مرة — ليس جهازًا بعينه'**
+  String get collapseReasonPurchasedMoreThanOnce;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'يوجد أكثر من واحد منه في المخزون'**
+  String get collapseReasonMoreThanOneOnHand;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم نفسه موجود في صنف آخر بالمخزون'**
+  String get collapseReasonDuplicateIdentifier;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعرّف موجود بالفعل في مخزون المتجر'**
+  String get collapseReasonAlreadyInStock;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'للصنف أكثر من خيار بيع'**
+  String get collapseReasonMultipleVariants;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة أو صنف محضّر — لا يُتتبّع'**
+  String get collapseReasonNotStockKeeping;
+
+  /// Reason code.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا اسم لهذا الصنف'**
+  String get collapseReasonEmptyName;
+
   /// No description provided for @warehousesTitle.
   ///
   /// In ar, this message translates to:

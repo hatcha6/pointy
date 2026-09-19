@@ -2,6 +2,7 @@
 //
 //   make frontend-migration-preview
 //   ?screen=choose|uploading|preparing|failed|review|dryrun|importing|done
+//   ?screen=collapse|collapse-building|collapse-approved  (the §12 review)
 //   ?theme=light|dark
 //
 // The wizard's steps are server-state-driven and some of them only appear after
@@ -15,9 +16,12 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/migration.dart';
+import 'package:pointy_frontend/src/data/models/migration_collapse.dart';
 import 'package:pointy_frontend/src/data/repositories/migration_repository.dart';
 import 'package:pointy_frontend/src/data/services/migration_uploader.dart';
+import 'package:pointy_frontend/src/features/migration/view_models/collapse_view_model.dart';
 import 'package:pointy_frontend/src/features/migration/view_models/migration_view_model.dart';
+import 'package:pointy_frontend/src/features/migration/views/collapse_review_page.dart';
 import 'package:pointy_frontend/src/features/migration/views/data_migration_page.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
@@ -67,6 +71,9 @@ class _Single extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (screen.startsWith('collapse')) {
+      return CollapseReviewPage(viewModel: _collapseViewModelFor(screen));
+    }
     return DataMigrationPage(viewModel: _viewModelFor(screen));
   }
 }
@@ -85,6 +92,9 @@ class _Board extends StatelessWidget {
     'dryrun',
     'importing',
     'done',
+    'collapse-building',
+    'collapse',
+    'collapse-approved',
   ];
 
   @override
@@ -116,9 +126,13 @@ class _Board extends StatelessWidget {
                       width: 420,
                       height: 900,
                       child: ClipRect(
-                        child: DataMigrationPage(
-                          viewModel: _viewModelFor(screen),
-                        ),
+                        child: screen.startsWith('collapse')
+                            ? CollapseReviewPage(
+                                viewModel: _collapseViewModelFor(screen),
+                              )
+                            : DataMigrationPage(
+                                viewModel: _viewModelFor(screen),
+                              ),
                       ),
                     ),
                   ],
@@ -133,6 +147,15 @@ class _Board extends StatelessWidget {
 
 MigrationViewModel _viewModelFor(String screen) {
   final viewModel = MigrationViewModel(_FakeMigrationRepository(screen));
+  viewModel.load();
+  return viewModel;
+}
+
+CollapseViewModel _collapseViewModelFor(String screen) {
+  final viewModel = CollapseViewModel(
+    _FakeMigrationRepository(screen),
+    sourceId: 1,
+  );
   viewModel.load();
   return viewModel;
 }
@@ -340,6 +363,196 @@ Map<String, Object?>? _runJson(String screen) {
   }
 }
 
+/// The prospect's catalogue, as §12 describes it: 340 rows that are really a
+/// dozen phones, with the handful of rows nobody can settle but the owner.
+Map<String, Object?> _collapsePlanJson(String screen) {
+  final status = switch (screen) {
+    'collapse-building' => 'running',
+    'collapse-approved' => 'approved',
+    _ => 'ready',
+  };
+  return {
+    'id': 7,
+    'source': 1,
+    'status': status,
+    'is_editable': status == 'ready',
+    'error_message': '',
+    'asset_type': 1,
+    'asset_type_name': 'هاتف',
+    'warranty_days': 0,
+    'thresholds': {'low': 0.5, 'high': 0.8},
+    // The builder's own stages (apps.migration.collapse.planner), not the
+    // preparation pipeline's — they are a different job.
+    'stages': status == 'running'
+        ? const [
+            {
+              'key': 'catalogue',
+              'label': 'قراءة الأصناف',
+              'status': 'done',
+              'percent': 100,
+              'detail': '34,112 صنف',
+            },
+            {
+              'key': 'history',
+              'label': 'قراءة الشراء والبيع',
+              'status': 'running',
+              'percent': 0,
+              'detail': '14,208 شراء · 892,441 بيع',
+            },
+            {
+              'key': 'cluster',
+              'label': 'تجميع الأصناف المتشابهة',
+              'status': 'pending',
+              'percent': 0,
+              'detail': '',
+            },
+            {
+              'key': 'propose',
+              'label': 'تجهيز الاقتراح',
+              'status': 'pending',
+              'percent': 0,
+              'detail': '',
+            },
+          ]
+        : const <Map<String, Object?>>[],
+    'stats': {
+      'source_products': 340,
+      'products': 12,
+      'variants': 31,
+      'units': 331,
+      'units_in_stock': 96,
+      'units_sold': 235,
+      'kept': 9,
+      'needs_review': 14,
+      'edited': 3,
+    },
+  };
+}
+
+List<Map<String, Object?>> _collapseClustersJson() => [
+  {
+    'stem_key': 'iphone 13 pro',
+    'stem': 'iPhone 13 Pro',
+    'variants': 6,
+    'units': 84,
+    'units_in_stock': 21,
+    'units_sold': 63,
+    'needs_review': 4,
+    'option_values': {
+      'storage': ['128GB', '256GB', '512GB'],
+      'colour': ['black', 'blue'],
+    },
+    'option_labels': {
+      'storage': ['128GB', '256GB', '512GB'],
+      'colour': ['أسود', 'أزرق'],
+    },
+  },
+  {
+    'stem_key': 'iphone 12',
+    'stem': 'iPhone 12',
+    'variants': 4,
+    'units': 61,
+    'units_in_stock': 18,
+    'units_sold': 43,
+    'needs_review': 0,
+    'option_values': {
+      'storage': ['64GB', '128GB'],
+      'colour': ['white', 'black'],
+    },
+    'option_labels': {
+      'storage': ['64GB', '128GB'],
+      'colour': ['أبيض', 'أسود'],
+    },
+  },
+  {
+    'stem_key': 'samsung s21 ultra',
+    'stem': 'Samsung S21 Ultra',
+    'variants': 3,
+    'units': 37,
+    'units_in_stock': 11,
+    'units_sold': 26,
+    'needs_review': 2,
+    'option_values': {
+      'storage': ['256GB', '512GB'],
+      'colour': ['black'],
+    },
+    'option_labels': {
+      'storage': ['256GB', '512GB'],
+      'colour': ['أسود'],
+    },
+  },
+];
+
+List<Map<String, Object?>> _collapseCandidatesJson() => [
+  {
+    'id': 1,
+    'source_key': '1042',
+    'source_name': 'ايفون 13 برو 1TB 351234567890111',
+    'decision': 'collapse',
+    'stem': 'ايفون 13 برو',
+    'stem_key': 'ايفون 13 برو',
+    'identifier': '351234567890111',
+    'identifier_kind': 'imei',
+    'options': {'storage': '1TB'},
+    'option_labels': {'storage': '1TB'},
+    'attributes': <String, Object?>{},
+    'unit_status': 'in_stock',
+    'unit_cost': '2350.000000',
+    'list_price': '2850.00',
+    'sold_price': null,
+    'confidence': '0.30',
+    'reasons': [
+      'imei_check_digit_failed',
+      'singleton_cluster',
+      'no_purchase_cost',
+    ],
+    'edited': false,
+    'needs_review': true,
+  },
+  {
+    'id': 2,
+    'source_key': '1180',
+    'source_name': 'جراب شفاف IMEI359900001111222',
+    'decision': 'keep',
+    'stem': '',
+    'stem_key': '',
+    'identifier': '',
+    'identifier_kind': '',
+    'options': <String, Object?>{},
+    'option_labels': <String, Object?>{},
+    'attributes': <String, Object?>{},
+    'unit_status': 'in_stock',
+    'unit_cost': '5.000000',
+    'list_price': '15.00',
+    'sold_price': '15.00',
+    'confidence': '0.00',
+    'reasons': ['sold_more_than_once'],
+    'edited': false,
+    'needs_review': false,
+  },
+  {
+    'id': 3,
+    'source_key': '1007',
+    'source_name': 'iPhone 13 Pro 256GB Blue Battery86 IMEI351234567890129',
+    'decision': 'collapse',
+    'stem': 'iPhone 13 Pro',
+    'stem_key': 'iphone 13 pro',
+    'identifier': '351234567890129',
+    'identifier_kind': 'imei',
+    'options': {'storage': '256GB', 'colour': 'blue'},
+    'option_labels': {'storage': '256GB', 'colour': 'أزرق'},
+    'attributes': {'battery_health': 86},
+    'unit_status': 'sold',
+    'unit_cost': '2400.000000',
+    'list_price': '2900.00',
+    'sold_price': '2900.00',
+    'confidence': '1.00',
+    'reasons': <String>[],
+    'edited': false,
+    'needs_review': false,
+  },
+];
+
 class _FakeMigrationRepository implements MigrationRepository {
   _FakeMigrationRepository(this.screen);
 
@@ -366,7 +579,11 @@ class _FakeMigrationRepository implements MigrationRepository {
           },
         ],
         'entities': [
-          {'entity_type': 'category', 'label': 'التصنيفات', 'implemented': true},
+          {
+            'entity_type': 'category',
+            'label': 'التصنيفات',
+            'implemented': true,
+          },
           {'entity_type': 'product', 'label': 'الأصناف', 'implemented': true},
           {'entity_type': 'variant', 'label': 'المتغيرات', 'implemented': true},
           {'entity_type': 'customer', 'label': 'الزبائن', 'implemented': true},
@@ -450,5 +667,80 @@ class _FakeMigrationRepository implements MigrationRepository {
   @override
   Future<Result<MigrationSource>> discardSource(int id) async {
     return Ok(MigrationSource.fromJson(_sourceJson('done')));
+  }
+
+  // --- the collapse (§12) ----------------------------------------------
+
+  @override
+  Future<Result<CollapsePlan>> proposeCollapse(int sourceId) async {
+    return Ok(CollapsePlan.fromJson(_collapsePlanJson('collapse-building')));
+  }
+
+  @override
+  Future<Result<CollapsePlan>> loadCollapsePlan(int planId) async {
+    return Ok(CollapsePlan.fromJson(_collapsePlanJson(screen)));
+  }
+
+  @override
+  Future<Result<List<CollapsePlan>>> loadCollapsePlans({int? sourceId}) async {
+    if (!screen.startsWith('collapse')) return const Ok([]);
+    return Ok([CollapsePlan.fromJson(_collapsePlanJson(screen))]);
+  }
+
+  @override
+  Future<Result<List<CollapseCluster>>> loadCollapseClusters(int planId) async {
+    return Ok([
+      for (final item in _collapseClustersJson())
+        CollapseCluster.fromJson(item),
+    ]);
+  }
+
+  @override
+  Future<Result<CollapseCandidatePage>> loadCollapseCandidates(
+    int planId, {
+    int page = 1,
+    String? decision,
+    String? stemKey,
+    bool needsReview = false,
+    String search = '',
+  }) async {
+    final rows = [
+      for (final item in _collapseCandidatesJson())
+        CollapseCandidate.fromJson(item),
+    ];
+    return Ok(
+      CollapseCandidatePage(
+        candidates: [
+          for (final row in rows)
+            if (decision == null || row.decision == decision)
+              if (!needsReview || row.needsReview) row,
+        ],
+        hasMore: false,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<({CollapseCandidate candidate, CollapseStats stats})>>
+  updateCollapseCandidate(int candidateId, Map<String, Object?> changes) async {
+    final row = CollapseCandidate.fromJson(_collapseCandidatesJson().first);
+    return Ok((
+      candidate: row,
+      stats: CollapsePlan.fromJson(_collapsePlanJson(screen)).stats,
+    ));
+  }
+
+  @override
+  Future<Result<CollapsePlan>> renameCollapseCluster(
+    int planId, {
+    required String stemKey,
+    required String stem,
+  }) async {
+    return Ok(CollapsePlan.fromJson(_collapsePlanJson(screen)));
+  }
+
+  @override
+  Future<Result<CollapsePlan>> approveCollapsePlan(int planId) async {
+    return Ok(CollapsePlan.fromJson(_collapsePlanJson('collapse-approved')));
   }
 }

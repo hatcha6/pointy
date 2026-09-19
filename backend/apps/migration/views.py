@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from apps.core.permissions import HasPointyPermission
 
 from . import uploads
+from .collapse_serializers import CollapsePlanSerializer
 from .models import MigrationRun, MigrationSource
 from .serializers import (
     EntitySpecSerializer,
@@ -19,7 +20,12 @@ from .serializers import (
     UploadBeginSerializer,
     UploadCompleteSerializer,
 )
-from .services import discard_source, queue_migration_run, queue_preparation
+from .services import (
+    discard_source,
+    queue_collapse_plan,
+    queue_migration_run,
+    queue_preparation,
+)
 
 
 class RawChunkParser(parsers.BaseParser):
@@ -71,6 +77,7 @@ class MigrationSourceViewSet(viewsets.ReadOnlyModelViewSet):
         "chunk": ("migration.add_migrationsource",),
         "complete": ("migration.add_migrationsource",),
         "discard": ("migration.delete_migrationsource",),
+        "collapse": ("migration.add_migrationrun",),
     }
     queryset = MigrationSource.objects.all()
     filterset_fields = ("system_key", "upload_state")
@@ -135,6 +142,19 @@ class MigrationSourceViewSet(viewsets.ReadOnlyModelViewSet):
         )
         source = queue_preparation(source, user=request.user)
         return Response(MigrationSourceSerializer(source).data, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=["post"])
+    def collapse(self, request, pk=None):
+        """Propose what a one-product-per-handset catalogue would collapse into.
+
+        Reads the file; writes nothing to the shop. The answer is a plan the
+        owner reviews and approves, and an import run then names (§12).
+        """
+        plan = queue_collapse_plan(self.get_object(), user=request.user)
+        return Response(
+            CollapsePlanSerializer(plan).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     @action(detail=True, methods=["post"])
     def discard(self, request, pk=None):

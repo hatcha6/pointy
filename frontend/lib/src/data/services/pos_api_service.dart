@@ -51,6 +51,7 @@ import '../models/purchase_suggestion.dart';
 import '../models/query.dart';
 import '../models/register_cash_movement.dart';
 import '../models/migration.dart';
+import '../models/migration_collapse.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/companion.dart';
 import '../models/register_session.dart';
@@ -519,6 +520,61 @@ class PosApiService {
     String? severity,
   }) {
     return _migration.fetchIssues(runId, page: page, severity: severity);
+  }
+
+  Future<CollapsePlan> proposeCollapse(int sourceId) {
+    return _migration.proposeCollapse(sourceId);
+  }
+
+  Future<CollapsePlan> fetchCollapsePlan(int planId) {
+    return _migration.fetchCollapsePlan(planId);
+  }
+
+  Future<List<CollapsePlan>> fetchCollapsePlans({int? sourceId}) {
+    return _migration.fetchCollapsePlans(sourceId: sourceId);
+  }
+
+  Future<List<CollapseCluster>> fetchCollapseClusters(int planId) {
+    return _migration.fetchCollapseClusters(planId);
+  }
+
+  Future<CollapseCandidatePage> fetchCollapseCandidates(
+    int planId, {
+    int page = 1,
+    String? decision,
+    String? stemKey,
+    bool needsReview = false,
+    String search = '',
+  }) {
+    return _migration.fetchCollapseCandidates(
+      planId,
+      page: page,
+      decision: decision,
+      stemKey: stemKey,
+      needsReview: needsReview,
+      search: search,
+    );
+  }
+
+  Future<({CollapseCandidate candidate, CollapseStats stats})>
+  updateCollapseCandidate(int candidateId, Map<String, Object?> changes) {
+    return _migration.updateCollapseCandidate(candidateId, changes);
+  }
+
+  Future<CollapsePlan> renameCollapseCluster(
+    int planId, {
+    required String stemKey,
+    required String stem,
+  }) {
+    return _migration.renameCollapseCluster(
+      planId,
+      stemKey: stemKey,
+      stem: stem,
+    );
+  }
+
+  Future<CollapsePlan> approveCollapsePlan(int planId) {
+    return _migration.approveCollapsePlan(planId);
   }
 
   Future<AttendanceConfig> fetchAttendanceConfig() {

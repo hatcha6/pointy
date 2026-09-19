@@ -21,9 +21,10 @@ from __future__ import annotations
 
 from django.db import transaction
 
+from .collapse.apply import CollapseSession
 from .connectors import get_connector
 from .connectors.base import ExtractContext
-from .entity_plan import PURCHASE_ORDER, SALE, STOCK, ordered_entities
+from .entity_plan import PRODUCT, PURCHASE_ORDER, SALE, STOCK, ordered_entities
 from .exceptions import CompatibilityError, MigrationError
 from .identity import IdentityResolver
 from .loaders import get_loader
@@ -37,6 +38,11 @@ from .reconstruct import (
     resolve_stock_source,
 )
 from .transports import build_transport
+
+#: Stage key for the collapse's unit phase — not an ENTITY_PLAN entity, because
+#: nothing extracts it from the file: it is built from the approved plan, after
+#: everything the units need to point at has been imported.
+COLLAPSE = "collapse"
 
 MAX_ISSUES_PER_ENTITY = 1000
 # Emit a live progress count every this-many records within a single entity.
@@ -65,6 +71,9 @@ class MigrationEngine:
         # none (no quantities), or reconstruct (compute from purchases − sales).
         self._stock_source = resolve_stock_source(run.options)
         self._reconstructor: StockReconstructor | None = None
+        # An approved §12 plan, when this run was launched with one. It
+        # redirects the catalogue loaders and builds the units at the end.
+        self._collapse = CollapseSession.for_run(run)
         self._tracker: StageTracker | None = None
 
     # --- public entrypoint ----------------------------------------------
@@ -81,7 +90,8 @@ class MigrationEngine:
         self._tracker = StageTracker(
             self.run,
             [Stage(spec.entity_type, spec.label) for spec in specs]
-            + ([Stage(STOCK, "احتساب الكميات")] if self._stock_source == STOCK_SOURCE_RECONSTRUCT else []),
+            + ([Stage(STOCK, "احتساب الكميات")] if self._stock_source == STOCK_SOURCE_RECONSTRUCT else [])
+            + ([Stage(COLLAPSE, "إنشاء الوحدات المعرّفة")] if self._collapse else []),
             # A dry run's writes are rolled back, so its stage timeline is kept
             # in memory and persisted with the rest of the report afterwards.
             persist=not self.dry_run,
@@ -91,6 +101,8 @@ class MigrationEngine:
             run_options=dict(self.run.options or {}),
         )
         resolver = IdentityResolver(self.source, self.run, dry_run=self.dry_run)
+        if self._collapse is not None:
+            self._collapse.resolver = resolver
         if self._stock_source == STOCK_SOURCE_RECONSTRUCT:
             self._reconstructor = StockReconstructor(resolver)
 
@@ -127,6 +139,11 @@ class MigrationEngine:
             self._feed_reconstruction_snapshot(connector, transport, context, resolver)
             self._reconstruct_stock()
             self._persist_summary()
+        if self._collapse is not None:
+            self._tracker.start(COLLAPSE)
+            self.run.update_progress(98, "إنشاء الوحدات المعرّفة…", current_entity=COLLAPSE)
+            self._apply_collapse()
+            self._persist_summary()
 
     def _run_dry(self, connector, transport, context, resolver, specs):
         # Single transaction across all entities (so children resolve their
@@ -143,6 +160,8 @@ class MigrationEngine:
                 if self._reconstructor is not None:
                     self._feed_reconstruction_snapshot(connector, transport, context, resolver)
                 self._reconstruct_stock()
+                if self._collapse is not None:
+                    self._apply_collapse()
                 raise _DryRunRollback
         except _DryRunRollback:
             pass
@@ -155,6 +174,8 @@ class MigrationEngine:
         if self._tracker is not None:
             self._tracker.start(spec.entity_type)
         loader = get_loader(spec.entity_type)
+        if loader is not None and self._collapse is not None:
+            loader = self._collapse.wrap(loader, spec.entity_type)
         if loader is None:
             self._add_issue(
                 spec.entity_type, "", ERROR, "no_loader", "No loader is registered for this entity."
@@ -245,6 +266,11 @@ class MigrationEngine:
         """
         if self._reconstructor is None:
             return
+        if self._collapse is not None:
+            # A collapsed variant's on-hand is the count of its units and
+            # nothing else (§12.5). Netting invoices into the same bin would
+            # give one number two authorities.
+            self._reconstructor.ignore(self._collapse.variant_ids)
         result = self._reconstructor.flush(dry_run=self.dry_run)
         if self._tracker is not None:
             self._tracker.done(STOCK, counts=dict(result.counts))
@@ -256,6 +282,27 @@ class MigrationEngine:
             self._add_issue(
                 STOCK, issue.source_key, issue.severity, issue.code, issue.message, issue.detail
             )
+
+    def _apply_collapse(self):
+        """Build the identified articles the approved plan proposed.
+
+        Reported under its own ``collapse`` bucket rather than folded into
+        ``product``: an owner who approved "340 units" is owed a line that says
+        340 units were created, or says why they were not.
+        """
+        result = self._collapse.apply_units()
+        bucket = dict(result.counts)
+        if result.stats:
+            bucket["units"] = result.stats
+        self._summary[COLLAPSE] = bucket
+        for issue in result.issues:
+            self._add_issue(
+                COLLAPSE, issue.source_key, issue.severity, issue.code,
+                issue.message, issue.detail,
+            )
+        if self._tracker is not None:
+            self._tracker.done(COLLAPSE, self._entity_detail(result.counts),
+                               counts=dict(result.counts))
 
     @staticmethod
     def _entity_detail(counts):
@@ -317,6 +364,10 @@ class MigrationEngine:
             selected.discard(STOCK)
         if self._stock_source == STOCK_SOURCE_RECONSTRUCT:
             selected |= {SALE, PURCHASE_ORDER} & supported
+        if self._collapse is not None:
+            # The catalogue pass is where a legacy key learns what it became;
+            # without it every sale would resolve to nothing.
+            selected |= {PRODUCT} & supported
         return [
             spec
             for spec in ordered_entities()

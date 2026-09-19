@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../models/migration.dart';
+import '../models/migration_collapse.dart';
 import 'api_session.dart';
 
 /// The outcome of one chunk PUT: where the server now is, and whether it
@@ -78,7 +79,10 @@ class MigrationApiClient {
       'migration/sources/begin/',
       body: {'filename': filename, 'size_bytes': sizeBytes},
     );
-    _session.ensureSuccess(response, 'Begin migration upload failed with status');
+    _session.ensureSuccess(
+      response,
+      'Begin migration upload failed with status',
+    );
     return MigrationUploadTicket.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -102,7 +106,9 @@ class MigrationApiClient {
       timeout: PosApiSession.longRunningRequestTimeout,
     );
     final decoded = _session.decodedBody(response);
-    final body = decoded is Map<String, Object?> ? decoded : const <String, Object?>{};
+    final body = decoded is Map<String, Object?>
+        ? decoded
+        : const <String, Object?>{};
     if (response.statusCode == 409) {
       return MigrationChunkResult(
         receivedBytes: (body['received_bytes'] as num?)?.toInt() ?? 0,
@@ -118,14 +124,18 @@ class MigrationApiClient {
         'الخادم رفض حجم الجزء المُرسَل. راجع إعداد حجم الأجزاء على الخادم.',
       );
     }
-    if (response.statusCode >= 400 && response.statusCode < 500 &&
+    if (response.statusCode >= 400 &&
+        response.statusCode < 500 &&
         response.statusCode != 429) {
       throw MigrationChunkRejected(
         response.statusCode,
         '${body['detail'] ?? 'تعذر رفع الملف'} (${response.statusCode})',
       );
     }
-    _session.ensureSuccess(response, 'Migration chunk upload failed with status');
+    _session.ensureSuccess(
+      response,
+      'Migration chunk upload failed with status',
+    );
     return MigrationChunkResult(
       receivedBytes: (body['received_bytes'] as num?)?.toInt() ?? 0,
       conflicted: false,
@@ -159,7 +169,9 @@ class MigrationApiClient {
       'Discard migration source failed with status',
     );
     final decoded = _session.decodedBody(response);
-    final body = decoded is Map<String, Object?> ? decoded : const <String, Object?>{};
+    final body = decoded is Map<String, Object?>
+        ? decoded
+        : const <String, Object?>{};
     return MigrationSource.fromJson(
       (body['source'] as Map<String, Object?>?) ?? const {},
     );
@@ -225,6 +237,137 @@ class MigrationApiClient {
       'Migration issues request failed with status',
     );
     return MigrationIssuePage.fromAny(_session.decodedBody(response));
+  }
+
+  // --- the collapse (§12) ----------------------------------------------
+
+  /// Asks the server what a one-product-per-handset catalogue would collapse
+  /// into. Reads the file; writes nothing to the shop.
+  Future<CollapsePlan> proposeCollapse(int sourceId) async {
+    final response = await _session.post(
+      'migration/sources/$sourceId/collapse/',
+      timeout: PosApiSession.longRunningRequestTimeout,
+    );
+    _session.ensureSuccess(response, 'Collapse proposal failed with status');
+    return CollapsePlan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<CollapsePlan> fetchCollapsePlan(int planId) async {
+    final response = await _session.get('migration/collapse-plans/$planId/');
+    _session.ensureSuccess(
+      response,
+      'Collapse plan request failed with status',
+    );
+    return CollapsePlan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<List<CollapsePlan>> fetchCollapsePlans({int? sourceId}) async {
+    final response = await _session.get(
+      'migration/collapse-plans/',
+      query: {if (sourceId != null) 'source': '$sourceId'},
+    );
+    _session.ensureSuccess(
+      response,
+      'Collapse plans request failed with status',
+    );
+    return _decodeList(
+      _session.decodedBody(response),
+    ).map(CollapsePlan.fromJson).toList();
+  }
+
+  Future<List<CollapseCluster>> fetchCollapseClusters(int planId) async {
+    final response = await _session.get(
+      'migration/collapse-plans/$planId/clusters/',
+    );
+    _session.ensureSuccess(
+      response,
+      'Collapse clusters request failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    return [
+      if (decoded is List)
+        for (final item in decoded)
+          if (item is Map<String, Object?>) CollapseCluster.fromJson(item),
+    ];
+  }
+
+  Future<CollapseCandidatePage> fetchCollapseCandidates(
+    int planId, {
+    int page = 1,
+    String? decision,
+    String? stemKey,
+    bool needsReview = false,
+    String search = '',
+  }) async {
+    final response = await _session.get(
+      'migration/collapse-plans/$planId/candidates/',
+      query: {
+        'page': '$page',
+        'decision': ?decision,
+        'stem_key': ?stemKey,
+        if (needsReview) 'needs_review': '1',
+        if (search.isNotEmpty) 'search': search,
+      },
+    );
+    _session.ensureSuccess(
+      response,
+      'Collapse candidates request failed with status',
+    );
+    return CollapseCandidatePage.fromAny(_session.decodedBody(response));
+  }
+
+  /// Edits one row. Returns the row and the recounted headline together, so the
+  /// screen never shows a total that predates the edit that produced it.
+  Future<({CollapseCandidate candidate, CollapseStats stats})>
+  updateCollapseCandidate(int candidateId, Map<String, Object?> changes) async {
+    final response = await _session.patch(
+      'migration/collapse-candidates/$candidateId/',
+      body: changes,
+    );
+    _session.ensureSuccess(
+      response,
+      'Collapse candidate update failed with status',
+    );
+    final body = _session.decodedBody(response) as Map<String, Object?>;
+    return (
+      candidate: CollapseCandidate.fromJson(
+        (body['candidate'] as Map<String, Object?>?) ?? const {},
+      ),
+      stats: CollapseStats.fromJson(
+        (body['stats'] as Map<String, Object?>?) ?? const {},
+      ),
+    );
+  }
+
+  /// Renames a proposed product — which is also how two of them are merged.
+  Future<CollapsePlan> renameCollapseCluster(
+    int planId, {
+    required String stemKey,
+    required String stem,
+  }) async {
+    final response = await _session.post(
+      'migration/collapse-plans/$planId/rename/',
+      body: {'stem_key': stemKey, 'stem': stem},
+    );
+    _session.ensureSuccess(response, 'Collapse rename failed with status');
+    final body = _session.decodedBody(response) as Map<String, Object?>;
+    return CollapsePlan.fromJson(
+      (body['plan'] as Map<String, Object?>?) ?? const {},
+    );
+  }
+
+  Future<CollapsePlan> approveCollapsePlan(int planId) async {
+    final response = await _session.post(
+      'migration/collapse-plans/$planId/approve/',
+    );
+    _session.ensureSuccess(response, 'Collapse approval failed with status');
+    return CollapsePlan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   List<Map<String, Object?>> _decodeList(Object? decoded) {

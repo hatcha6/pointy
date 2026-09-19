@@ -362,3 +362,226 @@ class MigrationIssue(TimeStampedModel):
 
     def __str__(self):
         return f"[{self.severity}] {self.entity_type}:{self.source_key} {self.code}"
+
+
+class CollapsePlan(TimeStampedModel):
+    """A proposal to turn "one product per handset" back into stock (§12).
+
+    The prospect's catalogue is 340 products that are really 340 *units* of a
+    dozen products. This row is what that observation looks like before anybody
+    has agreed to it: built from the file, reviewed one line at a time, approved
+    by the owner, and only then handed to an import run.
+
+    It is deliberately a **document rather than a switch**. A collapse rewrites
+    what a shop's catalogue means, and the difference between a tool that a shop
+    trusts with four years of history and one it does not is that this one shows
+    its work first — every row, what it read out of the name, and how sure it
+    was — and writes nothing until somebody says yes.
+    """
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Reading the catalogue"
+        # Built and waiting for a person.
+        READY = "ready", "Ready to review"
+        FAILED = "failed", "Failed"
+        # A person said yes. The next import run may use it.
+        APPROVED = "approved", "Approved"
+        # An import run used it. Terminal, and the goal.
+        APPLIED = "applied", "Applied"
+        # A newer plan was built for the same file.
+        SUPERSEDED = "superseded", "Superseded"
+
+    #: Statuses a run may be launched against. ``applied`` is in the list
+    #: because re-running an import is the ordinary way to finish one that came
+    #: back partial, and the plan being applied already is exactly the state it
+    #: is in by then — the identity map makes the second pass an update.
+    USABLE = (Status.APPROVED, Status.APPLIED)
+
+    source = models.ForeignKey(
+        MigrationSource,
+        on_delete=models.CASCADE,
+        related_name="collapse_plans",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.QUEUED,
+        db_index=True,
+    )
+    #: Build timeline, same shape as the preparation stages.
+    stages = models.JSONField(default=list, blank=True, db_default=[])
+    error_message = models.TextField(blank=True, db_default="")
+
+    #: What kind of identified thing these become — the shop-editable registry
+    #: the workshop side already maintains, so a migrated handset's intake sheet
+    #: is the one the shop already uses. Chosen by the builder from what the
+    #: identifiers turned out to be, and editable before approval.
+    asset_type = models.ForeignKey(
+        "customers.AssetType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="collapse_plans",
+    )
+    #: Warranty granted on sale for every product the collapse creates, in days.
+    warranty_days = models.PositiveIntegerField(default=0, db_default=0)
+
+    #: Headline counts — "340 products → 12 products, 31 variants, 340 units".
+    #: Recomputed from the candidate rows whenever one is edited, so the number
+    #: on the screen is never a memory of an earlier answer.
+    stats = models.JSONField(default=dict, blank=True, db_default={})
+
+    built_at = models.DateTimeField(blank=True, null=True)
+    approved_at = models.DateTimeField(blank=True, null=True)
+    approved_by_user_id = models.PositiveBigIntegerField(blank=True, null=True)
+    approved_by_username = models.CharField(max_length=150, blank=True, db_default="")
+    applied_run = models.ForeignKey(
+        MigrationRun,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="collapse_plans",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["source", "-created_at"])]
+
+    def __str__(self):
+        return f"collapse #{self.pk} ({self.status})"
+
+    @property
+    def is_active(self):
+        return self.status in {self.Status.QUEUED, self.Status.RUNNING}
+
+    @property
+    def is_editable(self):
+        """Can a person still change what this says?
+
+        Approval is the line. Afterwards the plan is a record of what was
+        agreed, and an edit would make the import disagree with the screen the
+        owner looked at.
+        """
+        return self.status == self.Status.READY
+
+
+class CollapseCandidate(TimeStampedModel):
+    """One legacy product, and what the collapse proposes to make of it.
+
+    The unit of review and the unit of editing: a person disagreeing with the
+    parser disagrees about *one handset*, and says so by changing this row.
+    Clusters are derived by grouping on :attr:`stem_key` rather than stored,
+    which is what makes "merge these two into one product" an edit to a name
+    instead of a second table to keep in step.
+    """
+
+    class Decision(models.TextChoices):
+        # Becomes a unit of a collapsed product.
+        COLLAPSE = "collapse", "Collapse into a unit"
+        # Stays an ordinary product, exactly as it is today. §12.4's escape
+        # hatch, and the default for anything the parser could not read.
+        KEEP = "keep", "Keep as a product"
+
+    class UnitStatus(models.TextChoices):
+        IN_STOCK = "in_stock", "In stock"
+        SOLD = "sold", "Sold"
+
+    plan = models.ForeignKey(
+        CollapsePlan,
+        on_delete=models.CASCADE,
+        related_name="candidates",
+    )
+    #: The legacy product's key in the source system — the join to everything
+    #: the import does with it.
+    source_key = models.CharField(max_length=255)
+    #: Its name, verbatim, because the review screen has to show what was read.
+    source_name = models.CharField(max_length=255, blank=True, db_default="")
+    #: The sellable row under it. Equal to ``source_key`` for the flat systems
+    #: this is really about; a separate key for a source that keeps a variant
+    #: table, because that is the key its invoices name.
+    variant_source_key = models.CharField(max_length=255, blank=True, db_default="")
+    #: The shelf label the old system printed for this handset. Carried onto the
+    #: unit as its secondary code, so four years of printed barcodes keep
+    #: scanning and keep resolving to the right article.
+    legacy_barcode = models.CharField(max_length=64, blank=True, db_default="")
+
+    decision = models.CharField(
+        max_length=12,
+        choices=Decision.choices,
+        default=Decision.COLLAPSE,
+        db_index=True,
+    )
+    #: The product this becomes part of, as it will be named.
+    stem = models.CharField(max_length=255, blank=True, db_default="")
+    #: Its comparison form. Two candidates sharing this share a product.
+    stem_key = models.CharField(max_length=255, blank=True, db_default="", db_index=True)
+
+    identifier = models.CharField(max_length=120, blank=True, db_default="")
+    identifier_kind = models.CharField(max_length=16, blank=True, db_default="")
+    #: ``{"storage": "256GB", "colour": "blue"}`` — the variant's axes.
+    options = models.JSONField(default=dict, blank=True, db_default={})
+    #: ``{"battery_health": 86, "condition_grade": "a"}`` — this article's own
+    #: facts, written onto the unit.
+    attributes = models.JSONField(default=dict, blank=True, db_default={})
+
+    unit_status = models.CharField(
+        max_length=12,
+        choices=UnitStatus.choices,
+        default=UnitStatus.IN_STOCK,
+    )
+    unit_cost = models.DecimalField(max_digits=18, decimal_places=6, default=0, db_default=0)
+    list_price = models.DecimalField(
+        max_digits=10, decimal_places=2, blank=True, null=True
+    )
+    sold_price = models.DecimalField(
+        max_digits=10, decimal_places=2, blank=True, null=True
+    )
+    acquired_at = models.DateTimeField(blank=True, null=True)
+    sold_at = models.DateTimeField(blank=True, null=True)
+    #: Source keys, resolved to Pointy rows through the identity map at apply
+    #: time — the supplier it came from, the invoice it left on, and who bought
+    #: it. This is the difference between importing units and importing history.
+    supplier_source_key = models.CharField(max_length=255, blank=True, db_default="")
+    sale_source_key = models.CharField(max_length=255, blank=True, db_default="")
+
+    #: 0–1. Drives the review order: least sure first, because those are the
+    #: rows a person can actually help with.
+    confidence = models.DecimalField(max_digits=3, decimal_places=2, default=0)
+    #: Machine codes explaining the confidence (``imei_check_digit_failed``,
+    #: ``singleton_cluster``, …). The client turns them into sentences.
+    reasons = models.JSONField(default=list, blank=True, db_default=[])
+    #: Set when a person changed this row, so a rebuild can say what it would
+    #: overwrite and the summary can say how much of this was human.
+    edited = models.BooleanField(default=False, db_default=False)
+
+    class Meta:
+        ordering = ["confidence", "stem_key", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plan", "source_key"],
+                name="uniq_collapse_candidate_per_plan",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["plan", "confidence", "id"]),
+            models.Index(fields=["plan", "stem_key"]),
+            models.Index(fields=["plan", "decision"]),
+        ]
+
+    def __str__(self):
+        return f"{self.source_name} -> {self.stem} / {self.identifier}"
+
+    @property
+    def is_sold(self) -> bool:
+        return self.unit_status == self.UnitStatus.SOLD
+
+    @property
+    def needs_review(self) -> bool:
+        """Low enough that a person should look at it before approving."""
+        from .collapse.extract import LOW_CONFIDENCE
+
+        return (
+            self.decision == self.Decision.COLLAPSE
+            and float(self.confidence) < LOW_CONFIDENCE
+        )

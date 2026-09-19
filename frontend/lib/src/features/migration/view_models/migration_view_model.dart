@@ -7,8 +7,10 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/migration.dart';
+import '../../../data/models/migration_collapse.dart';
 import '../../../data/repositories/migration_repository.dart';
 import '../../../data/services/migration_uploader.dart';
+import 'collapse_view_model.dart';
 
 /// How stock on-hand is established when products are imported.
 ///
@@ -78,6 +80,7 @@ class MigrationViewModel extends ChangeNotifier {
   MigrationRun? _activeRun;
   MigrationRun? _lastRun;
   List<MigrationIssue> _issues = const [];
+  CollapseViewModel? _collapse;
 
   PlatformFile? _pickedFile;
   MigrationUploader? _uploader;
@@ -108,6 +111,17 @@ class MigrationViewModel extends ChangeNotifier {
   MigrationRun? get currentRun => _activeRun ?? _lastRun;
   List<MigrationIssue> get issues => _issues;
 
+  /// The §12 review for the file currently in play, once there is one to
+  /// review. Owned here so the wizard can ask whether a collapse was approved
+  /// before it starts a run — the collapse is part of the import, not a
+  /// separate errand run beside it.
+  CollapseViewModel? get collapse => _collapse;
+
+  CollapsePlan? get collapsePlan => _collapse?.plan;
+
+  /// Is a collapse going to happen when this import runs?
+  bool get willCollapse => collapsePlan?.isUsable ?? false;
+
   bool get isLoading => _isLoading;
   bool get hasLoadError => _hasLoadError;
   bool get isUploading => _isUploading;
@@ -116,7 +130,8 @@ class MigrationViewModel extends ChangeNotifier {
   bool get isDiscarding => _isDiscarding;
   String? get errorMessage => _errorMessage;
 
-  MigrationAnalysis get analysis => _source?.analysis ?? MigrationAnalysis.empty;
+  MigrationAnalysis get analysis =>
+      _source?.analysis ?? MigrationAnalysis.empty;
 
   List<String> get supportedEntities => _source?.supportedEntities ?? const [];
 
@@ -209,6 +224,7 @@ class MigrationViewModel extends ChangeNotifier {
     final live = sources.where((source) => !source.isPurged).toList();
     _source = live.isNotEmpty ? live.first : sources.first;
     _syncSelectedEntities();
+    _attachCollapse(_source!);
     if (_source!.isBusy) {
       _startPolling(_preparePollInterval);
     } else {
@@ -234,6 +250,26 @@ class MigrationViewModel extends ChangeNotifier {
     } else {
       _lastRun = latest;
     }
+  }
+
+  /// Gives the file its own collapse review, and asks the server whether one
+  /// was already built for it — a proposal outlives the screen, like everything
+  /// else in this wizard.
+  void _attachCollapse(MigrationSource source) {
+    if (_collapse?.sourceId == source.id) return;
+    _collapse?.dispose();
+    if (source.isPurged) {
+      _collapse = null;
+      return;
+    }
+    final collapse = CollapseViewModel(
+      _repository,
+      sourceId: source.id,
+      analyticsEngine: _analyticsEngine,
+    );
+    _collapse = collapse;
+    collapse.addListener(notifyListeners);
+    unawaited(collapse.load());
   }
 
   void _syncSelectedEntities() {
@@ -351,6 +387,9 @@ class MigrationViewModel extends ChangeNotifier {
     _issues = const [];
     _errorMessage = null;
     _stopPolling();
+    _collapse?.removeListener(notifyListeners);
+    _collapse?.dispose();
+    _collapse = null;
     if (source != null && !source.isPurged) {
       await discard();
     }
@@ -406,7 +445,12 @@ class MigrationViewModel extends ChangeNotifier {
       sourceId: source.id,
       mode: dryRun ? 'dry_run' : 'import',
       entities: _selectedEntities.toList(),
-      options: {'stock_source': _stockSource.wireValue},
+      options: {
+        'stock_source': _stockSource.wireValue,
+        // Only an approved plan travels. The server refuses anything else, and
+        // sending an unapproved one would turn a dry run into a 400.
+        if (willCollapse) 'collapse_plan': collapsePlan!.id,
+      },
     );
     MigrationRun? run;
     switch (result) {
@@ -478,6 +522,7 @@ class MigrationViewModel extends ChangeNotifier {
     if (!_source!.isBusy) {
       _stopPolling();
       _syncSelectedEntities();
+      _attachCollapse(_source!);
     }
     notifyListeners();
   }
@@ -513,6 +558,8 @@ class MigrationViewModel extends ChangeNotifier {
   void dispose() {
     _stopPolling();
     _uploader?.cancel();
+    _collapse?.removeListener(notifyListeners);
+    _collapse?.dispose();
     super.dispose();
   }
 }

@@ -1,17 +1,14 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
-import 'package:pointy_frontend/src/core/result.dart';
-import 'package:pointy_frontend/src/data/models/migration.dart';
-import 'package:pointy_frontend/src/data/repositories/migration_repository.dart';
-import 'package:pointy_frontend/src/data/services/migration_uploader.dart';
 import 'package:pointy_frontend/src/features/migration/view_models/migration_view_model.dart';
 import 'package:pointy_frontend/src/features/migration/views/data_migration_page.dart';
 import 'package:pointy_frontend/src/shared/components/components.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
+
+import '../migration_fakes.dart';
 
 Widget _wrap(MigrationViewModel viewModel) {
   return MaterialApp(
@@ -90,7 +87,7 @@ void main() {
   /// — which is correct behaviour and would otherwise be untestable.
   Future<MigrationViewModel> pump(
     WidgetTester tester,
-    _FakeRepository repository,
+    FakeMigrationRepository repository,
   ) async {
     final viewModel = MigrationViewModel(repository);
     await tester.pumpWidget(_wrap(viewModel));
@@ -103,7 +100,7 @@ void main() {
   testWidgets('the first screen asks for a file and nothing else', (
     tester,
   ) async {
-    final viewModel = await pump(tester, _FakeRepository());
+    final viewModel = await pump(tester, FakeMigrationRepository());
 
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     expect(find.text(l10n.migrationChooseTitle), findsOneWidget);
@@ -117,8 +114,9 @@ void main() {
   testWidgets('preparation names the stage it is on and what comes after', (
     tester,
   ) async {
-    final viewModel = await pump(      tester,
-      _FakeRepository(sources: [source(state: 'preparing')]),
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source(state: 'preparing')]),
     );
 
     expect(find.byType(PointyStageTimeline), findsOneWidget);
@@ -134,8 +132,11 @@ void main() {
     tester,
   ) async {
     const message = 'هذا ملف مضغوط (ZIP) — نحتاج ملف قاعدة البيانات نفسه.';
-    final viewModel = await pump(      tester,
-      _FakeRepository(sources: [source(state: 'failed', error: message)]),
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(
+        sources: [source(state: 'failed', error: message)],
+      ),
     );
 
     expect(find.text(message), findsWidgets);
@@ -148,7 +149,10 @@ void main() {
   testWidgets('the review step leads with real counts, separated', (
     tester,
   ) async {
-    final viewModel = await pump(tester, _FakeRepository(sources: [source()]));
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
 
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     expect(find.text(l10n.migrationFoundTitle), findsOneWidget);
@@ -162,8 +166,9 @@ void main() {
   });
 
   testWidgets('a clean dry run unlocks the import', (tester) async {
-    final viewModel = await pump(      tester,
-      _FakeRepository(
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(
         sources: [source()],
         runs: const [
           {
@@ -191,8 +196,9 @@ void main() {
   });
 
   testWidgets('finishing says the file was deleted', (tester) async {
-    final viewModel = await pump(      tester,
-      _FakeRepository(
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(
         sources: [source(state: 'purged')],
         runs: const [
           {
@@ -224,8 +230,9 @@ void main() {
   testWidgets('the step rail tracks where the work actually is', (
     tester,
   ) async {
-    final viewModel = await pump(      tester,
-      _FakeRepository(sources: [source(state: 'preparing')]),
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source(state: 'preparing')]),
     );
 
     final rail = tester.widget<PointyStepRail>(find.byType(PointyStepRail));
@@ -233,81 +240,4 @@ void main() {
     expect(rail.steps, hasLength(5));
     viewModel.dispose();
   });
-}
-
-class _FakeRepository implements MigrationRepository {
-  _FakeRepository({this.sources = const [], this.runs = const []});
-
-  final List<Map<String, Object?>> sources;
-  final List<Map<String, Object?>> runs;
-
-  @override
-  Future<Result<MigrationCatalog>> loadCatalog() async => Ok(
-    MigrationCatalog.fromJson(const {
-      'systems': [
-        {
-          'system_key': 'fahd',
-          'display_name': 'برنامج فهد',
-          'supported_entities': ['product'],
-          'versions': ['fahd-mdb-recon-1'],
-          'implemented': true,
-        },
-      ],
-      'entities': [
-        {'entity_type': 'product', 'label': 'الأصناف', 'implemented': true},
-        {'entity_type': 'sale', 'label': 'المبيعات', 'implemented': true},
-      ],
-      'upload': {'chunk_size': 1024, 'max_bytes': 8589934592},
-    }),
-  );
-
-  @override
-  Future<Result<List<MigrationSource>>> loadSources() async =>
-      Ok(sources.map(MigrationSource.fromJson).toList());
-
-  @override
-  Future<Result<MigrationSource>> loadSource(int id) async =>
-      Ok(MigrationSource.fromJson(sources.first));
-
-  @override
-  Future<Result<List<MigrationRun>>> loadRuns({int? sourceId}) async =>
-      Ok(runs.map(MigrationRun.fromJson).toList());
-
-  @override
-  Future<Result<MigrationRun>> loadRun(int id) async =>
-      Ok(MigrationRun.fromJson(runs.first));
-
-  @override
-  Future<Result<MigrationRun>> startRun({
-    required int sourceId,
-    required String mode,
-    required List<String> entities,
-    Map<String, Object?> options = const {},
-  }) async => Ok(MigrationRun.fromJson(const {'id': 1, 'status': 'queued'}));
-
-  @override
-  Future<Result<MigrationIssuePage>> loadIssues(
-    int runId, {
-    int page = 1,
-    String? severity,
-  }) async => const Ok(MigrationIssuePage(issues: [], hasMore: false));
-
-  @override
-  MigrationUploader newUploader() => throw UnimplementedError();
-
-  @override
-  Future<Result<MigrationSource>> uploadFile(
-    PlatformFile file, {
-    required MigrationUploader uploader,
-    MigrationSource? resuming,
-    void Function(MigrationUploadProgress)? onProgress,
-  }) async => Ok(MigrationSource.fromJson(sources.first));
-
-  @override
-  Future<Result<MigrationSource>> completeUpload(int id) async =>
-      Ok(MigrationSource.fromJson(sources.first));
-
-  @override
-  Future<Result<MigrationSource>> discardSource(int id) async =>
-      Ok(MigrationSource.fromJson(sources.first));
 }

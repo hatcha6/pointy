@@ -26,10 +26,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections
 from rest_framework.serializers import ValidationError
 
-from apps.migration import services, storage
+from apps.migration import services
 from apps.migration.entity_plan import all_entity_types
 from apps.migration.models import MigrationIssue, MigrationRun, MigrationSource
-from apps.migration.preparation import pipeline
+from apps.migration.preparation.local import adopt_and_prepare
 from apps.migration.reconstruct import VALID_STOCK_SOURCES
 
 _POLL_SECONDS = 10
@@ -139,44 +139,7 @@ class Command(BaseCommand):
 
     # --- preparation ------------------------------------------------------
     def _source_for(self, path: Path, *, reprepare: bool) -> MigrationSource:
-        """Find the prepared source for this file, or stage and prepare it."""
-        name = path.name[:120]
-        existing = (
-            MigrationSource.objects.filter(original_filename=name)
-            .exclude(upload_state=MigrationSource.UploadState.PURGED)
-            .order_by("-created_at")
-            .first()
-        )
-        if existing is not None and existing.is_ready and not reprepare:
-            self.stdout.write(
-                f"Source #{existing.pk} already prepared — reusing it "
-                "(identity map preserved, so this stays idempotent)."
-            )
-            return existing
-
-        source = existing or MigrationSource.objects.create(
-            name=name,
-            original_filename=name,
-            declared_size_bytes=path.stat().st_size,
-        )
-        kind = "access" if path.suffix.lower() in {".mdb", ".accdb"} else "sqlite"
-        source.staged_filename = storage.staged_name(source.pk, kind)
-        source.received_bytes = source.declared_size_bytes = path.stat().st_size
-        source.staged_size_bytes = source.declared_size_bytes
-        source.upload_state = MigrationSource.UploadState.UPLOADED
-        source.save()
-
-        destination = storage.staged_path(source)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        self.stdout.write(f"Staging {path} → {destination}")
-        storage.adopt(path, destination)
-
-        self.stdout.write("Preparing (convert → reconstruct → detect)…")
-        pipeline.prepare_source(source)
-        source.refresh_from_db()
-        for stage in source.stages or []:
-            self.stdout.write(f"  {stage['status']:>8}  {stage['label']}  {stage['detail']}")
-        return source
+        return adopt_and_prepare(path, reprepare=reprepare, log=self.stdout.write)
 
     def _print_analysis(self, source):
         entities = (source.analysis or {}).get("entities") or {}

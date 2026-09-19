@@ -2,14 +2,17 @@
 
 **Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17,
 Phase C shipped 2026-09-18, A & B reviewed 2026-09-18, C reviewed 2026-09-19,
-Phase D shipped 2026-09-19)
-**Status:** **Phases A, B, C and D shipped** — the shared allocation core and
+Phase D shipped 2026-09-19, Phase E shipped 2026-09-19)
+**Status:** **Phases A–E shipped** — the shared allocation core and
 ledger, the shop operating both from the client, the used-goods trade with
-consignment carrying a real liability, and safety, recall and warehouse
-operations (§15). **Phase D's first job was to un-gate the feature**: a
+consignment carrying a real liability, safety, recall and warehouse
+operations, and the migration that converts the prospect's catalogue (§15).
+**Phase D's first job was to un-gate the feature**: a
 transfer, a stock count, a manual adjustment and a job's materials all *raised*
 on a tracked product, so no shop could have turned this on. They allocate now.
-Phase E remains proposed.
+**Phase E is the collapse tool of §12** — it reads a one-product-per-handset
+catalogue apart, prices it from the shop's own invoices, shows the owner what it
+proposes, and only then writes it, inside the ordinary import.
 Five things in this document were changed by building it, and each is marked
 **CORRECTED** or **DEFERRED** in place rather than quietly rewritten: the batch
 bin's treatment of a quarantined lot (§5.3), landed-cost re-stamping on
@@ -2379,6 +2382,8 @@ product's own tracking mode, so a grocery never renders one pixel of it.
 | `features/stock_count/views/stock_count_findings.dart` | **Shipped Phase D.** The four named lists a scanned count produces, plus the per-lot variances. Named rather than netted: −3 on a shelf of handsets is not something anybody can act on. |
 | `features/inventory/views/transfer_unit_pick_sheet.dart` | **Shipped Phase D.** Which handsets are actually in the van. Not auto-picked — see §6.5. |
 | `features/inventory/views/opening_identification_screen.dart` | **Shipped Phase D.** §6.10's guided run: the worklist of variants holding unnamed stock, a scan loop per variant, and *identify later* as a visible choice. |
+| `features/migration/views/collapse_review_view.dart` | **Shipped Phase E.** §12's screen: «٣٤٠ صنفًا ← ٣٣١ وحدة», the proposed products with the options each turned out to contain, the least-confident rows first, and one line saying that approving this turns identified stock on. |
+| `features/migration/views/collapse_candidate_sheet.dart` | **Shipped Phase E.** One row, opened for a person who disagrees with the parser: which product it is, which number is its identifier, its options, whether it is still on the shelf — and "leave it alone", which is §12.4's escape hatch. |
 
 **Every surface in this table that a scanner points at must declare itself a
 `ScanWedgeTarget`.** `ScanBurstGuard`
@@ -2664,6 +2669,50 @@ A **"collapse serialized products"** step:
 Run it on their real export before the meeting. A screen that shows their own
 catalog collapsing from 340 rows to 12 is a better demo than any feature list.
 
+> **SHIPPED 2026-09-19 as Phase E**, in `apps/migration/collapse/` —
+> `extract.py` (one name apart), `planner.py` (cluster, price, count) and
+> `apply.py` (the approved proposal, written). The five steps above are what was
+> built; four things about them are worth stating precisely, because each was
+> decided while building and none of them is in the list.
+>
+> **It runs *inside* the import, not beside it.** The whole thing turns on the
+> identity map: registering `variant:<legacy product key> → the collapsed
+> variant` during the catalogue pass means four years of invoices land on the
+> right row with **no change to the sale loader**, no re-mapping pass and no
+> second definition of what a legacy key means. The catalogue loaders are
+> *wrapped* rather than edited, so a shop with no plan runs exactly the code it
+> ran yesterday.
+>
+> **The premise is tested, not assumed.** §1.1's observation is that each of
+> those products is "bought exactly once and sold exactly once", and that is a
+> claim the shop's own documents can settle. A row purchased twice, sold twice,
+> or carrying two of itself on the shelf is an ordinary product that happens to
+> contain digits — it keeps its shape and says why. So does a row whose
+> identifier is already live in the shop, which is what a second file or a shop
+> that started identifying by hand produces.
+>
+> **The bin has one authority, and it is the articles.** The stock entity is
+> skipped for collapsed keys and reconstruction ignores their variants;
+> `StockItem` is set from the count of on-hand units, and a `StockValuationBin`
+> plus one `opening` ledger entry per variant carries what they cost. Two
+> authorities for one number is how invariant 1 fails on the day of the
+> migration. The §5.4 invariants are then run over the touched variants inside
+> the unit phase's own transaction, and a violation rolls the whole phase back
+> rather than committing a catalogue nobody can check.
+>
+> **The shop's printed labels keep working.** A legacy barcode that names
+> exactly one row is carried onto the unit as its `secondary_code`, so four
+> years of shelf labels still scan and still resolve to the right handset. A
+> code several rows share is a product-level label and is dropped — attaching it
+> to four articles would make a till scan ambiguous in the one way identity
+> exists to prevent.
+>
+> `manage.py collapse_preview --file <export> [--csv sheet.csv]` is §12's last
+> line as a command: it stages, prepares and reads a real export, prints
+> «340 products → 12 products, 31 variants, 340 units», the proposed products,
+> why rows are uncertain, and the least-confident rows — and writes the whole
+> candidate list to a sheet to go through with the shop. It writes nothing.
+
 ---
 
 ## 13. Enforcement
@@ -2737,6 +2786,24 @@ Where the rules live, so they cannot be forgotten by the next caller:
 ---
 
 ## 14. Tests
+
+### 14.0 The collapse (§12), added with Phase E
+
+`apps/migration/test_collapse.py` runs the prospect's catalogue in miniature —
+thirteen products in an AboGhris-shaped file, of which nine are really nine
+handsets of three models and four are four different ways of not being one. It
+holds four things: that the parser reads a name the way a shop writes one
+(including that folding never changes a name's length, which is the property
+every span in it depends on); that the builder *tests* §1.1's premise instead of
+assuming it; that nothing reaches the shop before approval; and that what the
+import writes passes the §5.4 invariants — asserted against
+`apps.inventory.integrity` rather than against a hand-written expectation.
+
+One guard in it is not about correctness. `CollapseScalingTests` measures
+`apply_units` at two shop sizes and fails if twelve more handsets cost more than
+three queries each: the sale-linking, allocation and identifier passes are
+batched, and an N+1 in any of them is invisible on thirteen rows and is the whole
+wall clock on Fahd's catalogue.
 
 ### 14.1 Ported from ERPNext's bug list
 
@@ -3259,8 +3326,53 @@ actually judged on — and the statement as a page rather than an endpoint.*
   tools and the `pointy://stock-unit/<id>` deep link landed; the catalog item
   did not).
 
-**Phase E — migration (≈1 week, runs in parallel with C).**
+**Phase E — migration (≈1 week, runs in parallel with C). SHIPPED 2026-09-19.**
 The collapse tool of §12, against the prospect's real export.
+
+- `apps/migration/collapse/extract.py` — the name parser. Identifier (labelled
+  and bare IMEI/serial/VIN, Luhn- and ISO-3779-checked), storage, colour
+  (Arabic and English, compound marketing names included), battery health and
+  condition grade, then whatever is left, which is the product. Three rules make
+  it trustworthy: extractors run in sequence over what the previous ones did not
+  claim (a 15-digit IMEI contains a storage size and a battery percentage);
+  folding is character-for-character so a span found in the folded form indexes
+  the original; and it decides nothing — an extraction with no identifier is a
+  product, and stays one.
+- `planner.py` — clusters on the folded stem, reads the file's purchases, sales
+  and stock for cost, price, dates, supplier and invoice, checks §1.1's premise
+  against those documents, scores each row and counts the whole thing into the
+  sentence the screen exists to say.
+- `apply.py` — the catalogue loaders wrapped, the units built last (after the
+  invoices they point at), and the §5.4 invariants run over the touched variants
+  before the phase commits.
+- `CollapsePlan` / `CollapseCandidate`, `POST sources/{id}/collapse/`, the
+  review endpoints, and the Flutter review screen: the headline, the proposed
+  products, the least-confident rows first, per-row editing, and a rename that
+  is also how two proposed products are merged.
+- `manage.py collapse_preview --file <export>` — §12's "run it on their real
+  export before the meeting", as a command.
+
+**What building it changed.** Four things, all found by running it rather than
+by reading it:
+
+- **A shelf label is not always an article's.** Carrying the legacy barcode onto
+  the unit's `secondary_code` is worth doing — the shop's printed labels keep
+  scanning — but only for a code exactly one row holds. A shared one is dropped.
+- **An identifier can already be in the shop.** A second file, or a shop that
+  began identifying by hand before it migrated, holds a handset the file also
+  claims. The builder flags it and leaves the row alone; the apply phase refuses
+  that one article with a named issue rather than letting the partial unique
+  index take the whole phase down.
+- **`collapse.extract` is both a module and a function, and that is a trap.**
+  Re-exporting the parser from the package's `__init__` rebinds the submodule's
+  name, so `from . import extract` inside the package returns whichever the
+  package attribute happens to be by then. The function is exported as
+  `extract_name` and the collision is documented where it was.
+- **`settings` is not a free name on a DRF viewset.** An `@action` called
+  `settings` replaces `APIView.settings`, which is the `api_settings` object
+  every request reads — every error in that viewset then dies inside the
+  exception handler instead of being returned. The action is `configure`, at the
+  same URL.
 
 Roughly nine to ten weeks of focused work for A–D, delivering a general
 traceability engine rather than a serial feature: four tracking modes that

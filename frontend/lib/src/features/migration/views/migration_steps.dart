@@ -8,6 +8,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/migration_view_model.dart';
+import 'collapse_review_page.dart';
 import 'migration_formatting.dart';
 
 /// Renders whichever step of the migration the work is actually at.
@@ -125,7 +126,9 @@ class _DropZone extends StatelessWidget {
           child: Column(
             children: [
               Icon(
-                chosen ? Icons.description_outlined : Icons.upload_file_outlined,
+                chosen
+                    ? Icons.description_outlined
+                    : Icons.upload_file_outlined,
                 size: 44,
                 color: chosen ? colors.primaryStrong : colors.mutedInk,
               ),
@@ -468,6 +471,8 @@ class _ReviewStep extends StatelessWidget {
         _EntitySelection(viewModel: viewModel),
         SizedBox(height: spacing.md),
         _StockSourceSelection(viewModel: viewModel),
+        SizedBox(height: spacing.md),
+        _CollapseOffer(viewModel: viewModel),
         if (lastRun != null && lastRun.isDryRun) ...[
           SizedBox(height: spacing.md),
           _DryRunVerdict(viewModel: viewModel),
@@ -720,6 +725,81 @@ class _StockSourceTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// §12, offered where it belongs: next to the other choices about this import.
+///
+/// A shop whose catalogue is one product per handset has to be told that, and
+/// told it *before* the import — afterwards it is 340 products and a stock
+/// report nobody can read. Every other shop sees a card it can ignore.
+class _CollapseOffer extends StatelessWidget {
+  const _CollapseOffer({required this.viewModel});
+
+  final MigrationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final spacing = AdaptiveSpacing.of(context);
+    final collapse = viewModel.collapse;
+    if (collapse == null) return const SizedBox.shrink();
+    final plan = collapse.plan;
+
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.collapseIntroTitle, style: theme.textTheme.titleSmall),
+          SizedBox(height: spacing.xs),
+          Text(
+            plan != null && plan.isUsable
+                ? l10n.collapseHeadline(
+                    formatCount(plan.stats.sourceProducts),
+                    formatCount(plan.stats.units),
+                  )
+                : l10n.collapseIntroBody,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.pointyColors.mutedInk,
+              height: 1.5,
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+          Row(
+            children: [
+              if (plan != null && plan.isUsable)
+                Padding(
+                  padding: EdgeInsetsDirectional.only(end: spacing.xs),
+                  child: PointyStatusPill(
+                    label: l10n.collapseApprovedTitle,
+                    icon: Icons.verified_outlined,
+                    color: context.pointyColors.success,
+                  ),
+                ),
+              const Spacer(),
+              OutlinedButton.icon(
+                onPressed: () => _open(context, collapse),
+                icon: const Icon(Icons.call_merge_outlined),
+                label: Text(
+                  plan == null
+                      ? l10n.collapseProposeButton
+                      : l10n.collapseTitle,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _open(BuildContext context, collapse) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CollapseReviewPage(viewModel: collapse),
       ),
     );
   }

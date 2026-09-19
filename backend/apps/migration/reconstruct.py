@@ -158,6 +158,15 @@ class StockReconstructor:
         # Most-recent purchase unit cost per variant, for valuation:
         # variant pk -> (occurred_at | None, unit_cost).
         self._cost: dict[int, tuple] = {}
+        # Variants whose on-hand another authority owns. The collapse (§12) is
+        # the only caller: a serialized variant's quantity is the count of its
+        # identified articles, and netting invoices into the same bin would give
+        # one number two answers.
+        self._ignored: set = set()
+
+    def ignore(self, variant_ids) -> None:
+        """Leave these variants' on-hand alone — somebody else owns it."""
+        self._ignored |= {int(pk) for pk in variant_ids or ()}
 
     # --- accumulation ----------------------------------------------------
     def observe(self, entity_type: str, record) -> None:
@@ -216,10 +225,10 @@ class StockReconstructor:
     # --- write + diagnose ------------------------------------------------
     def flush(self, *, dry_run: bool) -> ReconstructionResult:
         counts = {CREATED: 0, UPDATED: 0, SKIPPED: 0, FAILED: 0}
-        transacted = set(self._inflow) | set(self._outflow)
+        transacted = (set(self._inflow) | set(self._outflow)) - self._ignored
         # Snapshot-only variants (stock in the old system, but no invoices) still
         # need evaluating — that's the clearest "missing history" signal.
-        all_pks = transacted | set(self._snapshot)
+        all_pks = (transacted | set(self._snapshot)) - self._ignored
         stats = {
             "products_evaluated": len(transacted),
             "products_set": 0,

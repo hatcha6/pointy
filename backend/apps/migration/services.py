@@ -7,6 +7,9 @@ it failed if the broker is unreachable" guard ``apps.core.backup`` uses:
   Runs once per upload, and is why a source is not importable the instant its
   last byte arrives.
 * **runs** — a dry run or an import against a prepared file.
+* **collapse plans** — reading a one-product-per-handset catalogue into the
+  proposal of §12, which is a full pass over the file and so is never done on a
+  request thread.
 
 Nothing here opens a network connection to anything. The source of a migration is
 a file on disk.
@@ -23,9 +26,9 @@ from apps.core.dispatch import enqueue_or_raise
 
 from .connectors import get_connector
 from .engine import MigrationEngine
-from .entity_plan import ENTITY_PLAN_BY_TYPE
+from .entity_plan import ENTITY_PLAN_BY_TYPE, PRODUCT
 from .exceptions import CompatibilityError, MigrationError
-from .models import MigrationRun, MigrationSource
+from .models import CollapseCandidate, CollapsePlan, MigrationRun, MigrationSource
 from .preparation import pipeline
 
 
@@ -151,12 +154,19 @@ def queue_migration_run(
         raise ValidationError({"detail": f"This system cannot transfer: {', '.join(unsupported)}."})
     selected = requested or list(supported)
 
+    options = dict(options or {})
+    plan = _resolve_collapse_plan(source, options)
+    if plan is not None and PRODUCT in supported:
+        # Without the catalogue pass nothing redirects a legacy key, so every
+        # sale would resolve to a product that was never created.
+        selected = sorted({*selected, PRODUCT})
+
     _ensure_no_active_run()
     run = MigrationRun.objects.create(
         source=source,
         mode=mode,
         selected_entities=selected,
-        options=dict(options or {}),
+        options=options,
         progress_message="تمت جدولة العملية.",
         **_initiator_fields(user),
     )
@@ -164,7 +174,12 @@ def queue_migration_run(
         name="migration.run.queued",
         user=user,
         entity_id=source.pk,
-        attributes={"mode": mode, "run_id": run.pk, "entities": selected},
+        attributes={
+            "mode": mode,
+            "run_id": run.pk,
+            "entities": selected,
+            "collapse_plan": plan.pk if plan else None,
+        },
     )
     if dispatch:
         _dispatch_run(run)
@@ -203,8 +218,66 @@ def run_migration(run_id: int) -> None:
         _record_outcome(run, failed=True)
         return
 
+    _finalize_collapse(run)
     _finalize_source(run)
     _record_outcome(run, failed=False)
+
+
+def _resolve_collapse_plan(source, options):
+    """The approved plan this run names, if any. Refuses anything else."""
+    plan_id = options.get("collapse_plan")
+    if not plan_id:
+        return None
+    plan = CollapsePlan.objects.filter(pk=plan_id, source=source).first()
+    if plan is None:
+        raise ValidationError({"detail": "لم نعثر على اقتراح الدمج لهذا الملف."})
+    if plan.status not in CollapsePlan.USABLE:
+        raise ValidationError(
+            {"detail": "يجب اعتماد اقتراح الدمج قبل استخدامه في النقل."}
+        )
+    return plan
+
+
+def _finalize_collapse(run: MigrationRun) -> None:
+    """Record that the plan was used, and let the shop see what it just gained.
+
+    Turning ``enable_serialized_inventory`` on is part of applying a collapse,
+    not a separate errand: the flag gates the *surfaces* (§10), so a migration
+    that created four hundred identified handsets and left it off would have
+    produced a units register nobody in the shop can open.
+    """
+    from apps.core.models import ShopSettings
+
+    plan_id = (run.options or {}).get("collapse_plan")
+    if not plan_id or run.mode != MigrationRun.Mode.IMPORT:
+        return
+    # A phase that rolled back on the invariants did not apply anything, and
+    # turning the surfaces on for a units register that is empty would be
+    # telling the shop it has something it does not.
+    bucket = (run.summary or {}).get("collapse") or {}
+    if not (bucket.get("created") or bucket.get("updated")):
+        return
+    plan = CollapsePlan.objects.filter(pk=plan_id, source_id=run.source_id).first()
+    if plan is None:
+        return
+    plan.status = CollapsePlan.Status.APPLIED
+    plan.applied_run = run
+    plan.save(update_fields=["status", "applied_run", "updated_at"])
+    settings_row = ShopSettings.load()
+    if not settings_row.enable_serialized_inventory:
+        settings_row.enable_serialized_inventory = True
+        settings_row.save(update_fields=["enable_serialized_inventory", "updated_at"])
+    record_migration_event(
+        name="migration.collapse.applied",
+        user=None,
+        entity_id=run.source_id,
+        attributes={"plan_id": plan.pk, "run_id": run.pk},
+        metrics={
+            key: value
+            for key, value in (run.summary or {}).get("collapse", {}).items()
+            if isinstance(value, (int, float))
+        },
+    )
 
 
 def _finalize_source(run: MigrationRun) -> None:
@@ -247,3 +320,143 @@ def _record_outcome(run: MigrationRun, *, failed: bool) -> None:
         },
         severity=(AnalyticsEvent.Severity.WARNING if failed else AnalyticsEvent.Severity.INFO),
     )
+
+
+# --- the collapse (§12) ------------------------------------------------------
+
+
+def queue_collapse_plan(source: MigrationSource, *, user=None, dispatch=True) -> CollapsePlan:
+    """Read this file's catalogue and propose what it would collapse into.
+
+    Building is a full pass over products, purchases and sales, so it is a job
+    rather than a request. Any earlier plan for the same file that nobody
+    applied is superseded — two live proposals for one catalogue is two answers
+    to "what will this import do".
+    """
+    if not source.is_ready:
+        raise ValidationError({"detail": "هذا الملف غير جاهز للفحص بعد."})
+    CollapsePlan.objects.filter(source=source).exclude(
+        status__in=[CollapsePlan.Status.APPLIED, CollapsePlan.Status.SUPERSEDED]
+    ).update(status=CollapsePlan.Status.SUPERSEDED)
+    plan = CollapsePlan.objects.create(source=source)
+    record_migration_event(
+        name="migration.collapse.queued",
+        user=user,
+        entity_id=source.pk,
+        attributes={"plan_id": plan.pk},
+    )
+    if dispatch:
+        _dispatch_collapse(plan)
+    return plan
+
+
+def _dispatch_collapse(plan: CollapsePlan) -> None:
+    try:
+        from .tasks import build_collapse_plan_task
+
+        enqueue_or_raise(build_collapse_plan_task, plan.pk)
+    except Exception as exc:  # noqa: BLE001 - broker unreachable etc.
+        plan.status = CollapsePlan.Status.FAILED
+        plan.error_message = "تعذر إرسال الفحص إلى عامل الخلفية."
+        plan.save(update_fields=["status", "error_message", "updated_at"])
+        raise ValidationError({"detail": str(exc)}) from exc
+
+
+def build_collapse_plan(plan_id: int) -> None:
+    """Worker entrypoint: read the file and fill the plan."""
+    from .collapse import build_plan
+
+    plan = CollapsePlan.objects.select_related("source").filter(pk=plan_id).first()
+    if plan is None or not plan.is_active:
+        return
+    plan.status = CollapsePlan.Status.RUNNING
+    plan.error_message = ""
+    plan.save(update_fields=["status", "error_message", "updated_at"])
+    try:
+        build_plan(plan)
+    except Exception as exc:  # noqa: BLE001 - never leave a plan stuck "running"
+        plan.status = CollapsePlan.Status.FAILED
+        plan.error_message = str(exc)[:480]
+        plan.save(update_fields=["status", "error_message", "updated_at"])
+        record_migration_event(
+            name="migration.collapse.failed",
+            user=None,
+            entity_id=plan.source_id,
+            attributes={"plan_id": plan.pk, "error": plan.error_message},
+            severity=AnalyticsEvent.Severity.WARNING,
+        )
+        return
+    record_migration_event(
+        name="migration.collapse.built",
+        user=None,
+        entity_id=plan.source_id,
+        attributes={"plan_id": plan.pk},
+        metrics={
+            key: value
+            for key, value in (plan.stats or {}).items()
+            if isinstance(value, (int, float))
+        },
+    )
+
+
+def approve_collapse_plan(plan: CollapsePlan, *, user=None) -> CollapsePlan:
+    """The owner says yes. Nothing was written before this, and nothing is now.
+
+    Approval freezes the proposal: a later edit would make the import disagree
+    with the screen somebody looked at, so the rows stop being editable here and
+    an import run may name this plan from here.
+    """
+    if plan.status != CollapsePlan.Status.READY:
+        raise ValidationError({"detail": "هذا الاقتراح غير جاهز للاعتماد."})
+    if not plan.candidates.filter(decision=CollapseCandidate.Decision.COLLAPSE).exists():
+        raise ValidationError(
+            {"detail": "لا يوجد صنف واحد سيتحول إلى وحدة معرّفة — لا شيء لاعتماده."}
+        )
+    plan.status = CollapsePlan.Status.APPROVED
+    plan.approved_at = timezone.now()
+    if getattr(user, "is_authenticated", False):
+        plan.approved_by_user_id = user.pk
+        plan.approved_by_username = user.get_username()
+    plan.save(
+        update_fields=[
+            "status",
+            "approved_at",
+            "approved_by_user_id",
+            "approved_by_username",
+            "updated_at",
+        ]
+    )
+    record_migration_event(
+        name="migration.collapse.approved",
+        user=user,
+        entity_id=plan.source_id,
+        attributes={"plan_id": plan.pk},
+        metrics={
+            key: value
+            for key, value in (plan.stats or {}).items()
+            if isinstance(value, (int, float))
+        },
+    )
+    return plan
+
+
+def rename_collapse_cluster(plan: CollapsePlan, *, stem_key: str, stem: str) -> int:
+    """Rename a proposed product — which is also how two of them are merged.
+
+    Clusters are grouped on the name rather than stored, so typing an existing
+    product's name onto this one is the merge. There is no second operation and
+    no second table that could disagree with the first.
+    """
+    from .collapse.extract import cluster_key
+    from .collapse.planner import recompute_stats
+
+    if not plan.is_editable:
+        raise ValidationError({"detail": "لا يمكن تعديل اقتراح تم اعتماده."})
+    stem = (stem or "").strip()
+    if not stem:
+        raise ValidationError({"stem": "الاسم مطلوب."})
+    updated = plan.candidates.filter(
+        stem_key=stem_key, decision=CollapseCandidate.Decision.COLLAPSE
+    ).update(stem=stem[:255], stem_key=cluster_key(stem)[:255], edited=True)
+    recompute_stats(plan)
+    return updated
