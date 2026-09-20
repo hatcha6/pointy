@@ -1,8 +1,9 @@
 """Loader registry — one loader per entity type.
 
-Master-data loaders are fully implemented; transactional loaders are stubs that
-raise a clear "not supported yet" per record until a real source dump arrives.
 The registry is the engine's single lookup from ``entity_type`` to its loader.
+Every entity in ``ENTITY_PLAN`` has a real loader; a source that carries
+something none of them covers is a missing *connector* mapping, not a missing
+loader.
 """
 
 from __future__ import annotations
@@ -16,14 +17,15 @@ from .catalog import (
     VariantLoader,
 )
 from .customers import CustomerLoader
-from .employees import EmployeeLoader
+from .employees import EmployeeLoader, PayrollRunLoader
 from .expenses import ExpenseCategoryLoader, ExpenseLoader
 from .inventory import StockLoader
 from .purchasing import PurchaseOrderLoader, SupplierLoader, SupplierPaymentLoader
-from .sales import PaymentLoader, SaleLoader
+from .sales import PaymentLoader, SaleLoader, SaleReturnLoader
+from .treasury import MoneyAccountLoader
 
 _LOADER_CLASSES = (
-    # master data (implemented)
+    # master data
     UnitLoader,
     CategoryLoader,
     ProductLoader,
@@ -33,14 +35,16 @@ _LOADER_CLASSES = (
     CustomerLoader,
     SupplierLoader,
     ExpenseCategoryLoader,
-    # transactional (implemented)
+    EmployeeLoader,
+    MoneyAccountLoader,
+    # transactional
     PurchaseOrderLoader,
     SupplierPaymentLoader,
     SaleLoader,
-    ExpenseLoader,
-    # still stubs
+    SaleReturnLoader,
     PaymentLoader,
-    EmployeeLoader,
+    ExpenseLoader,
+    PayrollRunLoader,
 )
 
 LOADER_REGISTRY: dict[str, BaseLoader] = {

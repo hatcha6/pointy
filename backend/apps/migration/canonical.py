@@ -17,7 +17,7 @@ Pointy ids — because at extract time the destination ids do not exist yet.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 
@@ -81,6 +81,15 @@ class CanonicalStock(CanonicalRecord):
     variant_source_key: str = ""
     quantity_on_hand: Decimal = Decimal("0")
     reorder_level: int | None = None
+    #: Cost of one **base unit**, when the source knows it — a moving-average or
+    #: last-purchase cost off the item card.
+    #:
+    #: Without this an imported shop starts with stock it cannot value: the
+    #: valuation ledger has no opening balance, so the first sale of every
+    #: product falls through to the last-purchase fallback and reports a profit
+    #: equal to the whole selling price. The quantity alone was never the whole
+    #: of "this is what the shop has".
+    unit_cost: Decimal | None = None
 
 
 @dataclass
@@ -144,14 +153,76 @@ class CanonicalSale(CanonicalRecord):
     payment_method: str = "cash"  # cash | card | transfer
     occurred_at: datetime | None = None
     lines: list[CanonicalSaleLine] = field(default_factory=list)
+    #: ``standard`` (paid at the counter) or ``credit`` (آجل — issued unpaid or
+    #: part-paid, and owed). A source that settles on the customer's *account*
+    #: rather than per invoice is why this is not inferred from ``amount_paid``:
+    #: an آجل invoice with nothing yet received against it and a cash sale that
+    #: was paid in full are both "one payment short of settled" arithmetically,
+    #: and only the source knows which one it is.
+    sale_type: str = "standard"  # standard | credit
+    #: How much was actually taken against this invoice. ``None`` means "settled
+    #: in full", which keeps every existing connector's behaviour unchanged.
+    amount_paid: Decimal | None = None
+    #: When a credit invoice falls due. Ignored for a standard sale.
+    due_date: date | None = None
 
 
 @dataclass
 class CanonicalPayment(CanonicalRecord):
+    #: Either a payment against one invoice (``sale_source_key``) or a receipt
+    #: against a customer's *account* (``customer_source_key``), which is how
+    #: every legacy system that posts to a party ledger records one. An account
+    #: receipt is allocated across that customer's open credit invoices, oldest
+    #: first, by the loader.
     sale_source_key: str = ""
+    customer_source_key: str | None = None
     method: str = "cash"  # cash | card | transfer
     amount: Decimal = Decimal("0")
     occurred_at: datetime | None = None
+    reference: str = ""
+
+
+@dataclass
+class CanonicalSaleReturnLine:
+    variant_source_key: str
+    quantity: Decimal = Decimal("1")
+    unit_price: Decimal = Decimal("0")
+
+
+@dataclass
+class CanonicalSaleReturn(CanonicalRecord):
+    """Goods coming back off a sale that was already imported.
+
+    Pointy hangs a return on the invoice it reverses, so ``sale_source_key`` is
+    required — a source that files returns as standalone documents has to say
+    which sale each one belongs to (matching them is the connector's job, and
+    the connector is the only thing that knows how its own system files them).
+    """
+
+    sale_source_key: str = ""
+    occurred_at: datetime | None = None
+    reason: str = ""
+    refund_method: str = "cash"
+    lines: list[CanonicalSaleReturnLine] = field(default_factory=list)
+
+
+@dataclass
+class CanonicalMoneyAccount(CanonicalRecord):
+    """A drawer, safe or bank account the shop keeps money in.
+
+    Only the *opening* balance is carried. Every movement after it already
+    arrives as a sale, an expense or a supplier payment, and ``apps.treasury``
+    derives the balance from those — so importing a source's own running total
+    on top would state the same dinars twice.
+    """
+
+    name: str = ""
+    kind: str = "cash"  # cash | bank
+    opening_balance: Decimal = Decimal("0")
+    opening_at: date | None = None
+    is_default: bool = False
+    is_active: bool = True
+    notes: str = ""
 
 
 @dataclass
@@ -192,6 +263,36 @@ class CanonicalEmployee(CanonicalRecord):
     department: str = ""
     employment_type: str = "full_time"
     status: str = "active"
+    hire_date: date | None = None
+    notes: str = ""
+    #: What this person is paid. Present means the loader also writes a
+    #: compensation plan, because an employee with no pay rate is a contact
+    #: card: payroll cannot run for them, which is the reason to import them.
+    pay_amount: Decimal | None = None
+    pay_type: str = "monthly_salary"
+    salary_type: str = "monthly_fixed"
+    #: Hourly rate and standard day, when the source keeps them alongside the
+    #: monthly figure.
+    standard_daily_hours: Decimal | None = None
+
+
+@dataclass
+class CanonicalPayrollLine:
+    employee_source_key: str
+    gross_amount: Decimal = Decimal("0")
+    additions: Decimal = Decimal("0")
+    deductions: Decimal = Decimal("0")
+    net_amount: Decimal = Decimal("0")
+    description: str = ""
+
+
+@dataclass
+class CanonicalPayrollRun(CanonicalRecord):
+    period_start: date | None = None
+    period_end: date | None = None
+    payment_date: date | None = None
+    notes: str = ""
+    lines: list[CanonicalPayrollLine] = field(default_factory=list)
 
 
 @dataclass

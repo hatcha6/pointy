@@ -42,7 +42,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--file",
             required=True,
-            help="Path of the legacy database file (.mdb, .accdb, .sqlite).",
+            help="Path of the legacy database file (.mdb, .accdb, .sqlite, .sql).",
         )
         parser.add_argument(
             "--mode",

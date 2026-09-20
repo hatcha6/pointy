@@ -31,11 +31,14 @@ this to be a negotiation with whoever sold them the old system: **we do not need
 their server, their password, a port opened, a remote-desktop session, or
 anything from the vendor.** One file on a USB stick is the entire input.
 
-**What we take.** Microsoft Access `.mdb` / `.accdb`, or SQLite `.db` /
-`.sqlite` / `.sqlite3`. The extension is only a hint — the server identifies the
-file from its first 32 bytes (`preparation/identify.py`), so a database whose
-installer named it `.dat` still works, and a `data.mdb` that is really a Word
-document is caught rather than half-imported.
+**What we take.** Microsoft Access `.mdb` / `.accdb`, SQLite `.db` / `.sqlite` /
+`.sqlite3`, or a **MySQL/MariaDB text dump** `.sql` — the output of the vendor's
+own "backup" button on a Delphi POS that keeps its data in MySQL. The extension
+is only a hint — the server identifies the file from its header
+(`preparation/identify.py`), so a database whose installer named it `.dat` still
+works, and a `data.mdb` that is really a Word document is caught rather than
+half-imported. A text dump has no magic number, so it is recognised last, by its
+SQL keywords, and only after every binary format has been ruled out.
 
 **Where it usually is.** Beside the POS's `.exe` under `C:\<vendor>\`, or under
 `C:\ProgramData\<vendor>\`; Fahd shops keep `db.mdb` in the program folder. A
@@ -86,8 +89,36 @@ head -c 32 db.mdb | xxd | head -2
 
 `Standard Jet DB` (Access 97–2003) or `Standard ACE DB` (`.accdb`) in the header
 → Access, convert it below. `SQLite format 3\0` at offset 0 → SQLite, skip
-straight to [reading the result](#reading-the-result). Anything else is one of
-the rejects in the table above.
+straight to [reading the result](#reading-the-result). Readable ASCII SQL
+(`INSERT INTO`, `CREATE TABLE`, a `-- MySQL` banner) → a text dump, convert it
+below. Anything else is one of the rejects in the table above.
+
+### MySQL dump → SQLite
+
+`preparation/mysqldump.py` replays the statements into SQLite; nothing external
+is needed, and no MySQL server is involved.
+
+```bash
+python manage.py import_legacy --file backup.sql --mode dry_run
+```
+
+Two things about vendor dumps are worth knowing before you debug one:
+
+- **The `SET NAMES` line lies.** The KASS dumps declare `utf8` and contain
+  Windows-1256. The converter decides by decoding the bytes and reports both in
+  `analysis["conversion"]` (`encoding` vs `declared_encoding`). If Arabic comes
+  out as `????`, look there first.
+- **A data-only dump has no `CREATE TABLE`.** Columns are recovered from the
+  `INSERT` column lists, so a table that is only ever `TRUNCATE`d has no
+  knowable schema and is not created. It is listed in
+  `analysis["conversion"]["empty_tables"]` — if a connector's `VersionSpec`
+  wants one of those, that is why detection failed.
+
+Values are stored as **text**, exactly as the mdbtools path produces them, which
+is why `connectors/values.py` coercions work unchanged over either. It also
+keeps `1258.175` exact instead of handing a shop's balance to a float. The
+practical consequence when writing SQL against a converted dump: numbers compare
+and sort as text, so use `CAST(EthenType AS INTEGER) = 7`, never `= 7`.
 
 ### Access → SQLite
 

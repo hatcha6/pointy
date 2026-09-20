@@ -59,7 +59,7 @@ class MigrationSystemsView(views.APIView):
                 "upload": {
                     "chunk_size": uploads.chunk_size(),
                     "max_bytes": settings.POINTY_MIGRATION_MAX_UPLOAD_BYTES,
-                    "accepted_extensions": [".mdb", ".accdb", ".sqlite", ".sqlite3", ".db"],
+                    "accepted_extensions": [".mdb", ".accdb", ".sqlite", ".sqlite3", ".db", ".sql"],
                 },
             }
         )

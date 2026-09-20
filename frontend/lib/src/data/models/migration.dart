@@ -64,7 +64,7 @@ class MigrationUploadConfig {
   static const fallback = MigrationUploadConfig(
     chunkSize: 16 * 1024 * 1024,
     maxBytes: 8 * 1024 * 1024 * 1024,
-    acceptedExtensions: ['.mdb', '.accdb', '.sqlite', '.sqlite3', '.db'],
+    acceptedExtensions: ['.mdb', '.accdb', '.sqlite', '.sqlite3', '.db', '.sql'],
   );
 
   /// Extensions without the leading dot, which is what `file_picker` wants.

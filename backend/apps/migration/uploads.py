@@ -205,4 +205,6 @@ def _suffix_kind(filename: str) -> str:
         return "access"
     if lowered.endswith((".sqlite", ".sqlite3", ".db")):
         return "sqlite"
+    if lowered.endswith((".sql", ".dump")):
+        return "mysqldump"
     return "access"

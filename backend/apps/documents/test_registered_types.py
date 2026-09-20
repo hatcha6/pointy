@@ -32,6 +32,9 @@ SYSTEM_WRITE_CALLERS = {
     "apps/documents/services.py": "the in-place correction route runs the domain's own rewrite",
     "apps/migration/loaders/purchasing.py": "an import reconstructs and replays historical documents",
     "apps/migration/loaders/sales.py": "an import reconstructs and replays historical documents",
+    "apps/migration/loaders/employees.py": (
+        "an import replays payroll runs that were paid before Pointy existed"
+    ),
     "apps/holidays/management/commands/backfill_special_days.py": (
         "tags rows that predate the snapshot the tag is"
     ),

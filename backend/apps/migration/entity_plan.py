@@ -34,6 +34,9 @@ EXPENSE = "expense"
 EXPENSE_CATEGORY = "expense_category"
 PRODUCT_UNIT = "product_unit"
 SUPPLIER_PAYMENT = "supplier_payment"
+SALE_RETURN = "sale_return"
+MONEY_ACCOUNT = "money_account"
+PAYROLL_RUN = "payroll_run"
 
 
 @dataclass(frozen=True)
@@ -79,14 +82,30 @@ ENTITY_PLAN: tuple[EntitySpec, ...] = (
         canonical.CanonicalSale,
         (CUSTOMER, VARIANT),
     ),
-    EntitySpec(PAYMENT, "Payments", canonical.CanonicalPayment, (SALE,), implemented=False),
-    EntitySpec(EMPLOYEE, "Employees", canonical.CanonicalEmployee, implemented=False),
+    # Returns come off invoices, so every sale must already exist.
+    EntitySpec(
+        SALE_RETURN,
+        "Sales returns",
+        canonical.CanonicalSaleReturn,
+        (SALE,),
+    ),
+    # Receipts settle invoices, so they follow both the sales and the returns
+    # that changed what those invoices are worth.
+    EntitySpec(PAYMENT, "Payments", canonical.CanonicalPayment, (SALE, CUSTOMER)),
+    EntitySpec(EMPLOYEE, "Employees", canonical.CanonicalEmployee),
+    EntitySpec(
+        PAYROLL_RUN,
+        "Payroll runs",
+        canonical.CanonicalPayrollRun,
+        (EMPLOYEE,),
+    ),
     EntitySpec(
         EXPENSE_CATEGORY,
         "Expense categories",
         canonical.CanonicalExpenseCategory,
     ),
     EntitySpec(EXPENSE, "Expenses", canonical.CanonicalExpense, (EXPENSE_CATEGORY,)),
+    EntitySpec(MONEY_ACCOUNT, "Money accounts", canonical.CanonicalMoneyAccount),
 )
 
 ENTITY_PLAN_BY_TYPE: dict[str, EntitySpec] = {spec.entity_type: spec for spec in ENTITY_PLAN}

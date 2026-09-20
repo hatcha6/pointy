@@ -3,7 +3,7 @@
 Two files exist per migration and both are temporary:
 
 * the **staged** file — exactly the bytes the owner uploaded (``.mdb``,
-  ``.sqlite``). Multi-GB. Deleted the moment conversion succeeds.
+  ``.sqlite``, ``.sql``). Multi-GB. Deleted the moment conversion succeeds.
 * the **prepared** file — the SQLite database every connector reads. Deleted
   when the import lands, when the owner discards it, or by the TTL sweep.
 
@@ -27,7 +27,7 @@ from django.conf import settings
 
 #: Extensions we keep on staged files, purely so an operator looking at the
 #: volume can tell what a file is. Never taken from the upload's own name.
-STAGED_SUFFIXES = {"access": ".mdb", "sqlite": ".sqlite"}
+STAGED_SUFFIXES = {"access": ".mdb", "sqlite": ".sqlite", "mysqldump": ".sql"}
 PREPARED_SUFFIX = ".sqlite"
 
 

@@ -17,6 +17,10 @@ from pathlib import Path
 
 ACCESS = "access"
 SQLITE = "sqlite"
+#: A MySQL/MariaDB text dump — the "backup" button of a Delphi POS that keeps
+#: its data in MySQL. Unlike the other two this is a *script*, not a database,
+#: so it has no magic number and is recognised by its SQL keywords instead.
+MYSQLDUMP = "mysqldump"
 
 #: Jet/ACE databases carry this at offset 4, for every version from Access 97
 #: (Jet 3) through .accdb (ACE 12+).
@@ -49,7 +53,11 @@ _KNOWN_UNSUPPORTED = (
     ),
 )
 
+#: Enough to hold a dump's comment header and reach its first real statement.
+#: The binary formats above are all decided inside the first 32 bytes; only the
+#: text dump needs to read further, because a vendor preamble can be long.
 _HEADER_BYTES = 32
+_TEXT_SNIFF_BYTES = 4096
 
 
 class UnsupportedFile(Exception):
@@ -61,13 +69,15 @@ class UnsupportedFile(Exception):
 
 
 def identify(path: Path) -> str:
-    """Return :data:`ACCESS` or :data:`SQLITE`, or raise :class:`UnsupportedFile`."""
+    """Return one of :data:`ACCESS`, :data:`SQLITE`, :data:`MYSQLDUMP`, or raise
+    :class:`UnsupportedFile`."""
     try:
         with open(path, "rb") as handle:
-            header = handle.read(_HEADER_BYTES)
+            sample = handle.read(_TEXT_SNIFF_BYTES)
     except OSError as exc:
         raise UnsupportedFile(f"تعذر قراءة الملف: {exc}") from exc
 
+    header = sample[:_HEADER_BYTES]
     if not header:
         raise UnsupportedFile("الملف فارغ.", detected="EMPTY")
     if header.startswith(_SQLITE_MAGIC):
@@ -77,9 +87,15 @@ def identify(path: Path) -> str:
     for magic, detected, message in _KNOWN_UNSUPPORTED:
         if header.startswith(magic):
             raise UnsupportedFile(message, detected=detected)
+    # Checked after the magic numbers, never before: a binary database whose
+    # bytes happen to spell a SQL keyword must still be read as that database.
+    from .mysqldump import looks_like_dump
+
+    if looks_like_dump(sample):
+        return MYSQLDUMP
     raise UnsupportedFile(
         "لم نتعرف على نوع هذا الملف. المطلوب ملف قاعدة بيانات Access ‏(.mdb أو "
-        ".accdb) أو ملف SQLite.",
+        ".accdb) أو ملف SQLite أو ملف نسخة احتياطية بصيغة SQL ‏(.sql).",
         detected="UNKNOWN",
     )
 
@@ -88,4 +104,5 @@ def describe(kind: str) -> str:
     return {
         ACCESS: "قاعدة بيانات Microsoft Access",
         SQLITE: "قاعدة بيانات SQLite",
+        MYSQLDUMP: "نسخة احتياطية بصيغة SQL ‏(MySQL)",
     }.get(kind, kind)

@@ -107,13 +107,23 @@ def _convert(source, staged, kind, tracker):
         tracker.skip(CONVERT, "الملف بصيغة SQLite أصلًا")
         return staged
     tracker.start(CONVERT, "جارٍ التحضير…")
+    converter, failure = _converter_for(kind)
     try:
-        stats = access.convert(staged, working, tracker=tracker, stage_key=CONVERT)
-    except access.ConversionError as exc:
+        stats = converter(staged, working, tracker=tracker, stage_key=CONVERT)
+    except failure as exc:
         tracker.fail(CONVERT, str(exc))
         raise PreparationError(str(exc)) from exc
     source.analysis = {**(source.analysis or {}), "conversion": stats}
     return working
+
+
+def _converter_for(kind):
+    """The ``(convert, error_type)`` pair that turns ``kind`` into SQLite."""
+    if kind == identification.MYSQLDUMP:
+        from . import mysqldump
+
+        return mysqldump.convert, mysqldump.DumpConversionError
+    return access.convert, access.ConversionError
 
 
 def _prepare(source, working, tracker):
