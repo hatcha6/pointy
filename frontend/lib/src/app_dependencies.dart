@@ -214,6 +214,7 @@ class PointyAppDependencies {
       shopSettingsRepository,
       printingRepository,
       trackedStockRepository: trackedStockRepository,
+      integrationsRepository: integrationsRepository,
       analyticsEngine: analyticsEngine,
       scanFeedback: ScanFeedbackSounds.instance.play,
     );

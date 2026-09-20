@@ -44,6 +44,20 @@ class IntegrationsRepository {
     );
   }
 
+  /// Perform the recharges a sale sold. The guard lives on the server: a
+  /// repeat of this call cannot produce a second charge.
+  Future<Result<List<IntegrationChargeResult>>> charge({
+    int? orderId,
+    int? fulfillmentId,
+  }) {
+    return Result.guard(
+      () => _service.chargeIntegrationRecharges(
+        orderId: orderId,
+        fulfillmentId: fulfillmentId,
+      ),
+    );
+  }
+
   Future<Result<IntegrationHistoryPage>> loadHistory({
     required String providerKey,
     required String cardNo,

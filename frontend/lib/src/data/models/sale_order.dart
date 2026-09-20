@@ -883,6 +883,9 @@ class SaleLineIntegration {
     this.status = 'pending',
     this.providerReference = '',
     this.confirmedAt,
+    this.errorCode = '',
+    this.attemptCount = 0,
+    this.receipt = const {},
   });
 
   final String provider;
@@ -902,13 +905,30 @@ class SaleLineIntegration {
   /// pending · submitted · confirmed · failed · cancelled
   final String status;
 
-  /// The provider's own id for the purchase, once reconciliation matched it.
+  /// The provider's own id for the purchase, once it has confirmed one.
   final String providerReference;
   final DateTime? confirmedAt;
+
+  /// Why the last attempt did not land, as a code. An empty float is its own
+  /// code because the shop can fix that one itself.
+  final String errorCode;
+
+  /// How many times a write has been sent for this line. More than one means
+  /// reconciliation proved an earlier attempt never happened.
+  final int attemptCount;
+
+  /// The provider's own printed slip, ready to reprint beside our invoice.
+  final Map<String, String> receipt;
 
   bool get isConfirmed => status == 'confirmed';
   bool get isPending => status == 'pending';
   bool get hasFailed => status == 'failed';
+
+  /// A write went out and nobody knows what it did. The dangerous one: it must
+  /// never be retried, and somebody has to look at the card.
+  bool get needsAttention => status == 'submitted';
+
+  bool get isOutOfFloat => errorCode == 'insufficient_float';
 
   factory SaleLineIntegration.fromJson(Map<String, Object?> json) {
     return SaleLineIntegration(
@@ -926,6 +946,13 @@ class SaleLineIntegration {
       confirmedAt: DateTime.tryParse(
         json['confirmed_at']?.toString() ?? '',
       )?.toLocal(),
+      errorCode: json['error_code']?.toString() ?? '',
+      attemptCount: int.tryParse(json['attempt_count']?.toString() ?? '') ?? 0,
+      receipt: {
+        for (final entry
+            in (json['receipt'] as Map<String, Object?>? ?? const {}).entries)
+          entry.key: entry.value?.toString() ?? '',
+      },
     );
   }
 }

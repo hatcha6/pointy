@@ -15,22 +15,35 @@ against a live agency account, and what this driver therefore must not assume:
   type is no more trustworthy than the status code; parse, then decide.
 * The agency float is rendered as ``<span id="balanceId">`` in the page chrome,
   suffixed with a "$" glyph that does not mean dollars. It is LYD.
-* Nothing is idempotent. Forms render a per-view ``token`` UUID that the app's
-  own AJAX never sends, so it cannot serve as an idempotency key: a retried
-  write is a second real recharge. This driver therefore exposes reads only;
-  the write path needs an at-most-once design before it is worth having.
+* ``POST /card/renew`` is the one endpoint that behaves: it answers real
+  ``application/json``, ``{status, message, id, balance}`` on success and
+  ``{status: "failure", message}`` on a business refusal. ``id`` is the
+  buy-log row — the provider reference a fulfillment should keep — and
+  ``balance`` is the float after the charge, so a write needs no follow-up
+  probe. Verified live 2026-09-20 with one real 25.00 renewal.
+* **Nothing is idempotent, and the token does not save us.** The renew form
+  does send its per-view ``token`` (an earlier note here claimed otherwise
+  and was wrong), but whether the server spends it could not be established:
+  replaying a spent token and submitting a fresh one both return
+  ``Balance not sufficient !``, so the funds check runs first and hides the
+  answer. Until that is settled by an experiment with money to spare, a
+  retried write must be assumed to be a second real recharge, and the write
+  path owes its own at-most-once guard.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 
 import requests
 
 from .base import (
+    ERROR_INDETERMINATE,
+    ERROR_INSUFFICIENT_FLOAT,
     ERROR_NOT_FOUND,
     ERROR_PROVIDER_ERROR,
     ERROR_UNAUTHORIZED,
@@ -45,6 +58,7 @@ from .base import (
     ProbeResult,
     ProfileResult,
     PurchaseEntry,
+    RechargeResult,
     RechargeOption,
     StatusEntry,
     SubscriberProfile,
@@ -60,6 +74,8 @@ LIST_PATH = "/cardSimple/list"
 BUY_LOG_PATH = "/card/buy-log/list/"
 STATUS_LOG_PATH = "/card/status/list/"
 RENEW_VIEW_PATH = "/card/renew/view/"
+RENEW_PATH = "/card/renew"
+RECEIPT_VIEW_PATH = "/card/buy-log/detail/view/"
 DETAIL_VIEW_PATH = "/card/detail/view/"
 
 # The detail modal is a disabled form: <label>Name</label><input value="…">.
@@ -276,6 +292,96 @@ class HdBoxProvider(IntegrationProvider):
             return OfferResult(ok=False, error_code=ERROR_UNEXPECTED)
         return OfferResult(ok=True, options=tuple(options))
 
+    # --- the write path ----------------------------------------------------
+    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+        """Buy months on a card. Spends the agency float.
+
+        Every field is taken from the renew form the server just rendered
+        rather than composed from what we think it wants, because two of them
+        cannot be derived:
+
+        * ``expireDay`` is a **local date string**, and for an expired card the
+          server re-bases it to today rather than to the date the card list
+          reports — so a renewal is not backdated into the dead weeks.
+        * ``pid`` is the hidden package select, which nothing on the page ever
+          initialises. A real browser therefore submits its first option on
+          every renew and the server ignores it because ``changePackage`` is
+          0. Sending the card's own package instead would be a request the
+          provider's own UI never makes.
+        """
+        card_no = (card_no or "").strip()
+        if not card_no.isdigit():
+            return RechargeResult(ok=False, error_code=ERROR_NOT_FOUND)
+        months = _months_from_option(option_code)
+        if months is None:
+            return RechargeResult(
+                ok=False,
+                error_code=ERROR_UNEXPECTED,
+                error_detail=f"unsupported option {option_code!r}",
+            )
+
+        session, code, detail = self._login()
+        if session is None:
+            return RechargeResult(ok=False, error_code=code, error_detail=detail)
+        response, code, detail = self._authenticated_get(
+            session, f"{RENEW_VIEW_PATH}{card_no}"
+        )
+        if response is None:
+            return RechargeResult(ok=False, error_code=code, error_detail=detail)
+
+        form, error = _renew_payload(response.text or "", card_no, months)
+        if form is None:
+            return RechargeResult(
+                ok=False, error_code=ERROR_UNEXPECTED, error_detail=error
+            )
+
+        # The quote the customer paid against. If the provider has moved its
+        # price since the till quoted it, refuse: spending a different amount
+        # of the shop's money than it agreed to is not ours to decide.
+        quoted = _as_decimal(form["pay"])
+        if expected_cost is not None and quoted is not None:
+            if quoted != Decimal(expected_cost):
+                return RechargeResult(
+                    ok=False,
+                    error_code=ERROR_PROVIDER_ERROR,
+                    error_detail=(
+                        f"price moved: quoted {expected_cost}, now {quoted}"
+                    ),
+                )
+
+        # Past this line a charge may have happened, whatever comes back.
+        try:
+            reply = session.post(
+                self._url(RENEW_PATH),
+                data=form,
+                timeout=self._timeout,
+                headers=_AJAX_HEADERS,
+            )
+        except requests.RequestException as exc:
+            # The answer never arrived. The money may well have moved.
+            return RechargeResult(
+                ok=False,
+                indeterminate=True,
+                error_code=ERROR_INDETERMINATE,
+                error_detail=str(exc),
+            )
+        result = _classify_renew_reply(reply)
+        if not result.ok:
+            return result
+        # Best-effort: the shop wants to hand the customer the provider's own
+        # receipt, but a receipt we could not fetch is a missing printout, not
+        # a failed recharge. Never let it downgrade a confirmed charge.
+        receipt = dict(result.receipt)
+        try:
+            printed, _code, _detail = self._authenticated_get(
+                session, f"{RECEIPT_VIEW_PATH}{result.reference}"
+            )
+            if printed is not None:
+                receipt["printed"] = _parse_receipt(printed.text or "")
+        except Exception:  # noqa: BLE001 — see above
+            pass
+        return replace(result, receipt=receipt)
+
     def subscriber_profile(self, card_no: str) -> ProfileResult:
         """Read the card-detail modal — richer than the list row.
 
@@ -467,3 +573,195 @@ def _slashed_date(value):
         return datetime(parts[0], parts[1], parts[2], tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+# --- write-path helpers -----------------------------------------------------
+# What jQuery sends from the renew modal. Matching it is not cosmetic: the one
+# thing worse than a refused write is a write the provider's own UI would never
+# have produced.
+_AJAX_HEADERS = {
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+}
+
+#: The provider's clock. Its own UI computes the new expiry date in the
+#: browser's local time, and every browser that drives it is in Libya (UTC+2,
+#: no DST). Deriving this from the shop's Django timezone instead would put a
+#: misconfigured till a day out on every renewal.
+_PROVIDER_TZ = timezone(timedelta(hours=2))
+
+_EXPIRATION_RE = re.compile(r'name="expireDay"[^>]*data-expiration="(\d+)"', re.I)
+_HIDDEN_RE = re.compile(
+    r'<input[^>]*?name="(token|changePackage|dealerId|cardNo)"[^>]*?value="([^"]*)"',
+    re.I,
+)
+_PID_SELECT_RE = re.compile(r'<select[^>]*name="pid".*?</select>', re.S | re.I)
+_OPTION_SELECTED_RE = re.compile(r'<option[^>]*\bselected\b[^>]*value="(\d+)"', re.I)
+_OPTION_VALUE_RE = re.compile(r'value="(\d+)"')
+_INSUFFICIENT_RE = re.compile(r"balance\s+not\s+sufficient", re.I)
+
+
+def _months_from_option(option_code: str) -> int | None:
+    kind, _, raw = (option_code or "").partition(":")
+    if kind != RECHARGE_RENEW:
+        return None
+    months = _as_int(raw)
+    return months if months and months > 0 else None
+
+
+def _renew_payload(body: str, card_no: str, months: int):
+    """Rebuild the body the renew form would have submitted.
+
+    Returns ``(payload, error)``; exactly one is set.
+    """
+    if _ERROR_PAGE_RE.search(body):
+        return None, "provider returned its error page instead of the form"
+
+    hidden = {name: value for name, value in _HIDDEN_RE.findall(body)}
+    if "token" not in hidden:
+        return None, "renew form carried no token"
+
+    expiration = _EXPIRATION_RE.search(body)
+    if expiration is None:
+        return None, "renew form carried no data-expiration"
+
+    price = None
+    for option_months, option_price, _label in _MONTH_OPTION_RE.findall(body):
+        if _as_int(option_months) == months:
+            price = option_price
+            break
+    if price is None:
+        return None, f"renew form does not offer {months} months"
+
+    # Whatever the browser's <select name="pid"> would submit: the one marked
+    # selected, else the first option. See the docstring on recharge().
+    pid = ""
+    select = _PID_SELECT_RE.search(body)
+    if select:
+        chosen = _OPTION_SELECTED_RE.search(select.group(0))
+        values = _OPTION_VALUE_RE.findall(select.group(0))
+        pid = chosen.group(1) if chosen else (values[0] if values else "")
+
+    start = datetime.fromtimestamp(int(expiration.group(1)), _PROVIDER_TZ)
+    # setMonth(getMonth() + n): the same day of the month, n months on.
+    index = start.month + months
+    end = start.replace(
+        year=start.year + (index - 1) // 12, month=(index - 1) % 12 + 1
+    )
+    end_of_day = end.replace(hour=23, minute=59, second=59)
+
+    return {
+        "token": hidden["token"],
+        "changePackage": hidden.get("changePackage", "0"),
+        "dealerId": hidden.get("dealerId", ""),
+        "cardNo": hidden.get("cardNo", card_no),
+        "pid": pid,
+        "month": str(months),
+        "expireDay": f"{end.year}/{end.month:02d}/{end.day:02d}",
+        "pay": price,
+        "buyDay": str((end_of_day - start).days),
+    }, ""
+
+
+def _classify_renew_reply(reply):
+    """Decide what a reply to POST /card/renew means — including "no idea".
+
+    ``/card/renew`` is the one endpoint on this CAS that answers real JSON, for
+    success and for a business refusal alike. Anything else coming back is
+    territory we have never seen, and on a money path an unrecognised reply is
+    not a failure: it is an unknown, and it must be reconciled rather than
+    retried.
+    """
+    body = reply.text or ""
+    if _LOGIN_FORM_RE.search(body):
+        # Bounced by the auth filter, which runs before the handler — so
+        # nothing was charged. The only reply here that is safely definite.
+        return RechargeResult(
+            ok=False, error_code=ERROR_UNAUTHORIZED, error_detail="session expired"
+        )
+
+    try:
+        payload = json.loads(body)
+    except (ValueError, TypeError):
+        payload = None
+    if not isinstance(payload, dict):
+        return RechargeResult(
+            ok=False,
+            indeterminate=True,
+            error_code=ERROR_INDETERMINATE,
+            error_detail=f"unreadable reply (HTTP {reply.status_code})",
+        )
+
+    status = str(payload.get("status") or "").lower()
+    message = str(payload.get("message") or "").strip()
+    if status == "success":
+        return RechargeResult(
+            ok=True,
+            reference=str(payload.get("id") or ""),
+            balance_after=_as_decimal(payload.get("balance")),
+            receipt=payload,
+        )
+    if status == "failure":
+        if _INSUFFICIENT_RE.search(message):
+            # Worth its own code: the shop can fix this one itself, and the
+            # float is provably untouched.
+            return RechargeResult(
+                ok=False,
+                error_code=ERROR_INSUFFICIENT_FLOAT,
+                error_detail=message,
+            )
+        return RechargeResult(
+            ok=False, error_code=ERROR_PROVIDER_ERROR, error_detail=message
+        )
+    return RechargeResult(
+        ok=False,
+        indeterminate=True,
+        error_code=ERROR_INDETERMINATE,
+        error_detail=f"unrecognised status {status!r}: {message}",
+    )
+
+
+# The receipt modal is a small print table, and it is not uniform: most rows are
+# ``<td>label</td><td>value</td>``, but the dates are a label row followed by a
+# value row, both ``colspan=2``.
+_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+_RECEIPT_PAIR_RE = re.compile(
+    r"<td[^>]*>\s*([A-Za-z][A-Za-z ]{1,24}?)\s*</td>\s*<td[^>]*>\s*([^<]{0,60}?)\s*</td>",
+    re.I,
+)
+_RECEIPT_CELL_RE = re.compile(r"<td[^>]*>\s*([^<]{0,80}?)\s*</td>", re.I)
+_RECEIPT_FIELDS = {
+    "cardno": "card_no",
+    "months": "months",
+    "day": "days",
+    "total": "total",
+}
+#: Rendered as a label row above their value row rather than beside it.
+_RECEIPT_DATE_FIELDS = {"start date": "start_date", "end date": "end_date"}
+
+
+def _parse_receipt(body: str) -> dict:
+    """The provider's own receipt, reduced to the fields a till would print.
+
+    Comments are stripped first, and that is not tidiness: HD Box ships this
+    template with its **Total** row and its phone line commented out, so a
+    parser that reads raw markup reports a total the customer's copy does not
+    actually show. The provider slip proves the card and the term; the money on
+    it is Pointy's invoice's job.
+
+    "Package price" is deliberately not read — it was 10.00 on a receipt for a
+    25.00 renewal, so it is not what anyone paid.
+    """
+    body = _COMMENT_RE.sub("", body or "")
+    out: dict[str, str] = {}
+    for label, value in _RECEIPT_PAIR_RE.findall(body):
+        key = _RECEIPT_FIELDS.get(label.strip().lower())
+        if key and value:
+            out[key] = value.replace("&nbsp;", " ").strip()
+
+    cells = [c.replace("&nbsp;", " ").strip() for c in _RECEIPT_CELL_RE.findall(body)]
+    for index, cell in enumerate(cells[:-1]):
+        key = _RECEIPT_DATE_FIELDS.get(cell.lower())
+        if key:
+            out[key] = cells[index + 1].strip()
+    return out

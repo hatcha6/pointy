@@ -8,7 +8,8 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
-from django.test import TestCase
+from django.db import transaction
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from rest_framework import serializers
@@ -33,6 +34,7 @@ from apps.treasury.position import treasury_position
 
 from . import catalog
 from . import float_ledger
+from . import recharge
 from .fulfillment import resolve_line_integration
 from .reconciliation import reconcile_account
 from .models import (
@@ -50,6 +52,7 @@ from .providers.base import (
     ProbeResult,
 )
 from .providers.base import RechargeOption
+from .providers import hdbox
 from .providers.hdbox import HdBoxProvider
 from .provisioning import service_variant_for
 from .services import probe_account, record_seen_offers, record_subscriber
@@ -406,17 +409,29 @@ class IntegrationApiTests(TestCase):
 
 # Trimmed from the real renew form: the two <select>s, with their different
 # price attributes, are the whole reason the parser needs two patterns.
+# Trimmed from the real renew form, keeping every field the write path reads.
+# data-expiration is 2026-09-20 23:59:59 +02:00, so the dates below are fixed
+# and this fixture does not drift with the clock.
 RENEW_FORM = """
 <form id="renewCardForm">
   <input type="hidden" name="token" value="eb1c2a63-25d2-4b6f-9091-c0b4a85238d8"/>
+  <input type="hidden" name="changePackage" value="0"/>
   <input type="hidden" name="dealerId" value="265"/>
-  <!-- HD Box renders a package <select name="pid"> here with
-       style="display:none". It is deliberately not parsed. -->
+  <input type="text" name="cardNo" class="form-control" value="210906803499" readonly />
+  <!-- Hidden by HD Box, and nothing on the page ever selects an option: a real
+       browser therefore submits the FIRST one on every renew. Not a package
+       change — changePackage stays 0 and the server ignores it. -->
+  <select name="pid" data-old-pid="4" style="display:none;">
+    <option data-price="5.00" value="1">radwan(5.00$)</option>
+    <option data-price="10.00" value="3">HDBOX ACTIVE NEW(10.00$)</option>
+  </select>
   <select name="month" id="month">
     <option value="1" price="25.00">1 month 25.00$</option>
     <option value="3" price="65.00">3 month 65.00$</option>
     <option value="12" price="220.00">12 month 220.00$</option>
   </select>
+  <input type="text" name="expireDay" value="0" data-expiration="1789941599" />
+  <input type="text" name="pay" value="0" />
 </form>
 """
 
@@ -1622,4 +1637,484 @@ class TillVisibilityTests(TestCase):
         self.assertEqual(
             client.get("/api/shop-settings/").data["connected_integrations"],
             ["hdbox"],
+        )
+
+
+# --- the write path ---------------------------------------------------------
+RENEW_OK = '{"balance":"0.00","id":"558032","message":"Success !","status":"success"}'
+RENEW_BROKE = '{"message":"Balance not sufficient !","status":"failure"}'
+# The real receipt modal, keeping the two things that caught the first parser
+# out: the Total row is COMMENTED OUT by the provider, and the dates are a
+# label row above a value row rather than beside it.
+RECEIPT_PAGE = """
+<div id="printForm"><table>
+  <tr><td>CardNo</td><td>210906803499</td></tr>
+  <tr><td class='print-left-info'>Package price</td><td class='print-rigth-info'>10.00</td></tr>
+  <tr><td class='print-left-info'>Months</td><td class='print-rigth-info'>1</td></tr>
+  <tr><td class='print-left-info'>Day</td><td class='print-rigth-info'>0</td></tr>
+  <!-- <tr><td class='print-left-info'>Total</td><td class='print-rigth-info'>25.00</td></tr> -->
+  <tr><td colspan=2>Start Date</td></tr>
+  <tr><td colspan=2>&nbsp;&nbsp;&nbsp;&nbsp;2026-09-20</td></tr>
+  <tr><td colspan=2>End Date</td></tr>
+  <tr><td colspan=2>&nbsp;&nbsp;&nbsp;&nbsp;2026-10-20</td></tr>
+</table></div>
+"""
+
+
+class _WriteSession(_FakeSession):
+    """A fake session that can answer the renew POST, not just the login."""
+
+    def __init__(self, login_response, get_responses, *, renew=None, renew_raises=None):
+        super().__init__(login_response, get_responses)
+        self._renew = renew
+        self._renew_raises = renew_raises
+        self.renew_calls = []
+
+    def post(self, url, **kwargs):
+        if url.endswith("/card/renew"):
+            self.renew_calls.append(kwargs.get("data"))
+            if self._renew_raises is not None:
+                raise self._renew_raises
+            return self._renew
+        return super().post(url, **kwargs)
+
+
+class HdBoxRenewPayloadTests(TestCase):
+    """The body must be what the provider's own page would have submitted."""
+
+    def _payload(self, months=1, body=RENEW_FORM):
+        return hdbox._renew_payload(body, "210906803499", months)
+
+    def test_builds_every_field_the_form_would_have_sent(self):
+        payload, error = self._payload()
+        self.assertEqual(error, "")
+        self.assertEqual(
+            payload,
+            {
+                "token": "eb1c2a63-25d2-4b6f-9091-c0b4a85238d8",
+                "changePackage": "0",
+                "dealerId": "265",
+                "cardNo": "210906803499",
+                # The first option of the hidden select — what a browser sends.
+                "pid": "1",
+                "month": "1",
+                # data-expiration + 1 month, in the provider's own timezone.
+                "expireDay": "2026/10/20",
+                "pay": "25.00",
+                "buyDay": "30",
+            },
+        )
+
+    def test_a_longer_term_moves_the_date_and_the_day_count(self):
+        payload, _ = self._payload(months=12)
+        self.assertEqual(payload["expireDay"], "2027/09/20")
+        self.assertEqual(payload["pay"], "220.00")
+        self.assertEqual(payload["buyDay"], "365")
+
+    def test_refuses_a_term_the_form_is_not_offering(self):
+        payload, error = self._payload(months=6)
+        self.assertIsNone(payload)
+        self.assertIn("6 months", error)
+
+    def test_refuses_the_error_page(self):
+        payload, error = self._payload(body=ERROR_PAGE)
+        self.assertIsNone(payload)
+        self.assertIn("error page", error)
+
+    def test_refuses_a_form_with_no_token(self):
+        payload, error = self._payload(
+            body=RENEW_FORM.replace('name="token"', 'name="nothing"')
+        )
+        self.assertIsNone(payload)
+        self.assertIn("token", error)
+
+
+class HdBoxRenewReplyTests(TestCase):
+    """Three outcomes, and the third one is the whole point."""
+
+    def _classify(self, text, status_code=200):
+        return hdbox._classify_renew_reply(_FakeResponse(text, status_code))
+
+    def test_success_carries_the_reference_and_the_new_float(self):
+        result = self._classify(RENEW_OK)
+        self.assertTrue(result.ok)
+        self.assertFalse(result.indeterminate)
+        self.assertEqual(result.reference, "558032")
+        self.assertEqual(result.balance_after, Decimal("0.00"))
+
+    def test_insufficient_balance_gets_its_own_code(self):
+        result = self._classify(RENEW_BROKE)
+        self.assertTrue(result.is_definite_failure)
+        self.assertEqual(result.error_code, "insufficient_float")
+
+    def test_another_refusal_is_a_provider_error(self):
+        result = self._classify('{"status":"failure","message":"Card is locked"}')
+        self.assertTrue(result.is_definite_failure)
+        self.assertEqual(result.error_code, "provider_error")
+        self.assertEqual(result.error_detail, "Card is locked")
+
+    def test_the_html_error_page_is_unknown_not_failed(self):
+        # This endpoint answers JSON for both success and refusal, so HTML here
+        # is territory we have never seen — and on a money path that is not
+        # the same as "it did not happen".
+        result = self._classify(ERROR_PAGE)
+        self.assertTrue(result.indeterminate)
+        self.assertFalse(result.is_definite_failure)
+
+    def test_an_unreadable_reply_is_unknown(self):
+        result = self._classify("<h1>502 Bad Gateway</h1>", status_code=502)
+        self.assertTrue(result.indeterminate)
+
+    def test_an_unrecognised_status_is_unknown(self):
+        result = self._classify('{"status":"maybe","message":"?"}')
+        self.assertTrue(result.indeterminate)
+
+    def test_the_login_form_is_a_definite_failure(self):
+        # Bounced by the auth filter, which runs before the handler, so this
+        # is the one unparseable reply that proves nothing was charged.
+        result = self._classify(LOGIN_PAGE)
+        self.assertTrue(result.is_definite_failure)
+        self.assertEqual(result.error_code, "unauthorized")
+
+
+class RechargeGuardTests(TransactionTestCase):
+    """At most once, ever — including when we never learn what happened.
+
+    TransactionTestCase rather than TestCase on purpose: the guard refuses to
+    run inside an open transaction, because a claim that can be rolled back is
+    not a claim. TestCase wraps every test in exactly that.
+    """
+
+    reset_sequences = True
+
+    def setUp(self):
+        ensure_role_groups()
+        self.user = get_user_model().objects.create_user(username="till", password="x")
+        self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.register = RegisterSession.objects.create(
+            owner=self.user, owner_key=f"user:{self.user.pk}"
+        )
+        self.account = make_account()
+        self.variant = service_variant_for("hdbox")
+
+    def _fulfillment(self, cost="25.00", code="renew:1"):
+        resolved = resolve_line_integration(
+            {
+                "provider": "hdbox",
+                "subscriber_ref": "210906803499",
+                "option_code": code,
+                "option_label": "1 month",
+                "months": 1,
+                "cost": Decimal(cost),
+            },
+            self.variant,
+        )
+        order = checkout_order(
+            register_session=self.register,
+            lines_data=[
+                {
+                    "variant": self.variant,
+                    "quantity": Decimal("1"),
+                    "effective_unit_price": resolved["price"],
+                    "integration": resolved,
+                }
+            ],
+            payments_data=[{"method": "cash", "amount": resolved["price"]}],
+            request=None,
+        )
+        return IntegrationFulfillment.objects.get(order_line=order.lines.get())
+
+    def _session(self, **kwargs):
+        return _WriteSession(
+            _FakeResponse(AUTHED_PAGE), [_FakeResponse(RENEW_FORM)], **kwargs
+        )
+
+    def test_a_charge_confirms_and_records_what_the_provider_said(self):
+        fulfillment = self._fulfillment()
+        session = self._session(renew=_FakeResponse(RENEW_OK))
+        with patch_session(session):
+            outcome = recharge.charge(fulfillment.pk)
+
+        self.assertEqual(outcome.outcome, recharge.OUTCOME_CHARGED)
+        fulfillment.refresh_from_db()
+        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.CONFIRMED)
+        self.assertEqual(fulfillment.provider_reference, "558032")
+        self.assertEqual(fulfillment.attempt_count, 1)
+        self.assertIsNotNone(fulfillment.confirmed_at)
+        # The write told us the new float, so no second probe was needed.
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal("0.00"))
+
+    def test_a_confirmed_row_is_never_charged_again(self):
+        fulfillment = self._fulfillment()
+        with patch_session(self._session(renew=_FakeResponse(RENEW_OK))):
+            recharge.charge(fulfillment.pk)
+
+        second = self._session(renew=_FakeResponse(RENEW_OK))
+        with patch_session(second):
+            outcome = recharge.charge(fulfillment.pk)
+
+        self.assertEqual(outcome.outcome, recharge.OUTCOME_NOT_CLAIMABLE)
+        # Not "it was refused" — nothing was sent at all.
+        self.assertEqual(second.renew_calls, [])
+        fulfillment.refresh_from_db()
+        self.assertEqual(fulfillment.attempt_count, 1)
+
+    def test_an_unknown_outcome_stays_submitted_and_blocks_every_retry(self):
+        """The case the whole module exists for."""
+        fulfillment = self._fulfillment()
+        session = self._session(
+            renew_raises=hdbox.requests.ConnectionError("connection reset")
+        )
+        with patch_session(session):
+            outcome = recharge.charge(fulfillment.pk)
+
+        self.assertEqual(outcome.outcome, recharge.OUTCOME_UNKNOWN)
+        self.assertTrue(outcome.needs_attention)
+        fulfillment.refresh_from_db()
+        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.SUBMITTED)
+        self.assertEqual(fulfillment.last_error_code, "indeterminate")
+        # The request did leave, so the money may well have moved.
+        self.assertEqual(len(session.renew_calls), 1)
+
+        # And now nothing may send a second one.
+        again = self._session(renew=_FakeResponse(RENEW_OK))
+        with patch_session(again):
+            retry = recharge.charge(fulfillment.pk)
+        self.assertEqual(retry.outcome, recharge.OUTCOME_NOT_CLAIMABLE)
+        self.assertEqual(again.renew_calls, [])
+
+    def test_a_definite_refusal_frees_the_row_to_be_tried_again(self):
+        # An empty float is the one failure a shop can fix itself, and the
+        # provider proved it took nothing — so this must not strand the sale.
+        fulfillment = self._fulfillment()
+        with patch_session(self._session(renew=_FakeResponse(RENEW_BROKE))):
+            outcome = recharge.charge(fulfillment.pk)
+
+        self.assertEqual(outcome.outcome, recharge.OUTCOME_REFUSED)
+        self.assertEqual(outcome.error_code, "insufficient_float")
+        fulfillment.refresh_from_db()
+        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.PENDING)
+
+        # Topped up, it goes through — and the attempt count remembers both.
+        session = self._session(renew=_FakeResponse(RENEW_OK))
+        with patch_session(session):
+            self.assertTrue(recharge.charge(fulfillment.pk).ok)
+        fulfillment.refresh_from_db()
+        self.assertEqual(fulfillment.attempt_count, 2)
+
+    def test_a_driver_that_raises_is_unknown_not_failed(self):
+        fulfillment = self._fulfillment()
+        with mock.patch(
+            "apps.integrations.recharge.provider_for"
+        ) as provider:
+            provider.return_value.recharge.side_effect = RuntimeError("boom")
+            outcome = recharge.charge(fulfillment.pk)
+
+        self.assertEqual(outcome.outcome, recharge.OUTCOME_UNKNOWN)
+        fulfillment.refresh_from_db()
+        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.SUBMITTED)
+
+    def test_a_price_that_moved_since_the_quote_is_refused_unsent(self):
+        # The customer paid against a quote. Spending a different amount of
+        # the shop's money than it agreed to is not ours to decide.
+        fulfillment = self._fulfillment(cost="20.00")
+        session = self._session(renew=_FakeResponse(RENEW_OK))
+        with patch_session(session):
+            outcome = recharge.charge(fulfillment.pk)
+
+        self.assertEqual(outcome.outcome, recharge.OUTCOME_REFUSED)
+        self.assertIn("price moved", outcome.error_detail)
+        self.assertEqual(session.renew_calls, [])
+
+    def test_charging_inside_a_transaction_is_a_programming_error(self):
+        fulfillment = self._fulfillment()
+        with self.assertRaises(recharge.AtomicBlockError):
+            with transaction.atomic():
+                recharge.charge(fulfillment.pk)
+
+
+class IntegrationChargeApiTests(TransactionTestCase):
+    """The till's one call after a sale, and the guard behind it."""
+
+    reset_sequences = True
+
+    def setUp(self):
+        ensure_role_groups()
+        self.user = get_user_model().objects.create_user(username="till", password="x")
+        self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.register = RegisterSession.objects.create(
+            owner=self.user, owner_key=f"user:{self.user.pk}"
+        )
+        self.account = make_account()
+        self.variant = service_variant_for("hdbox")
+
+    def _order(self, cards=("210906803499",)):
+        lines = []
+        for card in cards:
+            resolved = resolve_line_integration(
+                {
+                    "provider": "hdbox",
+                    "subscriber_ref": card,
+                    "option_code": "renew:1",
+                    "option_label": "1 month",
+                    "months": 1,
+                    "cost": Decimal("25.00"),
+                },
+                self.variant,
+            )
+            lines.append(
+                {
+                    "variant": self.variant,
+                    "quantity": Decimal("1"),
+                    "effective_unit_price": resolved["price"],
+                    "integration": resolved,
+                }
+            )
+        return checkout_order(
+            register_session=self.register,
+            lines_data=lines,
+            payments_data=[
+                {"method": "cash", "amount": Decimal("25.00") * len(lines)}
+            ],
+            request=None,
+        )
+
+    def _session(self, **kwargs):
+        return _WriteSession(
+            _FakeResponse(AUTHED_PAGE),
+            [_FakeResponse(RENEW_FORM), _FakeResponse(RECEIPT_PAGE)],
+            **kwargs,
+        )
+
+    def test_charging_an_order_performs_its_recharges(self):
+        order = self._order()
+        with patch_session(self._session(renew=_FakeResponse(RENEW_OK))):
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        result = response.data["results"][0]
+        self.assertEqual(result["outcome"], "charged")
+        self.assertEqual(result["provider_reference"], "558032")
+        self.assertFalse(result["needs_attention"])
+        # The provider's own slip came back with it, ready to print.
+        self.assertEqual(result["receipt"]["end_date"], "2026-10-20")
+
+    def test_calling_it_twice_charges_nothing_twice(self):
+        order = self._order()
+        with patch_session(self._session(renew=_FakeResponse(RENEW_OK))):
+            self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+        second = self._session(renew=_FakeResponse(RENEW_OK))
+        with patch_session(second):
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        # Nothing claimable is not an error — a till that re-sends a finished
+        # sale should hear "nothing to do", not see a second charge.
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"], [])
+        self.assertEqual(second.renew_calls, [])
+
+    def test_an_empty_float_reaches_the_till_as_its_own_code(self):
+        order = self._order()
+        with patch_session(self._session(renew=_FakeResponse(RENEW_BROKE))):
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        result = response.data["results"][0]
+        self.assertEqual(result["outcome"], "refused")
+        self.assertEqual(result["error_code"], "insufficient_float")
+        # Still sold, still retryable once the shop tops up.
+        self.assertEqual(result["status"], "pending")
+
+    def test_one_line_can_be_retried_on_its_own(self):
+        order = self._order()
+        with patch_session(self._session(renew=_FakeResponse(RENEW_BROKE))):
+            self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+        fulfillment = IntegrationFulfillment.objects.get()
+        with patch_session(self._session(renew=_FakeResponse(RENEW_OK))):
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/",
+                {"fulfillment": fulfillment.pk},
+                format="json",
+            )
+        self.assertEqual(response.data["results"][0]["outcome"], "charged")
+
+    def test_naming_neither_an_order_nor_a_line_is_a_bad_request(self):
+        response = self.client.post(
+            "/api/integrations/fulfillments/charge/", {}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class UnresolvedRechargeNotificationTests(TestCase):
+    """The state nobody may retry has to be the one somebody is told about."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.user = get_user_model().objects.create_user(username="till", password="x")
+        self.register = RegisterSession.objects.create(
+            owner=self.user, owner_key=f"user:{self.user.pk}"
+        )
+        self.account = make_account()
+        self.variant = service_variant_for("hdbox")
+
+    def test_a_submitted_row_raises_a_critical_notification(self):
+        resolved = resolve_line_integration(
+            {
+                "provider": "hdbox",
+                "subscriber_ref": "210906803499",
+                "option_code": "renew:1",
+                "option_label": "1 month",
+                "months": 1,
+                "cost": Decimal("25.00"),
+            },
+            self.variant,
+        )
+        order = checkout_order(
+            register_session=self.register,
+            lines_data=[
+                {
+                    "variant": self.variant,
+                    "quantity": Decimal("1"),
+                    "effective_unit_price": resolved["price"],
+                    "integration": resolved,
+                }
+            ],
+            payments_data=[{"method": "cash", "amount": resolved["price"]}],
+            request=None,
+        )
+        fulfillment = IntegrationFulfillment.objects.get(order_line=order.lines.get())
+        fulfillment.status = IntegrationFulfillment.Status.SUBMITTED
+        fulfillment.submitted_at = timezone.now()
+        fulfillment.last_error_code = "indeterminate"
+        fulfillment.save()
+
+        sync_business_notifications()
+        notification = BusinessNotification.objects.get(
+            code="integrations.unresolved_recharge"
+        )
+        self.assertEqual(notification.severity, BusinessNotification.Severity.CRITICAL)
+        self.assertEqual(notification.payload["card_no"], "210906803499")
+        self.assertEqual(notification.payload["reason"], "indeterminate")
+
+        # Once it is resolved, the feed stops saying so without anyone clearing it.
+        fulfillment.status = IntegrationFulfillment.Status.CONFIRMED
+        fulfillment.save()
+        sync_business_notifications()
+        self.assertFalse(
+            BusinessNotification.objects.filter(
+                code="integrations.unresolved_recharge",
+                status=BusinessNotification.Status.ACTIVE,
+            ).exists()
         )

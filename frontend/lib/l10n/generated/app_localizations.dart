@@ -32898,7 +32898,7 @@ abstract class AppLocalizations {
   ///
   ///
   /// In ar, this message translates to:
-  /// **'يُسجَّل البيع في الفاتورة الآن. تنفيذ الشحن لدى المزوّد خطوة منفصلة لم تُفعَّل بعد.'**
+  /// **'يُسجَّل البيع ثم يُنفَّذ الشحن لدى المزوّد مباشرة، وتظهر النتيجة بعد إتمام الدفع.'**
   String get rechargePendingNote;
 
   ///
@@ -33284,6 +33284,96 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'شحن رصيد'**
   String get integrationTopUpAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة لا يكفي. اشحن الرصيد ثم أعد المحاولة.'**
+  String get integrationErrorInsufficientFloat;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل الطلب ولم تصلنا نتيجته. لا تُعد المحاولة — تحقّق من البطاقة لدى المزوّد أولاً.'**
+  String get integrationErrorIndeterminate;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الشحن لدى المزوّد'**
+  String get rechargeChargedTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُنفَّذ الشحن'**
+  String get rechargeRefusedTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'نتيجة الشحن غير معروفة'**
+  String get rechargeUnknownTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل طلب الشحن ولم تصلنا نتيجته، وقد يكون نُفِّذ فعلاً. لا تُعد الإرسال: تحقّق من البطاقة لدى المزوّد، وستتم المطابقة تلقائياً مع سجل المزوّد.'**
+  String get rechargeUnknownBody;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get rechargeRetryAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن رصيد الوكالة'**
+  String get rechargeTopUpAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بحاجة إلى مراجعة'**
+  String get rechargeNeedsAttentionBadge;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال المزوّد'**
+  String get rechargeProviderReceiptTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'البطاقة'**
+  String get rechargeReceiptCard;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المدة (شهر)'**
+  String get rechargeReceiptMonths;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'من'**
+  String get rechargeReceiptFrom;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى'**
+  String get rechargeReceiptTo;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد المحاولات: {count}'**
+  String rechargeAttemptCount(int count);
 
   ///
   ///

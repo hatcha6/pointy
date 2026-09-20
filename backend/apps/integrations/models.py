@@ -199,11 +199,13 @@ class IntegrationFulfillment(TimeStampedModel):
     This model holds the second, next to the line that sold it, so the gap
     between them is visible instead of assumed.
 
-    ``status`` starts at ``pending`` and stays there until a write path exists.
-    That is deliberate, not unfinished: the provider's API is not idempotent, so
-    a sale can be recorded honestly as "sold, not yet performed" rather than
-    have Pointy guess. Reconciliation against the provider's own purchase log
-    is what moves a row to ``confirmed``.
+    ``status`` is the at-most-once state machine, and ``submitted`` is the
+    load-bearing one: it means a write was sent and its outcome is **unknown**,
+    not that it is in flight. Because the providers are not idempotent, that
+    state is what stops a second charge, and only
+    :mod:`apps.integrations.reconciliation` may leave it — after reading the
+    provider's own purchase log, the sole authority on whether money moved.
+    See :mod:`apps.integrations.recharge` for the guard itself.
     """
 
     class Status(models.TextChoices):
@@ -258,6 +260,14 @@ class IntegrationFulfillment(TimeStampedModel):
 
     submitted_at = models.DateTimeField(blank=True, null=True)
     confirmed_at = models.DateTimeField(blank=True, null=True)
+    #: How many times a write has been *sent* for this line. The guard allows
+    #: one; anything above it is a fact worth being able to see, because it
+    #: means reconciliation put a row back to pending after proving the earlier
+    #: attempt never happened.
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    #: The structured reason, so the till can say "top up the float" for the
+    #: one failure a shop can fix itself instead of "something went wrong".
+    last_error_code = models.CharField(max_length=32, blank=True)
     last_error = models.TextField(blank=True)
 
     class Meta:

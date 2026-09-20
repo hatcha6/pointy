@@ -600,3 +600,72 @@ class IntegrationSubscriber {
     );
   }
 }
+
+/// What one attempted recharge did — including "we cannot say".
+///
+/// Three outcomes, not two, because the provider is not idempotent: a
+/// [needsAttention] result means a write went out and its answer never came
+/// back, so the money may or may not have moved. Nothing may retry it. The
+/// till says so plainly rather than offering a button that would spend twice.
+class IntegrationChargeResult {
+  const IntegrationChargeResult({
+    required this.fulfillment,
+    required this.outcome,
+    this.orderLine,
+    this.subscriberRef = '',
+    this.optionLabel = '',
+    this.status = '',
+    this.needsAttention = false,
+    this.errorCode = '',
+    this.errorDetail = '',
+    this.providerReference = '',
+    this.balanceAfter,
+    this.receipt = const {},
+  });
+
+  final int? fulfillment;
+  final int? orderLine;
+  final String subscriberRef;
+  final String optionLabel;
+
+  /// charged · refused · unknown · not_claimable
+  final String outcome;
+
+  /// The row this left behind. Disagrees with [outcome] on purpose when the
+  /// answer never arrived: `unknown` leaves the row `submitted`.
+  final String status;
+
+  final bool needsAttention;
+  final String errorCode;
+  final String errorDetail;
+  final String providerReference;
+  final double? balanceAfter;
+
+  /// The provider's own printed slip, if it gave us one.
+  final Map<String, String> receipt;
+
+  bool get isCharged => outcome == 'charged';
+  bool get isRefused => outcome == 'refused';
+  bool get isOutOfFloat => errorCode == 'insufficient_float';
+
+  factory IntegrationChargeResult.fromJson(Map<String, Object?> json) {
+    return IntegrationChargeResult(
+      fulfillment: int.tryParse(json['fulfillment']?.toString() ?? ''),
+      orderLine: int.tryParse(json['order_line']?.toString() ?? ''),
+      subscriberRef: json['subscriber_ref']?.toString() ?? '',
+      optionLabel: json['option_label']?.toString() ?? '',
+      outcome: json['outcome']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      needsAttention: json['needs_attention'] == true,
+      errorCode: json['error_code']?.toString() ?? '',
+      errorDetail: json['error_detail']?.toString() ?? '',
+      providerReference: json['provider_reference']?.toString() ?? '',
+      balanceAfter: double.tryParse(json['balance_after']?.toString() ?? ''),
+      receipt: {
+        for (final entry
+            in (json['receipt'] as Map<String, Object?>? ?? const {}).entries)
+          entry.key: entry.value?.toString() ?? '',
+      },
+    );
+  }
+}

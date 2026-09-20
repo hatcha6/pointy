@@ -75,6 +75,8 @@ const _assignButton = ValueKey('assign_invoice_customer_button');
 const _voidedCallout = ValueKey('voided_invoice_callout');
 
 void main() {
+  _rechargeInvoiceTests();
+
   group('SaleOrder.fromJson', () {
     test('parses can_assign_customer and defaults it to false', () {
       final base = <String, Object?>{
@@ -327,4 +329,120 @@ Future<void> _openVoidDialog(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(trigger);
   await tester.pumpAndSettle();
+}
+
+/// A sale that sold a top-up, in whatever state the provider left it.
+SaleOrder _rechargeInvoice(SaleLineIntegration integration) {
+  return SaleOrder(
+    id: 11,
+    receiptNumber: 'R20260920000011',
+    status: 'completed',
+    lines: [
+      SaleOrderLine(
+        id: 1,
+        productId: 90,
+        variantId: 90,
+        productName: 'شحن اشتراك',
+        quantity: 1,
+        returnedQuantity: 0,
+        returnableQuantity: 0,
+        unitPrice: 30,
+        total: 30,
+        integration: integration,
+      ),
+    ],
+    payments: const [],
+    subtotal: 30,
+    total: 30,
+    paymentStatus: 'paid',
+  );
+}
+
+void _rechargeInvoiceTests() {
+  group('a recharge line on the invoice', () {
+    testWidgets('an unanswered write says so, and says not to retry', (
+      tester,
+    ) async {
+      // The state that costs real money to get wrong. A cashier reading
+      // "pending" here would top the card up again by hand.
+      await tester.pumpWidget(
+        _wrap(
+          SingleChildScrollView(
+            child: SaleOrderDetailsContent(
+              order: _rechargeInvoice(
+                const SaleLineIntegration(
+                  provider: 'hdbox',
+                  subscriberRef: '210906803499',
+                  optionLabel: '1 month',
+                  status: 'submitted',
+                  errorCode: 'indeterminate',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('بحاجة إلى مراجعة'), findsOneWidget);
+      expect(find.textContaining('لا تُعد المحاولة'), findsOneWidget);
+      // Never the word that would send somebody to do it again by hand.
+      expect(find.text('بانتظار التنفيذ'), findsNothing);
+    });
+
+    testWidgets('an empty float names itself instead of "something failed"', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          SingleChildScrollView(
+            child: SaleOrderDetailsContent(
+              order: _rechargeInvoice(
+                const SaleLineIntegration(
+                  provider: 'hdbox',
+                  subscriberRef: '210906803499',
+                  optionLabel: '1 month',
+                  status: 'pending',
+                  errorCode: 'insufficient_float',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('رصيد الوكالة لا يكفي'), findsOneWidget);
+    });
+
+    testWidgets("a confirmed line shows the provider's own dates", (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          SingleChildScrollView(
+            child: SaleOrderDetailsContent(
+              order: _rechargeInvoice(
+                const SaleLineIntegration(
+                  provider: 'hdbox',
+                  subscriberRef: '210906803499',
+                  optionLabel: '1 month',
+                  status: 'confirmed',
+                  providerReference: '558032',
+                  receipt: {
+                    'start_date': '2026-09-20',
+                    'end_date': '2026-10-20',
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('إيصال المزوّد'), findsOneWidget);
+      expect(find.textContaining('2026-10-20'), findsOneWidget);
+    });
+  });
 }

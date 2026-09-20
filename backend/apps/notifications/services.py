@@ -68,6 +68,10 @@ MANAGED_CODES = (
     "integrations.unperformed_recharge",
     "integrations.offbook_recharge",
     "integrations.float_drift",
+    # A write went out and its answer never came back. The most urgent of the
+    # four, because it is the only one where nobody yet knows whether money
+    # moved — and where the wrong reaction (try again) spends it twice.
+    "integrations.unresolved_recharge",
     "discounts.expiring_rule",
     "employees.payroll_ready",
     "operations.backend_error",
@@ -1238,7 +1242,41 @@ def _integration_notifications(now):
             )
         )
 
-    # 2. The float disagrees with our arithmetic. Catches money spent on cards
+    # 2. Sent, and we never learned what happened. Distinct from every other
+    #    row here: this one is not "something went wrong" but "we do not know",
+    #    and the only safe action is to look at the card. The guard in
+    #    apps.integrations.recharge will not retry it, so nothing resolves it
+    #    until reconciliation matches it against the provider's own log or a
+    #    human settles it.
+    unresolved = (
+        IntegrationFulfillment.objects.filter(
+            status=IntegrationFulfillment.Status.SUBMITTED,
+        )
+        .select_related("order_line__order")
+        .order_by("submitted_at")
+    )
+    for row in unresolved:
+        specs.append(
+            _spec(
+                code="integrations.unresolved_recharge",
+                category=BusinessNotification.Category.SALES,
+                severity=BusinessNotification.Severity.CRITICAL,
+                fingerprint=f"integrations.unresolved_recharge:{row.pk}",
+                entity_type="integrations.integrationfulfillment",
+                entity_id=str(row.pk),
+                payload={
+                    "provider": row.provider,
+                    "card_no": row.subscriber_ref,
+                    "amount": _money(row.cost),
+                    "sent_at": row.submitted_at.isoformat() if row.submitted_at else "",
+                    "order_id": row.order_line.order_id,
+                    "reason": row.last_error_code,
+                    "count": 1,
+                },
+            )
+        )
+
+    # 3. The float disagrees with our arithmetic. Catches money spent on cards
     #    Pointy has never seen, which no per-card check can.
     from apps.integrations import float_ledger
 

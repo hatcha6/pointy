@@ -2222,6 +2222,12 @@ class PosApiService {
     required String cardNo,
   }) => _integrations.fetchCard(providerKey: providerKey, cardNo: cardNo);
 
+  /// Perform an order's sold recharges. At most once per line, server-side.
+  Future<List<IntegrationChargeResult>> chargeIntegrationRecharges({
+    int? orderId,
+    int? fulfillmentId,
+  }) => _integrations.charge(orderId: orderId, fulfillmentId: fulfillmentId);
+
   Future<IntegrationHistoryPage> fetchIntegrationHistory({
     required String providerKey,
     required String cardNo,

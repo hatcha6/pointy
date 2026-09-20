@@ -265,3 +265,29 @@ class SubscriberWriteSerializer(serializers.Serializer):
         max_length=160, required=False, allow_blank=True
     )
     note = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+def charge_payload(outcome) -> dict:
+    """The result of one attempted write, as the till needs to read it.
+
+    ``outcome`` is the honest word and ``status`` is the row it left behind;
+    the till renders the first and reconciliation cares about the second. The
+    two disagree on purpose in the case that matters: an unknown outcome
+    leaves the row ``submitted``, which is what forbids another attempt.
+    """
+    fulfillment = outcome.fulfillment
+    printed = (fulfillment.provider_receipt or {}).get("printed") if fulfillment else None
+    return {
+        "fulfillment": fulfillment.pk if fulfillment else None,
+        "order_line": fulfillment.order_line_id if fulfillment else None,
+        "subscriber_ref": fulfillment.subscriber_ref if fulfillment else "",
+        "option_label": fulfillment.option_label if fulfillment else "",
+        "outcome": outcome.outcome,
+        "status": fulfillment.status if fulfillment else "",
+        "needs_attention": outcome.needs_attention,
+        "error_code": outcome.error_code,
+        "error_detail": outcome.error_detail,
+        "provider_reference": fulfillment.provider_reference if fulfillment else "",
+        "balance_after": outcome.balance_after,
+        "receipt": printed or {},
+    }

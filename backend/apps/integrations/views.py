@@ -16,7 +16,8 @@ from rest_framework.views import APIView
 from apps.core.permissions import HasPointyPermission
 
 from . import catalog
-from .models import IntegrationAccount
+from . import recharge
+from .models import IntegrationAccount, IntegrationFulfillment
 from .providers import provider_for
 from .providers.base import ERROR_NOT_CONFIGURED, ERROR_NOT_FOUND, ERROR_UNAVAILABLE
 from . import float_ledger
@@ -28,6 +29,7 @@ from .serializers import (
     TopUpWriteSerializer,
     ProviderSerializer,
     card_payload,
+    charge_payload,
     offer_payload,
     float_payload,
     option_price_payload,
@@ -304,7 +306,12 @@ class IntegrationCardView(APIView):
                 # have to go and look up mid-sale.
                 "service_variant": _service_variant_payload(provider),
                 "currency": spec.currency,
+                # The float, so the till can warn before a cashier sells
+                # something the agency cannot pay for. ``balance_at`` says how
+                # old the figure is: it is refreshed by every probe and by
+                # every successful charge, not read live on each lookup.
                 "balance": account.balance,
+                "balance_at": account.balance_at,
             }
         )
 
@@ -567,3 +574,49 @@ class IntegrationSubscriberView(APIView):
             subscriber.save(update_fields=[*fields, "updated_at"])
 
         return Response(subscriber_payload(subscriber))
+
+
+class IntegrationChargeView(APIView):
+    """Perform the recharges a sale has already sold. Spends the float.
+
+    Addressed by order, because that is how a till uses it: the sale completes,
+    and the same screen immediately asks for its recharges to be performed. A
+    single fulfillment can be named instead, which is how a cashier retries the
+    one line a provider refused.
+
+    Every write goes through :mod:`apps.integrations.recharge`, which allows a
+    given line **one** attempt. This view therefore cannot double-charge by
+    being called twice — a second call finds nothing claimable and says so.
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"POST": USE}
+
+    def post(self, request):
+        rows, error = self._targets(request.data)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+        results = [charge_payload(recharge.charge(row.pk, user=request.user)) for row in rows]
+        accounts = {row.account_id for row in rows}
+        balance = None
+        if len(accounts) == 1:
+            account = IntegrationAccount.objects.filter(pk=rows[0].account_id).first()
+            balance = None if account is None else account.balance
+        return Response({"results": results, "balance": balance})
+
+    def _targets(self, data):
+        """The fulfillments this call may attempt, oldest line first."""
+        rows = IntegrationFulfillment.objects.select_related("account")
+        fulfillment_id = data.get("fulfillment")
+        order_id = data.get("order")
+        if fulfillment_id:
+            rows = rows.filter(pk=fulfillment_id)
+        elif order_id:
+            rows = rows.filter(order_line__order_id=order_id)
+        else:
+            return [], "name an order or a fulfillment"
+        # Only what may still be attempted. Anything else is not an error —
+        # a till that re-sends a completed sale should get "nothing to do".
+        rows = rows.filter(status=IntegrationFulfillment.Status.PENDING)
+        return list(rows.order_by("pk")), ""

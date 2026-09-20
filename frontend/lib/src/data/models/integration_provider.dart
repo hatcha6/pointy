@@ -77,6 +77,8 @@ abstract final class IntegrationErrorCode {
   static const unauthorized = 'unauthorized';
   static const notFound = 'not_found';
   static const providerError = 'provider_error';
+  static const insufficientFloat = 'insufficient_float';
+  static const indeterminate = 'indeterminate';
   static const unexpected = 'unexpected_response';
 }
 

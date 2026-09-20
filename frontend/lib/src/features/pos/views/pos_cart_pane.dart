@@ -7,6 +7,7 @@ import '../../../shared/barcode/scan_burst_guard.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/integration_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
@@ -18,6 +19,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../settings/views/integration_presentation.dart';
 import '../view_models/pos_view_model.dart';
 import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
@@ -269,6 +271,15 @@ class PosCartPane extends StatelessWidget {
           SnackBar(content: Text(l10n.saleCheckoutSessionExpired)),
         );
       return;
+    }
+
+    // The provider has already been paid (or refused) by now. Anything other
+    // than a clean charge is told to the cashier in a dialog rather than a
+    // snackbar: one of these states means money may have moved and nobody
+    // knows, which is not something to let scroll past.
+    if (outcome.isSuccess && outcome.recharges.any((row) => !row.isCharged)) {
+      await _showRechargeOutcomeDialog(context, outcome.recharges);
+      if (!context.mounted) return;
     }
 
     final receiptNumber = outcome.order?.receiptNumber;
@@ -1275,4 +1286,79 @@ class _CheckoutFooter extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What the provider did about each recharge, when it was not simply "done".
+///
+/// The three outcomes need three different reactions and the dialog says so
+/// outright, because the wrong reaction to the third one spends the shop's
+/// money twice:
+///
+/// * refused for want of float — top up, then retry the line;
+/// * refused for any other reason — the float is untouched, retry is safe;
+/// * **unknown** — the request left and never answered. Do not retry. Check
+///   the card with the provider; reconciliation will settle it against their
+///   own purchase log.
+Future<void> _showRechargeOutcomeDialog(
+  BuildContext context,
+  List<IntegrationChargeResult> rows,
+) {
+  final l10n = AppLocalizations.of(context)!;
+  final colors = context.pointyColors;
+  final unresolved = rows.where((row) => row.needsAttention).toList();
+  final failed = rows.where((row) => row.isRefused).toList();
+
+  return showDialog<void>(
+    context: context,
+    // The unknown case is not dismissable by tapping away: it is the one
+    // state where doing nothing about it is a real risk.
+    barrierDismissible: unresolved.isEmpty,
+    builder: (dialogContext) => AlertDialog(
+      icon: Icon(
+        unresolved.isEmpty
+            ? Icons.error_outline
+            : Icons.help_outline,
+        color: unresolved.isEmpty ? colors.danger : colors.warning,
+      ),
+      title: Text(
+        unresolved.isEmpty
+            ? l10n.rechargeRefusedTitle
+            : l10n.rechargeUnknownTitle,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (unresolved.isNotEmpty) ...[
+            Text(l10n.rechargeUnknownBody),
+            const SizedBox(height: 12),
+          ],
+          for (final row in [...unresolved, ...failed])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${row.subscriberRef} · ${row.optionLabel}',
+                    style: Theme.of(dialogContext).textTheme.titleSmall,
+                  ),
+                  Text(
+                    integrationErrorText(row.errorCode, l10n),
+                    style: Theme.of(dialogContext).textTheme.bodySmall
+                        ?.copyWith(color: colors.mutedInk),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: Text(l10n.closeButton),
+        ),
+      ],
+    ),
+  );
 }

@@ -179,6 +179,27 @@ class IntegrationsApiClient {
     );
   }
 
+  /// Perform the recharges a sale has already sold. Spends the agency float.
+  ///
+  /// Safe to call more than once for the same order: the server allows each
+  /// line one attempt ever, so a repeat finds nothing claimable and comes back
+  /// with an empty list rather than charging again.
+  Future<List<IntegrationChargeResult>> charge({
+    int? orderId,
+    int? fulfillmentId,
+  }) async {
+    final response = await _session.post(
+      'integrations/fulfillments/charge/',
+      body: {'order': ?orderId, 'fulfillment': ?fulfillmentId},
+    );
+    _session.throwApiException(response, 'Performing the recharge failed with status');
+    final decoded = _session.decodedBody(response) as Map<String, Object?>;
+    return (decoded['results'] as List<Object?>? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .map(IntegrationChargeResult.fromJson)
+        .toList(growable: false);
+  }
+
   /// Name the person behind a card — the half the provider will not tell us.
   Future<IntegrationSubscriber> identifySubscriber(
     String providerKey,

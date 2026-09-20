@@ -68,6 +68,12 @@ String integrationErrorText(String code, AppLocalizations l10n) {
     IntegrationErrorCode.unauthorized => l10n.integrationErrorUnauthorized,
     IntegrationErrorCode.notFound => l10n.integrationErrorNotFound,
     IntegrationErrorCode.providerError => l10n.integrationErrorProviderError,
+    // Its own message because it is the one failure a shop can fix itself,
+    // and the fix is a different screen from "try again".
+    IntegrationErrorCode.insufficientFloat =>
+      l10n.integrationErrorInsufficientFloat,
+    // Not a failure at all: a write went out and nobody knows what it did.
+    IntegrationErrorCode.indeterminate => l10n.integrationErrorIndeterminate,
     _ => l10n.integrationErrorUnexpected,
   };
 }

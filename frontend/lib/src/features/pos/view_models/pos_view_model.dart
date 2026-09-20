@@ -33,6 +33,7 @@ import '../../../data/models/shop_settings.dart';
 import '../../../data/models/stock_batch.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../data/models/tracked_scan.dart';
+import '../../../data/repositories/integrations_repository.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/register_session_repository.dart';
@@ -179,6 +180,7 @@ class PosViewModel extends ChangeNotifier {
     this._shopSettingsRepository,
     this._printingRepository, {
     TrackedStockRepository? trackedStockRepository,
+    IntegrationsRepository? integrationsRepository,
     AnalyticsEngine? analyticsEngine,
     ScopedJsonStorage sessionStorage = const SharedPreferencesScopedJsonStorage(
       'pointy.pos.sessions.v1',
@@ -187,6 +189,7 @@ class PosViewModel extends ChangeNotifier {
     Duration checkoutPrintDeadline = const Duration(seconds: 20),
     this.cartQuantityIdleTimeout = const Duration(milliseconds: 700),
   }) : _trackedStockRepository = trackedStockRepository,
+       _integrationsRepository = integrationsRepository,
        _analyticsEngine = analyticsEngine,
        _sessionStorage = sessionStorage,
        _scanFeedback = scanFeedback,
@@ -218,6 +221,10 @@ class PosViewModel extends ChangeNotifier {
   /// keeps working untouched; a null repository simply means a scan that misses
   /// the catalog stays a miss, which is exactly what it was before.
   final TrackedStockRepository? _trackedStockRepository;
+
+  /// Performs a sale's recharges the moment it is rung up. Null in a shop
+  /// with no provider configured, and on the preview harnesses.
+  final IntegrationsRepository? _integrationsRepository;
 
   /// Exposed so the panes can open a picker. Null in a shop that has no
   /// identified stock, which is what hides every one of those surfaces.

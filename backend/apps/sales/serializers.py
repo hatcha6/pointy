@@ -346,11 +346,23 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "package_name": fulfillment.package_name,
             "cost": fulfillment.cost,
             "status": fulfillment.status,
-            # Present once reconciliation has found this sale in the
-            # provider's own log — the proof the customer actually got it.
+            # Present once the provider has confirmed it — either in its reply
+            # or, later, in its own purchase log. The proof the customer got it.
             "provider_reference": fulfillment.provider_reference,
             "confirmed_at": fulfillment.confirmed_at,
             "provider_receipt": fulfillment.provider_receipt,
+            # The provider's own printed slip, already reduced to the fields
+            # worth reprinting beside Pointy's invoice.
+            "receipt": (fulfillment.provider_receipt or {}).get("printed") or {},
+            # Why the last attempt did not land, as a code the client can act
+            # on — "top up the float" is a different screen from "try again".
+            "error_code": fulfillment.last_error_code,
+            "attempt_count": fulfillment.attempt_count,
+            # A write went out and we never learned what it did. Nothing may
+            # retry it; somebody has to look at the card.
+            "needs_attention": (
+                fulfillment.status == fulfillment.Status.SUBMITTED
+            ),
         }
 
     class Meta:

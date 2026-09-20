@@ -19069,7 +19069,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get rechargePendingNote =>
-      'يُسجَّل البيع في الفاتورة الآن. تنفيذ الشحن لدى المزوّد خطوة منفصلة لم تُفعَّل بعد.';
+      'يُسجَّل البيع ثم يُنفَّذ الشحن لدى المزوّد مباشرة، وتظهر النتيجة بعد إتمام الدفع.';
 
   @override
   String get rechargeCostLabel => 'تكلفة على المتجر';
@@ -19302,6 +19302,56 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get integrationTopUpAction => 'شحن رصيد';
+
+  @override
+  String get integrationErrorInsufficientFloat =>
+      'رصيد الوكالة لا يكفي. اشحن الرصيد ثم أعد المحاولة.';
+
+  @override
+  String get integrationErrorIndeterminate =>
+      'أُرسل الطلب ولم تصلنا نتيجته. لا تُعد المحاولة — تحقّق من البطاقة لدى المزوّد أولاً.';
+
+  @override
+  String get rechargeChargedTitle => 'تم الشحن لدى المزوّد';
+
+  @override
+  String get rechargeRefusedTitle => 'لم يُنفَّذ الشحن';
+
+  @override
+  String get rechargeUnknownTitle => 'نتيجة الشحن غير معروفة';
+
+  @override
+  String get rechargeUnknownBody =>
+      'أُرسل طلب الشحن ولم تصلنا نتيجته، وقد يكون نُفِّذ فعلاً. لا تُعد الإرسال: تحقّق من البطاقة لدى المزوّد، وستتم المطابقة تلقائياً مع سجل المزوّد.';
+
+  @override
+  String get rechargeRetryAction => 'إعادة المحاولة';
+
+  @override
+  String get rechargeTopUpAction => 'شحن رصيد الوكالة';
+
+  @override
+  String get rechargeNeedsAttentionBadge => 'بحاجة إلى مراجعة';
+
+  @override
+  String get rechargeProviderReceiptTitle => 'إيصال المزوّد';
+
+  @override
+  String get rechargeReceiptCard => 'البطاقة';
+
+  @override
+  String get rechargeReceiptMonths => 'المدة (شهر)';
+
+  @override
+  String get rechargeReceiptFrom => 'من';
+
+  @override
+  String get rechargeReceiptTo => 'إلى';
+
+  @override
+  String rechargeAttemptCount(int count) {
+    return 'عدد المحاولات: $count';
+  }
 
   @override
   String integrationTopUpActionFor(String provider) {

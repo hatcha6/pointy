@@ -11,6 +11,7 @@ from .views import (
     IntegrationAccountView,
     IntegrationCardView,
     IntegrationCatalogView,
+    IntegrationChargeView,
     IntegrationFloatView,
     IntegrationHistoryView,
     IntegrationLookupView,
@@ -21,6 +22,12 @@ from .views import (
 
 urlpatterns = [
     path("", IntegrationCatalogView.as_view(), name="integrations-catalog"),
+    # Two segments, so it can never be mistaken for a provider key.
+    path(
+        "fulfillments/charge/",
+        IntegrationChargeView.as_view(),
+        name="integrations-charge",
+    ),
     path("<str:provider>/", IntegrationAccountView.as_view(), name="integrations-account"),
     path("<str:provider>/probe/", IntegrationProbeView.as_view(), name="integrations-probe"),
     path(

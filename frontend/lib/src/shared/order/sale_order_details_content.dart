@@ -9,6 +9,7 @@ import '../../data/models/sale_order.dart';
 import '../../data/services/order_document_service.dart';
 import '../components/components.dart';
 import '../design/design.dart';
+import '../../features/settings/views/integration_presentation.dart';
 import '../formatters.dart';
 import '../order_totals.dart';
 import 'pointy_quantity_stepper.dart'
@@ -894,6 +895,14 @@ class _RechargeDetails extends StatelessWidget {
         colors.mutedInk,
         Icons.block_outlined,
       ),
+      // Sent, never answered. Deliberately not shown as "pending": a pending
+      // row is one nothing has happened to yet, and this one may have taken
+      // the shop's money. Nobody may retry it from here.
+      'submitted' => (
+        l10n.rechargeNeedsAttentionBadge,
+        colors.warning,
+        Icons.help_outline,
+      ),
       _ => (
         l10n.invoiceRechargePending,
         colors.warning,
@@ -910,6 +919,21 @@ class _RechargeDetails extends StatelessWidget {
         l10n.invoiceRechargeReference(ltrIsolated(recharge.providerReference)),
       if (showCost && recharge.cost != null)
         l10n.invoiceRechargeCost(formatMoney(recharge.cost!)),
+      // Only worth saying when it is not the expected one: more than a single
+      // attempt means reconciliation proved an earlier one never happened.
+      if (recharge.attemptCount > 1)
+        l10n.rechargeAttemptCount(recharge.attemptCount),
+    ];
+
+    // The provider's own slip. Shown beside our invoice rather than instead
+    // of it: HD Box ships this template with its total commented out, so the
+    // money on the page is always Pointy's to state.
+    final receipt = recharge.receipt;
+    final receiptFacts = <String>[
+      if ((receipt['start_date'] ?? '').isNotEmpty)
+        '${l10n.rechargeReceiptFrom} ${ltrIsolated(receipt['start_date']!)}',
+      if ((receipt['end_date'] ?? '').isNotEmpty)
+        '${l10n.rechargeReceiptTo} ${ltrIsolated(receipt['end_date']!)}',
     ];
 
     return Padding(
@@ -931,6 +955,25 @@ class _RechargeDetails extends StatelessWidget {
             facts.join(' • '),
             style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
           ),
+          if (recharge.needsAttention)
+            Text(
+              l10n.integrationErrorIndeterminate,
+              style: theme.textTheme.bodySmall?.copyWith(color: colors.warning),
+            )
+          else if (recharge.errorCode.isNotEmpty && !recharge.isConfirmed)
+            Text(
+              integrationErrorText(recharge.errorCode, l10n),
+              style: theme.textTheme.bodySmall?.copyWith(color: colors.danger),
+            ),
+          if (receiptFacts.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              '${l10n.rechargeProviderReceiptTitle}: ${receiptFacts.join(' • ')}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.mutedInk,
+              ),
+            ),
+          ],
         ],
       ),
     );

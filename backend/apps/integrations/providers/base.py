@@ -15,7 +15,7 @@ Error codes are contract; the Arabic wording lives in the Flutter layer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
@@ -27,6 +27,11 @@ ERROR_UNAUTHORIZED = "unauthorized"          # credentials rejected
 ERROR_NOT_FOUND = "not_found"                # no such card/line
 ERROR_PROVIDER_ERROR = "provider_error"      # provider said no, with a message
 ERROR_UNEXPECTED = "unexpected_response"     # we did not recognise the reply
+ERROR_INSUFFICIENT_FLOAT = "insufficient_float"  # the agency float cannot cover it
+#: We sent a write and do not know whether it happened. Never an ordinary
+#: failure: a charge may have left the float, so the only safe reaction is to
+#: stop and go looking, never to try again.
+ERROR_INDETERMINATE = "indeterminate"
 
 
 @dataclass(frozen=True)
@@ -169,6 +174,31 @@ class OfferResult:
     error_detail: str = ""
 
 
+@dataclass(frozen=True)
+class RechargeResult:
+    """What a write did — including "we cannot say", which is not a failure.
+
+    A provider that is not idempotent has three outcomes, not two. ``ok`` means
+    the provider confirmed it; a plain failure means it definitely refused and
+    the float is untouched; ``indeterminate`` means the answer never arrived,
+    the money may or may not have moved, and **nothing may be retried** until
+    the provider's own log has been read. Collapsing that third case into
+    either of the others is how a shop gets charged twice.
+    """
+
+    ok: bool
+    indeterminate: bool = False
+    reference: str = ""                 # the provider's id for the purchase
+    balance_after: Decimal | None = None
+    receipt: dict = field(default_factory=dict)
+    error_code: str = ""
+    error_detail: str = ""
+
+    @property
+    def is_definite_failure(self) -> bool:
+        return not self.ok and not self.indeterminate
+
+
 class IntegrationProvider:
     """One instance per configured account."""
 
@@ -200,6 +230,19 @@ class IntegrationProvider:
     def subscriber_profile(self, card_no: str):
         """Everything the provider knows about this subscriber. Never raises."""
         return ProfileResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+        """Actually buy the top-up. Spends real money. Must never raise.
+
+        Callers must go through :mod:`apps.integrations.recharge`, never here
+        directly: this method has no at-most-once guard of its own and a
+        second call is a second real charge.
+
+        ``expected_cost`` is what the till quoted and the customer paid. A
+        provider whose live price has moved since the quote must refuse rather
+        than silently spend a different amount of the shop's money.
+        """
+        return RechargeResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
 
 class PlannedProvider(IntegrationProvider):

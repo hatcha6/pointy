@@ -158,18 +158,20 @@ void main() {
   });
 
   group('the screen', () {
-    testWidgets('always says the top-up has not been performed yet', (
+    testWidgets('always says when the top-up will actually be performed', (
       tester,
     ) async {
-      // A cashier who believes the subscription is already live will tell the
-      // customer so, and the customer will go home to a dead box.
+      // A cashier who is wrong about this tells the customer something wrong:
+      // before the write path existed the danger was believing a dead box was
+      // live, and now it is not knowing the result is still to come. Either
+      // way the screen has to say it every time, not once in a tooltip.
       final viewModel = _viewModel(_FakeRepo());
       await tester.pumpWidget(_harness(viewModel));
       await viewModel.lookup('12345');
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('تنفيذ الشحن لدى المزوّد خطوة منفصلة'),
+        find.textContaining('يُنفَّذ الشحن لدى المزوّد مباشرة'),
         findsOneWidget,
       );
     });

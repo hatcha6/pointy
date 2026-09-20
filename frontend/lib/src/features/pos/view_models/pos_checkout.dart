@@ -118,6 +118,30 @@ extension PosCheckoutActions on PosViewModel {
     return _discountPreview?.lossLines ?? const [];
   }
 
+  /// Perform the recharges this sale just sold, if it sold any.
+  ///
+  /// Never throws and never blocks the sale from being reported as complete:
+  /// a top-up that could not be performed is a line to chase, not a sale to
+  /// undo. Calling it twice cannot double-charge — the server allows each
+  /// line one attempt, ever.
+  Future<List<IntegrationChargeResult>> _performSoldRecharges(
+    SaleOrder order,
+  ) async {
+    final repository = _integrationsRepository;
+    if (repository == null) return const [];
+    final hasRecharge = order.lines.any((line) => line.integration != null);
+    if (!hasRecharge) return const [];
+
+    final result = await repository.charge(orderId: order.id);
+    return switch (result) {
+      Ok<List<IntegrationChargeResult>>(value: final rows) => rows,
+      // The sale stands. Nothing was necessarily charged and nothing may be
+      // retried blindly; reconciliation and the notification feed take it
+      // from here.
+      Error<List<IntegrationChargeResult>>() => const [],
+    };
+  }
+
   Future<SaleCheckoutOutcome> checkoutCurrentSale({
     required List<SaleCheckoutPaymentDraft> payments,
     SaleType saleType = SaleType.standard,
@@ -335,7 +359,17 @@ extension PosCheckoutActions on PosViewModel {
               ) ??
               Future<void>.value(),
         );
-        return SaleCheckoutOutcome.success(result.value, printStatus);
+        // The float is spent here, not during the sale: the guard that makes
+        // a charge at-most-once needs its claim committed before the provider
+        // is called, so it cannot live inside the checkout transaction. The
+        // sale is therefore always recorded, even when the provider refuses —
+        // which is the right way round, because the customer has paid.
+        final recharges = await _performSoldRecharges(result.value);
+        return SaleCheckoutOutcome.success(
+          result.value,
+          printStatus,
+          recharges: recharges,
+        );
       case Error<SaleOrder>(:final exception):
         _isCheckingOut = false;
         _notifyChanged();
@@ -776,17 +810,20 @@ class SaleCheckoutOutcome {
     this.shortages = const [],
     this.lossLines = const [],
     this.creditLimit,
+    this.recharges = const [],
   });
 
   const SaleCheckoutOutcome.success(
     SaleOrder order,
-    InvoicePrintStatus printStatus,
-  ) : this._(
+    InvoicePrintStatus printStatus, {
+    List<IntegrationChargeResult> recharges = const [],
+  }) : this._(
         isSuccess: true,
         isStockRejected: false,
         isLossRejected: false,
         order: order,
         printStatus: printStatus,
+        recharges: recharges,
       );
 
   const SaleCheckoutOutcome.failure()
@@ -836,6 +873,21 @@ class SaleCheckoutOutcome {
 
   /// Set when the آجل sale was refused for breaching the customer's ceiling.
   final SaleCheckoutCreditLimitException? creditLimit;
+
+  /// What the provider did about each recharge this sale sold. Empty when the
+  /// sale sold none — or when the call itself failed, which is not the same
+  /// as nothing having been charged.
+  final List<IntegrationChargeResult> recharges;
+
+  /// Sent, and never answered. Nothing may retry these: somebody has to look
+  /// at the card before anything else happens to them.
+  List<IntegrationChargeResult> get rechargesNeedingAttention =>
+      recharges.where((row) => row.needsAttention).toList(growable: false);
+
+  /// Definitely refused, so the float is untouched and this can be tried
+  /// again once whatever the provider objected to is fixed.
+  List<IntegrationChargeResult> get rechargesRefused =>
+      recharges.where((row) => row.isRefused).toList(growable: false);
 
   bool get isCreditLimitRejected => creditLimit != null;
 }
