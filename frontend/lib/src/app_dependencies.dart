@@ -13,6 +13,7 @@ import 'data/repositories/ai_chat_repository.dart';
 import 'data/repositories/analytics_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/crm_repository.dart';
+import 'data/repositories/integrations_repository.dart';
 import 'data/repositories/messaging_repository.dart';
 import 'data/repositories/business_alert_repository.dart';
 import 'data/repositories/attendance_repository.dart';
@@ -181,6 +182,7 @@ class PointyAppDependencies {
     fxRepository = FxRepository(service);
     dashboardFxViewModel = DashboardFxViewModel(fxRepository);
     messagingRepository = MessagingRepository(service);
+    integrationsRepository = IntegrationsRepository(service);
     crmRepository = CrmRepository(service);
     userRepository = UserRepository(service);
     connectionStatus = ConnectionStatusController();
@@ -407,6 +409,7 @@ class PointyAppDependencies {
   late final SubscriptionRepository subscriptionRepository;
   late final FxRepository fxRepository;
   late final MessagingRepository messagingRepository;
+  late final IntegrationsRepository integrationsRepository;
   late final CrmRepository crmRepository;
   late final UserRepository userRepository;
   late final ConnectionCoordinator connectionCoordinator;

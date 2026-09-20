@@ -172,6 +172,12 @@ flutter:
     # Arabic name when one is absent, so a build carrying none still
     # renders. See assets/banks/README.md for the naming contract.
     - assets/banks/
+    # Resale-provider brand marks, keyed by the backend's provider key
+    # (hdbox.png, lnet.png, qareeb.png). Every file is OPTIONAL: the
+    # IntegrationProviderLogo widget falls back to a themed icon when one is
+    # absent, so a build carrying none still renders. See
+    # assets/integrations/README.md for the naming contract.
+    - assets/integrations/
     # Barcode scan feedback chimes (see shared/barcode/scan_feedback_sounds.dart).
     - assets/sounds/
 

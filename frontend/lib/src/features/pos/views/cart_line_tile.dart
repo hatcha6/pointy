@@ -63,10 +63,22 @@ class CartLineTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    // A top-up line has to say whose card it is for. The cashier is about to
+    // take money for a number they typed, and the customer's card is the one
+    // thing on this line nobody can check afterwards from the SKU.
+    final recharge = line.integration;
+
     final tile = PointyOrderLineTile(
       title: line.variant.productLabel,
-      subtitle: line.variant.variantLabel,
-      detail: line.variant.sku,
+      subtitle: recharge == null
+          ? line.variant.variantLabel
+          : l10n.rechargeCartLineSubtitle(
+              ltrIsolated(recharge.subscriberRef),
+              recharge.months > 0
+                  ? l10n.rechargeMonths(recharge.months)
+                  : recharge.optionLabel,
+            ),
+      detail: recharge == null ? line.variant.sku : null,
       // Effective unit price reflects the selected unit and any modifier deltas.
       unitPriceLabel: l10n.unitPriceEach(formatMoney(line.unitPrice)),
       totalLabel: formatMoney(line.total),

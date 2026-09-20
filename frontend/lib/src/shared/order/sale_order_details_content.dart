@@ -847,9 +847,92 @@ class _LinesSection extends StatelessWidget {
                     ].join(' • '),
                     trailing: Text(formatMoney(line.total)),
                   ),
+                  // A top-up is the one line on an invoice whose delivery is
+                  // not obvious from the document. This is where a shop looks
+                  // when a customer comes back saying the TV is still off.
+                  if (line.integration != null)
+                    _RechargeDetails(
+                      recharge: line.integration!,
+                      showCost: line.profit != null,
+                    ),
                 ],
               ],
             ),
+    );
+  }
+}
+
+/// What a recharge line actually was, and whether the provider has done it.
+class _RechargeDetails extends StatelessWidget {
+  const _RechargeDetails({required this.recharge, required this.showCost});
+
+  final SaleLineIntegration recharge;
+
+  /// Cost is the shop's business, not the customer's. Gated on the same
+  /// signal the line's profit already uses, so one permission governs both.
+  final bool showCost;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final theme = Theme.of(context);
+
+    final (label, tone, icon) = switch (recharge.status) {
+      'confirmed' => (
+        l10n.invoiceRechargeConfirmed,
+        colors.success,
+        Icons.check_circle_outline,
+      ),
+      'failed' => (
+        l10n.invoiceRechargeFailed,
+        colors.danger,
+        Icons.error_outline,
+      ),
+      'cancelled' => (
+        l10n.invoiceRechargeCancelled,
+        colors.mutedInk,
+        Icons.block_outlined,
+      ),
+      _ => (
+        l10n.invoiceRechargePending,
+        colors.warning,
+        Icons.schedule_outlined,
+      ),
+    };
+
+    final facts = <String>[
+      l10n.invoiceRechargeCard(ltrIsolated(recharge.subscriberRef)),
+      if (recharge.subscriberLabel.isNotEmpty)
+        l10n.invoiceRechargeFor(recharge.subscriberLabel),
+      if (recharge.optionLabel.isNotEmpty) recharge.optionLabel,
+      if (recharge.providerReference.isNotEmpty)
+        l10n.invoiceRechargeReference(ltrIsolated(recharge.providerReference)),
+      if (showCost && recharge.cost != null)
+        l10n.invoiceRechargeCost(formatMoney(recharge.cost!)),
+    ];
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 40, top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: tone),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(color: tone),
+              ),
+            ],
+          ),
+          Text(
+            facts.join(' • '),
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+        ],
+      ),
     );
   }
 }

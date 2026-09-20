@@ -1,6 +1,63 @@
 import 'modifier_group.dart';
 import 'product_variant.dart';
 
+/// The top-up a cart line is selling, when the line is a resale recharge.
+///
+/// The line still points at an ordinary service variant — that is what keeps
+/// the cart, discounts, receipts and returns working unchanged — and this
+/// rides alongside it carrying the part the catalog cannot know: whose card,
+/// which package, and what the provider will charge the shop's float for it.
+class CartLineIntegration {
+  const CartLineIntegration({
+    required this.provider,
+    required this.subscriberRef,
+    required this.optionCode,
+    required this.optionLabel,
+    required this.cost,
+    this.months = 0,
+    this.packageId = '',
+    this.packageName = '',
+  });
+
+  final String provider;
+
+  /// The subscriber's card/line number at the provider.
+  final String subscriberRef;
+  final String optionCode;
+  final String optionLabel;
+
+  /// What the provider draws from the float, in LYD. Distinct from the line's
+  /// selling price, which is the shop's own.
+  final double cost;
+  final int months;
+  final String packageId;
+  final String packageName;
+
+  Map<String, Object?> toJson() => {
+    'provider': provider,
+    'subscriber_ref': subscriberRef,
+    'option_code': optionCode,
+    'option_label': optionLabel,
+    'cost': cost,
+    'months': months,
+    'package_id': packageId,
+    'package_name': packageName,
+  };
+
+  factory CartLineIntegration.fromJson(Map<String, Object?> json) {
+    return CartLineIntegration(
+      provider: json['provider']?.toString() ?? '',
+      subscriberRef: json['subscriber_ref']?.toString() ?? '',
+      optionCode: json['option_code']?.toString() ?? '',
+      optionLabel: json['option_label']?.toString() ?? '',
+      cost: _doubleFromJson(json['cost']),
+      months: _intOrNull(json['months']) ?? 0,
+      packageId: json['package_id']?.toString() ?? '',
+      packageName: json['package_name']?.toString() ?? '',
+    );
+  }
+}
+
 class CartLine {
   const CartLine({
     required this.variant,
@@ -16,6 +73,7 @@ class CartLine {
     this.stockBatchId,
     this.stockBatchCode = '',
     this.stockBatchExpiry,
+    this.integration,
     this.lineKey = '',
   });
 
@@ -37,6 +95,7 @@ class CartLine {
     int? stockBatchId,
     String stockBatchCode = '',
     DateTime? stockBatchExpiry,
+    CartLineIntegration? integration,
   }) {
     _sequence += 1;
     return CartLine(
@@ -53,6 +112,7 @@ class CartLine {
       stockBatchId: stockBatchId,
       stockBatchCode: stockBatchCode,
       stockBatchExpiry: stockBatchExpiry,
+      integration: integration,
       lineKey: 'cart-$_sequence',
     );
   }
@@ -102,6 +162,10 @@ class CartLine {
   final String stockBatchCode;
   final DateTime? stockBatchExpiry;
 
+  /// The top-up this line sells, when it is a resale recharge rather than
+  /// something off the shelf.
+  final CartLineIntegration? integration;
+
   /// Stable identity for this line within the cart, independent of the variant.
   final String lineKey;
 
@@ -109,6 +173,9 @@ class CartLine {
 
   /// Does this line name one specific article of stock?
   bool get isSerialized => stockUnitId != null;
+
+  /// Is this line a top-up bought from an outside provider?
+  bool get isIntegrationRecharge => integration != null;
 
   /// Has a lot been pinned to this line rather than left to FEFO?
   bool get hasPinnedBatch => stockBatchId != null;
@@ -118,7 +185,10 @@ class CartLine {
   /// One article is one article. The `+`/`−` hotkeys and the quantity sheet are
   /// both suppressed for these lines — a serialized line whose quantity said 2
   /// would be a claim to hold two handsets with the same IMEI.
-  bool get allowsQuantityEdit => !isSerialized;
+  /// A recharge is one top-up of one card. Quantity two would mean two
+  /// separate purchases from the provider, each with its own cost and its own
+  /// confirmation — so it is a second line, never a bigger number on the first.
+  bool get allowsQuantityEdit => !isSerialized && !isIntegrationRecharge;
 
   /// Quantity converted to the product's base unit (for stock-style display).
   double get baseQuantity => quantity * unitFactor;
@@ -156,6 +226,7 @@ class CartLine {
     Object? stockBatchId = _noChange,
     String? stockBatchCode,
     Object? stockBatchExpiry = _noChange,
+    Object? integration = _noChange,
     String? lineKey,
   }) {
     return CartLine(
@@ -180,6 +251,9 @@ class CartLine {
       stockBatchExpiry: identical(stockBatchExpiry, _noChange)
           ? this.stockBatchExpiry
           : stockBatchExpiry as DateTime?,
+      integration: identical(integration, _noChange)
+          ? this.integration
+          : integration as CartLineIntegration?,
       lineKey: lineKey ?? this.lineKey,
     );
   }
@@ -201,6 +275,7 @@ class CartLine {
       'stock_batch_id': stockBatchId,
       'stock_batch_code': stockBatchCode,
       'stock_batch_expiry': stockBatchExpiry?.toIso8601String(),
+      'integration': integration?.toJson(),
       'line_key': lineKey,
     };
   }
@@ -240,6 +315,11 @@ class CartLine {
       stockBatchExpiry: DateTime.tryParse(
         json['stock_batch_expiry']?.toString() ?? '',
       ),
+      integration: json['integration'] is Map<String, Object?>
+          ? CartLineIntegration.fromJson(
+              json['integration'] as Map<String, Object?>,
+            )
+          : null,
       lineKey: lineKey,
     );
   }

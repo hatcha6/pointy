@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/integration_provider.dart';
+import '../../../data/repositories/integrations_repository.dart';
+import '../view_models/integration_recharge_view_model.dart';
+import 'integration_recharge_screen.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/repositories/catalog_repository.dart';
@@ -44,6 +48,7 @@ class PosScreen extends StatelessWidget {
     required this.shopSettingsRepository,
     required this.catalogRepository,
     required this.purchaseRepository,
+    required this.integrationsRepository,
     required this.capabilities,
     required this.navigation,
   });
@@ -54,6 +59,7 @@ class PosScreen extends StatelessWidget {
   final ShopSettingsRepository shopSettingsRepository;
   final CatalogRepository catalogRepository;
   final PurchaseRepository purchaseRepository;
+  final IntegrationsRepository integrationsRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -119,6 +125,7 @@ class PosScreen extends StatelessWidget {
                 ? _PosWorkspace(
                     viewModel: viewModel,
                     contactRepository: contactRepository,
+                    integrationsRepository: integrationsRepository,
                     capabilities: capabilities,
                   )
                 : RegisterSessionGate(
@@ -518,11 +525,13 @@ class _PosWorkspace extends StatefulWidget {
   const _PosWorkspace({
     required this.viewModel,
     required this.contactRepository,
+    required this.integrationsRepository,
     required this.capabilities,
   });
 
   final PosViewModel viewModel;
   final ContactRepository contactRepository;
+  final IntegrationsRepository integrationsRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -530,6 +539,32 @@ class _PosWorkspace extends StatefulWidget {
 }
 
 class _PosWorkspaceState extends State<_PosWorkspace> {
+  /// Show the top-up button only when this shop actually resells something
+  /// and this cashier is allowed to. Both halves matter: the permission is on
+  /// by default for cashiers, so the shop's own configuration is what keeps
+  /// the button out of a grocer's till.
+  List<String> get _rechargeProviders => widget.capabilities.canUseIntegrations
+      ? widget.viewModel.connectedIntegrations
+      : const [];
+
+  Future<void> _openRecharge(String providerKey) async {
+    final draft = await showIntegrationRecharge(
+      context: context,
+      viewModel: IntegrationRechargeViewModel(
+        repository: widget.integrationsRepository,
+        provider: integrationProviderKeyFromJson(providerKey),
+      ),
+    );
+    if (draft == null || !mounted) {
+      return;
+    }
+    widget.viewModel.addIntegrationRecharge(draft);
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.maybeOf(context)
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(l10n.rechargeAddedToCart)));
+  }
+
   // The cart pane publishes its checkout closure here so Ctrl/Cmd+Enter runs the
   // same flow as the footer button, even while the catalog search has focus.
   final PosCheckoutController _checkoutController = PosCheckoutController();
@@ -673,6 +708,8 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
                 primaryPane: PosCatalogPane(
                   viewModel: viewModel,
                   capabilities: capabilities,
+                  rechargeProviders: _rechargeProviders,
+                  onRecharge: _openRecharge,
                 ),
                 secondaryPane: PosCartPane(
                   viewModel: viewModel,
@@ -687,6 +724,8 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
               viewModel: viewModel,
               contactRepository: widget.contactRepository,
               capabilities: capabilities,
+              rechargeProviders: _rechargeProviders,
+              onRecharge: _openRecharge,
             );
           },
         ),
@@ -700,11 +739,15 @@ class _CompactPosWorkspace extends StatelessWidget {
     required this.viewModel,
     required this.contactRepository,
     required this.capabilities,
+    this.rechargeProviders = const [],
+    this.onRecharge,
   });
 
   final PosViewModel viewModel;
   final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
+  final List<String> rechargeProviders;
+  final void Function(String providerKey)? onRecharge;
 
   @override
   Widget build(BuildContext context) {
@@ -716,6 +759,8 @@ class _CompactPosWorkspace extends StatelessWidget {
           child: PosCatalogPane(
             viewModel: viewModel,
             capabilities: capabilities,
+            rechargeProviders: rechargeProviders,
+            onRecharge: onRecharge,
           ),
         ),
         PointyCompactOrderLauncher(

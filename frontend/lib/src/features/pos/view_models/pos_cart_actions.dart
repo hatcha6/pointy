@@ -142,7 +142,10 @@ extension PosCartActions on PosViewModel {
               // handset, so a second handset of the same model is a second
               // line — never a quantity of two, which would be a claim to hold
               // two devices with the same IMEI.
-              !line.isSerialized,
+              !line.isSerialized &&
+              // Same reasoning for a top-up: each one is its own purchase from
+              // the provider, with its own cost and its own confirmation.
+              !line.isIntegrationRecharge,
         )
         .firstOrNull;
   }
@@ -472,6 +475,52 @@ extension PosCartActions on PosViewModel {
     }
     _touchActiveSaleSession();
     return true;
+  }
+
+  /// Puts a provider top-up in the cart.
+  ///
+  /// The line is an ordinary service-product line — that is what keeps
+  /// discounts, receipts, returns and the profit report working without any of
+  /// them learning what a recharge is — carrying the provider's own details
+  /// alongside. It never merges with anything: each top-up is its own purchase
+  /// from the provider, with its own cost and its own confirmation.
+  ///
+  /// The price shown here is what the server quoted for this shop's markup.
+  /// The server recomputes it at checkout; this is display, not instruction.
+  void addIntegrationRecharge(IntegrationRechargeDraft draft) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final service = draft.serviceVariant;
+    _cart.add(
+      CartLine.create(
+        variant: ProductVariant(
+          id: service.id,
+          productId: service.productId,
+          sku: service.sku,
+          unitPrice: draft.price,
+          productName: service.name,
+          displayName: service.name,
+          fullName: service.name,
+          isService: true,
+          isDefault: true,
+        ),
+        quantity: 1,
+        integration: CartLineIntegration(
+          provider: integrationProviderKeyToJson(draft.provider),
+          subscriberRef: draft.subscriberRef,
+          optionCode: draft.offer.code,
+          optionLabel: draft.offer.label,
+          cost: draft.cost,
+          months: draft.offer.months,
+          packageId: draft.offer.packageId,
+          packageName: draft.offer.packageName,
+        ),
+      ),
+    );
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
   }
 
   /// Switches the unit a cart line is sold in (used from the cart). Changes the

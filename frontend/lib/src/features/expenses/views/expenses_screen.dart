@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../settings/views/integration_action_button.dart';
+import '../../settings/views/integration_float_sheet.dart';
+import '../../settings/view_models/integrations_view_model.dart';
+import '../../../data/models/integration_provider.dart';
 import '../../../core/result.dart';
 import '../../../data/models/expense.dart';
 import '../../../data/models/expense_category.dart';
@@ -31,6 +35,8 @@ class ExpensesScreen extends StatefulWidget {
     required this.categoriesViewModel,
     required this.capabilities,
     required this.navigation,
+    required this.integrationsViewModel,
+    this.integrationProviders = const [],
   });
 
   final ExpensesViewModel viewModel;
@@ -38,11 +44,41 @@ class ExpensesScreen extends StatefulWidget {
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
+  /// Drives the provider-float sheet. Recording a top-up lives here, beside
+  /// the other money-out work, rather than in Shop Settings: the member of
+  /// staff who paid the provider can reach this screen and cannot reach that
+  /// one.
+  final IntegrationsViewModel integrationsViewModel;
+
+  /// Connected providers, by backend key. Empty draws no action.
+  final List<String> integrationProviders;
+
   @override
   State<ExpensesScreen> createState() => _ExpensesScreenState();
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
+  bool get _canTopUp =>
+      widget.capabilities.canRecordIntegrationTopUp &&
+      widget.integrationProviders.isNotEmpty;
+
+  Future<void> _openFloat(String providerKey) async {
+    final saved = await showIntegrationFloatSheet(
+      context: context,
+      providerKey: integrationProviderKeyFromJson(providerKey),
+      viewModel: widget.integrationsViewModel,
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.maybeOf(context)
+        ?..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.integrationTopUpSaved),
+          ),
+        );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +115,27 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       ? null
                       : () => _openEditor(context),
                   icon: const Icon(Icons.add),
+                ),
+              if (_canTopUp)
+                // An app bar lays its actions out stretched, which would
+                // stand a real button on its full height: centre it.
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 4),
+                    child: IntegrationActionButton(
+                      providers: widget.integrationProviders,
+                      onSelected: _openFloat,
+                      enabled: !viewModel.isMutating,
+                      icon: Icons.account_balance_wallet_outlined,
+                      menuLabel: l10n.integrationTopUpAction,
+                      labelFor: l10n.integrationTopUpActionFor,
+                      // Outlined, not filled: recording an expense is
+                      // this screen's own headline action and must stay the
+                      // loudest thing in the bar.
+                      emphasis: IntegrationActionEmphasis.outlined,
+                      buttonKey: const ValueKey('expenses_top_up_button'),
+                    ),
+                  ),
                 ),
               if (canManage)
                 IconButton(

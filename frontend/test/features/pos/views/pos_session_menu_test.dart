@@ -10,6 +10,7 @@ import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
+import 'package:pointy_frontend/src/data/repositories/integrations_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
@@ -150,6 +151,7 @@ Future<void> _pumpPos(WidgetTester tester, PosViewModel viewModel) async {
         shopSettingsRepository: _FakeShopSettingsRepository(),
         catalogRepository: _FakeCatalogRepository(),
         purchaseRepository: _FakePurchaseRepository(),
+        integrationsRepository: IntegrationsRepository(PosApiService()),
         capabilities: _managerCaps,
         navigation: _FakeNavigation(),
       ),

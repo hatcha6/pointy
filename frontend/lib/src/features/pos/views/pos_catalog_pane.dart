@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../settings/views/integration_action_button.dart';
 import '../../../core/result.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
@@ -32,10 +33,19 @@ class PosCatalogPane extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.capabilities,
+    this.rechargeProviders = const [],
+    this.onRecharge,
   });
 
   final PosViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+
+  /// The providers this shop can top up, by backend key. Empty draws no
+  /// button at all — a grocer must not be able to tell this feature shipped.
+  final List<String> rechargeProviders;
+
+  /// Opens the top-up flow for one provider.
+  final void Function(String providerKey)? onRecharge;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +61,12 @@ class PosCatalogPane extends StatelessWidget {
       notice: viewModel.errorMessage != null
           ? PointyInlineMessage.warning(message: l10n.sampleCatalogNotice)
           : null,
+      headerAction: (onRecharge == null || rechargeProviders.isEmpty)
+          ? null
+          : PosRechargeButton(
+              providers: rechargeProviders,
+              onSelected: onRecharge!,
+            ),
       search: _PosProductLookupControls(
         viewModel: viewModel,
         capabilities: capabilities,
@@ -587,6 +603,39 @@ class _BarcodeScanStatusLine extends StatelessWidget {
           visualDensity: VisualDensity.compact,
         ),
       ],
+    );
+  }
+}
+
+/// The till's entry into the resale recharge flow.
+///
+/// Nothing here but the till's wording: the shape of the control — named
+/// button for one provider, menu for several — is
+/// [IntegrationActionButton], shared with the expenses screen so the two
+/// entry points cannot drift apart.
+///
+/// Public so the screenshot harness and widget tests can render the real
+/// button in a real catalog header rather than a stand-in.
+class PosRechargeButton extends StatelessWidget {
+  const PosRechargeButton({
+    super.key,
+    required this.providers,
+    required this.onSelected,
+  });
+
+  final List<String> providers;
+  final void Function(String providerKey) onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return IntegrationActionButton(
+      providers: providers,
+      onSelected: onSelected,
+      icon: Icons.sim_card_outlined,
+      menuLabel: l10n.rechargeCatalogAction,
+      labelFor: l10n.rechargeCatalogActionFor,
+      buttonKey: const ValueKey('pos_recharge_button'),
     );
   }
 }

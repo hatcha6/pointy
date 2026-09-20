@@ -91,6 +91,7 @@ import 'features/inventory/views/stock_batches_screen.dart';
 import 'features/inventory/views/stock_units_screen.dart';
 import 'features/settings/view_models/warehouses_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
+import 'features/settings/view_models/integrations_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
 import 'features/settings/view_models/exchange_rates_view_model.dart';
 import 'features/settings/view_models/subscription_status_view_model.dart';
@@ -321,6 +322,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         shopSettingsRepository: dependencies.shopSettingsRepository,
         catalogRepository: dependencies.catalogRepository,
         purchaseRepository: dependencies.purchaseRepository,
+        integrationsRepository: dependencies.integrationsRepository,
         capabilities: capabilities,
         navigation: this,
       ),
@@ -874,6 +876,10 @@ class _AuthenticatedRoutes implements AppNavigation {
           analyticsEngine: dependencies.analyticsEngine,
         ),
         capabilities: capabilities,
+        integrationsViewModel: IntegrationsViewModel(
+          dependencies.integrationsRepository,
+        ),
+        integrationProviders: dependencies.posViewModel.connectedIntegrations,
         navigation: this,
       ),
     );
@@ -968,6 +974,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         ),
         messagingViewModel: MessagingSettingsViewModel(
           dependencies.messagingRepository,
+        ),
+        integrationsViewModel: IntegrationsViewModel(
+          dependencies.integrationsRepository,
         ),
         clientUpdateService: dependencies.clientUpdateService,
         capabilities: capabilities,

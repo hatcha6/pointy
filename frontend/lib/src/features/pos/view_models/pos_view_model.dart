@@ -9,6 +9,8 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
+import '../../../data/models/integration_card.dart';
+import '../../../data/models/integration_provider.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../shared/barcode/scale_barcode.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';
@@ -293,6 +295,15 @@ class PosViewModel extends ChangeNotifier {
   int _nextSaleSessionId = 2;
   int _nextSaleSessionNumber = 2;
   ShopSettings? _checkoutSettings;
+
+  /// Which resale providers this shop has connected, by backend key.
+  ///
+  /// Empty in a shop that sells nothing of the kind, which is what keeps the
+  /// till's top-up button out of it. One entry draws a named button; more
+  /// than one draws a menu. Read from shop settings the till already loads.
+  List<String> get connectedIntegrations =>
+      _checkoutSettings?.connectedIntegrations ?? const [];
+
   Uint8List? _checkoutShopLogoBytes;
   bool _isLoading = false;
   bool _isLoadingMore = false;

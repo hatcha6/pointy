@@ -98,6 +98,7 @@ class SaleCheckoutDraft {
               unit: line.unitCode,
               stockUnitId: line.stockUnitId,
               stockBatchId: line.stockBatchId,
+              integration: line.integration,
             ),
           )
           .toList(growable: false),
@@ -350,6 +351,7 @@ class SaleCheckoutLineDraft {
     this.unit = '',
     this.stockUnitId,
     this.stockBatchId,
+    this.integration,
   });
 
   final int variantId;
@@ -370,6 +372,11 @@ class SaleCheckoutLineDraft {
   /// picked back on the sale line.
   final int? stockBatchId;
 
+  /// The top-up this line sells, when it is a resale recharge. The backend
+  /// prices it from the shop's markup setting — the quoted cost travels for
+  /// the record, not to be believed as the selling price.
+  final CartLineIntegration? integration;
+
   Map<String, Object?> toJson() {
     final normalizedNotes = notes.trim();
     final normalizedUnit = unit.trim();
@@ -384,6 +391,7 @@ class SaleCheckoutLineDraft {
             .toList(growable: false),
       if (stockUnitId != null) 'stock_units': [stockUnitId],
       if (stockBatchId != null) 'stock_batches': [stockBatchId],
+      if (integration != null) 'integration': integration!.toJson(),
     };
   }
 }
@@ -788,6 +796,7 @@ class SaleOrderLine {
     this.subtotal = 0,
     this.discountTotal = 0,
     this.identifiers = const [],
+    this.integration,
   });
 
   final int id;
@@ -817,6 +826,11 @@ class SaleOrderLine {
   /// one that does not name the lot cannot answer a recall.
   final List<SaleLineIdentifier> identifiers;
 
+  /// The top-up this line sold, when it sold one. Whose card, what was
+  /// bought, and — the part a shop is actually asked about — whether the
+  /// provider has done it yet.
+  final SaleLineIntegration? integration;
+
   factory SaleOrderLine.fromJson(Map<String, Object?> json) {
     return SaleOrderLine(
       id: _intFromJson(json['id']),
@@ -844,6 +858,74 @@ class SaleOrderLine {
               .toList(growable: false),
         _ => const [],
       },
+      integration: switch (json['integration']) {
+        final Map<String, Object?> row => SaleLineIntegration.fromJson(row),
+        _ => null,
+      },
+    );
+  }
+}
+
+/// A provider top-up recorded against a sale line.
+///
+/// [status] is the one that matters on an invoice: Pointy taking the money
+/// and the provider performing the recharge are two events, and until
+/// reconciliation proves the second the document must not imply it happened.
+class SaleLineIntegration {
+  const SaleLineIntegration({
+    required this.provider,
+    required this.subscriberRef,
+    this.subscriberLabel = '',
+    this.customerId,
+    this.optionLabel = '',
+    this.months = 0,
+    this.cost,
+    this.status = 'pending',
+    this.providerReference = '',
+    this.confirmedAt,
+  });
+
+  final String provider;
+
+  /// The subscriber's card/line number at the provider.
+  final String subscriberRef;
+
+  /// Who the shop says owns that card, if anybody has said.
+  final String subscriberLabel;
+  final int? customerId;
+  final String optionLabel;
+  final int months;
+
+  /// What the provider charged the shop's float. Manager-facing.
+  final double? cost;
+
+  /// pending · submitted · confirmed · failed · cancelled
+  final String status;
+
+  /// The provider's own id for the purchase, once reconciliation matched it.
+  final String providerReference;
+  final DateTime? confirmedAt;
+
+  bool get isConfirmed => status == 'confirmed';
+  bool get isPending => status == 'pending';
+  bool get hasFailed => status == 'failed';
+
+  factory SaleLineIntegration.fromJson(Map<String, Object?> json) {
+    return SaleLineIntegration(
+      provider: json['provider']?.toString() ?? '',
+      subscriberRef: json['subscriber_ref']?.toString() ?? '',
+      subscriberLabel: json['subscriber_label']?.toString() ?? '',
+      customerId: json['customer_id'] is int
+          ? json['customer_id'] as int
+          : int.tryParse(json['customer_id']?.toString() ?? ''),
+      optionLabel: json['option_label']?.toString() ?? '',
+      months: int.tryParse(json['months']?.toString() ?? '') ?? 0,
+      cost: _nullableMoneyFromJson(json['cost']),
+      status: json['status']?.toString() ?? 'pending',
+      providerReference: json['provider_reference']?.toString() ?? '',
+      confirmedAt: DateTime.tryParse(
+        json['confirmed_at']?.toString() ?? '',
+      )?.toLocal(),
     );
   }
 }

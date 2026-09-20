@@ -32282,6 +32282,1014 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ومستحق على أصحاب الأمانات: {amount}'**
   String treasuryConsignorReceivable(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'التكاملات'**
+  String get integrationsTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن اشتراكات العملاء من داخل دفتر بدل مواقع المزوّدين'**
+  String get integrationsSubtitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اربط حساب الوكالة لديك، فتصبح عمليات الشحن وأرصدتها وإيصالاتها جزءاً من حسابات المتجر.'**
+  String get integrationsPageIntro;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خدمات متاحة حالياً'**
+  String get integrationsEmpty;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل قائمة الخدمات'**
+  String get integrationsLoadError;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get integrationsRetry;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'HD Box'**
+  String get integrationProviderHdboxName;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتراكات القنوات — تجديد وتفعيل بطاقات المشتركين'**
+  String get integrationProviderHdboxTagline;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'LNET'**
+  String get integrationProviderLnetName;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'باقات الإنترنت — شحن اشتراكات المشتركين'**
+  String get integrationProviderLnetTagline;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'قريب'**
+  String get integrationProviderQareebName;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'كروت الشحن ورصيد الهاتف'**
+  String get integrationProviderQareebTagline;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة غير معروفة'**
+  String get integrationProviderUnknownName;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الخدمة غير مدعومة في هذه النسخة'**
+  String get integrationProviderUnknownTagline;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'متاح'**
+  String get integrationAvailabilityAvailable;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'قريباً'**
+  String get integrationAvailabilityPlanned;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'موقع المزوّد يحجب الاتصال من شبكتنا. ننتظر واجهة برمجية أو إذن وصول.'**
+  String get integrationBlockedPortalUnreachable;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار حساب وكالة وتفاصيل الربط من المزوّد.'**
+  String get integrationBlockedAwaitingAccess;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد الإعداد. الربط مع هذا المزوّد لم يكتمل بعد.'**
+  String get integrationBlockedDriverInProgress;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد'**
+  String get integrationCapabilityBalance;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'استعلام'**
+  String get integrationCapabilityLookup;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن'**
+  String get integrationCapabilityRecharge;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'متصل'**
+  String get integrationStatusConnected;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مُهيّأ'**
+  String get integrationStatusNotConfigured;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل الاتصال'**
+  String get integrationStatusFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'موقوف'**
+  String get integrationStatusDisabled;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد لدى المزوّد'**
+  String get integrationBalanceLabel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معروف'**
+  String get integrationBalanceUnknown;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تحقق: {time}'**
+  String integrationBalanceCheckedAt(String time);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ بالدينار الليبي، حتى لو عرضه موقع المزوّد بعلامة الدولار.'**
+  String get integrationBalanceCurrencyNote;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب: {name}'**
+  String integrationAccountLabel(String name);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم التحقق بعد'**
+  String get integrationNeverChecked;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان الخدمة'**
+  String get integrationFieldBaseUrl;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: http://cas.example.ly:18688'**
+  String get integrationFieldBaseUrlHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get integrationFieldUsername;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get integrationFieldPassword;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'محفوظة. اتركها فارغة للإبقاء عليها.'**
+  String get integrationPasswordStoredHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كلمة المرور'**
+  String get integrationPasswordRequired;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل اسم المستخدم'**
+  String get integrationUsernameRequired;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط الحساب'**
+  String get integrationConnect;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل البيانات'**
+  String get integrationEdit;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get integrationSave;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get integrationCancel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال'**
+  String get integrationTest;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'فصل الحساب'**
+  String get integrationDisconnect;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'فصل الحساب؟'**
+  String get integrationDisconnectConfirmTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم حذف بيانات الدخول المحفوظة لهذه الخدمة. لن يتأثر أي شيء لدى المزوّد.'**
+  String get integrationDisconnectConfirmBody;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'فصل'**
+  String get integrationDisconnectConfirmAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الاتصال بنجاح'**
+  String get integrationProbeSuccess;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الاتصال — الرصيد {amount}'**
+  String integrationProbeSuccessWithBalance(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ البيانات'**
+  String get integrationSaved;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم فصل الحساب'**
+  String get integrationDisconnected;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُدخل بيانات الدخول بعد'**
+  String get integrationErrorNotConfigured;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الخدمة غير متاحة بعد'**
+  String get integrationErrorUnavailable;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى المزوّد. تحقق من العنوان ومن الاتصال بالإنترنت.'**
+  String get integrationErrorUnreachable;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض المزوّد اسم المستخدم أو كلمة المرور'**
+  String get integrationErrorUnauthorized;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُعثر على البطاقة المطلوبة'**
+  String get integrationErrorNotFound;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض المزوّد الطلب'**
+  String get integrationErrorProviderError;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رد المزوّد بشكل غير متوقع'**
+  String get integrationErrorUnexpected;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المزوّد يستخدم اتصالاً غير مشفّر (http)، فتنتقل بيانات الدخول دون تشفير. لا تستخدم كلمة مرور تستعملها في مكان آخر.'**
+  String get integrationInsecureTransportWarning;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن اشتراك'**
+  String get rechargeTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن اشتراك'**
+  String get rechargeCatalogAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم البطاقة'**
+  String get rechargeSearchLabel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل أو امسح رقم البطاقة'**
+  String get rechargeSearchHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث'**
+  String get rechargeSearchAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم بطاقة المشترك للاطّلاع على اشتراكه وأسعار التجديد'**
+  String get rechargeIdlePrompt;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ البحث لدى المزوّد…'**
+  String get rechargeSearching;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الاشتراك نشط'**
+  String get rechargeHealthActive;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'يوشك على الانتهاء'**
+  String get rechargeHealthExpiringSoon;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهي'**
+  String get rechargeHealthExpired;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'موقوف'**
+  String get rechargeHealthLocked;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة غير معروفة'**
+  String get rechargeHealthUnknown;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{يوم واحد متبقٍ} two{يومان متبقيان} few{{count} أيام متبقية} other{{count} يوماً متبقياً}}'**
+  String rechargeDaysRemaining(int count);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{انتهى منذ يوم} two{انتهى منذ يومين} few{انتهى منذ {count} أيام} other{انتهى منذ {count} يوماً}}'**
+  String rechargeDaysExpired(int count);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي في {date}'**
+  String rechargeExpiresOn(String date);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ في {date}'**
+  String rechargeStartedOn(String date);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الباقة'**
+  String get rechargePackageLabel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة المزوّد'**
+  String get rechargeProviderStatus;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة التجديد'**
+  String get rechargeRenewHeading;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أو انتقل إلى باقة أخرى'**
+  String get rechargeSwitchHeading;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{شهر واحد} two{شهران} few{{count} أشهر} other{{count} شهراً}}'**
+  String rechargeMonths(int count);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر قراءة الأسعار من المزوّد. أعد المحاولة.'**
+  String get rechargeOffersUnavailable;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الأسعار مقروءة من المزوّد الآن، وقد تتغيّر بين عملية وأخرى.'**
+  String get rechargePriceLiveNote;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة'**
+  String get rechargeFloatLabel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة {balance} لا يغطّي {cost}. سجّل البيع الآن وارصد الرصيد لاحقاً.'**
+  String rechargeFloatShort(String balance, String cost);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سجلّ البطاقة'**
+  String get rechargeHistoryTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الشحن'**
+  String get rechargeHistoryPurchases;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّرات الحالة'**
+  String get rechargeHistoryStatuses;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'من متجرنا'**
+  String get rechargeHistoryOurs;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'وكيل آخر'**
+  String get rechargeHistoryOther;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سجلّ لهذه البطاقة'**
+  String get rechargeHistoryEmpty;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل السجلّ'**
+  String get rechargeHistoryError;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تلقائي'**
+  String get rechargeHistoryAutomatic;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'صفحة {page} من {count}'**
+  String rechargeHistoryPage(int page, int count);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'السابق'**
+  String get rechargeHistoryPrevious;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'التالي'**
+  String get rechargeHistoryNext;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{from} ← {to}'**
+  String rechargeHistoryStatusChange(String from, String to);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف إلى السلة'**
+  String get rechargeAddToCart;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر مدة أو باقة أولاً'**
+  String get rechargeSelectFirst;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيف الشحن إلى السلة'**
+  String get rechargeAddedToCart;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن {provider}'**
+  String rechargeCartLineTitle(String provider);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة {card} — {option}'**
+  String rechargeCartLineSubtitle(String card, String option);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'يُسجَّل البيع في الفاتورة الآن. تنفيذ الشحن لدى المزوّد خطوة منفصلة لم تُفعَّل بعد.'**
+  String get rechargePendingNote;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة على المتجر'**
+  String get rechargeCostLabel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة أخرى'**
+  String get rechargeChangeCard;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خدمة شحن مُهيّأة. اربط حساباً من إعدادات المتجر ← التكاملات.'**
+  String get rechargeNoProviders;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار البيع'**
+  String get integrationPricesTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد سعر البيع لكل مدة. ما لم تُسعّره يُباع بالتكلفة.'**
+  String get integrationPricesSubtitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُقرأ أي أسعار بعد. ابحث عن بطاقة مرة واحدة من شاشة البيع، ثم عد إلى هنا.'**
+  String get integrationPricesEmpty;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة'**
+  String get integrationPricesCost;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع'**
+  String get integrationPricesSell;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح'**
+  String get integrationPricesMargin;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بالتكلفة'**
+  String get integrationPricesUnset;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من التكلفة — رفع المزوّد سعره'**
+  String get integrationPricesBelowCost;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مزوّد رفع أسعاره: بعض المدد أصبح سعر بيعها أقل من تكلفتها.'**
+  String get integrationPricesBelowCostBanner;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الأسعار'**
+  String get integrationPricesSave;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الأسعار'**
+  String get integrationPricesSaved;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الأسعار'**
+  String get integrationPricesAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} من {total} مسعّرة'**
+  String integrationPricesPriced(int count, int total);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'التجديد'**
+  String get integrationPricesRenewals;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير الباقة'**
+  String get integrationPricesSwitches;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر قراءة: {date}'**
+  String integrationPricesLastSeen(String date);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر الموصى به من المزوّد: {price}'**
+  String integrationPricesFollowingSuggestion(String price);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغاً لاتّباع سعر المزوّد الموصى به'**
+  String get integrationPricesUnsetHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن اشتراك'**
+  String get invoiceRechargeTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة {card}'**
+  String invoiceRechargeCard(String card);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'لـ {name}'**
+  String invoiceRechargeFor(String name);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار التنفيذ لدى المزوّد'**
+  String get invoiceRechargePending;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'نُفِّذ لدى المزوّد'**
+  String get invoiceRechargeConfirmed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رفضه المزوّد'**
+  String get invoiceRechargeFailed;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغيت العملية'**
+  String get invoiceRechargeCancelled;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مرجع المزوّد {reference}'**
+  String invoiceRechargeReference(String reference);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بتاريخ {date}'**
+  String invoiceRechargeConfirmedAt(String date);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة على المتجر {amount}'**
+  String invoiceRechargeCost(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة'**
+  String get integrationFloatTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد'**
+  String get integrationFloatAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد المتوقَّع'**
+  String get integrationFloatExpected;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب المزوّد'**
+  String get integrationFloatReported;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مجموع الشحن'**
+  String get integrationFloatToppedUp;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المسحوب المؤكَّد'**
+  String get integrationFloatDrawn;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مباع ولم يُنفَّذ بعد'**
+  String get integrationFloatCommitted;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المزوّد يقول {amount} أقل مما نتوقّع — صُرف من الرصيد خارج دفتر.'**
+  String integrationFloatDriftShort(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المزوّد يقول {amount} أكثر مما نتوقّع — شحن لم يُسجَّل في دفتر.'**
+  String integrationFloatDriftOver(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن الرصيد ليس مصروفاً: المال انتقل من صندوقك إلى المزوّد، ويصبح تكلفة عند تنفيذ عملية شحن.'**
+  String get integrationFloatExplainer;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل شحن رصيد'**
+  String get integrationTopUpTitle;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المدفوع'**
+  String get integrationTopUpAmount;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'خرج من'**
+  String get integrationTopUpSource;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تحديد'**
+  String get integrationTopUpSourceNone;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحوالة أو الإيصال'**
+  String get integrationTopUpReference;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل'**
+  String get integrationTopUpSave;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل شحن الرصيد'**
+  String get integrationTopUpSaved;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغاً أكبر من صفر'**
+  String get integrationTopUpAmountRequired;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة غير معروفة — من صاحبها؟'**
+  String get rechargeSubscriberUnknown;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم صاحب البطاقة'**
+  String get rechargeSubscriberName;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get rechargeSubscriberSave;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ اسم صاحب البطاقة'**
+  String get rechargeSubscriberSaved;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{عملية شحن واحدة} two{عمليتا شحن} few{{count} عمليات شحن} other{{count} عملية شحن}} بقيمة {amount} لدى كل الوكلاء'**
+  String rechargeSubscriberLifetime(int count, String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز {model}'**
+  String rechargeSubscriberDevice(String model);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'نشط'**
+  String get integrationStatusActive;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'موقوف'**
+  String get integrationStatusOnHold;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'يوشك على الانتهاء'**
+  String get integrationStatusSoonToExpire;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مفعّل'**
+  String get integrationStatusInactive;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مقفل'**
+  String get integrationStatusLocked;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'معلّق'**
+  String get integrationStatusSuspended;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهي الصلاحية'**
+  String get integrationStatusExpired;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن {provider}'**
+  String rechargeCatalogActionFor(String provider);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن رصيد'**
+  String get integrationTopUpAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن رصيد {provider}'**
+  String integrationTopUpActionFor(String provider);
 }
 
 class _AppLocalizationsDelegate

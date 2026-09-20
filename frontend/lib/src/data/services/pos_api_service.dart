@@ -116,8 +116,11 @@ import 'operations_api_client.dart';
 import 'pos_http_client.dart';
 import '../models/campaign.dart';
 import '../models/conversation.dart';
+import '../models/integration_card.dart';
+import '../models/integration_provider.dart';
 import '../models/messaging_gateway.dart';
 import 'crm_api_client.dart';
+import 'integrations_api_client.dart';
 import 'messaging_api_client.dart';
 import 'price_checker_api_client.dart';
 import 'surveillance_api_client.dart';
@@ -189,6 +192,7 @@ class PosApiService {
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
     _messaging = MessagingApiClient(_session);
+    _integrations = IntegrationsApiClient(_session);
     _crm = CrmApiClient(_session);
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
@@ -270,6 +274,7 @@ class PosApiService {
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
   late final MessagingApiClient _messaging;
+  late final IntegrationsApiClient _integrations;
   late final CrmApiClient _crm;
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
@@ -2160,6 +2165,76 @@ class PosApiService {
 
   Future<GatewayActivation> activateMessagingGateway(int id) =>
       _messaging.activate(id);
+
+  Future<List<IntegrationProvider>> fetchIntegrationProviders() =>
+      _integrations.fetchProviders();
+
+  Future<IntegrationProvider> saveIntegrationCredentials(
+    String providerKey,
+    IntegrationCredentialsDraft draft,
+  ) => _integrations.saveCredentials(providerKey, draft);
+
+  Future<IntegrationProvider> disconnectIntegration(String providerKey) =>
+      _integrations.disconnect(providerKey);
+
+  Future<IntegrationProbeResult> probeIntegration(String providerKey) =>
+      _integrations.probe(providerKey);
+
+  Future<IntegrationPriceList> fetchIntegrationPrices(String providerKey) =>
+      _integrations.fetchPrices(providerKey);
+
+  Future<IntegrationFloat> fetchIntegrationFloat(String providerKey) =>
+      _integrations.fetchFloat(providerKey);
+
+  Future<IntegrationFloat> recordIntegrationTopUp(
+    String providerKey, {
+    required double amount,
+    int? fromAccountId,
+    String reference = '',
+    String note = '',
+  }) => _integrations.recordTopUp(
+    providerKey,
+    amount: amount,
+    fromAccountId: fromAccountId,
+    reference: reference,
+    note: note,
+  );
+
+  Future<IntegrationSubscriber> identifyIntegrationSubscriber(
+    String providerKey,
+    String subscriberRef, {
+    int? customerId,
+    String? displayName,
+  }) => _integrations.identifySubscriber(
+    providerKey,
+    subscriberRef,
+    customerId: customerId,
+    displayName: displayName,
+  );
+
+  Future<IntegrationPriceList> saveIntegrationPrices(
+    String providerKey,
+    Map<String, double?> prices,
+  ) => _integrations.savePrices(providerKey, prices);
+
+  Future<IntegrationCardSnapshot> fetchIntegrationCard({
+    required String providerKey,
+    required String cardNo,
+  }) => _integrations.fetchCard(providerKey: providerKey, cardNo: cardNo);
+
+  Future<IntegrationHistoryPage> fetchIntegrationHistory({
+    required String providerKey,
+    required String cardNo,
+    required IntegrationHistoryKind kind,
+    int limit = 10,
+    int offset = 0,
+  }) => _integrations.fetchHistory(
+    providerKey: providerKey,
+    cardNo: cardNo,
+    kind: kind,
+    limit: limit,
+    offset: offset,
+  );
 
   Future<List<Conversation>> fetchConversations({String? status}) =>
       _crm.fetchConversations(status: status);

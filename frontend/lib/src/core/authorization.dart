@@ -67,6 +67,9 @@ enum AppCapability {
   manageCameras,
   manageScales,
   manageMessaging,
+  manageIntegrations,
+  useIntegrations,
+  recordIntegrationTopUp,
   viewConversations,
   manageConversations,
   manageCampaigns,
@@ -599,6 +602,36 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.manageMessaging);
       }
+      // Resale providers. Configuring one stores an agency credential that can
+      // spend the shop's float, so it rides the manage right rather than the
+      // general settings one — a cashier who may *use* an integration at the
+      // till still has no business seeing its password field.
+      if (_hasAny(user, const [
+        'manage_integrations',
+        'integrations.manage_integrations',
+      ])) {
+        capabilities.add(AppCapability.manageIntegrations);
+      }
+      // Selling a top-up is till work, so a cashier has it. Whether the button
+      // appears at all is a separate question, answered by whether the shop
+      // has actually connected a provider (ShopSettings.hasIntegrations).
+      if (_hasAny(user, const [
+        'use_integrations',
+        'integrations.use_integrations',
+      ])) {
+        capabilities.add(AppCapability.useIntegrations);
+      }
+      // Recording money paid into a provider float. Its own right, because
+      // the person who walks to the provider's office and pays is almost
+      // never the one who configures the account — gating the record on
+      // manage_integrations meant the only person who knew a top-up had
+      // happened was the one who could not write it down.
+      if (_hasAny(user, const [
+        'record_integration_topup',
+        'integrations.record_integration_topup',
+      ])) {
+        capabilities.add(AppCapability.recordIntegrationTopUp);
+      }
       // Cameras. Watching, reviewing recordings and exporting a copy are three
       // different levels of trust, so they are three permissions — a floor
       // supervisor typically holds the first two and not the third.
@@ -955,6 +988,10 @@ class AuthorizationCapabilities {
   bool get canManageCameras => allows(AppCapability.manageCameras);
   bool get canManageScales => allows(AppCapability.manageScales);
   bool get canManageMessaging => allows(AppCapability.manageMessaging);
+  bool get canManageIntegrations => allows(AppCapability.manageIntegrations);
+  bool get canUseIntegrations => allows(AppCapability.useIntegrations);
+  bool get canRecordIntegrationTopUp =>
+      allows(AppCapability.recordIntegrationTopUp);
   bool get canViewConversations => allows(AppCapability.viewConversations);
   bool get canManageConversations => allows(AppCapability.manageConversations);
   bool get canManageCampaigns => allows(AppCapability.manageCampaigns);

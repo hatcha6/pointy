@@ -68,6 +68,7 @@ class ShopSettings {
     this.defaultPaymentTermsBasis = PaymentTermsBasis.netDays,
     this.defaultPaymentTerms,
     this.enablePurchaseSuggestions = true,
+    this.connectedIntegrations = const [],
     this.enableSurveillance = false,
     this.surveillancePreRollSeconds = 20,
     this.surveillancePostRollSeconds = 40,
@@ -152,6 +153,18 @@ class ShopSettings {
   /// habitually buys from the chosen supplier. Off hides all three surfaces and
   /// stops the client asking for them at all.
   final bool enablePurchaseSuggestions;
+
+  /// Which resale providers are connected, by backend key. Read-only: the
+  /// backend derives it from the configured accounts.
+  ///
+  /// A list rather than a flag because the till draws a *named* button for a
+  /// single provider and a menu for several, and it should not need a second
+  /// call to learn which.
+  final List<String> connectedIntegrations;
+
+  /// Whether the shop resells anything at all — what hides the till's top-up
+  /// button in a shop that does not.
+  bool get hasIntegrations => connectedIntegrations.isNotEmpty;
 
   /// Whether this shop has cameras wired up. Gates the camera wall, the
   /// command-palette entry and the invoice playback panel — a shop with no DVR
@@ -306,6 +319,10 @@ class ShopSettings {
         json['enable_purchase_suggestions'],
         true,
       ),
+      connectedIntegrations:
+          (json['connected_integrations'] as List<Object?>? ?? const [])
+              .map((value) => value.toString())
+              .toList(growable: false),
       enableSurveillance: _boolFromJson(json['enable_surveillance'], false),
       surveillancePreRollSeconds: _intFromJson(
         json['surveillance_pre_roll_seconds'],

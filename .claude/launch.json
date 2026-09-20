@@ -306,6 +306,22 @@
         "frontend-learning-preview"
       ],
       "port": 8080
+    },
+    {
+      "name": "integrations-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-integrations-preview"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "recharge-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-recharge-preview"
+      ],
+      "port": 8080
     }
   ]
 }

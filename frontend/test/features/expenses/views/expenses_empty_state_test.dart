@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/features/settings/view_models/integrations_view_model.dart';
+import 'package:pointy_frontend/src/data/repositories/integrations_repository.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/expense_category.dart';
@@ -89,6 +91,9 @@ Future<ExpensesViewModel> _pumpExpenses(
       home: Directionality(
         textDirection: TextDirection.rtl,
         child: ExpensesScreen(
+          integrationsViewModel: IntegrationsViewModel(
+            IntegrationsRepository(PosApiService()),
+          ),
           viewModel: viewModel,
           categoriesViewModel: categoriesViewModel,
           capabilities: navigation.capabilities,

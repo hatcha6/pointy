@@ -18693,4 +18693,618 @@ class AppLocalizationsAr extends AppLocalizations {
   String treasuryConsignorReceivable(String amount) {
     return 'ومستحق على أصحاب الأمانات: $amount';
   }
+
+  @override
+  String get integrationsTitle => 'التكاملات';
+
+  @override
+  String get integrationsSubtitle =>
+      'شحن اشتراكات العملاء من داخل دفتر بدل مواقع المزوّدين';
+
+  @override
+  String get integrationsPageIntro =>
+      'اربط حساب الوكالة لديك، فتصبح عمليات الشحن وأرصدتها وإيصالاتها جزءاً من حسابات المتجر.';
+
+  @override
+  String get integrationsEmpty => 'لا توجد خدمات متاحة حالياً';
+
+  @override
+  String get integrationsLoadError => 'تعذّر تحميل قائمة الخدمات';
+
+  @override
+  String get integrationsRetry => 'إعادة المحاولة';
+
+  @override
+  String get integrationProviderHdboxName => 'HD Box';
+
+  @override
+  String get integrationProviderHdboxTagline =>
+      'اشتراكات القنوات — تجديد وتفعيل بطاقات المشتركين';
+
+  @override
+  String get integrationProviderLnetName => 'LNET';
+
+  @override
+  String get integrationProviderLnetTagline =>
+      'باقات الإنترنت — شحن اشتراكات المشتركين';
+
+  @override
+  String get integrationProviderQareebName => 'قريب';
+
+  @override
+  String get integrationProviderQareebTagline => 'كروت الشحن ورصيد الهاتف';
+
+  @override
+  String get integrationProviderUnknownName => 'خدمة غير معروفة';
+
+  @override
+  String get integrationProviderUnknownTagline =>
+      'هذه الخدمة غير مدعومة في هذه النسخة';
+
+  @override
+  String get integrationAvailabilityAvailable => 'متاح';
+
+  @override
+  String get integrationAvailabilityPlanned => 'قريباً';
+
+  @override
+  String get integrationBlockedPortalUnreachable =>
+      'موقع المزوّد يحجب الاتصال من شبكتنا. ننتظر واجهة برمجية أو إذن وصول.';
+
+  @override
+  String get integrationBlockedAwaitingAccess =>
+      'بانتظار حساب وكالة وتفاصيل الربط من المزوّد.';
+
+  @override
+  String get integrationBlockedDriverInProgress =>
+      'قيد الإعداد. الربط مع هذا المزوّد لم يكتمل بعد.';
+
+  @override
+  String get integrationCapabilityBalance => 'الرصيد';
+
+  @override
+  String get integrationCapabilityLookup => 'استعلام';
+
+  @override
+  String get integrationCapabilityRecharge => 'شحن';
+
+  @override
+  String get integrationStatusConnected => 'متصل';
+
+  @override
+  String get integrationStatusNotConfigured => 'غير مُهيّأ';
+
+  @override
+  String get integrationStatusFailed => 'فشل الاتصال';
+
+  @override
+  String get integrationStatusDisabled => 'موقوف';
+
+  @override
+  String get integrationBalanceLabel => 'الرصيد لدى المزوّد';
+
+  @override
+  String get integrationBalanceUnknown => 'غير معروف';
+
+  @override
+  String integrationBalanceCheckedAt(String time) {
+    return 'آخر تحقق: $time';
+  }
+
+  @override
+  String get integrationBalanceCurrencyNote =>
+      'المبلغ بالدينار الليبي، حتى لو عرضه موقع المزوّد بعلامة الدولار.';
+
+  @override
+  String integrationAccountLabel(String name) {
+    return 'الحساب: $name';
+  }
+
+  @override
+  String get integrationNeverChecked => 'لم يتم التحقق بعد';
+
+  @override
+  String get integrationFieldBaseUrl => 'عنوان الخدمة';
+
+  @override
+  String get integrationFieldBaseUrlHint => 'مثال: http://cas.example.ly:18688';
+
+  @override
+  String get integrationFieldUsername => 'اسم المستخدم';
+
+  @override
+  String get integrationFieldPassword => 'كلمة المرور';
+
+  @override
+  String get integrationPasswordStoredHint =>
+      'محفوظة. اتركها فارغة للإبقاء عليها.';
+
+  @override
+  String get integrationPasswordRequired => 'أدخل كلمة المرور';
+
+  @override
+  String get integrationUsernameRequired => 'أدخل اسم المستخدم';
+
+  @override
+  String get integrationConnect => 'ربط الحساب';
+
+  @override
+  String get integrationEdit => 'تعديل البيانات';
+
+  @override
+  String get integrationSave => 'حفظ';
+
+  @override
+  String get integrationCancel => 'إلغاء';
+
+  @override
+  String get integrationTest => 'اختبار الاتصال';
+
+  @override
+  String get integrationDisconnect => 'فصل الحساب';
+
+  @override
+  String get integrationDisconnectConfirmTitle => 'فصل الحساب؟';
+
+  @override
+  String get integrationDisconnectConfirmBody =>
+      'سيتم حذف بيانات الدخول المحفوظة لهذه الخدمة. لن يتأثر أي شيء لدى المزوّد.';
+
+  @override
+  String get integrationDisconnectConfirmAction => 'فصل';
+
+  @override
+  String get integrationProbeSuccess => 'تم الاتصال بنجاح';
+
+  @override
+  String integrationProbeSuccessWithBalance(String amount) {
+    return 'تم الاتصال — الرصيد $amount';
+  }
+
+  @override
+  String get integrationSaved => 'تم حفظ البيانات';
+
+  @override
+  String get integrationDisconnected => 'تم فصل الحساب';
+
+  @override
+  String get integrationErrorNotConfigured => 'لم تُدخل بيانات الدخول بعد';
+
+  @override
+  String get integrationErrorUnavailable => 'هذه الخدمة غير متاحة بعد';
+
+  @override
+  String get integrationErrorUnreachable =>
+      'تعذّر الوصول إلى المزوّد. تحقق من العنوان ومن الاتصال بالإنترنت.';
+
+  @override
+  String get integrationErrorUnauthorized =>
+      'رفض المزوّد اسم المستخدم أو كلمة المرور';
+
+  @override
+  String get integrationErrorNotFound => 'لم يُعثر على البطاقة المطلوبة';
+
+  @override
+  String get integrationErrorProviderError => 'رفض المزوّد الطلب';
+
+  @override
+  String get integrationErrorUnexpected => 'رد المزوّد بشكل غير متوقع';
+
+  @override
+  String get integrationInsecureTransportWarning =>
+      'هذا المزوّد يستخدم اتصالاً غير مشفّر (http)، فتنتقل بيانات الدخول دون تشفير. لا تستخدم كلمة مرور تستعملها في مكان آخر.';
+
+  @override
+  String get rechargeTitle => 'شحن اشتراك';
+
+  @override
+  String get rechargeCatalogAction => 'شحن اشتراك';
+
+  @override
+  String get rechargeSearchLabel => 'رقم البطاقة';
+
+  @override
+  String get rechargeSearchHint => 'أدخل أو امسح رقم البطاقة';
+
+  @override
+  String get rechargeSearchAction => 'بحث';
+
+  @override
+  String get rechargeIdlePrompt =>
+      'أدخل رقم بطاقة المشترك للاطّلاع على اشتراكه وأسعار التجديد';
+
+  @override
+  String get rechargeSearching => 'جارٍ البحث لدى المزوّد…';
+
+  @override
+  String get rechargeHealthActive => 'الاشتراك نشط';
+
+  @override
+  String get rechargeHealthExpiringSoon => 'يوشك على الانتهاء';
+
+  @override
+  String get rechargeHealthExpired => 'منتهي';
+
+  @override
+  String get rechargeHealthLocked => 'موقوف';
+
+  @override
+  String get rechargeHealthUnknown => 'حالة غير معروفة';
+
+  @override
+  String rechargeDaysRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count يوماً متبقياً',
+      few: '$count أيام متبقية',
+      two: 'يومان متبقيان',
+      one: 'يوم واحد متبقٍ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rechargeDaysExpired(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'انتهى منذ $count يوماً',
+      few: 'انتهى منذ $count أيام',
+      two: 'انتهى منذ يومين',
+      one: 'انتهى منذ يوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rechargeExpiresOn(String date) {
+    return 'ينتهي في $date';
+  }
+
+  @override
+  String rechargeStartedOn(String date) {
+    return 'بدأ في $date';
+  }
+
+  @override
+  String get rechargePackageLabel => 'الباقة';
+
+  @override
+  String get rechargeProviderStatus => 'حالة المزوّد';
+
+  @override
+  String get rechargeRenewHeading => 'مدة التجديد';
+
+  @override
+  String get rechargeSwitchHeading => 'أو انتقل إلى باقة أخرى';
+
+  @override
+  String rechargeMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شهراً',
+      few: '$count أشهر',
+      two: 'شهران',
+      one: 'شهر واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rechargeOffersUnavailable =>
+      'تعذّر قراءة الأسعار من المزوّد. أعد المحاولة.';
+
+  @override
+  String get rechargePriceLiveNote =>
+      'الأسعار مقروءة من المزوّد الآن، وقد تتغيّر بين عملية وأخرى.';
+
+  @override
+  String get rechargeFloatLabel => 'رصيد الوكالة';
+
+  @override
+  String rechargeFloatShort(String balance, String cost) {
+    return 'رصيد الوكالة $balance لا يغطّي $cost. سجّل البيع الآن وارصد الرصيد لاحقاً.';
+  }
+
+  @override
+  String get rechargeHistoryTitle => 'سجلّ البطاقة';
+
+  @override
+  String get rechargeHistoryPurchases => 'عمليات الشحن';
+
+  @override
+  String get rechargeHistoryStatuses => 'تغيّرات الحالة';
+
+  @override
+  String get rechargeHistoryOurs => 'من متجرنا';
+
+  @override
+  String get rechargeHistoryOther => 'وكيل آخر';
+
+  @override
+  String get rechargeHistoryEmpty => 'لا يوجد سجلّ لهذه البطاقة';
+
+  @override
+  String get rechargeHistoryError => 'تعذّر تحميل السجلّ';
+
+  @override
+  String get rechargeHistoryAutomatic => 'تلقائي';
+
+  @override
+  String rechargeHistoryPage(int page, int count) {
+    return 'صفحة $page من $count';
+  }
+
+  @override
+  String get rechargeHistoryPrevious => 'السابق';
+
+  @override
+  String get rechargeHistoryNext => 'التالي';
+
+  @override
+  String rechargeHistoryStatusChange(String from, String to) {
+    return '$from ← $to';
+  }
+
+  @override
+  String get rechargeAddToCart => 'أضف إلى السلة';
+
+  @override
+  String get rechargeSelectFirst => 'اختر مدة أو باقة أولاً';
+
+  @override
+  String get rechargeAddedToCart => 'أُضيف الشحن إلى السلة';
+
+  @override
+  String rechargeCartLineTitle(String provider) {
+    return 'شحن $provider';
+  }
+
+  @override
+  String rechargeCartLineSubtitle(String card, String option) {
+    return 'بطاقة $card — $option';
+  }
+
+  @override
+  String get rechargePendingNote =>
+      'يُسجَّل البيع في الفاتورة الآن. تنفيذ الشحن لدى المزوّد خطوة منفصلة لم تُفعَّل بعد.';
+
+  @override
+  String get rechargeCostLabel => 'تكلفة على المتجر';
+
+  @override
+  String get rechargeChangeCard => 'بطاقة أخرى';
+
+  @override
+  String get rechargeNoProviders =>
+      'لا توجد خدمة شحن مُهيّأة. اربط حساباً من إعدادات المتجر ← التكاملات.';
+
+  @override
+  String get integrationPricesTitle => 'أسعار البيع';
+
+  @override
+  String get integrationPricesSubtitle =>
+      'حدّد سعر البيع لكل مدة. ما لم تُسعّره يُباع بالتكلفة.';
+
+  @override
+  String get integrationPricesEmpty =>
+      'لم تُقرأ أي أسعار بعد. ابحث عن بطاقة مرة واحدة من شاشة البيع، ثم عد إلى هنا.';
+
+  @override
+  String get integrationPricesCost => 'التكلفة';
+
+  @override
+  String get integrationPricesSell => 'سعر البيع';
+
+  @override
+  String get integrationPricesMargin => 'الربح';
+
+  @override
+  String get integrationPricesUnset => 'بالتكلفة';
+
+  @override
+  String get integrationPricesBelowCost => 'أقل من التكلفة — رفع المزوّد سعره';
+
+  @override
+  String get integrationPricesBelowCostBanner =>
+      'مزوّد رفع أسعاره: بعض المدد أصبح سعر بيعها أقل من تكلفتها.';
+
+  @override
+  String get integrationPricesSave => 'حفظ الأسعار';
+
+  @override
+  String get integrationPricesSaved => 'تم حفظ الأسعار';
+
+  @override
+  String get integrationPricesAction => 'الأسعار';
+
+  @override
+  String integrationPricesPriced(int count, int total) {
+    return '$count من $total مسعّرة';
+  }
+
+  @override
+  String get integrationPricesRenewals => 'التجديد';
+
+  @override
+  String get integrationPricesSwitches => 'تغيير الباقة';
+
+  @override
+  String integrationPricesLastSeen(String date) {
+    return 'آخر قراءة: $date';
+  }
+
+  @override
+  String integrationPricesFollowingSuggestion(String price) {
+    return 'السعر الموصى به من المزوّد: $price';
+  }
+
+  @override
+  String get integrationPricesUnsetHint =>
+      'اتركه فارغاً لاتّباع سعر المزوّد الموصى به';
+
+  @override
+  String get invoiceRechargeTitle => 'شحن اشتراك';
+
+  @override
+  String invoiceRechargeCard(String card) {
+    return 'بطاقة $card';
+  }
+
+  @override
+  String invoiceRechargeFor(String name) {
+    return 'لـ $name';
+  }
+
+  @override
+  String get invoiceRechargePending => 'بانتظار التنفيذ لدى المزوّد';
+
+  @override
+  String get invoiceRechargeConfirmed => 'نُفِّذ لدى المزوّد';
+
+  @override
+  String get invoiceRechargeFailed => 'رفضه المزوّد';
+
+  @override
+  String get invoiceRechargeCancelled => 'أُلغيت العملية';
+
+  @override
+  String invoiceRechargeReference(String reference) {
+    return 'مرجع المزوّد $reference';
+  }
+
+  @override
+  String invoiceRechargeConfirmedAt(String date) {
+    return 'بتاريخ $date';
+  }
+
+  @override
+  String invoiceRechargeCost(String amount) {
+    return 'التكلفة على المتجر $amount';
+  }
+
+  @override
+  String get integrationFloatTitle => 'رصيد الوكالة';
+
+  @override
+  String get integrationFloatAction => 'الرصيد';
+
+  @override
+  String get integrationFloatExpected => 'الرصيد المتوقَّع';
+
+  @override
+  String get integrationFloatReported => 'حسب المزوّد';
+
+  @override
+  String get integrationFloatToppedUp => 'مجموع الشحن';
+
+  @override
+  String get integrationFloatDrawn => 'المسحوب المؤكَّد';
+
+  @override
+  String get integrationFloatCommitted => 'مباع ولم يُنفَّذ بعد';
+
+  @override
+  String integrationFloatDriftShort(String amount) {
+    return 'المزوّد يقول $amount أقل مما نتوقّع — صُرف من الرصيد خارج دفتر.';
+  }
+
+  @override
+  String integrationFloatDriftOver(String amount) {
+    return 'المزوّد يقول $amount أكثر مما نتوقّع — شحن لم يُسجَّل في دفتر.';
+  }
+
+  @override
+  String get integrationFloatExplainer =>
+      'شحن الرصيد ليس مصروفاً: المال انتقل من صندوقك إلى المزوّد، ويصبح تكلفة عند تنفيذ عملية شحن.';
+
+  @override
+  String get integrationTopUpTitle => 'تسجيل شحن رصيد';
+
+  @override
+  String get integrationTopUpAmount => 'المبلغ المدفوع';
+
+  @override
+  String get integrationTopUpSource => 'خرج من';
+
+  @override
+  String get integrationTopUpSourceNone => 'بدون تحديد';
+
+  @override
+  String get integrationTopUpReference => 'رقم الحوالة أو الإيصال';
+
+  @override
+  String get integrationTopUpSave => 'تسجيل';
+
+  @override
+  String get integrationTopUpSaved => 'تم تسجيل شحن الرصيد';
+
+  @override
+  String get integrationTopUpAmountRequired => 'أدخل مبلغاً أكبر من صفر';
+
+  @override
+  String get rechargeSubscriberUnknown => 'بطاقة غير معروفة — من صاحبها؟';
+
+  @override
+  String get rechargeSubscriberName => 'اسم صاحب البطاقة';
+
+  @override
+  String get rechargeSubscriberSave => 'حفظ';
+
+  @override
+  String get rechargeSubscriberSaved => 'تم حفظ اسم صاحب البطاقة';
+
+  @override
+  String rechargeSubscriberLifetime(int count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية شحن',
+      few: '$count عمليات شحن',
+      two: 'عمليتا شحن',
+      one: 'عملية شحن واحدة',
+    );
+    return '$_temp0 بقيمة $amount لدى كل الوكلاء';
+  }
+
+  @override
+  String rechargeSubscriberDevice(String model) {
+    return 'الجهاز $model';
+  }
+
+  @override
+  String get integrationStatusActive => 'نشط';
+
+  @override
+  String get integrationStatusOnHold => 'موقوف';
+
+  @override
+  String get integrationStatusSoonToExpire => 'يوشك على الانتهاء';
+
+  @override
+  String get integrationStatusInactive => 'غير مفعّل';
+
+  @override
+  String get integrationStatusLocked => 'مقفل';
+
+  @override
+  String get integrationStatusSuspended => 'معلّق';
+
+  @override
+  String get integrationStatusExpired => 'منتهي الصلاحية';
+
+  @override
+  String rechargeCatalogActionFor(String provider) {
+    return 'شحن $provider';
+  }
+
+  @override
+  String get integrationTopUpAction => 'شحن رصيد';
+
+  @override
+  String integrationTopUpActionFor(String provider) {
+    return 'شحن رصيد $provider';
+  }
 }
