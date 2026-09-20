@@ -18910,6 +18910,66 @@ class AppLocalizationsAr extends AppLocalizations {
   String get rechargeSearchAction => 'بحث';
 
   @override
+  String get rechargeSearchLabelLine => 'رقم الهاتف أو اسم المستخدم';
+
+  @override
+  String get rechargeSearchHintLine =>
+      'أدخل رقم الهاتف أو اسم المستخدم أو رقم العقد';
+
+  @override
+  String get rechargeIdlePromptLine =>
+      'أدخل رقم هاتف المشترك للاطّلاع على خطوطه وشحن رصيدها';
+
+  @override
+  String get rechargeChooseLineHeading => 'اختر الخط';
+
+  @override
+  String rechargeChooseLinePrompt(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'هذا البحث يطابق $count خطاً. اختر الخط المطلوب قبل الشحن.',
+      few: 'هذا البحث يطابق $count خطوط. اختر الخط المطلوب قبل الشحن.',
+      two: 'هذا البحث يطابق خطّين. اختر الخط المطلوب قبل الشحن.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rechargeLineBalance(String amount) {
+    return 'الرصيد الحالي $amount';
+  }
+
+  @override
+  String get rechargeTopUpHeading => 'قيمة الشحن';
+
+  @override
+  String get rechargeCustomAmountLabel => 'مبلغ آخر';
+
+  @override
+  String get rechargeCustomAmountHint => 'أدخل المبلغ بالدينار';
+
+  @override
+  String rechargeAmountBelowMinimum(String amount) {
+    return 'أقل مبلغ للشحن هو $amount';
+  }
+
+  @override
+  String rechargeAmountAboveMaximum(String amount) {
+    return 'أكبر مبلغ للشحن هو $amount';
+  }
+
+  @override
+  String get rechargeAmountNotWhole => 'أدخل مبلغاً صحيحاً بدون كسور';
+
+  @override
+  String get rechargeAmountInvalid => 'أدخل مبلغاً صالحاً';
+
+  @override
+  String get rechargeTopUpNote =>
+      'يُضاف المبلغ إلى رصيد المشترك كما هو، وربح المحل هو عمولة الوكالة.';
+
+  @override
   String get rechargeIdlePrompt =>
       'أدخل رقم بطاقة المشترك للاطّلاع على اشتراكه وأسعار التجديد';
 
@@ -19050,6 +19110,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get rechargeAddToCart => 'أضف إلى السلة';
+
+  @override
+  String get rechargeSelectAmountFirst =>
+      'اختر قيمة الشحن أو أدخل مبلغاً أولاً';
 
   @override
   String get rechargeSelectFirst => 'اختر مدة أو باقة أولاً';

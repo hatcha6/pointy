@@ -14,7 +14,7 @@ from django.utils import timezone
 from . import catalog
 from .models import IntegrationAccount, IntegrationOptionPrice
 from .providers import provider_for
-from .providers.base import ERROR_NOT_CONFIGURED, ProbeResult
+from .providers.base import ERROR_NOT_CONFIGURED, RECHARGE_TOPUP, ProbeResult
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,13 @@ def record_seen_offers(account: IntegrationAccount, options) -> None:
     spec = catalog.spec_for(account.provider)
     suggested = dict(spec.suggested_retail) if spec else {}
     for option in options:
+        # Stored-value amounts are not a price list. The shop does not choose
+        # what 45 dinars of credit sells for — it sells for 45, and the margin
+        # is the agency commission. Recording them would fill Shop Settings
+        # with rows an owner must not edit, and could not complete anyway,
+        # since the provider takes any amount and not just the listed ones.
+        if option.kind == RECHARGE_TOPUP:
+            continue
         try:
             IntegrationOptionPrice.objects.update_or_create(
                 account=account,

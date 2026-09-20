@@ -32676,6 +32676,90 @@ abstract class AppLocalizations {
   ///
   ///
   /// In ar, this message translates to:
+  /// **'رقم الهاتف أو اسم المستخدم'**
+  String get rechargeSearchLabelLine;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم الهاتف أو اسم المستخدم أو رقم العقد'**
+  String get rechargeSearchHintLine;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم هاتف المشترك للاطّلاع على خطوطه وشحن رصيدها'**
+  String get rechargeIdlePromptLine;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الخط'**
+  String get rechargeChooseLineHeading;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, two{هذا البحث يطابق خطّين. اختر الخط المطلوب قبل الشحن.} few{هذا البحث يطابق {count} خطوط. اختر الخط المطلوب قبل الشحن.} other{هذا البحث يطابق {count} خطاً. اختر الخط المطلوب قبل الشحن.}}'**
+  String rechargeChooseLinePrompt(int count);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد الحالي {amount}'**
+  String rechargeLineBalance(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة الشحن'**
+  String get rechargeTopUpHeading;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ آخر'**
+  String get rechargeCustomAmountLabel;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل المبلغ بالدينار'**
+  String get rechargeCustomAmountHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل مبلغ للشحن هو {amount}'**
+  String rechargeAmountBelowMinimum(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أكبر مبلغ للشحن هو {amount}'**
+  String rechargeAmountAboveMaximum(String amount);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغاً صحيحاً بدون كسور'**
+  String get rechargeAmountNotWhole;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغاً صالحاً'**
+  String get rechargeAmountInvalid;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'يُضاف المبلغ إلى رصيد المشترك كما هو، وربح المحل هو عمولة الوكالة.'**
+  String get rechargeTopUpNote;
+
+  ///
+  ///
+  /// In ar, this message translates to:
   /// **'أدخل رقم بطاقة المشترك للاطّلاع على اشتراكه وأسعار التجديد'**
   String get rechargeIdlePrompt;
 
@@ -32870,6 +32954,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أضف إلى السلة'**
   String get rechargeAddToCart;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قيمة الشحن أو أدخل مبلغاً أولاً'**
+  String get rechargeSelectAmountFirst;
 
   ///
   ///

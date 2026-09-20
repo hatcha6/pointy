@@ -4,8 +4,8 @@ A Pointy shop that resells somebody else's product — TV subscriptions, interne
 airtime — otherwise does that work on the provider's own website, and the money
 never reaches the books. This catalog is the list of those providers, and it is
 deliberately *static*: every provider appears in Shop Settings whether or not it
-can be configured yet, because "HD Box works, LNET is coming" is information the
-owner wants, and an empty screen is not.
+can be configured yet, because "HD Box works, Qareeb is coming" is information
+the owner wants, and an empty screen is not.
 
 Two vocabularies live here, and both are **API contract**:
 
@@ -20,8 +20,8 @@ Two vocabularies live here, and both are **API contract**:
 
 The same goes for ``fields``: the backend names the credentials a provider needs
 and which of them are secret, and the client renders one generic form from that.
-Teaching Pointy about LNET the day its API appears is then a change to this file
-and a driver, with no Flutter release.
+Teaching Pointy about the next provider is then a change to this file and a
+driver, with no Flutter release.
 """
 
 from __future__ import annotations
@@ -105,22 +105,23 @@ HDBOX = ProviderSpec(
 
 LNET = ProviderSpec(
     key="lnet",
-    availability=AVAILABILITY_PLANNED,
+    availability=AVAILABILITY_AVAILABLE,
     capabilities=(CAPABILITY_BALANCE, CAPABILITY_LOOKUP, CAPABILITY_RECHARGE),
     fields=_CREDENTIALS,
     secret_fields=_SECRETS,
     default_base_url="https://billing.lnet.ly/lnet-billing/public",
-    # Reachability here is PER SHOP, which is why this is not
-    # ``portal_unreachable``. LNET's WAF refuses by origin network: from a
-    # development machine on another ISP the portal 403s, but an agency
-    # sitting on an LNET connection reaches it normally — and the driver runs
-    # in the shop's own backend, so the shop's connection is the one that
-    # matters. Telling that owner "the portal blocks our network" would be
-    # describing our bench, and would read to them as a statement about
-    # theirs. What is actually missing is the driver: the portal has never
-    # been surveyed, because nobody has yet captured its pages from a
-    # connection that can load them.
-    blocked_reason=BLOCKED_DRIVER_IN_PROGRESS,
+    # No ``suggested_retail``. LNET sells stored value, and the retail price of
+    # stored value is its face value — 45 dinars of credit sells for 45 — so
+    # the driver quotes it per option instead of it being reference data typed
+    # in here. There is also nothing to enumerate: the portal takes any amount,
+    # not a fixed ladder.
+    #
+    # Reachability is PER SHOP. LNET's WAF refuses whole origin networks, so a
+    # development machine on another ISP gets a flat 403 while an agency on an
+    # LNET connection reaches it normally — and the driver runs in the shop's
+    # own backend. That is why this is ``available`` despite never loading from
+    # our bench: what was missing was a survey of the portal, and a session
+    # captured from a real agency connection supplied it.
 )
 
 QAREEB = ProviderSpec(

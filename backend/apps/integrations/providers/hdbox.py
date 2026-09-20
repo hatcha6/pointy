@@ -41,6 +41,13 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
+from ..telemetry import (
+    STEP_FORM,
+    STEP_LOGIN,
+    STEP_PARSE,
+    STEP_SEARCH,
+    STEP_SUBMIT,
+)
 from .base import (
     ERROR_INDETERMINATE,
     ERROR_INSUFFICIENT_FLOAT,
@@ -66,6 +73,9 @@ from .base import (
 )
 
 DEFAULT_TIMEOUT_SECONDS = 15
+
+#: Older than any purchase the CAS can hold, for "we have seen all of it".
+BEGINNING_OF_TIME = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 LOGIN_PATH = "/login"
 # Cheapest authenticated page that carries the balance in its chrome.
@@ -127,6 +137,7 @@ class HdBoxProvider(IntegrationProvider):
     def _login(self) -> tuple[requests.Session | None, str, str]:
         """Return ``(session, error_code, error_detail)``."""
         session = requests.Session()
+        self._note(STEP_LOGIN)
         try:
             response = session.post(
                 self._url(LOGIN_PATH),
@@ -152,6 +163,7 @@ class HdBoxProvider(IntegrationProvider):
             response = session.get(self._url(path), timeout=self._timeout, **kwargs)
         except requests.RequestException as exc:
             return None, ERROR_UNREACHABLE, str(exc)
+        self._observe(http_status=response.status_code)
         body = response.text or ""
         if _LOGIN_FORM_RE.search(body):
             return None, ERROR_UNAUTHORIZED, "session expired"
@@ -190,6 +202,7 @@ class HdBoxProvider(IntegrationProvider):
         if session is None:
             return LookupResult(ok=False, error_code=code, error_detail=detail)
 
+        self._note(STEP_SEARCH)
         response, code, detail = self._authenticated_get(
             session, LIST_PATH, params={"limit": 10, "offset": 0, "cardNo": card_no}
         )
@@ -200,12 +213,18 @@ class HdBoxProvider(IntegrationProvider):
 
         # Served as text/html even when it is JSON, so parse before believing
         # anything about the shape.
+        self._note(STEP_PARSE)
         try:
             payload = json.loads(response.text or "")
         except ValueError:
+            # The endpoint that answers JSON stopped answering JSON: their
+            # side changed, which is not the same as a card we cannot find.
+            self._observe(shape_ok=False)
             return LookupResult(ok=False, error_code=ERROR_UNEXPECTED, error_detail="not JSON")
         if not isinstance(payload, dict):
+            self._observe(shape_ok=False)
             return LookupResult(ok=False, error_code=ERROR_UNEXPECTED, error_detail="not an object")
+        self._observe(shape_ok=True)
 
         rows = payload.get("rows") or []
         if payload.get("status") != "success" and not rows:
@@ -227,12 +246,19 @@ class HdBoxProvider(IntegrationProvider):
         if payload is None:
             return HistoryResult(ok=False, error_code=code, error_detail=detail)
         mine = (self.account.username or "").strip().casefold()
+        rows = payload.get("rows") or []
+        total = _as_int(payload.get("total")) or 0
+        # Only claim completeness when this page IS the whole card log — the
+        # ordinary case, since a card renewed yearly for a decade has ten rows.
+        # A truncated page would need the log to be newest-first for a partial
+        # claim to hold, and nothing in the provider's contract says so; the
+        # cost of guessing wrong is a top-up charged twice.
+        complete = offset + len(rows) >= total
         return HistoryResult(
             ok=True,
-            total=_as_int(payload.get("total")) or 0,
-            purchases=tuple(
-                _purchase_from_row(row, mine) for row in (payload.get("rows") or [])
-            ),
+            total=total,
+            purchases=tuple(_purchase_from_row(row, mine) for row in rows),
+            complete_since=BEGINNING_OF_TIME if complete else None,
         )
 
     def status_history(
@@ -265,6 +291,7 @@ class HdBoxProvider(IntegrationProvider):
         session, code, detail = self._login()
         if session is None:
             return OfferResult(ok=False, error_code=code, error_detail=detail)
+        self._note(STEP_FORM)
         response, code, detail = self._authenticated_get(
             session, f"{RENEW_VIEW_PATH}{card_no}"
         )
@@ -289,6 +316,9 @@ class HdBoxProvider(IntegrationProvider):
         if not options:
             # The page rendered but told us no prices — better to say so than to
             # show a cashier an empty picker that looks like "nothing to buy".
+            # Shape, not absence: a renew form always has a duration ladder, so
+            # none means the option markup moved.
+            self._observe(shape_ok=False)
             return OfferResult(ok=False, error_code=ERROR_UNEXPECTED)
         return OfferResult(ok=True, options=tuple(options))
 
@@ -329,8 +359,10 @@ class HdBoxProvider(IntegrationProvider):
         if response is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
 
+        self._note(STEP_FORM)
         form, error = _renew_payload(response.text or "", card_no, months)
         if form is None:
+            self._observe(shape_ok=False)
             return RechargeResult(
                 ok=False, error_code=ERROR_UNEXPECTED, error_detail=error
             )
@@ -349,7 +381,10 @@ class HdBoxProvider(IntegrationProvider):
                     ),
                 )
 
-        # Past this line a charge may have happened, whatever comes back.
+        # Past this line a charge may have happened, whatever comes back. The
+        # step is recorded BEFORE the request: a process that dies mid-call
+        # still leaves a row saying the money may have moved.
+        self._note(STEP_SUBMIT)
         try:
             reply = session.post(
                 self._url(RENEW_PATH),

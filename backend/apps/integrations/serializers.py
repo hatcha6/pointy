@@ -108,6 +108,11 @@ def card_payload(card) -> dict | None:
         "start_at": card.start_at,
         "expire_at": card.expire_at,
         "package_name": card.package_name,
+        # Present when one identifier holds several lines and a human has to
+        # tell them apart before anything is sold.
+        "provider_id": card.provider_id,
+        "holder_name": card.holder_name,
+        "card_balance": card.card_balance,
     }
 
 
@@ -120,17 +125,54 @@ def offer_payload(option, account=None, *, prices=None) -> dict:
     number from the invoice would be a bug the cashier discovers in front of
     the customer.
     """
+    face_value = getattr(option, "face_value", None)
     return {
         "code": option.code,
         "kind": option.kind,
         "label": option.label,
         "cost": option.cost,
-        "price": account.selling_price(option.cost, option.code, prices=prices)
+        "price": account.selling_price(
+            option.cost, option.code, prices=prices, floor=face_value
+        )
         if account
-        else option.cost,
+        else (face_value if face_value is not None else option.cost),
+        # Set when the provider, not the shop, fixes what this is worth: the
+        # face value of stored value. The till shows it so a cashier can see
+        # that 45 means 45.
+        "face_value": face_value,
         "months": option.months,
         "package_id": option.package_id,
         "package_name": option.package_name,
+    }
+
+
+def open_amount_payload(spec, account=None) -> dict | None:
+    """The provider will take any amount, not just the listed ones.
+
+    Carries the two coefficients a till needs to price an amount nobody has
+    quoted yet: ``price = max(face, amount * price_per_unit + price_fixed)``.
+    Sending those rather than the shop's markup *settings* keeps one copy of
+    the pricing rule — the till evaluates a line the server handed it instead
+    of reimplementing ``selling_price`` in Dart and drifting from it.
+    """
+    if spec is None:
+        return None
+    per_unit = spec.cost_ratio
+    fixed = Decimal("0")
+    if account is not None:
+        if account.markup_kind == account.Markup.PERCENT:
+            per_unit = spec.cost_ratio * (
+                Decimal("1") + (account.markup_value / Decimal("100"))
+            )
+        elif account.markup_kind == account.Markup.AMOUNT:
+            fixed = account.markup_value
+    return {
+        "minimum": spec.minimum,
+        "maximum": spec.maximum,
+        "step": spec.step,
+        "cost_ratio": spec.cost_ratio,
+        "price_per_unit": per_unit,
+        "price_fixed": fixed,
     }
 
 

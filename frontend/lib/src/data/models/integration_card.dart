@@ -37,9 +37,23 @@ class IntegrationCardInfo {
     this.startAt,
     this.expireAt,
     this.packageName = '',
+    this.providerId = '',
+    this.holderName = '',
+    this.cardBalance,
   });
 
+  /// What the provider's write path is keyed on — and so what a cart line
+  /// carries: HD Box's card number, LNET's username.
   final String cardNo;
+
+  /// The provider's own id for the line, when it differs from [cardNo].
+  final String providerId;
+
+  /// Who the line is registered to, where the provider will say.
+  final String holderName;
+
+  /// Money already sitting on the line, for providers that sell stored value.
+  final double? cardBalance;
 
   /// The provider's own wording ("On hold", "Active"). Shown verbatim next to
   /// our own reading of it, because the cashier may be asked to repeat it.
@@ -58,10 +72,23 @@ class IntegrationCardInfo {
   }
 
   /// HD Box status ids: 1/3 activatable, 4 locked, 5 inactive, 6/9 on hold.
+  ///
+  /// LNET has no numeric id and says it in words instead, so the word is read
+  /// when there is no id — otherwise every LNET line would be judged purely on
+  /// its expiry date and a suspended one would read as healthy.
   IntegrationCardHealth health({DateTime? now}) {
     if (statusId == 4) return IntegrationCardHealth.locked;
     if (statusId == 6 || statusId == 9 || statusId == 5) {
       return IntegrationCardHealth.expired;
+    }
+    if (statusId == null) {
+      final word = status.trim().toLowerCase();
+      if (word == 'suspended' || word == 'locked') {
+        return IntegrationCardHealth.locked;
+      }
+      if (word == 'expired' || word == 'inactive' || word == 'disabled') {
+        return IntegrationCardHealth.expired;
+      }
     }
     final days = daysRemaining(now: now);
     if (days == null) return IntegrationCardHealth.unknown;
@@ -78,6 +105,9 @@ class IntegrationCardInfo {
       startAt: _toDate(json['start_at']),
       expireAt: _toDate(json['expire_at']),
       packageName: json['package_name']?.toString() ?? '',
+      providerId: json['provider_id']?.toString() ?? '',
+      holderName: json['holder_name']?.toString() ?? '',
+      cardBalance: _toDouble(json['card_balance']),
     );
   }
 }
@@ -93,14 +123,18 @@ class IntegrationOffer {
     this.months = 0,
     this.packageId = '',
     this.packageName = '',
+    this.faceValue,
   });
 
   /// Stable within one lookup, e.g. `renew:12`.
   final String code;
 
-  /// Always `renew`: more time on the package the card already has. Package
-  /// switches are not offered — the provider hides them and a mis-tap would
-  /// break a subscriber's card.
+  /// `renew` — more time on the package the card already has. Package switches
+  /// are not offered: the provider hides them and a mis-tap would break a
+  /// subscriber's card.
+  ///
+  /// `topup` — money onto a stored-value line, in an amount the customer
+  /// chooses. These carry no [months]; do not print one for them.
   final String kind;
 
   /// The provider's own wording, e.g. "12 month 220.00$".
@@ -113,12 +147,19 @@ class IntegrationOffer {
   /// out server-side. The till shows this; [cost] is the shop's own business.
   final double price;
 
+  /// What the provider says this is worth, when the provider — not the shop —
+  /// decides: the face value of stored value. 45 dinars of credit sells for
+  /// 45, and the shop's income is the agency commission already inside [cost].
+  /// Null when the shop's markup is what sets the price.
+  final double? faceValue;
+
   double get margin => price - cost;
   final int months;
   final String packageId;
   final String packageName;
 
   bool get isRenewal => kind == 'renew';
+  bool get isTopUp => kind == 'topup';
 
   factory IntegrationOffer.fromJson(Map<String, Object?> json) {
     return IntegrationOffer(
@@ -130,8 +171,115 @@ class IntegrationOffer {
       months: _toInt(json['months']),
       packageId: json['package_id']?.toString() ?? '',
       packageName: json['package_name']?.toString() ?? '',
+      faceValue: _toDouble(json['face_value']),
     );
   }
+}
+
+/// A provider that will take any amount, not just the ones it listed.
+///
+/// When this is present the offers beside it are quick-pick buttons rather
+/// than the menu, and the till owes the cashier somewhere to type an amount —
+/// without one it would be strictly less capable than the provider's own
+/// portal, which is a poor reason to adopt Pointy.
+class IntegrationOpenAmount {
+  const IntegrationOpenAmount({
+    this.minimum = 1,
+    this.maximum,
+    this.step = 1,
+    this.costRatio = 1,
+    this.pricePerUnit = 1,
+    this.priceFixed = 0,
+  });
+
+  final double minimum;
+  final double? maximum;
+
+  /// Amounts must be a whole multiple of this.
+  final double step;
+
+  /// What the float pays per dinar of face value — 0.95 for a 5% commission.
+  final double costRatio;
+
+  /// Together these are the shop's pricing rule for an amount nobody quoted:
+  /// `price = max(face, amount * pricePerUnit + priceFixed)`. The server sends
+  /// them already worked out so the till evaluates its rule rather than
+  /// keeping a second copy of it that can drift.
+  final double pricePerUnit;
+  final double priceFixed;
+
+  double costOf(double amount) => _money(amount * costRatio);
+
+  /// What the customer pays for [amount] of face value. Never below face: the
+  /// shop's income is the commission inside [costOf], and selling stored value
+  /// under its face value loses money on every sale by construction.
+  double priceOf(double amount) {
+    final marked = _money(amount * pricePerUnit + priceFixed);
+    return marked > amount ? marked : _money(amount);
+  }
+
+  static double _money(double value) =>
+      double.parse(value.toStringAsFixed(2));
+
+  /// `null` when [amount] is sellable, else which rule it broke.
+  IntegrationAmountProblem? validate(double amount) {
+    if (amount <= 0) return IntegrationAmountProblem.notPositive;
+    if (amount < minimum) return IntegrationAmountProblem.belowMinimum;
+    final ceiling = maximum;
+    if (ceiling != null && amount > ceiling) {
+      return IntegrationAmountProblem.aboveMaximum;
+    }
+    if (step > 0) {
+      // Compare in whole steps to keep binary floating point out of it:
+      // 45.5 % 1 is not reliably 0.5 once it has been through a double.
+      final steps = amount / step;
+      if ((steps - steps.roundToDouble()).abs() > 1e-9) {
+        return IntegrationAmountProblem.notAMultiple;
+      }
+    }
+    return null;
+  }
+
+  factory IntegrationOpenAmount.fromJson(Map<String, Object?> json) {
+    return IntegrationOpenAmount(
+      minimum: _toDouble(json['minimum']) ?? 1,
+      maximum: _toDouble(json['maximum']),
+      step: _toDouble(json['step']) ?? 1,
+      costRatio: _toDouble(json['cost_ratio']) ?? 1,
+      pricePerUnit:
+          _toDouble(json['price_per_unit']) ?? _toDouble(json['cost_ratio']) ?? 1,
+      priceFixed: _toDouble(json['price_fixed']) ?? 0,
+    );
+  }
+}
+
+extension IntegrationOpenAmountOffer on IntegrationOpenAmount {
+  /// Turn a typed amount into an ordinary [IntegrationOffer].
+  ///
+  /// The code carries the amount (`topup:45`) exactly as a quick-pick's does,
+  /// so the cart, the fulfillment and the driver all see one kind of thing and
+  /// none of them needs a special case for "the cashier typed it".
+  IntegrationOffer offerFor(double amount, {String packageName = ''}) {
+    final whole = amount == amount.roundToDouble()
+        ? amount.toStringAsFixed(0)
+        : amount.toString();
+    return IntegrationOffer(
+      code: 'topup:$whole',
+      kind: 'topup',
+      label: '$whole LYD',
+      cost: costOf(amount),
+      price: priceOf(amount),
+      faceValue: amount,
+      packageName: packageName,
+    );
+  }
+}
+
+enum IntegrationAmountProblem {
+  notPositive,
+  belowMinimum,
+  aboveMaximum,
+  notAMultiple,
 }
 
 /// Everything one lookup returns — one round trip, because a customer is
@@ -169,10 +317,32 @@ class IntegrationCardSnapshot {
     this.currency = 'LYD',
     this.balance,
     this.offersErrorCode = '',
+    this.openAmount,
+    this.candidates = const [],
+    this.needsSelection = false,
+    this.historyKinds = const ['purchases', 'statuses'],
   });
 
   final IntegrationCardInfo card;
   final List<IntegrationOffer> offers;
+
+  /// Set when the provider takes any amount and [offers] are only shortcuts.
+  final IntegrationOpenAmount? openAmount;
+
+  /// Every line the search matched. One phone number can hold several — a
+  /// live one beside an expired one is ordinary — so when [needsSelection] is
+  /// true nothing has been priced yet and the cashier must choose first.
+  /// Guessing would top up somebody's dead second line and leave the one they
+  /// came in about still expired.
+  final List<IntegrationCardInfo> candidates;
+  final bool needsSelection;
+
+  /// Which history feeds this provider can answer. LNET keeps no state log,
+  /// and a tab that always errors reads to a cashier as the provider being
+  /// down — so the till offers only what is really there.
+  final List<String> historyKinds;
+
+  bool get hasStatusHistory => historyKinds.contains('statuses');
 
   /// The catalog variant a cart line for this provider must point at.
   final IntegrationServiceVariant serviceVariant;
@@ -191,12 +361,31 @@ class IntegrationCardSnapshot {
 
   bool get hasOffers => offers.isNotEmpty;
 
+  /// True when the cashier may type any amount rather than only tap one.
+  bool get allowsOpenAmount => openAmount != null;
+
   factory IntegrationCardSnapshot.fromJson(Map<String, Object?> json) {
     final offers = (json['offers'] as List<Object?>? ?? const [])
         .whereType<Map<String, Object?>>()
         .map(IntegrationOffer.fromJson)
         .toList(growable: false);
+    final candidates = (json['candidates'] as List<Object?>? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .map(IntegrationCardInfo.fromJson)
+        .toList(growable: false);
     return IntegrationCardSnapshot(
+      candidates: candidates,
+      needsSelection: json['needs_selection'] == true,
+      historyKinds: switch (json['history_kinds']) {
+        final List<Object?> kinds when kinds.isNotEmpty =>
+          kinds.map((k) => k.toString()).toList(growable: false),
+        // An older backend says nothing; it only had providers with both.
+        _ => const ['purchases', 'statuses'],
+      },
+      openAmount: switch (json['open_amount']) {
+        final Map<String, Object?> row => IntegrationOpenAmount.fromJson(row),
+        _ => null,
+      },
       card: IntegrationCardInfo.fromJson(
         (json['card'] as Map<String, Object?>?) ?? const {},
       ),

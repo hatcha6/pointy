@@ -188,8 +188,14 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
       textInputAction: TextInputAction.search,
       onSubmitted: (_) => _search(),
       decoration: InputDecoration(
-        labelText: l10n.rechargeSearchLabel,
-        hintText: l10n.rechargeSearchHint,
+        labelText: integrationSubscriberPrompt(
+          widget.viewModel.provider,
+          l10n,
+        ).label,
+        hintText: integrationSubscriberPrompt(
+          widget.viewModel.provider,
+          l10n,
+        ).hint,
         prefixIcon: const Icon(Icons.sim_card_outlined),
         suffixIcon: IconButton(
           icon: viewModel.isSearching
@@ -216,7 +222,10 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
         return [
           PointyEmptyState(
             icon: Icons.sim_card_outlined,
-            title: l10n.rechargeIdlePrompt,
+            title: integrationSubscriberPrompt(
+              widget.viewModel.provider,
+              l10n,
+            ).prompt,
           ),
         ];
       case RechargeLookupState.searching:
@@ -268,6 +277,19 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
   ) {
     final viewModel = widget.viewModel;
     final snapshot = viewModel.snapshot!;
+
+    if (viewModel.needsLineSelection) {
+      // Several lines matched. Nothing is priced and nothing is in a cart yet
+      // — the hero would have to pick one line to describe, and picking is
+      // exactly what has not happened.
+      return [
+        RechargeLinePicker(
+          lines: viewModel.candidates,
+          onSelect: viewModel.selectLine,
+        ),
+      ];
+    }
+
     final offers = _buildOffersSection(context, l10n, spacing);
     final history = _buildHistorySection(context, l10n, spacing);
     final isWide = MediaQuery.sizeOf(context).width >= AppBreakpoints.tabletMin;
@@ -332,21 +354,32 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
       ];
     }
 
+    final openAmount = viewModel.openAmount;
+    final isTopUp = openAmount != null;
     return [
       PointyDetailSection(
-        title: l10n.rechargeRenewHeading,
-        icon: Icons.autorenew,
+        title: isTopUp ? l10n.rechargeTopUpHeading : l10n.rechargeRenewHeading,
+        icon: isTopUp ? Icons.account_balance_wallet_outlined : Icons.autorenew,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             RechargeOfferGrid(
-              offers: viewModel.renewalOffers,
+              offers: viewModel.sellableOffers,
               selected: viewModel.selectedOffer,
               onSelect: viewModel.selectOffer,
             ),
+            if (openAmount != null) ...[
+              SizedBox(height: spacing.sm),
+              RechargeAmountField(
+                spec: openAmount,
+                value: viewModel.customAmount,
+                problem: viewModel.customAmountProblem,
+                onChanged: viewModel.setCustomAmount,
+              ),
+            ],
             SizedBox(height: spacing.sm),
             Text(
-              l10n.rechargePriceLiveNote,
+              isTopUp ? l10n.rechargeTopUpNote : l10n.rechargePriceLiveNote,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: context.pointyColors.mutedInk,
               ),
@@ -370,23 +403,27 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SegmentedButton<IntegrationHistoryKind>(
-              segments: [
-                ButtonSegment(
-                  value: IntegrationHistoryKind.purchases,
-                  label: Text(l10n.rechargeHistoryPurchases),
-                ),
-                ButtonSegment(
-                  value: IntegrationHistoryKind.statuses,
-                  label: Text(l10n.rechargeHistoryStatuses),
-                ),
-              ],
-              selected: {viewModel.historyKind},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) =>
-                  viewModel.showHistoryKind(selection.first),
-            ),
-            SizedBox(height: spacing.sm),
+            // Only the feeds this provider really has. LNET keeps no state
+            // log, and one tab is a label, not a choice.
+            if (viewModel.hasStatusHistory) ...[
+              SegmentedButton<IntegrationHistoryKind>(
+                segments: [
+                  ButtonSegment(
+                    value: IntegrationHistoryKind.purchases,
+                    label: Text(l10n.rechargeHistoryPurchases),
+                  ),
+                  ButtonSegment(
+                    value: IntegrationHistoryKind.statuses,
+                    label: Text(l10n.rechargeHistoryStatuses),
+                  ),
+                ],
+                selected: {viewModel.historyKind},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) =>
+                    viewModel.showHistoryKind(selection.first),
+              ),
+              SizedBox(height: spacing.sm),
+            ],
             RechargeHistoryList(
               page: viewModel.historyPage,
               isLoading: viewModel.isHistoryLoading,
@@ -410,10 +447,20 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
     // so below this the two stack instead of colliding.
     final isNarrow =
         MediaQuery.sizeOf(context).width < AppBreakpoints.tabletMin;
-    final summary = offer == null
-        ? l10n.rechargeSelectFirst
-        : '${offer.months > 0 ? l10n.rechargeMonths(offer.months) : offer.label}'
-              ' · ${formatMoney(offer.price)}';
+    // A stored-value top-up is one number, not a thing plus its price: "37
+    // LYD · 37.00 د.ل" says the same figure twice in two notations.
+    final summary = switch (offer) {
+      // While several lines are still on offer nothing has been priced, so
+      // naming a duration or an amount would be asking for the wrong thing.
+      null when viewModel.needsLineSelection => l10n.rechargeChooseLineHeading,
+      null => viewModel.allowsCustomAmount
+          ? l10n.rechargeSelectAmountFirst
+          : l10n.rechargeSelectFirst,
+      final chosen when chosen.months > 0 =>
+        '${l10n.rechargeMonths(chosen.months)} · ${formatMoney(chosen.price)}',
+      final chosen when chosen.isTopUp => formatMoney(chosen.price),
+      final chosen => '${chosen.label} · ${formatMoney(chosen.price)}',
+    };
 
     return SafeArea(
       top: false,

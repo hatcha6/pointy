@@ -104,6 +104,230 @@ class RechargeCardHero extends StatelessWidget {
   }
 }
 
+/// The lines one search matched, when it matched more than one.
+///
+/// A household can hold several lines on one phone number — a live one beside
+/// an expired one is ordinary — and the expired one is usually the reason they
+/// walked in. Choosing for them would top up the wrong line and leave the
+/// customer still cut off, so this asks, and shows each line's state next to
+/// its name so the answer is obvious rather than a guess.
+class RechargeLinePicker extends StatelessWidget {
+  const RechargeLinePicker({
+    super.key,
+    required this.lines,
+    required this.onSelect,
+    this.now,
+  });
+
+  final List<IntegrationCardInfo> lines;
+  final ValueChanged<IntegrationCardInfo> onSelect;
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final theme = Theme.of(context);
+
+    return PointyDetailSection(
+      title: l10n.rechargeChooseLineHeading,
+      icon: Icons.call_split,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.rechargeChooseLinePrompt(lines.length),
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+          SizedBox(height: spacing.sm),
+          for (final line in lines) ...[
+            _LineRow(line: line, onTap: () => onSelect(line), now: now),
+            SizedBox(height: spacing.xs),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LineRow extends StatelessWidget {
+  const _LineRow({required this.line, required this.onTap, this.now});
+
+  final IntegrationCardInfo line;
+  final VoidCallback onTap;
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+    final health = line.health(now: now);
+    final tone = cardHealthColor(health, colors);
+
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        child: Container(
+          padding: EdgeInsets.all(spacing.sm),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border.all(color: colors.line),
+            borderRadius: BorderRadius.circular(PointyRadii.card),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: tone,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      ltrIsolated(line.cardNo),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    if (line.packageName.isNotEmpty)
+                      Text(
+                        line.packageName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.mutedInk,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              SizedBox(width: spacing.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    cardHealthLabel(health, l10n),
+                    style: theme.textTheme.labelMedium?.copyWith(color: tone),
+                  ),
+                  if (line.expireAt != null)
+                    Text(
+                      formatShortDate(line.expireAt!),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.mutedInk,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Somewhere to type an amount the quick-picks do not cover.
+///
+/// The provider takes any amount, so a till that only offered the buttons
+/// would be less capable than the portal the shop already uses. The field
+/// prices as it is typed and says why an amount cannot be sold rather than
+/// silently refusing to select it.
+class RechargeAmountField extends StatefulWidget {
+  const RechargeAmountField({
+    super.key,
+    required this.spec,
+    required this.onChanged,
+    required this.problem,
+    this.value,
+  });
+
+  final IntegrationOpenAmount spec;
+  final ValueChanged<double?> onChanged;
+  final IntegrationAmountProblem? problem;
+
+  /// The amount currently selected, so tapping a quick-pick can clear this.
+  final double? value;
+
+  @override
+  State<RechargeAmountField> createState() => _RechargeAmountFieldState();
+}
+
+class _RechargeAmountFieldState extends State<RechargeAmountField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: _format(widget.value),
+  );
+
+  static String _format(double? value) {
+    if (value == null) return '';
+    return value == value.roundToDouble()
+        ? value.toStringAsFixed(0)
+        : value.toString();
+  }
+
+  @override
+  void didUpdateWidget(RechargeAmountField old) {
+    super.didUpdateWidget(old);
+    // A quick-pick tap clears the typed amount upstream; follow it here so the
+    // field cannot keep showing a number that is not what will be sold.
+    if (widget.value == null && old.value != null && _controller.text.isNotEmpty) {
+      _controller.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String? _problemText(AppLocalizations l10n) {
+    return switch (widget.problem) {
+      IntegrationAmountProblem.belowMinimum => l10n.rechargeAmountBelowMinimum(
+        formatMoney(widget.spec.minimum),
+      ),
+      IntegrationAmountProblem.aboveMaximum => l10n.rechargeAmountAboveMaximum(
+        formatMoney(widget.spec.maximum ?? 0),
+      ),
+      IntegrationAmountProblem.notAMultiple => l10n.rechargeAmountNotWhole,
+      IntegrationAmountProblem.notPositive => l10n.rechargeAmountInvalid,
+      null => null,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return TextField(
+      controller: _controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textDirection: TextDirection.ltr,
+      decoration: InputDecoration(
+        labelText: l10n.rechargeCustomAmountLabel,
+        hintText: l10n.rechargeCustomAmountHint,
+        prefixIcon: const Icon(Icons.edit_outlined),
+        errorText: _problemText(l10n),
+      ),
+      onChanged: (raw) {
+        final text = raw.trim();
+        widget.onChanged(text.isEmpty ? null : double.tryParse(text));
+      },
+    );
+  }
+}
+
 /// The price ladder, as big tap targets. Nothing is preselected: a default
 /// duration is a sale waiting to be made by accident.
 class RechargeOfferGrid extends StatelessWidget {
@@ -118,20 +342,43 @@ class RechargeOfferGrid extends StatelessWidget {
   final IntegrationOffer? selected;
   final ValueChanged<IntegrationOffer> onSelect;
 
+  /// Narrowest a tile may get before the grid drops a column. Sized for a
+  /// till: "12 شهراً" beside "245.00 د.ل" has to fit without eliding.
+  static const double minTileWidth = 140;
+
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
-    return Wrap(
-      spacing: spacing.sm,
-      runSpacing: spacing.sm,
-      children: [
-        for (final offer in offers)
-          _OfferCard(
-            offer: offer,
-            isSelected: selected?.code == offer.code,
-            onTap: () => onSelect(offer),
-          ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Tiles are sized to fill the row rather than left at a fixed width:
+        // a fixed width leaves a ragged edge wherever the pane is not an
+        // exact multiple of it, which on a two-column till reads as a broken
+        // layout rather than a deliberate one.
+        final available = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : minTileWidth;
+        final gap = spacing.sm;
+        var columns = ((available + gap) / (minTileWidth + gap)).floor();
+        columns = columns.clamp(1, offers.isEmpty ? 1 : offers.length);
+        final width = (available - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final offer in offers)
+              SizedBox(
+                width: width,
+                child: _OfferCard(
+                  offer: offer,
+                  isSelected: selected?.code == offer.code,
+                  onTap: () => onSelect(offer),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -154,9 +401,16 @@ class _OfferCard extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final theme = Theme.of(context);
 
+    // A duration card names the duration; a top-up card names the amount of
+    // credit. Its provider label ("45 LYD") would otherwise repeat the price
+    // underneath in a second currency notation, which reads as two numbers.
+    final face = offer.faceValue;
     final title = offer.months > 0
         ? l10n.rechargeMonths(offer.months)
-        : offer.label;
+        : (offer.isTopUp && face != null ? formatMoney(face) : offer.label);
+    // Only worth a second line when the shop charges something other than the
+    // face value; otherwise one number is the whole truth.
+    final showsPrice = !offer.isTopUp || face == null || offer.price != face;
 
     return Semantics(
       selected: isSelected,
@@ -165,7 +419,6 @@ class _OfferCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(PointyRadii.card),
         child: Container(
-          width: 150,
           padding: EdgeInsets.all(spacing.sm),
           decoration: BoxDecoration(
             color: isSelected ? colors.primaryContainer : colors.surface,
@@ -186,7 +439,13 @@ class _OfferCard extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall,
+                      style: showsPrice
+                          ? theme.textTheme.titleSmall
+                          : theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  isSelected ? colors.primaryDark : colors.ink,
+                            ),
                     ),
                   ),
                   if (isSelected)
@@ -197,14 +456,16 @@ class _OfferCard extends StatelessWidget {
                     ),
                 ],
               ),
-              SizedBox(height: spacing.xs),
-              Text(
-                formatMoney(offer.price),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? colors.primaryDark : colors.ink,
+              if (showsPrice) ...[
+                SizedBox(height: spacing.xs),
+                Text(
+                  formatMoney(offer.price),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? colors.primaryDark : colors.ink,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

@@ -27,6 +27,7 @@ from .models import (
     IntegrationFulfillment,
     IntegrationSubscriber,
 )
+from .providers import provider_for
 from .provisioning import service_sku
 
 
@@ -82,10 +83,23 @@ def resolve_line_integration(payload: dict, variant):
             {"integration": "This provider is not configured."}
         )
 
-    try:
-        cost = Decimal(payload["cost"])
-    except (KeyError, TypeError, InvalidOperation):
-        raise serializers.ValidationError({"integration": "A quoted cost is required."})
+    option_code = (payload.get("option_code") or "").strip()
+    # A driver that can price its own options offline is believed over the
+    # till. For stored value that is not a nicety: the option code carries the
+    # face value, so the shop's cost and the customer's price are both
+    # arithmetic here, and a cart line cannot assert either of them.
+    quote = provider_for(account).quote(option_code)
+    if quote is not None:
+        cost = quote.cost
+        floor = quote.face_value
+    else:
+        floor = None
+        try:
+            cost = Decimal(payload["cost"])
+        except (KeyError, TypeError, InvalidOperation):
+            raise serializers.ValidationError(
+                {"integration": "A quoted cost is required."}
+            )
 
     subscriber_ref = (payload.get("subscriber_ref") or "").strip()
     # The card gets a record on its first sale, so the invoice can name its
@@ -101,7 +115,7 @@ def resolve_line_integration(payload: dict, variant):
         "provider": provider,
         "subscriber": subscriber,
         "subscriber_ref": subscriber_ref,
-        "option_code": (payload.get("option_code") or "").strip(),
+        "option_code": option_code,
         "option_label": (payload.get("option_label") or "").strip(),
         "months": int(payload.get("months") or 0),
         "package_id": (payload.get("package_id") or "").strip(),
@@ -109,7 +123,7 @@ def resolve_line_integration(payload: dict, variant):
         "cost": cost,
         # Priced by option, not by a blanket rule: the same shop sells one
         # month at +5 and twelve at +20.
-        "price": account.selling_price(cost, (payload.get("option_code") or "").strip()),
+        "price": account.selling_price(cost, option_code, floor=floor),
     }
 
 

@@ -34,6 +34,30 @@ String integrationProviderTagline(
   };
 }
 
+/// What a cashier is being asked to type, per provider.
+///
+/// HD Box identifies a subscriber by a card number on a physical card; LNET by
+/// the phone number, username or contract the line was sold under. Asking for
+/// "the card number" in front of an LNET customer who has no card is the kind
+/// of small wrongness that makes a cashier distrust the screen.
+({String label, String hint, String prompt}) integrationSubscriberPrompt(
+  IntegrationProviderKey key,
+  AppLocalizations l10n,
+) {
+  return switch (key) {
+    IntegrationProviderKey.lnet => (
+      label: l10n.rechargeSearchLabelLine,
+      hint: l10n.rechargeSearchHintLine,
+      prompt: l10n.rechargeIdlePromptLine,
+    ),
+    _ => (
+      label: l10n.rechargeSearchLabel,
+      hint: l10n.rechargeSearchHint,
+      prompt: l10n.rechargeIdlePrompt,
+    ),
+  };
+}
+
 IconData integrationProviderIcon(IntegrationProviderKey key) {
   return switch (key) {
     IntegrationProviderKey.hdbox => Icons.live_tv_outlined,

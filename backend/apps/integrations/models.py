@@ -135,7 +135,7 @@ class IntegrationAccount(SecretStorageMixin, TimeStampedModel):
         default = spec.default_base_url if spec else ""
         return (self.base_url or default).rstrip("/")
 
-    def selling_price(self, cost, option_code: str = "", *, prices=None):
+    def selling_price(self, cost, option_code: str = "", *, prices=None, floor=None):
         """What the customer pays for a top-up that costs the float ``cost``.
 
         Four sources, in order: the price the owner set for **this option**,
@@ -148,13 +148,25 @@ class IntegrationAccount(SecretStorageMixin, TimeStampedModel):
         instruction to sell at a loss. The settings screen surfaces the
         difference rather than leaving it silent.
 
+        ``floor`` raises that bar when the *provider* fixes a retail minimum
+        the markup rules know nothing about. Stored value is the case: the
+        shop's income is the agency commission already inside ``cost``, and a
+        markup of "none" would otherwise sell a 45-dinar top-up for 42.75.
+
         ``prices`` lets a caller pass an already-loaded ``{option_code: price}``
         map so pricing a whole ladder is one query rather than one per option.
         """
         from decimal import ROUND_HALF_UP, Decimal
 
         cost = Decimal(cost)
-        floor = cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        least = cost
+        if floor is not None:
+            # A provider-set floor, e.g. the face value of stored value. It
+            # can sit *above* cost — that is the whole point of it: 45 dinars
+            # of credit costs the float 42.75 and may never be sold for less
+            # than 45, however the shop's markup is configured.
+            least = max(least, Decimal(floor))
+        floor = least.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         override = None
         if option_code:

@@ -47,7 +47,13 @@ class ProbeResult:
 
 @dataclass(frozen=True)
 class CardInfo:
-    """One subscriber card/line as the provider describes it."""
+    """One subscriber card/line as the provider describes it.
+
+    ``card_no`` is whatever the provider's write path is keyed on, because it
+    is what a fulfillment stores and replays: HD Box's card number, LNET's
+    username. ``label`` and ``holder_name`` exist so a picker can show a human
+    which line is which when a search matched several.
+    """
 
     card_no: str
     status: str = ""
@@ -55,14 +61,41 @@ class CardInfo:
     start_at: datetime | None = None
     expire_at: datetime | None = None
     package_name: str = ""
+    #: The provider's own id for the line, when it differs from ``card_no``
+    #: (LNET keys its pages on a numeric user id but shows the username).
+    provider_id: str = ""
+    #: Display sugar for a multi-line picker; never an identifier.
+    label: str = ""
+    holder_name: str = ""
+    #: Stored value already sitting on the line, for providers that sell it.
+    card_balance: Decimal | None = None
 
 
 @dataclass(frozen=True)
 class LookupResult:
+    """What a search found — which may be more than one thing.
+
+    A subscriber identifier is not always unique. LNET lets one phone number,
+    one name or one contract hold **several lines**, each its own username with
+    its own package, status and expiry, and a household with an expired line
+    beside a live one is ordinary rather than exotic. So a lookup answers with
+    everything it matched and the caller decides.
+
+    ``card`` is the single match, and is set *only* when there is exactly one.
+    When ``candidates`` holds more, the till has to ask which line before
+    anything may be quoted or bought: guessing would recharge somebody's dead
+    second line and leave the one they came in about still expired.
+    """
+
     ok: bool
     card: CardInfo | None = None
+    candidates: tuple[CardInfo, ...] = ()
     error_code: str = ""
     error_detail: str = ""
+
+    @property
+    def is_ambiguous(self) -> bool:
+        return len(self.candidates) > 1
 
 
 @dataclass(frozen=True)
@@ -138,8 +171,24 @@ class HistoryResult:
     total: int = 0
     purchases: tuple[PurchaseEntry, ...] = ()
     statuses: tuple[StatusEntry, ...] = ()
+    #: **Every** purchase this provider recorded at or after this instant is
+    #: present in ``purchases``. ``None`` means the driver makes no such claim.
+    #:
+    #: This is what lets absence be read as proof. Reconciliation may only
+    #: return a sent-but-unconfirmed charge to retryable on the strength of
+    #: "the provider has no record of it", and that inference is sound only
+    #: where the page actually reaches back past the attempt. A driver that
+    #: read one page of a long log must say where its knowledge stops, or a
+    #: top-up that merely scrolled off the end would be charged twice.
+    complete_since: datetime | None = None
     error_code: str = ""
     error_detail: str = ""
+
+    def covers(self, moment: datetime | None) -> bool:
+        """True when this page is complete back past ``moment``."""
+        if moment is None or self.complete_since is None:
+            return False
+        return self.complete_since <= moment
 
 
 @dataclass(frozen=True)
@@ -152,24 +201,82 @@ class RechargeOption:
     """
 
     code: str                    # stable within a lookup, e.g. "renew:12"
-    kind: str                    # RECHARGE_RENEW
+    kind: str                    # RECHARGE_RENEW or RECHARGE_TOPUP
     label: str                   # the provider's own wording
     cost: Decimal
     months: int = 0
     package_id: str = ""
     package_name: str = ""
+    #: What the customer should be charged, when the *provider* determines it
+    #: rather than the shop. For a stored-value top-up this is the face value:
+    #: 45 dinars of credit is sold for 45 dinars, and the shop's income is the
+    #: agency commission already baked into ``cost``. Distinct from the
+    #: catalog's ``suggested_retail``, which is reference data we typed in;
+    #: this one is read from the sale itself and is a **floor**, because
+    #: selling stored value for less than its face value loses money on every
+    #: sale by construction. ``None`` means the shop's markup decides.
+    face_value: Decimal | None = None
 
 
-#: The only thing a till sells: more time on the package a card already has.
-#: Moving a subscriber between packages is deliberately not modelled — see
-#: apps.integrations.providers.hdbox for why.
+#: More time on the package a card already has. Moving a subscriber between
+#: packages is deliberately not modelled — see providers.hdbox for why.
 RECHARGE_RENEW = "renew"
+
+#: Money onto a stored-value account, in an amount the customer chooses. LNET
+#: bills this way: the till does not buy "three months", it pays some number of
+#: dinars into a line and the provider's own billing spends it down. The two
+#: kinds are not interchangeable and a client must not assume ``months``.
+RECHARGE_TOPUP = "topup"
+
+
+@dataclass(frozen=True)
+class OpenAmount:
+    """A provider that will take any amount, not just the ones we listed.
+
+    The options beside this are convenience buttons, not the menu. A till that
+    renders only them is strictly less capable than the portal the shop is
+    already using — which would be a poor reason to adopt Pointy — so a
+    provider that answers with an ``OpenAmount`` must also be given somewhere
+    to type one.
+    """
+
+    minimum: Decimal
+    maximum: Decimal | None = None
+    #: Amounts must be a whole multiple of this. ``1`` means whole dinars.
+    step: Decimal = Decimal("1")
+    #: What the float pays per dinar of face value — the agency commission
+    #: expressed as a multiplier, e.g. ``0.95`` for a 5% margin. Quoted by the
+    #: driver rather than assumed by the caller.
+    cost_ratio: Decimal = Decimal("1")
+
+    def cost_of(self, amount: Decimal) -> Decimal:
+        """What the agency float pays for ``amount`` of face value."""
+        from decimal import ROUND_HALF_UP
+
+        return (Decimal(amount) * self.cost_ratio).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+    def validate(self, amount: Decimal) -> str:
+        """``""`` when ``amount`` is sellable, else a short reason."""
+        amount = Decimal(amount)
+        if amount <= 0:
+            return "amount must be positive"
+        if amount < self.minimum:
+            return f"minimum is {self.minimum}"
+        if self.maximum is not None and amount > self.maximum:
+            return f"maximum is {self.maximum}"
+        if self.step > 0 and (amount % self.step) != 0:
+            return f"amount must be a multiple of {self.step}"
+        return ""
 
 
 @dataclass(frozen=True)
 class OfferResult:
     ok: bool
     options: tuple[RechargeOption, ...] = ()
+    #: Set when ``options`` are shortcuts rather than the whole menu.
+    open_amount: OpenAmount | None = None
     error_code: str = ""
     error_detail: str = ""
 
@@ -199,13 +306,74 @@ class RechargeResult:
         return not self.ok and not self.indeterminate
 
 
+@dataclass(frozen=True)
+class OptionQuote:
+    """What an option costs and must not be sold below, worked out locally.
+
+    Checkout runs inside a transaction and must not call a provider, so a
+    driver that *can* derive its own numbers from an option code says so here
+    and the till's figures stop being something the client asserts. A driver
+    that cannot — because only the provider knows the price — returns ``None``
+    and the quoted cost travels with the cart line as before.
+    """
+
+    cost: Decimal
+    #: The retail floor. See ``RechargeOption.face_value``.
+    face_value: Decimal | None = None
+
+
+#: The two history feeds a provider may be able to answer.
+HISTORY_PURCHASES = "purchases"
+HISTORY_STATUSES = "statuses"
+
+
 class IntegrationProvider:
     """One instance per configured account."""
 
     key = ""
 
+    #: Which history feeds this driver can actually answer. Declared rather
+    #: than discovered, because the till renders a tab per kind and a tab that
+    #: always errors is worse than one that was never offered — a cashier
+    #: reads it as the provider being down.
+    history_kinds: tuple[str, ...] = (HISTORY_PURCHASES, HISTORY_STATUSES)
+
     def __init__(self, account):
         self.account = account
+        #: Set by the telemetry wrapper for the duration of one call.
+        self._call = None
+
+    def _note(self, step: str) -> None:
+        """Say how far this call got, for telemetry. Never fails.
+
+        A driver calls this as it moves through the provider's conversation.
+        On a failure the last step recorded IS the diagnosis — "login fine,
+        search fine, the form did not render" names a changed selector, which
+        an error code alone never could.
+        """
+        call = getattr(self, "_call", None)
+        if call is not None:
+            call.step = step
+
+    def _observe(self, **fields) -> None:
+        """Attach detail to this call's telemetry row. Never fails."""
+        call = getattr(self, "_call", None)
+        if call is None:
+            return
+        for name, value in fields.items():
+            if hasattr(call, name):
+                setattr(call, name, value)
+            else:  # pragma: no cover - a typo must not become a crash
+                call.extra[name] = value
+
+    def quote(self, option_code: str) -> "OptionQuote | None":
+        """Cost and retail floor for an option, **without any network call**.
+
+        Pure arithmetic over the option code and the account's own settings.
+        Safe to call inside a transaction; must never raise and must never
+        reach the provider. ``None`` means this driver cannot price offline.
+        """
+        return None
 
     def probe(self) -> ProbeResult:
         """Authenticate and report the agency float. Must never raise."""
@@ -261,10 +429,20 @@ _REGISTRY: dict[str, type[IntegrationProvider]] = {}
 
 
 def register(provider_key: str):
+    """Put a driver in the registry — and make it observable.
+
+    Instrumentation happens here rather than in each driver so that a provider
+    added next year is measured whether or not its author thought about it.
+    The same totality argument as :class:`PlannedProvider`: the system should
+    not have a quiet corner that only shows up when something breaks in it.
+    """
+
     def _decorator(cls):
+        from apps.integrations.telemetry import observe
+
         cls.key = provider_key
         _REGISTRY[provider_key] = cls
-        return cls
+        return observe(cls)
 
     return _decorator
 

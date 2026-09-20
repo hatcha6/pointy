@@ -4,8 +4,30 @@
     {
       "name": "register-session-preview",
       "runtimeExecutable": "flutter",
-      "runtimeArgs": ["run", "-d", "web-server", "--web-port", "8791", "-t", "lib/dev/register_session_preview.dart"],
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "8791",
+        "-t",
+        "lib/dev/register_session_preview.dart"
+      ],
       "port": 8791
+    },
+    {
+      "name": "recharge-preview",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "8792",
+        "-t",
+        "lib/dev/recharge_preview.dart"
+      ],
+      "port": 8792
     }
   ]
 }

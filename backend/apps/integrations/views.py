@@ -29,6 +29,7 @@ from .serializers import (
     TopUpWriteSerializer,
     ProviderSerializer,
     card_payload,
+    open_amount_payload,
     charge_payload,
     offer_payload,
     float_payload,
@@ -185,22 +186,16 @@ class IntegrationLookupView(APIView):
             return Response({"ok": False, "error_code": ERROR_UNAVAILABLE})
 
         result = provider_for(account).lookup(request.query_params.get("card_no", ""))
-        card = result.card
         return Response(
             {
                 "ok": result.ok,
                 "error_code": result.error_code,
                 "error_detail": result.error_detail,
-                "card": None
-                if card is None
-                else {
-                    "card_no": card.card_no,
-                    "status": card.status,
-                    "status_id": card.status_id,
-                    "start_at": card.start_at,
-                    "expire_at": card.expire_at,
-                    "package_name": card.package_name,
-                },
+                # Set only when the search matched exactly one line.
+                "card": card_payload(result.card),
+                # Every line the term matched. One phone number can hold
+                # several, so this is the list and ``card`` is the shortcut.
+                "candidates": [card_payload(c) for c in result.candidates],
             }
         )
 
@@ -278,6 +273,23 @@ class IntegrationCardView(APIView):
                 }
             )
 
+        if lookup.is_ambiguous:
+            # One phone number, several lines. Quoting the first would offer a
+            # cashier a top-up for somebody's dead second line while the one
+            # the customer came in about stays expired — so this answers with
+            # the choice instead, and the till asks before anything is priced.
+            return Response(
+                {
+                    "ok": True,
+                    "needs_selection": True,
+                    "candidates": [card_payload(c) for c in lookup.candidates],
+                    "service_variant": _service_variant_payload(provider),
+                    "currency": spec.currency,
+                    "balance": account.balance,
+                    "balance_at": account.balance_at,
+                }
+            )
+
         # Prices are quoted live and never cached — see RechargeOption.
         offers = driver.offers(card_no)
         # Teach Shop Settings what there is to price. The ladder is per-card,
@@ -301,6 +313,18 @@ class IntegrationCardView(APIView):
                     for option in offers.options
                 ],
                 "offers_error_code": "" if offers.ok else offers.error_code,
+                # When set, the listed offers are shortcuts and the provider
+                # will take any amount in this range — the till must give the
+                # cashier somewhere to type one, or it is less capable than
+                # the portal the shop already uses.
+                "open_amount": open_amount_payload(offers.open_amount, account),
+                # False here, but always present so the till has one shape to
+                # read rather than two.
+                "needs_selection": False,
+                # Which history tabs this provider can actually answer. LNET
+                # keeps no state log, and a tab that always errors reads to a
+                # cashier as the provider being down.
+                "history_kinds": list(driver.history_kinds),
                 # The cart line must point at a real variant, so the till is
                 # given the whole identity rather than just an id it would
                 # have to go and look up mid-sale.

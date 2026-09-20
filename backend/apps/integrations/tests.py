@@ -22,6 +22,7 @@ from apps.core.roles import (
     MANAGER_GROUP,
     ensure_role_groups,
 )
+from apps.core.timeutils import business_timezone
 from apps.customers.models import Customer
 from apps.expenses.models import Expense
 from apps.notifications.models import BusinessNotification
@@ -32,8 +33,11 @@ from apps.sales.services import checkout_order
 from apps.treasury.models import MoneyAccount, MoneyTransfer
 from apps.treasury.position import treasury_position
 
+import json
+
 from . import catalog
 from . import float_ledger
+from . import telemetry as integ_telemetry
 from . import recharge
 from .fulfillment import resolve_line_integration
 from .reconciliation import reconcile_account
@@ -44,14 +48,17 @@ from .models import (
 )
 from .providers import is_implemented, provider_for
 from .providers.base import (
+    ERROR_INDETERMINATE,
     ERROR_NOT_CONFIGURED,
     ERROR_NOT_FOUND,
+    ERROR_PROVIDER_ERROR,
     ERROR_UNAUTHORIZED,
     ERROR_UNAVAILABLE,
     ERROR_UNEXPECTED,
+    ERROR_UNREACHABLE,
     ProbeResult,
 )
-from .providers.base import RechargeOption
+from .providers.base import HistoryResult, RechargeOption
 from .providers import hdbox
 from .providers.hdbox import HdBoxProvider
 from .provisioning import service_variant_for
@@ -121,14 +128,20 @@ class CatalogTests(TestCase):
 
     def test_availability_matches_which_drivers_are_real(self):
         self.assertTrue(is_implemented("hdbox"))
-        self.assertFalse(is_implemented("lnet"))
+        self.assertTrue(is_implemented("lnet"))
         self.assertFalse(is_implemented("qareeb"))
 
     def test_planned_providers_say_why(self):
-        self.assertEqual(
-            catalog.LNET.blocked_reason, catalog.BLOCKED_DRIVER_IN_PROGRESS
-        )
         self.assertEqual(catalog.QAREEB.blocked_reason, catalog.BLOCKED_AWAITING_ACCESS)
+
+    def test_an_available_provider_gives_no_blocked_reason(self):
+        # The two fields are one statement. A provider that works while still
+        # naming an excuse would render as both ready and blocked.
+        for spec in catalog.PROVIDERS:
+            if spec.is_available:
+                self.assertEqual(spec.blocked_reason, "", spec.key)
+            else:
+                self.assertNotEqual(spec.blocked_reason, "", spec.key)
 
     def test_every_provider_settles_in_dinar(self):
         # HD Box prints a "$" glyph on a balance that is Libyan dinar. If this
@@ -250,7 +263,7 @@ class HdBoxDriverTests(TestCase):
 
 class PlannedProviderTests(TestCase):
     def test_planned_provider_refuses_uniformly(self):
-        account = IntegrationAccount.objects.create(provider="lnet")
+        account = IntegrationAccount.objects.create(provider="qareeb")
         driver = provider_for(account)
         self.assertEqual(driver.probe().error_code, ERROR_UNAVAILABLE)
         self.assertEqual(driver.lookup("1").error_code, ERROR_UNAVAILABLE)
@@ -315,8 +328,9 @@ class IntegrationApiTests(TestCase):
         self.assertEqual(keys, ["hdbox", "lnet", "qareeb"])
         by_key = {p["key"]: p for p in resp.data["providers"]}
         self.assertTrue(by_key["hdbox"]["is_configurable"])
-        self.assertFalse(by_key["lnet"]["is_configurable"])
-        self.assertEqual(by_key["lnet"]["blocked_reason"], "driver_in_progress")
+        self.assertTrue(by_key["lnet"]["is_configurable"])
+        self.assertFalse(by_key["qareeb"]["is_configurable"])
+        self.assertEqual(by_key["qareeb"]["blocked_reason"], "awaiting_access")
         self.assertIsNone(by_key["hdbox"]["account"])
 
     def test_cashier_cannot_read_integration_settings(self):
@@ -360,10 +374,12 @@ class IntegrationApiTests(TestCase):
     def test_planned_provider_cannot_be_configured(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.put(
-            "/api/integrations/lnet/", {"username": "x", "password": "y"}, format="json"
+            "/api/integrations/qareeb/",
+            {"username": "x", "password": "y"},
+            format="json",
         )
         self.assertEqual(resp.status_code, 409)
-        self.assertFalse(IntegrationAccount.objects.filter(provider="lnet").exists())
+        self.assertFalse(IntegrationAccount.objects.filter(provider="qareeb").exists())
 
     def test_unknown_provider_is_404(self):
         self.client.force_authenticate(self.manager)
@@ -2118,3 +2134,1022 @@ class UnresolvedRechargeNotificationTests(TestCase):
                 status=BusinessNotification.Status.ACTIVE,
             ).exists()
         )
+
+
+# --------------------------------------------------------------------------
+# LNET
+#
+# The fixtures below are trimmed from a real reseller session captured on
+# 2026-09-20, and they keep the two things that make this portal hostile to
+# parse: tables whose unused columns ship as HTML **comments** that do not line
+# up between header and body, and JSON answers served as ``text/html``.
+# Synthesising tidier markup would test a portal we do not have.
+# --------------------------------------------------------------------------
+from .providers import lnet as lnet_module  # noqa: E402
+from .providers.lnet import LnetProvider  # noqa: E402
+
+LNET_LOGIN_PAGE = """
+<form action="/lnet-billing/public/login" method="post">
+  <div style="display:none">
+  <input type="hidden" name="ci_csrf_token" value="tok-from-login" /></div>
+  <input type="text" name="login" /><input type="password" name="password" />
+</form>
+"""
+
+LNET_HOME_PAGE = "<h1>Welcome Back النسيم للهاتف المحمول !</h1>"
+
+
+def _lnet_user_row(username, user_id, *, start, finish, status, plan, money="0"):
+    """One result row, commented-out cells and all — exactly as served."""
+    return f"""
+    <tr>
+      <td class="column-check"><input type="checkbox" name="checked[]" value="{user_id}" /></td>
+      <td><a href="https://b/lnet-billing/public/admin/settings/users/edit/{user_id}">{username}</a> </td>
+      <!--<td></td>-->
+      <td>{start}</td>
+      <!--<td></td>-->
+      <td>{finish}</td>
+      <td></td>
+      <td class="u_d_balance" data-username="{username}" data-custid="{user_id}"><img src="x"></td>
+      <td class='last-login'>{money}</td>
+      <!--<td></td>-->
+      <td class='status'> <span class="label label-success">{status}</span> </td>
+      <td></td>
+      <td><a href="https://b/lnet-billing/public/admin/settings/users/statistics/{user_id}?refresh-records=true">Show Statistics</a></td>
+      <td><a href="https://b/lnet-billing/public/admin/settings/users/recharge/{user_id}"
+             data-toggle="popover" title="Service Plan Name" data-content="{plan}" >Recharge</a></td>
+    </tr>"""
+
+
+def lnet_users_page(*rows) -> str:
+    """The user-search result table. ``rows`` may be empty (no match)."""
+    return f"""
+    <table class="table">
+      <thead><tr>
+        <th></th><th>Username</th>
+        <!--<th>Display Name</th>-->
+        <th>Service Start Date</th>
+        <!--<th>Email</th>-->
+        <th>Service Finish Date</th><th>Role</th><th>Up/Down Balance</th>
+        <th>Money Balance</th>
+        <!--<th>Rent Debt</th>-->
+        <th>Service Status</th><th>Expiry Date</th>
+        <th>Statistics</th><th>Recharge</th>
+      </tr></thead>
+      <tbody>{"".join(rows)}</tbody>
+    </table>"""
+
+
+LNET_ONE_LINE = lnet_users_page(
+    _lnet_user_row(
+        "alhussainbasheir", "214737",
+        start="2026-08-24", finish="2026-09-23",
+        status="Active", plan="Unlimited Home Basic",
+    )
+)
+
+# One phone, three lines — the shape the field warned about.
+LNET_THREE_LINES = lnet_users_page(
+    _lnet_user_row(
+        "basheir.home", "214737", start="2026-08-24", finish="2026-09-23",
+        status="Active", plan="Unlimited Home Basic", money="12.50",
+    ),
+    _lnet_user_row(
+        "basheir.shop", "214740", start="2026-01-02", finish="2026-02-02",
+        status="Expired", plan="Unlimited Home Basic Plus",
+    ),
+    _lnet_user_row(
+        "basheir.old", "214741", start="2025-01-02", finish="2025-02-02",
+        status="Suspended", plan="WIFI-Home Basic",
+    ),
+)
+
+LNET_RECHARGE_FORM = """
+<form action="https://b/lnet-billing/public/admin/settings/users/recharge/214737" method="post">
+  <div style="display:none">
+  <input type="hidden" name="ci_csrf_token" value="tok-from-form" /></div>
+  <input type="text" id="recharge_amount" name="recharge_amount" />
+  <select id="recharge_type" name="recharge_type">
+    <option value="1">Cash</option><option value="2">Cheque</option></select>
+  <input type="text" id="extra_gb" name="extra_gb" value="0" />
+  <input value="214737" type="hidden" id="user_id" name="user_id" />
+</form>
+"""
+
+def lnet_payments_report(rows=None) -> str:
+    """The agency payments report.
+
+    Rows are built relative to *now* rather than frozen, because the resolver
+    reasons about how far back the page reaches — a fixture with hardcoded
+    dates would quietly stop covering "an hour ago" the day after it was
+    written. Times are printed in the portal's own clock (shop-local), which
+    is what the parser converts back out of.
+    """
+    from apps.core.timeutils import business_timezone
+
+    if rows is None:
+        now = timezone.now()
+        rows = [
+            ("4300578", Decimal("25"), Decimal("518.8"), "alhussainbasheir",
+             now - timedelta(hours=2)),
+            ("4300494", Decimal("45"), Decimal("542.55"), "someone.else",
+             now - timedelta(hours=4)),
+        ]
+    body = []
+    for serial, amount, final, customer, at in rows:
+        local = at.astimezone(business_timezone()).strftime("%Y-%m-%d %H:%M:%S")
+        body.append(
+            f"""
+<tr><td>{serial}</td><td>{local}</td><td>{amount}</td><td>Cash</td><td></td>
+    <td></td><td>{final}</td><td>0</td><td></td><td> verified </td>
+    <td>{local}</td><td>{customer}</td><td>lnet_r67</td>
+    <!-- <td>x</td> <td>y</td>-->
+    <td></td><td>Reprint</td></tr>"""
+        )
+    return """
+<table class="table table-striped"><thead><tr>
+  <th>S/N</th><th>Payment Date</th><th>Payment Amount</th><th>Payment Type</th>
+  <th>Bank</th><th>Cheque Number</th><th>Final Balance</th><th>Extra Gb</th>
+  <th>Comment</th><th>Status</th><th>Final Date</th><th>Customer Name</th>
+  <th>Recharged By</th>
+  <!-- <th>Created At</th> <th>Updated At</th>-->
+  <th>Cancel Payment</th><th>Reprint</th>
+</tr></thead><tbody>""" + "".join(body) + "</tbody></table>"
+
+
+# The portal serves these as text/html; the driver must parse before believing.
+LNET_VALIDATE_OK = (
+    '{"status":"success","message":"Payment is ready for recharge.",'
+    '"data":{"payment_date":"2026-09-20 17:40:44","serial_number":4300665,'
+    '"payment_amount":45,"extra_gb":"0","current_user_id":203397,'
+    '"new_balance":517.85,"recharge_type":"1","bank":null,'
+    '"cheque_number":null,"total":"45"}}'
+)
+LNET_COMMIT_OK = (
+    '{"status":"success","message":"Customer has been successfully recharged '
+    'and your balance has been successfully updated."}'
+)
+
+
+class _LnetFakeSession:
+    """Routes by URL path, because this driver makes many different calls."""
+
+    def __init__(self, *, pages=None, posts=None, raise_on=None):
+        self.pages = dict(pages or {})
+        self.posts = dict(posts or {})
+        self.raise_on = raise_on or {}
+        self.get_calls = []
+        self.post_calls = []
+
+    def _match(self, table, url):
+        for fragment, value in table.items():
+            if fragment in url:
+                return value
+        return None
+
+    def get(self, url, **kwargs):
+        self.get_calls.append((url, kwargs))
+        if self._match(self.raise_on, url) == "get":
+            raise lnet_module.requests.RequestException("boom")
+        found = self._match(self.pages, url)
+        if found is None:
+            raise AssertionError(f"unscripted GET {url}")
+        return found
+
+    def post(self, url, **kwargs):
+        self.post_calls.append((url, kwargs))
+        if self._match(self.raise_on, url) == "post":
+            raise lnet_module.requests.RequestException("boom")
+        found = self._match(self.posts, url)
+        if found is None:
+            raise AssertionError(f"unscripted POST {url}")
+        return found
+
+
+class _LnetResponse(_FakeResponse):
+    def __init__(self, text, status_code=200, url="https://b/lnet-billing/public/"):
+        super().__init__(text, status_code)
+        self.url = url
+
+
+def lnet_account(**kwargs) -> IntegrationAccount:
+    defaults = {
+        "provider": "lnet",
+        "base_url": "https://b/lnet-billing/public",
+        "username": "lnet_r67",
+    }
+    defaults.update(kwargs)
+    return make_account(**defaults)
+
+
+def patch_lnet(session):
+    return mock.patch(
+        "apps.integrations.providers.lnet.requests.Session", return_value=session
+    )
+
+
+def lnet_session(*, users=LNET_ONE_LINE, **overrides):
+    """A session that can log in, search, and render the recharge form."""
+    pages = {
+        "/login": _LnetResponse(LNET_LOGIN_PAGE),
+        "/admin/settings/users/recharge/": _LnetResponse(LNET_RECHARGE_FORM),
+        "/admin/reports/payments": _LnetResponse(lnet_payments_report()),
+        "/admin/settings/users": _LnetResponse(users),
+    }
+    pages.update(overrides.pop("pages", {}))
+    posts = {"/login": _LnetResponse(LNET_HOME_PAGE)}
+    posts.update(overrides.pop("posts", {}))
+    return _LnetFakeSession(pages=pages, posts=posts, **overrides)
+
+
+class LnetAuthTests(TestCase):
+    def test_probe_reads_the_float_from_the_newest_payment(self):
+        # The portal renders no balance anywhere; Final Balance is all there is.
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(lnet_account()).probe()
+        self.assertTrue(result.ok)
+        self.assertEqual(result.balance, Decimal("518.8"))
+
+    def test_login_form_coming_back_is_unauthorized(self):
+        session = lnet_session(posts={"/login": _LnetResponse(LNET_LOGIN_PAGE)})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).probe()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNAUTHORIZED)
+
+    def test_landing_back_on_the_login_url_is_unauthorized(self):
+        # Some builds answer a bad password with a bare redirect back.
+        session = lnet_session(
+            posts={"/login": _LnetResponse("", url="https://b/lnet-billing/public/login")}
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).probe()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNAUTHORIZED)
+
+    def test_waf_403_is_unreachable_not_a_bad_password(self):
+        # Telling an owner their password is wrong when their network is
+        # blocked sends them to reset a credential that was fine.
+        session = lnet_session(pages={"/login": _LnetResponse("denied", 403)})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).probe()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNREACHABLE)
+
+    def test_probe_survives_an_unreadable_payments_report(self):
+        # Credentials proved good at login; a missing report is a missing
+        # balance, not a failed probe.
+        session = lnet_session(pages={"/admin/reports/payments": _LnetResponse("", 500)})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).probe()
+        self.assertTrue(result.ok)
+        self.assertIsNone(result.balance)
+
+    def test_login_posts_the_page_csrf_token(self):
+        session = lnet_session()
+        with patch_lnet(session):
+            LnetProvider(lnet_account()).probe()
+        _url, kwargs = session.post_calls[0]
+        self.assertEqual(kwargs["data"]["ci_csrf_token"], "tok-from-login")
+        self.assertEqual(kwargs["data"]["login"], "lnet_r67")
+
+
+class LnetLookupTests(TestCase):
+    def test_one_match_sets_card_and_reads_every_column(self):
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(lnet_account()).lookup("0910682854")
+        self.assertTrue(result.ok)
+        self.assertFalse(result.is_ambiguous)
+        card = result.card
+        self.assertEqual(card.card_no, "alhussainbasheir")
+        self.assertEqual(card.provider_id, "214737")
+        # The trap: commented-out cells shift every column left if not stripped.
+        self.assertEqual(card.status, "Active")
+        self.assertEqual(card.package_name, "Unlimited Home Basic")
+        # Stored as UTC, read back in the shop's clock — the portal prints a
+        # bare local date, and 2026-09-23 there is 2026-09-22T22:00Z here.
+        shop = business_timezone()
+        self.assertEqual(
+            card.expire_at.astimezone(shop).date().isoformat(), "2026-09-23"
+        )
+        self.assertEqual(
+            card.start_at.astimezone(shop).date().isoformat(), "2026-08-24"
+        )
+
+    def test_one_phone_with_several_lines_returns_all_of_them(self):
+        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+            result = LnetProvider(lnet_account()).lookup("0910682854")
+        self.assertTrue(result.ok)
+        self.assertTrue(result.is_ambiguous)
+        self.assertEqual(
+            [c.card_no for c in result.candidates],
+            ["basheir.home", "basheir.shop", "basheir.old"],
+        )
+        self.assertEqual(
+            [c.status for c in result.candidates], ["Active", "Expired", "Suspended"]
+        )
+        # Nothing may be chosen for the customer.
+        self.assertIsNone(result.card)
+
+    def test_a_line_carries_the_money_already_on_it(self):
+        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+            result = LnetProvider(lnet_account()).lookup("0910682854")
+        self.assertEqual(result.candidates[0].card_balance, Decimal("12.50"))
+
+    def test_no_match_is_not_found(self):
+        with patch_lnet(lnet_session(users=lnet_users_page())):
+            result = LnetProvider(lnet_account()).lookup("0000000000")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_NOT_FOUND)
+
+    def test_a_digit_term_tries_mobile_before_username(self):
+        session = lnet_session()
+        with patch_lnet(session):
+            LnetProvider(lnet_account()).lookup("0910682854")
+        search = [k for _u, k in session.get_calls if "params" in k][0]
+        self.assertEqual(search["params"]["search_by"], "mobile")
+
+    def test_a_lettered_term_never_wastes_a_mobile_search(self):
+        session = lnet_session()
+        with patch_lnet(session):
+            LnetProvider(lnet_account()).lookup("basheir.home")
+        modes = [k["params"]["search_by"] for _u, k in session.get_calls if "params" in k]
+        self.assertNotIn("mobile", modes)
+        self.assertEqual(modes[0], "username")
+
+
+class LnetOfferTests(TestCase):
+    def test_offers_are_shortcuts_over_an_open_amount(self):
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(lnet_account()).offers("alhussainbasheir")
+        self.assertTrue(result.ok)
+        self.assertIsNotNone(result.open_amount)
+        self.assertEqual(result.open_amount.cost_ratio, Decimal("0.95"))
+        self.assertTrue(result.options)
+
+    def test_cost_is_95_percent_and_retail_is_face_value(self):
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(lnet_account()).offers("alhussainbasheir")
+        by_code = {o.code: o for o in result.options}
+        option = by_code["topup:45"]
+        self.assertEqual(option.cost, Decimal("42.75"))
+        self.assertEqual(option.face_value, Decimal("45.00"))
+        self.assertEqual(option.kind, lnet_module.RECHARGE_TOPUP)
+
+    def test_a_shop_on_other_terms_can_set_its_own_commission(self):
+        account = lnet_account(config={"cost_ratio": "0.90"})
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(account).offers("alhussainbasheir")
+        by_code = {o.code: o for o in result.options}
+        self.assertEqual(by_code["topup:45"].cost, Decimal("40.50"))
+
+    def test_a_nonsense_commission_falls_back_rather_than_quoting_zero(self):
+        account = lnet_account()
+        for bad in ("0", "-1", "3", "banana", None, ""):
+            account.config = {"cost_ratio": bad}
+            self.assertEqual(
+                LnetProvider(account)._cost_ratio, lnet_module.DEFAULT_COST_RATIO, bad
+            )
+
+    def test_a_line_that_cannot_be_recharged_is_refused_before_the_customer_pays(self):
+        session = lnet_session(
+            pages={"/admin/settings/users/recharge/": _LnetResponse("<p>nope</p>")}
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).offers("alhussainbasheir")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNEXPECTED)
+
+    def test_a_near_miss_username_is_never_acted_on(self):
+        # Search is a substring match; "basheir" must not resolve to a line.
+        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+            result = LnetProvider(lnet_account()).offers("basheir")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_NOT_FOUND)
+
+    def test_open_amount_validates_what_a_cashier_may_type(self):
+        spec = lnet_module.OpenAmount(
+            minimum=Decimal("1"), step=Decimal("1"), cost_ratio=Decimal("0.95")
+        )
+        self.assertEqual(spec.validate(Decimal("45")), "")
+        self.assertIn("positive", spec.validate(Decimal("0")))
+        self.assertIn("minimum", spec.validate(Decimal("0.5")))
+        self.assertIn("multiple", spec.validate(Decimal("45.5")))
+
+
+class LnetQuoteTests(TestCase):
+    """Pricing that must hold without touching the network."""
+
+    def test_quote_derives_cost_and_face_value_from_the_code_alone(self):
+        quote = LnetProvider(lnet_account()).quote("topup:45")
+        self.assertEqual(quote.cost, Decimal("42.75"))
+        self.assertEqual(quote.face_value, Decimal("45.00"))
+
+    def test_quote_refuses_anything_it_does_not_recognise(self):
+        driver = LnetProvider(lnet_account())
+        for code in ("renew:12", "topup:0", "topup:-5", "topup:", "", "junk"):
+            self.assertIsNone(driver.quote(code), code)
+
+    def test_stored_value_is_never_sold_below_its_face_value(self):
+        # The default markup is "sell at cost". Without a floor that would
+        # sell 45 dinars of credit for 42.75 — a loss on every single sale.
+        account = lnet_account()
+        self.assertEqual(account.markup_kind, IntegrationAccount.Markup.NONE)
+        self.assertEqual(
+            account.selling_price(Decimal("42.75"), "topup:45", floor=Decimal("45.00")),
+            Decimal("45.00"),
+        )
+
+    def test_a_markup_may_still_sit_above_the_face_value(self):
+        account = lnet_account(
+            markup_kind=IntegrationAccount.Markup.AMOUNT, markup_value=Decimal("5.00")
+        )
+        self.assertEqual(
+            account.selling_price(Decimal("42.75"), "topup:45", floor=Decimal("45.00")),
+            Decimal("47.75"),
+        )
+
+
+class LnetRechargeTests(TransactionTestCase):
+    """The write path, and the three outcomes it has to tell apart."""
+
+    def _session(self, **overrides):
+        posts = {
+            "/login": _LnetResponse(LNET_HOME_PAGE),
+            "validatePaymentAJAX": _LnetResponse(LNET_VALIDATE_OK),
+            "rechargeOperatorPaymentAJAX": _LnetResponse(LNET_COMMIT_OK),
+        }
+        posts.update(overrides.pop("posts", {}))
+        return lnet_session(posts=posts, **overrides)
+
+    def test_a_successful_recharge_reports_the_serial_and_the_new_float(self):
+        session = self._session()
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45", expected_cost=Decimal("42.75")
+            )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.reference, "4300665")
+        self.assertEqual(result.balance_after, Decimal("517.85"))
+        self.assertEqual(result.receipt["username"], "alhussainbasheir")
+
+    def test_it_always_declares_cash_and_never_a_cheque(self):
+        session = self._session()
+        with patch_lnet(session):
+            LnetProvider(lnet_account()).recharge("alhussainbasheir", "topup:45")
+        sent = [k for u, k in session.post_calls if "validatePaymentAJAX" in u][0]
+        self.assertEqual(sent["data"]["recharge_type"], lnet_module.RECHARGE_TYPE_CASH)
+        self.assertEqual(sent["data"]["bank"], lnet_module.BANK_PLACEHOLDER)
+        self.assertEqual(sent["data"]["cheque_number"], "")
+        self.assertEqual(sent["data"]["extra_gb"], "0")
+        self.assertEqual(sent["data"]["recharge_amount"], "45")
+
+    def test_it_posts_the_token_from_the_recharge_form_not_the_login_page(self):
+        session = self._session()
+        with patch_lnet(session):
+            LnetProvider(lnet_account()).recharge("alhussainbasheir", "topup:45")
+        sent = [k for u, k in session.post_calls if "validatePaymentAJAX" in u][0]
+        self.assertEqual(sent["data"]["ci_csrf_token"], "tok-from-form")
+
+    def test_the_commit_echoes_back_exactly_what_the_server_computed(self):
+        session = self._session()
+        with patch_lnet(session):
+            LnetProvider(lnet_account()).recharge("alhussainbasheir", "topup:45")
+        sent = [k for u, k in session.post_calls if "rechargeOperator" in u][0]
+        self.assertEqual(sent["data"]["serial_number"], "4300665")
+        self.assertEqual(sent["data"]["current_user_id"], "203397")
+        # Not "517.8500" — the portal's own wire form, unchanged.
+        self.assertEqual(sent["data"]["new_balance"], "517.85")
+
+    def test_a_moved_cost_is_refused_before_anything_is_sent(self):
+        session = self._session()
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45", expected_cost=Decimal("40.00")
+            )
+        self.assertTrue(result.is_definite_failure)
+        self.assertFalse(
+            [u for u, _k in session.post_calls if "validatePaymentAJAX" in u]
+        )
+
+    def test_a_refused_payment_is_a_definite_failure(self):
+        # The one outcome where the float and the customer are both untouched.
+        session = self._session(
+            posts={
+                "validatePaymentAJAX": _LnetResponse(
+                    '{"status":"error","message":"Balance not sufficient"}'
+                )
+            }
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45"
+            )
+        self.assertTrue(result.is_definite_failure)
+        self.assertEqual(result.error_code, ERROR_PROVIDER_ERROR)
+        self.assertIn("Balance not sufficient", result.error_detail)
+
+    def test_a_lost_answer_to_the_payment_call_is_indeterminate(self):
+        session = self._session(raise_on={"validatePaymentAJAX": "post"})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45"
+            )
+        self.assertFalse(result.ok)
+        self.assertTrue(result.indeterminate)
+        self.assertEqual(result.error_code, ERROR_INDETERMINATE)
+
+    def test_an_unreadable_answer_to_the_payment_call_is_indeterminate(self):
+        # A 500 here may still have written the payment row.
+        session = self._session(
+            posts={"validatePaymentAJAX": _LnetResponse("<html>oops</html>", 500)}
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45"
+            )
+        self.assertTrue(result.indeterminate)
+
+    def test_a_failed_float_debit_is_indeterminate_and_keeps_the_serial(self):
+        # THE case this driver exists to get right: the customer has already
+        # been credited, so this is never a failure a caller may retry — and
+        # the serial number is the only thing that makes it reconcilable.
+        session = self._session(
+            posts={
+                "rechargeOperatorPaymentAJAX": _LnetResponse(
+                    '{"status":"error","message":"session expired"}'
+                )
+            }
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45"
+            )
+        self.assertFalse(result.ok)
+        self.assertTrue(result.indeterminate)
+        self.assertFalse(result.is_definite_failure)
+        self.assertEqual(result.reference, "4300665")
+        self.assertEqual(result.receipt["serial_number"], "4300665")
+
+    def test_a_lost_answer_to_the_float_debit_is_indeterminate(self):
+        session = self._session(raise_on={"rechargeOperatorPaymentAJAX": "post"})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45"
+            )
+        self.assertTrue(result.indeterminate)
+        self.assertEqual(result.reference, "4300665")
+
+    def test_an_unknown_option_never_reaches_the_provider(self):
+        session = self._session()
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge("alhussainbasheir", "renew:12")
+        self.assertTrue(result.is_definite_failure)
+        self.assertFalse(session.post_calls)
+
+
+class LnetHistoryTests(TestCase):
+    def test_history_keeps_only_this_line_and_prices_it_at_cost(self):
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(lnet_account()).purchase_history("alhussainbasheir")
+        self.assertTrue(result.ok)
+        self.assertEqual(result.total, 1)
+        entry = result.purchases[0]
+        self.assertEqual(entry.reference, "4300578")
+        # Face value 25 cost the float 23.75 — the reconcilable number.
+        self.assertEqual(entry.cost, Decimal("23.75"))
+        self.assertTrue(entry.is_ours)
+
+
+class LnetCheckoutTests(TestCase):
+    """What the till may and may not decide for itself."""
+
+    def test_the_server_derives_cost_and_price_and_ignores_a_lying_till(self):
+        account = lnet_account()
+        variant = service_variant_for("lnet")
+        resolved = resolve_line_integration(
+            {
+                "provider": "lnet",
+                "subscriber_ref": "alhussainbasheir",
+                "option_code": "topup:45",
+                # A client claiming this cost almost nothing.
+                "cost": "1.00",
+            },
+            variant,
+        )
+        self.assertEqual(resolved["cost"], Decimal("42.75"))
+        self.assertEqual(resolved["price"], Decimal("45.00"))
+        self.assertEqual(resolved["account"], account)
+
+    def test_an_open_amount_the_till_invented_is_still_priced_correctly(self):
+        lnet_account()
+        variant = service_variant_for("lnet")
+        resolved = resolve_line_integration(
+            {
+                "provider": "lnet",
+                "subscriber_ref": "alhussainbasheir",
+                "option_code": "topup:37",
+                "cost": "0",
+            },
+            variant,
+        )
+        self.assertEqual(resolved["cost"], Decimal("35.15"))
+        self.assertEqual(resolved["price"], Decimal("37.00"))
+
+    def test_hdbox_still_takes_its_cost_from_the_quote(self):
+        # The offline-quote path must not change a driver that cannot price
+        # itself: HD Box's ladder is only knowable from the provider.
+        make_account(provider="hdbox")
+        variant = service_variant_for("hdbox")
+        resolved = resolve_line_integration(
+            {
+                "provider": "hdbox",
+                "subscriber_ref": "12345",
+                "option_code": "renew:12",
+                "cost": "220.00",
+            },
+            variant,
+        )
+        self.assertEqual(resolved["cost"], Decimal("220.00"))
+
+    def test_open_amounts_never_become_rows_in_the_shops_price_list(self):
+        account = lnet_account()
+        with patch_lnet(lnet_session()):
+            offers = LnetProvider(account).offers("alhussainbasheir")
+        record_seen_offers(account, offers.options)
+        self.assertEqual(account.option_prices.count(), 0)
+
+
+class SubmittedResolutionTests(TestCase):
+    """Settling a charge that was sent and never answered.
+
+    This is the half of the at-most-once guard that lets a shop recover.
+    `recharge.py` refuses to touch a `submitted` row ever again, so without
+    these paths one stuck row is stuck for good — and the cost of getting them
+    wrong is a customer charged twice.
+    """
+
+    def setUp(self):
+        self.account = lnet_account()
+        self.variant = service_variant_for("lnet")
+
+    def _submitted(self, *, cost="42.75", reference="", sent_ago_hours=1, card="alhussainbasheir"):
+        order = Order.objects.create()
+        line = OrderLine.objects.create(
+            order=order, variant=self.variant, quantity=Decimal("1"),
+            unit_price=Decimal("45.00"), unit_cost=Decimal(cost),
+        )
+        row = IntegrationFulfillment.objects.create(
+            order_line=line, account=self.account, provider="lnet",
+            subscriber_ref=card, option_code="topup:45", option_label="45 LYD",
+            cost=Decimal(cost),
+            status=IntegrationFulfillment.Status.SUBMITTED,
+            submitted_at=timezone.now() - timedelta(hours=sent_ago_hours),
+            provider_reference=reference,
+            last_error_code=ERROR_INDETERMINATE,
+        )
+        IntegrationFulfillment.objects.filter(pk=row.pk).update(
+            created_at=timezone.now() - timedelta(hours=sent_ago_hours)
+        )
+        row.refresh_from_db()
+        return row
+
+    def _reconcile(self):
+        with patch_lnet(lnet_session()):
+            return reconcile_account(self.account)
+
+    def test_a_held_reference_found_in_the_log_confirms_the_sale(self):
+        # LNET hands back a serial even when the float debit fails, so this is
+        # the ordinary ending for its two-step write.
+        row = self._submitted(cost="23.75", reference="4300578")
+        result = self._reconcile()
+        row.refresh_from_db()
+        self.assertEqual(row.status, IntegrationFulfillment.Status.CONFIRMED)
+        self.assertEqual(row.provider_receipt["reference"], "4300578")
+        self.assertEqual(result["resolved"]["confirmed"], 1)
+
+    def test_a_held_reference_is_never_returned_to_retryable(self):
+        # The provider told us a payment existed. Even with the log reaching
+        # back past the attempt, retrying would credit the customer twice.
+        row = self._submitted(cost="23.75", reference="no-such-serial")
+        result = self._reconcile()
+        row.refresh_from_db()
+        self.assertEqual(row.status, IntegrationFulfillment.Status.SUBMITTED)
+        self.assertEqual(result["resolved"]["retryable"], 0)
+        self.assertEqual(len(result["resolved"]["unknown"]), 1)
+
+    def test_absence_from_a_log_that_reaches_back_makes_it_retryable(self):
+        # No reference was ever handed back, and the report covers the attempt,
+        # so the provider demonstrably never performed it.
+        row = self._submitted(cost="99.99", sent_ago_hours=1)
+        result = self._reconcile()
+        row.refresh_from_db()
+        self.assertEqual(row.status, IntegrationFulfillment.Status.PENDING)
+        self.assertEqual(result["resolved"]["retryable"], 1)
+        # Re-armed: the guard will now allow exactly one more attempt.
+        self.assertEqual(row.last_error_code, "")
+
+    def test_absence_from_a_log_that_does_not_reach_back_proves_nothing(self):
+        # Sent before the oldest row the report still shows — a busy agency
+        # pushes older payments off the page. Absence here is ignorance, not
+        # proof, so it must not become a second charge.
+        row = self._submitted(cost="99.99", sent_ago_hours=72)
+        result = self._reconcile()
+        row.refresh_from_db()
+        self.assertEqual(row.status, IntegrationFulfillment.Status.SUBMITTED)
+        self.assertEqual(result["resolved"]["retryable"], 0)
+        self.assertEqual(len(result["resolved"]["unknown"]), 1)
+
+    def test_an_unreadable_log_settles_nothing(self):
+        row = self._submitted(cost="99.99")
+        session = lnet_session(
+            pages={"/admin/reports/payments": _LnetResponse("", 500)}
+        )
+        with patch_lnet(session):
+            result = reconcile_account(self.account)
+        row.refresh_from_db()
+        self.assertEqual(row.status, IntegrationFulfillment.Status.SUBMITTED)
+        self.assertEqual(result["resolved"]["confirmed"], 0)
+        self.assertEqual(result["resolved"]["retryable"], 0)
+
+    def test_one_provider_entry_cannot_settle_two_sales(self):
+        # Otherwise a genuine unperformed row hides behind a real payment.
+        first = self._submitted(cost="23.75")
+        second = self._submitted(cost="23.75")
+        self._reconcile()
+        first.refresh_from_db()
+        second.refresh_from_db()
+        settled = [
+            r.status for r in (first, second)
+            if r.status == IntegrationFulfillment.Status.CONFIRMED
+        ]
+        self.assertEqual(len(settled), 1)
+
+    def test_a_resolved_row_stops_raising_the_critical_notification(self):
+        row = self._submitted(cost="23.75", reference="4300578")
+        sync_business_notifications()
+        self.assertTrue(
+            BusinessNotification.objects.filter(
+                code="integrations.unresolved_recharge"
+            ).exists()
+        )
+        self._reconcile()
+        row.refresh_from_db()
+        self.assertEqual(row.status, IntegrationFulfillment.Status.CONFIRMED)
+        sync_business_notifications()
+        self.assertFalse(
+            BusinessNotification.objects.filter(
+                code="integrations.unresolved_recharge",
+                status=BusinessNotification.Status.ACTIVE,
+            ).exists()
+        )
+
+
+class ProviderTimestampTests(TestCase):
+    """Timestamps a driver returns are compared against ``timezone.now()``."""
+
+    def test_lnet_history_timestamps_are_timezone_aware(self):
+        # A naive datetime here does not read oddly — it makes reconciliation
+        # raise TypeError the moment it filters the log by time, which is how
+        # the whole sweep silently reports itself as unreachable.
+        with patch_lnet(lnet_session()):
+            history = LnetProvider(lnet_account()).purchase_history(
+                "alhussainbasheir"
+            )
+        entry = history.purchases[0]
+        self.assertIsNotNone(entry.at.tzinfo)
+        self.assertLess(entry.at, timezone.now() + timedelta(days=365))
+
+    def test_lnet_reads_the_portal_clock_as_shop_local(self):
+        # The portal prints a bare wall clock in Africa/Tripoli (UTC+2), so
+        # 16:38:59 on its screen is 14:38:59 in the database.
+        parsed = lnet_module._parse_datetime("2026-09-20 16:38:59")
+        self.assertEqual(parsed.astimezone(dt_timezone.utc).hour, 14)
+
+    def test_lnet_card_dates_are_aware_too(self):
+        with patch_lnet(lnet_session()):
+            card = LnetProvider(lnet_account()).lookup("0910682854").card
+        self.assertIsNotNone(card.expire_at.tzinfo)
+
+    def test_a_page_says_how_far_back_it_is_complete(self):
+        with patch_lnet(lnet_session()):
+            history = LnetProvider(lnet_account()).purchase_history(
+                "alhussainbasheir"
+            )
+        # The report is account-wide and newest-first, so having read it we
+        # have seen every payment back to its oldest row.
+        self.assertIsNotNone(history.complete_since)
+        self.assertTrue(history.covers(timezone.now()))
+        self.assertFalse(history.covers(timezone.now() - timedelta(days=300)))
+
+    def test_a_driver_making_no_claim_never_lets_absence_count_as_proof(self):
+        blank = HistoryResult(ok=True)
+        self.assertFalse(blank.covers(timezone.now()))
+        self.assertFalse(blank.covers(None))
+
+
+class IntegrationTelemetryTests(TestCase):
+    """Rows that say WHERE a provider broke, not merely that it did.
+
+    These drive somebody else's website; nobody versions it and nobody
+    announces a change. What makes a row worth writing is the step it reached.
+    """
+
+    def setUp(self):
+        integ_telemetry.reset()
+        # One row per provider, so a test that loops must reuse this one.
+        self.account = lnet_account()
+
+    def _events(self):
+        from apps.analytics.models import AnalyticsEvent
+
+        return AnalyticsEvent.objects.filter(name=integ_telemetry.EVENT_NAME)
+
+    def _flush(self):
+        from apps.analytics import buffer
+
+        buffer.flush()
+
+    def test_a_good_lookup_records_the_operation_and_its_shape(self):
+        with patch_lnet(lnet_session()):
+            LnetProvider(self.account).lookup("0910682854")
+        self._flush()
+        row = self._events().get()
+        self.assertEqual(row.attributes["provider"], "lnet")
+        self.assertEqual(row.attributes["operation"], "lookup")
+        self.assertEqual(row.attributes["outcome"], "ok")
+        self.assertTrue(row.attributes["shape_ok"])
+        self.assertEqual(row.metrics["matches"], 1)
+
+    def test_a_blocked_network_is_named_at_the_login_page(self):
+        # The row has to distinguish this from a wrong password, because the
+        # fix is a different person's job.
+        session = lnet_session(pages={"/login": _LnetResponse("denied", 403)})
+        with patch_lnet(session):
+            LnetProvider(self.account).probe()
+        self._flush()
+        row = self._events().get()
+        self.assertEqual(row.attributes["outcome"], ERROR_UNREACHABLE)
+        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_LOGIN_PAGE)
+        self.assertEqual(row.attributes["http_status"], 403)
+
+    def test_a_bad_password_is_named_at_the_login_post(self):
+        session = lnet_session(posts={"/login": _LnetResponse(LNET_LOGIN_PAGE)})
+        with patch_lnet(session):
+            LnetProvider(self.account).probe()
+        self._flush()
+        row = self._events().get()
+        self.assertEqual(row.attributes["outcome"], ERROR_UNAUTHORIZED)
+        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_LOGIN)
+
+    def test_changed_markup_is_told_apart_from_a_missing_customer(self):
+        # Both arrive as not_found. Only one of them is a bug we must fix, and
+        # without shape_ok the two are indistinguishable in an export.
+        with patch_lnet(lnet_session(users=lnet_users_page())):
+            LnetProvider(self.account).lookup("0000000000")
+        self._flush()
+        absent = self._events().get()
+        self.assertEqual(absent.attributes["outcome"], ERROR_NOT_FOUND)
+        self.assertTrue(absent.attributes["shape_ok"], "the table was there")
+
+        integ_telemetry.reset()
+        self._events().delete()
+        with patch_lnet(lnet_session(users="<p>redesigned</p>")):
+            LnetProvider(self.account).lookup("0910682854")
+        self._flush()
+        broken = self._events().get()
+        self.assertEqual(broken.attributes["outcome"], ERROR_NOT_FOUND)
+        self.assertFalse(broken.attributes["shape_ok"], "our parser went blind")
+
+    def test_a_login_page_without_its_token_reports_a_changed_page(self):
+        session = lnet_session(pages={"/login": _LnetResponse("<form></form>")})
+        with patch_lnet(session):
+            LnetProvider(self.account).probe()
+        self._flush()
+        row = self._events().get()
+        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_LOGIN_PAGE)
+        self.assertFalse(row.attributes["shape_ok"])
+
+    def test_repeated_read_failures_are_folded_into_a_count(self):
+        # A portal that is down is one fact, however many times a till of
+        # cashiers rediscovers it. Telemetry has taken this product down once
+        # already by writing a row per attempt.
+        session = lnet_session(pages={"/login": _LnetResponse("denied", 403)})
+        with patch_lnet(session):
+            for _ in range(5):
+                LnetProvider(self.account).probe()
+        self._flush()
+        self.assertEqual(self._events().count(), 1)
+
+        # The four it swallowed are reported on the next row out of the fold,
+        # so the count is carried rather than lost.
+        with self.settings(POINTY_INTEGRATION_TELEMETRY_FAILURE_WINDOW=0):
+            with patch_lnet(session):
+                LnetProvider(self.account).probe()
+        self._flush()
+        latest = self._events().order_by("-id").first()
+        self.assertEqual(latest.metrics["suppressed_repeats"], 4)
+
+    def test_every_recharge_attempt_writes_its_own_row(self):
+        # Money. Folding two indeterminate charges into a count would erase
+        # the evidence for a second customer's money.
+        session = lnet_session(
+            posts={
+                "validatePaymentAJAX": _LnetResponse(LNET_VALIDATE_OK),
+                "rechargeOperatorPaymentAJAX": _LnetResponse(
+                    '{"status":"error","message":"nope"}'
+                ),
+            }
+        )
+        with patch_lnet(session):
+            for _ in range(3):
+                LnetProvider(self.account).recharge(
+                    "alhussainbasheir", "topup:45"
+                )
+        self._flush()
+        writes = self._events().filter(attributes__operation="recharge")
+        self.assertEqual(writes.count(), 3)
+
+    def test_an_unknown_charge_is_critical_and_keeps_its_serial(self):
+        session = lnet_session(
+            posts={
+                "validatePaymentAJAX": _LnetResponse(LNET_VALIDATE_OK),
+                "rechargeOperatorPaymentAJAX": _LnetResponse(
+                    '{"status":"error","message":"session expired"}'
+                ),
+            }
+        )
+        with patch_lnet(session):
+            LnetProvider(self.account).recharge("alhussainbasheir", "topup:45")
+        self._flush()
+        row = self._events().filter(attributes__operation="recharge").get()
+        from apps.analytics.models import AnalyticsEvent
+
+        self.assertEqual(row.severity, AnalyticsEvent.Severity.CRITICAL)
+        # It got past the customer credit and failed on the float debit.
+        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_COMMIT)
+        self.assertEqual(row.attributes["provider_reference"], "4300665")
+
+    def test_a_refused_charge_is_an_error_not_a_crisis(self):
+        session = lnet_session(
+            posts={
+                "validatePaymentAJAX": _LnetResponse(
+                    '{"status":"error","message":"Balance not sufficient"}'
+                )
+            }
+        )
+        with patch_lnet(session):
+            LnetProvider(self.account).recharge("alhussainbasheir", "topup:45")
+        self._flush()
+        row = self._events().filter(attributes__operation="recharge").get()
+        from apps.analytics.models import AnalyticsEvent
+
+        self.assertEqual(row.severity, AnalyticsEvent.Severity.ERROR)
+        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_SUBMIT)
+
+    def test_no_row_ever_carries_a_customer_identifier(self):
+        # Analytics rows leave the shop. A card number is a subscriber and an
+        # LNET username is a person; neither may ride along.
+        with patch_lnet(lnet_session()):
+            driver = LnetProvider(self.account)
+            driver.lookup("0910682854")
+            driver.offers("alhussainbasheir")
+            driver.purchase_history("alhussainbasheir")
+        self._flush()
+        blob = json.dumps(
+            [
+                {"a": row.attributes, "m": row.metrics, "e": row.entity_id}
+                for row in self._events()
+            ]
+        )
+        self.assertNotIn("alhussainbasheir", blob)
+        self.assertNotIn("0910682854", blob)
+
+    def test_telemetry_never_breaks_the_call_it_is_measuring(self):
+        with mock.patch.object(
+            integ_telemetry, "_record", side_effect=RuntimeError("boom")
+        ):
+            with patch_lnet(lnet_session()):
+                result = LnetProvider(self.account).lookup("0910682854")
+        self.assertTrue(result.ok, "a telemetry fault must not fail a lookup")
+
+    def test_hdbox_is_instrumented_by_the_same_vocabulary(self):
+        # Registration instruments a driver, so a provider added later is
+        # measured whether or not its author thought about it.
+        session = _FakeSession(_FakeResponse(LOGIN_PAGE), [])
+        with patch_session(session):
+            HdBoxProvider(make_account()).probe()
+        self._flush()
+        row = self._events().get()
+        self.assertEqual(row.attributes["provider"], "hdbox")
+        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_LOGIN)
+        self.assertEqual(row.attributes["outcome"], ERROR_UNAUTHORIZED)
+
+    def test_every_registered_driver_is_observed(self):
+        for key in ("hdbox", "lnet", "qareeb"):
+            driver = provider_for(IntegrationAccount(provider=key))
+            for method in integ_telemetry.OPERATIONS:
+                self.assertTrue(
+                    getattr(getattr(type(driver), method), "_observed", False),
+                    f"{key}.{method} is unobserved",
+                )

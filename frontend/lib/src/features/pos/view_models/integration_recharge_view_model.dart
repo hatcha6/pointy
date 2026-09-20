@@ -59,13 +59,74 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   bool get isSearching => _lookupState == RechargeLookupState.searching;
   bool get hasCard => _snapshot != null;
 
-  /// Durations only. Moving a subscriber between packages is deliberately not
-  /// offered: the provider hides it in its own form, the agency does not do
-  /// it, and a mis-tap would put a customer on the wrong package and break
-  /// their card. The backend does not send them either — this is the second
-  /// lock on the same door.
-  List<IntegrationOffer> get renewalOffers =>
-      _snapshot?.offers.where((offer) => offer.isRenewal).toList() ?? const [];
+  /// Durations and top-up amounts — never a package switch. Moving a
+  /// subscriber between packages is deliberately not offered: the provider
+  /// hides it in its own form, the agency does not do it, and a mis-tap would
+  /// put a customer on the wrong package and break their card. The backend
+  /// does not send them either — this is the second lock on the same door.
+  List<IntegrationOffer> get sellableOffers =>
+      _snapshot?.offers
+          .where((offer) => offer.isRenewal || offer.isTopUp)
+          .toList() ??
+      const [];
+
+  /// True when the cashier may type an amount instead of only tapping one.
+  bool get allowsCustomAmount => _snapshot?.allowsOpenAmount ?? false;
+
+  IntegrationOpenAmount? get openAmount => _snapshot?.openAmount;
+
+  /// Whether this provider keeps a state log worth a tab of its own.
+  bool get hasStatusHistory => _snapshot?.hasStatusHistory ?? true;
+
+  /// The lines this search matched, when it matched more than one.
+  List<IntegrationCardInfo> get candidates =>
+      _snapshot?.candidates ?? const [];
+
+  /// True while the cashier still has to say which line they mean. Nothing is
+  /// priced and nothing may be added to a cart until they do.
+  bool get needsLineSelection => _snapshot?.needsSelection ?? false;
+
+  /// What the cashier typed, when they typed an amount rather than tapping
+  /// one. Kept so the field and the selection cannot disagree.
+  double? _customAmount;
+  double? get customAmount => _customAmount;
+
+  /// Why the typed amount cannot be sold, or null when it can.
+  IntegrationAmountProblem? get customAmountProblem {
+    final spec = openAmount;
+    final amount = _customAmount;
+    if (spec == null || amount == null) return null;
+    return spec.validate(amount);
+  }
+
+  /// Price a typed amount and select it, or clear the selection.
+  ///
+  /// The result is an ordinary [IntegrationOffer], so the cart, the draft and
+  /// the server all see the same shape whether the cashier tapped 45 or typed
+  /// it. An amount the provider would refuse selects nothing rather than
+  /// quoting a number that cannot be bought.
+  void setCustomAmount(double? amount) {
+    final spec = openAmount;
+    _customAmount = amount;
+    if (spec == null || amount == null || spec.validate(amount) != null) {
+      _selectedOffer = null;
+      notifyListeners();
+      return;
+    }
+    _selectedOffer = spec.offerFor(
+      amount,
+      packageName: _snapshot?.card.packageName ?? '',
+    );
+    notifyListeners();
+  }
+
+  /// Narrow a multi-line result to the one the cashier picked.
+  ///
+  /// Re-runs the lookup against that line's own identifier rather than
+  /// trusting the row we already have: the offers, and the confirmation that
+  /// this line can be topped up at all, only exist for a single line.
+  Future<void> selectLine(IntegrationCardInfo line) =>
+      lookup(line.cardNo);
 
   /// True when the float cannot cover the selected top-up. Advisory: the sale
   /// is still recorded, and the shop tops the float up separately — but a
@@ -80,6 +141,9 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   void selectOffer(IntegrationOffer? offer) {
     if (_selectedOffer?.code == offer?.code) return;
     _selectedOffer = offer;
+    // Tapping a quick-pick retires whatever was typed, so the amount field
+    // cannot keep claiming a number that is no longer what will be sold.
+    _customAmount = null;
     notifyListeners();
   }
 
@@ -90,6 +154,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
     _refusalCode = '';
     _failure = null;
     _selectedOffer = null;
+    _customAmount = null;
     _historyPage = null;
     _historyKind = IntegrationHistoryKind.purchases;
     notifyListeners();
@@ -103,6 +168,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
     _lookupState = RechargeLookupState.searching;
     _snapshot = null;
     _selectedOffer = null;
+    _customAmount = null;
     _historyPage = null;
     _refusalCode = '';
     _failure = null;
@@ -129,7 +195,9 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
     }
     notifyListeners();
 
-    if (_lookupState == RechargeLookupState.found) {
+    // History is per line, so there is nothing to fetch while several are
+    // still on offer — and the search term is not a line identifier.
+    if (_lookupState == RechargeLookupState.found && !needsLineSelection) {
       await loadHistory();
     }
   }
@@ -230,6 +298,10 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
           currency: snapshot.currency,
           balance: snapshot.balance,
           offersErrorCode: snapshot.offersErrorCode,
+          openAmount: snapshot.openAmount,
+          candidates: snapshot.candidates,
+          needsSelection: snapshot.needsSelection,
+          historyKinds: snapshot.historyKinds,
         );
         notifyListeners();
         return true;

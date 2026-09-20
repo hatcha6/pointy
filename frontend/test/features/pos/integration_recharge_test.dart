@@ -54,10 +54,10 @@ void main() {
       final viewModel = _viewModel(_FakeRepo());
       await viewModel.lookup('12345');
 
-      expect(viewModel.renewalOffers, hasLength(2));
-      expect(viewModel.renewalOffers.every((o) => o.isRenewal), isTrue);
+      expect(viewModel.sellableOffers, hasLength(2));
+      expect(viewModel.sellableOffers.every((o) => o.isRenewal), isTrue);
       expect(
-        viewModel.snapshot!.offers.any((o) => !o.isRenewal),
+        viewModel.snapshot!.offers.any((o) => !o.isRenewal && !o.isTopUp),
         isTrue,
         reason: 'the fixture still contains one, and it must stay hidden',
       );
@@ -68,7 +68,7 @@ void main() {
     test('carries the quoted cost and the server-quoted price', () async {
       final viewModel = _viewModel(_FakeRepo());
       await viewModel.lookup('12345');
-      viewModel.selectOffer(viewModel.renewalOffers.last);
+      viewModel.selectOffer(viewModel.sellableOffers.last);
 
       final draft = viewModel.buildDraft()!;
       expect(draft.subscriberRef, '12345');
@@ -83,7 +83,7 @@ void main() {
       // price sent from a till would be a price a cashier could choose.
       final viewModel = _viewModel(_FakeRepo());
       await viewModel.lookup('12345');
-      viewModel.selectOffer(viewModel.renewalOffers.first);
+      viewModel.selectOffer(viewModel.sellableOffers.first);
 
       final json = viewModel.buildDraft()!.toJson();
       expect(json['option_code'], 'renew:1');
@@ -97,9 +97,9 @@ void main() {
       final viewModel = _viewModel(_FakeRepo());
       await viewModel.lookup('12345');
 
-      viewModel.selectOffer(viewModel.renewalOffers.first); // 25, balance 25
+      viewModel.selectOffer(viewModel.sellableOffers.first); // 25, balance 25
       expect(viewModel.exceedsBalance, isFalse);
-      viewModel.selectOffer(viewModel.renewalOffers.last); // 220
+      viewModel.selectOffer(viewModel.sellableOffers.last); // 220
       expect(viewModel.exceedsBalance, isTrue);
     });
   });
@@ -157,6 +157,148 @@ void main() {
     });
   });
 
+  group('LNET: one phone, several lines', () {
+    test('a multi-line match prices nothing until a line is chosen', () async {
+      // Guessing would top up somebody's dead second line and leave the one
+      // they came in about still expired.
+      final viewModel = _lnetViewModel(_FakeLnetRepo(manyLines: true));
+      await viewModel.lookup('0910682854');
+
+      expect(viewModel.lookupState, RechargeLookupState.found);
+      expect(viewModel.needsLineSelection, isTrue);
+      expect(viewModel.candidates, hasLength(3));
+      expect(viewModel.sellableOffers, isEmpty);
+      expect(viewModel.buildDraft(), isNull);
+    });
+
+    test('each line shows the state that tells it from the others', () async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo(manyLines: true));
+      await viewModel.lookup('0910682854');
+
+      final health = viewModel.candidates
+          .map((line) => line.health(now: DateTime(2026, 9, 20)))
+          .toList();
+      expect(health, [
+        IntegrationCardHealth.active,
+        IntegrationCardHealth.expired,
+        // Suspended is said in words, with no numeric id behind it — without
+        // reading the word this line would pass for merely unknown.
+        IntegrationCardHealth.locked,
+      ]);
+    });
+
+    test('choosing a line re-reads it by its own identifier', () async {
+      final repo = _FakeLnetRepo(manyLines: true);
+      final viewModel = _lnetViewModel(repo);
+      await viewModel.lookup('0910682854');
+      await viewModel.selectLine(viewModel.candidates[1]);
+
+      expect(repo.lookedUp, ['0910682854', 'basheir.shop']);
+      expect(viewModel.needsLineSelection, isFalse);
+      expect(viewModel.buildDraft(), isNull, reason: 'still nothing chosen');
+      expect(viewModel.sellableOffers, isNotEmpty);
+    });
+
+    test('a single match needs no choosing', () async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await viewModel.lookup('0910682854');
+
+      expect(viewModel.needsLineSelection, isFalse);
+      expect(viewModel.sellableOffers, hasLength(2));
+    });
+  });
+
+  group('LNET: an amount the buttons do not cover', () {
+    test('the quick-picks are shortcuts, not the whole menu', () async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await viewModel.lookup('basheir.home');
+
+      expect(viewModel.allowsCustomAmount, isTrue);
+      expect(viewModel.sellableOffers.every((o) => o.isTopUp), isTrue);
+    });
+
+    test('a typed amount is priced at face value and costs 95%', () async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await viewModel.lookup('basheir.home');
+      viewModel.setCustomAmount(37);
+
+      final offer = viewModel.selectedOffer!;
+      expect(offer.code, 'topup:37');
+      expect(offer.cost, closeTo(35.15, 0.001));
+      // Stored value sold below its face value loses money on every sale.
+      expect(offer.price, 37);
+      expect(offer.faceValue, 37);
+    });
+
+    test('a markup the shop set still lands above face value', () async {
+      const spec = IntegrationOpenAmount(
+        minimum: 1,
+        step: 1,
+        costRatio: 0.95,
+        pricePerUnit: 0.95,
+        priceFixed: 5,
+      );
+      expect(spec.priceOf(45), 47.75);
+      // And a markup too small to clear face value never drops below it.
+      const tiny = IntegrationOpenAmount(
+        minimum: 1, step: 1, costRatio: 0.95, pricePerUnit: 0.95, priceFixed: 1,
+      );
+      expect(tiny.priceOf(45), 45);
+    });
+
+    test('an amount the provider would refuse selects nothing', () async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await viewModel.lookup('basheir.home');
+
+      viewModel.setCustomAmount(0);
+      expect(viewModel.selectedOffer, isNull);
+      expect(viewModel.customAmountProblem,
+          IntegrationAmountProblem.notPositive);
+
+      viewModel.setCustomAmount(45.5);
+      expect(viewModel.selectedOffer, isNull);
+      expect(viewModel.customAmountProblem,
+          IntegrationAmountProblem.notAMultiple);
+
+      viewModel.setCustomAmount(45);
+      expect(viewModel.customAmountProblem, isNull);
+      expect(viewModel.selectedOffer, isNotNull);
+    });
+
+    test('tapping a quick-pick retires the typed amount', () async {
+      // Otherwise the field keeps showing a number that is not what is sold.
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await viewModel.lookup('basheir.home');
+      viewModel.setCustomAmount(37);
+      viewModel.selectOffer(viewModel.sellableOffers.first);
+
+      expect(viewModel.customAmount, isNull);
+      expect(viewModel.selectedOffer!.code, 'topup:25');
+    });
+
+    test('a typed amount reaches the cart as an ordinary line', () async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await viewModel.lookup('basheir.home');
+      viewModel.setCustomAmount(37);
+
+      final draft = viewModel.buildDraft()!;
+      expect(draft.subscriberRef, 'basheir.home');
+      expect(draft.offer.code, 'topup:37');
+      expect(draft.serviceVariant.sku, 'INTEG-LNET');
+    });
+
+    test('the float warning fires on cost, not on face value', () async {
+      // 45 face costs the float 42.75; a float of 43 covers it.
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await viewModel.lookup('basheir.home');
+      viewModel.setCustomAmount(45);
+      expect(viewModel.exceedsBalance, isFalse);
+
+      viewModel.setCustomAmount(600);
+      expect(viewModel.exceedsBalance, isTrue);
+    });
+  });
+
   group('the screen', () {
     testWidgets('always says when the top-up will actually be performed', (
       tester,
@@ -197,7 +339,7 @@ void main() {
         reason: 'nothing is chosen yet',
       );
 
-      viewModel.selectOffer(viewModel.renewalOffers.first);
+      viewModel.selectOffer(viewModel.sellableOffers.first);
       await tester.pumpAndSettle();
 
       expect(tester.widget<FilledButton>(addButton()).onPressed, isNotNull);
@@ -264,6 +406,116 @@ const _serviceVariant = IntegrationServiceVariant(
   sku: 'INTEG-HDBOX',
   name: 'شحن اشتراك HD Box',
 );
+
+const _lnetServiceVariant = IntegrationServiceVariant(
+  id: 9002,
+  productId: 4002,
+  sku: 'INTEG-LNET',
+  name: 'شحن اشتراك LNET',
+);
+
+/// The 5% agency commission, as the backend quotes it.
+const _lnetOpenAmount = IntegrationOpenAmount(
+  minimum: 1,
+  step: 1,
+  costRatio: 0.95,
+  pricePerUnit: 0.95,
+);
+
+IntegrationCardInfo _lnetLine(
+  String username, {
+  required String status,
+  DateTime? expireAt,
+  String package = 'Unlimited Home Basic',
+}) {
+  return IntegrationCardInfo(
+    cardNo: username,
+    status: status,
+    expireAt: expireAt,
+    packageName: package,
+    providerId: '214737',
+  );
+}
+
+class _FakeLnetRepo extends IntegrationsRepository {
+  _FakeLnetRepo({this.manyLines = false}) : super(PosApiService());
+
+  /// When true the first lookup matches three lines, as one phone number can.
+  final bool manyLines;
+  final List<String> lookedUp = [];
+
+  @override
+  Future<Result<IntegrationCardSnapshot>> lookupCard({
+    required String providerKey,
+    required String cardNo,
+  }) async {
+    lookedUp.add(cardNo);
+    // A phone number matches every line; a username matches only its own.
+    final isPhone = manyLines && !cardNo.contains('.');
+    if (isPhone) {
+      return Ok(
+        IntegrationCardSnapshot(
+          card: const IntegrationCardInfo(cardNo: ''),
+          offers: const [],
+          serviceVariant: _lnetServiceVariant,
+          needsSelection: true,
+          candidates: [
+            _lnetLine('basheir.home', status: 'Active',
+                expireAt: DateTime(2026, 12, 1)),
+            _lnetLine('basheir.shop', status: 'Expired',
+                expireAt: DateTime(2026, 2, 2)),
+            _lnetLine('basheir.old', status: 'Suspended'),
+          ],
+          balance: 518.8,
+        ),
+      );
+    }
+    return Ok(
+      IntegrationCardSnapshot(
+        card: _lnetLine(cardNo, status: 'Active', expireAt: DateTime(2026, 12, 1)),
+        offers: const [
+          IntegrationOffer(
+            code: 'topup:25',
+            kind: 'topup',
+            label: '25 LYD',
+            cost: 23.75,
+            price: 25,
+            faceValue: 25,
+          ),
+          IntegrationOffer(
+            code: 'topup:45',
+            kind: 'topup',
+            label: '45 LYD',
+            cost: 42.75,
+            price: 45,
+            faceValue: 45,
+          ),
+        ],
+        openAmount: _lnetOpenAmount,
+        serviceVariant: _lnetServiceVariant,
+        balance: 518.8,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<IntegrationHistoryPage>> loadHistory({
+    required String providerKey,
+    required String cardNo,
+    required IntegrationHistoryKind kind,
+    int limit = 10,
+    int offset = 0,
+  }) async {
+    return Ok(IntegrationHistoryPage(ok: true, kind: kind, limit: limit));
+  }
+}
+
+IntegrationRechargeViewModel _lnetViewModel(IntegrationsRepository repository) {
+  return IntegrationRechargeViewModel(
+    repository: repository,
+    provider: IntegrationProviderKey.lnet,
+  );
+}
 
 class _FakeRepo extends IntegrationsRepository {
   _FakeRepo({this.refusal, this.fail = false}) : super(PosApiService());
