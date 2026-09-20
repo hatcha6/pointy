@@ -106,17 +106,36 @@ Future<void> addScannedPurchaseBarcode(
   viewModel.requestSearchFocus();
 }
 
+/// Opens the product-creation workflow from the purchasing workspace with
+/// nothing scanned, and drops whatever it creates onto the open order. The
+/// buyer reaches for this because the box in their hands is not in the catalog
+/// yet — so creating the product and ordering it is one action, not two.
+Future<void> createPurchaseProduct(
+  BuildContext context, {
+  required PurchaseViewModel viewModel,
+}) async {
+  final created = await showPurchaseProductForm(context, viewModel: viewModel);
+  if (created == null) {
+    return;
+  }
+  await viewModel.addVariant(created, source: 'purchase_new_product');
+  // Same resting focus the scan path leaves behind: the buyer is back at the
+  // search field, ready for the next item off the pallet.
+  viewModel.requestSearchFocus();
+}
+
 /// Presents the full product-creation workflow — the same robust wizard used in
-/// the catalog — prefilled with [barcode], and returns the created product's
-/// default variant so the caller can drop it straight into the purchase order.
+/// the catalog — prefilled with [barcode] when a scan opened it, and returns the
+/// created product's default variant so the caller can drop it straight into
+/// the purchase order.
 ///
 /// Backs the form with its own [CatalogViewModel] over the shared catalog
 /// repository (the wizard is written against that view model); the instance is
 /// disposed with the sheet.
 Future<ProductVariant?> showPurchaseProductForm(
   BuildContext context, {
-  required String barcode,
   required PurchaseViewModel viewModel,
+  String? barcode,
 }) {
   return showAdaptiveFormSurface<ProductVariant?>(
     context: context,
@@ -138,7 +157,7 @@ class _PurchaseProductFormSheet extends StatefulWidget {
     required this.purchaseViewModel,
   });
 
-  final String barcode;
+  final String? barcode;
   final PurchaseViewModel purchaseViewModel;
 
   @override

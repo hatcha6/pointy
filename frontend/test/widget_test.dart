@@ -27,6 +27,7 @@ import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
+import 'package:pointy_frontend/src/features/catalog/views/product_form.dart';
 import 'package:pointy_frontend/src/data/repositories/attendance_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/device_settings_repository.dart';
@@ -1977,8 +1978,15 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       // The full product-creation wizard now opens for an unknown barcode —
-      // the old quick-create sheet is gone.
-      expect(find.text('منتج جديد'), findsOneWidget);
+      // the old quick-create sheet is gone. Matched inside the wizard: the
+      // catalog pane's own "new product" button carries the same words.
+      expect(
+        find.descendant(
+          of: find.byType(ProductForm),
+          matching: find.text('منتج جديد'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('إضافة منتج سريع'), findsNothing);
 
       // Step 1 — parent details.

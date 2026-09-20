@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';
@@ -20,9 +21,14 @@ import 'purchase_product_create.dart';
 import 'purchase_suggestion_strip.dart';
 
 class PurchaseCatalogPane extends StatelessWidget {
-  const PurchaseCatalogPane({super.key, required this.viewModel});
+  const PurchaseCatalogPane({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final PurchaseViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +44,12 @@ class PurchaseCatalogPane extends StatelessWidget {
       hasMoreResults: viewModel.hasMoreProducts,
       notice: viewModel.errorMessage != null
           ? PointyInlineMessage.warning(message: l10n.sampleCatalogNotice)
+          : null,
+      // A delivery routinely contains something the catalog has never seen.
+      // Until now the only way to enter it was to scan a code the box may not
+      // carry; this is the same wizard, reachable on purpose.
+      headerAction: capabilities.canCreateProduct
+          ? _CreateProductButton(viewModel: viewModel)
           : null,
       search: _PurchaseProductLookupControls(
         viewModel: viewModel,
@@ -179,6 +191,42 @@ class PurchaseCatalogPane extends StatelessWidget {
       variant == null ? ScanFeedback.notFound : ScanFeedback.success,
     );
     return variant;
+  }
+}
+
+/// Opens the product-creation wizard and drops the result onto the order.
+///
+/// Labelled from tablet width up and an icon on a phone: the header also
+/// carries the pane title and the result count, and on a 375pt till there is
+/// not room for all three.
+class _CreateProductButton extends StatelessWidget {
+  const _CreateProductButton({required this.viewModel});
+
+  final PurchaseViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final onPressed = viewModel.isSubmitting
+        ? null
+        : () => unawaited(createPurchaseProduct(context, viewModel: viewModel));
+    if (AppBreakpoints.of(context).index < AppBreakpoint.tablet.index) {
+      return IconButton.filled(
+        key: const ValueKey('purchase_create_product_button'),
+        tooltip: l10n.purchaseCreateProductTooltip,
+        onPressed: onPressed,
+        icon: const Icon(Icons.add),
+      );
+    }
+    return Tooltip(
+      message: l10n.purchaseCreateProductTooltip,
+      child: FilledButton.icon(
+        key: const ValueKey('purchase_create_product_button'),
+        onPressed: onPressed,
+        icon: const Icon(Icons.add),
+        label: Text(l10n.purchaseCreateProductButton),
+      ),
+    );
   }
 }
 

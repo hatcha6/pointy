@@ -5080,6 +5080,8 @@
     }
   },
   "purchaseCatalogTitle": "كتالوج الشراء",
+  "purchaseCreateProductButton": "منتج جديد",
+  "purchaseCreateProductTooltip": "إنشاء منتج جديد وإضافته إلى أمر الشراء",
   "purchaseProductLookupHint": "ابحث عن منتج لإضافته للمشتريات",
   "purchaseDraftTitle": "مسودة الشراء",
   "openPurchaseDraftSheetButton": "مراجعة المسودة",

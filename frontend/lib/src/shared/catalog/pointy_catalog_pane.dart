@@ -25,6 +25,7 @@ class PointyCatalogPane extends StatelessWidget {
     this.categoryStrip,
     this.suggestionStrip,
     this.statusLine,
+    this.headerAction,
   });
 
   /// Section title (e.g. "Products").
@@ -58,6 +59,11 @@ class PointyCatalogPane extends StatelessWidget {
   /// Optional status line shown above the grid (e.g. barcode scan feedback).
   final Widget? statusLine;
 
+  /// Optional action at the end of the header row (e.g. "new product"). It
+  /// sits beside the title rather than in the search row so it never eats the
+  /// width a scanner-driven lookup field needs.
+  final Widget? headerAction;
+
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
@@ -72,6 +78,7 @@ class PointyCatalogPane extends StatelessWidget {
             resultCount: resultCount,
             hasMoreResults: hasMoreResults,
             isLoading: isLoading,
+            action: headerAction,
           ),
           if (notice != null) ...[SizedBox(height: spacing.sm), notice!],
           SizedBox(height: spacing.md),
@@ -102,36 +109,52 @@ class _CatalogHeader extends StatelessWidget {
     required this.resultCount,
     required this.hasMoreResults,
     required this.isLoading,
+    this.action,
   });
 
   final String title;
   final int? resultCount;
   final bool hasMoreResults;
   final bool isLoading;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
 
+    // Title and count are one group that hugs the start; the action belongs at
+    // the far end. Getting there needs the group to be the flexible one.
+    //
+    // It used to be `Flexible(title) … Spacer() … action`, and both of those
+    // carry flex 1 — so they split the free space in half, the title used only
+    // what it needed, and the leftover collected *after* the action. That left
+    // the button stranded mid-header with empty space beyond it, on this pane
+    // and on purchasing's.
     return Row(
       children: [
-        Flexible(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.titleLarge?.copyWith(
-              color: colors.ink,
-              fontWeight: FontWeight.w800,
-            ),
+        Expanded(
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleLarge?.copyWith(
+                    color: colors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (resultCount != null) ...[
+                const SizedBox(width: 10),
+                _CountPill(count: resultCount!, hasMore: hasMoreResults),
+              ],
+            ],
           ),
         ),
-        if (resultCount != null) ...[
-          const SizedBox(width: 10),
-          _CountPill(count: resultCount!, hasMore: hasMoreResults),
-        ],
-        const Spacer(),
+        ?action,
         if (isLoading)
           const Padding(
             padding: EdgeInsetsDirectional.only(start: 8),

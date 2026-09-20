@@ -100,6 +100,7 @@ class PurchasingScreen extends StatelessWidget {
             child: _PurchasingWorkspace(
               viewModel: viewModel,
               contactRepository: contactRepository,
+              capabilities: capabilities,
               onSaved: onSaved,
             ),
           ),
@@ -113,11 +114,13 @@ class _PurchasingWorkspace extends StatefulWidget {
   const _PurchasingWorkspace({
     required this.viewModel,
     required this.contactRepository,
+    required this.capabilities,
     this.onSaved,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+  final AuthorizationCapabilities capabilities;
   final VoidCallback? onSaved;
 
   @override
@@ -288,7 +291,10 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
             if (AppBreakpoints.usesTwoPane(width)) {
               return TwoPaneLayout(
                 minPrimaryWidth: 390,
-                primaryPane: PurchaseCatalogPane(viewModel: viewModel),
+                primaryPane: PurchaseCatalogPane(
+                  viewModel: viewModel,
+                  capabilities: widget.capabilities,
+                ),
                 secondaryPane: PurchaseDraftPane(
                   viewModel: viewModel,
                   contactRepository: widget.contactRepository,
@@ -301,6 +307,7 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
             return _CompactPurchasingWorkspace(
               viewModel: viewModel,
               contactRepository: widget.contactRepository,
+              capabilities: widget.capabilities,
               onSaved: widget.onSaved,
             );
           },
@@ -321,11 +328,13 @@ class _CompactPurchasingWorkspace extends StatelessWidget {
   const _CompactPurchasingWorkspace({
     required this.viewModel,
     required this.contactRepository,
+    required this.capabilities,
     this.onSaved,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+  final AuthorizationCapabilities capabilities;
   final VoidCallback? onSaved;
 
   @override
@@ -334,7 +343,12 @@ class _CompactPurchasingWorkspace extends StatelessWidget {
 
     return Column(
       children: [
-        Expanded(child: PurchaseCatalogPane(viewModel: viewModel)),
+        Expanded(
+          child: PurchaseCatalogPane(
+            viewModel: viewModel,
+            capabilities: capabilities,
+          ),
+        ),
         PointyCompactOrderLauncher(
           title: l10n.purchaseDraftTitle,
           lineCountLabel: l10n.lineItemCount(viewModel.draft.length),

@@ -14772,6 +14772,18 @@ abstract class AppLocalizations {
   /// **'كتالوج الشراء'**
   String get purchaseCatalogTitle;
 
+  /// No description provided for @purchaseCreateProductButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج جديد'**
+  String get purchaseCreateProductButton;
+
+  /// No description provided for @purchaseCreateProductTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء منتج جديد وإضافته إلى أمر الشراء'**
+  String get purchaseCreateProductTooltip;
+
   /// No description provided for @purchaseProductLookupHint.
   ///
   /// In ar, this message translates to:

@@ -8442,6 +8442,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseCatalogTitle => 'كتالوج الشراء';
 
   @override
+  String get purchaseCreateProductButton => 'منتج جديد';
+
+  @override
+  String get purchaseCreateProductTooltip =>
+      'إنشاء منتج جديد وإضافته إلى أمر الشراء';
+
+  @override
   String get purchaseProductLookupHint => 'ابحث عن منتج لإضافته للمشتريات';
 
   @override

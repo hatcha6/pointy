@@ -386,7 +386,10 @@ class _PurchaseWorkspace extends StatelessWidget {
         if (AppBreakpoints.usesTwoPane(width)) {
           return TwoPaneLayout(
             minPrimaryWidth: 390,
-            primaryPane: PurchaseCatalogPane(viewModel: viewModel),
+            primaryPane: PurchaseCatalogPane(
+              viewModel: viewModel,
+              capabilities: _managerCaps,
+            ),
             secondaryPane: PurchaseDraftPane(
               viewModel: viewModel,
               contactRepository: contactRepository,
@@ -397,7 +400,12 @@ class _PurchaseWorkspace extends StatelessWidget {
         final l10n = AppLocalizations.of(context)!;
         return Column(
           children: [
-            Expanded(child: PurchaseCatalogPane(viewModel: viewModel)),
+            Expanded(
+              child: PurchaseCatalogPane(
+                viewModel: viewModel,
+                capabilities: _managerCaps,
+              ),
+            ),
             PointyCompactOrderLauncher(
               title: l10n.purchaseDraftTitle,
               lineCountLabel: l10n.lineItemCount(viewModel.draft.length),
