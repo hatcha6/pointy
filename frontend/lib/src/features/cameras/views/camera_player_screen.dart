@@ -8,6 +8,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/result.dart';
 import '../../../data/services/camera_file_saver.dart';
 import '../../../shared/components/components.dart';
+import '../camera_audio.dart';
 import '../view_models/camera_player_view_model.dart';
 import '../widgets/camera_timeline.dart';
 import '../widgets/camera_tile.dart';
@@ -27,9 +28,17 @@ import 'camera_time_picker.dart';
 /// bar turns into a range selector, playback loops inside the selection, and
 /// what you are watching is exactly the clip that will be saved.
 class CameraPlayerScreen extends StatefulWidget {
-  const CameraPlayerScreen({super.key, required this.viewModel});
+  const CameraPlayerScreen({
+    super.key,
+    required this.viewModel,
+    this.audioSink,
+  });
 
   final CameraPlayerViewModel viewModel;
+
+  /// Injectable for widget tests and the preview harness, where there is no
+  /// sound device. Production leaves it null and gets the real plugin.
+  final CameraAudioSink? audioSink;
 
   @override
   State<CameraPlayerScreen> createState() => _CameraPlayerScreenState();
@@ -45,9 +54,16 @@ class _CameraPlayerScreenState extends State<CameraPlayerScreen> {
   /// True while a finger or pointer is down on the timeline.
   bool _isInteracting = false;
 
+  late final CameraListenController _listen;
+
   @override
   void initState() {
     super.initState();
+    _listen = CameraListenController(
+      resolveSource: widget.viewModel.audioStreamUri,
+      sink: widget.audioSink ?? AudioPlayersCameraAudioSink(),
+    );
+    _listen.addListener(_onListenChanged);
     // The picture is the point; the status and navigation bars are not.
     unawaited(
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
@@ -60,6 +76,8 @@ class _CameraPlayerScreenState extends State<CameraPlayerScreen> {
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _listen.removeListener(_onListenChanged);
+    _listen.dispose();
     _frameTime.removeListener(_onFrame);
     _frameTime.dispose();
     unawaited(
@@ -72,6 +90,23 @@ class _CameraPlayerScreenState extends State<CameraPlayerScreen> {
   }
 
   void _onFrame() => widget.viewModel.reportFrameTime(_frameTime.value);
+
+  void _stopListening() => unawaited(_listen.stop());
+
+  void _onListenChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+    // A camera with no microphone, or one that refused, is worth one line —
+    // the button alone cannot explain why it stopped being offered.
+    final message = _listen.message;
+    if (message.isEmpty) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
 
   void _restartHideTimer() {
     _hideTimer?.cancel();
@@ -189,6 +224,8 @@ class _CameraPlayerScreenState extends State<CameraPlayerScreen> {
                               onAction: _showChrome,
                               onSaveStill: _saveStill,
                               onPickMoment: _pickMoment,
+                              listen: _listen,
+                              onLeaveLive: _stopListening,
                             ),
                           ),
                           Align(
@@ -452,6 +489,8 @@ class _TopBar extends StatelessWidget {
     required this.onAction,
     required this.onSaveStill,
     required this.onPickMoment,
+    required this.listen,
+    required this.onLeaveLive,
   });
 
   final CameraPlayerViewModel viewModel;
@@ -460,6 +499,8 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onAction;
   final Future<void> Function() onSaveStill;
   final Future<void> Function() onPickMoment;
+  final CameraListenController listen;
+  final VoidCallback onLeaveLive;
 
   @override
   Widget build(BuildContext context) {
@@ -530,6 +571,8 @@ class _TopBar extends StatelessWidget {
                   ],
                 ),
               ),
+              if (viewModel.canOfferAudio && listen.isOffered)
+                _ListenButton(listen: listen, onAction: onAction),
               if (viewModel.playbackAvailable)
                 IconButton(
                   tooltip: viewModel.isLive
@@ -537,6 +580,12 @@ class _TopBar extends StatelessWidget {
                       : l10n.cameraLiveBadge,
                   onPressed: () {
                     onAction();
+                    if (viewModel.isLive) {
+                      // Sound is live-only: the playback path carries no audio
+                      // track, so leaving live must not leave a stream open on
+                      // the recorder for a picture that is no longer showing.
+                      onLeaveLive();
+                    }
                     viewModel.switchTo(
                       viewModel.isLive
                           ? CameraPlayerMode.playback
@@ -560,6 +609,42 @@ class _TopBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Sound on/off for the live picture.
+///
+/// Three visible states, not two: off, a spinner while the ticket is minted
+/// and the stream opens (which on a busy DVR is a second or more), and on.
+/// Without the middle one a tap looks like it did nothing.
+class _ListenButton extends StatelessWidget {
+  const _ListenButton({required this.listen, required this.onAction});
+
+  final CameraListenController listen;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return IconButton(
+      tooltip: listen.isOn ? l10n.cameraMuteTooltip : l10n.cameraListenTooltip,
+      onPressed: () {
+        onAction();
+        unawaited(listen.toggle());
+      },
+      color: Colors.white,
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      icon: listen.isBusy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Icon(listen.isOn ? Icons.volume_up : Icons.volume_off_outlined),
     );
   }
 }

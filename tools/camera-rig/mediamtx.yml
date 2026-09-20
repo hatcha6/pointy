@@ -1,4 +1,4 @@
-# MediaMTX for the camera rig: RTSP only, no auth, one path.
+# MediaMTX for the camera rig: RTSP only, no auth, two paths.
 #
 # This is the half of the rig that is genuinely real — a real RTSP server
 # speaking to real ffmpeg, which is what proves the transcode spine, the frame
@@ -15,7 +15,22 @@ srt: no
 rtspTransports: [tcp]
 rtspAddress: :8554
 
+# Every path has to be declared: MediaMTX refuses a publish to an unlisted one
+# with a bare 400, which looks exactly like a broken encoder if you are not
+# expecting it.
 paths:
+  # `source: publisher` is MediaMTX's keyword for "something will publish into
+  # this path" — it is not the name of the compose service that happens to
+  # match. Both paths below use it.
+  #
   # Published into by the `publisher` service. Named for what it stands in for.
+  # Carries video AND a G.711 A-law audio track, as a camera with a microphone
+  # does.
   shop:
+    source: publisher
+
+  # The same camera with no microphone, which on a real analogue install is
+  # most of them. The listen path has to answer "there is nothing to hear"
+  # here, and it has to answer it the same way every time.
+  silent:
     source: publisher

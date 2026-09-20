@@ -20,6 +20,7 @@ from contextlib import closing
 from datetime import timedelta, timezone as dt_timezone
 
 from django.conf import settings
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.db.models import Count
 from django.core.handlers.asgi import ASGIRequest
 from django.http import Http404, HttpResponse, StreamingHttpResponse
@@ -29,7 +30,7 @@ from django.utils.dateparse import parse_datetime
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -54,6 +55,7 @@ from .serializers import (
 from .streaming import (
     FfmpegSource,
     Frame,
+    classify_ffmpeg_error,
     PipedSource,
     SampledRtspSource,
     SnapshotSource,
@@ -250,7 +252,13 @@ def _stream_response(request, frames, *, content_type=MJPEG_CONTENT_TYPE):
     response["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response["Pragma"] = "no-cache"
     response["X-Accel-Buffering"] = "no"
-    response["Connection"] = "close"
+    # Deliberately no ``Connection: close``. It is a hop-by-hop header, which
+    # PEP 3333 forbids an application from setting — ``wsgiref`` asserts on it
+    # and turns every camera stream into a 500, which is why video could not be
+    # opened at all under ``runserver``. Production never saw it because uvicorn
+    # does not assert. Nothing is lost: what actually ends these streams is the
+    # generator's ``finally``, which stops ffmpeg and hands the recorder back
+    # its session.
     return response
 
 
@@ -1190,3 +1198,260 @@ class InvoiceFootageView(APIView):
                 "cameras": InvoiceFootageCameraSerializer(cameras, many=True).data,
             }
         )
+
+
+# -- listening to a camera ---------------------------------------------------
+#
+# Sound is a SECOND stream beside the MJPEG one, never inside it: the live wire
+# format has nowhere to put audio, and muxing both into a real container would
+# cost the property that whole design was chosen for — that a till needs no
+# video codec to show a camera. The two arrive independently and are not
+# synchronised, which for a shop camera nobody lip-reads is the right trade.
+
+#: How long a minted listen URL stays usable. Long enough for the client to
+#: hand it to a platform audio player and for that player to make its request;
+#: short enough that one copied out of a log or a proxy is already dead.
+AUDIO_TICKET_MAX_AGE = 60
+
+#: Namespaces the signature so a ticket cannot be replayed against any other
+#: signed value this installation produces.
+AUDIO_TICKET_SALT = "surveillance.audio.listen"
+
+AUDIO_CONTENT_TYPES = {"adts": "audio/aac", "mp3": "audio/mpeg"}
+
+#: One read off the pipe. Small because it is also the latency floor: at
+#: 32 kbps a 4 KB read would hold a second of sound back waiting to be filled.
+AUDIO_CHUNK_BYTES = 1024
+
+
+def _mint_audio_ticket(camera) -> str:
+    return TimestampSigner(salt=AUDIO_TICKET_SALT).sign(str(camera.pk))
+
+
+def _camera_id_from_ticket(ticket: str) -> int | None:
+    """The camera a ticket authorises, or ``None`` if it authorises nothing.
+
+    The camera id is *inside* the signature rather than read from the URL, so a
+    valid ticket for the yard camera cannot be pointed at the office one.
+    """
+    try:
+        value = TimestampSigner(salt=AUDIO_TICKET_SALT).unsign(
+            ticket, max_age=AUDIO_TICKET_MAX_AGE
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_audio(camera) -> bool:
+    """Whether this channel carries sound, measuring it once and remembering.
+
+    The measurement costs an RTSP session, so it happens here — at the moment
+    somebody asks to listen — and not on every camera during a channel sync,
+    which on a 16-channel DVR would be sixteen sessions for a feature nobody
+    had asked for yet.
+    """
+    if camera.has_audio is not None:
+        return camera.has_audio
+    driver = services.open_driver(camera.recorder)
+    try:
+        url = driver.live_rtsp_url(camera.channel, quality=camera.live_quality)
+    finally:
+        driver.close()
+    has_audio = bool(transcode.audio_track(url))
+    Camera.objects.filter(pk=camera.pk).update(
+        has_audio=has_audio, audio_checked_at=timezone.now()
+    )
+    camera.has_audio = has_audio
+    return has_audio
+
+
+def _no_audio_response(camera):
+    return Response(
+        {
+            "detail": (
+                f"{camera.display_name} has no microphone, so there is nothing "
+                "to listen to."
+            ),
+            "code": "camera_has_no_audio",
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
+class CameraAudioTicketView(_CameraViewMixin, APIView):
+    """Mint a short-lived URL for listening to one camera.
+
+    Sound is played by the platform's own audio player, not by our HTTP client,
+    and those players cannot portably be handed an Authorization header. So the
+    authorisation happens *here* — where the session and the permission already
+    are — and produces a signed, camera-scoped, one-minute URL the player can
+    fetch with no headers at all. The same shape as a pre-signed media URL.
+
+    It is also the last point at which "this camera has no microphone" can be a
+    sentence rather than a player that connects and stays silent, so that is
+    settled here too.
+    """
+
+    permission_classes = [IsAuthenticated, HasSurveillancePermission]
+    required_permission = "surveillance.view_live"
+
+    def post(self, request, pk):
+        camera = self.get_camera(pk)
+        if not transcode.audio_available():
+            return _stream_error_response(
+                transcode.TranscodeUnavailable(
+                    "Listening to a camera needs ffmpeg with an audio encoder, "
+                    "which this server does not have."
+                ),
+                code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        try:
+            has_audio = _resolve_audio(camera)
+        except transcode.TranscodeUnavailable as exc:
+            return _stream_error_response(
+                exc, code=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except RecorderError as exc:
+            return _stream_error_response(exc)
+        if not has_audio:
+            return _no_audio_response(camera)
+        return Response(
+            {
+                "ticket": _mint_audio_ticket(camera),
+                "expires_in": AUDIO_TICKET_MAX_AGE,
+            }
+        )
+
+
+class CameraAudioStreamView(APIView):
+    """Live sound for one camera, authorised by the ticket in the URL.
+
+    Deliberately unauthenticated in the DRF sense: the signed ticket *is* the
+    authorisation, because the client for this endpoint is a platform audio
+    player that cannot send headers. The ticket is camera-scoped and expires in
+    a minute, which bounds what a leaked URL is worth — though note that it
+    gates the *start* of a stream, not its length, exactly as a pre-signed
+    media URL does.
+
+    Unlike video this is not shared through the frame broker. The broker's
+    subscribers are lossy by design — newest frame wins — which is right for
+    pictures and wrong for sound, where a dropped chunk is an audible click.
+    A listen is one viewer on one full-screen camera, so it gets its own
+    pipeline and its own stream seat on the recorder.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, pk):
+        ticket = request.query_params.get("ticket") or ""
+        ticket_camera_id = _camera_id_from_ticket(ticket)
+        if ticket_camera_id is None or ticket_camera_id != int(pk):
+            return Response(
+                {
+                    "detail": "This listening link is not valid any more.",
+                    "code": "audio_ticket_invalid",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        camera = get_object_or_404(
+            Camera.objects.select_related("recorder"), pk=ticket_camera_id
+        )
+        if not camera.is_enabled or not camera.recorder.is_enabled:
+            raise Http404("This camera is turned off.")
+        if camera.has_audio is False:
+            return _no_audio_response(camera)
+
+        try:
+            breaker.check(camera.recorder_id)
+        except breaker.RecorderCircuitOpen as exc:
+            return _breaker_response(exc)
+
+        driver = services.open_driver(camera.recorder)
+        try:
+            url = driver.live_rtsp_url(camera.channel, quality=camera.live_quality)
+        except RecorderError as exc:
+            return _stream_error_response(exc)
+        finally:
+            driver.close()
+
+        # A listen is a second session on the box, so it is charged for like
+        # any other pull rather than quietly exceeding the recorder's cap and
+        # taking a tile down with it.
+        try:
+            reservation = budget.reserve(
+                camera.recorder, limit=budget.limit_for(camera.recorder)
+            )
+        except budget.RecorderAtCapacity as exc:
+            return _capacity_response(exc)
+
+        try:
+            process, slot = transcode.open_audio_stream(url)
+        except transcode.TranscodeUnavailable as exc:
+            reservation.release()
+            return _stream_error_response(
+                exc, code=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        # The first bytes are pulled before the response starts, for the same
+        # reason every other stream here does it: a recorder that refuses turns
+        # into an HTTP status with a sentence, rather than a player that
+        # connects successfully and is silent forever.
+        first = process.stdout.read(AUDIO_CHUNK_BYTES)
+        if not first:
+            stderr = transcode.drain_error(process)
+            transcode.stop(process, slot)
+            reservation.release()
+            _reason, message = classify_ffmpeg_error(stderr)
+            return _stream_error_response(
+                StreamError(
+                    message or "The camera sent no sound.",
+                    detail=stderr.splitlines()[0][:200] if stderr else "",
+                )
+            )
+
+        chunks = _audio_chunks(process, slot, reservation, first)
+        django_request = getattr(request, "_request", request)
+        if isinstance(django_request, ASGIRequest):
+            # Same trap as the video streams: under ASGI a sync iterator is
+            # drained whole before the first byte leaves, which for a live
+            # stream means never.
+            chunks = aiter_in_thread(chunks, maxsize=2)
+        response = StreamingHttpResponse(
+            chunks,
+            content_type=AUDIO_CONTENT_TYPES.get(
+                transcode.probe()["audio_format"], "application/octet-stream"
+            ),
+        )
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response["X-Accel-Buffering"] = "no"
+        # Deliberately no ``Connection: close``. It is a hop-by-hop header,
+        # which PEP 3333 forbids an application from setting — the WSGI dev
+        # server asserts on it and turns the whole stream into a 500. Nothing
+        # is lost: what actually ends this stream is the generator's finally,
+        # which kills ffmpeg and returns the recorder's session.
+        return response
+
+
+def _audio_chunks(process, slot, reservation, first: bytes):
+    """Pump ffmpeg's audio pipe to the client, and clean up however it ends.
+
+    The ``finally`` is the important part: when the listener closes the player
+    the generator is closed, which kills ffmpeg and hands the recorder back its
+    session. A listen nobody is hearing has to actually stop, or a DVR counting
+    sessions runs out of them.
+    """
+    try:
+        yield first
+        while True:
+            chunk = process.stdout.read(AUDIO_CHUNK_BYTES)
+            if not chunk:
+                return
+            yield chunk
+    finally:
+        transcode.stop(process, slot)
+        reservation.release()

@@ -195,6 +195,53 @@ class SurveillanceApiClient {
     );
   }
 
+  /// A short-lived URL for listening to one camera.
+  ///
+  /// Two calls rather than one because the thing that fetches sound is the
+  /// platform's own audio player, which cannot portably be handed an
+  /// Authorization header. So this call — authenticated, like everything else
+  /// here — asks permission and gets back a URL carrying a signed ticket that
+  /// the player can fetch with no headers at all.
+  ///
+  /// It is also where "this camera has no microphone" is answered, as a 409
+  /// with a sentence in it. Most analogue cameras are silent, so that is a
+  /// normal outcome and not an error to log.
+  Future<Uri> audioStreamUri(int cameraId) async {
+    final response = await _session.post(
+      'surveillance/cameras/$cameraId/audio/ticket/',
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = _session.body(response);
+      final message = _messageFor(response.statusCode, body);
+      if (response.statusCode == 409) {
+        // Not a failure to retry: the server measured this channel and there
+        // is no microphone on it. A distinct type so the caller can stop
+        // offering the button rather than letting it fail again.
+        throw CameraHasNoAudio(message);
+      }
+      throw PosApiException(
+        message: message,
+        statusCode: response.statusCode,
+        responseBody: body,
+      );
+    }
+    final decoded = _session.decodedBody(response);
+    final ticket = decoded is Map<String, Object?>
+        ? decoded['ticket']?.toString() ?? ''
+        : '';
+    if (ticket.isEmpty) {
+      throw PosApiException(
+        message: 'The server did not return a listening link.',
+        statusCode: response.statusCode,
+        responseBody: '',
+      );
+    }
+    return _session.uri(
+      'surveillance/cameras/$cameraId/audio/',
+      queryParameters: {'ticket': ticket},
+    );
+  }
+
   /// Recorded frames for a window, paced at [speed] times real time.
   Stream<CameraFrame> playbackFrames(
     int cameraId, {
@@ -527,4 +574,19 @@ class MjpegParser {
     }
     return -1;
   }
+}
+
+
+/// Thrown when the server has measured a channel and found no microphone.
+///
+/// Most analogue cameras are silent — sound on an XVR arrives on separate
+/// inputs, and only some HDCVI cameras carry it — so this is a normal answer,
+/// not an error worth logging.
+class CameraHasNoAudio implements Exception {
+  const CameraHasNoAudio(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

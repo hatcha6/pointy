@@ -30,16 +30,41 @@ services:
     # -re paces at wall-clock so the stream behaves like a camera rather than
     # arriving as fast as the CPU can encode; -stream_loop -1 never ends.
     # zerolatency + a 1s GOP keeps first-frame time honest for the live path.
+    #
+    # The audio track is G.711 A-law at 8 kHz, which is not an arbitrary
+    # choice: it is what Hikvision, Dahua and Xiongmai all actually put on
+    # the wire, so the listen path here decodes the same thing it will decode
+    # in a shop. A stream with no audio at all is a different rig path —
+    # see `publisher-silent` — because "this channel has no microphone" is
+    # the COMMON case in the field and has to be testable, not assumed.
+    command: >
+      ffmpeg -hide_banner -loglevel warning
+      -re -stream_loop -1
+      -f lavfi -i testsrc2=size=704x576:rate=15
+      -f lavfi -i sine=frequency=440:sample_rate=8000
+      -c:v libx264 -preset ultrafast -tune zerolatency
+      -g 15 -pix_fmt yuv420p
+      -c:a pcm_alaw -ar 8000 -ac 1
+      -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/shop
+    # Load-bearing, not tidiness: this is how the publisher waits for MediaMTX.
+    # ffmpeg exits if the RTSP port is not accepting yet, and compose restarts
+    # it until it is.
+    restart: unless-stopped
+
+  # The camera with no microphone — most of them, on a real analogue install.
+  # Without this path the listen feature can only ever be tested against a
+  # channel that works, which is the half that was never going to break.
+  publisher-silent:
+    build: .
+    container_name: pointy-rig-publisher-silent
+    depends_on: [mediamtx]
     command: >
       ffmpeg -hide_banner -loglevel warning
       -re -stream_loop -1
       -f lavfi -i testsrc2=size=704x576:rate=15
       -c:v libx264 -preset ultrafast -tune zerolatency
-      -g 15 -pix_fmt yuv420p
-      -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/shop
-    # Load-bearing, not tidiness: this is how the publisher waits for MediaMTX.
-    # ffmpeg exits if the RTSP port is not accepting yet, and compose restarts
-    # it until it is.
+      -g 15 -pix_fmt yuv420p -an
+      -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/silent
     restart: unless-stopped
 
   fake-dvr:

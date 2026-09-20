@@ -225,6 +225,19 @@ class Camera(TimeStampedModel):
         default=StreamQuality.MAIN,
     )
 
+    # Whether this channel carries sound, as measured by ffprobe — never
+    # guessed. NULL means "not asked yet", which is the state every camera
+    # starts in; the check costs an RTSP session, so it is made once, on the
+    # first attempt to listen, and kept.
+    #
+    # Tri-state rather than a boolean default because "no microphone" and "not
+    # yet checked" need different answers from the UI: the first hides the
+    # listen button for good, the second leaves it to be tried. Defaulting to
+    # False would hide sound on every camera that has it until something
+    # re-checked; defaulting to True is the snapshot-polling mistake again.
+    has_audio = models.BooleanField(null=True, blank=True, default=None)
+    audio_checked_at = models.DateTimeField(blank=True, null=True)
+
     status = models.CharField(
         max_length=16,
         choices=Status.choices,

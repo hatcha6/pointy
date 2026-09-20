@@ -2666,6 +2666,13 @@ class PosApiService {
     );
   }
 
+  /// A short-lived URL for listening to one camera. See
+  /// [SurveillanceApiClient.audioStreamUri]: throws [CameraHasNoAudio] when
+  /// the channel has been measured and has no microphone.
+  Future<Uri> cameraAudioStreamUri(int cameraId) {
+    return _surveillance.audioStreamUri(cameraId);
+  }
+
   Stream<CameraFrame> playbackCameraFrames(
     int cameraId, {
     required DateTime start,

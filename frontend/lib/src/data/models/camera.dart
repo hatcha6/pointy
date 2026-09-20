@@ -110,6 +110,7 @@ class Camera {
     required this.status,
     this.recorderName = '',
     this.lastFrameAt,
+    this.hasAudio,
   });
 
   final int id;
@@ -134,6 +135,17 @@ class Camera {
   final CameraStatus status;
   final DateTime? lastFrameAt;
 
+  /// Whether this channel carries sound, as the server measured it — three
+  /// states, not two. `null` means nobody has asked the recorder yet, which is
+  /// worth offering a listen button for; `false` means it was asked and there
+  /// is no microphone, which is not. Most analogue cameras are `false`.
+  final bool? hasAudio;
+
+  /// Whether to offer a listen button at all. Deliberately optimistic about
+  /// the unmeasured case: the first tap is what triggers the measurement, and
+  /// it answers with a sentence if the channel turns out to be silent.
+  bool get mightHaveAudio => hasAudio ?? true;
+
   factory Camera.fromJson(Map<String, Object?> json) {
     return Camera(
       id: (json['id'] as num?)?.toInt() ?? 0,
@@ -150,6 +162,9 @@ class Camera {
       playbackQuality: CameraQuality.fromWire(json['playback_quality']),
       status: CameraStatus.fromWire(json['status']),
       lastFrameAt: DateTime.tryParse(json['last_frame_at']?.toString() ?? ''),
+      // Absent and explicit null mean the same thing — not measured yet — so
+      // this must not collapse to false the way the other flags do.
+      hasAudio: json['has_audio'] is bool ? json['has_audio'] as bool : null,
     );
   }
 
@@ -178,6 +193,7 @@ class Camera {
       playbackQuality: playbackQuality ?? this.playbackQuality,
       status: status,
       lastFrameAt: lastFrameAt,
+      hasAudio: hasAudio,
     );
   }
 }

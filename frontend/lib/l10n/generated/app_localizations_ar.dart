@@ -17772,6 +17772,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cameraOpenPlaybackTooltip => 'مراجعة التسجيلات';
 
   @override
+  String get cameraListenTooltip => 'تشغيل الصوت';
+
+  @override
+  String get cameraMuteTooltip => 'كتم الصوت';
+
+  @override
   String get cameraSaveFrameTooltip => 'حفظ اللقطة';
 
   @override

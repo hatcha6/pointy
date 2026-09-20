@@ -25,6 +25,10 @@ class CameraSerializer(serializers.ModelSerializer):
             "playback_quality",
             "status",
             "last_frame_at",
+            # Tri-state, and the client must keep it that way: null is "not
+            # checked yet", which is a listen button worth offering, and false
+            # is "measured, no microphone", which is not.
+            "has_audio",
         ]
         # Channels come from the recorder, never from a client: a camera row
         # that does not correspond to a real channel would stream nothing and
@@ -38,6 +42,7 @@ class CameraSerializer(serializers.ModelSerializer):
             "display_name",
             "status",
             "last_frame_at",
+            "has_audio",
         ]
 
 

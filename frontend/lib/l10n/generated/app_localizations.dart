@@ -30681,6 +30681,18 @@ abstract class AppLocalizations {
   /// **'مراجعة التسجيلات'**
   String get cameraOpenPlaybackTooltip;
 
+  /// No description provided for @cameraListenTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل الصوت'**
+  String get cameraListenTooltip;
+
+  /// No description provided for @cameraMuteTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'كتم الصوت'**
+  String get cameraMuteTooltip;
+
   /// No description provided for @cameraSaveFrameTooltip.
   ///
   /// In ar, this message translates to:

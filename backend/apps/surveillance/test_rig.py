@@ -39,6 +39,13 @@ from .streaming import _jpeg_frame_end, _jpeg_frames
 DVR = os.environ.get("POINTY_RIG_DVR", "http://127.0.0.1:8090")
 RTSP = os.environ.get("POINTY_RIG_RTSP", "rtsp://127.0.0.1:8554/shop")
 
+#: The same camera with no microphone. Most analogue channels are this, and it
+#: is the half of the listen feature that a rig serving only `shop` could not
+#: test — which is how the audio-only probe shipped broken for an afternoon.
+SILENT_RTSP = os.environ.get(
+    "POINTY_RIG_RTSP_SILENT", "rtsp://127.0.0.1:8554/silent"
+)
+
 #: Below this standard deviation of luma a frame has no picture in it. A flat
 #: grey fill lands near 0; the rig's test pattern is above 50. The gap is wide
 #: enough that the threshold never needs tuning.
@@ -230,3 +237,112 @@ class RealVideoTests(RigTestCase):
             "ffmpeg has started emitting FFD9 inside a header segment; the real "
             "video path can now catch this bug and the trap could be retired",
         )
+
+
+class LiveAudioTests(RigTestCase):
+    """Listening to a camera, against a real RTSP server.
+
+    The interesting case is not the camera that has sound. It is the one that
+    does not: a silent channel is the common case on an analogue install, and
+    the difference between "answers nothing" and "refuses the session" is the
+    difference between caching the answer once and re-opening an RTSP session
+    on every tap, forever.
+    """
+
+    def test_a_channel_with_a_microphone_reports_its_codec(self):
+        """G.711 is what these boxes actually send, and what the rig publishes."""
+        self.assertEqual(transcode.audio_track(RTSP), "pcm_alaw")
+
+    def test_a_channel_with_no_microphone_answers_instead_of_failing(self):
+        """The regression that the rig caught.
+
+        An empty answer is a *measurement* — it caches, and the listen button
+        stops being offered. An exception is not: it caches nothing, so every
+        tap opens another session on a recorder that was never going to have
+        anything to say.
+        """
+        self.assertEqual(transcode.audio_track(SILENT_RTSP), "")
+
+    def test_asking_for_audio_only_still_breaks_the_silent_channel(self):
+        """The guard on the test above: prove the trap is still a trap.
+
+        If a future ffmpeg or server starts answering an audio-only request on
+        a video-only stream politely, the reason for the probe's shape has gone
+        away — and this test says so, instead of the pair quietly passing for
+        a reason nobody checked.
+        """
+        completed = subprocess.run(
+            [
+                transcode.ffprobe_path(),
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-rtsp_transport",
+                "tcp",
+                "-allowed_media_types",
+                "audio",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=nokey=1:noprint_wrappers=1",
+                SILENT_RTSP,
+            ],
+            capture_output=True,
+            timeout=transcode.AUDIO_PROBE_TIMEOUT,
+            check=False,
+        )
+        self.assertNotEqual(
+            completed.returncode,
+            0,
+            "the audio-only filter no longer breaks a video-only stream; the "
+            "probe could use it again, and this pair of tests needs revisiting",
+        )
+
+    def test_the_stream_is_playable_audio_from_a_real_recorder(self):
+        """End to end: RTSP in, a self-framing audio byte stream out."""
+        process, slot = transcode.open_audio_stream(RTSP)
+        try:
+            data = b""
+            # ADTS frames at 32 kbps are small; a few reads is a fraction of a
+            # second of sound, which is all that needs proving here.
+            for _ in range(40):
+                chunk = process.stdout.read(1024)
+                if not chunk:
+                    break
+                data += chunk
+                if len(data) >= 2048:
+                    break
+        finally:
+            transcode.stop(process, slot)
+        self.assertGreater(len(data), 512, transcode.drain_error(process))
+        # 0xFFF_ is the ADTS syncword: 12 set bits, then the MPEG version and
+        # layer. Anything else means we are not looking at decodable audio.
+        self.assertEqual(data[0], 0xFF)
+        self.assertEqual(data[1] & 0xF0, 0xF0)
+
+    def test_listening_does_not_pull_the_video_down_the_wire(self):
+        """The saving that makes a listen cheap rather than a second stream."""
+        completed = subprocess.run(
+            [
+                transcode.ffprobe_path(),
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-rtsp_transport",
+                "tcp",
+                "-allowed_media_types",
+                "audio",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "default=nokey=1:noprint_wrappers=1",
+                RTSP,
+            ],
+            capture_output=True,
+            timeout=transcode.AUDIO_PROBE_TIMEOUT,
+            check=False,
+        )
+        kinds = completed.stdout.decode().split()
+        self.assertEqual(kinds, ["audio"], completed.stderr.decode())

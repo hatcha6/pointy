@@ -8,6 +8,8 @@ render. Mounted by the project router under ``api/``.
 from django.urls import path
 
 from .views import (
+    CameraAudioStreamView,
+    CameraAudioTicketView,
     CameraExportView,
     CameraLiveStreamView,
     CameraPlaybackStreamView,
@@ -34,6 +36,20 @@ urlpatterns = [
         "surveillance/cameras/<int:pk>/playback/",
         CameraPlaybackStreamView.as_view(),
         name="surveillance-camera-playback",
+    ),
+    # Sound is its own stream beside the MJPEG one, and its own two-step: the
+    # ticket call is authenticated and answers "is there a microphone", the
+    # stream call is opened by a platform audio player carrying only the signed
+    # ticket, because those players cannot send an Authorization header.
+    path(
+        "surveillance/cameras/<int:pk>/audio/ticket/",
+        CameraAudioTicketView.as_view(),
+        name="surveillance-camera-audio-ticket",
+    ),
+    path(
+        "surveillance/cameras/<int:pk>/audio/",
+        CameraAudioStreamView.as_view(),
+        name="surveillance-camera-audio",
     ),
     path(
         "surveillance/cameras/<int:pk>/snapshot/",

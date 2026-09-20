@@ -43,6 +43,25 @@ DEFAULT_MAX_PROCESSES = 12
 # DVR is busy. The reader kills it; the client reconnects.
 DEFAULT_IDLE_TIMEOUT = 20.0
 
+#: Audio encoders a live listen can be served with, best first, as
+#: ``(encoder, container)``. ``aac`` is ffmpeg's own — built into every build
+#: including the minimal ones, needing no external library — and ADTS is a
+#: self-framing byte stream, which is what lets it be played straight off a
+#: chunked HTTP response the way an internet radio station is. libmp3lame is
+#: only a fallback for a build that somehow lacks the native encoder.
+AUDIO_ENCODERS = (("aac", "adts"), ("libmp3lame", "mp3"))
+
+#: Sound from a shop camera is a G.711 telephone-quality microphone at best, so
+#: there is nothing above this to preserve. 32 kbps mono is transparent for it
+#: and costs a fifteenth of the video beside it.
+AUDIO_BITRATE_KBPS = 32
+AUDIO_SAMPLE_RATE = 16000
+
+#: Opening an RTSP session and reading far enough to answer "is there a
+#: microphone on this channel" against a busy DVR. Generous because the answer
+#: is cached on the camera row and asked once, not per listen.
+AUDIO_PROBE_TIMEOUT = 15.0
+
 _probe_lock = threading.Lock()
 _probe_cache: dict | None = None
 
@@ -86,6 +105,8 @@ def probe() -> dict:
             "version": "",
             "supports_readrate": False,
             "supports_fps_mode": False,
+            "audio_encoder": "",
+            "audio_format": "",
         }
         if path:
             try:
@@ -103,6 +124,10 @@ def probe() -> dict:
                     result["version"] = f"{major}.{minor}"
                     result["supports_readrate"] = (major, minor) >= (5, 1)
                     result["supports_fps_mode"] = (major, minor) >= (5, 1)
+                if result["available"]:
+                    encoder, container = _detect_audio_encoder(path)
+                    result["audio_encoder"] = encoder
+                    result["audio_format"] = container
             except (OSError, subprocess.SubprocessError) as exc:
                 logger.warning("ffmpeg probe failed: %s", exc)
         _probe_cache = result
@@ -118,6 +143,113 @@ def reset_probe_cache():
 
 def ffmpeg_available() -> bool:
     return bool(probe()["available"])
+
+
+def _detect_audio_encoder(path: str) -> tuple[str, str]:
+    """The first of :data:`AUDIO_ENCODERS` this build actually has.
+
+    Asked rather than assumed, like ``supports_readrate`` above it: the shipped
+    image has both, but a source install may have an ffmpeg stripped to the
+    video codecs, and a listen button that dies inside ffmpeg is worse than one
+    that was never drawn.
+    """
+    try:
+        completed = subprocess.run(
+            [path, "-hide_banner", "-encoders"],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("ffmpeg audio encoder probe failed: %s", exc)
+        return "", ""
+    listing = completed.stdout.decode("utf-8", "replace")
+    for encoder, container in AUDIO_ENCODERS:
+        # The encoder table's rows begin with capability flags; the leading "A"
+        # is what marks an audio encoder, and anchoring on it keeps a decoder
+        # or a filter with a colliding name from matching.
+        if re.search(rf"^\s*A\S*\s+{re.escape(encoder)}\s", listing, re.M):
+            return encoder, container
+    return "", ""
+
+
+def audio_available() -> bool:
+    """Whether this server can serve camera sound at all."""
+    return bool(probe()["available"] and probe()["audio_encoder"])
+
+
+def ffprobe_path() -> str:
+    """ffprobe ships beside ffmpeg in every build and package we use."""
+    binary = ffmpeg_path()
+    if not binary:
+        return ""
+    candidate = binary.replace("ffmpeg", "ffprobe")
+    if candidate != binary and os.path.exists(candidate):
+        return candidate
+    return shutil.which("ffprobe") or ""
+
+
+def audio_track(url: str) -> str:
+    """The codec of this stream's first audio track, or ``""`` if it has none.
+
+    Measured, never assumed. Most analogue cameras have no microphone — sound
+    on an XVR arrives on separate RCA inputs or over coax from the few HDCVI
+    cameras that carry it — so on a typical install *some* channels are silent
+    and the rest do not exist as audio at all. Guessing the other way is the
+    snapshot-polling failure in a different costume: a listen button wired to a
+    channel with no microphone opens a pipeline that can only ever time out.
+
+    Slow (it opens an RTSP session), so the answer belongs in a cache on the
+    camera row; this is the call behind that cache, not a per-listen check.
+    """
+    path = ffprobe_path()
+    if not path:
+        raise TranscodeUnavailable(
+            "Checking a camera for sound needs ffprobe, which is not installed "
+            "on this server."
+        )
+    args = [
+        path,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-rtsp_transport",
+        "tcp",
+        # Deliberately NOT ``-allowed_media_types audio`` here, though the
+        # stream itself does use it. Asking a server for audio-only on a
+        # channel that HAS NO AUDIO makes it refuse the session outright — the
+        # rig answers 501, a DVR will have its own number — and a refusal is
+        # indistinguishable from a recorder that is down. Without the filter
+        # the same channel answers successfully with nothing, which is the
+        # question we actually asked. Getting this backwards means "no
+        # microphone" never caches, and every tap re-opens an RTSP session
+        # forever: the snapshot-polling failure, again.
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=codec_name",
+        "-of",
+        "default=nokey=1:noprint_wrappers=1",
+        url,
+    ]
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv, never a shell
+            args, capture_output=True, timeout=AUDIO_PROBE_TIMEOUT, check=False
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TranscodeUnavailable(
+            "The recorder did not answer in time when it was checked for sound."
+        ) from exc
+    except OSError as exc:
+        raise TranscodeUnavailable(f"Could not start ffprobe: {exc}") from exc
+    if completed.returncode != 0:
+        detail = redact_secrets(completed.stderr.decode("utf-8", "replace").strip())
+        raise TranscodeUnavailable(
+            detail or "The stream could not be opened to check it for sound."
+        )
+    # No audio track is a *successful* probe with empty output, which is the
+    # answer we want rather than an error: this channel has no microphone.
+    return completed.stdout.decode("utf-8", "replace").strip()
 
 
 def max_processes() -> int:
@@ -165,6 +297,7 @@ def _base_input_args(
     readrate: float | None,
     low_latency: bool = False,
     keyframes_only: bool = False,
+    allowed_media_types: str = "",
 ) -> list[str]:
     args = [
         "-hide_banner",
@@ -208,6 +341,12 @@ def _base_input_args(
             "-analyzeduration",
             "1000000",
         ]
+    if allowed_media_types:
+        # Filters what the server is asked to SETUP, not what ffmpeg keeps — so
+        # an audio pull never has the video sent to it in the first place. That
+        # is the difference between a listen costing a few KB/s and it costing
+        # a whole second video stream off a DVR that is counting them.
+        args += ["-allowed_media_types", allowed_media_types]
     if readrate is not None and probe()["supports_readrate"]:
         args += ["-readrate", f"{readrate:g}"]
     elif readrate is not None:
@@ -379,6 +518,71 @@ def open_mp4_stream(url: str) -> tuple[subprocess.Popen, _Slot]:
         "mp4",
         "-movflags",
         "frag_keyframe+empty_moov+default_base_moof",
+        "pipe:1",
+    ]
+    return _spawn(args, slot)
+
+
+def open_audio_stream(
+    url: str,
+    *,
+    bitrate_kbps: int = AUDIO_BITRATE_KBPS,
+    sample_rate: int = AUDIO_SAMPLE_RATE,
+) -> tuple[subprocess.Popen, _Slot]:
+    """Start ffmpeg turning an RTSP stream's sound into a pipe of audio bytes.
+
+    Sound is a **second pipeline beside the video**, not part of it, because the
+    live wire format is MJPEG and MJPEG has nowhere to put audio. Muxing both
+    into a real container instead would buy lip-sync and cost the property the
+    whole feature was built on — that a till needs no video codec to show a
+    camera. Nobody lip-reads a shop camera, so the trade is not close.
+
+    That makes a listen a second RTSP session on the recorder, which is why the
+    caller must take a stream seat for it like any other pull.
+
+    The output is a bare self-framing byte stream (ADTS, or MP3), so it plays
+    from a chunked HTTP response with no container index and no seeking — the
+    same shape as an internet radio station, which is the one live-audio shape
+    every platform's player already handles.
+    """
+    path = ffmpeg_path()
+    if not path:
+        raise TranscodeUnavailable(
+            "Listening to a camera needs ffmpeg, which is not installed on this "
+            "server."
+        )
+    encoder = probe()["audio_encoder"]
+    container = probe()["audio_format"]
+    if not encoder:
+        raise TranscodeUnavailable(
+            "This server's ffmpeg has no audio encoder, so cameras cannot be "
+            "listened to."
+        )
+    slot = reserve_slot()
+    args = [path] + _base_input_args(
+        url, readrate=None, low_latency=True, allowed_media_types="audio"
+    )
+    args += [
+        # Belt and braces behind ``-allowed_media_types``: if a firmware
+        # ignores the filter and sends video anyway, it is dropped here rather
+        # than decoded. An audio pull that decoded H.264 would cost as much as
+        # a second tile.
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        str(int(sample_rate)),
+        "-c:a",
+        encoder,
+        "-b:a",
+        f"{int(bitrate_kbps)}k",
+        # Without this the muxer fills a buffer before writing, which on a
+        # 32 kbps stream is seconds of silence before the first sound and a
+        # permanent lag behind the picture after it.
+        "-flush_packets",
+        "1",
+        "-f",
+        container,
         "pipe:1",
     ]
     return _spawn(args, slot)

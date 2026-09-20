@@ -51,6 +51,18 @@ class CameraPlayerViewModel extends ChangeNotifier {
   bool _isLoadingRecordings = false;
 
   bool get isLive => mode == CameraPlayerMode.live;
+
+  /// Whether to offer the listen button. Optimistic when the channel has never
+  /// been measured — the first tap is what measures it — and false only once
+  /// the server has looked and found no microphone.
+  ///
+  /// Sound is live-only: there is no audio track in the MJPEG playback path,
+  /// and the recorder's own playback stream is not pulled for it.
+  bool get canOfferAudio => isLive && camera.mightHaveAudio;
+
+  /// A short-lived URL for this camera's sound. Throws [CameraHasNoAudio] if
+  /// the channel turns out to be silent.
+  Future<Uri> audioStreamUri() => _repository.audioStreamUri(camera.id);
   DateTime get windowStart => _windowStart;
   DateTime get windowEnd => _windowStart.add(_window);
   Duration get window => _window;

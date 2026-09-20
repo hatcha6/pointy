@@ -40,6 +40,7 @@ import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/repositories/surveillance_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/surveillance_api_client.dart';
+import 'package:pointy_frontend/src/features/cameras/camera_audio.dart';
 import 'package:pointy_frontend/src/features/cameras/view_models/camera_player_view_model.dart';
 import 'package:pointy_frontend/src/features/cameras/view_models/camera_settings_view_model.dart';
 import 'package:pointy_frontend/src/features/cameras/view_models/camera_wall_view_model.dart';
@@ -127,6 +128,29 @@ class _PreviewRouter extends StatelessWidget {
         return _playback();
       case 'live-player':
         return _playback(mode: CameraPlayerMode.live);
+      // The three things the listen button can be: a channel that has sound,
+      // one the server measured and found silent, and one whose recorder
+      // refuses. The middle one is the common case in the field.
+      case 'listen':
+        return _playback(mode: CameraPlayerMode.live, hasAudio: true);
+      case 'listen-silent':
+        return _playback(mode: CameraPlayerMode.live, hasAudio: false);
+      // The real chain: the actual audioplayers plugin, pointed at a URL that
+      // is really being served — the backend's own audio endpoint with a
+      // minted ticket. Nothing here is faked, which is the point:
+      //   ?screen=listen-real&audio=<url>
+      case 'listen-real':
+        return _playback(
+          mode: CameraPlayerMode.live,
+          hasAudio: true,
+          audioUrl: _param('audio') ?? '',
+        );
+      case 'listen-broken':
+        return _playback(
+          mode: CameraPlayerMode.live,
+          hasAudio: true,
+          audioFails: true,
+        );
       case 'settings':
         return _settings();
       case 'dashboard-band':
@@ -160,12 +184,27 @@ Widget _wall({int cameraCount = 6}) {
   );
 }
 
-Widget _playback({CameraPlayerMode mode = CameraPlayerMode.playback}) {
-  final repository = _FakeSurveillanceRepository();
+Widget _playback({
+  CameraPlayerMode mode = CameraPlayerMode.playback,
+  bool? hasAudio,
+  bool audioFails = false,
+  String audioUrl = '',
+}) {
+  final repository = _FakeSurveillanceRepository(
+    audioFails: audioFails,
+    audioUrl: audioUrl,
+  );
   return CameraPlayerScreen(
+    // An empty `audioUrl` means the harness is only being looked at, so the
+    // sink stays fake and silent. Given one, the REAL plugin is used against
+    // the REAL stream — the only way to find out whether this platform can
+    // play a live, endless HTTP audio stream at all.
+    audioSink: audioUrl.isEmpty
+        ? const _FakeAudioSink()
+        : AudioPlayersCameraAudioSink(),
     viewModel: CameraPlayerViewModel(
       repository,
-      camera: _fakeCamera(1),
+      camera: _fakeCamera(1, hasAudio: hasAudio),
       mode: mode,
       start: DateTime.now().subtract(const Duration(minutes: 10)),
       status: const SurveillanceStatus(
@@ -376,7 +415,7 @@ final _capabilities = AuthorizationCapabilities.forUser(
   ),
 );
 
-Camera _fakeCamera(int id) {
+Camera _fakeCamera(int id, {bool? hasAudio}) {
   const names = ['الصندوق', 'الباب الأمامي', 'المخزن', 'الرف الجانبي'];
   return Camera(
     id: id,
@@ -391,7 +430,23 @@ Camera _fakeCamera(int id) {
     liveQuality: CameraQuality.sub,
     playbackQuality: CameraQuality.main,
     status: id == 4 ? CameraStatus.offline : CameraStatus.online,
+    hasAudio: hasAudio,
   );
+}
+
+/// Accepts a stream and makes no sound: the preview is for looking at the
+/// control, and there is no audio device in a harness.
+class _FakeAudioSink implements CameraAudioSink {
+  const _FakeAudioSink();
+
+  @override
+  Future<void> play(Uri source) async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> dispose() async {}
 }
 
 class _FakeNavigation implements AppNavigation {
@@ -434,9 +489,30 @@ class _FakeNavigation implements AppNavigation {
 }
 
 class _FakeSurveillanceRepository extends SurveillanceRepository {
-  _FakeSurveillanceRepository({this.cameraCount = 6}) : super(PosApiService());
+  _FakeSurveillanceRepository({
+    this.cameraCount = 6,
+    this.audioFails = false,
+    this.audioUrl = '',
+  }) : super(PosApiService());
 
   final int cameraCount;
+  final bool audioFails;
+  final String audioUrl;
+
+  @override
+  Future<Uri> audioStreamUri(int cameraId) async {
+    // A real ticket round trip is not instant on a busy DVR, and the spinner
+    // it produces is part of what this preview exists to show.
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (audioFails) {
+      throw const CameraHasNoAudio('لا يوجد ميكروفون على هذه الكاميرا.');
+    }
+    if (audioUrl.isNotEmpty) {
+      return Uri.parse(audioUrl);
+    }
+    return Uri.parse('http://127.0.0.1:8000/api/surveillance/cameras/'
+        '$cameraId/audio/?ticket=preview');
+  }
 
   List<Camera> get _cameras =>
       List.generate(cameraCount, (index) => _fakeCamera(index + 1));

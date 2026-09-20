@@ -782,6 +782,32 @@ class ApiTests(TestCase):
         self.assertIn(b"\xff\xd8", next(chunks))
         close_stream(response)
 
+    def test_a_stream_response_sets_no_hop_by_hop_header(self):
+        """A WSGI application may not set one, and setting one is fatal.
+
+        ``Connection: close`` lived here until 2026-09-20 and made every camera
+        stream a 500 under ``runserver`` — ``wsgiref`` asserts on hop-by-hop
+        headers, and production never noticed because uvicorn does not. The
+        connection is the server's business, not ours; what actually ends these
+        streams is the producer's ``finally``.
+
+        Asserted with the very predicate that raised, so this cannot drift from
+        what the server enforces.
+        """
+        from wsgiref.util import is_hop_by_hop
+
+        self.login_manager()
+        with patch.object(services, "open_driver") as open_driver:
+            open_driver.return_value = StubHikvision(target(), {})
+            response = self.client.get(
+                reverse("surveillance-camera-live", args=[self.camera.pk]),
+                {"fps": MAX_SNAPSHOT_FPS, "smooth": "false"},
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        offenders = [name for name, _ in response.items() if is_hop_by_hop(name)]
+        self.assertEqual(offenders, [], f"hop-by-hop header(s) set: {offenders}")
+        close_stream(response)
+
     def test_live_defaults_to_the_rtsp_path_when_ffmpeg_is_present(self):
         """The only path that can carry a real frame rate is the default.
 

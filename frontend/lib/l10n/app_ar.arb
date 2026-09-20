@@ -11480,6 +11480,8 @@
   "cameraExitFullScreenTooltip": "إنهاء ملء الشاشة",
   "cameraSmoothModeTooltip": "جودة أعلى (إطارات أكثر)",
   "cameraOpenPlaybackTooltip": "مراجعة التسجيلات",
+  "cameraListenTooltip": "تشغيل الصوت",
+  "cameraMuteTooltip": "كتم الصوت",
   "cameraSaveFrameTooltip": "حفظ اللقطة",
   "cameraFrameSavedMessage": "تم حفظ اللقطة",
   "cameraFrameSaveFailedMessage": "تعذّر حفظ اللقطة",

@@ -93,6 +93,13 @@ class SurveillanceRepository {
     );
   }
 
+  /// Deliberately not wrapped in a [Result]: the caller needs to tell
+  /// "this camera has no microphone" apart from "that failed, try again",
+  /// and collapsing both into a failure string would lose exactly that.
+  Future<Uri> audioStreamUri(int cameraId) {
+    return _service.cameraAudioStreamUri(cameraId);
+  }
+
   Stream<CameraFrame> playbackFrames(
     int cameraId, {
     required DateTime start,
