@@ -246,7 +246,6 @@ class GeneratedVariantsPreview extends StatelessWidget {
     required this.defaultSignature,
     required this.onDefaultChanged,
     required this.onActiveChanged,
-    required this.requiredValidator,
     required this.numberValidator,
     this.conflictsBySignature = const {},
   });
@@ -266,7 +265,6 @@ class GeneratedVariantsPreview extends StatelessWidget {
   final String? defaultSignature;
   final ValueChanged<String> onDefaultChanged;
   final void Function(String signature, bool value) onActiveChanged;
-  final FormFieldValidator<String> requiredValidator;
   final FormFieldValidator<String> numberValidator;
 
   @override
@@ -296,7 +294,6 @@ class GeneratedVariantsPreview extends StatelessWidget {
             onDefaultChanged: () => onDefaultChanged(combination.signature),
             onActiveChanged: (value) =>
                 onActiveChanged(combination.signature, value),
-            requiredValidator: requiredValidator,
             numberValidator: numberValidator,
             conflicts: conflictsBySignature[combination.signature] ?? const {},
           ),
@@ -473,7 +470,6 @@ class _GeneratedVariantTile extends StatelessWidget {
     required this.isDefault,
     required this.onDefaultChanged,
     required this.onActiveChanged,
-    required this.requiredValidator,
     required this.numberValidator,
     this.conflicts = const {},
   });
@@ -488,7 +484,6 @@ class _GeneratedVariantTile extends StatelessWidget {
   final bool isDefault;
   final VoidCallback onDefaultChanged;
   final ValueChanged<bool> onActiveChanged;
-  final FormFieldValidator<String> requiredValidator;
   final FormFieldValidator<String> numberValidator;
 
   @override
@@ -558,7 +553,7 @@ class _GeneratedVariantTile extends StatelessWidget {
                 prefixIcon: const Icon(Icons.qr_code_2),
                 errorText: skuError,
               ),
-              validator: (value) => skuError ?? requiredValidator(value),
+              validator: (_) => skuError,
             ),
             const SizedBox(height: 8),
             TextFormField(

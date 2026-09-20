@@ -6033,6 +6033,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get skuLabel => 'رمز المنتج';
 
   @override
+  String get skuOptionalHelper =>
+      'اختياري — يُنشأ رمز تلقائيًا إذا تُرك فارغًا';
+
+  @override
   String get skuHint => 'مثال: COF-100';
 
   @override

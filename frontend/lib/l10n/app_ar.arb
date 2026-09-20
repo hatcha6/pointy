@@ -3534,6 +3534,7 @@
   "productNameLabel": "اسم المنتج",
   "productNameHint": "مثال: قهوة عربية",
   "skuLabel": "رمز المنتج",
+  "skuOptionalHelper": "اختياري — يُنشأ رمز تلقائيًا إذا تُرك فارغًا",
   "skuHint": "مثال: COF-100",
   "barcodeLabel": "الباركود",
   "barcodeHint": "اختياري",

@@ -458,11 +458,6 @@ class _ProductFormState extends State<ProductForm> {
                                                       _generatedActiveBySignature[signature] =
                                                           value,
                                                 ),
-                                            requiredValidator: (value) =>
-                                                _requiredValidator(
-                                                  context,
-                                                  value,
-                                                ),
                                             numberValidator: (value) =>
                                                 _numberValidator(
                                                   context,
@@ -519,11 +514,6 @@ class _ProductFormState extends State<ProductForm> {
                                                 setState(
                                                   () =>
                                                       _isDefaultVariant = value,
-                                                ),
-                                            requiredValidator: (value) =>
-                                                _requiredValidator(
-                                                  context,
-                                                  value,
                                                 ),
                                             numberValidator: (value) =>
                                                 _numberValidator(
@@ -1263,7 +1253,6 @@ class _GeneratedVariantFormStep extends StatelessWidget {
     required this.onSelectAllValues,
     required this.onDefaultChanged,
     required this.onVariantActiveChanged,
-    required this.requiredValidator,
     required this.numberValidator,
     required this.generationErrorText,
     required this.conflictsBySignature,
@@ -1286,7 +1275,6 @@ class _GeneratedVariantFormStep extends StatelessWidget {
   final void Function(VariantOption option) onSelectAllValues;
   final ValueChanged<String> onDefaultChanged;
   final void Function(String signature, bool value) onVariantActiveChanged;
-  final FormFieldValidator<String> requiredValidator;
   final FormFieldValidator<String> numberValidator;
   final String? generationErrorText;
   final Map<String, Map<CatalogIdentityField, CatalogIdentityConflict>>
@@ -1309,8 +1297,8 @@ class _GeneratedVariantFormStep extends StatelessWidget {
               labelText: l10n.skuPrefixLabel,
               hintText: l10n.skuPrefixHint,
               prefixIcon: const Icon(Icons.qr_code_2),
+              helperText: l10n.skuOptionalHelper,
             ),
-            validator: requiredValidator,
           ),
         ),
         const SizedBox(height: 12),
@@ -1355,7 +1343,6 @@ class _GeneratedVariantFormStep extends StatelessWidget {
           defaultSignature: defaultSignature,
           onDefaultChanged: onDefaultChanged,
           onActiveChanged: onVariantActiveChanged,
-          requiredValidator: requiredValidator,
           numberValidator: numberValidator,
           conflictsBySignature: conflictsBySignature,
         ),

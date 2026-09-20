@@ -19,7 +19,13 @@ class VariantCombination {
       .join(' ');
 
   String skuFromBase(String baseSku) {
-    final base = _cleanSkuPart(baseSku, fallback: 'SKU');
+    final base = _cleanSkuPart(baseSku, fallback: '');
+    if (base.isEmpty) {
+      // No prefix typed means this shop keeps no SKU scheme: leave the rows
+      // blank for the server to code, rather than filling a whole catalog
+      // with variants called SKU-RED.
+      return '';
+    }
     final suffix = values
         .map((value) => _cleanSkuPart(value.code, fallback: '${value.id}'))
         .where((part) => part.isNotEmpty)

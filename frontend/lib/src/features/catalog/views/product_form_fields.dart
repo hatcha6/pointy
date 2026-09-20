@@ -162,7 +162,6 @@ class ProductVariantFormFields extends StatelessWidget {
     required this.onClearOptionValues,
     required this.onActiveChanged,
     required this.onDefaultChanged,
-    required this.requiredValidator,
     required this.numberValidator,
     this.showDefaultToggle = true,
     this.showOptionValues = true,
@@ -183,7 +182,6 @@ class ProductVariantFormFields extends StatelessWidget {
   final VoidCallback? onClearOptionValues;
   final ValueChanged<bool> onActiveChanged;
   final ValueChanged<bool> onDefaultChanged;
-  final FormFieldValidator<String> requiredValidator;
   final FormFieldValidator<String> numberValidator;
   final bool showDefaultToggle;
   final bool showOptionValues;
@@ -225,12 +223,18 @@ class ProductVariantFormFields extends StatelessWidget {
             hintText: l10n.skuHint,
             prefixIcon: const Icon(Icons.qr_code_2),
             suffixIcon: IdentityStatusIcon(state: skuState, isBarcode: false),
-            helperText: identityHelperText(l10n, skuState, isBarcode: false),
-            // The server error stays visible until the value changes; validator
-            // errors (a blank SKU) still win, so both can never show at once.
+            // Optional, like the barcode beside it: a shop that keeps no SKUs
+            // should not have to invent one, and the server codes a blank row
+            // itself. Says so while there is no live status to report.
+            helperText:
+                identityHelperText(l10n, skuState, isBarcode: false) ??
+                l10n.skuOptionalHelper,
+            // The server error stays visible until the value changes.
             errorText: skuError,
           ),
-          validator: (value) => skuError ?? requiredValidator(value),
+          // Only a clash can fail a SKU now — surfaced through the validator so
+          // Form.validate() blocks the save, exactly as the barcode does.
+          validator: (_) => skuError,
         ),
       ),
       TutorTarget(

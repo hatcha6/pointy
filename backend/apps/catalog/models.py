@@ -391,10 +391,12 @@ class Product(TimeStampedModel):
     def ensure_default_variant(self, **variant_data):
         if self.pk is None:
             return None
-        defaults = self._default_variant_defaults(variant_data)
         variant = self.variants.filter(is_default=True).order_by("id").first()
         if variant is None:
             variant = self.variants.order_by("id").first()
+        # Resolved against the row being written, so a blank SKU falls back to
+        # that row's own code before it falls back to a generated one.
+        defaults = self._default_variant_defaults(variant_data, existing=variant)
         if variant is None:
             return ProductVariant.objects.create(
                 product=self,
@@ -414,8 +416,15 @@ class Product(TimeStampedModel):
             variant.save(update_fields=[*set(update_fields), "updated_at"])
         return variant
 
-    def _default_variant_defaults(self, data):
-        sku = normalize_sku(data.get("sku")) or self._generated_default_sku()
+    def _default_variant_defaults(self, data, existing=None):
+        sku = normalize_sku(data.get("sku"))
+        if not sku:
+            # A SKU is optional to *type* — plenty of shops keep none — but the
+            # column is unique and non-blank, so a blank one is coded here.
+            # An existing row keeps the code it already carries: "I left the
+            # field empty" must never silently renumber a product the shop has
+            # been printing labels for.
+            sku = (existing.sku if existing is not None else "") or generate_variant_sku(self)
         unit_price = Decimal(data.get("unit_price", Decimal("0.00")))
         return {
             "name": str(data.get("name", "")).strip(),
@@ -424,15 +433,6 @@ class Product(TimeStampedModel):
             "unit_price": unit_price,
             "is_active": bool(data.get("is_active", self.is_active)),
         }
-
-    def _generated_default_sku(self):
-        base_sku = f"P{self.pk:06d}"
-        candidate = base_sku
-        suffix = 2
-        while ProductVariant.objects.filter(sku=candidate).exists():
-            candidate = f"{base_sku}-{suffix}"
-            suffix += 1
-        return candidate
 
     def __str__(self) -> str:
         return self.name
@@ -1005,6 +1005,24 @@ class ProductVariant(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sku} - {self.full_name}"
+
+
+def generate_variant_sku(product):
+    """A code for a variant whose owner left the SKU blank.
+
+    ``sku`` is unique and non-blank, so every write path that accepts an empty
+    one has to put *something* in the column. Derived from the product id so it
+    is stable and searchable rather than random, and suffixed until it is free —
+    a product can hold several coded variants, and the rows created before this
+    one in the same transaction are already visible to the check.
+    """
+    base_sku = f"P{product.pk:06d}"
+    candidate = base_sku
+    suffix = 2
+    while ProductVariant.objects.filter(sku=candidate).exists():
+        candidate = f"{base_sku}-{suffix}"
+        suffix += 1
+    return candidate
 
 
 def validate_variant_option_values(product, option_values, *, variant=None):

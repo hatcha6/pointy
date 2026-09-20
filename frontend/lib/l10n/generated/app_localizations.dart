@@ -10636,6 +10636,12 @@ abstract class AppLocalizations {
   /// **'رمز المنتج'**
   String get skuLabel;
 
+  /// No description provided for @skuOptionalHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري — يُنشأ رمز تلقائيًا إذا تُرك فارغًا'**
+  String get skuOptionalHelper;
+
   /// No description provided for @skuHint.
   ///
   /// In ar, this message translates to:

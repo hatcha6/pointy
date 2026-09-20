@@ -223,8 +223,8 @@ class _ProductVariantGenerationSheetState
                       labelText: l10n.skuPrefixLabel,
                       hintText: l10n.skuPrefixHint,
                       prefixIcon: const Icon(Icons.qr_code_2),
+                      helperText: l10n.skuOptionalHelper,
                     ),
-                    validator: _requiredValidator,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -255,7 +255,6 @@ class _ProductVariantGenerationSheetState
                         setState(() => _defaultSignature = signature),
                     onActiveChanged: (signature, value) =>
                         setState(() => _activeBySignature[signature] = value),
-                    requiredValidator: _requiredValidator,
                     numberValidator: _numberValidator,
                     conflictsBySignature: _generatedConflicts,
                   ),
@@ -745,13 +744,6 @@ class _ProductVariantGenerationSheetState
     } else {
       _availableOptions = [..._availableOptions, option];
     }
-  }
-
-  String? _requiredValidator(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return AppLocalizations.of(context)!.requiredField;
-    }
-    return null;
   }
 
   String? _numberValidator(String? value) {

@@ -35,6 +35,7 @@ from .models import (
     UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
+    generate_variant_sku,
     normalize_barcode,
     normalize_sku,
     variant_option_signature,
@@ -579,7 +580,7 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
         trim_whitespace=True,
         default="",
     )
-    sku = serializers.CharField(required=False, allow_blank=False, trim_whitespace=True)
+    sku = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
     barcode = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -666,7 +667,16 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     # UniqueValidator: DRF's stock message ("product variant with this barcode
     # already exists") never says which product owns the code, and the client
     # needs the structured conflict to mark the right input.
-    sku = serializers.CharField(max_length=64, validators=[])
+    # Optional to send, like the barcode beside it: a shop that keeps no SKUs
+    # should not have to invent one. No ``default`` — an absent key on a PUT
+    # must leave an existing variant's code alone, while an explicit blank asks
+    # for one to be generated.
+    sku = serializers.CharField(
+        max_length=64,
+        required=False,
+        allow_blank=True,
+        validators=[],
+    )
     barcode = serializers.CharField(
         max_length=64,
         required=False,
@@ -823,6 +833,12 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                         is_default=True,
                     ).update(is_default=False)
                 foreign_amount = validated_data.pop("price_amount", None)
+                # The column is unique and non-blank: a variant created without
+                # a SKU is coded here rather than rejected at the form.
+                if not validated_data.get("sku"):
+                    validated_data["sku"] = generate_variant_sku(
+                        validated_data["product"]
+                    )
                 variant = ProductVariant.objects.create(**validated_data)
                 _derive_base_price(variant, foreign_amount)
                 if option_values:
@@ -848,6 +864,13 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                         is_default=True,
                     ).exclude(pk=instance.pk).update(is_default=False)
                 foreign_amount = validated_data.pop("price_amount", None)
+                if "sku" in validated_data and not validated_data["sku"]:
+                    # Clearing the field keeps the code the row already carries:
+                    # emptying an input must not renumber a product the shop has
+                    # been printing labels for.
+                    validated_data["sku"] = instance.sku or generate_variant_sku(
+                        validated_data.get("product", instance.product)
+                    )
                 for field, value in validated_data.items():
                     setattr(instance, field, value)
                 instance.save()
@@ -874,7 +897,12 @@ class ProductVariantInputSerializer(serializers.Serializer):
         trim_whitespace=True,
         default="",
     )
-    sku = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
+    sku = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        default="",
+    )
     barcode = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -1444,6 +1472,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 ) from error
 
         validate_variant_option_values(product, option_values, variant=variant)
+        if not data.get("sku"):
+            # Same rule as every other variant write: blank is allowed in, and
+            # an existing row keeps its own code rather than being renumbered.
+            data["sku"] = (
+                variant.sku if variant is not None else ""
+            ) or generate_variant_sku(product)
         if data.get("is_default") is True:
             queryset = ProductVariant.objects.filter(
                 product=product,

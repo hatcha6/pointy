@@ -152,8 +152,6 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                             setState(() => _isActive = value),
                         onDefaultChanged: (value) =>
                             setState(() => _isDefault = value),
-                        requiredValidator: (value) =>
-                            _requiredValidator(context, value),
                         numberValidator: (value) =>
                             _numberValidator(context, value),
                         showOptionValues: false,
@@ -232,13 +230,6 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       selected.putIfAbsent(optionValue.optionId, () => {}).add(optionValue.id);
     }
     return selected;
-  }
-
-  String? _requiredValidator(BuildContext context, String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return AppLocalizations.of(context)!.requiredField;
-    }
-    return null;
   }
 
   String? _numberValidator(BuildContext context, String? value) {
