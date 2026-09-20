@@ -58,6 +58,45 @@ String integrationProviderTagline(
   };
 }
 
+/// Arabic wording for a declared provider setting.
+///
+/// Keyed on the stable code like every other provider string, so a new setting
+/// is a backend change plus one line here — never a schema the client has to
+/// learn.
+({String label, String hint, IconData icon}) integrationSettingLabel(
+  String key,
+  AppLocalizations l10n,
+) {
+  return switch (key) {
+    IntegrationSettingKey.commissionPercent => (
+      label: l10n.integrationSettingCommission,
+      hint: l10n.integrationSettingCommissionHint,
+      icon: Icons.percent_outlined,
+    ),
+    IntegrationSettingKey.denominations => (
+      label: l10n.integrationSettingDenominations,
+      hint: l10n.integrationSettingDenominationsHint,
+      icon: Icons.apps_outlined,
+    ),
+    _ => (label: key, hint: '', icon: Icons.tune_outlined),
+  };
+}
+
+/// The currency note for a provider's balance.
+///
+/// HD Box prints its float with a "$" glyph that is NOT dollars, and saying so
+/// is worth a line. No other provider does that, and repeating the warning for
+/// one that doesn't would be explaining a quirk the owner has never seen.
+String integrationCurrencyNote(
+  IntegrationProviderKey key,
+  AppLocalizations l10n,
+) {
+  return switch (key) {
+    IntegrationProviderKey.hdbox => l10n.integrationBalanceCurrencyNote,
+    _ => l10n.integrationBalanceCurrencyPlainNote,
+  };
+}
+
 IconData integrationProviderIcon(IntegrationProviderKey key) {
   return switch (key) {
     IntegrationProviderKey.hdbox => Icons.live_tv_outlined,

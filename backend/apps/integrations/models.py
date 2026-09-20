@@ -189,6 +189,33 @@ class IntegrationAccount(SecretStorageMixin, TimeStampedModel):
             price = cost
         return max(price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), floor)
 
+    def setting(self, key: str):
+        """This account's value for a declared setting, or its default.
+
+        One place resolves a setting, so the driver that prices a sale and the
+        screen that shows the owner what it will charge can never disagree. A
+        stored value that no longer passes the spec's own validation is
+        ignored the same way a typed one would be — the setting could have
+        been tightened since, and falling back beats honouring a number the
+        catalog now says is impossible.
+        """
+        spec = self.spec
+        declared = spec.setting(key) if spec else None
+        if declared is None:
+            return None
+        stored = (self.config or {}).get(key)
+        if stored is None:
+            return declared.default
+        cleaned = declared.clean(stored)
+        return declared.default if cleaned is None else cleaned
+
+    def settings_map(self) -> dict:
+        """Every declared setting with its effective value."""
+        spec = self.spec
+        if spec is None:
+            return {}
+        return {item.key: self.setting(item.key) for item in spec.settings}
+
     def option_price_map(self) -> dict:
         """``{option_code: price}`` for every option that has a price at all.
 

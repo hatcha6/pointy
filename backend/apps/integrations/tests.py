@@ -2497,7 +2497,9 @@ class LnetOfferTests(TestCase):
         self.assertEqual(option.kind, lnet_module.RECHARGE_TOPUP)
 
     def test_a_shop_on_other_terms_can_set_its_own_commission(self):
-        account = lnet_account(config={"cost_ratio": "0.90"})
+        # Owner-facing: a shop says it is "on 10%", never that its cost ratio
+        # is 0.90. The conversion is the driver's job.
+        account = lnet_account(config={catalog.SETTING_COMMISSION_PERCENT: "10"})
         with patch_lnet(lnet_session()):
             result = LnetProvider(account).offers("alhussainbasheir")
         by_code = {o.code: o for o in result.options}
@@ -2505,11 +2507,32 @@ class LnetOfferTests(TestCase):
 
     def test_a_nonsense_commission_falls_back_rather_than_quoting_zero(self):
         account = lnet_account()
-        for bad in ("0", "-1", "3", "banana", None, ""):
-            account.config = {"cost_ratio": bad}
+        for bad in ("-1", "99", "banana", None, "", [], {"a": 1}):
+            account.config = {catalog.SETTING_COMMISSION_PERCENT: bad}
             self.assertEqual(
                 LnetProvider(account)._cost_ratio, lnet_module.DEFAULT_COST_RATIO, bad
             )
+
+    def test_a_shop_may_choose_its_own_quick_picks(self):
+        account = lnet_account(
+            config={catalog.SETTING_DENOMINATIONS: ["15", "35"]}
+        )
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(account).offers("alhussainbasheir")
+        self.assertEqual(
+            [o.code for o in result.options], ["topup:15", "topup:35"]
+        )
+
+    def test_clearing_the_quick_picks_still_leaves_an_open_amount(self):
+        # "We always type it" is a real answer, and the provider takes any
+        # amount — so no buttons must not read as nothing to sell.
+        account = lnet_account(config={catalog.SETTING_DENOMINATIONS: []})
+        with patch_lnet(lnet_session()):
+            result = LnetProvider(account).offers("alhussainbasheir")
+        self.assertTrue(result.ok)
+        self.assertEqual(result.options, ())
+        self.assertIsNotNone(result.open_amount)
+
 
     def test_a_line_that_cannot_be_recharged_is_refused_before_the_customer_pays(self):
         session = lnet_session(
@@ -2536,6 +2559,89 @@ class LnetOfferTests(TestCase):
         self.assertIn("minimum", spec.validate(Decimal("0.5")))
         self.assertIn("multiple", spec.validate(Decimal("45.5")))
 
+
+class ProviderSettingsApiTests(TestCase):
+    """An owner's commercial terms, set from the settings screen."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.manager = get_user_model().objects.create_user(
+            username="manager", password="pw"
+        )
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.manager)
+        lnet_account()
+
+    def _put(self, payload):
+        return self.client.put("/api/integrations/lnet/", payload, format="json")
+
+    def test_the_catalog_publishes_what_may_be_set_and_what_it_is(self):
+        resp = self.client.get("/api/integrations/")
+        lnet = {p["key"]: p for p in resp.data["providers"]}["lnet"]
+        by_key = {item["key"]: item for item in lnet["settings"]}
+        commission = by_key[catalog.SETTING_COMMISSION_PERCENT]
+        self.assertEqual(commission["kind"], catalog.SETTING_KIND_PERCENT)
+        self.assertEqual(commission["value"], "5")
+        self.assertEqual(commission["maximum"], Decimal("50"))
+        self.assertIn(catalog.SETTING_DENOMINATIONS, by_key)
+
+    def test_an_owner_can_change_the_commission(self):
+        resp = self._put({"settings": {catalog.SETTING_COMMISSION_PERCENT: "7.5"}})
+        self.assertEqual(resp.status_code, 200)
+        account = IntegrationAccount.objects.get(provider="lnet")
+        self.assertEqual(
+            account.setting(catalog.SETTING_COMMISSION_PERCENT), "7.5"
+        )
+        # And the price a till would quote follows it immediately.
+        self.assertEqual(
+            LnetProvider(account).quote("topup:100").cost, Decimal("92.50")
+        )
+
+    def test_a_commission_out_of_range_is_refused_not_ignored(self):
+        # Silently ignoring it would book the wrong margin on every sale until
+        # somebody noticed in a profit report a month later.
+        resp = self._put({"settings": {catalog.SETTING_COMMISSION_PERCENT: "95"}})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(catalog.SETTING_COMMISSION_PERCENT, resp.data["settings"])
+        self.assertEqual(
+            IntegrationAccount.objects.get(provider="lnet").setting(
+                catalog.SETTING_COMMISSION_PERCENT
+            ),
+            "5",
+            "the stored value must survive a rejected write",
+        )
+
+    def test_a_setting_the_provider_does_not_declare_cannot_reach_config(self):
+        # config is a JSONField; an endpoint that wrote it verbatim would be an
+        # open door into the account's own storage.
+        resp = self._put({"settings": {"secrets_encrypted": "nice try"}})
+        self.assertEqual(resp.status_code, 400)
+        account = IntegrationAccount.objects.get(provider="lnet")
+        self.assertNotIn("secrets_encrypted", account.config)
+
+    def test_saving_credentials_leaves_settings_alone(self):
+        self._put({"settings": {catalog.SETTING_COMMISSION_PERCENT: "8"}})
+        self._put({"username": "lnet_r99"})
+        account = IntegrationAccount.objects.get(provider="lnet")
+        self.assertEqual(account.username, "lnet_r99")
+        self.assertEqual(account.setting(catalog.SETTING_COMMISSION_PERCENT), "8")
+
+    def test_an_unset_setting_reads_as_its_default(self):
+        account = IntegrationAccount.objects.get(provider="lnet")
+        self.assertEqual(account.config, {})
+        self.assertEqual(account.setting(catalog.SETTING_COMMISSION_PERCENT), "5")
+        self.assertEqual(
+            account.settings_map()[catalog.SETTING_DENOMINATIONS][0], "10"
+        )
+
+    def test_a_stored_value_the_catalog_now_rejects_falls_back(self):
+        # Bounds can tighten after a value was stored; honouring a number the
+        # catalog says is impossible is worse than falling back.
+        account = IntegrationAccount.objects.get(provider="lnet")
+        account.config = {catalog.SETTING_COMMISSION_PERCENT: "80"}
+        account.save()
+        self.assertEqual(account.setting(catalog.SETTING_COMMISSION_PERCENT), "5")
 
 class LnetQuoteTests(TestCase):
     """Pricing that must hold without touching the network."""

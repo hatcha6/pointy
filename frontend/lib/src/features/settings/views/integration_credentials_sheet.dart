@@ -71,6 +71,9 @@ class _IntegrationCredentialsFormState
     );
     _username = TextEditingController(text: account?.username ?? '');
     _password = TextEditingController();
+    for (final setting in widget.provider.settings) {
+      _settings[setting.key] = TextEditingController(text: setting.asText);
+    }
   }
 
   @override
@@ -78,10 +81,67 @@ class _IntegrationCredentialsFormState
     _baseUrl.dispose();
     _username.dispose();
     _password.dispose();
+    for (final controller in _settings.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
+  /// What the owner typed, as the backend's own shape. Only sent when it
+  /// differs from what was loaded, so saving a URL never rewrites a
+  /// commission somebody set months ago.
+  Map<String, Object?> _changedSettings() {
+    final changed = <String, Object?>{};
+    for (final setting in widget.provider.settings) {
+      final text = _settings[setting.key]?.text.trim() ?? '';
+      if (text == setting.asText.trim()) continue;
+      changed[setting.key] = setting.isAmountList
+          ? _splitAmounts(text)
+          : text;
+    }
+    return changed;
+  }
+
+  /// A bound as a plain number: a percentage is not money and must not be
+  /// rendered with a currency.
+  static String _plain(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toString();
+
+  /// Amounts as the owner separated them — comma, Arabic comma, or space.
+  static List<String> _splitAmounts(String raw) => raw
+      .split(RegExp(r'[،,\s]+'))
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+
   bool _shows(String field) => widget.provider.fields.contains(field);
+
+  final Map<String, TextEditingController> _settings = {};
+
+  String? _validateSetting(IntegrationSetting setting, String? raw) {
+    final l10n = AppLocalizations.of(context)!;
+    final text = (raw ?? '').trim();
+    if (text.isEmpty) return null; // blank means "leave it alone"
+    if (setting.isAmountList) {
+      final parts = _splitAmounts(text);
+      final bad = parts.any((part) {
+        final value = double.tryParse(part);
+        return value == null || value <= 0;
+      });
+      return bad ? l10n.integrationSettingInvalidAmounts : null;
+    }
+    final value = double.tryParse(text);
+    final min = setting.minimum ?? 0;
+    final max = setting.maximum ?? 100;
+    if (value == null || value < min || value > max) {
+      return l10n.integrationSettingOutOfRange(
+        _plain(min),
+        _plain(max),
+      );
+    }
+    return null;
+  }
 
   /// http:// means the password crosses the wire in clear. HD Box offers
   /// nothing else today, so this warns rather than blocks — but it warns every
@@ -101,6 +161,7 @@ class _IntegrationCredentialsFormState
             ? _username.text.trim()
             : null,
         password: _shows(IntegrationField.password) ? _password.text : null,
+        settings: _changedSettings(),
       ),
     );
     if (!mounted) return;
@@ -178,6 +239,40 @@ class _IntegrationCredentialsFormState
               ),
               SizedBox(height: spacing.sm),
             ],
+            // The shop's own commercial terms, rendered from whatever the
+            // backend declares. Below the credentials because these always
+            // have a working default: a shop can connect without reading
+            // this section at all, and only opens it when its deal differs.
+            if (widget.provider.settings.isNotEmpty) ...[
+              SizedBox(height: spacing.sm),
+              Text(
+                l10n.integrationSettingsHeading,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              SizedBox(height: spacing.sm),
+              for (final setting in widget.provider.settings) ...[
+                Builder(
+                  builder: (context) {
+                    final copy = integrationSettingLabel(setting.key, l10n);
+                    return TextFormField(
+                      controller: _settings[setting.key],
+                      textDirection: TextDirection.ltr,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: copy.label,
+                        helperText: copy.hint,
+                        helperMaxLines: 2,
+                        prefixIcon: Icon(copy.icon),
+                      ),
+                      validator: (value) => _validateSetting(setting, value),
+                    );
+                  },
+                ),
+                SizedBox(height: spacing.sm),
+              ],
+            ],
             if (_isInsecure) ...[
               PointyInlineMessage.warning(
                 message: l10n.integrationInsecureTransportWarning,
@@ -186,7 +281,7 @@ class _IntegrationCredentialsFormState
               SizedBox(height: spacing.sm),
             ],
             PointyInlineMessage(
-              message: l10n.integrationBalanceCurrencyNote,
+              message: integrationCurrencyNote(widget.provider.key, l10n),
               icon: Icons.info_outline,
               compact: true,
             ),

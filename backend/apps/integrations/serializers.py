@@ -52,6 +52,7 @@ class ProviderSerializer(serializers.Serializer):
     capabilities = serializers.ListField(child=serializers.CharField())
     fields = serializers.ListField(child=serializers.CharField())
     secret_fields = serializers.ListField(child=serializers.CharField())
+    settings = serializers.ListField(child=serializers.DictField())
     currency = serializers.CharField()
     default_base_url = serializers.CharField()
     is_configurable = serializers.BooleanField()
@@ -66,6 +67,23 @@ class ProviderSerializer(serializers.Serializer):
             "capabilities": list(spec.capabilities),
             "fields": list(spec.fields),
             "secret_fields": sorted(spec.secret_fields),
+            # Both halves together: what may be set, and what it is right now.
+            # The client renders one generic form from this, so a provider's
+            # knobs never need a Flutter release — the same bargain ``fields``
+            # already makes for credentials.
+            "settings": [
+                {
+                    "key": item.key,
+                    "kind": item.kind,
+                    "default": item.default,
+                    "minimum": item.minimum,
+                    "maximum": item.maximum,
+                    "value": account.setting(item.key)
+                    if account is not None
+                    else item.default,
+                }
+                for item in spec.settings
+            ],
             "currency": spec.currency,
             "default_base_url": spec.default_base_url,
             # Availability is the catalog's intent; is_implemented is whether a
@@ -90,6 +108,11 @@ class IntegrationAccountWriteSerializer(serializers.Serializer):
         required=False, allow_blank=True, write_only=True, max_length=255, trim_whitespace=False
     )
     is_active = serializers.BooleanField(required=False)
+    # Free-form on the way in and validated against the provider's own catalog
+    # entry in the view, because what is acceptable is per provider and this
+    # serializer does not know which one it is looking at. Absent keys keep
+    # their stored value, like ``password``.
+    settings = serializers.DictField(required=False)
 
 
 # --- till-facing payloads ---------------------------------------------------

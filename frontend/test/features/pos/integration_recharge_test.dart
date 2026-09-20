@@ -276,6 +276,18 @@ void main() {
       expect(viewModel.selectedOffer!.code, 'topup:25');
     });
 
+    test('clearing the quick-picks does not read as a broken provider', () async {
+      // An owner who wants amounts typed every time gets an empty grid and a
+      // working field, not a warning that the provider is down.
+      final viewModel = _lnetViewModel(_FakeLnetRepo(noQuickPicks: true));
+      await viewModel.lookup('basheir.home');
+
+      expect(viewModel.sellableOffers, isEmpty);
+      expect(viewModel.allowsCustomAmount, isTrue);
+      viewModel.setCustomAmount(45);
+      expect(viewModel.buildDraft()!.offer.code, 'topup:45');
+    });
+
     test('a typed amount reaches the cart as an ordinary line', () async {
       final viewModel = _lnetViewModel(_FakeLnetRepo());
       await viewModel.lookup('basheir.home');
@@ -438,10 +450,14 @@ IntegrationCardInfo _lnetLine(
 }
 
 class _FakeLnetRepo extends IntegrationsRepository {
-  _FakeLnetRepo({this.manyLines = false}) : super(PosApiService());
+  _FakeLnetRepo({this.manyLines = false, this.noQuickPicks = false})
+    : super(PosApiService());
 
   /// When true the first lookup matches three lines, as one phone number can.
   final bool manyLines;
+
+  /// When true the shop has cleared its quick-pick amounts.
+  final bool noQuickPicks;
   final List<String> lookedUp = [];
 
   @override
@@ -473,7 +489,7 @@ class _FakeLnetRepo extends IntegrationsRepository {
     return Ok(
       IntegrationCardSnapshot(
         card: _lnetLine(cardNo, status: 'Active', expireAt: DateTime(2026, 12, 1)),
-        offers: const [
+        offers: noQuickPicks ? const [] : const [
           IntegrationOffer(
             code: 'topup:25',
             kind: 'topup',

@@ -18796,6 +18796,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'المبلغ بالدينار الليبي، حتى لو عرضه موقع المزوّد بعلامة الدولار.';
 
   @override
+  String get integrationBalanceCurrencyPlainNote =>
+      'جميع المبالغ بالدينار الليبي.';
+
+  @override
   String integrationAccountLabel(String name) {
     return 'الحساب: $name';
   }
@@ -18908,6 +18912,31 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get rechargeSearchAction => 'بحث';
+
+  @override
+  String get integrationSettingsHeading => 'شروط التعامل';
+
+  @override
+  String get integrationSettingCommission => 'عمولة الوكالة (%)';
+
+  @override
+  String get integrationSettingCommissionHint => 'نسبة ربح المحل من قيمة الشحن';
+
+  @override
+  String get integrationSettingDenominations => 'مبالغ الشحن السريعة';
+
+  @override
+  String get integrationSettingDenominationsHint =>
+      'افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط';
+
+  @override
+  String integrationSettingOutOfRange(String min, String max) {
+    return 'أدخل قيمة بين $min و $max';
+  }
+
+  @override
+  String get integrationSettingInvalidAmounts =>
+      'أدخل مبالغ صحيحة مفصولة بفاصلة';
 
   @override
   String get rechargeSearchLabelLine => 'رقم الهاتف أو اسم المستخدم';

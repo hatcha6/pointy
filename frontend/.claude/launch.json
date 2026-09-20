@@ -28,6 +28,20 @@
         "lib/dev/recharge_preview.dart"
       ],
       "port": 8792
+    },
+    {
+      "name": "integrations-preview",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "8793",
+        "-t",
+        "lib/dev/integrations_preview.dart"
+      ],
+      "port": 8793
     }
   ]
 }

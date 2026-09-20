@@ -63,6 +63,13 @@ abstract final class IntegrationCapability {
 }
 
 /// Credential field keys. The form renders whatever the backend lists.
+/// Stable keys for the settings a provider may declare. Mirrors
+/// `catalog.SETTING_*`; never renamed, only added to.
+abstract final class IntegrationSettingKey {
+  static const commissionPercent = 'commission_percent';
+  static const denominations = 'denominations';
+}
+
 abstract final class IntegrationField {
   static const baseUrl = 'base_url';
   static const username = 'username';
@@ -159,6 +166,56 @@ class IntegrationAccount {
   }
 }
 
+/// One owner-editable setting a provider declares.
+///
+/// Deliberately owner-facing: LNET's commission is a *percentage*, because a
+/// shop knows it is "on 5%" and not that its cost ratio is 0.95. The server
+/// does the arithmetic; nobody here converts anything.
+class IntegrationSetting {
+  const IntegrationSetting({
+    required this.key,
+    required this.kind,
+    this.value,
+    this.defaultValue,
+    this.minimum,
+    this.maximum,
+  });
+
+  final String key;
+
+  /// `percent` or `amount_list`. Stable codes; the Arabic label is chosen in
+  /// the presentation layer like every other provider string.
+  final String kind;
+
+  /// What it is set to now — the default when nobody has chosen.
+  final Object? value;
+  final Object? defaultValue;
+  final double? minimum;
+  final double? maximum;
+
+  bool get isPercent => kind == 'percent';
+  bool get isAmountList => kind == 'amount_list';
+
+  /// The current value as text a form field can hold.
+  String get asText {
+    final current = value ?? defaultValue;
+    if (current == null) return '';
+    if (current is List) return current.map((e) => e.toString()).join('، ');
+    return current.toString();
+  }
+
+  factory IntegrationSetting.fromJson(Map<String, Object?> json) {
+    return IntegrationSetting(
+      key: json['key']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? '',
+      value: json['value'],
+      defaultValue: json['default'],
+      minimum: double.tryParse(json['minimum']?.toString() ?? ''),
+      maximum: double.tryParse(json['maximum']?.toString() ?? ''),
+    );
+  }
+}
+
 class IntegrationProvider {
   const IntegrationProvider({
     required this.key,
@@ -167,6 +224,7 @@ class IntegrationProvider {
     this.capabilities = const [],
     this.fields = const [],
     this.secretFields = const [],
+    this.settings = const [],
     this.currency = 'LYD',
     this.defaultBaseUrl = '',
     this.isConfigurable = false,
@@ -183,6 +241,12 @@ class IntegrationProvider {
 
   /// Which of [fields] are write-only secrets.
   final List<String> secretFields;
+
+  /// Knobs that are not credentials: the shop's own commercial terms, each
+  /// with a working default. Rendered from this list rather than hand-written,
+  /// so a provider's settings need no Flutter release — the same bargain
+  /// [fields] already makes.
+  final List<IntegrationSetting> settings;
   final String currency;
   final String defaultBaseUrl;
 
@@ -208,6 +272,10 @@ class IntegrationProvider {
       blockedReason: json['blocked_reason']?.toString() ?? '',
       capabilities: _strings(json['capabilities']),
       fields: _strings(json['fields']),
+      settings: (json['settings'] as List<Object?>? ?? const [])
+          .whereType<Map<String, Object?>>()
+          .map(IntegrationSetting.fromJson)
+          .toList(growable: false),
       secretFields: _strings(json['secret_fields']),
       currency: json['currency']?.toString() ?? 'LYD',
       defaultBaseUrl: json['default_base_url']?.toString() ?? '',
@@ -227,6 +295,7 @@ class IntegrationCredentialsDraft {
     this.username,
     this.password,
     this.isActive,
+    this.settings,
   });
 
   final String? baseUrl;
@@ -234,7 +303,12 @@ class IntegrationCredentialsDraft {
   final String? password;
   final bool? isActive;
 
+  /// Declared settings the owner changed. Absent keys keep what is stored, so
+  /// saving a URL never resets a commission somebody set months ago.
+  final Map<String, Object?>? settings;
+
   Map<String, Object?> toJson() => {
+    if (settings != null && settings!.isNotEmpty) 'settings': settings,
     if (baseUrl != null) 'base_url': baseUrl,
     if (username != null) 'username': username,
     if (password != null && password!.isNotEmpty) 'password': password,

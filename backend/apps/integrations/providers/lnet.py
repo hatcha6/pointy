@@ -66,6 +66,8 @@ import requests
 
 from apps.core.timeutils import business_timezone
 
+from ..catalog import SETTING_COMMISSION_PERCENT, SETTING_DENOMINATIONS
+
 from ..telemetry import (
     STEP_COMMIT,
     STEP_FORM,
@@ -109,14 +111,13 @@ VALIDATE_PATH = "/admin/settings/users/validatePaymentAJAX/"
 COMMIT_PATH = "/admin/settings/users/rechargeOperatorPaymentAJAX"
 PAYMENTS_PATH = "/admin/reports/payments"
 
-#: The float pays this much per dinar of face value — a 5% agency commission.
-#: Overridable per account because a contract is a contract, not a constant,
-#: and a shop on different terms must not have its cost silently misreported.
+#: The float pays this much per dinar of face value when nothing else is set —
+#: a 5% agency commission. The *owner-facing* form of this is a percentage and
+#: lives in the catalog as ``SETTING_COMMISSION_PERCENT``; a shop knows it is
+#: "on 5%", not that its cost ratio is 0.95, and nobody should have to convert.
 DEFAULT_COST_RATIO = Decimal("0.95")
 
-#: Quick-pick buttons. Not the menu — see ``offers`` and ``OpenAmount``. Chosen
-#: from what the captured account actually sold (25, 40, 45 recurring).
-DEFAULT_DENOMINATIONS = (10, 20, 25, 30, 40, 45, 50, 100)
+_HUNDRED = Decimal("100")
 
 #: The portal's own search selector. Order matters: a till types a phone number
 #: far more often than anything else, so that is tried first.
@@ -202,28 +203,31 @@ class LnetProvider(IntegrationProvider):
 
     @property
     def _cost_ratio(self) -> Decimal:
-        """What the float pays per dinar of face value."""
-        raw = (self.account.config or {}).get("cost_ratio")
-        ratio = _as_decimal(raw)
-        # A ratio outside (0, 1] is a typo, not a deal. Falling back is safer
-        # than quoting a cost of zero or one above face value.
-        if ratio is None or ratio <= 0 or ratio > 1:
+        """What the float pays per dinar of face value.
+
+        Derived from the owner's commission percentage rather than stored, so
+        there is one number in the system and it is the one a shop would say
+        out loud. The account has already rejected anything out of range.
+        """
+        percent = _as_decimal(self.account.setting(SETTING_COMMISSION_PERCENT))
+        if percent is None:
             return DEFAULT_COST_RATIO
-        return ratio
+        return (_HUNDRED - percent) / _HUNDRED
 
     @property
     def _denominations(self) -> tuple[Decimal, ...]:
-        raw = (self.account.config or {}).get("denominations")
-        if not isinstance(raw, (list, tuple)) or not raw:
-            raw = DEFAULT_DENOMINATIONS
+        """The one-tap amounts, in order. May legitimately be empty.
+
+        An owner who clears them is saying "we always type it", which is a
+        real answer: the provider takes any amount and the field is always
+        there, so there is nothing to protect them from.
+        """
         values = []
-        for item in raw:
+        for item in self.account.setting(SETTING_DENOMINATIONS) or ():
             amount = _as_decimal(item)
             if amount is not None and amount > 0:
                 values.append(amount.quantize(Decimal("0.01")))
-        return tuple(sorted(set(values))) or tuple(
-            Decimal(x) for x in DEFAULT_DENOMINATIONS
-        )
+        return tuple(sorted(set(values)))
 
     def _url(self, path: str) -> str:
         return f"{self.account.resolved_base_url()}{path}"

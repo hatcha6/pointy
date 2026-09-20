@@ -345,7 +345,11 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
     final viewModel = widget.viewModel;
     final snapshot = viewModel.snapshot!;
 
-    if (!snapshot.hasOffers) {
+    // No buttons is only a problem when buttons are all there is. An
+    // open-amount provider whose owner cleared the quick-picks is saying "we
+    // always type it", and the field below is still there — warning would be
+    // telling a cashier the provider is broken when it is working.
+    if (!snapshot.hasOffers && !snapshot.allowsOpenAmount) {
       return [
         PointyInlineMessage.warning(
           message: l10n.rechargeOffersUnavailable,

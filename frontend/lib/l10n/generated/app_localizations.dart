@@ -32466,6 +32466,12 @@ abstract class AppLocalizations {
   ///
   ///
   /// In ar, this message translates to:
+  /// **'جميع المبالغ بالدينار الليبي.'**
+  String get integrationBalanceCurrencyPlainNote;
+
+  ///
+  ///
+  /// In ar, this message translates to:
   /// **'الحساب: {name}'**
   String integrationAccountLabel(String name);
 
@@ -32672,6 +32678,48 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'بحث'**
   String get rechargeSearchAction;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'شروط التعامل'**
+  String get integrationSettingsHeading;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة الوكالة (%)'**
+  String get integrationSettingCommission;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة ربح المحل من قيمة الشحن'**
+  String get integrationSettingCommissionHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'مبالغ الشحن السريعة'**
+  String get integrationSettingDenominations;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط'**
+  String get integrationSettingDenominationsHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل قيمة بين {min} و {max}'**
+  String integrationSettingOutOfRange(String min, String max);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبالغ صحيحة مفصولة بفاصلة'**
+  String get integrationSettingInvalidAmounts;
 
   ///
   ///

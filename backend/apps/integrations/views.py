@@ -65,6 +65,30 @@ def _catalog_payload() -> dict:
     }
 
 
+def _apply_settings(account, spec, incoming: dict) -> dict:
+    """Merge declared settings onto an account. Returns what it refused.
+
+    Only keys the provider declares are touched, so nothing a client invents
+    can reach ``config`` — it is a JSONField, and an endpoint that wrote it
+    verbatim would be an open door into the account's own storage.
+    """
+    rejected = {}
+    config = dict(account.config or {})
+    for key, value in incoming.items():
+        declared = spec.setting(key)
+        if declared is None:
+            rejected[key] = "unknown setting"
+            continue
+        cleaned = declared.clean(value)
+        if cleaned is None:
+            rejected[key] = "out of range"
+            continue
+        config[key] = cleaned
+    if not rejected:
+        account.config = config
+    return rejected
+
+
 def _provider_payload(spec: catalog.ProviderSpec) -> dict:
     account = IntegrationAccount.objects.filter(provider=spec.key).first()
     return ProviderSerializer.payload(spec, account)
@@ -116,6 +140,16 @@ class IntegrationAccountView(APIView):
         password = data.get("password")
         if password:
             account.set_secret(catalog.FIELD_PASSWORD, password)
+
+        # Settings are the shop's commercial arrangement, not credentials, so
+        # a bad one is refused loudly rather than quietly ignored: a shop that
+        # types its commission wrong and is told nothing would book the wrong
+        # margin on every sale until somebody noticed in a profit report.
+        rejected = _apply_settings(account, spec, data.get("settings") or {})
+        if rejected:
+            return Response(
+                {"settings": rejected}, status=status.HTTP_400_BAD_REQUEST
+            )
         account.save()
 
         return Response(_provider_payload(spec))

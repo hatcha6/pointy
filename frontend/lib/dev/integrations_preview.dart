@@ -222,8 +222,7 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
 
   static IntegrationProvider _lnet() => const IntegrationProvider(
     key: IntegrationProviderKey.lnet,
-    availability: IntegrationAvailability.planned,
-    blockedReason: IntegrationBlockedReason.portalUnreachable,
+    availability: IntegrationAvailability.available,
     capabilities: [
       IntegrationCapability.balance,
       IntegrationCapability.lookup,
@@ -235,6 +234,25 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
       IntegrationField.password,
     ],
     secretFields: [IntegrationField.password],
+    defaultBaseUrl: 'https://billing.lnet.ly/lnet-billing/public',
+    isConfigurable: true,
+    // The shop's own commercial terms, declared by the backend and rendered
+    // by the generic form — this is what the settings section is for.
+    settings: [
+      IntegrationSetting(
+        key: IntegrationSettingKey.commissionPercent,
+        kind: 'percent',
+        value: '5',
+        defaultValue: '5',
+        minimum: 0,
+        maximum: 50,
+      ),
+      IntegrationSetting(
+        key: IntegrationSettingKey.denominations,
+        kind: 'amount_list',
+        value: ['10', '20', '25', '30', '40', '45', '50', '100'],
+      ),
+    ],
   );
 
   static IntegrationProvider _qareeb() => const IntegrationProvider(
