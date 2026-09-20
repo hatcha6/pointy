@@ -769,9 +769,19 @@ CORS_ALLOW_HEADERS = (
     *default_headers,
     "idempotency-key",
     "if-none-match",
+    # Sent on EVERY request by PosApiSession, so a missing entry here does not
+    # break one endpoint — it breaks the whole app cross-origin, and it does it
+    # in the most confusing way available: the preflight answers 200, the
+    # browser compares this list against what it asked for, finds a gap, and
+    # silently never sends the real request. The server log then shows a run of
+    # OPTIONS with no POST after them and no error anywhere.
+    "x-request-id",
     "x-pointy-app-version",
     "x-pointy-device-id",
     "x-pointy-platform",
+    # Only sent while a register session is open — so leaving it out breaks the
+    # till after login rather than at it, which is worse to diagnose.
+    "x-pointy-register-session",
     "x-pointy-relay-token",
 )
 # The mirror image of CORS_ALLOW_HEADERS, and just as easy to forget: on a
