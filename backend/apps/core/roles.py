@@ -78,6 +78,7 @@ INITIAL_SETUP_SHOP_ACTIVITY_MODELS = (
     ("scales", "scale"),
     ("surveillance", "recorder"),
     ("messaging", "messaginggateway"),
+    ("integrations", "integrationaccount"),
     # A finished data import is the clearest possible evidence that this
     # installation already belongs to a shop, even before anyone logs in.
     ("migration", "migrationrun"),
@@ -111,6 +112,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "migration",
     "messaging",
     "crm",
+    "integrations",
 )
 USER_PERMISSION_CODES = (
     "auth.add_user",
@@ -119,6 +121,9 @@ USER_PERMISSION_CODES = (
     "auth.view_user",
 )
 CASHIER_PERMISSION_CODES = (
+    # Looking a subscriber up and putting a top-up in the cart is till work.
+    # Configuring the provider account is not, and stays on manage_integrations.
+    "integrations.use_integrations",
     "catalog.view_product",
     "catalog.view_productcategory",
     # Required to resolve a scanned barcode at checkout: the POS looks the code up
@@ -212,6 +217,10 @@ TECHNICIAN_PERMISSION_CODES = (
     "analytics.add_analyticsevent",
 )
 ACCOUNTANT_PERMISSION_CODES = (
+    # Paying a provider to refill its float is money-out work, done
+    # by whoever is standing at the provider's office — not by the
+    # owner from the settings screen.
+    "integrations.record_integration_topup",
     "auth.view_user",
     "core.view_shopsettings",
     # An accountant reconciling import costs needs to see which rate a price was
@@ -414,6 +423,10 @@ INVENTORY_CLERK_PERMISSION_CODES = (
 )
 # مسؤول المشتريات / buyer: the whole purchase-order lifecycle plus suppliers.
 PURCHASING_AGENT_PERMISSION_CODES = (
+    # Paying a provider to refill its float is money-out work, done
+    # by whoever is standing at the provider's office — not by the
+    # owner from the settings screen.
+    "integrations.record_integration_topup",
     "core.view_shopsettings",
     "catalog.view_product",
     "catalog.view_productcategory",

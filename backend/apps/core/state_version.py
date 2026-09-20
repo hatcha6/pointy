@@ -178,6 +178,15 @@ DOMAINS: tuple[Domain, ...] = (
         doc="Currencies and exchange rates.",
     ),
     Domain(
+        name="integrations",
+        models=("integrations.IntegrationAccount",),
+        doc=(
+            "Resale-provider accounts (HD Box and friends). The settings screen "
+            "loads the catalog once and lives on, and a probe rewrites the "
+            "balance and health of a row without anyone touching the form."
+        ),
+    ),
+    Domain(
         name="operations_setup",
         models=(
             "customers.AssetType",

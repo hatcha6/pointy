@@ -138,6 +138,7 @@ INSTALLED_APPS = [
     "apps.reports",
     "apps.notifications",
     "apps.messaging",
+    "apps.integrations",
     "apps.crm",
     "apps.attachments",
     "apps.employees",
@@ -639,6 +640,13 @@ CELERY_BEAT_SCHEDULE = {
     "reports.snapshot-month-end": {
         "task": "reports.snapshot_month_end",
         "schedule": crontab(minute=5, hour=1),
+    },
+    # Nightly, after the day's trading: match what Pointy sold against what
+    # the provider's own log says it performed. See apps.integrations.
+    # reconciliation for why the three failure modes are kept apart.
+    "integrations.reconcile-providers": {
+        "task": "integrations.reconcile_providers",
+        "schedule": crontab(minute=20, hour=2),
     },
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",

@@ -63,6 +63,12 @@ COMPONENT_TRANSFER_OUT = "transfer_out"
 # code, deliberately: filing it under expenses or supplier payments would put
 # other people's money in a category the shop reads as its own spending.
 COMPONENT_CONSIGNOR_PAYOUT = "consignor_payout"
+# What a resale provider has taken out of its float. Only confirmed draws: a
+# top-up Pointy has sold but the provider has not performed is still money
+# sitting with the provider, and subtracting it would understate the float on
+# the very day somebody is deciding whether to top up (apps.integrations.
+# float_ledger holds the definition; this module only places it).
+COMPONENT_INTEGRATION_DRAW = "integration_draw"
 
 # Which payment methods land in which kind of account. Every derived flow is
 # routed by method, because no money row carries an account of its own yet.
@@ -291,6 +297,17 @@ def _transfer_components(account, *, incoming, outgoing):
     ]
 
 
+def _provider_components(money_account, *, end):
+    """What a provider has drawn out of its float, for one float account."""
+    from apps.integrations import float_ledger
+
+    integration = getattr(money_account, "integration_account", None)
+    if integration is None:
+        return []
+    drawn = float_ledger.drawn(integration, end=end)
+    return [_component(COMPONENT_INTEGRATION_DRAW, -drawn, direction="out")]
+
+
 def _default_account_ids(accounts):
     """The account of each kind that untagged money events land in.
 
@@ -360,10 +377,17 @@ def treasury_position(*, as_of=None):
     defaults = _default_account_ids(accounts)
     derived = {}
     for kind, account in defaults.items():
+        if kind == MoneyAccount.Kind.PROVIDER:
+            # A float has no untagged flows to attribute — every movement
+            # names its provider — so it is built per account, below.
+            continue
         builder = (
             _cash_components if kind == MoneyAccount.Kind.CASH else _bank_components
         )
         derived[account.pk] = builder(start=account.opening_at, end=as_of)
+    for account in accounts:
+        if account.kind == MoneyAccount.Kind.PROVIDER:
+            derived[account.pk] = _provider_components(account, end=as_of)
 
     # Two grouped queries and one ordered pass, whatever the account count.
     transfers = _transfer_totals(end=as_of)
@@ -513,6 +537,12 @@ def _totals(positions):
 
     cash = total_for(MoneyAccount.Kind.CASH)
     bank = total_for(MoneyAccount.Kind.BANK)
+    # Reported beside `total`, never inside it. A provider float is the shop's
+    # money, but it cannot pay a wage or settle a supplier — folding it into
+    # the figure an owner reads as "what I can spend" would change what that
+    # figure means, which is the same reason consignor obligations sit outside
+    # it rather than being netted off.
+    provider_float = total_for(MoneyAccount.Kind.PROVIDER)
     counted = [
         position for position in positions if position["last_count"] is not None
     ]
@@ -520,6 +550,7 @@ def _totals(positions):
         "cash": cash,
         "bank": bank,
         "total": (cash + bank).quantize(MONEY_PLACES),
+        "provider_float": provider_float,
         "accounts_counted": len(counted),
         "accounts_total": len(positions),
         "accounts_with_variance": sum(
@@ -535,7 +566,9 @@ def expected_balance_for(account, *, as_of=None):
     accounts = list(MoneyAccount.objects.filter(is_active=True))
     defaults = _default_account_ids(accounts)
     components = None
-    if defaults.get(account.kind) and defaults[account.kind].pk == account.pk:
+    if account.kind == MoneyAccount.Kind.PROVIDER:
+        components = _provider_components(account, end=as_of)
+    elif defaults.get(account.kind) and defaults[account.kind].pk == account.pk:
         builder = (
             _cash_components
             if account.kind == MoneyAccount.Kind.CASH

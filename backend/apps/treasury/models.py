@@ -36,6 +36,12 @@ class MoneyAccount(TimeStampedModel):
     class Kind(models.TextChoices):
         CASH = "cash", "Cash"
         BANK = "bank", "Bank"
+        # Money the shop has already paid to a resale provider and not yet
+        # spent — an agency float. It is the shop's money, sitting somewhere
+        # else, which is exactly what this model is for. Unlike cash and bank
+        # it is never a *default*: no untagged payment lands in a float, and
+        # every movement into or out of one names its provider.
+        PROVIDER = "provider", "Provider float"
 
     name = models.CharField(max_length=120)
     kind = models.CharField(max_length=8, choices=Kind.choices, db_index=True)

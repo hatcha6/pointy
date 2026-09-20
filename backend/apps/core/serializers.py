@@ -416,6 +416,22 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
     # walk-in آجل sale (a customer's own terms come back on the customer), so
     # the calendar arithmetic stays on one side of the wire.
     default_payment_terms = serializers.SerializerMethodField()
+    # WHICH resale providers are connected, not merely whether any are: the
+    # till draws one named button for a single provider and a menu for
+    # several, and it should not need a second call to find out which. Rides
+    # on shop settings because every till already loads them.
+    connected_integrations = serializers.SerializerMethodField()
+
+    def get_connected_integrations(self, settings) -> list:
+        from apps.integrations.models import IntegrationAccount
+
+        return [
+            account.provider
+            for account in IntegrationAccount.objects.filter(
+                is_active=True
+            ).order_by("provider")
+            if account.is_configured
+        ]
 
     def get_default_payment_terms(self, settings) -> dict:
         from apps.core.timeutils import business_local_date
@@ -562,6 +578,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "default_payment_terms_days",
             "default_payment_terms_basis",
             "default_payment_terms",
+            "connected_integrations",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
             "enable_purchase_suggestions",
@@ -623,6 +640,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "month_end_report_phone",
             "logo_attachment",
             "default_payment_terms",
+            "connected_integrations",
             "updated_at",
         ]
 

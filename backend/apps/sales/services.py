@@ -26,6 +26,7 @@ from apps.discounts.services import (
     persist_applied_discounts,
 )
 from apps.catalog.services import preload_line_variants
+from apps.integrations.fulfillment import persist_fulfillment
 from apps.catalog.units import quantize_quantity
 from apps.inventory import tracking
 from apps.inventory.models import StockLedgerEntry, StockMovement, StockUnit
@@ -162,6 +163,14 @@ def create_order_with_lines(
             notes=line_data.get("notes", ""),
         )
         _persist_order_line_modifiers(line, line_data.get("modifiers", []))
+        # A top-up's cost is what the provider quoted, not what the warehouse
+        # thinks a service product cost (nothing). Written here rather than in
+        # the create() above so the ordinary path reads unchanged.
+        integration = line_data.get("integration")
+        if integration:
+            line.unit_cost = money(integration["cost"])
+            line.save(update_fields=["unit_cost", "updated_at"])
+            persist_fulfillment(line, integration)
         line_objects_by_key[line_key] = line
         lines_in_order.append(line)
     remember_line_order(order, lines_in_order)

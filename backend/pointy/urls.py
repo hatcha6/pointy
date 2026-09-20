@@ -514,6 +514,9 @@ urlpatterns = [
     # Its own router (see apps.invoice_intake.urls) — mounted at
     # api/invoice-intakes/ alongside the project router below.
     path("api/companion/", include("apps.companion.urls")),
+    # Resale providers (HD Box and friends): keyed by provider key, not by a
+    # row id, so it has its own module rather than a router entry.
+    path("api/integrations/", include("apps.integrations.urls")),
     # Camera streaming lives outside the router: these return
     # StreamingHttpResponse (MJPEG / MP4), which DRF's renderers would try to
     # negotiate. See apps.surveillance.urls.

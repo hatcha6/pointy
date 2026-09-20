@@ -62,6 +62,12 @@ MANAGED_CODES = (
     "sales.register_variance",
     "sales.negative_margin",
     "fraud.suspected_cashier_activity",
+    # Resale providers. Three failures that mean three different things: a
+    # customer who paid and got nothing, cash taken outside Pointy, and a
+    # float that disagrees with our arithmetic for a reason we cannot name.
+    "integrations.unperformed_recharge",
+    "integrations.offbook_recharge",
+    "integrations.float_drift",
     "discounts.expiring_rule",
     "employees.payroll_ready",
     "operations.backend_error",
@@ -146,6 +152,7 @@ def sync_business_notifications(now=None):
     desired.extend(_printing_notifications(now))
     desired.extend(_sales_notifications(now))
     desired.extend(_fraud_notifications(now))
+    desired.extend(_integration_notifications(now))
     desired.extend(_discount_notifications(now))
     desired.extend(_payroll_notifications(now))
     desired.extend(_backup_notifications(now))
@@ -1184,3 +1191,82 @@ def _state_for_user(notification, user):
         notification=notification,
         user=user,
     ).first()
+
+
+def _integration_notifications(now):
+    """What last night's provider reconciliation could not explain.
+
+    Read from the rows themselves rather than from the sweep's return value,
+    so the feed still tells the truth when a sweep is missed — and so a
+    problem that has been fixed stops being reported without anyone clearing
+    it, which is what the managed-code sweep does for every other builder.
+    """
+    from apps.integrations.models import IntegrationAccount, IntegrationFulfillment
+    from apps.integrations.reconciliation import (
+        DRIFT_TOLERANCE,
+        UNPERFORMED_AFTER,
+    )
+
+    specs = []
+
+    # 1. Sold and never performed. The customer is the one out of pocket.
+    stale = (
+        IntegrationFulfillment.objects.filter(
+            status=IntegrationFulfillment.Status.PENDING,
+            created_at__lte=now - UNPERFORMED_AFTER,
+        )
+        .select_related("order_line__order")
+        .order_by("created_at")
+    )
+    for row in stale:
+        specs.append(
+            _spec(
+                code="integrations.unperformed_recharge",
+                category=BusinessNotification.Category.SALES,
+                severity=BusinessNotification.Severity.CRITICAL,
+                fingerprint=f"integrations.unperformed_recharge:{row.pk}",
+                entity_type="integrations.integrationfulfillment",
+                entity_id=str(row.pk),
+                payload={
+                    "provider": row.provider,
+                    "card_no": row.subscriber_ref,
+                    "amount": _money(row.cost),
+                    "sold_at": row.created_at.isoformat(),
+                    "order_id": row.order_line.order_id,
+                    "count": 1,
+                },
+            )
+        )
+
+    # 2. The float disagrees with our arithmetic. Catches money spent on cards
+    #    Pointy has never seen, which no per-card check can.
+    from apps.integrations import float_ledger
+
+    for account in IntegrationAccount.objects.filter(is_active=True):
+        if account.balance is None or account.money_account_id is None:
+            continue
+        drift = account.balance - float_ledger.expected_balance(account)
+        if abs(drift) <= DRIFT_TOLERANCE:
+            continue
+        specs.append(
+            _spec(
+                code="integrations.float_drift",
+                category=BusinessNotification.Category.SALES,
+                severity=BusinessNotification.Severity.WARNING,
+                fingerprint=f"integrations.float_drift:{account.pk}",
+                entity_type="integrations.integrationaccount",
+                entity_id=str(account.pk),
+                payload={
+                    "provider": account.provider,
+                    "amount": _money(abs(drift)),
+                    # Which way it went changes what it means: less than
+                    # expected is money spent outside Pointy, more is a
+                    # top-up nobody wrote down.
+                    "direction": "short" if drift < 0 else "over",
+                    "expected": _money(float_ledger.expected_balance(account)),
+                    "reported": _money(account.balance),
+                    "count": 1,
+                },
+            )
+        )
+    return specs

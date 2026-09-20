@@ -6,6 +6,10 @@ from rest_framework import serializers
 from apps.documents.serializers import DocumentLifecycleFields
 from apps.catalog.models import ModifierOption, ProductVariant
 from apps.catalog.services import MIN_LINES_TO_PRELOAD, load_line_variants
+from apps.integrations.fulfillment import (
+    IntegrationLineSerializer,
+    resolve_line_integration,
+)
 from apps.catalog.units import (
     UnitConversionError,
     resolve_unit,
@@ -321,6 +325,33 @@ class OrderLineSerializer(serializers.ModelSerializer):
     # lines where it is not: a receipt that does not name the IMEI is a receipt
     # that cannot settle a warranty claim two years later.
     identifiers = serializers.SerializerMethodField()
+    # A top-up sold on this line: whose card, what was bought, and whether the
+    # provider has actually done it. The invoice is where a shop looks when a
+    # customer comes back saying their TV is still off, so it has to say more
+    # than "شحن اشتراك HD Box · 240.00".
+    integration = serializers.SerializerMethodField()
+
+    def get_integration(self, line):
+        fulfillment = getattr(line, "integration_fulfillment", None)
+        if fulfillment is None:
+            return None
+        subscriber = fulfillment.subscriber
+        return {
+            "provider": fulfillment.provider,
+            "subscriber_ref": fulfillment.subscriber_ref,
+            "subscriber_label": subscriber.label if subscriber else "",
+            "customer_id": subscriber.customer_id if subscriber else None,
+            "option_label": fulfillment.option_label,
+            "months": fulfillment.months,
+            "package_name": fulfillment.package_name,
+            "cost": fulfillment.cost,
+            "status": fulfillment.status,
+            # Present once reconciliation has found this sale in the
+            # provider's own log — the proof the customer actually got it.
+            "provider_reference": fulfillment.provider_reference,
+            "confirmed_at": fulfillment.confirmed_at,
+            "provider_receipt": fulfillment.provider_receipt,
+        }
 
     class Meta:
         model = OrderLine
@@ -345,6 +376,7 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "line_cost",
             "line_profit",
             "identifiers",
+            "integration",
             "notes",
         ]
         read_only_fields = ("unit_price", "unit_cost", "discount_total")
@@ -967,6 +999,10 @@ class CheckoutLineSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    # A top-up bought from an outside provider (apps.integrations). Present
+    # only on the provider's own service product; the price it sells at is
+    # computed from the shop's markup setting, never taken from this payload.
+    integration = IntegrationLineSerializer(required=False)
 
     class Meta:
         list_serializer_class = CheckoutLineListSerializer
@@ -1012,6 +1048,15 @@ class CheckoutLineSerializer(serializers.Serializer):
         if asking is None:
             asking = unit_sale_price(variant, resolved)
         attrs["effective_unit_price"] = asking + delta
+
+        # A top-up is priced from the provider's live quote plus the shop's own
+        # markup, not from the service product's standing price (which is zero
+        # on purpose — a price nobody maintains is a price that goes stale).
+        integration = attrs.get("integration")
+        if integration:
+            resolved_integration = resolve_line_integration(integration, variant)
+            attrs["integration"] = resolved_integration
+            attrs["effective_unit_price"] = resolved_integration["price"]
         return attrs
 
     def _unit_asking_price(self, attrs, resolved):

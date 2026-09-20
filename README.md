@@ -453,6 +453,97 @@ Remote relay access is denied when an installation's relay entitlement is
 disabled, the subscription flag is inactive, or its subscription end time has
 passed. Local LAN access to the on-prem backend is unaffected.
 
+## Integrations (resale providers)
+
+Shops that resell somebody else's product — TV subscriptions, internet, airtime
+— otherwise do that work on the provider's own website, where the money never
+reaches the books. `apps.integrations` is the spine for pulling it back in, and
+Shop Settings → Integrations is its face.
+
+The provider list in `apps/integrations/catalog.py` is deliberately static and
+always rendered whole, so an owner sees what is coming as well as what works:
+
+| Provider | State | Notes |
+| --- | --- | --- |
+| HD Box | available | DigiCrypt CAS. Session login, JSON endpoints behind the UI. |
+| LNET | planned | Their WAF 403s whole networks; needs a reseller API or a permitted origin. |
+| Qareeb | planned | Vouchers and airtime; awaiting agency access. |
+
+A provider declares which credentials it needs and the Flutter form renders
+them, so teaching Pointy a new service is a catalog entry plus a driver in
+`apps/integrations/providers/` — no client release. Credentials are encrypted
+at rest (`apps.core.secret_box`) and never serialized back out; the API returns
+only `has_password`.
+
+Two things the HD Box driver exists to survive, both verified against a live
+agency account: **failure arrives as HTTP 200** (a bad card renders an HTML
+error page, an expired session renders the login form), and the JSON endpoints
+answer with `Content-Type: text/html`. Neither the status code nor the content
+type can be trusted — on a money path, "200 means it worked" books a sale for a
+recharge that never happened. Nothing in that API is idempotent either, so the
+driver is read-only until the write path has an at-most-once design.
+
+Provider floats are **LYD**, whatever glyph the provider's own screen prints
+next to them.
+
+Preview the screen with `make frontend-integrations-preview`
+(`?screen=catalog|connected|failed|unconfigured|error|board`).
+
+### Selling a top-up at the till
+
+POS catalog header → **شحن اشتراك** → look a subscriber up → card state, the
+provider's live price ladder, and a paginated history of what has been bought
+for that card before (including, by name, the competing agencies that sold it)
+→ pick a duration → cart.
+
+A recharge is rung up as an **ordinary service-product line**. Every `OrderLine`
+needs a real `ProductVariant`, so `apps/integrations/provisioning.py` creates one
+product per provider (`INTEG-<KEY>`, `is_service=True`) the first time it is
+needed; discounts, returns, receipts and the profit report then need to learn
+nothing about recharges. The provider-specific part rides alongside in
+`CartLineIntegration` (client) and `IntegrationFulfillment` (server, one-to-one
+on the line).
+
+`apps.sales` never trusts a price from a till, so pricing is server-side.
+Real shops do not mark up by one rule — HD Box's 25/65/125/220 cost ladder is
+sold at a recommended 30/80/140/240, which is neither a flat amount nor a flat
+percentage — so prices are **per option**, resolved shop price → the provider's
+recommended retail → the account's fallback markup → cost, and floored at cost.
+
+The option list is *learned*: the ladder only exists inside a per-card renew
+form, so every real lookup records what it was quoted and Shop Settings prices
+what has actually been seen. The recommended retail is seeded as reference data
+(`ProviderSpec.suggested_retail`), so a newly connected shop arrives knowing the
+card rather than reselling at cost, and a row nobody has touched keeps following
+it if the provider reprints. The lookup returns **both** `cost`
+and `price` per option so the cart cannot show a different number from the
+invoice, and `OrderLine.unit_cost` carries the provider's quote, which makes the
+margin on a top-up real rather than assumed.
+
+The fulfillment is written `pending` and stays there: there is no write path, by
+choice, because the provider's API is not idempotent. The till says so on every
+sale rather than letting a cashier tell a customer their box is already on.
+
+The button appears only when the shop has actually connected a provider —
+`ShopSettings.has_integrations`, derived server-side and carried on the settings
+payload every till already loads, so gating it costs no extra call.
+
+Preview with `make frontend-recharge-preview`
+(`?screen=expired|active|expiring|empty-history|notfound|idle`).
+
+### Screenshots without a browser
+
+`frontend/test/screens/` renders real screens to PNG headlessly, with the app's
+Arabic font and the Material icon font loaded:
+
+```
+POINTY_CAPTURE_SCREENS=1 flutter test test/screens --update-goldens
+```
+
+Output lands in `test/screens/goldens/`. An ordinary `flutter test` **skips**
+every case there, so it is a way to look at a screen — not a golden gate that
+fails CI on a deliberate design change.
+
 ## Cameras (DVR/NVR)
 
 Pointy talks to the shop's own Hikvision or Dahua recorder on the LAN and puts

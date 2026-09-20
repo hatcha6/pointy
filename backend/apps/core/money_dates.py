@@ -49,6 +49,10 @@ MONEY_DATE_FIELDS = {
     "employees.PayrollRun": "payment_date",
     "treasury.MoneyTransfer": "moved_at",
     "treasury.MoneyCount": "counted_at",
+    # A top-up is drawn from the float when the PROVIDER performs it, not when
+    # Pointy sold it — so the money date is the confirmation, and a row still
+    # waiting for one is correctly outside every period.
+    "integrations.IntegrationFulfillment": "confirmed_at",
 }
 
 

@@ -369,6 +369,11 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
                 "lines__stock_units",
                 queryset=StockUnit.objects.select_related("batch").order_by("id"),
             ),
+            # A recharge line's provider record, and the subscriber it names.
+            # Without this the invoice detail costs two queries per top-up
+            # line — invisible on a grocer's sale, obvious on the invoice of
+            # an agency that just rang up six cards.
+            "lines__integration_fulfillment__subscriber__customer",
         )
 
 
