@@ -639,10 +639,7 @@ class _ListenButton extends StatelessWidget {
           ? const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
+              child: PointySpinner(strokeWidth: 2, color: Colors.white),
             )
           : Icon(listen.isOn ? Icons.volume_up : Icons.volume_off_outlined),
     );
