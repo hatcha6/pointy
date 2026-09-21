@@ -588,6 +588,12 @@ class _BarcodeLabelSheet {
   ///
   /// A sticker with no footer hands that share to the name and the bars rather
   /// than leaving the label part empty.
+  ///
+  /// The **bars** are the one row that flexes: every other row is a fixed share
+  /// of the card, and the symbol takes whatever is left, so nothing here can
+  /// change how tall the sticker is. They are also the row that can best afford
+  /// to give — a scanner decodes module *widths*, and bar height buys only
+  /// aiming tolerance, which 8 mm of bar still has at counter range.
   pw.Widget _card(
     _LabelSticker sticker, {
     required double cardWidth,
@@ -606,7 +612,12 @@ class _BarcodeLabelSheet {
         ? headlineFontSize
         : headlineFontSize * 2 / nameLines;
 
-    final digitsHeight = cardHeight * 0.11;
+    // How tall the barcode digits themselves come out on paper — the figures,
+    // not a line of text; see [_digits]. Plus the air that keeps them clear of
+    // the bars above. A narrow card may set them smaller than this, and then
+    // this is all the bars give up.
+    final digitsHeight = cardHeight * 0.1;
+    final digitsGap = cardHeight * 0.03;
     final footerHeight = hasFooter ? headlineFontSize * 1.34 : 0.0;
     final footer = _footer(sticker, fontSize: headlineFontSize);
 
@@ -658,21 +669,11 @@ class _BarcodeLabelSheet {
               ),
             ),
           ),
-          _row(
+          _digits(
+            sticker.barcode,
             height: digitsHeight,
             width: cardWidth,
-            child: pw.Text(
-              sticker.barcode,
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
-              textAlign: pw.TextAlign.center,
-              textDirection: pw.TextDirection.ltr,
-              style: pw.TextStyle(
-                fontSize: digitsHeight * 0.85,
-                color: _ink,
-                font: fonts.base,
-              ),
-            ),
+            gap: digitsGap,
           ),
           if (footer != null)
             _row(height: footerHeight, width: cardWidth, child: footer),
@@ -712,6 +713,69 @@ class _BarcodeLabelSheet {
         alignment: pw.Alignment.center,
         child: pw.SizedBox(width: width, child: child),
       ),
+    );
+  }
+
+  /// The human-readable barcode: the fallback for when the bars won't scan and
+  /// someone has to read the number off the sticker and key it in.
+  ///
+  /// [height] is what the digits *measure on paper*, not the row they sit in.
+  /// The two used to be confused, and the digits lost: a line of text is sized
+  /// to the face's ascender and descender, which for this one is 1.5 em, while
+  /// digits — no ascenders, no descenders — fill only 0.72 em of it. Asking for
+  /// a row and setting text at 85% of it therefore printed figures barely half
+  /// the row's height: eight dots on the shop's 23 mm roll, which is the least
+  /// a 203-dpi head can form a digit out of at all, and not reliably legible.
+  ///
+  /// So the size is solved from the face's own figure height, and `tightBounds`
+  /// makes the row the height of the glyphs rather than of a line — which is
+  /// what makes [height] exactly what the printer lays down, and what makes
+  /// this row cost the bars only what the digits actually use. [gap] is the air
+  /// above them, keeping them clear of the bars.
+  ///
+  /// A number too long to set that tall takes [width] as its limit instead and
+  /// comes out smaller, but whole — and its row shrinks with it, so the bars
+  /// keep the difference. It used to come out **clipped**: a row can only scale
+  /// down text that overflows its own box, and this one is handed the card's
+  /// full width to lay out in, so a long code simply ran off the end and lost
+  /// its last digits with nothing to show for it. A partial number is worse
+  /// than a small one — it is a number someone will key in and get the wrong
+  /// product — and on a quarter-turned sticker, where the card is as narrow as
+  /// the label is tall, it was every code of ordinary length.
+  pw.Widget _digits(
+    String barcode, {
+    required double height,
+    required double width,
+    required double gap,
+  }) {
+    return pw.Builder(
+      builder: (context) {
+        // Metrics come back per em, so each one divides into the room there is
+        // to give the size that exactly fills it. `height` spans the glyphs'
+        // own top and bottom — the figure height this string really has, not a
+        // line's — and `advanceWidth` is the width it sets to.
+        final metrics = fonts.base.getFont(context).stringMetrics(barcode);
+        final byHeight = metrics.height > 0 ? height / metrics.height : height;
+        final byWidth = metrics.advanceWidth > 0
+            ? width / metrics.advanceWidth
+            : byHeight;
+        return pw.Padding(
+          padding: pw.EdgeInsets.only(top: gap),
+          child: pw.Text(
+            barcode,
+            tightBounds: true,
+            maxLines: 1,
+            overflow: pw.TextOverflow.clip,
+            textAlign: pw.TextAlign.center,
+            textDirection: pw.TextDirection.ltr,
+            style: pw.TextStyle(
+              fontSize: math.min(byHeight, byWidth),
+              color: _ink,
+              font: fonts.base,
+            ),
+          ),
+        );
+      },
     );
   }
 

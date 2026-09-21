@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:pointy_frontend/src/data/models/barcode_label.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/services/barcode_label_document_service.dart';
@@ -289,6 +291,55 @@ void main() {
     expect(sizes.toSet(), hasLength(2));
   });
 
+  test('the barcode digits print large enough to be read', () async {
+    final bytes = await service.buildLabelsPdf(
+      lines: [line],
+      // The shop's own 33 x 23 mm die-cut roll — the smallest in use, so the
+      // tightest the digits ever get.
+      endpoint: endpoint(
+        BarcodeLabelPdfSize.sticker,
+        widthMm: 33,
+        heightMm: 23,
+      ),
+    );
+    // The digits are the smallest thing set on the sticker, by design.
+    final digitsSize = _fontSizes(bytes).reduce(math.min);
+    // What the digits *measure*, which is not their font size: a line box is
+    // mostly the face's ascender and descender, and digits have neither. The
+    // layout sizes them by this number, so the two agree here.
+    final printedMm =
+        digitsSize * (await _digitMetrics()).height * 25.4 / PdfPageFormat.inch;
+    // A 203-dpi head lays eight dots to the millimetre. These printed at
+    // 1.0 mm — eight dots — which is the very least a head can shape a digit
+    // out of, and not reliably a readable one. 1.6 mm is thirteen dots.
+    expect(printedMm, greaterThan(1.6));
+  });
+
+  test('a quarter-turned sticker sets the whole number, not part of it', () async {
+    final bytes = await service.buildLabelsPdf(
+      lines: [line],
+      endpoint: endpoint(
+        BarcodeLabelPdfSize.sticker,
+        widthMm: 40,
+        heightMm: 25,
+        rotation: 1,
+      ),
+    );
+    final digitsSize = _fontSizes(bytes).reduce(math.min);
+    final setMm =
+        digitsSize *
+        (await _digitMetrics()).advanceWidth *
+        25.4 /
+        PdfPageFormat.inch;
+    // Turned a quarter, the card is as wide as the label is *tall*: 25 mm less
+    // the 1.8 mm margin at each end. The number has to set inside that. It used
+    // not to — a row can only scale down text that overflows its own box, and
+    // this one is handed the card's full width to lay out in, so the last
+    // digits ran off the end and were clipped away with nothing to show for it.
+    const cardWidthMm = 25 - 2 * 1.8;
+    expect(setMm, lessThanOrEqualTo(cardWidthMm + 0.01));
+  });
+
   test('a label with no price gives the name and the bars the room', () async {
     final priced = await service.buildLabelsPdf(
       lines: [line],
@@ -427,6 +478,20 @@ _PageSize _mediaBox(Uint8List bytes) {
     double.parse(match.group(3)!) - double.parse(match.group(1)!),
     double.parse(match.group(4)!) - double.parse(match.group(2)!),
   );
+}
+
+/// The bundled face's own metrics for the sample barcode, per em: `height` is
+/// the figures' tight box (0.72 em — no ascenders, no descenders, against a
+/// 1.5 em line), and `advanceWidth` is the width the number sets to.
+Future<PdfFontMetrics> _digitMetrics() async {
+  final bytes = await File(
+    'assets/fonts/IBMPlexSansArabic-Regular.ttf',
+  ).readAsBytes();
+  final font = PdfTtfFont(
+    pw.Document().document,
+    ByteData.view(Uint8List.fromList(bytes).buffer),
+  );
+  return font.stringMetrics('6224000123456');
 }
 
 /// Loads the real bundled Arabic TTFs straight off disk so the rendered sample
