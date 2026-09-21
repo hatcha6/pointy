@@ -808,63 +808,73 @@ class _VariantDataTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 20,
-        columns: [
-          DataColumn(label: Text(l10n.variantNameColumn)),
-          DataColumn(label: Text(l10n.variantStockColumn), numeric: true),
-          DataColumn(label: Text(l10n.variantPriceColumn)),
-          DataColumn(label: Text(l10n.variantSkuColumn)),
-          DataColumn(label: Text(l10n.variantBarcodeColumn)),
-          DataColumn(label: Text(l10n.variantStatusColumn)),
-          DataColumn(label: Text(l10n.actionsColumn)),
-        ],
-        rows: [
-          for (final variant in variants)
-            DataRow(
-              onSelectChanged: (_) => onOpenVariant(variant),
-              cells: [
-                DataCell(_VariantNameLabel(variant: variant)),
-                DataCell(Text('${variant.quantityOnHand}')),
-                DataCell(Text(formatMoney(variant.unitPrice))),
-                DataCell(Text(variant.sku)),
-                DataCell(
-                  Text(
-                    variant.barcode.isEmpty ? l10n.noBarcode : variant.barcode,
-                  ),
+    // Fill the section when the columns fit, and only scroll sideways when
+    // they genuinely overflow — a table that hugs its content leaves a dead
+    // gap down the side of the card.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+          child: DataTable(
+            columnSpacing: 20,
+            columns: [
+              DataColumn(label: Text(l10n.variantNameColumn)),
+              DataColumn(label: Text(l10n.variantStockColumn), numeric: true),
+              DataColumn(label: Text(l10n.variantPriceColumn)),
+              DataColumn(label: Text(l10n.variantSkuColumn)),
+              DataColumn(label: Text(l10n.variantBarcodeColumn)),
+              DataColumn(label: Text(l10n.variantStatusColumn)),
+              DataColumn(label: Text(l10n.actionsColumn)),
+            ],
+            rows: [
+              for (final variant in variants)
+                DataRow(
+                  onSelectChanged: (_) => onOpenVariant(variant),
+                  cells: [
+                    DataCell(_VariantNameLabel(variant: variant)),
+                    DataCell(Text('${variant.quantityOnHand}')),
+                    DataCell(Text(formatMoney(variant.unitPrice))),
+                    DataCell(Text(variant.sku)),
+                    DataCell(
+                      Text(
+                        variant.barcode.isEmpty
+                            ? l10n.noBarcode
+                            : variant.barcode,
+                      ),
+                    ),
+                    DataCell(ProductStatusPill(isActive: variant.isSellable)),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _VariantBarcodeLabelPrintButton(
+                            product: product,
+                            variant: variant,
+                            printingRepository: printingRepository,
+                            analyticsEngine: analyticsEngine,
+                          ),
+                          IconButton(
+                            tooltip: l10n.openVariantDetailsTooltip,
+                            onPressed: () => onOpenVariant(variant),
+                            icon: const Icon(Icons.open_in_new),
+                          ),
+                          ProductVariantChangeGuard(
+                            capabilities: capabilities,
+                            child: IconButton(
+                              tooltip: l10n.editVariantTitle,
+                              onPressed: () => onEditVariant(variant),
+                              icon: const Icon(Icons.edit_outlined),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                DataCell(ProductStatusPill(isActive: variant.isSellable)),
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _VariantBarcodeLabelPrintButton(
-                        product: product,
-                        variant: variant,
-                        printingRepository: printingRepository,
-                        analyticsEngine: analyticsEngine,
-                      ),
-                      IconButton(
-                        tooltip: l10n.openVariantDetailsTooltip,
-                        onPressed: () => onOpenVariant(variant),
-                        icon: const Icon(Icons.open_in_new),
-                      ),
-                      ProductVariantChangeGuard(
-                        capabilities: capabilities,
-                        child: IconButton(
-                          tooltip: l10n.editVariantTitle,
-                          onPressed: () => onEditVariant(variant),
-                          icon: const Icon(Icons.edit_outlined),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
