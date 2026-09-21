@@ -21,6 +21,35 @@ from django.http import HttpResponseBadRequest
 from django.http.request import split_domain_port
 
 
+# Service names inside the deployment's own container network. These arrive as
+# real ``Host`` headers even though nothing on the LAN can resolve them: the
+# relay connector calls the backend by the front door's name
+# (``--backend http://edge:8000``), and the front door forwards the caller's
+# original ``Host`` untouched, so what Django sees is ``edge:8000``. Until this
+# list existed, that request was answered "Disallowed host." — the connector
+# could not bootstrap, its heartbeat never landed, and every request tunnelled
+# in for remote support was refused, so a shop with a valid subscription looked
+# offline.
+#
+# They are allowed unconditionally rather than through ``DJANGO_ALLOWED_HOSTS``
+# because the names are a property of the compose file, not of the site: a shop
+# whose ``.env`` predates the front door would otherwise still be broken, and
+# there is nothing for an operator to get right. Allowing them adds no exposure
+# — a bare container name is unroutable from outside the network it names.
+INTERNAL_SERVICE_HOSTS = frozenset(
+    {
+        # The API container itself.
+        "backend",
+        # The LAN front door that owns :8000 and proxies to whichever backend
+        # is live (deploy/onprem/edge).
+        "edge",
+        # The second backend a live update starts beside the running one; the
+        # updater's readiness probe reaches it by this name.
+        "pointy-backend-standby",
+    }
+)
+
+
 def host_is_allowed(host, allowed_names):
     """Return True if ``host`` (a raw ``Host`` header value) is acceptable.
 
@@ -48,7 +77,7 @@ class PrivateNetworkHostMiddleware:
         self.get_response = get_response
         self.allowed_names = {
             name.lower() for name in getattr(settings, "POINTY_LAN_ALLOWED_HOST_NAMES", [])
-        }
+        } | INTERNAL_SERVICE_HOSTS
 
     def __call__(self, request):
         # ALLOWED_HOSTS is ["*"] in this mode, so get_host() never raises here.

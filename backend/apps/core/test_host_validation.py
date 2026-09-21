@@ -1,7 +1,11 @@
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, override_settings
 
-from .host_validation import PrivateNetworkHostMiddleware, host_is_allowed
+from .host_validation import (
+    INTERNAL_SERVICE_HOSTS,
+    PrivateNetworkHostMiddleware,
+    host_is_allowed,
+)
 
 
 ALLOWED_NAMES = {"localhost", "127.0.0.1", "backend"}
@@ -60,4 +64,35 @@ class PrivateNetworkHostMiddlewareTests(SimpleTestCase):
     def test_public_host_rejected(self):
         request = self.factory.get("/", HTTP_HOST="evil.example.com")
         response = self.middleware(request)
+        self.assertEqual(response.status_code, 400)
+
+
+@override_settings(ALLOWED_HOSTS=["*"], POINTY_LAN_ALLOWED_HOST_NAMES=[])
+class InternalServiceHostTests(SimpleTestCase):
+    """The container names callers inside the deployment address Django by.
+
+    The relay connector posts its bootstrap to ``http://edge:8000`` and the LAN
+    front door passes the caller's ``Host`` through, so Django is asked for
+    ``edge:8000``. Rejecting that took the connector down — no bootstrap, no
+    heartbeat, and no tunnelled remote support — so these names must hold
+    whatever a site's ``DJANGO_ALLOWED_HOSTS`` happens to say, which is why the
+    settings list is empty here.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.middleware = PrivateNetworkHostMiddleware(lambda request: HttpResponse("ok"))
+
+    def test_front_door_name_accepted(self):
+        for host in ["edge:8000", "edge", "EDGE:8000"]:
+            response = self.middleware(self.factory.get("/", HTTP_HOST=host))
+            self.assertEqual(response.status_code, 200, host)
+
+    def test_every_internal_service_name_accepted(self):
+        for name in INTERNAL_SERVICE_HOSTS:
+            response = self.middleware(self.factory.get("/", HTTP_HOST=f"{name}:8000"))
+            self.assertEqual(response.status_code, 200, name)
+
+    def test_internal_names_do_not_open_the_door_to_public_hosts(self):
+        response = self.middleware(self.factory.get("/", HTTP_HOST="edge.example.com"))
         self.assertEqual(response.status_code, 400)

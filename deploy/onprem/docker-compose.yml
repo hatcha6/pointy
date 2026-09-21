@@ -7,9 +7,13 @@ x-pointy-logging: &pointy-logging
 x-backend-environment: &backend-environment
   DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in deploy/onprem/.env}"
   DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
-  # `pointy-backend-standby` is the one-off container a live update starts
-  # beside the running one; the readiness probe reaches it by that name.
-  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,pointy-backend-standby}"
+  # `edge` is the LAN front door, `pointy-backend-standby` the one-off container
+  # a live update starts beside the running one — both address Django by name
+  # from inside this network, so both arrive as Host headers. With
+  # POINTY_ALLOW_PRIVATE_HOSTS on (the default just below) the backend accepts
+  # them whatever this variable says; they are listed for the hardened profile
+  # that turns that off and leaves Django's own check in charge.
+  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,edge,pointy-backend-standby}"
   # On-prem LAN appliance: accept any private LAN IP as a Host (DHCP-friendly)
   # while still rejecting public hosts. Lets cashier tills connect to whatever
   # IP discovery hands them with no per-site configuration.
