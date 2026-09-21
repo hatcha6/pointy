@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.models import Prefetch, prefetch_related_objects
 from django.utils import timezone
 from rest_framework import serializers
@@ -1227,15 +1227,22 @@ def latest_purchase_lines_for_variants(variant_ids):
     ids = {variant_id for variant_id in variant_ids if variant_id is not None}
     if not ids:
         return {}
-    latest = {}
     lines = (
         PurchaseLine.objects.filter(variant_id__in=ids)
         .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
         .order_by("variant_id", "-created_at", "-id")
     )
+    if connection.vendor == "postgresql":
+        # Let the database pick the winners. The fallback below reads EVERY
+        # purchase line of every variant into memory before discarding all but
+        # the newest: PgBouncer transaction pooling forces
+        # DISABLE_SERVER_SIDE_CURSORS, so ``.iterator()`` does not stream here
+        # (see apps/core/test_database_settings.py). A staple bought weekly for
+        # two years is a hundred rows fetched to keep one.
+        return {line.variant_id: line for line in lines.distinct("variant_id")}
+    latest = {}
     for line in lines.iterator():
-        if line.variant_id not in latest:
-            latest[line.variant_id] = line
+        latest.setdefault(line.variant_id, line)
     return latest
 
 

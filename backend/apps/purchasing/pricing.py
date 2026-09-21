@@ -11,7 +11,11 @@ with no matching product), but it has no AI dependency and is reusable anywhere.
 
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 
+from django.conf import settings
 from django.db.models import DecimalField, F, OuterRef, Subquery
+
+from apps.catalog.cache import catalog_version
+from apps.core.caching import get_or_compute_single_flight
 
 # Fallback markup when the shop has too little cost+price history to infer one.
 DEFAULT_MARKUP_PERCENT = Decimal("30")
@@ -114,15 +118,58 @@ def _median(values):
     return (values[middle - 1] + values[middle]) / Decimal(2)
 
 
+# "Too little data to trust" is a real, cacheable answer, so it needs its own
+# marker: a bare ``None`` is indistinguishable from a cache miss.
+_NO_MARKUP = "__none__"
+
+
+def _markup_cache_key(category_ids, min_points):
+    version = catalog_version()
+    if version is None:
+        return None
+    scope = ",".join(str(cid) for cid in sorted(category_ids)) if category_ids else "*"
+    return f"purchasing:markup:v{version}:p{min_points}:{scope}"
+
+
 def _median_markup_percent(category_ids=None, *, min_points=_MIN_DATA_POINTS):
     """The median markup percent over the matching priced+costed products, clamped
     to the guard rails, or ``None`` when there are fewer than ``min_points`` of
-    them (too little data to trust)."""
-    markups = _priced_costed_markups(category_ids)
-    if len(markups) < min_points:
+    them (too little data to trust).
+
+    Cached against the catalog version, because this is a statistic about the
+    whole catalogue and the question is asked per keystroke-ish: pricing a
+    purchase line resolves a category markup and, when the category is too
+    thin, the shop-wide one as well — each a scan of every priced variant
+    carrying a correlated "latest purchase cost" subquery. The field export
+    measured ``pricing-suggestion`` at 348ms, 247ms of it database time, for
+    two or three queries. The answer only changes when the catalogue does, and
+    the catalog version already moves on every product, price and stock write,
+    so a stale markup is not reachable. Fail-open: no cache, same computation.
+    """
+    key = _markup_cache_key(category_ids, min_points)
+
+    def compute():
+        markups = _priced_costed_markups(category_ids)
+        if len(markups) < min_points:
+            return _NO_MARKUP
+        median = _median(markups)
+        clamped = max(_MIN_MARKUP_PERCENT, min(_MAX_MARKUP_PERCENT, median))
+        # Stored as a string: a Decimal has to survive whatever the cache
+        # backend serialises with, and this one is read on the checkout-adjacent
+        # purchasing path.
+        return str(clamped)
+
+    if key is None:
+        value = compute()
+    else:
+        value = get_or_compute_single_flight(key, compute, _markup_cache_ttl())
+    if value == _NO_MARKUP:
         return None
-    median = _median(markups)
-    return max(_MIN_MARKUP_PERCENT, min(_MAX_MARKUP_PERCENT, median))
+    return Decimal(value)
+
+
+def _markup_cache_ttl() -> int:
+    return int(getattr(settings, "POINTY_MARKUP_CACHE_TTL", 0))
 
 
 def shop_typical_markup_percent():

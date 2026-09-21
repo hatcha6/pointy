@@ -28,6 +28,7 @@ from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSerializer, AttachmentSummarySerializer
 from apps.catalog.models import Product, ProductVariant, VariantOptionValue
 from apps.core.idempotency import run_idempotent_request
+from apps.core.pagination import UncountedPageNumberPagination
 from apps.core.permissions import HasPointyPermission
 from .models import (
     PurchaseLine,
@@ -57,6 +58,7 @@ from .services import (
     clear_purchase_order_applied_discounts,
     create_pos_cash_purchase,
     latest_purchase_line_for_variant,
+    latest_purchase_lines_for_variants,
     previous_purchase_line_annotations,
     receive_purchase_order,
     record_purchase_order_audit_event,
@@ -665,10 +667,16 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 purchases_count=Count("id"),
             )
         }
+        # One query for every variant's newest line rather than one per
+        # variant: the field export caught this endpoint at 81 queries for a
+        # single product (2026-09-16).
+        last_lines = latest_purchase_lines_for_variants(
+            variant.pk for variant in variants
+        )
         payload = []
         for variant in variants:
             stats = stats_by_variant.get(variant.pk)
-            last_line = latest_purchase_line_for_variant(variant.pk)
+            last_line = last_lines.get(variant.pk)
             payload.append(
                 {
                     "product": product.pk,
@@ -688,54 +696,80 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="outstanding-received-not-paid")
     def outstanding_received_not_paid(self, request):
-        # Filter, sort, and paginate in SQL — loading every received order to
-        # compute ``balance_due`` in Python hangs the purchases screen once the
-        # table grows (each order also drags its prefetch trees along).
-        # ``balance_due > 0`` is ``billable total > sum(all supplier payments)``
-        # because paid_total + credit_applied_total together cover every payment
-        # method. The billable total nets off ``cancelled_total`` — goods a
-        # receipt closed as never-arriving — so an order settled in full for
-        # what actually turned up stops being listed as outstanding instead of
-        # sitting on the payables screen forever.
-        # A correlated subquery keeps that sum immune to row inflation from any
-        # multi-valued joins (e.g. the product/variant line filters).
-        paid = (
+        """Received orders the shop still owes money on, most urgent first.
+
+        An order is outstanding when its billable total still exceeds
+        everything paid against it. The billable total nets off
+        ``cancelled_total`` — goods a receipt closed as never-arriving — so an
+        order settled in full for what actually turned up stops being listed
+        instead of sitting on the payables screen forever. ``paid_total`` and
+        ``credit_applied_total`` together cover every payment method, so one
+        sum over live ``SupplierPayment`` rows is the whole of "paid".
+
+        Written as a *set difference* rather than a per-order comparison.
+        Asking each received order for the sum of its own payments is a
+        correlated subquery the database must run once per row, and nothing
+        about it can be indexed: the 2026-09-16 field export measured 581ms of
+        database time here, and the walk grows with every delivery the shop
+        has ever taken in. But an order with no payments at all — most of them —
+        is outstanding purely by its own columns, and the orders that *do* have
+        payments are reachable in one grouped pass over the payments table,
+        which is far smaller. So: every received order that is billable at all,
+        minus the ones whose payments already cover them.
+        """
+        # Orders whose live payments already cover the billable total. One
+        # aggregate over the payments table, joined to its order for the
+        # comparison — it visits payments, not every order ever received.
+        settled = (
             SupplierPayment.objects.live()
-            .filter(purchase_order=OuterRef("pk"))
-            .order_by()
+            .filter(purchase_order__isnull=False)
             .values("purchase_order")
-            .annotate(total=Sum("amount"))
-            .values("total")[:1]
-        )
-        money = DecimalField(max_digits=10, decimal_places=2)
-        queryset = (
-            self.get_queryset()
-            .filter(status=PurchaseOrder.Status.RECEIVED)
-            .annotate(
-                paid_amount=Coalesce(
-                    Subquery(paid, output_field=money),
-                    Value(Decimal("0.00")),
-                    output_field=money,
-                ),
-                billable_amount=F("total") - F("cancelled_total"),
+            .annotate(paid=Sum("amount"))
+            .filter(
+                paid__gte=F("purchase_order__total")
+                - F("purchase_order__cancelled_total")
             )
-            .filter(billable_amount__gt=F("paid_amount"))
-            # Most urgent first: dated orders by earliest due date, undated ones
-            # last, most recently received breaking ties.
-            .order_by(
-                F("due_date").asc(nulls_last=True),
-                Coalesce("received_at", "created_at").desc(),
-                "-id",
+            .values("purchase_order")
+        )
+        # Most urgent first: dated orders by earliest due date, undated ones
+        # last, most recently received breaking ties.
+        ordering = (
+            F("due_date").asc(nulls_last=True),
+            Coalesce("received_at", "created_at").desc(),
+            "-id",
+        )
+
+        def outstanding(queryset):
+            return (
+                queryset.filter(status=PurchaseOrder.Status.RECEIVED)
+                .filter(total__gt=F("cancelled_total"))
+                .exclude(pk__in=settled)
+                .order_by(*ordering)
             )
+
+        # Choose the page over the order table alone, then hydrate only the
+        # rows that made it. Filtering and sorting on the viewset's own
+        # queryset made the database build the joined supplier, warehouse and
+        # lifecycle-user columns for every candidate (about 5KB a row over
+        # 11,700 rows at the field shop) and then discard all but fifty.
+        candidates = outstanding(self.get_queryset().select_related(None))
+        paginator = UncountedPageNumberPagination()
+        page_ids = paginator.paginate_queryset(
+            candidates.values_list("pk", flat=True),
+            request,
+            view=self,
         )
-        page = self.paginate_queryset(queryset)
-        serializer = self.get_serializer(
-            page if page is not None else queryset,
-            many=True,
-        )
-        if page is not None:
-            return self.get_paginated_response(serializer.data)
-        return Response(serializer.data)
+        if page_ids is None:
+            serializer = self.get_serializer(
+                outstanding(self.get_queryset()), many=True
+            )
+            return Response(serializer.data)
+        # ``balance_due``/``payment_status`` are Python properties over the
+        # prefetched payment, credit and adjustment rows, so the page needs the
+        # viewset's prefetches — and only for these fifty.
+        page = outstanding(self.get_queryset().filter(pk__in=list(page_ids)))
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     @action(detail=False, methods=["get"], url_path="adjustment-history")
     def adjustment_history(self, request):

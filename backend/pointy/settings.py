@@ -1070,6 +1070,14 @@ POINTY_FRAUD_SWEEP_DEBOUNCE_SECONDS = (
 # Invalidated by the viewset's own writes, so the TTL bounds staleness from
 # direct-ORM writes (imports, admin) — and must be 0 under tests, where DB
 # rollbacks leave stale ids in Redis while Postgres sequences keep advancing.
+# The shop's typical markup, keyed on the catalog version. A statistic over the
+# whole catalogue, recomputed per pricing suggestion until it was cached; the
+# version key means the TTL only bounds how long a *missed* invalidation could
+# last, so it can be generous.
+POINTY_MARKUP_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_MARKUP_CACHE_TTL", default=900)
+)
+
 POINTY_ACTIVE_PRODUCT_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_ACTIVE_PRODUCT_CACHE_TTL", default=60)
 )
