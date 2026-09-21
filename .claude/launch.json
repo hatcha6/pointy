@@ -58,6 +58,14 @@
       "port": 8080
     },
     {
+      "name": "navigation-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-navigation-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "treasury-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

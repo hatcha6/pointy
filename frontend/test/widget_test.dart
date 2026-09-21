@@ -1794,7 +1794,10 @@ void main() {
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات المتجر'), findsOneWidget);
-    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -320));
+    await tester.drag(
+      find.byType(PointyNavigationSurface),
+      const Offset(0, -320),
+    );
     await tester.pumpAndSettle();
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
@@ -2355,20 +2358,15 @@ void main() {
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: ReturnsExchangeLookupScreen(
-          saleRepository: SaleRepository(apiService),
-          printingRepository: PrintingRepository(apiService),
-          shopSettingsRepository: ShopSettingsRepository(apiService),
-          catalogRepository: CatalogRepository(apiService),
-          capabilities: AuthorizationCapabilities.forUser(
-            PosUser.fromJson(
-              _userJson(
-                role: 'cashier',
-                permissions: const [
-                  'sales.add_order',
-                  'sales.process_return_lookup',
-                ],
-              ),
+        home: _returnsLookupScreen(
+          apiService,
+          PosUser.fromJson(
+            _userJson(
+              role: 'cashier',
+              permissions: const [
+                'sales.add_order',
+                'sales.process_return_lookup',
+              ],
             ),
           ),
         ),
@@ -2430,17 +2428,12 @@ void main() {
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: ReturnsExchangeLookupScreen(
-          saleRepository: SaleRepository(apiService),
-          printingRepository: PrintingRepository(apiService),
-          shopSettingsRepository: ShopSettingsRepository(apiService),
-          catalogRepository: CatalogRepository(apiService),
-          capabilities: AuthorizationCapabilities.forUser(
-            PosUser.fromJson(
-              _userJson(
-                role: 'cashier',
-                permissions: const ['sales.process_return_lookup'],
-              ),
+        home: _returnsLookupScreen(
+          apiService,
+          PosUser.fromJson(
+            _userJson(
+              role: 'cashier',
+              permissions: const ['sales.process_return_lookup'],
             ),
           ),
         ),
@@ -4638,7 +4631,7 @@ Future<void> _expandNavigationDrawerGroup(
   WidgetTester tester,
   String label,
 ) async {
-  final drawer = find.byType(NavigationDrawer);
+  final drawer = find.byType(PointyNavigationSurface);
   final group = find.descendant(of: drawer, matching: find.text(label));
   if (group.evaluate().isEmpty) {
     // The drawer scrolls; a group lower than the viewport is not yet built.
@@ -4676,7 +4669,7 @@ Future<void> _openNavigationDestination(
 
   Finder drawerDestination() {
     return find.descendant(
-      of: find.byType(NavigationDrawer),
+      of: find.byType(PointyNavigationSurface),
       matching: find.text(label),
     );
   }
@@ -4755,10 +4748,14 @@ Future<void> _openNavigationDestination(
 
   Future<Finder> revealDrawerDestination() async {
     var destination = drawerDestination();
-    if (!tester.any(destination) && tester.any(find.byType(NavigationDrawer))) {
+    if (!tester.any(destination) &&
+        tester.any(find.byType(PointyNavigationSurface))) {
       // The drawer remembers its scroll offset across pages, so it may open
       // mid-list; reset to the top before sweeping downward.
-      await tester.drag(find.byType(NavigationDrawer), const Offset(0, 2400));
+      await tester.drag(
+        find.byType(PointyNavigationSurface),
+        const Offset(0, 2400),
+      );
       await tester.pumpAndSettle();
       destination = drawerDestination();
     }
@@ -4768,14 +4765,17 @@ Future<void> _openNavigationDestination(
       attempts++
     ) {
       await expandVisibleGroups(
-        find.byType(NavigationDrawer),
+        find.byType(PointyNavigationSurface),
         drawerDestination,
       );
       destination = drawerDestination();
       if (tester.any(destination)) {
         return destination;
       }
-      await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
+      await tester.drag(
+        find.byType(PointyNavigationSurface),
+        const Offset(0, -240),
+      );
       await tester.pumpAndSettle();
       destination = drawerDestination();
     }
@@ -4997,20 +4997,29 @@ Widget _returnsLookupApp(PosApiService apiService) {
       GlobalCupertinoLocalizations.delegate,
     ],
     supportedLocales: AppLocalizations.supportedLocales,
-    home: ReturnsExchangeLookupScreen(
-      saleRepository: SaleRepository(apiService),
-      printingRepository: PrintingRepository(apiService),
-      shopSettingsRepository: ShopSettingsRepository(apiService),
-      catalogRepository: CatalogRepository(apiService),
-      capabilities: AuthorizationCapabilities.forUser(
-        PosUser.fromJson(
-          _userJson(
-            role: 'cashier',
-            permissions: const ['sales.process_return_lookup'],
-          ),
+    home: _returnsLookupScreen(
+      apiService,
+      PosUser.fromJson(
+        _userJson(
+          role: 'cashier',
+          permissions: const ['sales.process_return_lookup'],
         ),
       ),
     ),
+  );
+}
+
+ReturnsExchangeLookupScreen _returnsLookupScreen(
+  PosApiService apiService,
+  PosUser user,
+) {
+  return ReturnsExchangeLookupScreen(
+    saleRepository: SaleRepository(apiService),
+    printingRepository: PrintingRepository(apiService),
+    shopSettingsRepository: ShopSettingsRepository(apiService),
+    catalogRepository: CatalogRepository(apiService),
+    capabilities: AuthorizationCapabilities.forUser(user),
+    navigation: FakeAppNavigation(currentUser: user),
   );
 }
 

@@ -670,6 +670,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         shopSettingsRepository: dependencies.shopSettingsRepository,
         catalogRepository: dependencies.catalogRepository,
         capabilities: capabilities,
+        navigation: this,
         analyticsEngine: dependencies.analyticsEngine,
       ),
     );
@@ -1172,6 +1173,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       StockUnitsScreen(
         viewModel: dependencies.trackedStockViewModel,
         capabilities: capabilities,
+        navigation: this,
         repository: dependencies.trackedStockRepository,
       ),
     );
@@ -1182,6 +1184,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       'stock_batches',
       StockBatchesScreen(
         viewModel: dependencies.trackedStockViewModel,
+        navigation: this,
         repository: dependencies.trackedStockRepository,
         canQuarantine: capabilities.canQuarantineBatch,
       ),
@@ -1197,6 +1200,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         catalog: dependencies.catalogRepository,
         contacts: dependencies.contactRepository,
         capabilities: capabilities,
+        navigation: this,
       ),
     );
   }

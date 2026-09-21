@@ -2,20 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../responsive/responsive.dart';
-import '../shell/pointy_navigation_rail_scope.dart';
-
-/// Wraps a navigation list in the app shell's scroll bucket (when one is
-/// provided): screens replace each other as routes (each with per-route
-/// PageStorage), so without the app-level bucket the drawer/rail list forgets
-/// its scroll offset on every navigation. Without a shell (tests, previews)
-/// the child renders as-is.
-Widget _withNavigationScrollBucket(BuildContext context, Widget child) {
-  final bucket = PointyNavigationRailScope.maybeOf(context)?.navigationBucket;
-  if (bucket == null) {
-    return child;
-  }
-  return PageStorage(bucket: bucket, child: child);
-}
+import '../shell/pointy_navigation_scroll_store.dart';
 
 class PointyNavigationSurface extends StatelessWidget {
   const PointyNavigationSurface({
@@ -36,62 +23,77 @@ class PointyNavigationSurface extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
 
-    return _withNavigationScrollBucket(
-      context,
-      NavigationDrawer(
-        key: const PageStorageKey('app-navigation-drawer'),
-        children: [
-          Padding(
-            padding: EdgeInsetsDirectional.fromSTEB(
-              spacing.lg,
-              spacing.xl,
-              spacing.lg,
-              spacing.md,
-            ),
-            child: Row(
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.primaryStrong,
-                    borderRadius: BorderRadius.circular(PointyRadii.card),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(spacing.sm),
-                    child: Icon(Icons.point_of_sale, color: colors.surface),
-                  ),
+    // A plain [Drawer] around a list this widget controls, rather than
+    // [NavigationDrawer], which builds its own list and offers no way in: the
+    // scroll offset has to come from the shared store like the rail's does.
+    // Every destination here is a custom tile, so nothing of NavigationDrawer
+    // but its themed surface was in play.
+    final drawerTheme = NavigationDrawerTheme.of(context);
+
+    return Drawer(
+      backgroundColor: drawerTheme.backgroundColor,
+      shadowColor: drawerTheme.shadowColor,
+      surfaceTintColor: drawerTheme.surfaceTintColor,
+      elevation: drawerTheme.elevation,
+      child: SafeArea(
+        bottom: false,
+        child: PointyNavigationScrollView(
+          kind: PointyNavigationSurfaceKind.drawer,
+          builder: (context, controller) => ListView(
+            controller: controller,
+            children: [
+              Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(
+                  spacing.lg,
+                  spacing.xl,
+                  spacing.lg,
+                  spacing.md,
                 ),
-                SizedBox(width: spacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        userLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                child: Row(
+                  children: [
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.primaryStrong,
+                        borderRadius: BorderRadius.circular(PointyRadii.card),
                       ),
-                      SizedBox(height: spacing.xs),
-                      Text(
-                        roleLabel,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+                      child: Padding(
+                        padding: EdgeInsets.all(spacing.sm),
+                        child: Icon(Icons.point_of_sale, color: colors.surface),
                       ),
-                    ],
-                  ),
+                    ),
+                    SizedBox(width: spacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            userLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          SizedBox(height: spacing.xs),
+                          Text(
+                            roleLabel,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.mutedInk),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const Divider(),
+              ...navigationChildren,
+              const Divider(),
+              logoutTile,
+            ],
           ),
-          const Divider(),
-          ...navigationChildren,
-          const Divider(),
-          logoutTile,
-        ],
+        ),
       ),
     );
   }
@@ -147,16 +149,14 @@ class PointyNavigationRailSurface extends StatelessWidget {
                 behavior: ScrollConfiguration.of(
                   context,
                 ).copyWith(scrollbars: false),
-                child: _withNavigationScrollBucket(
-                  context,
-                  ListView(
-                    // Per-mode keys: the same offset means a different place
-                    // in the denser collapsed layout.
-                    key: PageStorageKey(
-                      extended
-                          ? 'app-navigation-rail-extended'
-                          : 'app-navigation-rail-collapsed',
-                    ),
+                child: PointyNavigationScrollView(
+                  // Per-mode: the same offset means a different place in the
+                  // denser collapsed layout.
+                  kind: extended
+                      ? PointyNavigationSurfaceKind.railExtended
+                      : PointyNavigationSurfaceKind.railCollapsed,
+                  builder: (context, controller) => ListView(
+                    controller: controller,
                     padding: EdgeInsetsDirectional.symmetric(
                       vertical: spacing.sm,
                       horizontal: extended ? spacing.sm : spacing.xs,

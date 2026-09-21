@@ -8,6 +8,7 @@ import '../../../data/models/consignment.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/consignment_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -37,6 +38,7 @@ class ConsignmentPayablesScreen extends StatefulWidget {
     required this.catalog,
     required this.contacts,
     required this.capabilities,
+    required this.navigation,
   });
 
   final ConsignmentViewModel viewModel;
@@ -44,6 +46,7 @@ class ConsignmentPayablesScreen extends StatefulWidget {
   final CatalogRepository catalog;
   final ContactRepository contacts;
   final AuthorizationCapabilities capabilities;
+  final AppNavigation navigation;
 
   @override
   State<ConsignmentPayablesScreen> createState() =>
@@ -77,7 +80,12 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
         return PointyScaffold(
+          drawer: AppNavigationDrawer(
+            selectedDestination: AppNavigationDestination.consignmentPayables,
+            navigation: widget.navigation,
+          ),
           appBar: PointyAppBar(
+            leading: const PointyNavigationMenuButton(),
             title: Text(l10n.consignmentPayablesTitle),
             isLoading: viewModel.isLoading,
             actions: [

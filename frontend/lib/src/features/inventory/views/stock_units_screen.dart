@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
+import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -27,11 +28,13 @@ class StockUnitsScreen extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.capabilities,
+    required this.navigation,
     this.repository,
   });
 
   final TrackedStockViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+  final AppNavigation navigation;
 
   /// For the opening-identification run behind the app bar. Optional so a
   /// shop with nothing anonymous on the shelf pays nothing for it.
@@ -69,7 +72,12 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
         return PointyScaffold(
+          drawer: AppNavigationDrawer(
+            selectedDestination: AppNavigationDestination.stockUnits,
+            navigation: widget.navigation,
+          ),
           appBar: PointyAppBar(
+            leading: const PointyNavigationMenuButton(),
             title: Text(l10n.stockUnitsTitle),
             isLoading: viewModel.isLoadingUnits,
             actions: [

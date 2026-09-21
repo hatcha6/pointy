@@ -42,9 +42,10 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
   late final PointyAppDependencies _dependencies;
   late final PointyNavigationRailController _navigationRailController;
   // App-lifetime home for the nav drawer/rail scroll offsets: screens replace
-  // each other as routes, so per-route PageStorage forgets the list position
-  // on every navigation.
-  final PageStorageBucket _navigationScrollBucket = PageStorageBucket();
+  // each other as routes, and the routes left underneath stay alive with a
+  // scroll position each, so the offset has to live above all of them.
+  final PointyNavigationScrollStore _navigationScrollStore =
+      PointyNavigationScrollStore();
 
   /// Lives as long as the app: [TrackedScreen]s subscribe to it so a screen
   /// knows when the route above it is popped and it is on show again.
@@ -181,7 +182,7 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                 child: PointyNavigationRailScope(
                   isActive: false,
                   controller: _navigationRailController,
-                  navigationBucket: _navigationScrollBucket,
+                  navigationScrollStore: _navigationScrollStore,
                   // Above the Navigator, not inside `home`: pushed routes are
                   // siblings of the first route, so a scope installed there
                   // would be invisible to every screen but the first.

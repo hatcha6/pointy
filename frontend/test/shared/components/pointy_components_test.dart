@@ -402,7 +402,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(NavigationDrawer), findsOneWidget);
+    expect(find.byType(PointyNavigationSurface), findsOneWidget);
     expect(find.text('مدير المتجر'), findsOneWidget);
     expect(find.text('لوحة التحكم'), findsOneWidget);
 

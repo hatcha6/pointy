@@ -10,8 +10,10 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/api_session.dart';
+import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/order/sale_order_details_content.dart';
+import '../../../shared/shell/shell.dart';
 import '../../invoices/view_models/invoice_details_view_model.dart';
 
 /// Returns desk: enter an invoice's receipt number to fetch that single invoice
@@ -27,6 +29,7 @@ class ReturnsExchangeLookupScreen extends StatefulWidget {
     required this.shopSettingsRepository,
     required this.catalogRepository,
     required this.capabilities,
+    required this.navigation,
     this.analyticsEngine,
   });
 
@@ -35,6 +38,7 @@ class ReturnsExchangeLookupScreen extends StatefulWidget {
   final ShopSettingsRepository shopSettingsRepository;
   final CatalogRepository catalogRepository;
   final AuthorizationCapabilities capabilities;
+  final AppNavigation navigation;
   final AnalyticsEngine? analyticsEngine;
 
   @override
@@ -108,8 +112,15 @@ class _ReturnsExchangeLookupScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.returnsLookupTitle)),
+    return PointyScaffold(
+      drawer: AppNavigationDrawer(
+        selectedDestination: AppNavigationDestination.returnsExchange,
+        navigation: widget.navigation,
+      ),
+      appBar: PointyAppBar(
+        leading: const PointyNavigationMenuButton(),
+        title: Text(l10n.returnsLookupTitle),
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

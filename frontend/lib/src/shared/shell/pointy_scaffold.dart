@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_navigation_drawer.dart';
 import '../responsive/responsive.dart';
 import 'pointy_navigation_rail_scope.dart';
+import 'pointy_navigation_scroll_store.dart';
 import 'pointy_shell_action_scope.dart';
 
 class PointyScaffold extends StatefulWidget {
@@ -44,10 +45,16 @@ class PointyScaffold extends StatefulWidget {
 class _PointyScaffoldState extends State<PointyScaffold> {
   late final PointyNavigationRailController _fallbackNavigationRailController;
 
+  /// Used when no app shell is above this scaffold (tests, previews). It is
+  /// per-scaffold, so the offset is kept for as long as this screen lives and
+  /// no further — the shell's store is what makes it survive a screen change.
+  late final PointyNavigationScrollStore _fallbackNavigationScrollStore;
+
   @override
   void initState() {
     super.initState();
     _fallbackNavigationRailController = PointyNavigationRailController();
+    _fallbackNavigationScrollStore = PointyNavigationScrollStore();
     _fallbackNavigationRailController.addListener(
       _handleFallbackNavigationRailChanged,
     );
@@ -74,6 +81,9 @@ class _PointyScaffoldState extends State<PointyScaffold> {
     final navigationRailController =
         parentNavigationRailScope?.controller ??
         _fallbackNavigationRailController;
+    final navigationScrollStore =
+        parentNavigationRailScope?.navigationScrollStore ??
+        _fallbackNavigationScrollStore;
     final navigationDrawer = widget.drawer;
     final shellActionScope = PointyShellActionScope.maybeOf(context);
     final resolvedEndDrawer =
@@ -116,9 +126,9 @@ class _PointyScaffoldState extends State<PointyScaffold> {
     return PointyNavigationRailScope(
       isActive: usesNavigationRail,
       controller: navigationRailController,
-      // Pass the app shell's bucket through so the drawer/rail surfaces (below
+      // Pass the app shell's store through so the drawer/rail surfaces (below
       // this re-wrap) keep their scroll offsets across page changes.
-      navigationBucket: parentNavigationRailScope?.navigationBucket,
+      navigationScrollStore: navigationScrollStore,
       child: Scaffold(
         appBar: widget.appBar,
         drawer: usesNavigationRail ? null : widget.drawer,

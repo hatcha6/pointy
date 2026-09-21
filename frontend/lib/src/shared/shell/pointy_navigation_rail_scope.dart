@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import 'pointy_navigation_scroll_store.dart';
+
 class PointyNavigationRailController extends ChangeNotifier {
   PointyNavigationRailController({bool isExpanded = true})
     : _isExpanded = isExpanded;
@@ -27,19 +29,20 @@ class PointyNavigationRailScope
     super.key,
     required this.isActive,
     required this.controller,
-    this.navigationBucket,
+    this.navigationScrollStore,
     required super.child,
   }) : super(notifier: controller);
 
   final bool isActive;
   final PointyNavigationRailController controller;
 
-  /// App-lifetime storage for the drawer/rail list scroll offsets. Screens
-  /// replace each other as routes (each route gets its own PageStorage), so
-  /// without this app-level bucket the navigation list snaps back to the top
-  /// on every page change. Null when no app shell provides one (tests,
-  /// previews) — the surfaces then simply don't persist scroll.
-  final PageStorageBucket? navigationBucket;
+  /// App-lifetime home for the drawer/rail list scroll offsets. Screens
+  /// replace each other as routes, and the routes left underneath stay alive
+  /// with a scroll position each, so the offset has to live above all of them
+  /// or the navigation snaps back to an older place every time one is
+  /// revealed. Null when no app shell provides one (tests, previews) — the
+  /// surfaces then keep their own offset, as any list does.
+  final PointyNavigationScrollStore? navigationScrollStore;
 
   bool get isExpanded => controller.isExpanded;
 
@@ -56,7 +59,7 @@ class PointyNavigationRailScope
   bool updateShouldNotify(PointyNavigationRailScope oldWidget) {
     return isActive != oldWidget.isActive ||
         controller != oldWidget.controller ||
-        navigationBucket != oldWidget.navigationBucket ||
+        navigationScrollStore != oldWidget.navigationScrollStore ||
         super.updateShouldNotify(oldWidget);
   }
 }

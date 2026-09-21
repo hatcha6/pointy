@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/stock_batch.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
+import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
@@ -24,11 +25,13 @@ class StockBatchesScreen extends StatefulWidget {
   const StockBatchesScreen({
     super.key,
     required this.viewModel,
+    required this.navigation,
     this.repository,
     this.canQuarantine = false,
   });
 
   final TrackedStockViewModel viewModel;
+  final AppNavigation navigation;
 
   /// For the recall screen behind a row. Optional so a shop that never
   /// recalls anything pays nothing for it.
@@ -59,7 +62,12 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
         return PointyScaffold(
+          drawer: AppNavigationDrawer(
+            selectedDestination: AppNavigationDestination.stockBatches,
+            navigation: widget.navigation,
+          ),
           appBar: PointyAppBar(
+            leading: const PointyNavigationMenuButton(),
             title: Text(l10n.stockBatchesTitle),
             isLoading: viewModel.isLoadingBatches,
             actions: [
