@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
+from apps.core.serializer_reuse import render as render_reused
 
 from . import scale_barcodes
 from .tracking_modes import assert_mode_change_allowed
@@ -45,11 +46,12 @@ from .models import (
 
 def attachment_summaries(owner, *, role, context):
     attachments = owner_attachments(owner, role=role)
-    return AttachmentSummarySerializer(
+    return render_reused(
+        context,
+        AttachmentSummarySerializer,
         attachments,
         many=True,
-        context=context,
-    ).data
+    )
 
 
 def primary_attachment_summary(owner, *, role, context):
@@ -59,7 +61,7 @@ def primary_attachment_summary(owner, *, role, context):
         primary = attachments[0]
     if primary is None:
         return None
-    return AttachmentSummarySerializer(primary, context=context).data
+    return render_reused(context, AttachmentSummarySerializer, primary)
 
 
 def owner_attachments(owner, *, role):
@@ -382,11 +384,12 @@ def product_modifier_group_details(product, context=None):
             .prefetch_related("group__options")
             .order_by("display_order", "id")
         )
-    return ModifierGroupSerializer(
+    return render_reused(
+        context,
+        ModifierGroupSerializer,
         [link.group for link in links],
         many=True,
-        context=context,
-    ).data
+    )
 
 
 class UnitOfMeasureSerializer(serializers.ModelSerializer):
@@ -482,7 +485,7 @@ class ProductUnitListField(serializers.Field):
 
     def to_representation(self, value):
         units = value.all() if hasattr(value, "all") else value
-        return ProductUnitSerializer(units, many=True, context=self.context).data
+        return render_reused(self.context, ProductUnitSerializer, units, many=True)
 
     def to_internal_value(self, data):
         if not isinstance(data, list):
@@ -566,11 +569,12 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
         return product_modifier_group_details(product, self.context)
 
     def get_units(self, product):
-        return ProductUnitSerializer(
+        return render_reused(
+            self.context,
+            ProductUnitSerializer,
             product.units.all(),
             many=True,
-            context=self.context,
-        ).data
+        )
 
 
 class DefaultProductVariantInputSerializer(serializers.Serializer):
@@ -624,8 +628,12 @@ class DefaultProductVariantField(serializers.Field):
             return None
         # catalog_list drops the redundant per-variant product_detail (the parent
         # product is the list item itself). See ProductVariantSerializer.__init__.
-        context = {**self.context, "catalog_list": True}
-        return ProductVariantSerializer(value, context=context).data
+        return render_reused(
+            self.context,
+            ProductVariantSerializer,
+            value,
+            extra_context={"catalog_list": True},
+        )
 
     def to_internal_value(self, data):
         if not isinstance(data, dict):
@@ -947,12 +955,13 @@ class ProductVariantListField(serializers.Field):
         # catalog_list drops the redundant per-variant product_detail (a product
         # with N variants would otherwise ship its full data N+1×). The client
         # re-attaches the parent it was listed under.
-        context = {**self.context, "catalog_list": True}
-        return ProductVariantSerializer(
+        return render_reused(
+            self.context,
+            ProductVariantSerializer,
             queryset,
             many=True,
-            context=context,
-        ).data
+            extra_context={"catalog_list": True},
+        )
 
     def to_internal_value(self, data):
         if not isinstance(data, list):
