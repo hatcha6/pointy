@@ -73,6 +73,90 @@ void main() {
       TextDirection.rtl,
     );
   });
+
+  Future<void> pumpAlert(WidgetTester tester, BusinessAlert alert) async {
+    final viewModel = NotificationCenterViewModel(
+      _FakeBusinessAlertRepository(
+        BusinessAlertLoadResult(digest: BusinessAlertDigest(alerts: [alert])),
+      ),
+    );
+    addTearDown(viewModel.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: PointyTheme.light(),
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: NotificationCenterHost(
+            viewModel: viewModel,
+            child: const PointyScaffold(
+              appBar: PointyAppBar(title: Text('الصفحة')),
+              body: Text('المحتوى'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('تنبيه ذكي واحد'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a low provider float reads as Arabic, not as "a new alert"', (
+    tester,
+  ) async {
+    await pumpAlert(
+      tester,
+      BusinessAlert.fromJson(const {
+        'id': '9',
+        'code': 'integrations.low_float',
+        'category': 'sales',
+        'severity': 'warning',
+        'is_hidden': false,
+        'payload': {
+          'provider': 'hdbox',
+          'amount': '180.00',
+          'threshold': '250.00',
+          'account_label': 'Alnassim',
+          'balance_at': '2026-09-21T08:50:00Z',
+          'count': 1,
+        },
+      }),
+    );
+
+    expect(find.text('رصيد الوكالة على وشك النفاد'), findsOneWidget);
+    // The provider is named the way the shop knows it. The payload carries
+    // the stable key, and putting "hdbox" in front of a shopkeeper names
+    // nothing — a shop reselling two providers has to be told which float.
+    expect(find.textContaining('HD Box'), findsOneWidget);
+    expect(find.textContaining('hdbox'), findsNothing);
+    expect(find.textContaining('حد التنبيه'), findsOneWidget);
+    expect(find.text('تنبيه جديد'), findsNothing);
+  });
+
+  testWidgets('an exhausted float says the till cannot sell', (tester) async {
+    await pumpAlert(
+      tester,
+      BusinessAlert.fromJson(const {
+        'id': '10',
+        'code': 'integrations.low_float',
+        'category': 'sales',
+        'severity': 'critical',
+        'is_hidden': false,
+        'payload': {
+          'provider': 'lnet',
+          'amount': '0.00',
+          'threshold': '100.00',
+          'count': 1,
+        },
+      }),
+    );
+
+    expect(find.text('رصيد الوكالة نفد'), findsOneWidget);
+    expect(find.textContaining('لا يمكن بيع أي شحن'), findsOneWidget);
+  });
 }
 
 class _FakeBusinessAlertRepository extends BusinessAlertRepository {

@@ -57,11 +57,29 @@ SETTING_COMMISSION_PERCENT = "commission_percent"
 #: amount, so this is convenience, not a constraint — which is why an owner
 #: may safely change it.
 SETTING_DENOMINATIONS = "denominations"
+#: Warn the shop when the prepaid float drops to this much or less.
+#:
+#: A knob rather than a constant because the right number is the shop's own
+#: trading pattern, not ours: an agency selling four renewals a day runs a
+#: float an order of magnitude bigger than one selling four a month, and a
+#: threshold picked here would either cry wolf at the first or stay silent at
+#: the second until a customer was standing at the counter. Every provider
+#: that can report a balance declares one, so the answer to "where do I set
+#: this?" is the same screen for all of them.
+#:
+#: Zero turns the warning off, which is why the minimum is zero rather than
+#: some small positive number: an owner who does not want to be told must be
+#: able to say so without us deciding that silence is a mistake.
+SETTING_LOW_BALANCE_THRESHOLD = "low_balance_threshold"
 
 # How the client renders and validates a setting. Stable codes, like everything
 # else here; the Arabic label lives in the Flutter layer.
 SETTING_KIND_PERCENT = "percent"
 SETTING_KIND_AMOUNT_LIST = "amount_list"
+#: One money figure, in the provider's own currency (always LYD — see
+#: ``ProviderSpec.currency``). Distinct from ``percent`` only in how it is
+#: labelled and bounded; both clean to a single ``Decimal``.
+SETTING_KIND_AMOUNT = "amount"
 
 
 @dataclass(frozen=True)
@@ -88,7 +106,7 @@ class ProviderSetting:
 
     def clean(self, value):
         """The value to store, or ``None`` if it is not one we accept."""
-        if self.kind == SETTING_KIND_PERCENT:
+        if self.kind in (SETTING_KIND_PERCENT, SETTING_KIND_AMOUNT):
             try:
                 number = Decimal(str(value))
             except (ArithmeticError, TypeError, ValueError):
@@ -162,6 +180,30 @@ class ProviderSpec:
 _CREDENTIALS = (FIELD_BASE_URL, FIELD_USERNAME, FIELD_PASSWORD)
 _SECRETS = frozenset({FIELD_PASSWORD})
 
+
+def _low_balance(default: str) -> ProviderSetting:
+    """The float warning for one provider, defaulted to what it sells.
+
+    The default is anchored to the dearest single thing that provider can
+    sell, because that is the number that decides whether the next customer
+    can be served: a float below it means the till is one sale away from
+    refusing one, which is the moment the owner wanted to hear about a day
+    earlier. It is a starting point and not a rule — a busy agency will raise
+    it, and the whole point of the setting is that it can.
+
+    The ceiling is deliberately far above any real float: it exists so a
+    fat-fingered extra zero is refused at the form rather than pinning the
+    warning on for ever, not to tell an agency how much money it may hold.
+    """
+    return ProviderSetting(
+        key=SETTING_LOW_BALANCE_THRESHOLD,
+        kind=SETTING_KIND_AMOUNT,
+        default=default,
+        minimum=Decimal("0"),
+        maximum=Decimal("1000000"),
+    )
+
+
 HDBOX = ProviderSpec(
     key="hdbox",
     availability=AVAILABILITY_AVAILABLE,
@@ -178,6 +220,9 @@ HDBOX = ProviderSpec(
         "renew:6": Decimal("140.00"),
         "renew:12": Decimal("240.00"),
     },
+    # 250 clears the 220 a twelve-month renewal costs the float, with enough
+    # left that the warning arrives before the sale that cannot be made.
+    settings=(_low_balance("250"),),
 )
 
 LNET = ProviderSpec(
@@ -208,6 +253,10 @@ LNET = ProviderSpec(
             kind=SETTING_KIND_AMOUNT_LIST,
             default=["10", "20", "25", "30", "40", "45", "50", "100"],
         ),
+        # 100 is the largest quick-pick above, and the portal takes any
+        # amount — so this is "the biggest top-up a cashier reaches for",
+        # which is the one a thin float would refuse.
+        _low_balance("100"),
     ),
     # No ``suggested_retail``. LNET sells stored value, and the retail price of
     # stored value is its face value — 45 dinars of credit sells for 45 — so
@@ -230,6 +279,11 @@ QAREEB = ProviderSpec(
     fields=_CREDENTIALS,
     secret_fields=_SECRETS,
     blocked_reason=BLOCKED_AWAITING_ACCESS,
+    # Declared even though nothing can be configured yet, so the day a driver
+    # lands the float warning is already part of it rather than a thing
+    # somebody has to remember. ``test_every_provider_that_reports_a_balance_
+    # can_warn_on_it`` is what makes sure the next provider does not forget.
+    settings=(_low_balance("100"),),
 )
 
 PROVIDERS: tuple[ProviderSpec, ...] = (HDBOX, LNET, QAREEB)

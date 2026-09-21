@@ -123,6 +123,105 @@ void main() {
     );
     expect(submitted!.toJson().containsKey('password'), isFalse);
   });
+
+  Future<IntegrationCredentialsDraft?> pumpFormAndSave(
+    WidgetTester tester, {
+    String? typeThreshold,
+  }) async {
+    IntegrationCredentialsDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: IntegrationCredentialsForm(
+            provider: _provider(connected: true),
+            onSubmit: (draft) async {
+              submitted = draft;
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+    if (typeThreshold != null) {
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'حد تنبيه الرصيد'),
+        typeThreshold,
+      );
+    }
+    await tester.tap(find.text('حفظ'));
+    await tester.pumpAndSettle();
+    return submitted;
+  }
+
+  testWidgets('the float threshold is a field the owner can set', (
+    tester,
+  ) async {
+    final submitted = await pumpFormAndSave(tester, typeThreshold: '600');
+
+    expect(
+      submitted!.settings?[IntegrationSettingKey.lowBalanceThreshold],
+      '600',
+    );
+  });
+
+  testWidgets('a float threshold above a hundred is not "out of range"', (
+    tester,
+  ) async {
+    // The validator used to fall back to a percentage's 0-100 ceiling when a
+    // setting declared none, which would refuse every float a real agency
+    // runs. The declared maximum is a typo guard, not a limit on the shop.
+    final submitted = await pumpFormAndSave(tester, typeThreshold: '5000');
+
+    expect(submitted, isNotNull, reason: '5000 dinars is an ordinary float');
+    expect(
+      submitted!.settings?[IntegrationSettingKey.lowBalanceThreshold],
+      '5000',
+    );
+  });
+
+  testWidgets('zero is accepted, so the warning can be turned off', (
+    tester,
+  ) async {
+    final submitted = await pumpFormAndSave(tester, typeThreshold: '0');
+
+    expect(
+      submitted!.settings?[IntegrationSettingKey.lowBalanceThreshold],
+      '0',
+    );
+  });
+
+  testWidgets('clearing a setting leaves the stored one alone', (
+    tester,
+  ) async {
+    // Blank has always *read* as "leave it alone" — but it was being sent, and
+    // the server refuses a blank, so emptying the box failed the whole save.
+    final submitted = await pumpFormAndSave(tester, typeThreshold: '');
+
+    expect(submitted, isNotNull, reason: 'a cleared box must still save');
+    expect(
+      submitted!.settings?.containsKey(
+        IntegrationSettingKey.lowBalanceThreshold,
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('a threshold past the typo guard is refused at the form', (
+    tester,
+  ) async {
+    final submitted = await pumpFormAndSave(tester, typeThreshold: '50000000');
+
+    expect(submitted, isNull);
+    expect(find.textContaining('أدخل قيمة بين'), findsOneWidget);
+  });
 }
 
 IntegrationProvider _provider({required bool connected}) {
@@ -134,6 +233,15 @@ IntegrationProvider _provider({required bool connected}) {
       IntegrationField.baseUrl,
       IntegrationField.username,
       IntegrationField.password,
+    ],
+    settings: const [
+      IntegrationSetting(
+        key: IntegrationSettingKey.lowBalanceThreshold,
+        kind: 'amount',
+        defaultValue: '250',
+        minimum: 0,
+        maximum: 1000000,
+      ),
     ],
     secretFields: const [IntegrationField.password],
     defaultBaseUrl: 'http://cas.example:18688',

@@ -67,6 +67,38 @@ def probe_account(account: IntegrationAccount) -> ProbeResult:
     return result
 
 
+def refresh_float_balances() -> dict:
+    """Re-read every connected provider's float.
+
+    The low-float warning is only as truthful as the number it reads, and
+    until this existed that number moved twice: at 02:20, when reconciliation
+    probed, and after an LNET recharge, which reports the new balance in its
+    own reply. So a shop could spend its whole float between opening and
+    closing and be told about it the following morning — and HD Box, which
+    has no recharge driver and therefore never reports a balance back, only
+    ever moved on the nightly sweep or when somebody opened Shop Settings and
+    pressed Test.
+
+    One account failing must not stop the rest: ``probe_account`` already
+    swallows a driver crash and writes the reason to the account, so a
+    provider that is down records that and the next one is still read.
+    """
+    checked = 0
+    connected = 0
+    for account in IntegrationAccount.objects.filter(is_active=True):
+        spec = account.spec
+        if spec is None or catalog.CAPABILITY_BALANCE not in spec.capabilities:
+            continue
+        if not account.is_configured:
+            # No credentials is not a failure worth recording every hour; it
+            # is a shop that has not connected this provider.
+            continue
+        checked += 1
+        if probe_account(account).ok:
+            connected += 1
+    return {"checked": checked, "connected": connected}
+
+
 def accounts_by_provider() -> dict[str, IntegrationAccount]:
     return {account.provider: account for account in IntegrationAccount.objects.all()}
 

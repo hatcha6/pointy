@@ -4071,6 +4071,123 @@ abstract class AppLocalizations {
   /// **'{name} من {source}'**
   String smartNotificationOperationsErrorMessage(String name, String source);
 
+  /// No description provided for @smartNotificationProviderFloatLowTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة على وشك النفاد'**
+  String get smartNotificationProviderFloatLowTitle;
+
+  /// Provider float below the shop's own threshold.
+  ///
+  /// In ar, this message translates to:
+  /// **'{provider}: المتبقي {amount} وحد التنبيه {threshold}. عبِّ الرصيد قبل أن يقف البيع.'**
+  String smartNotificationProviderFloatLowMessage(
+    String provider,
+    String amount,
+    String threshold,
+  );
+
+  /// No description provided for @smartNotificationProviderFloatEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة نفد'**
+  String get smartNotificationProviderFloatEmptyTitle;
+
+  /// Provider float exhausted: no top-up can be sold.
+  ///
+  /// In ar, this message translates to:
+  /// **'{provider}: لا يمكن بيع أي شحن حتى تتم تعبئة الرصيد.'**
+  String smartNotificationProviderFloatEmptyMessage(String provider);
+
+  /// When the provider float figure was last read.
+  ///
+  /// In ar, this message translates to:
+  /// **'قراءة الرصيد بتاريخ {readAt}'**
+  String smartNotificationProviderFloatAsOf(String readAt);
+
+  /// No description provided for @smartNotificationUnperformedRechargeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن مدفوع ولم يُنفَّذ'**
+  String get smartNotificationUnperformedRechargeTitle;
+
+  /// A recharge the customer paid for that the provider never performed.
+  ///
+  /// In ar, this message translates to:
+  /// **'{provider}: الرقم {reference} بقيمة {amount} دفعه الزبون ولم ينفذه المزود.'**
+  String smartNotificationUnperformedRechargeMessage(
+    String provider,
+    String reference,
+    String amount,
+  );
+
+  /// When an unperformed recharge was sold.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع بتاريخ {soldAt}'**
+  String smartNotificationRechargeSoldAt(String soldAt);
+
+  /// When an unresolved recharge was sent to the provider.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل بتاريخ {sentAt}'**
+  String smartNotificationRechargeSentAt(String sentAt);
+
+  /// No description provided for @smartNotificationUnresolvedRechargeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن غير مؤكد — لا تُعِد إرساله'**
+  String get smartNotificationUnresolvedRechargeTitle;
+
+  /// A recharge whose outcome is unknown; retrying could charge twice.
+  ///
+  /// In ar, this message translates to:
+  /// **'{provider}: الرقم {reference} بقيمة {amount} أُرسل ولم تصل نتيجته. راجع سجل المزود قبل أي إجراء.'**
+  String smartNotificationUnresolvedRechargeMessage(
+    String provider,
+    String reference,
+    String amount,
+  );
+
+  /// No description provided for @smartNotificationOffbookRechargeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن من رصيد الوكالة بلا فاتورة'**
+  String get smartNotificationOffbookRechargeTitle;
+
+  /// A provider purchase with no matching sale in Pointy.
+  ///
+  /// In ar, this message translates to:
+  /// **'{provider}: شحن بقيمة {amount} خصم من الرصيد ولا يقابله بيع في دفتر.'**
+  String smartNotificationOffbookRechargeMessage(
+    String provider,
+    String amount,
+  );
+
+  /// No description provided for @smartNotificationProviderFloatDriftTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة لا يطابق حسابنا'**
+  String get smartNotificationProviderFloatDriftTitle;
+
+  /// The provider float is lower than Pointy's arithmetic expects.
+  ///
+  /// In ar, this message translates to:
+  /// **'{provider}: الرصيد أقل من المتوقع بمقدار {amount} — صرف خارج دفتر.'**
+  String smartNotificationProviderFloatShortMessage(
+    String provider,
+    String amount,
+  );
+
+  /// The provider float is higher than expected: an unrecorded top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'{provider}: الرصيد أعلى من المتوقع بمقدار {amount} — تعبئة لم تُسجَّل.'**
+  String smartNotificationProviderFloatOverMessage(
+    String provider,
+    String amount,
+  );
+
   /// No description provided for @smartNotificationUnknownTitle.
   ///
   /// In ar, this message translates to:
@@ -32460,18 +32577,6 @@ abstract class AppLocalizations {
   ///
   ///
   /// In ar, this message translates to:
-  /// **'المبلغ بالدينار الليبي، حتى لو عرضه موقع المزوّد بعلامة الدولار.'**
-  String get integrationBalanceCurrencyNote;
-
-  ///
-  ///
-  /// In ar, this message translates to:
-  /// **'جميع المبالغ بالدينار الليبي.'**
-  String get integrationBalanceCurrencyPlainNote;
-
-  ///
-  ///
-  /// In ar, this message translates to:
   /// **'الحساب: {name}'**
   String integrationAccountLabel(String name);
 
@@ -32646,12 +32751,6 @@ abstract class AppLocalizations {
   ///
   ///
   /// In ar, this message translates to:
-  /// **'هذا المزوّد يستخدم اتصالاً غير مشفّر (http)، فتنتقل بيانات الدخول دون تشفير. لا تستخدم كلمة مرور تستعملها في مكان آخر.'**
-  String get integrationInsecureTransportWarning;
-
-  ///
-  ///
-  /// In ar, this message translates to:
   /// **'شحن اشتراك'**
   String get rechargeTitle;
 
@@ -32708,6 +32807,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط'**
   String get integrationSettingDenominationsHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حد تنبيه الرصيد'**
+  String get integrationSettingLowBalance;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'ننبّهك عندما ينزل رصيد الوكالة إلى هذا المبلغ. اكتب 0 لإيقاف التنبيه'**
+  String get integrationSettingLowBalanceHint;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل قيمة لا تقل عن {min}'**
+  String integrationSettingAtLeast(String min);
 
   ///
   ///

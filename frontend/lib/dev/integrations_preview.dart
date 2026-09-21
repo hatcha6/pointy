@@ -214,6 +214,18 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
         IntegrationField.password,
       ],
       secretFields: const [IntegrationField.password],
+      // Every provider that reports a balance declares a float warning, so the
+      // harness shows one here too — the backend serves 250 for HD Box.
+      settings: const [
+        IntegrationSetting(
+          key: IntegrationSettingKey.lowBalanceThreshold,
+          kind: 'amount',
+          value: '250',
+          defaultValue: '250',
+          minimum: 0,
+          maximum: 1000000,
+        ),
+      ],
       defaultBaseUrl: 'http://cas.hdboxly.com:18688',
       isConfigurable: true,
       account: scenario == 'catalog' ? null : account,
@@ -251,6 +263,14 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
         key: IntegrationSettingKey.denominations,
         kind: 'amount_list',
         value: ['10', '20', '25', '30', '40', '45', '50', '100'],
+      ),
+      IntegrationSetting(
+        key: IntegrationSettingKey.lowBalanceThreshold,
+        kind: 'amount',
+        value: '100',
+        defaultValue: '100',
+        minimum: 0,
+        maximum: 1000000,
       ),
     ],
   );

@@ -90,14 +90,23 @@ class _IntegrationCredentialsFormState
   /// What the owner typed, as the backend's own shape. Only sent when it
   /// differs from what was loaded, so saving a URL never rewrites a
   /// commission somebody set months ago.
+  ///
+  /// A cleared box is "leave it alone", which is what the validator has always
+  /// told the owner — but the blank was being *sent*, and the server refuses a
+  /// blank as out of range. So emptying a field to move on from it failed the
+  /// whole save with a message about a number nobody had typed. The one
+  /// exception is a list, where empty is a real answer: no quick-picks.
   Map<String, Object?> _changedSettings() {
     final changed = <String, Object?>{};
     for (final setting in widget.provider.settings) {
       final text = _settings[setting.key]?.text.trim() ?? '';
       if (text == setting.asText.trim()) continue;
-      changed[setting.key] = setting.isAmountList
-          ? _splitAmounts(text)
-          : text;
+      if (setting.isAmountList) {
+        changed[setting.key] = _splitAmounts(text);
+        continue;
+      }
+      if (text.isEmpty) continue;
+      changed[setting.key] = text;
     }
     return changed;
   }
@@ -132,23 +141,20 @@ class _IntegrationCredentialsFormState
       return bad ? l10n.integrationSettingInvalidAmounts : null;
     }
     final value = double.tryParse(text);
+    // The declared bounds, not a percentage's. A money threshold's ceiling is
+    // a typo guard in the hundreds of thousands, and assuming 100 here would
+    // have refused every float a real agency runs.
     final min = setting.minimum ?? 0;
-    final max = setting.maximum ?? 100;
+    final max = setting.maximum ?? double.infinity;
     if (value == null || value < min || value > max) {
-      return l10n.integrationSettingOutOfRange(
-        _plain(min),
-        _plain(max),
-      );
+      // Both bounds are optional in the catalog, so a setting may legally
+      // declare a floor and no ceiling. Saying "between 0 and Infinity" is
+      // how that would otherwise reach a shopkeeper.
+      return max.isFinite
+          ? l10n.integrationSettingOutOfRange(_plain(min), _plain(max))
+          : l10n.integrationSettingAtLeast(_plain(min));
     }
     return null;
-  }
-
-  /// http:// means the password crosses the wire in clear. HD Box offers
-  /// nothing else today, so this warns rather than blocks — but it warns every
-  /// time, because "it is only the TV system" is how a reused password leaks.
-  bool get _isInsecure {
-    final url = _baseUrl.text.trim().toLowerCase();
-    return url.startsWith('http://');
   }
 
   Future<void> _save() async {
@@ -202,7 +208,6 @@ class _IntegrationCredentialsFormState
                   hintText: l10n.integrationFieldBaseUrlHint,
                   prefixIcon: const Icon(Icons.dns_outlined),
                 ),
-                onChanged: (_) => setState(() {}),
               ),
               SizedBox(height: spacing.sm),
             ],
@@ -273,18 +278,6 @@ class _IntegrationCredentialsFormState
                 SizedBox(height: spacing.sm),
               ],
             ],
-            if (_isInsecure) ...[
-              PointyInlineMessage.warning(
-                message: l10n.integrationInsecureTransportWarning,
-                compact: true,
-              ),
-              SizedBox(height: spacing.sm),
-            ],
-            PointyInlineMessage(
-              message: integrationCurrencyNote(widget.provider.key, l10n),
-              icon: Icons.info_outline,
-              compact: true,
-            ),
             SizedBox(height: spacing.md),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,

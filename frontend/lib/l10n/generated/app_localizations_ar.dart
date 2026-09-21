@@ -2322,6 +2322,100 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get smartNotificationProviderFloatLowTitle =>
+      'رصيد الوكالة على وشك النفاد';
+
+  @override
+  String smartNotificationProviderFloatLowMessage(
+    String provider,
+    String amount,
+    String threshold,
+  ) {
+    return '$provider: المتبقي $amount وحد التنبيه $threshold. عبِّ الرصيد قبل أن يقف البيع.';
+  }
+
+  @override
+  String get smartNotificationProviderFloatEmptyTitle => 'رصيد الوكالة نفد';
+
+  @override
+  String smartNotificationProviderFloatEmptyMessage(String provider) {
+    return '$provider: لا يمكن بيع أي شحن حتى تتم تعبئة الرصيد.';
+  }
+
+  @override
+  String smartNotificationProviderFloatAsOf(String readAt) {
+    return 'قراءة الرصيد بتاريخ $readAt';
+  }
+
+  @override
+  String get smartNotificationUnperformedRechargeTitle =>
+      'شحن مدفوع ولم يُنفَّذ';
+
+  @override
+  String smartNotificationUnperformedRechargeMessage(
+    String provider,
+    String reference,
+    String amount,
+  ) {
+    return '$provider: الرقم $reference بقيمة $amount دفعه الزبون ولم ينفذه المزود.';
+  }
+
+  @override
+  String smartNotificationRechargeSoldAt(String soldAt) {
+    return 'بيع بتاريخ $soldAt';
+  }
+
+  @override
+  String smartNotificationRechargeSentAt(String sentAt) {
+    return 'أُرسل بتاريخ $sentAt';
+  }
+
+  @override
+  String get smartNotificationUnresolvedRechargeTitle =>
+      'شحن غير مؤكد — لا تُعِد إرساله';
+
+  @override
+  String smartNotificationUnresolvedRechargeMessage(
+    String provider,
+    String reference,
+    String amount,
+  ) {
+    return '$provider: الرقم $reference بقيمة $amount أُرسل ولم تصل نتيجته. راجع سجل المزود قبل أي إجراء.';
+  }
+
+  @override
+  String get smartNotificationOffbookRechargeTitle =>
+      'شحن من رصيد الوكالة بلا فاتورة';
+
+  @override
+  String smartNotificationOffbookRechargeMessage(
+    String provider,
+    String amount,
+  ) {
+    return '$provider: شحن بقيمة $amount خصم من الرصيد ولا يقابله بيع في دفتر.';
+  }
+
+  @override
+  String get smartNotificationProviderFloatDriftTitle =>
+      'رصيد الوكالة لا يطابق حسابنا';
+
+  @override
+  String smartNotificationProviderFloatShortMessage(
+    String provider,
+    String amount,
+  ) {
+    return '$provider: الرصيد أقل من المتوقع بمقدار $amount — صرف خارج دفتر.';
+  }
+
+  @override
+  String smartNotificationProviderFloatOverMessage(
+    String provider,
+    String amount,
+  ) {
+    return '$provider: الرصيد أعلى من المتوقع بمقدار $amount — تعبئة لم تُسجَّل.';
+  }
+
+  @override
   String get smartNotificationUnknownTitle => 'تنبيه جديد';
 
   @override
@@ -18792,14 +18886,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get integrationBalanceCurrencyNote =>
-      'المبلغ بالدينار الليبي، حتى لو عرضه موقع المزوّد بعلامة الدولار.';
-
-  @override
-  String get integrationBalanceCurrencyPlainNote =>
-      'جميع المبالغ بالدينار الليبي.';
-
-  @override
   String integrationAccountLabel(String name) {
     return 'الحساب: $name';
   }
@@ -18895,10 +18981,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get integrationErrorUnexpected => 'رد المزوّد بشكل غير متوقع';
 
   @override
-  String get integrationInsecureTransportWarning =>
-      'هذا المزوّد يستخدم اتصالاً غير مشفّر (http)، فتنتقل بيانات الدخول دون تشفير. لا تستخدم كلمة مرور تستعملها في مكان آخر.';
-
-  @override
   String get rechargeTitle => 'شحن اشتراك';
 
   @override
@@ -18928,6 +19010,18 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get integrationSettingDenominationsHint =>
       'افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط';
+
+  @override
+  String get integrationSettingLowBalance => 'حد تنبيه الرصيد';
+
+  @override
+  String get integrationSettingLowBalanceHint =>
+      'ننبّهك عندما ينزل رصيد الوكالة إلى هذا المبلغ. اكتب 0 لإيقاف التنبيه';
+
+  @override
+  String integrationSettingAtLeast(String min) {
+    return 'أدخل قيمة لا تقل عن $min';
+  }
 
   @override
   String integrationSettingOutOfRange(String min, String max) {

@@ -68,6 +68,11 @@ abstract final class IntegrationCapability {
 abstract final class IntegrationSettingKey {
   static const commissionPercent = 'commission_percent';
   static const denominations = 'denominations';
+
+  /// Warn when the prepaid float drops to this much or less. Declared by
+  /// every provider that can report a balance, so "where do I set this?" has
+  /// one answer for all of them. Zero means the owner asked not to be told.
+  static const lowBalanceThreshold = 'low_balance_threshold';
 }
 
 abstract final class IntegrationField {
@@ -183,8 +188,8 @@ class IntegrationSetting {
 
   final String key;
 
-  /// `percent` or `amount_list`. Stable codes; the Arabic label is chosen in
-  /// the presentation layer like every other provider string.
+  /// `percent`, `amount` or `amount_list`. Stable codes; the Arabic label is
+  /// chosen in the presentation layer like every other provider string.
   final String kind;
 
   /// What it is set to now — the default when nobody has chosen.
@@ -195,6 +200,12 @@ class IntegrationSetting {
 
   bool get isPercent => kind == 'percent';
   bool get isAmountList => kind == 'amount_list';
+
+  /// One money figure, in the provider's own currency. Bounded like a
+  /// percentage but never rendered as one — and, unlike a percentage, its
+  /// upper bound is a typo guard rather than a real ceiling, so the form must
+  /// read the declared bounds instead of assuming 0–100.
+  bool get isAmount => kind == 'amount';
 
   /// The current value as text a form field can hold.
   String get asText {

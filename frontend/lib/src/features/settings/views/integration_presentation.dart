@@ -78,22 +78,12 @@ String integrationProviderTagline(
       hint: l10n.integrationSettingDenominationsHint,
       icon: Icons.apps_outlined,
     ),
+    IntegrationSettingKey.lowBalanceThreshold => (
+      label: l10n.integrationSettingLowBalance,
+      hint: l10n.integrationSettingLowBalanceHint,
+      icon: Icons.battery_alert_outlined,
+    ),
     _ => (label: key, hint: '', icon: Icons.tune_outlined),
-  };
-}
-
-/// The currency note for a provider's balance.
-///
-/// HD Box prints its float with a "$" glyph that is NOT dollars, and saying so
-/// is worth a line. No other provider does that, and repeating the warning for
-/// one that doesn't would be explaining a quirk the owner has never seen.
-String integrationCurrencyNote(
-  IntegrationProviderKey key,
-  AppLocalizations l10n,
-) {
-  return switch (key) {
-    IntegrationProviderKey.hdbox => l10n.integrationBalanceCurrencyNote,
-    _ => l10n.integrationBalanceCurrencyPlainNote,
   };
 }
 

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/business_alert.dart';
+import '../../../data/models/integration_provider.dart';
+import '../../settings/views/integration_presentation.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
@@ -367,6 +369,11 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.expiringDiscounts => Icons.local_offer_outlined,
       BusinessAlertType.payrollReady => Icons.payments_outlined,
       BusinessAlertType.operationsError => Icons.error_outline,
+      BusinessAlertType.lowProviderFloat => Icons.battery_alert_outlined,
+      BusinessAlertType.unperformedRecharge => Icons.sim_card_alert_outlined,
+      BusinessAlertType.unresolvedRecharge => Icons.help_outline,
+      BusinessAlertType.offbookRecharge => Icons.receipt_long_outlined,
+      BusinessAlertType.providerFloatDrift => Icons.balance_outlined,
       BusinessAlertType.unknown => Icons.notifications_outlined,
     };
   }
@@ -426,6 +433,21 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.payrollReady => l10n.smartNotificationPayrollReadyTitle,
       BusinessAlertType.operationsError =>
         l10n.smartNotificationOperationsErrorTitle,
+      // The one alert whose headline turns on severity: "running out" and
+      // "cannot sell anything" are different news, and the backend files them
+      // as separate rows precisely so both get said.
+      BusinessAlertType.lowProviderFloat =>
+        alert.severity == BusinessAlertSeverity.critical
+            ? l10n.smartNotificationProviderFloatEmptyTitle
+            : l10n.smartNotificationProviderFloatLowTitle,
+      BusinessAlertType.unperformedRecharge =>
+        l10n.smartNotificationUnperformedRechargeTitle,
+      BusinessAlertType.unresolvedRecharge =>
+        l10n.smartNotificationUnresolvedRechargeTitle,
+      BusinessAlertType.offbookRecharge =>
+        l10n.smartNotificationOffbookRechargeTitle,
+      BusinessAlertType.providerFloatDrift =>
+        l10n.smartNotificationProviderFloatDriftTitle,
       BusinessAlertType.unknown => l10n.smartNotificationUnknownTitle,
     };
   }
@@ -493,6 +515,45 @@ class _NotificationAlertRow extends StatelessWidget {
           alert.primaryLabel,
           alert.secondaryLabel,
         ),
+      BusinessAlertType.lowProviderFloat =>
+        alert.severity == BusinessAlertSeverity.critical
+            ? l10n.smartNotificationProviderFloatEmptyMessage(
+                _providerName(alert, l10n),
+              )
+            : l10n.smartNotificationProviderFloatLowMessage(
+                _providerName(alert, l10n),
+                formatMoney(alert.amount),
+                formatMoney(_doublePayload(alert, 'threshold')),
+              ),
+      BusinessAlertType.unperformedRecharge =>
+        l10n.smartNotificationUnperformedRechargeMessage(
+          _providerName(alert, l10n),
+          alert.secondaryLabel,
+          formatMoney(alert.amount),
+        ),
+      BusinessAlertType.unresolvedRecharge =>
+        l10n.smartNotificationUnresolvedRechargeMessage(
+          _providerName(alert, l10n),
+          alert.secondaryLabel,
+          formatMoney(alert.amount),
+        ),
+      BusinessAlertType.offbookRecharge =>
+        l10n.smartNotificationOffbookRechargeMessage(
+          _providerName(alert, l10n),
+          formatMoney(alert.amount),
+        ),
+      // Which way it went is the whole meaning: short is money spent outside
+      // Pointy, over is a top-up nobody wrote down.
+      BusinessAlertType.providerFloatDrift =>
+        alert.secondaryLabel == 'over'
+            ? l10n.smartNotificationProviderFloatOverMessage(
+                _providerName(alert, l10n),
+                formatMoney(alert.amount),
+              )
+            : l10n.smartNotificationProviderFloatShortMessage(
+                _providerName(alert, l10n),
+                formatMoney(alert.amount),
+              ),
       BusinessAlertType.unknown => l10n.smartNotificationUnknownMessage,
     };
   }
@@ -536,10 +597,31 @@ class _NotificationAlertRow extends StatelessWidget {
                 alert.detailLabel,
               ),
       BusinessAlertType.operationsError => alert.detailLabel,
+      // How old the float figure is. A shop that reads "220 left" has to know
+      // whether that was measured this hour or before it opened.
+      BusinessAlertType.lowProviderFloat => alert.occurredAt == null
+          ? ''
+          : l10n.smartNotificationProviderFloatAsOf(
+              formatDateTime(alert.occurredAt!),
+            ),
+      // How long the customer has been waiting, and how long the unknown has
+      // stood. Both are what decides whether this is today's problem.
+      BusinessAlertType.unperformedRecharge => alert.occurredAt == null
+          ? ''
+          : l10n.smartNotificationRechargeSoldAt(
+              formatDateTime(alert.occurredAt!),
+            ),
+      BusinessAlertType.unresolvedRecharge => alert.occurredAt == null
+          ? ''
+          : l10n.smartNotificationRechargeSentAt(
+              formatDateTime(alert.occurredAt!),
+            ),
       BusinessAlertType.stalePrintAgents ||
       BusinessAlertType.registerVariance ||
       BusinessAlertType.stockPositionUntrusted ||
       BusinessAlertType.lowProfitMargin ||
+      BusinessAlertType.offbookRecharge ||
+      BusinessAlertType.providerFloatDrift ||
       BusinessAlertType.unknown => '',
     };
   }
@@ -566,6 +648,28 @@ class _NotificationAlertRow extends StatelessWidget {
 
 /// One integer off an alert's payload, for the counts that are specific to a
 /// single alert type and do not deserve a column on every one of them.
+/// The provider's own name in Arabic. The alert carries the stable key
+/// ("hdbox"), and rendering that raw would put a developer's identifier in
+/// front of a shopkeeper — the same reason every other provider string is
+/// chosen here rather than sent.
+String _providerName(BusinessAlert alert, AppLocalizations l10n) {
+  return integrationProviderName(
+    integrationProviderKeyFromJson(alert.primaryLabel),
+    l10n,
+  );
+}
+
+/// One money figure off an alert's payload. Money arrives as a quantised
+/// string ("250.00"), which the int reader on [BusinessAlert] cannot parse —
+/// it would silently answer zero.
+double _doublePayload(BusinessAlert alert, String key) {
+  final value = alert.payload[key];
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse('$value') ?? 0;
+}
+
 int _intPayload(BusinessAlert alert, String key) {
   final value = alert.payload[key];
   if (value is num) {

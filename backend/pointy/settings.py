@@ -648,6 +648,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "integrations.reconcile_providers",
         "schedule": crontab(minute=20, hour=2),
     },
+    # Hourly, through the trading day: re-read each provider's prepaid float so
+    # the low-float warning is set against a number from this hour rather than
+    # from the 02:20 sweep. Without it a shop can spend its whole float between
+    # opening and closing and hear about it the next morning.
+    "integrations.refresh-float-balances": {
+        "task": "integrations.refresh_float_balances",
+        "schedule": crontab(minute=50),
+    },
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",
         "schedule": crontab(minute=10, hour=0, day_of_month="1"),

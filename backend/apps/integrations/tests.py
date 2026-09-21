@@ -62,7 +62,12 @@ from .providers.base import HistoryResult, RechargeOption
 from .providers import hdbox
 from .providers.hdbox import HdBoxProvider
 from .provisioning import service_variant_for
-from .services import probe_account, record_seen_offers, record_subscriber
+from .services import (
+    probe_account,
+    record_seen_offers,
+    record_subscriber,
+    refresh_float_balances,
+)
 
 # Trimmed to the parts the driver actually keys off.
 AUTHED_PAGE = """
@@ -1540,6 +1545,313 @@ class ReconciliationNotificationTests(TestCase):
         self.assertIn(
             "integrations.reconcile-providers", settings.CELERY_BEAT_SCHEDULE
         )
+
+
+class LowFloatNotificationTests(TestCase):
+    """The float warning, and the threshold the owner sets it against."""
+
+    def setUp(self):
+        self.account = make_account(username="Alnassim")
+
+    def _set_balance(self, amount):
+        self.account.balance = Decimal(amount)
+        self.account.balance_at = timezone.now()
+        self.account.save(update_fields=["balance", "balance_at"])
+
+    def _alert(self):
+        return BusinessNotification.objects.filter(
+            code="integrations.low_float",
+            status=BusinessNotification.Status.ACTIVE,
+        ).first()
+
+    def test_a_float_under_the_threshold_warns(self):
+        self._set_balance("180.00")  # hdbox default threshold is 250
+        sync_business_notifications()
+        alert = self._alert()
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.severity, BusinessNotification.Severity.WARNING)
+        self.assertEqual(alert.payload["provider"], "hdbox")
+        self.assertEqual(alert.payload["amount"], "180.00")
+        self.assertEqual(alert.payload["threshold"], "250.00")
+        self.assertEqual(alert.payload["currency"], "LYD")
+
+    def test_a_healthy_float_says_nothing(self):
+        self._set_balance("900.00")
+        sync_business_notifications()
+        self.assertIsNone(self._alert())
+
+    def test_the_threshold_is_the_shops_own(self):
+        # The default would fire at 180; an owner who runs a thin float and
+        # says so must not be warned at all.
+        self.account.config = {catalog.SETTING_LOW_BALANCE_THRESHOLD: "100"}
+        self.account.save(update_fields=["config"])
+        self._set_balance("180.00")
+        sync_business_notifications()
+        self.assertIsNone(self._alert())
+
+        # ...and the same shop is warned at its own number.
+        self._set_balance("90.00")
+        sync_business_notifications()
+        self.assertIsNotNone(self._alert())
+
+    def test_zero_turns_the_warning_off_even_on_an_empty_float(self):
+        # An owner who switched it off and then got a critical alert anyway
+        # would conclude the switch does not work.
+        self.account.config = {catalog.SETTING_LOW_BALANCE_THRESHOLD: "0"}
+        self.account.save(update_fields=["config"])
+        self._set_balance("0.00")
+        sync_business_notifications()
+        self.assertIsNone(self._alert())
+
+    def test_an_exhausted_float_is_critical_and_re_reaches_a_dismissed_reader(
+        self,
+    ):
+        self._set_balance("40.00")
+        sync_business_notifications()
+        warning = self._alert()
+        self.assertEqual(warning.severity, BusinessNotification.Severity.WARNING)
+
+        self._set_balance("0.00")
+        sync_business_notifications()
+        critical = self._alert()
+        self.assertEqual(critical.severity, BusinessNotification.Severity.CRITICAL)
+        # A separate row, so somebody who acknowledged "getting low" is still
+        # told "cannot sell anything" — an in-place severity bump would leave
+        # the acknowledgement standing and the bell silent.
+        self.assertNotEqual(critical.pk, warning.pk)
+        warning.refresh_from_db()
+        self.assertEqual(warning.status, BusinessNotification.Status.RESOLVED)
+
+    def test_topping_the_float_up_clears_it(self):
+        self._set_balance("40.00")
+        sync_business_notifications()
+        self.assertIsNotNone(self._alert())
+        self._set_balance("900.00")
+        sync_business_notifications()
+        self.assertIsNone(self._alert())
+
+    def test_a_float_nobody_has_read_is_never_called_low(self):
+        self.assertIsNone(self.account.balance)
+        sync_business_notifications()
+        self.assertIsNone(self._alert())
+
+    def test_a_provider_with_no_credentials_is_not_warned_about(self):
+        # The stored balance is a memory of a float we can no longer read.
+        self._set_balance("10.00")
+        self.account.secrets_encrypted = ""
+        self.account.save(update_fields=["secrets_encrypted"])
+        sync_business_notifications()
+        self.assertIsNone(self._alert())
+
+    def test_a_disconnected_provider_is_not_warned_about(self):
+        self._set_balance("10.00")
+        self.account.is_active = False
+        self.account.save(update_fields=["is_active"])
+        sync_business_notifications()
+        self.assertIsNone(self._alert())
+
+    def test_it_needs_no_money_account(self):
+        # A shop that has never recorded a top-up in Pointy still has a float,
+        # and is the shop most likely to be surprised by it running out.
+        self.assertIsNone(self.account.money_account_id)
+        self._set_balance("10.00")
+        sync_business_notifications()
+        self.assertIsNotNone(self._alert())
+
+    def test_two_providers_are_two_alerts(self):
+        lnet = lnet_account()
+        lnet.balance = Decimal("20.00")  # lnet default threshold is 100
+        lnet.balance_at = timezone.now()
+        lnet.save(update_fields=["balance", "balance_at"])
+        self._set_balance("40.00")
+        sync_business_notifications()
+        providers = {
+            row.payload["provider"]
+            for row in BusinessNotification.objects.filter(
+                code="integrations.low_float",
+                status=BusinessNotification.Status.ACTIVE,
+            )
+        }
+        self.assertEqual(providers, {"hdbox", "lnet"})
+
+    def test_the_hourly_refresh_is_scheduled(self):
+        self.assertIn(
+            "integrations.refresh-float-balances", settings.CELERY_BEAT_SCHEDULE
+        )
+
+
+class LowFloatThresholdSettingTests(TestCase):
+    """The threshold as a declared setting, on every provider that has a float."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.manager = get_user_model().objects.create_user(
+            username="owner", password="pw"
+        )
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.manager)
+
+    def test_every_provider_that_reports_a_balance_can_warn_on_it(self):
+        # The guard against the next provider shipping with a float nobody can
+        # be warned about.
+        for spec in catalog.PROVIDERS:
+            if catalog.CAPABILITY_BALANCE not in spec.capabilities:
+                continue
+            with self.subTest(provider=spec.key):
+                setting = spec.setting(catalog.SETTING_LOW_BALANCE_THRESHOLD)
+                self.assertIsNotNone(setting, f"{spec.key} declares no threshold")
+                self.assertEqual(setting.kind, catalog.SETTING_KIND_AMOUNT)
+                self.assertEqual(setting.minimum, Decimal("0"))
+                self.assertGreater(Decimal(setting.default), 0)
+
+    def test_the_catalog_publishes_it_with_its_value(self):
+        make_account()
+        resp = self.client.get("/api/integrations/")
+        hdbox_payload = {p["key"]: p for p in resp.data["providers"]}["hdbox"]
+        by_key = {item["key"]: item for item in hdbox_payload["settings"]}
+        threshold = by_key[catalog.SETTING_LOW_BALANCE_THRESHOLD]
+        self.assertEqual(threshold["kind"], catalog.SETTING_KIND_AMOUNT)
+        self.assertEqual(threshold["value"], "250")
+
+    def test_an_owner_can_change_it(self):
+        make_account()
+        resp = self.client.put(
+            "/api/integrations/hdbox/",
+            {"settings": {catalog.SETTING_LOW_BALANCE_THRESHOLD: "600"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        account = IntegrationAccount.objects.get(provider="hdbox")
+        self.assertEqual(
+            account.setting(catalog.SETTING_LOW_BALANCE_THRESHOLD), "600"
+        )
+
+    def test_a_negative_threshold_is_refused_not_stored(self):
+        make_account()
+        resp = self.client.put(
+            "/api/integrations/hdbox/",
+            {"settings": {catalog.SETTING_LOW_BALANCE_THRESHOLD: "-5"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(catalog.SETTING_LOW_BALANCE_THRESHOLD, resp.data["settings"])
+        self.assertEqual(
+            IntegrationAccount.objects.get(provider="hdbox").setting(
+                catalog.SETTING_LOW_BALANCE_THRESHOLD
+            ),
+            "250",
+            "the stored value must survive a rejected write",
+        )
+
+    def test_an_extra_zero_is_refused_rather_than_pinning_the_warning_on(self):
+        make_account()
+        resp = self.client.put(
+            "/api/integrations/hdbox/",
+            {"settings": {catalog.SETTING_LOW_BALANCE_THRESHOLD: "50000000"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+
+class FloatBalanceRefreshTests(TestCase):
+    """The hourly probe that keeps the warning's number current."""
+
+    def test_it_probes_each_connected_provider_that_has_a_float(self):
+        make_account()
+        lnet_account()
+        with mock.patch(
+            "apps.integrations.services.probe_account",
+            return_value=ProbeResult(ok=True, balance=Decimal("5.00")),
+        ) as probe:
+            result = refresh_float_balances()
+        self.assertEqual(result, {"checked": 2, "connected": 2})
+        self.assertEqual(
+            {call.args[0].provider for call in probe.call_args_list},
+            {"hdbox", "lnet"},
+        )
+
+    def test_an_unconfigured_provider_is_not_probed_every_hour(self):
+        account = make_account()
+        account.secrets_encrypted = ""
+        account.save(update_fields=["secrets_encrypted"])
+        with mock.patch("apps.integrations.services.probe_account") as probe:
+            self.assertEqual(
+                refresh_float_balances(), {"checked": 0, "connected": 0}
+            )
+        probe.assert_not_called()
+
+    def test_one_provider_being_down_does_not_stop_the_next(self):
+        make_account()
+        lnet_account()
+        outcomes = {
+            "hdbox": ProbeResult(ok=False, error_code=ERROR_UNREACHABLE),
+            "lnet": ProbeResult(ok=True, balance=Decimal("5.00")),
+        }
+        with mock.patch(
+            "apps.integrations.services.probe_account",
+            side_effect=lambda account: outcomes[account.provider],
+        ):
+            self.assertEqual(
+                refresh_float_balances(), {"checked": 2, "connected": 1}
+            )
+
+
+class IntegrationAlertAudienceTests(TestCase):
+    """Who each provider alert reaches.
+
+    Every one of these was generated, stored and swept while being shown to
+    nobody: ``_codes_for_user`` only returns codes that appear in
+    ``NOTIFICATION_AUDIENCE_RULES``, and none of the provider codes did.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        self.users = {}
+        for group in (MANAGER_GROUP, ACCOUNTANT_GROUP, CASHIER_GROUP):
+            user = get_user_model().objects.create_user(
+                username=f"user-{group}", password="pw"
+            )
+            user.groups.add(Group.objects.get(name=group))
+            self.users[group] = get_user_model().objects.get(pk=user.pk)
+
+    def _codes(self, group):
+        from apps.notifications.services import _codes_for_user
+
+        return set(_codes_for_user(self.users[group]))
+
+    def test_every_provider_alert_reaches_somebody(self):
+        from apps.notifications.services import (
+            MANAGED_CODES,
+            NOTIFICATION_AUDIENCE_RULES,
+        )
+
+        for code in MANAGED_CODES:
+            if not code.startswith("integrations."):
+                continue
+            with self.subTest(code=code):
+                self.assertIn(
+                    code,
+                    NOTIFICATION_AUDIENCE_RULES,
+                    "a code with no audience rule is shown to nobody",
+                )
+
+    def test_the_owner_sees_all_of_them(self):
+        codes = self._codes(MANAGER_GROUP)
+        self.assertIn("integrations.low_float", codes)
+        self.assertIn("integrations.float_drift", codes)
+        self.assertIn("integrations.unresolved_recharge", codes)
+
+    def test_whoever_refills_the_float_is_told_it_is_low(self):
+        # The accountant walks to the provider's office with the money; the
+        # owner may be nowhere near the shop.
+        self.assertIn("integrations.low_float", self._codes(ACCOUNTANT_GROUP))
+
+    def test_a_cashier_sees_the_sale_that_failed_but_not_the_float(self):
+        codes = self._codes(CASHIER_GROUP)
+        self.assertIn("integrations.unperformed_recharge", codes)
+        self.assertNotIn("integrations.float_drift", codes)
+        self.assertNotIn("integrations.low_float", codes)
 
 
 class SubscriberTests(TestCase):

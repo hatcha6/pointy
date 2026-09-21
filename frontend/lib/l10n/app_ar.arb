@@ -1487,6 +1487,91 @@
       }
     }
   },
+  "smartNotificationProviderFloatLowTitle": "رصيد الوكالة على وشك النفاد",
+  "smartNotificationProviderFloatLowMessage": "{provider}: المتبقي {amount} وحد التنبيه {threshold}. عبِّ الرصيد قبل أن يقف البيع.",
+  "@smartNotificationProviderFloatLowMessage": {
+    "description": "Provider float below the shop's own threshold.",
+    "placeholders": {
+      "provider": {"type": "String"},
+      "amount": {"type": "String"},
+      "threshold": {"type": "String"}
+    }
+  },
+  "smartNotificationProviderFloatEmptyTitle": "رصيد الوكالة نفد",
+  "smartNotificationProviderFloatEmptyMessage": "{provider}: لا يمكن بيع أي شحن حتى تتم تعبئة الرصيد.",
+  "@smartNotificationProviderFloatEmptyMessage": {
+    "description": "Provider float exhausted: no top-up can be sold.",
+    "placeholders": {
+      "provider": {"type": "String"}
+    }
+  },
+  "smartNotificationProviderFloatAsOf": "قراءة الرصيد بتاريخ {readAt}",
+  "@smartNotificationProviderFloatAsOf": {
+    "description": "When the provider float figure was last read.",
+    "placeholders": {
+      "readAt": {"type": "String"}
+    }
+  },
+  "smartNotificationUnperformedRechargeTitle": "شحن مدفوع ولم يُنفَّذ",
+  "smartNotificationUnperformedRechargeMessage": "{provider}: الرقم {reference} بقيمة {amount} دفعه الزبون ولم ينفذه المزود.",
+  "@smartNotificationUnperformedRechargeMessage": {
+    "description": "A recharge the customer paid for that the provider never performed.",
+    "placeholders": {
+      "provider": {"type": "String"},
+      "reference": {"type": "String"},
+      "amount": {"type": "String"}
+    }
+  },
+  "smartNotificationRechargeSoldAt": "بيع بتاريخ {soldAt}",
+  "@smartNotificationRechargeSoldAt": {
+    "description": "When an unperformed recharge was sold.",
+    "placeholders": {
+      "soldAt": {"type": "String"}
+    }
+  },
+  "smartNotificationRechargeSentAt": "أُرسل بتاريخ {sentAt}",
+  "@smartNotificationRechargeSentAt": {
+    "description": "When an unresolved recharge was sent to the provider.",
+    "placeholders": {
+      "sentAt": {"type": "String"}
+    }
+  },
+  "smartNotificationUnresolvedRechargeTitle": "شحن غير مؤكد — لا تُعِد إرساله",
+  "smartNotificationUnresolvedRechargeMessage": "{provider}: الرقم {reference} بقيمة {amount} أُرسل ولم تصل نتيجته. راجع سجل المزود قبل أي إجراء.",
+  "@smartNotificationUnresolvedRechargeMessage": {
+    "description": "A recharge whose outcome is unknown; retrying could charge twice.",
+    "placeholders": {
+      "provider": {"type": "String"},
+      "reference": {"type": "String"},
+      "amount": {"type": "String"}
+    }
+  },
+  "smartNotificationOffbookRechargeTitle": "شحن من رصيد الوكالة بلا فاتورة",
+  "smartNotificationOffbookRechargeMessage": "{provider}: شحن بقيمة {amount} خصم من الرصيد ولا يقابله بيع في دفتر.",
+  "@smartNotificationOffbookRechargeMessage": {
+    "description": "A provider purchase with no matching sale in Pointy.",
+    "placeholders": {
+      "provider": {"type": "String"},
+      "amount": {"type": "String"}
+    }
+  },
+  "smartNotificationProviderFloatDriftTitle": "رصيد الوكالة لا يطابق حسابنا",
+  "smartNotificationProviderFloatShortMessage": "{provider}: الرصيد أقل من المتوقع بمقدار {amount} — صرف خارج دفتر.",
+  "@smartNotificationProviderFloatShortMessage": {
+    "description": "The provider float is lower than Pointy's arithmetic expects.",
+    "placeholders": {
+      "provider": {"type": "String"},
+      "amount": {"type": "String"}
+    }
+  },
+  "smartNotificationProviderFloatOverMessage": "{provider}: الرصيد أعلى من المتوقع بمقدار {amount} — تعبئة لم تُسجَّل.",
+  "@smartNotificationProviderFloatOverMessage": {
+    "description": "The provider float is higher than expected: an unrecorded top-up.",
+    "placeholders": {
+      "provider": {"type": "String"},
+      "amount": {"type": "String"}
+    }
+  },
   "smartNotificationUnknownTitle": "تنبيه جديد",
   "smartNotificationUnknownMessage": "يوجد تنبيه يحتاج مراجعة.",
   "dashboardOrderCount": "{count, plural, =0{لا طلبات} =1{طلب واحد} =2{طلبان} other{{count} طلبات}}",
@@ -11976,10 +12061,6 @@
   "@integrationBalanceUnknown": {"description": ""},
   "integrationBalanceCheckedAt": "آخر تحقق: {time}",
   "@integrationBalanceCheckedAt": {"description": "", "placeholders": {"time": {"type": "String"}}},
-  "integrationBalanceCurrencyNote": "المبلغ بالدينار الليبي، حتى لو عرضه موقع المزوّد بعلامة الدولار.",
-  "integrationBalanceCurrencyPlainNote": "جميع المبالغ بالدينار الليبي.",
-  "@integrationBalanceCurrencyPlainNote": {"description": ""},
-  "@integrationBalanceCurrencyNote": {"description": ""},
   "integrationAccountLabel": "الحساب: {name}",
   "@integrationAccountLabel": {"description": "", "placeholders": {"name": {"type": "String"}}},
   "integrationNeverChecked": "لم يتم التحقق بعد",
@@ -12038,8 +12119,6 @@
   "@integrationErrorProviderError": {"description": ""},
   "integrationErrorUnexpected": "رد المزوّد بشكل غير متوقع",
   "@integrationErrorUnexpected": {"description": ""},
-  "integrationInsecureTransportWarning": "هذا المزوّد يستخدم اتصالاً غير مشفّر (http)، فتنتقل بيانات الدخول دون تشفير. لا تستخدم كلمة مرور تستعملها في مكان آخر.",
-  "@integrationInsecureTransportWarning": {"description": ""},
   "rechargeTitle": "شحن اشتراك",
   "@rechargeTitle": {"description": ""},
   "rechargeCatalogAction": "شحن اشتراك",
@@ -12059,6 +12138,12 @@
   "@integrationSettingDenominations": {"description": ""},
   "integrationSettingDenominationsHint": "افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط",
   "@integrationSettingDenominationsHint": {"description": ""},
+  "integrationSettingLowBalance": "حد تنبيه الرصيد",
+  "@integrationSettingLowBalance": {"description": ""},
+  "integrationSettingLowBalanceHint": "ننبّهك عندما ينزل رصيد الوكالة إلى هذا المبلغ. اكتب 0 لإيقاف التنبيه",
+  "@integrationSettingLowBalanceHint": {"description": ""},
+  "integrationSettingAtLeast": "أدخل قيمة لا تقل عن {min}",
+  "@integrationSettingAtLeast": {"description": "", "placeholders": {"min": {"type": "String"}}},
   "integrationSettingOutOfRange": "أدخل قيمة بين {min} و {max}",
   "@integrationSettingOutOfRange": {"description": "", "placeholders": {"min": {"type": "String"}, "max": {"type": "String"}}},
   "integrationSettingInvalidAmounts": "أدخل مبالغ صحيحة مفصولة بفاصلة",

@@ -72,6 +72,9 @@ MANAGED_CODES = (
     # four, because it is the only one where nobody yet knows whether money
     # moved — and where the wrong reaction (try again) spends it twice.
     "integrations.unresolved_recharge",
+    # The float is nearly out. The one alert here that arrives before a sale
+    # has failed rather than after — see _low_float_notification.
+    "integrations.low_float",
     "discounts.expiring_rule",
     "employees.payroll_ready",
     "operations.backend_error",
@@ -130,6 +133,48 @@ NOTIFICATION_AUDIENCE_RULES = {
     "fraud.suspected_cashier_activity": {
         "permissions": ("fraud.view_fraudfinding", "analytics.view_analyticsevent"),
         "manager_only": True,
+    },
+    # Resale providers. These had no entry at all until the float warning was
+    # added, which meant the four recharge alerts were generated, stored, swept
+    # — and shown to nobody, because _codes_for_user only returns codes that
+    # appear here. A code with no rule is invisible, not public.
+    "integrations.unperformed_recharge": {
+        # A customer paid and got nothing. The till is where that is fixed —
+        # charge it again or refund it — so the cashier holding the counter
+        # sees it, not only the owner who may be nowhere near the shop.
+        "permissions": ("integrations.use_integrations",),
+        "manager_only": False,
+    },
+    "integrations.unresolved_recharge": {
+        # Nobody yet knows whether money moved, and the one safe action is to
+        # read the provider's own log. Manager work: the wrong reaction at the
+        # till (send it again) is exactly what spends it twice.
+        "permissions": ("integrations.manage_integrations",),
+        "manager_only": True,
+    },
+    # NB: nothing generates this one yet. ``reconcile_account`` returns the
+    # orphan purchases under ``off_book`` and the code has been declared in
+    # MANAGED_CODES since the feature shipped, but no builder turns them into
+    # notifications. The rule is here so the two lists agree and so the day a
+    # builder is written it is seen rather than silently swallowed.
+    "integrations.offbook_recharge": {
+        "permissions": ("integrations.manage_integrations",),
+        "manager_only": True,
+    },
+    "integrations.float_drift": {
+        "permissions": ("integrations.manage_integrations",),
+        "manager_only": True,
+    },
+    "integrations.low_float": {
+        # Whoever can refill it. Deliberately not manager-only and deliberately
+        # not gated on manage_integrations alone: the person who walks to the
+        # provider's office with the money is the accountant or the buyer, and
+        # they are the one who needs the day's notice.
+        "permissions": (
+            "integrations.manage_integrations",
+            "integrations.record_integration_topup",
+        ),
+        "manager_only": False,
     },
     "discounts.expiring_rule": {
         "permissions": ("discounts.view_discountrule",),
@@ -1276,35 +1321,111 @@ def _integration_notifications(now):
             )
         )
 
-    # 3. The float disagrees with our arithmetic. Catches money spent on cards
-    #    Pointy has never seen, which no per-card check can.
+    # 3 and 4 both read the same accounts, so they share one pass over them.
     from apps.integrations import float_ledger
 
     for account in IntegrationAccount.objects.filter(is_active=True):
-        if account.balance is None or account.money_account_id is None:
+        if account.balance is None:
+            # Never probed, or probed and refused. Nothing below can say
+            # anything honest about a float nobody has read.
             continue
-        drift = account.balance - float_ledger.expected_balance(account)
-        if abs(drift) <= DRIFT_TOLERANCE:
-            continue
-        specs.append(
-            _spec(
-                code="integrations.float_drift",
-                category=BusinessNotification.Category.SALES,
-                severity=BusinessNotification.Severity.WARNING,
-                fingerprint=f"integrations.float_drift:{account.pk}",
-                entity_type="integrations.integrationaccount",
-                entity_id=str(account.pk),
-                payload={
-                    "provider": account.provider,
-                    "amount": _money(abs(drift)),
-                    # Which way it went changes what it means: less than
-                    # expected is money spent outside Pointy, more is a
-                    # top-up nobody wrote down.
-                    "direction": "short" if drift < 0 else "over",
-                    "expected": _money(float_ledger.expected_balance(account)),
-                    "reported": _money(account.balance),
-                    "count": 1,
-                },
-            )
-        )
+
+        # 3. The float disagrees with our arithmetic. Catches money spent on
+        #    cards Pointy has never seen, which no per-card check can.
+        if account.money_account_id is not None:
+            expected = float_ledger.expected_balance(account)
+            drift = account.balance - expected
+            if abs(drift) > DRIFT_TOLERANCE:
+                specs.append(
+                    _spec(
+                        code="integrations.float_drift",
+                        category=BusinessNotification.Category.SALES,
+                        severity=BusinessNotification.Severity.WARNING,
+                        fingerprint=f"integrations.float_drift:{account.pk}",
+                        entity_type="integrations.integrationaccount",
+                        entity_id=str(account.pk),
+                        payload={
+                            "provider": account.provider,
+                            "amount": _money(abs(drift)),
+                            # Which way it went changes what it means: less
+                            # than expected is money spent outside Pointy,
+                            # more is a top-up nobody wrote down.
+                            "direction": "short" if drift < 0 else "over",
+                            "expected": _money(expected),
+                            "reported": _money(account.balance),
+                            "count": 1,
+                        },
+                    )
+                )
+
+        # 4. The float is nearly out. Alone among these four it arrives
+        #    *before* anything has gone wrong: the other three are reports on
+        #    a sale that already failed, and this is the shop's chance to walk
+        #    to the provider's office before one does. It needs no money
+        #    account — a shop that has never recorded a top-up in Pointy still
+        #    has a float, and is in fact the shop most likely to be surprised
+        #    by it.
+        specs.extend(_low_float_notification(account))
     return specs
+
+
+def _low_float_notification(account):
+    """The float warning for one account, against the owner's own threshold.
+
+    Off by the owner's choice (``0``) is silence, including when the float is
+    flat empty. An owner who turned the warning off and then got a critical
+    alert would conclude the switch does not work, and would be right.
+
+    The severity band is part of the fingerprint on purpose. "Getting low" and
+    "cannot sell anything" are different facts, and somebody who dismissed the
+    first must be told the second — an in-place severity bump would leave the
+    row acknowledged and the bell silent at the worse moment.
+    """
+    from apps.integrations import catalog as provider_catalog
+
+    if not account.is_configured:
+        # The credentials are gone; the stored balance is a memory of a float
+        # we can no longer read, and warning on it would be a guess.
+        return []
+    raw = account.setting(provider_catalog.SETTING_LOW_BALANCE_THRESHOLD)
+    if raw is None:
+        return []  # this provider declares no threshold
+    threshold = Decimal(str(raw))
+    if threshold <= 0 or account.balance > threshold:
+        return []
+
+    empty = account.balance <= 0
+    return [
+        _spec(
+            code="integrations.low_float",
+            category=BusinessNotification.Category.SALES,
+            severity=(
+                BusinessNotification.Severity.CRITICAL
+                if empty
+                else BusinessNotification.Severity.WARNING
+            ),
+            fingerprint=(
+                f"integrations.low_float:{account.pk}:"
+                f"{'empty' if empty else 'low'}"
+            ),
+            entity_type="integrations.integrationaccount",
+            entity_id=str(account.pk),
+            payload={
+                "provider": account.provider,
+                "account_label": account.account_label,
+                "amount": _money(account.balance),
+                "threshold": _money(threshold),
+                # Every provider in the catalog settles in dinar, but the
+                # figure is the provider's and the client renders it, so it
+                # says which currency rather than leaving that to be assumed.
+                "currency": account.spec.currency if account.spec else "LYD",
+                # How old the number is. A float read at 02:20 and a float
+                # read ten minutes ago support very different decisions, and
+                # the reader is the one who should get to weigh that.
+                "balance_at": (
+                    account.balance_at.isoformat() if account.balance_at else ""
+                ),
+                "count": 1,
+            },
+        )
+    ]
