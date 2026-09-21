@@ -418,7 +418,29 @@ class SweepDriver {
   /// Open a top-level destination through the drawer/rail, whichever the
   /// current width shows — the same path a user takes.
   Future<void> navigate(String label) async {
-    Finder destination() => find.text(label);
+    // Scoped to the rail/drawer. A bare `find.text(label)` also matches the
+    // *content* of whatever screen is showing — the dashboard has a section
+    // headed "المنتجات" — and `destination().last` then tapped the card
+    // instead of the tile, so every surface after the dashboard was measured
+    // while still on the dashboard.
+    Finder destination() {
+      final inChrome = find.descendant(
+        of: find.byType(PointyNavigationRailSurface),
+        matching: find.text(label),
+      );
+      if (controller.any(inChrome)) {
+        return inChrome;
+      }
+      final inDrawer = find.descendant(
+        of: find.byType(Drawer),
+        matching: find.text(label),
+      );
+      if (controller.any(inDrawer)) {
+        return inDrawer;
+      }
+      return find.text(label);
+    }
+
     await _returnToShell();
     if (!controller.any(destination())) {
       await _expandNavigationGroups(destination);

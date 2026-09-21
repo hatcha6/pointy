@@ -60,9 +60,23 @@ class TwoPaneLayout extends StatelessWidget {
     );
   }
 
+  // Each pane owns a layer. The panes change independently — typing in the
+  // catalog search, editing a quantity in the draft — but without boundaries
+  // the nearest picture holding them is the Scaffold's whole body, so a
+  // keystroke on one side re-recorded both panes and the chrome around them.
+  // Measured on the purchase draft (2026-09-21 sweep): the body boundary went
+  // from 4 pictures a keystroke frame covering 305% of the window to 1 at 76%,
+  // and the draft pane stopped re-recording for the catalog's keystrokes
+  // altogether.
   List<Widget> _wideChildren(double secondaryWidth) {
-    final primary = Expanded(flex: primaryFlex, child: primaryPane);
-    final secondary = SizedBox(width: secondaryWidth, child: secondaryPane);
+    final primary = Expanded(
+      flex: primaryFlex,
+      child: RepaintBoundary(child: primaryPane),
+    );
+    final secondary = SizedBox(
+      width: secondaryWidth,
+      child: RepaintBoundary(child: secondaryPane),
+    );
     final divider = verticalDivider;
 
     if (secondaryFirst) {
@@ -73,10 +87,13 @@ class TwoPaneLayout extends StatelessWidget {
   }
 
   List<Widget> _compactChildren() {
-    final primary = Expanded(flex: compactPrimaryFlex, child: primaryPane);
+    final primary = Expanded(
+      flex: compactPrimaryFlex,
+      child: RepaintBoundary(child: primaryPane),
+    );
     final secondary = Expanded(
       flex: compactSecondaryFlex,
-      child: secondaryPane,
+      child: RepaintBoundary(child: secondaryPane),
     );
     final divider = horizontalDivider;
 

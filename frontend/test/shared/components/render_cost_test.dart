@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/shared/components/components.dart';
+import 'package:pointy_frontend/src/shared/responsive/responsive.dart';
+import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
 /// Guards against the app's jank cause coming back.
 ///
@@ -226,6 +228,58 @@ void main() {
           'window.',
     );
   });
+
+  group('the shell gives its big, independent regions their own layer', () {
+    // Typing into a list screen's search box re-recorded the whole page. The
+    // field already had its own boundary, but the app bar above it and the
+    // pane beside it did not, so the nearest picture holding those was the
+    // route's — the entire window. The 2026-09-21 sweep measured the purchase
+    // draft at 9.9 pictures re-recorded per keystroke frame covering 605% of
+    // the window; with these two boundaries it is 7.9 and 366%. The catalog
+    // is the same shape, and the app bar is on every screen in the app.
+    testWidgets('the app bar does not share a layer with the page', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: PointyScaffold(
+            appBar: PointyAppBar(title: Text('t')),
+            body: Center(child: Text('body')),
+          ),
+        ),
+      );
+      expect(
+        _isolatedFrom(tester, find.byType(AppBar), find.byType(Scaffold)),
+        isTrue,
+        reason:
+            'PointyAppBar must own a layer: a toolbar spinner, an ink '
+            'ripple or a rebuilt title otherwise re-records the whole route',
+      );
+    });
+
+    testWidgets('each pane of a two-pane screen owns a layer', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: TwoPaneLayout(
+              primaryPane: Center(child: Text('primary')),
+              secondaryPane: Center(child: Text('secondary')),
+            ),
+          ),
+        ),
+      );
+      for (final label in ['primary', 'secondary']) {
+        expect(
+          _isolatedFrom(tester, find.text(label), find.byType(TwoPaneLayout)),
+          isTrue,
+          reason:
+              'the $label pane must own a layer: the catalog and the '
+              'draft change independently, and without one a keystroke on '
+              'either re-records both',
+        );
+      }
+    });
+  });
 }
 
 const double _surfaceWidth = 360;
@@ -251,6 +305,21 @@ Future<void> _pump(WidgetTester tester, Widget child) {
 
 /// The layer an animation's `markNeedsPaint` would actually stop at. If this is
 /// the root view, the animation is repainting the entire window.
+/// Whether a repaint boundary sits strictly between [of] and [ancestor] — the
+/// question "is this subtree isolated from that one", rather than the weaker
+/// "some boundary exists somewhere above".
+bool _isolatedFrom(WidgetTester tester, Finder of, Finder ancestor) {
+  final stop = tester.renderObject(ancestor);
+  RenderObject? node = tester.renderObject(of).parent;
+  while (node != null && !identical(node, stop)) {
+    if (node.isRepaintBoundary) {
+      return true;
+    }
+    node = node.parent;
+  }
+  return false;
+}
+
 RenderObject _nearestRepaintBoundary(WidgetTester tester, Finder of) {
   RenderObject? node = tester.renderObject(of);
   while (node != null) {

@@ -200,6 +200,10 @@ class FrameProbe {
       '$_surface/$_phase',
       () => {},
     );
+    final countTarget = repaintCounts.putIfAbsent(
+      '$_surface/$_phase',
+      () => {},
+    );
     void visit(Layer layer) {
       layers += 1;
       if (layer is PictureLayer) {
@@ -215,6 +219,7 @@ class FrameProbe {
             }
             final owner = _creatorOf(layer);
             repaintTarget[owner] = (repaintTarget[owner] ?? 0) + area;
+            countTarget[owner] = (countTarget[owner] ?? 0) + 1;
           }
         }
       }
@@ -287,6 +292,13 @@ class FrameProbe {
 
   /// Per phase key: repainted area (px²) by the widget chain that owned it.
   final Map<String, Map<String, double>> repaintHistograms = {};
+
+  /// Per phase key: how many pictures each owner re-recorded. Area says how
+  /// *big* the damage looked and over-reports (a scrolling viewport's cull
+  /// rect is the whole viewport however small the real damage); the count is
+  /// the same number the verdicts key on, split by who owns it, so the report
+  /// can say which widget the budget went to and not merely that it went.
+  final Map<String, Map<String, int>> repaintCounts = {};
 
   /// Attribute engine timings by when their build started, so a frame that
   /// straddles a phase change is charged to the phase it was drawn in.

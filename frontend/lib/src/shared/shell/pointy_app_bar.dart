@@ -47,30 +47,35 @@ class PointyAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
     };
 
-    return AppBar(
-      leading: leading,
-      title: title,
-      centerTitle: centerTitle,
-      actions: [
-        if (reserveLoadingSlot)
-          _LoadingSlot(isLoading: isLoading, color: appBarTheme.foregroundColor)
-        else if (isLoading)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(end: 8),
-            child: _AppBarProgress(color: appBarTheme.foregroundColor),
-          ),
-        ...scopedActions,
-        ...actions,
-      ],
-      bottom: bottom,
-      backgroundColor: appBarTheme.backgroundColor,
-      foregroundColor: appBarTheme.foregroundColor,
-      surfaceTintColor: appBarTheme.surfaceTintColor,
-      elevation: appBarTheme.elevation,
-      scrolledUnderElevation: appBarTheme.scrolledUnderElevation,
-      titleTextStyle: appBarTheme.titleTextStyle,
-      iconTheme: appBarTheme.iconTheme,
-      actionsIconTheme: appBarTheme.actionsIconTheme,
+    return RepaintBoundary(
+      child: AppBar(
+        leading: leading,
+        title: title,
+        centerTitle: centerTitle,
+        actions: [
+          if (reserveLoadingSlot)
+            _LoadingSlot(
+              isLoading: isLoading,
+              color: appBarTheme.foregroundColor,
+            )
+          else if (isLoading)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 8),
+              child: _AppBarProgress(color: appBarTheme.foregroundColor),
+            ),
+          ...scopedActions,
+          ...actions,
+        ],
+        bottom: bottom,
+        backgroundColor: appBarTheme.backgroundColor,
+        foregroundColor: appBarTheme.foregroundColor,
+        surfaceTintColor: appBarTheme.surfaceTintColor,
+        elevation: appBarTheme.elevation,
+        scrolledUnderElevation: appBarTheme.scrolledUnderElevation,
+        titleTextStyle: appBarTheme.titleTextStyle,
+        iconTheme: appBarTheme.iconTheme,
+        actionsIconTheme: appBarTheme.actionsIconTheme,
+      ),
     );
   }
 }

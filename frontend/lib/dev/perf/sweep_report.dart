@@ -134,6 +134,7 @@ class SweepReport {
     required this.rebuildHistograms,
     required this.paintHistograms,
     required this.repaintHistograms,
+    required this.repaintCounts,
     required this.structural,
     required this.timed,
     required this.windowArea,
@@ -146,6 +147,7 @@ class SweepReport {
   final Map<String, Map<String, int>> rebuildHistograms;
   final Map<String, Map<String, int>> paintHistograms;
   final Map<String, Map<String, double>> repaintHistograms;
+  final Map<String, Map<String, int>> repaintCounts;
   final bool structural;
   final bool timed;
   final double windowArea;
@@ -275,6 +277,7 @@ class SweepReport {
       rebuildHistograms: probe.rebuildHistograms,
       paintHistograms: probe.paintHistograms,
       repaintHistograms: probe.repaintHistograms,
+      repaintCounts: probe.repaintCounts,
       structural: probe.structuralMetricsAvailable,
       timed: timed,
       windowArea: windowArea,
@@ -425,6 +428,7 @@ class SweepReport {
     'rebuild_histograms': rebuildHistograms,
     'paint_histograms': paintHistograms,
     'repaint_histograms': repaintHistograms,
+    'repaint_counts': repaintCounts,
   };
 
   String toJsonString() =>
@@ -504,16 +508,27 @@ class SweepReport {
           buffer.writeln('- painted: ${_top(painted, 8)}');
         }
         final repainted = repaintHistograms[s.key];
+        final counted = repaintCounts[s.key] ?? const <String, int>{};
         if (repainted != null && repainted.isNotEmpty && s.frames > 0) {
+          // Ranked by pictures, not area: the count is what the verdict is
+          // measured in, and area over-reports for anything in a viewport.
           final owners = repainted.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value));
-          buffer.writeln('- repainted (avg % of window per frame, by owner):');
+            ..sort((a, b) {
+              final byCount = (counted[b.key] ?? 0).compareTo(
+                counted[a.key] ?? 0,
+              );
+              return byCount != 0 ? byCount : b.value.compareTo(a.value);
+            });
+          buffer.writeln('- re-recorded per frame, by owner:');
           for (final owner in owners.take(6)) {
             final perFrame = windowArea > 0
                 ? owner.value / s.frames / windowArea * 100
                 : 0.0;
+            final pics = (counted[owner.key] ?? 0) / s.frames;
             buffer.writeln(
-              '  - ${perFrame.toStringAsFixed(1)}% `${owner.key}`',
+              '  - ${pics.toStringAsFixed(1)} pictures, '
+              '${perFrame.toStringAsFixed(1)}% of the window '
+              '`${owner.key}`',
             );
           }
         }
