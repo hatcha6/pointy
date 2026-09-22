@@ -87,6 +87,12 @@
   <label><input type="checkbox" id="try-downscale" checked> tryDownscale</label>
   <label><input type="checkbox" id="motion-gate" checked> motion gate</label>
   <label>gate at <input type="number" id="gate-threshold" value="4" min="0" max="60" step="1" style="width:56px"></label>
+  <label>angles <select id="angles">
+    <option value="0">0° only</option>
+    <option value="0,30,60" selected>0/30/60°</option>
+    <option value="0,20,40,60,80">0/20/40/60/80°</option>
+    <option value="0,15,30,45,60,75">every 15°</option>
+  </select></label>
   <label>formats <select id="formats">
     <option value="retail" selected>retail 1D + 2D</option>
     <option value="all">everything</option>
@@ -97,6 +103,11 @@
     <option value="manual">locked</option>
   </select></label>
   <label>lock at <input type="number" id="focus-distance" value="0.15" min="0" max="1" step="0.01" style="width:64px"></label>
+  <label>agree <select id="agree">
+    <option value="1">1 read (trust it)</option>
+    <option value="2" selected>2 agreeing</option>
+    <option value="3">3 agreeing</option>
+  </select></label>
   <button id="start" class="primary">Start</button>
   <button id="stop" disabled>Stop</button>
   <button id="arm">Arm timer</button>
@@ -144,6 +155,7 @@
         <div class="stat"><span>scene vs empty</span><span id="scene">—</span></div>
       </div>
       <div style="color:var(--muted);margin-top:8px" id="focus-note">focus: not set</div>
+      <div style="color:var(--muted);margin-top:4px" id="agree-note">no reads yet</div>
       <div style="display:none">
       </div>
     </div>
@@ -313,9 +325,17 @@ function stop() {
   el("stop").disabled = true;
 }
 
+let focusApplied = { requested: "auto", mode: null, distance: null, supported: null };
+
 async function applyFocus(track) {
   const wanted = el("focus").value;
   const capabilities = track.getCapabilities?.() ?? {};
+  focusApplied = {
+    requested: wanted,
+    supported: capabilities.focusMode ?? null,
+    mode: null,
+    distance: null,
+  };
   if (!capabilities.focusMode || !capabilities.focusMode.includes(wanted)) {
     el("focus-note").textContent =
       `camera does not offer focusMode "${wanted}" (offers: ${capabilities.focusMode?.join(", ") || "nothing"})`;
@@ -335,14 +355,22 @@ async function applyFocus(track) {
     await track.applyConstraints({ advanced });
   } catch (error) {
     el("focus-note").textContent = `focus refused: ${error.message}`;
+    return;
   }
+  const now = track.getSettings();
+  focusApplied.mode = now.focusMode ?? null;
+  focusApplied.distance = now.focusDistance ?? null;
+  el("focus-note").textContent =
+    `asked ${wanted} -> camera reports focusMode=${now.focusMode ?? "(not reported)"}` +
+    (now.focusDistance != null ? ` distance=${now.focusDistance}` : "");
 }
 
 // ---------------------------------------------------------------- stats
 let stats = null;
 function resetStats() {
   stats = { attempts: 0, hits: 0, emitted: 0, latencies: [], frames: 0,
-            sceneNow: null, sceneMax: null, since: performance.now() };
+            sceneNow: null, sceneMax: null, disagreements: 0,
+            since: performance.now() };
   el("log").innerHTML = "";
   el("last-value").textContent = "—";
   el("last-meta").textContent = "nothing yet";
@@ -368,6 +396,8 @@ function snapshot() {
     sceneNow: stats.sceneNow != null ? Number(stats.sceneNow.toFixed(1)) : null,
     sceneMax: stats.sceneMax != null ? Number(stats.sceneMax.toFixed(1)) : null,
     gateThreshold: Number(el("gate-threshold").value),
+    disagreements: stats.disagreements,
+    agree: Number(el("agree").value),
   };
 }
 
@@ -403,6 +433,7 @@ function report(kind, body) {
       tryDownscale: el("try-downscale").checked,
       motionGate: el("motion-gate").checked, formats: el("formats").value,
       focus: el("focus").value, focusDistance: el("focus-distance").value,
+      focusApplied, angles: el("angles").value, agree: el("agree").value,
     },
     ...body,
   };
@@ -417,6 +448,39 @@ const REREAD_HOLDOFF_MS = 1500;
 const ARM_EXPIRY_MS = 30000;
 let lastEmit = { value: "", at: 0 };
 let armedAt = 0;
+
+let pending = { value: "", count: 0, at: 0 };
+const AGREE_WINDOW_MS = 600;
+
+// MEASURED, and the most important thing this rig found: a real EAN-13 read as
+// 9660323434725 and 0608713434725 instead of 3600523434725. Both wrong values
+// PASS the EAN-13 check digit, so the symbology's own error detection does not
+// catch them. At a till that is the wrong product at the wrong price with
+// nothing looking amiss anywhere, which is the one failure that would make a
+// shop stop trusting the feature for good.
+//
+// Note the shape: the right six digits were correct every time and only the
+// left group was wrong, which is what one blurred or curved half of a barcode
+// produces. The wrong values differ from each other, so requiring independent
+// frames to AGREE rejects them; at ~80 attempts/s the second read costs ~13 ms.
+// Rejections are counted, because how often this fires is itself the finding.
+function considerRead(value, format, decodeMs) {
+  const now = performance.now();
+  const wanted = Number(el("agree").value);
+  if (pending.value === value && now - pending.at < AGREE_WINDOW_MS) {
+    pending.count += 1;
+  } else {
+    if (pending.count > 0 && pending.value !== value) stats.disagreements += 1;
+    pending = { value, count: 1, at: now };
+  }
+  pending.at = now;
+  el("agree-note").textContent =
+    `${pending.count}/${wanted} agreeing - ${stats.disagreements} disagreement(s) rejected`;
+  if (pending.count >= wanted) {
+    pending = { value: "", count: 0, at: 0 };
+    emit(value, format, decodeMs);
+  }
+}
 
 function emit(value, format, decodeMs) {
   const now = performance.now();
@@ -439,7 +503,9 @@ function emit(value, format, decodeMs) {
     armedAt = 0;
     el("arm").textContent = "Arm timer";
   }
-  report("scan", { value, format, decodeMs: Math.round(decodeMs), hoverMs });
+  report("scan", { value, format, decodeMs: Math.round(decodeMs), hoverMs, angle: lastHitAngle,
+                   trace: hoverMs != null ? trace.slice(-60) : undefined });
+  trace = [];
 
   el("last-value").textContent = value;
   el("last-meta").textContent = `${format} · decoded in ${decodeMs.toFixed(0)} ms`;
@@ -454,6 +520,52 @@ function emit(value, format, decodeMs) {
 }
 
 // ---------------------------------------------------------------- loop
+let trace = [];
+let lastHitAngle = null;
+
+// Sampled every 4th pixel on every 4th row: enough to rank frames against each
+// other, which is all this is for.
+function meanGradient(image) {
+  const { data, width, height } = image;
+  let sum = 0;
+  let count = 0;
+  for (let y = 0; y < height; y += 4) {
+    const row = y * width * 4;
+    for (let x = 4; x < width; x += 4) {
+      const here = data[row + x * 4];
+      const before = data[row + (x - 4) * 4];
+      sum += Math.abs(here - before);
+      count += 1;
+    }
+  }
+  return count ? sum / count : 0;
+}
+
+let angleIndex = 0;
+
+function drawRotated(rect, factor, angleDeg) {
+  const w = rect.w * factor;
+  const h = rect.h * factor;
+  if (!angleDeg) {
+    work.width = Math.max(1, Math.round(w));
+    work.height = Math.max(1, Math.round(h));
+    workCtx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, work.width, work.height);
+    return;
+  }
+  const radians = (angleDeg * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  // Size the canvas to the rotated bounding box, so a code near an edge is
+  // turned rather than cropped away.
+  work.width = Math.max(1, Math.round(w * cos + h * sin));
+  work.height = Math.max(1, Math.round(w * sin + h * cos));
+  workCtx.save();
+  workCtx.translate(work.width / 2, work.height / 2);
+  workCtx.rotate(radians);
+  workCtx.drawImage(video, rect.x, rect.y, rect.w, rect.h, -w / 2, -h / 2, w, h);
+  workCtx.restore();
+}
+
 function roiRect(width, height) {
   switch (el("roi-mode").value) {
     case "center": return { x: width * 0.15, y: height * 0.15, w: width * 0.7, h: height * 0.7 };
@@ -531,10 +643,11 @@ async function attempt() {
   const rect = roiRect(video.videoWidth, video.videoHeight);
   const target = Number(el("scale").value);
   const factor = target ? Math.min(1, target / Math.max(rect.w, rect.h)) : 1;
-  work.width = Math.max(1, Math.round(rect.w * factor));
-  work.height = Math.max(1, Math.round(rect.h * factor));
-  workCtx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, work.width, work.height);
-  el("dsize").textContent = `${work.width}×${work.height}`;
+  const angles = el("angles").value.split(",").map(Number);
+  const angle = angles[angleIndex % angles.length];
+  angleIndex += 1;
+  drawRotated(rect, factor, angle);
+  el("dsize").textContent = `${work.width}×${work.height} @${angle}°`;
 
   const formats = FORMAT_SETS[el("formats").value];
   const options = {
@@ -546,11 +659,13 @@ async function attempt() {
     ...(formats.length ? { formats } : {}),
   };
 
+  const pixels = workCtx.getImageData(0, 0, work.width, work.height);
+  const sharpness = meanGradient(pixels);
+
   const started = performance.now();
   let results = [];
   try {
-    const image = workCtx.getImageData(0, 0, work.width, work.height);
-    results = await readBarcodes(image, options);
+    results = await readBarcodes(pixels, options);
   } catch (error) {
     say(`decode error: ${error.message}`, "bad");
     return;
@@ -560,10 +675,22 @@ async function attempt() {
   stats.attempts += 1;
   stats.latencies.push(elapsed);
   if (stats.latencies.length > 400) stats.latencies.shift();
+  if (armedAt) {
+    trace.push({
+      t: Math.round(performance.now() - armedAt),
+      sharp: Math.round(sharpness * 10) / 10,
+      scene: stats.sceneNow != null ? Math.round(stats.sceneNow * 10) / 10 : null,
+      hit: Boolean(results && results[0]),
+      angle,
+    });
+    if (trace.length > 200) trace.shift();
+  }
+
   const first = results && results[0];
   if (first && first.text) {
+    lastHitAngle = angle;
     stats.hits += 1;
-    emit(first.text, first.format || "?", elapsed);
+    considerRead(first.text, first.format || "?", elapsed);
   }
   render();
 }
@@ -574,6 +701,7 @@ el("stop").addEventListener("click", stop);
 el("reset").addEventListener("click", resetStats);
 el("arm").addEventListener("click", () => {
   armedAt = performance.now();
+  trace = [];
   lastEmit = { value: "", at: 0 }; // so re-presenting the same item still counts
   el("arm-result").textContent = "waiting…";
   el("arm").textContent = "Armed";

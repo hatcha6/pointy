@@ -46,6 +46,47 @@ camera there is room for an order of magnitude more work per frame — which is
 the budget that pays for rotation tolerance, several exposures, or a retry at
 another scale.
 
+### The finding that decides whether this can ship at all
+
+**A camera scan can emit a wrong barcode that passes its own check digit.**
+Reading one real EAN-13 repeatedly, `3600523434725` came back as:
+
+    9660323434725      left=966032  right=3434725
+    0608713434725      left=060871  right=3434725
+    9620723434725      left=962072  right=3434725
+
+**3 wrong values in 24 scans — 12% — and all three pass the EAN-13 check
+digit.** The symbology's own error detection does not catch them. At a till
+that is the wrong product at the wrong price, with nothing looking amiss on any
+screen, and it is the one failure that would make a shop stop trusting the
+feature permanently. A hardware scanner has this failure mode too, and far more
+rarely.
+
+Note the shape: the right six digits were correct every time and only the
+parity-encoded left group was wrong, which is what one blurred, curved or
+clipped half of a barcode produces.
+
+The fix is cheap only because the decoder is so fast. The wrong values differ
+from each other, so **two independent frames must agree** before a scan is
+emitted — at ~80 attempts/s the second read costs about 10 ms. Measured with
+the guard on: **408 attempts, 25 hits, 2 emitted, 6 disagreements rejected, 0
+misreads emitted.** The traces show it working directly — two hits 156 ms apart
+producing no emit, because they disagreed.
+
+**Nothing built on this should ever emit a single unconfirmed read.**
+
+### Rotation: zxing alone is not enough
+
+`tryRotate` covers 90° steps. Between them nothing crosses the bars of a 1-D
+code, and a tilted EAN-13 sat unread for **14.7 seconds** — 59 consecutive
+failed attempts while perfectly sharp and perfectly still — reading only when
+it was nudged.
+
+The rig rotates the frame itself, cycling one angle per attempt rather than
+trying all of them per frame: at ~80 attempts/s a 0/30/60° cycle covers every
+orientation in **37 ms**, while each decode stays a single cheap pass. Wins are
+now recorded at 0°, 30° and 60°, so all three are doing real work.
+
 ### The two findings that cost the most time
 
 **1. A motion gate is the wrong question, twice over.** The first version gated
