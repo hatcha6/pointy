@@ -723,3 +723,7 @@ frontend-perf-record: ## Record perf-sweep fixtures against the running backend:
 
 frontend-perf-profile: frontend-install ## Profile-build frontend sweep on macOS: real build/raster ms per screen (replays fixtures, no backend).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d macos --profile -t lib/dev/perf_sweep.dart --dart-define=PERF_FIXTURE_DIR="$$PWD/test/perf/fixtures" --dart-define=PERF_OUT="$$PWD/build/perf_profile" --dart-define=PERF_SURFACES="$(SURFACES)"
+
+.PHONY: camera-wedge-lab
+camera-wedge-lab: ## Serve the USB-camera-as-barcode-wedge measurement lab (http://localhost:8099).
+	cd tools/camera-wedge-lab && python3 serve.py 8099

@@ -330,6 +330,16 @@
         "frontend-recharge-preview"
       ],
       "port": 8080
+    },
+    {
+      "name": "camera-wedge-lab",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "serve.py",
+        "8099"
+      ],
+      "cwd": "tools/camera-wedge-lab",
+      "port": 8099
     }
   ]
 }

@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera Wedge Lab</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #171c22; --line: #2a323c; --ink: #e6edf3;
+    --muted: #8b98a5; --ok: #3fb950; --bad: #f85149; --warn: #d29922;
+    --accent: #58a6ff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-size: 13px; }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0; z-index: 5;
+  }
+  h1 { font-size: 14px; margin: 0 8px 0 0; font-weight: 700; letter-spacing: .2px; }
+  label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+  select, button, input[type=number] {
+    background: #0d1117; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 8px; font: inherit;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #04121f; border-color: var(--accent); font-weight: 700; }
+  button:disabled { opacity: .45; cursor: default; }
+  main { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(320px, 420px); gap: 14px; padding: 14px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .stage { position: relative; background: #000; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  video { display: block; width: 100%; height: auto; }
+  #roi { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,.35); pointer-events: none; }
+  #flash { position: absolute; inset: 0; background: var(--ok); opacity: 0; pointer-events: none; transition: opacity .18s; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .panel + .panel { margin-top: 12px; }
+  .panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 0 0 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  .stat { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+          border-bottom: 1px dotted var(--line); padding-bottom: 3px; }
+  .stat span:first-child { color: var(--muted); }
+  .stat span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .big { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  #log { max-height: 320px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  #log div { padding: 4px 0; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+  #log .fmt { color: var(--accent); min-width: 78px; }
+  #log .val { flex: 1; word-break: break-all; }
+  #log .ms { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #status { padding: 8px 14px; border-top: 1px solid var(--line); color: var(--muted); background: var(--panel); }
+  .bad { color: var(--bad); } .ok { color: var(--ok); } .warn { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Camera Wedge Lab</h1>
+  <label>camera <select id="device"></select></label>
+  <label>capture <select id="resolution">
+    <option value="640x480">640×480</option>
+    <option value="1280x720" selected>1280×720</option>
+    <option value="1920x1080">1920×1080</option>
+    <option value="2592x1944">2592×1944</option>
+  </select></label>
+  <label>decode at <select id="scale">
+    <option value="0">native</option>
+    <option value="1280">1280</option>
+    <option value="960">960</option>
+    <option value="800" selected>800</option>
+    <option value="640">640</option>
+    <option value="480">480</option>
+  </select></label>
+  <label>roi <select id="roi-mode">
+    <option value="full" selected>full frame</option>
+    <option value="center">center 70%</option>
+    <option value="band">center band (100%×40%)</option>
+  </select></label>
+  <label>every <select id="interval">
+    <option value="0" selected>as fast as possible</option>
+    <option value="100">100 ms</option>
+    <option value="200">200 ms</option>
+    <option value="333">333 ms</option>
+    <option value="500">500 ms</option>
+  </select></label>
+  <label><input type="checkbox" id="try-harder" checked> tryHarder</label>
+  <label><input type="checkbox" id="try-rotate" checked> tryRotate</label>
+  <label><input type="checkbox" id="try-invert" checked> tryInvert</label>
+  <label><input type="checkbox" id="try-downscale" checked> tryDownscale</label>
+  <label><input type="checkbox" id="motion-gate" checked> motion gate</label>
+  <label>gate at <input type="number" id="gate-threshold" value="4" min="0" max="60" step="1" style="width:56px"></label>
+  <label>formats <select id="formats">
+    <option value="retail" selected>retail 1D + 2D</option>
+    <option value="all">everything</option>
+    <option value="linear">1D only</option>
+  </select></label>
+  <label>focus <select id="focus">
+    <option value="auto" selected>continuous (camera decides)</option>
+    <option value="manual">locked</option>
+  </select></label>
+  <label>lock at <input type="number" id="focus-distance" value="0.15" min="0" max="1" step="0.01" style="width:64px"></label>
+  <button id="start" class="primary">Start</button>
+  <button id="stop" disabled>Stop</button>
+  <button id="arm">Arm timer</button>
+  <button id="reset">Reset stats</button>
+</header>
+
+<main>
+  <div>
+    <div class="stage">
+      <video id="video" playsinline muted></video>
+      <div id="roi"></div>
+      <div id="flash"></div>
+    </div>
+    <div class="panel">
+      <h2>Last emitted scan — what a wedge would have typed</h2>
+      <div class="big" id="last-value">—</div>
+      <div style="color:var(--muted)" id="last-meta">nothing yet</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Hover → read</h2>
+      <div class="big" id="arm-result">—</div>
+      <div style="color:var(--muted)">Press <b>Arm timer</b>, then put an item under the camera. This is the number that decides whether it feels like a scanner.</div>
+    </div>
+    <div class="panel">
+      <h2>Rates</h2>
+      <div class="grid">
+        <div class="stat"><span>attempts/s</span><span id="aps">0</span></div>
+        <div class="stat"><span>frames/s (camera)</span><span id="fps">0</span></div>
+        <div class="stat"><span>hit rate</span><span id="hitrate">0%</span></div>
+        <div class="stat"><span>emitted scans</span><span id="emitted">0</span></div>
+        <div class="stat"><span>attempts</span><span id="attempts">0</span></div>
+        <div class="stat"><span>hits</span><span id="hits">0</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Decode latency (ms)</h2>
+      <div class="grid">
+        <div class="stat"><span>p50</span><span id="p50">—</span></div>
+        <div class="stat"><span>p95</span><span id="p95">—</span></div>
+        <div class="stat"><span>max</span><span id="pmax">—</span></div>
+        <div class="stat"><span>decoded size</span><span id="dsize">—</span></div>
+        <div class="stat"><span>scene vs empty</span><span id="scene">—</span></div>
+      </div>
+      <div style="color:var(--muted);margin-top:8px" id="focus-note">focus: not set</div>
+      <div style="display:none">
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Emitted scans</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+</main>
+
+<div id="status">booting…</div>
+
+<script type="module">
+const CDN = "https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4";
+
+const el = (id) => document.getElementById(id);
+const statusEl = el("status");
+function say(text, cls) { statusEl.className = cls || ""; statusEl.textContent = text; }
+
+// ---------------------------------------------------------------- decoder
+// zxing-wasm is zxing-cpp compiled to WebAssembly: the SAME engine the backend
+// already runs (apps/companion/decoding.py). Whatever this lab measures about
+// read rate therefore transfers to any decode path built on zxing-cpp, which
+// is the point of choosing it over jsQR or a platform detector.
+let readBarcodes = null;
+let engine = "none";
+
+const FORMAT_SETS = {
+  // What a Libyan shop actually meets: retail 1D on goods, 2D on payment
+  // terminal receipts and invoices. A narrow set is faster and produces fewer
+  // false reads off stray edges.
+  retail: ["EAN-13","EAN-8","UPC-A","UPC-E","Code128","Code39","Code93","ITF","Codabar",
+           "QRCode","MicroQRCode","DataMatrix","PDF417","Aztec"],
+  linear: ["EAN-13","EAN-8","UPC-A","UPC-E","Code128","Code39","Code93","ITF","Codabar"],
+  all: [],
+};
+
+async function loadEngine() {
+  try {
+    const mod = await import(`${CDN}/dist/es/reader/index.js`);
+    await mod.prepareZXingModule({
+      overrides: { locateFile: (p) => p.endsWith(".wasm") ? `${CDN}/dist/reader/zxing_reader.wasm` : p },
+      fireImmediately: true,
+    });
+    readBarcodes = mod.readBarcodes;
+    engine = `zxing-wasm ${mod.ZXING_WASM_VERSION ?? "3.1.4"}`;
+    return true;
+  } catch (error) {
+    // A till on a shop LAN with no internet cannot reach the CDN. Chrome on
+    // Android/ChromeOS/macOS has a platform detector; Chrome on WINDOWS does
+    // not, which is exactly the platform that matters — so this fallback is a
+    // comparison point, never the plan.
+    if (typeof window.BarcodeDetector === "function") {
+      const detector = new window.BarcodeDetector();
+      readBarcodes = async (bitmapSource) => {
+        const found = await detector.detect(bitmapSource);
+        return found.map((f) => ({ text: f.rawValue, format: f.format }));
+      };
+      engine = "BarcodeDetector (platform)";
+      say(`zxing-wasm unreachable (${error.message}); fell back to the platform detector`, "warn");
+      return true;
+    }
+    say(`No decoder: zxing-wasm failed to load (${error.message}) and this browser has no BarcodeDetector.`, "bad");
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------- capture
+const video = el("video");
+let stream = null;
+let running = false;
+let rafId = 0;
+
+const work = document.createElement("canvas");
+const workCtx = work.getContext("2d", { willReadFrequently: true });
+// The gate compares a tiny greyscale thumbnail against a BASELINE — what an
+// empty counter looks like — rather than against the previous frame. A counter
+// camera looks at nothing nearly all day and decoding it continuously burns a
+// core for no reason; but frame-to-frame differencing is the wrong gate, and
+// wrong in the way that matters: an item HELD STILL under the camera stops
+// moving the instant it arrives, which is precisely when it needs decoding.
+// Measured with the first version of this file: 2 decode attempts in 31
+// seconds of an item sitting in view.
+//
+// So the question is "does the scene differ from an empty counter", and the
+// baseline drifts slowly towards whatever it settles at, which absorbs shop
+// lighting changing over a day without ever absorbing an item.
+const tiny = document.createElement("canvas");
+tiny.width = 32; tiny.height = 24;
+const tinyCtx = tiny.getContext("2d", { willReadFrequently: true });
+let baseline = null;
+const BASELINE_BLEND = 0.02; // how fast an unchanging scene becomes the new "empty"
+const BURST_MS = 1200;       // keep decoding this long after the scene last differed
+// An item whose difference sits NEAR the threshold gets eaten: one frame falls
+// below, the baseline blends towards it, that lowers the difference further,
+// and the item is quietly redefined as "empty" — after which the gate never
+// fires again until it moves. Measured: 2.4 attempts/s against a camera
+// offering 70 fps, i.e. ~97% of frames thrown away with an item in view, which
+// is where the 8-second reads came from. So re-baselining requires the scene
+// to have been quiet CONTINUOUSLY, and never happens during a burst.
+const QUIET_FRAMES_BEFORE_REBASELINE = 90; // ~1.5s at 60fps
+let burstUntil = 0;
+let quietFrames = 0;
+
+async function listDevices() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter((d) => d.kind === "videoinput");
+  const select = el("device");
+  const previous = select.value;
+  select.innerHTML = "";
+  cams.forEach((cam, index) => {
+    const option = document.createElement("option");
+    option.value = cam.deviceId;
+    option.textContent = cam.label || `camera ${index + 1}`;
+    select.appendChild(option);
+  });
+  if (previous) select.value = previous;
+  return cams;
+}
+
+async function start() {
+  const [w, h] = el("resolution").value.split("x").map(Number);
+  const deviceId = el("device").value;
+  stop();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        width: { ideal: w }, height: { ideal: h },
+        frameRate: { ideal: 30 },
+      },
+    });
+  } catch (error) {
+    say(`Camera refused: ${error.name} — ${error.message}`, "bad");
+    return;
+  }
+  video.srcObject = stream;
+  await video.play();
+  await listDevices(); // labels only exist once permission is granted
+  const track = stream.getVideoTracks()[0];
+  await applyFocus(track);
+  const settings = track.getSettings();
+  say(`${engine} · ${track.label} · ${settings.width}×${settings.height} @ ${settings.frameRate ?? "?"}fps`, "ok");
+  running = true;
+  el("start").disabled = true;
+  el("stop").disabled = false;
+  baseline = null;
+  burstUntil = 0;
+  quietFrames = 0;
+  stats.since = performance.now();
+  report("start", {});
+  snapshotTimer = setInterval(() => { if (running) report("stats", snapshot()); }, 5000);
+  loop();
+}
+
+let snapshotTimer = 0;
+
+function stop() {
+  if (running) report("stop", snapshot());
+  clearInterval(snapshotTimer);
+  running = false;
+  cancelAnimationFrame(rafId);
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  stream = null;
+  el("start").disabled = false;
+  el("stop").disabled = true;
+}
+
+async function applyFocus(track) {
+  const wanted = el("focus").value;
+  const capabilities = track.getCapabilities?.() ?? {};
+  if (!capabilities.focusMode || !capabilities.focusMode.includes(wanted)) {
+    el("focus-note").textContent =
+      `camera does not offer focusMode "${wanted}" (offers: ${capabilities.focusMode?.join(", ") || "nothing"})`;
+    return;
+  }
+  const advanced = [{ focusMode: wanted }];
+  if (wanted === "manual" && capabilities.focusDistance) {
+    const { min, max } = capabilities.focusDistance;
+    const asked = Number(el("focus-distance").value);
+    advanced[0].focusDistance = Math.min(max, Math.max(min, asked));
+    el("focus-note").textContent =
+      `locked at ${advanced[0].focusDistance} (range ${min}–${max})`;
+  } else {
+    el("focus-note").textContent = `focusMode: ${wanted}`;
+  }
+  try {
+    await track.applyConstraints({ advanced });
+  } catch (error) {
+    el("focus-note").textContent = `focus refused: ${error.message}`;
+  }
+}
+
+// ---------------------------------------------------------------- stats
+let stats = null;
+function resetStats() {
+  stats = { attempts: 0, hits: 0, emitted: 0, latencies: [], frames: 0,
+            sceneNow: null, sceneMax: null, since: performance.now() };
+  el("log").innerHTML = "";
+  el("last-value").textContent = "—";
+  el("last-meta").textContent = "nothing yet";
+  el("arm-result").textContent = "—";
+  render();
+}
+function percentile(sorted, p) {
+  if (!sorted.length) return null;
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+}
+function snapshot() {
+  const seconds = (performance.now() - stats.since) / 1000 || 1;
+  const sorted = [...stats.latencies].sort((a, b) => a - b);
+  return {
+    seconds: Math.round(seconds),
+    attempts: stats.attempts, hits: stats.hits, emitted: stats.emitted,
+    attemptsPerSecond: Number((stats.attempts / seconds).toFixed(1)),
+    cameraFps: Number((stats.frames / seconds).toFixed(1)),
+    hitRate: stats.attempts ? Number(((stats.hits / stats.attempts) * 100).toFixed(0)) : 0,
+    decodeP50: percentile(sorted, 0.5) ? Math.round(percentile(sorted, 0.5)) : null,
+    decodeP95: percentile(sorted, 0.95) ? Math.round(percentile(sorted, 0.95)) : null,
+    decodedSize: el("dsize").textContent,
+    sceneNow: stats.sceneNow != null ? Number(stats.sceneNow.toFixed(1)) : null,
+    sceneMax: stats.sceneMax != null ? Number(stats.sceneMax.toFixed(1)) : null,
+    gateThreshold: Number(el("gate-threshold").value),
+  };
+}
+
+function render() {
+  const seconds = (performance.now() - stats.since) / 1000 || 1;
+  el("attempts").textContent = stats.attempts;
+  el("hits").textContent = stats.hits;
+  el("emitted").textContent = stats.emitted;
+  el("aps").textContent = (stats.attempts / seconds).toFixed(1);
+  el("fps").textContent = (stats.frames / seconds).toFixed(1);
+  el("hitrate").textContent = stats.attempts ? `${((stats.hits / stats.attempts) * 100).toFixed(0)}%` : "0%";
+  const sorted = [...stats.latencies].sort((a, b) => a - b);
+  el("p50").textContent = percentile(sorted, 0.5)?.toFixed(0) ?? "—";
+  el("p95").textContent = percentile(sorted, 0.95)?.toFixed(0) ?? "—";
+  el("pmax").textContent = sorted.length ? sorted[sorted.length - 1].toFixed(0) : "—";
+}
+
+// ---------------------------------------------------------------- reporting
+// Everything measured is POSTed to results.jsonl beside this file, so a run
+// can be read while it happens instead of squinted at afterwards.
+function report(kind, body) {
+  const settings = stream?.getVideoTracks()[0]?.getSettings() ?? {};
+  const payload = {
+    kind,
+    at: new Date().toISOString(),
+    engine,
+    camera: stream?.getVideoTracks()[0]?.label ?? "",
+    capture: `${settings.width ?? "?"}x${settings.height ?? "?"}`,
+    knobs: {
+      decodeAt: el("scale").value, roi: el("roi-mode").value,
+      interval: el("interval").value, tryHarder: el("try-harder").checked,
+      tryRotate: el("try-rotate").checked, tryInvert: el("try-invert").checked,
+      tryDownscale: el("try-downscale").checked,
+      motionGate: el("motion-gate").checked, formats: el("formats").value,
+      focus: el("focus").value, focusDistance: el("focus-distance").value,
+    },
+    ...body,
+  };
+  navigator.sendBeacon?.("/report", new Blob([JSON.stringify(payload)], { type: "application/json" }));
+}
+
+// ---------------------------------------------------------------- the wedge
+// A hardware scanner does not report the same code forty times while an item
+// sits under it: it reads once, then holds off. Modelling that here is what
+// makes "emitted scans" the number to look at rather than "hits".
+const REREAD_HOLDOFF_MS = 1500;
+const ARM_EXPIRY_MS = 30000;
+let lastEmit = { value: "", at: 0 };
+let armedAt = 0;
+
+function emit(value, format, decodeMs) {
+  const now = performance.now();
+  if (value === lastEmit.value && now - lastEmit.at < REREAD_HOLDOFF_MS) {
+    lastEmit.at = now; // still under the camera; keep holding off
+    return;
+  }
+  lastEmit = { value, at: now };
+  stats.emitted += 1;
+
+  let hoverMs = null;
+  if (armedAt && now - armedAt > ARM_EXPIRY_MS) {
+    armedAt = 0;
+    el("arm-result").textContent = "expired";
+    el("arm").textContent = "Arm timer";
+  }
+  if (armedAt) {
+    hoverMs = Math.round(now - armedAt);
+    el("arm-result").textContent = `${hoverMs} ms`;
+    armedAt = 0;
+    el("arm").textContent = "Arm timer";
+  }
+  report("scan", { value, format, decodeMs: Math.round(decodeMs), hoverMs });
+
+  el("last-value").textContent = value;
+  el("last-meta").textContent = `${format} · decoded in ${decodeMs.toFixed(0)} ms`;
+  const row = document.createElement("div");
+  row.innerHTML = `<span class="fmt">${format}</span><span class="val"></span><span class="ms">${decodeMs.toFixed(0)}ms</span>`;
+  row.querySelector(".val").textContent = value;
+  el("log").prepend(row);
+
+  const flash = el("flash");
+  flash.style.opacity = ".55";
+  setTimeout(() => { flash.style.opacity = "0"; }, 120);
+}
+
+// ---------------------------------------------------------------- loop
+function roiRect(width, height) {
+  switch (el("roi-mode").value) {
+    case "center": return { x: width * 0.15, y: height * 0.15, w: width * 0.7, h: height * 0.7 };
+    case "band": return { x: 0, y: height * 0.3, w: width, h: height * 0.4 };
+    default: return { x: 0, y: 0, w: width, h: height };
+  }
+}
+
+function paintRoiOverlay() {
+  const box = el("roi");
+  const rect = roiRect(video.clientWidth, video.clientHeight);
+  box.style.left = `${rect.x}px`; box.style.top = `${rect.y}px`;
+  box.style.width = `${rect.w}px`; box.style.height = `${rect.h}px`;
+}
+
+function sceneHasSomethingInIt() {
+  tinyCtx.drawImage(video, 0, 0, tiny.width, tiny.height);
+  const pixels = tinyCtx.getImageData(0, 0, tiny.width, tiny.height).data;
+  const grey = new Float32Array(tiny.width * tiny.height);
+  for (let i = 0, g = 0; i < pixels.length; i += 4, g += 1) {
+    grey[g] = (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) / 1000;
+  }
+  if (!baseline) { baseline = grey; return false; }
+
+  let sum = 0;
+  for (let i = 0; i < grey.length; i += 1) sum += Math.abs(grey[i] - baseline[i]);
+  const difference = sum / grey.length;
+  el("scene").textContent = difference.toFixed(1);
+  stats.sceneNow = difference;
+  stats.sceneMax = Math.max(stats.sceneMax ?? 0, difference);
+
+  const now = performance.now();
+  if (difference > Number(el("gate-threshold").value)) {
+    quietFrames = 0;
+    // Something is there. Keep decoding for a moment after it stops
+    // differing, so a hand settling into place does not cut the read off.
+    burstUntil = now + BURST_MS;
+    return true;
+  }
+  // An empty counter — but only once it has been empty for a while, and never
+  // while a burst is still running.
+  quietFrames += 1;
+  if (now >= burstUntil && quietFrames > QUIET_FRAMES_BEFORE_REBASELINE) {
+    for (let i = 0; i < grey.length; i += 1) {
+      baseline[i] += (grey[i] - baseline[i]) * BASELINE_BLEND;
+    }
+  }
+  return now < burstUntil;
+}
+
+let lastAttempt = 0;
+let busy = false;
+
+async function loop() {
+  if (!running) return;
+  rafId = requestAnimationFrame(loop);
+  if (!video.videoWidth) return;
+  stats.frames += 1;
+  paintRoiOverlay();
+
+  const interval = Number(el("interval").value);
+  const now = performance.now();
+  if (busy || (interval && now - lastAttempt < interval)) return;
+
+  // The gate is deliberately AFTER the interval check and BEFORE the decode:
+  // it is there to save the decode, which is the expensive part.
+  if (el("motion-gate").checked && !sceneHasSomethingInIt()) return;
+
+  lastAttempt = now;
+  busy = true;
+  try { await attempt(); } finally { busy = false; }
+}
+
+async function attempt() {
+  const rect = roiRect(video.videoWidth, video.videoHeight);
+  const target = Number(el("scale").value);
+  const factor = target ? Math.min(1, target / Math.max(rect.w, rect.h)) : 1;
+  work.width = Math.max(1, Math.round(rect.w * factor));
+  work.height = Math.max(1, Math.round(rect.h * factor));
+  workCtx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, work.width, work.height);
+  el("dsize").textContent = `${work.width}×${work.height}`;
+
+  const formats = FORMAT_SETS[el("formats").value];
+  const options = {
+    tryHarder: el("try-harder").checked,
+    tryRotate: el("try-rotate").checked,
+    tryInvert: el("try-invert").checked,
+    tryDownscale: el("try-downscale").checked,
+    maxNumberOfSymbols: 1,
+    ...(formats.length ? { formats } : {}),
+  };
+
+  const started = performance.now();
+  let results = [];
+  try {
+    const image = workCtx.getImageData(0, 0, work.width, work.height);
+    results = await readBarcodes(image, options);
+  } catch (error) {
+    say(`decode error: ${error.message}`, "bad");
+    return;
+  }
+  const elapsed = performance.now() - started;
+
+  stats.attempts += 1;
+  stats.latencies.push(elapsed);
+  if (stats.latencies.length > 400) stats.latencies.shift();
+  const first = results && results[0];
+  if (first && first.text) {
+    stats.hits += 1;
+    emit(first.text, first.format || "?", elapsed);
+  }
+  render();
+}
+
+// ---------------------------------------------------------------- wiring
+el("start").addEventListener("click", start);
+el("stop").addEventListener("click", stop);
+el("reset").addEventListener("click", resetStats);
+el("arm").addEventListener("click", () => {
+  armedAt = performance.now();
+  lastEmit = { value: "", at: 0 }; // so re-presenting the same item still counts
+  el("arm-result").textContent = "waiting…";
+  el("arm").textContent = "Armed";
+});
+el("focus").addEventListener("change", () => {
+  if (stream) applyFocus(stream.getVideoTracks()[0]);
+});
+el("focus-distance").addEventListener("change", () => {
+  if (stream) applyFocus(stream.getVideoTracks()[0]);
+});
+["resolution", "device"].forEach((id) =>
+  el(id).addEventListener("change", () => { if (running) start(); })
+);
+
+resetStats();
+say("loading zxing-wasm…");
+if (await loadEngine()) {
+  await listDevices();
+  say(`${engine} ready — pick a camera and press Start (the browser will ask for camera permission).`, "ok");
+}
+</script>
+</body>
+</html>
