@@ -1,4 +1,4 @@
-platform :osx, '10.15'
+platform :osx, '12.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -38,5 +38,19 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+
+    # Several pods pin their own, older minimum — libserialport at 10.11,
+    # sqlite3 and file_picker at 10.13 — and the helper above does not raise
+    # them. Xcode 26+ refuses to build anything below 12.0 at all, so every
+    # one of them failed the macOS build with
+    # "the range of supported deployment target versions is 12.0 to ...".
+    # Raising the floor here fixes them all without waiting on each package
+    # upstream, and never LOWERS a pod that already asks for more.
+    target.build_configurations.each do |config|
+      current = config.build_settings['MACOSX_DEPLOYMENT_TARGET']
+      next if current.is_a?(String) && current =~ /\A\d+(\.\d+)*\z/ &&
+              Gem::Version.new(current) >= Gem::Version.new('12.0')
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.0'
+    end
   end
 end
