@@ -16,6 +16,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.test import APIClient
 
+from apps.catalog.models import Product
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import (
     ACCOUNTANT_GROUP,
@@ -30,6 +31,7 @@ from apps.notifications.models import BusinessNotification
 from apps.notifications.services import sync_business_notifications
 from apps.inventory.models import StockMovement
 from apps.sales.models import Order, OrderLine, RegisterSession
+from apps.sales.serializers import DiscountPreviewSerializer
 from apps.sales.services import checkout_order
 from apps.treasury.models import MoneyAccount, MoneyTransfer
 from apps.treasury.position import treasury_position
@@ -742,6 +744,23 @@ class ServiceVariantTests(TestCase):
         self.assertIsNone(restored.product.archived_at)
         self.assertTrue(restored.product.is_active)
 
+    def test_the_service_product_is_marked_as_one_the_shop_did_not_choose(self):
+        # It is the flag that keeps a 0.00 «شحن اشتراك HD Box» out of the till's
+        # catalog grid, off the price checker, and out of a cart.
+        variant = service_variant_for("hdbox")
+        self.assertTrue(variant.product.is_system)
+
+    def test_a_product_provisioned_before_the_flag_existed_is_repaired(self):
+        # Every shop already selling top-ups has this product without the flag;
+        # the next top-up must fix it, not wait for a data migration it may
+        # already have run past.
+        variant = service_variant_for("hdbox")
+        Product.objects.filter(pk=variant.product.pk).update(is_system=False)
+
+        repaired = service_variant_for("hdbox")
+        self.assertEqual(repaired.pk, variant.pk)
+        self.assertTrue(repaired.product.is_system)
+
 
 class TillApiTests(TestCase):
     def setUp(self):
@@ -1077,6 +1096,46 @@ class RechargeCheckoutTests(TestCase):
             request=None,
         )
         self.assertFalse(StockMovement.objects.exists())
+
+    def test_the_service_product_cannot_be_rung_up_on_its_own(self):
+        # Its standing price is zero, because the real one is computed per
+        # line from the provider's quote. A line that reached checkout without
+        # the top-up payload — a held invoice from before this release, a till
+        # that has not updated — would have handed a customer a free recharge
+        # that reached no provider and recorded no fulfillment.
+        with self.assertRaises(serializers.ValidationError) as caught:
+            checkout_order(
+                register_session=self.session,
+                lines_data=[
+                    {
+                        "variant": self.variant,
+                        "quantity": Decimal("1"),
+                        "effective_unit_price": Decimal("0.00"),
+                    }
+                ],
+                payments_data=[{"method": "cash", "amount": Decimal("0.00")}],
+                request=None,
+            )
+        # Named, so this cannot pass on some unrelated complaint about a
+        # zero-value sale.
+        self.assertEqual(
+            str(caught.exception.detail["variants"][0]["variant_id"]),
+            str(self.variant.pk),
+        )
+        self.assertFalse(Order.objects.exists())
+
+    def test_the_discount_preview_still_prices_a_cart_holding_a_top_up(self):
+        # The preview re-uses the checkout LINE serializer and drops the
+        # integration payload on purpose — it prices, it does not sell. The
+        # guard above therefore lives in checkout, not in that serializer; a
+        # preview that 400s would silently stop the cashier's total updating
+        # every time a top-up is in the cart.
+        preview = DiscountPreviewSerializer(
+            data={
+                "lines": [{"variant": self.variant.pk, "quantity": "1"}],
+            }
+        )
+        self.assertTrue(preview.is_valid(), preview.errors)
 
 
 class OptionPricingTests(TestCase):

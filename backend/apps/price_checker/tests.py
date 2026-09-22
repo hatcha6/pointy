@@ -746,6 +746,14 @@ class KioskSkuFallbackTests(TestCase):
         self.product.save(update_fields=["archived_at"])
         self.assertFalse(lookup_price("BREAD-01").found)
 
+    def test_a_system_product_has_no_price_to_quote(self):
+        # The recharge service product (apps.integrations) is priced per line
+        # from the provider's quote and carries a standing zero, so a checker
+        # that matched its SKU would answer a customer «0.00 د.ل».
+        self.product.is_system = True
+        self.product.save(update_fields=["is_system"])
+        self.assertFalse(lookup_price("BREAD-01").found)
+
 
 class UnmatchedScanWorklistTests(TestCase):
     """816 misses are 816 unread audit rows; grouped they are a worklist."""

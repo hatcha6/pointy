@@ -219,6 +219,20 @@ class Product(TimeStampedModel):
     # without stock of their own; the kitchen job consumes their recipe
     # ingredients instead.
     is_prepared = models.BooleanField(default=False)
+    # A product a *feature* created so its sales have something to hang on,
+    # not a thing the shop chose to stock. Today that is one service product
+    # per recharge provider (apps.integrations.provisioning): every order line
+    # must point at a real variant, so a top-up is rung up as one.
+    #
+    # It is priced per line from the provider's live quote, so its own price
+    # is zero and always will be — which is exactly why it must not be
+    # browsable. On a till it appeared in the catalog grid as «شحن اشتراك
+    # LNET — 0.00 د.ل», near the front because the default sort is most-bought
+    # and a busy agency sells hundreds of top-ups; tapping it added a free
+    # line that topped nobody up. Hidden from every surface that sells or
+    # quotes (the catalog list, the price checker), kept in the back office
+    # under ?system=all so an owner can still rename it and read its profit.
+    is_system = models.BooleanField(default=False, db_index=True)
     # Denormalized "most bought" score: the count of paid sale lines this product's
     # variants appear on within a rolling 90-day window, recomputed nightly by
     # ``catalog.recompute_product_popularity``. It is the catalog's default sort key

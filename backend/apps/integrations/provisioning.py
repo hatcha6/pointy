@@ -50,10 +50,19 @@ def service_variant_for(provider_key: str) -> ProductVariant:
         # A shop that archived it and then sells another top-up should get the
         # product back rather than a confusing failure at the till.
         product = existing.product
+        fields = []
         if product.archived_at is not None or not product.is_active:
             product.archived_at = None
             product.is_active = True
-            product.save(update_fields=["archived_at", "is_active", "updated_at"])
+            fields += ["archived_at", "is_active"]
+        # Repaired rather than only set on create: shops that sold top-ups
+        # before this flag existed have the product already, and the migration
+        # that backfills them cannot reach one created in between.
+        if not product.is_system:
+            product.is_system = True
+            fields.append("is_system")
+        if fields:
+            product.save(update_fields=[*fields, "updated_at"])
         if not existing.is_active:
             existing.is_active = True
             existing.save(update_fields=["is_active", "updated_at"])
@@ -63,6 +72,10 @@ def service_variant_for(provider_key: str) -> ProductVariant:
         name=_PRODUCT_NAMES.get(provider_key, f"شحن {provider_key}"),
         is_service=True,
         is_active=True,
+        # Not a thing the shop stocks: it exists so a top-up has a line to be,
+        # and it is kept out of the catalog grid, the search and the price
+        # checker (see Product.is_system).
+        is_system=True,
     )
     # Price 0: the real price is set per line from the provider's live quote
     # plus whatever the shop adds. A standing price here would be a number

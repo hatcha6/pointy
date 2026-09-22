@@ -54,6 +54,27 @@ enum ProductStockFilter implements QueryFilterSet {
   }
 }
 
+/// Whether products a *feature* owns — today the one service product per
+/// recharge provider — are included. They exist so a top-up has an order line
+/// to be, are priced per line from the provider's quote, and so carry a
+/// standing price of zero; a till that showed one offered a free recharge.
+/// Hidden everywhere by default, and only the back-office catalog opts in via
+/// [includeSystem] so an owner can still rename one and see what it earned.
+enum ProductSystemFilter implements QueryFilterSet {
+  excludeSystem(null),
+  includeSystem(QueryFilter(parameter: 'system', value: 'all'));
+
+  const ProductSystemFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
 enum ProductOrdering implements QueryOrdering {
   name('name'),
   // "Most bought": sorts by the server's denormalized popularity score (highest
@@ -77,6 +98,7 @@ class ProductQuery extends ModelQuery {
     this.availability = ProductAvailabilityFilter.all,
     this.archived = ProductArchivedFilter.excludeArchived,
     this.stock = ProductStockFilter.all,
+    this.system = ProductSystemFilter.excludeSystem,
     this.supplierId,
     this.supplierName,
     this.preferredSupplierId,
@@ -91,6 +113,7 @@ class ProductQuery extends ModelQuery {
   final ProductAvailabilityFilter availability;
   final ProductArchivedFilter archived;
   final ProductStockFilter stock;
+  final ProductSystemFilter system;
   // Filter to products a given supplier has supplied (resolved server-side
   // through that supplier's purchase orders). [supplierName] is carried only so
   // the active-filter chip can label the selection.
@@ -117,6 +140,7 @@ class ProductQuery extends ModelQuery {
     ...availability.filters,
     ...archived.filters,
     ...stock.filters,
+    ...system.filters,
     if (barcode.trim().isNotEmpty)
       QueryFilter(parameter: 'barcode', value: barcode.trim()),
     if (categories.isNotEmpty)
@@ -142,6 +166,7 @@ class ProductQuery extends ModelQuery {
     ProductAvailabilityFilter? availability,
     ProductArchivedFilter? archived,
     ProductStockFilter? stock,
+    ProductSystemFilter? system,
     ProductOrdering? ordering,
   }) {
     return ProductQuery(
@@ -151,6 +176,7 @@ class ProductQuery extends ModelQuery {
       availability: availability ?? this.availability,
       archived: archived ?? this.archived,
       stock: stock ?? this.stock,
+      system: system ?? this.system,
       supplierId: supplierId,
       warehouseId: warehouseId,
       supplierName: supplierName,
@@ -169,6 +195,7 @@ class ProductQuery extends ModelQuery {
       availability: availability,
       archived: archived,
       stock: stock,
+      system: system,
       supplierId: supplierId,
       warehouseId: warehouseId,
       supplierName: supplierName,
@@ -187,6 +214,7 @@ class ProductQuery extends ModelQuery {
       availability: availability,
       archived: archived,
       stock: stock,
+      system: system,
       supplierId: supplierId,
       warehouseId: warehouseId,
       supplierName: supplierName,
@@ -205,6 +233,7 @@ class ProductQuery extends ModelQuery {
       availability: availability,
       archived: archived,
       stock: stock,
+      system: system,
       supplierId: supplierId,
       warehouseId: warehouseId,
       supplierName: supplierName,
@@ -222,6 +251,7 @@ class ProductQuery extends ModelQuery {
         other.availability == availability &&
         other.archived == archived &&
         other.stock == stock &&
+        other.system == system &&
         other.supplierId == supplierId &&
         other.preferredSupplierId == preferredSupplierId &&
         other.ordering == ordering;
@@ -235,6 +265,7 @@ class ProductQuery extends ModelQuery {
     availability,
     archived,
     stock,
+    system,
     supplierId,
     preferredSupplierId,
     ordering,

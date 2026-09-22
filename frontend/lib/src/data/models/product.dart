@@ -20,6 +20,7 @@ class Product {
     this.trackingMode = TrackingMode.quantity,
     this.isService = false,
     this.isPrepared = false,
+    this.isSystem = false,
     this.unit = 'piece',
     this.pricingCurrency = '',
     this.defaultSaleUnit = '',
@@ -53,6 +54,13 @@ class Product {
   final TrackingMode trackingMode;
   final bool isService;
   final bool isPrepared;
+
+  /// A product a *feature* created so its sales have a line to hang on —
+  /// today the one service product per recharge provider. It is priced per
+  /// line from the provider's quote, so its own price is zero; the till and
+  /// the price checker never see one, and the back office shows it so an
+  /// owner can rename it, not so anyone can sell it.
+  final bool isSystem;
 
   /// Base (stock) unit code. Stock, recipes, and totals are kept in this unit.
   final String unit;
@@ -142,6 +150,7 @@ class Product {
       trackingMode: TrackingMode.fromWire(json['tracking_mode']),
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
+      isSystem: (json['is_system'] as bool?) ?? false,
       unit: json['unit']?.toString() ?? 'piece',
       pricingCurrency: json['pricing_currency']?.toString() ?? '',
       defaultSaleUnit: json['default_sale_unit']?.toString() ?? '',
@@ -185,6 +194,7 @@ class Product {
       trackingMode: trackingMode,
       isService: isService,
       isPrepared: isPrepared,
+      isSystem: isSystem,
       unit: unit,
       pricingCurrency: pricingCurrency,
       defaultSaleUnit: defaultSaleUnit,
@@ -250,6 +260,7 @@ class Product {
       'tracking_mode': trackingMode.wire,
       'is_service': isService,
       'is_prepared': isPrepared,
+      'is_system': isSystem,
       'unit': unit,
       if (pricingCurrency.isNotEmpty) 'pricing_currency': pricingCurrency,
       'default_sale_unit': defaultSaleUnit,
@@ -285,6 +296,7 @@ class Product {
       trackingMode: trackingMode,
       isService: isService,
       isPrepared: isPrepared,
+      isSystem: isSystem,
       unit: unit,
       defaultSaleUnit: defaultSaleUnit,
       defaultPurchaseUnit: defaultPurchaseUnit,

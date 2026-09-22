@@ -840,6 +840,49 @@ def validate_sale_variants_sellable(lines_data):
         )
 
 
+def validate_integration_lines_carry_their_top_up(lines_data):
+    """Reject a sale of a recharge service product that tops nobody up.
+
+    ``apps.integrations`` owns one service product per provider, because every
+    order line has to point at a real variant. Its standing price is zero —
+    the real one is computed per line from the provider's live quote — so a
+    line that arrived WITHOUT its top-up payload would hand a customer a free
+    recharge that reached no provider, recorded no fulfillment, and left
+    nobody anything to notice.
+
+    The product is hidden from the catalog, the search, the variant endpoint
+    and the price checker, which is what stops a cashier meeting one. This is
+    the rule underneath all of that, for the paths hiding cannot reach: a held
+    invoice from before the release, a till that has not updated, a direct
+    service call.
+
+    Deliberately NOT in ``CheckoutLineSerializer``: the discount preview
+    re-uses that serializer and drops the payload on purpose (it prices, it
+    does not sell), so a guard there would soft-fail every preview of a cart
+    with a top-up in it. This runs where a line becomes a sold line.
+    """
+    blocked = [
+        {
+            "product_id": line_data["variant"].product.pk,
+            "variant_id": line_data["variant"].pk,
+            "product_name": line_data["variant"].product.name,
+        }
+        for line_data in lines_data
+        if line_data["variant"].product.is_system
+        and not line_data.get("integration")
+    ]
+    if blocked:
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    "This product is sold only through its own flow and "
+                    "cannot be rung up on its own."
+                ),
+                "variants": blocked,
+            }
+        )
+
+
 @transaction.atomic
 def checkout_order(
     *,
@@ -869,6 +912,7 @@ def checkout_order(
     # categories / option_values reads below cost a constant few queries.
     preload_line_variants(lines_data)
     validate_sale_variants_sellable(lines_data)
+    validate_integration_lines_carry_their_top_up(lines_data)
     validate_checkout_loss_sales_allowed(
         settings=settings,
         lines_data=lines_data,

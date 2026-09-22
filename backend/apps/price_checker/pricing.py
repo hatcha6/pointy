@@ -164,6 +164,10 @@ def lookup_price(
             is_active=True,
             product__is_active=True,
             product__archived_at__isnull=True,
+            # A product a feature owns has no price of its own to quote — a
+            # recharge is priced per line from the provider — so a checker
+            # that found one would answer a customer «0.00 د.ل».
+            product__is_system=False,
         )
         .first()
     )
@@ -181,6 +185,7 @@ def lookup_price(
                 is_active=True,
                 product__is_active=True,
                 product__archived_at__isnull=True,
+                product__is_system=False,
             )
             .first()
         )

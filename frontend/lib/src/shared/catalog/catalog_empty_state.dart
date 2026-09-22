@@ -41,7 +41,8 @@ class CatalogEmptyState extends StatelessWidget {
   }
 
   /// Strips every user-set filter, leaving app-set ones ([ProductQuery.stock],
-  /// [ProductQuery.preferredSupplierId]) and the chosen ordering intact.
+  /// [ProductQuery.system], [ProductQuery.preferredSupplierId]) and the chosen
+  /// ordering intact.
   static ProductQuery cleared(ProductQuery query) {
     return query.withSupplier().copyWith(
       search: '',

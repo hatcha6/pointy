@@ -417,6 +417,7 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         queryset = self._filter_by_category(queryset)
         queryset = self._filter_by_barcode(queryset)
         queryset = self._filter_by_archived(queryset)
+        queryset = self._filter_by_system(queryset)
         queryset = self._filter_by_stock(queryset)
         queryset = self._filter_by_supplier(queryset)
         queryset = self._annotate_supplier_boost(queryset)
@@ -462,6 +463,26 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         if archived in ("true", "1", "only"):
             return queryset.filter(archived_at__isnull=False)
         return queryset.filter(archived_at__isnull=True)
+
+    def _filter_by_system(self, queryset):
+        # Products a feature owns rather than the shop (today: the recharge
+        # service product per provider) are hidden from the catalog list, and
+        # therefore from the POS grid, the POS search and the purchasing
+        # picker. They are priced per line and carry a standing price of zero,
+        # so a cashier who tapped one added a free line that topped nobody up
+        # — and because the default sort is most-bought, a busy agency's two
+        # of them sat at the front of the grid.
+        #
+        # Hidden by DEFAULT rather than opted out of: a surface added later
+        # should have to ask for these, not discover them. The back-office
+        # catalog passes ?system=all so an owner can still rename one and see
+        # what it earned. Only the list is scoped — detail, archive and
+        # restore must still reach them.
+        if self.action != "list":
+            return queryset
+        if self.request.query_params.get("system") == "all":
+            return queryset
+        return queryset.filter(is_system=False)
 
     def _filter_by_stock(self, queryset):
         # POS passes ?in_stock=true when overselling is disabled so cashiers
@@ -1083,8 +1104,19 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Variants of archived products never appear in the purchasing picker
-        # (or anywhere this endpoint feeds).
-        return super().get_queryset().filter(product__archived_at__isnull=True)
+        # (or anywhere this endpoint feeds) — nor do variants of products a
+        # feature owns (the recharge service product), which this endpoint
+        # would otherwise hand a till through a typed SKU, having been hidden
+        # from the catalog list it browses.
+        #
+        # ``identity_check`` is the exception and rightly so: it answers "is
+        # this code already taken", and INTEG-LNET *is* taken. It runs its own
+        # query (see below) rather than this one.
+        return (
+            super()
+            .get_queryset()
+            .filter(product__archived_at__isnull=True, product__is_system=False)
+        )
 
     @action(detail=False, methods=["get"], url_path="identity-check")
     def identity_check(self, request):

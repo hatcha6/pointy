@@ -532,6 +532,10 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "tracks_expiry",
             "is_service",
             "is_prepared",
+            # A product a feature owns rather than the shop — today the
+            # recharge service product per provider. Read-only: a shop
+            # cannot declare one, and cannot un-declare these.
+            "is_system",
             "unit",
             # The currency this product's price sheet is written in. NULL (the
             # default, and every existing product) means the shop's own.
@@ -549,7 +553,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at", "archived_at")
+        read_only_fields = ("created_at", "updated_at", "archived_at", "is_system")
 
     def get_primary_image(self, product):
         return primary_attachment_summary(
@@ -1031,6 +1035,10 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "tracks_expiry",
             "is_service",
             "is_prepared",
+            # A product a feature owns rather than the shop — today the
+            # recharge service product per provider. Read-only: a shop
+            # cannot declare one, and cannot un-declare these.
+            "is_system",
             # How closely this product's stock is identified. Defaults to
             # ``quantity`` and stays there for every product that never asks
             # for anything else; changing it re-labels history, so it is
@@ -1076,6 +1084,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             # Derived from ``tracking_mode``; a write of it is translated
             # in ``validate`` rather than stored.
             "tracks_expiry",
+            # Set by the feature that owns the product, never by a client.
+            "is_system",
         )
 
     def validate_unit(self, value):
