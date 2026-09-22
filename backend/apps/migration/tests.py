@@ -1817,6 +1817,51 @@ class PreparationPipelineTests(MigrationTestBase):
         self.assertTrue(source.error_message)
         self.assertFalse(source.detection["matched"])
 
+    def test_a_cancel_mid_preparation_is_not_undone_by_the_job(self):
+        """The owner discarded the file while this was converting it.
+
+        Preparation runs on a worker for minutes and the wizard lets the owner
+        walk away from it, which purges the row and deletes both files. The job
+        then fails on a file that is gone — and its failure handling used to
+        write FAILED straight over PURGED, so the cancel appeared to work and
+        undid itself seconds later, stranding the wizard on an error screen for
+        a file the server no longer had.
+        """
+        build_sample_database(self.db_path)
+        source = self._staged_source(self.db_path)
+        cancelled = {"done": False}
+
+        def _cancel_then_identify(transport, raw=False):
+            if not cancelled["done"]:
+                cancelled["done"] = True
+                services.discard_source(MigrationSource.objects.get(pk=source.pk))
+            raise RuntimeError("the file vanished mid-read")
+
+        with mock.patch.object(detection, "detect", _cancel_then_identify):
+            pipeline.prepare_source(source)
+
+        source.refresh_from_db()
+        self.assertTrue(cancelled["done"])
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.PURGED)
+        self.assertEqual(source.staged_filename, "")
+
+    def test_a_cancel_mid_preparation_is_not_undone_by_success_either(self):
+        """Same race, the other way: the job finished just after the cancel."""
+        build_sample_database(self.db_path)
+        source = self._staged_source(self.db_path)
+        real_analyze = pipeline._analyze
+
+        def _cancel_then_analyze(source_arg, prepared, tracker):
+            result = real_analyze(source_arg, prepared, tracker)
+            services.discard_source(MigrationSource.objects.get(pk=source_arg.pk))
+            return result
+
+        with mock.patch.object(pipeline, "_analyze", _cancel_then_analyze):
+            pipeline.prepare_source(source)
+
+        source.refresh_from_db()
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.PURGED)
+
 
 class PurgeTests(MigrationTestBase):
     def test_clean_import_deletes_the_file(self):

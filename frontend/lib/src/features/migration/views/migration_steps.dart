@@ -347,8 +347,64 @@ class _UploadStep extends StatelessWidget {
             icon: const Icon(Icons.play_arrow),
             label: Text(l10n.migrationResumeUploadButton),
           ),
+        // Pausing is not leaving. Cancelling an upload stops the bytes but
+        // keeps the half-written file on the server, so the wizard comes
+        // straight back to this step offering to resume it — and for a file
+        // that turns out to be the wrong one, or one the server will not
+        // accept, resuming is the only thing on offer and none of it helps.
+        // This is the way back to the picker.
+        _StartOverAction(viewModel: viewModel),
       ],
     );
+  }
+}
+
+/// Abandons the file on the server and returns the wizard to step one.
+///
+/// Lives on every step that can otherwise trap someone: an upload and a
+/// preparation both run against a file already on the server, so walking away
+/// has to delete it rather than just stop looking at it.
+class _StartOverAction extends StatelessWidget {
+  const _StartOverAction({required this.viewModel});
+
+  final MigrationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    return Padding(
+      padding: EdgeInsets.only(top: spacing.sm),
+      child: TextButton.icon(
+        onPressed: viewModel.isDiscarding
+            ? null
+            : () => unawaited(_confirm(context)),
+        icon: const Icon(Icons.close, size: 18),
+        label: Text(l10n.migrationTryAnotherFileButton),
+      ),
+    );
+  }
+
+  Future<void> _confirm(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.migrationTryAnotherFileButton),
+        content: Text(l10n.migrationDiscardFileConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.deleteButton),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) await viewModel.startOver();
   }
 }
 
@@ -385,6 +441,12 @@ class _PrepareStep extends StatelessWidget {
             ],
           ),
         ],
+        // Conversion is the step with no end in sight from the outside: it can
+        // run for minutes on a large database, and a file it will never manage
+        // to read looks exactly the same as one it is halfway through. Without
+        // this there was nothing on the screen at all, and the only way out of
+        // the wizard was to leave the file on the server and hope.
+        _StartOverAction(viewModel: viewModel),
       ],
     );
   }

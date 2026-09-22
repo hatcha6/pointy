@@ -146,6 +146,65 @@ void main() {
     viewModel.dispose();
   });
 
+  testWidgets('an upload in progress offers a way out, not only a pause', (
+    tester,
+  ) async {
+    // Cancelling the transfer leaves the file on the server, so the wizard
+    // returns to this same step offering to resume it. For a file that is the
+    // wrong one — or one the server keeps refusing — there was nothing else on
+    // the screen and no way back to the picker.
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source(state: 'uploading')]),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+    expect(find.text(l10n.migrationResumeUploadButton), findsOneWidget);
+    expect(find.text(l10n.migrationTryAnotherFileButton), findsOneWidget);
+    viewModel.dispose();
+  });
+
+  testWidgets('preparation can be abandoned', (tester) async {
+    // Conversion can run for minutes, and a file it will never read looks
+    // exactly like one it is halfway through.
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source(state: 'preparing')]),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+    expect(find.text(l10n.migrationTryAnotherFileButton), findsOneWidget);
+    viewModel.dispose();
+  });
+
+  testWidgets('abandoning asks first, then deletes the file', (tester) async {
+    final repository = FakeMigrationRepository(
+      sources: [source(state: 'preparing')],
+    );
+    final viewModel = await pump(tester, repository);
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    await tester.tap(find.text(l10n.migrationTryAnotherFileButton));
+    await tester.pump();
+    expect(find.text(l10n.migrationDiscardFileConfirm), findsOneWidget);
+
+    // Backing out of the question changes nothing.
+    await tester.tap(find.text(l10n.cancelButton));
+    await tester.pump();
+    expect(repository.discarded, isEmpty);
+
+    await tester.tap(find.text(l10n.migrationTryAnotherFileButton));
+    await tester.pump();
+    await tester.tap(find.text(l10n.deleteButton));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(repository.discarded, [1]);
+    expect(find.text(l10n.migrationChooseTitle), findsOneWidget);
+    viewModel.dispose();
+  });
+
   testWidgets('the review step leads with real counts, separated', (
     tester,
   ) async {

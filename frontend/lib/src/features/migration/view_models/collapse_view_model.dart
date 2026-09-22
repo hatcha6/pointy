@@ -344,7 +344,24 @@ class CollapseViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _stopPolling();
     super.dispose();
+  }
+
+  /// This review outlives none of its requests, but its requests outlive it.
+  ///
+  /// The plan is fetched the moment a file is adopted, and the owner can now
+  /// abandon that file while the fetch is still in the air — cancelling during
+  /// preparation disposes this the same instant. The reply then lands on a
+  /// disposed notifier, which is an assertion in debug and a listener list that
+  /// is no longer anyone's in release. So every notification after disposal is
+  /// dropped, rather than each await having to remember.
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
   }
 }

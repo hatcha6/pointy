@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/migration.dart';
 import 'package:pointy_frontend/src/data/models/migration_collapse.dart';
 import 'package:pointy_frontend/src/data/repositories/migration_repository.dart';
+import 'package:pointy_frontend/src/data/services/api_session.dart';
+import 'package:pointy_frontend/src/data/services/migration_api_client.dart';
 import 'package:pointy_frontend/src/data/services/migration_uploader.dart';
 
 /// One fake for the whole migration feature, so a new repository method does not
@@ -28,6 +34,14 @@ class FakeMigrationRepository implements MigrationRepository {
   /// What each write was asked to do, for a test that cares about the request
   /// rather than the answer.
   final List<Map<String, Object?>> startedRuns = [];
+
+  /// Source ids the wizard asked the server to delete.
+  final List<int> discarded = [];
+
+  /// Held open by a test that needs an upload to still be in flight while it
+  /// does something else — cancelling it, for instance. Left null, an upload
+  /// finishes immediately, which is what every other test wants.
+  Completer<Result<MigrationSource>>? pendingUpload;
   final List<Map<String, Object?>> candidateEdits = [];
   final List<({String stemKey, String stem})> renames = [];
   int approvals = 0;
@@ -87,8 +101,19 @@ class FakeMigrationRepository implements MigrationRepository {
     String? severity,
   }) async => const Ok(MigrationIssuePage(issues: [], hasMore: false));
 
+  /// A real uploader over a client that answers nothing.
+  ///
+  /// The view model holds this to cancel it; the transfer itself is [uploadFile]
+  /// here, so the uploader never issues a request.
   @override
-  MigrationUploader newUploader() => throw UnimplementedError();
+  MigrationUploader newUploader() => MigrationUploader(
+    MigrationApiClient(
+      PosApiSession(
+        client: MockClient((_) async => http.Response('{}', 200)),
+        baseUrl: 'http://pointy.test/api',
+      ),
+    ),
+  );
 
   @override
   Future<Result<MigrationSource>> uploadFile(
@@ -96,15 +121,27 @@ class FakeMigrationRepository implements MigrationRepository {
     required MigrationUploader uploader,
     MigrationSource? resuming,
     void Function(MigrationUploadProgress)? onProgress,
-  }) async => Ok(MigrationSource.fromJson(sources.first));
+  }) {
+    final pending = pendingUpload;
+    if (pending != null) return pending.future;
+    return Future.value(Ok(MigrationSource.fromJson(sources.first)));
+  }
 
   @override
   Future<Result<MigrationSource>> completeUpload(int id) async =>
       Ok(MigrationSource.fromJson(sources.first));
 
   @override
-  Future<Result<MigrationSource>> discardSource(int id) async =>
-      Ok(MigrationSource.fromJson(sources.first));
+  Future<Result<MigrationSource>> discardSource(int id) async {
+    discarded.add(id);
+    return Ok(
+      MigrationSource.fromJson({
+        ...sources.first,
+        'upload_state': 'purged',
+        'is_purged': true,
+      }),
+    );
+  }
 
   // --- the collapse (§12) ----------------------------------------------
 

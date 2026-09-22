@@ -337,9 +337,14 @@ class MigrationViewModel extends ChangeNotifier {
         notifyListeners();
         return await _completeUpload();
       case Error<MigrationSource>():
-        // The upload is resumable, not lost: the server kept every byte it
-        // acknowledged, so retrying continues from there.
-        _errorMessage = result.exception.toString();
+        // A cancel the owner asked for is not a failure to report back to them.
+        // It used to land in the error banner as the uploader's own English
+        // "Upload cancelled", under the screen they had just chosen to leave.
+        if (result.exception is! MigrationUploadCancelled) {
+          // The upload is resumable, not lost: the server kept every byte it
+          // acknowledged, so retrying continues from there.
+          _errorMessage = result.exception.toString();
+        }
         notifyListeners();
         return false;
     }
@@ -378,8 +383,16 @@ class MigrationViewModel extends ChangeNotifier {
   }
 
   /// Forgets the picked file and any half-finished upload, back to step one.
+  ///
+  /// Stops the transfer before anything else. Without that the uploader kept
+  /// sending chunks at a source the next line deletes — every one refused, and
+  /// `_isUploading` still true, which pins [step] on `uploading` forever. The
+  /// screen offering to cancel was the screen you could not leave.
   Future<void> startOver() async {
     final source = _source;
+    _uploader?.cancel();
+    _uploader = null;
+    _isUploading = false;
     _pickedFile = null;
     _uploadProgress = null;
     _activeRun = null;

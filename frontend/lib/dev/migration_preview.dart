@@ -229,6 +229,21 @@ Map<String, Object?> _sourceJson(String screen) {
   };
 
   switch (screen) {
+    case 'uploading':
+      // A transfer the server has part of: the state the wizard is in for
+      // however long a gigabyte takes over a shop's network, and the one you
+      // cannot reach by hand because it needs a real file and a real upload.
+      return {
+        ...base,
+        'upload_state': 'uploading',
+        'received_bytes': 624951296,
+        'upload_percent': 39,
+        'staged_size_bytes': 624951296,
+        'prepared_size_bytes': 0,
+        'system_key': '',
+        'detection': const <String, Object?>{},
+        'stages': const <Map<String, Object?>>[],
+      };
     case 'preparing':
       return {
         ...base,
@@ -606,7 +621,7 @@ class _FakeMigrationRepository implements MigrationRepository {
 
   @override
   Future<Result<List<MigrationSource>>> loadSources() async {
-    if (screen == 'choose' || screen == 'uploading') return const Ok([]);
+    if (screen == 'choose') return const Ok([]);
     return Ok([MigrationSource.fromJson(_sourceJson(screen))]);
   }
 

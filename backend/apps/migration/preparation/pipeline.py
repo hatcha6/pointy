@@ -82,6 +82,8 @@ def prepare_source(source) -> None:
         # retry preparation without re-sending gigabytes.
         _drop_working_file(source, staged)
 
+    if abandoned(source):
+        return
     source.upload_state = MigrationSource.UploadState.READY
     source.save(update_fields=["upload_state", "updated_at"])
 
@@ -227,9 +229,32 @@ def _drop_working_file(source, staged):
         storage.delete_quietly(working)
 
 
+def abandoned(source) -> bool:
+    """Did the owner discard this file while we were working on it?
+
+    Preparation is a Celery job measured in minutes, and the wizard lets the
+    owner cancel during it — which purges the row and deletes both files. The
+    job then fails, on a file that is gone, and its own failure handling used to
+    write ``FAILED`` straight over ``PURGED``: a cancel that appeared to work
+    and then undid itself seconds later, leaving the wizard stuck on an error
+    screen for a file the server no longer had. So the terminal writes ask the
+    database, not the in-memory copy, whether the owner has since walked away.
+    """
+    from ..models import MigrationSource
+
+    state = (
+        MigrationSource.objects.filter(pk=source.pk)
+        .values_list("upload_state", flat=True)
+        .first()
+    )
+    return state in (None, MigrationSource.UploadState.PURGED)
+
+
 def _fail(source, message):
     from ..models import MigrationSource
 
+    if abandoned(source):
+        return
     source.upload_state = MigrationSource.UploadState.FAILED
     source.error_message = str(message)[:480]
     source.save(

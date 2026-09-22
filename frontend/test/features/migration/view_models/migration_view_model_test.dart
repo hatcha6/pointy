@@ -1,4 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/migration.dart';
+import 'package:pointy_frontend/src/data/services/migration_uploader.dart';
 import 'package:pointy_frontend/src/features/migration/view_models/migration_view_model.dart';
 
 import '../migration_fakes.dart';
@@ -159,5 +164,66 @@ void main() {
       ),
     );
     expect(viewModel.source!.isReady, isTrue);
+  });
+
+  group('walking away from a file the server already has', () {
+    test('starting over during an upload lands back on step one', () async {
+      // The trap this closes: cancelling the *transfer* left the half-written
+      // file on the server, so the wizard came right back to the upload step
+      // offering to resume it. For a file the server will not accept, resume
+      // was the only button on the screen.
+      final repository = FakeMigrationRepository(
+        sources: [sourceJson(state: 'uploading')],
+      );
+      final inFlight = Completer<Result<MigrationSource>>();
+      repository.pendingUpload = inFlight;
+      final viewModel = await loaded(repository);
+
+      unawaited(viewModel.startUpload());
+      expect(viewModel.step, MigrationStep.uploading);
+
+      await viewModel.startOver();
+
+      expect(viewModel.step, MigrationStep.choose);
+      expect(viewModel.source, isNull);
+      expect(repository.discarded, [1]);
+
+      // The abandoned transfer settling afterwards must not drag the wizard
+      // back, nor report the owner's own decision to them as an error.
+      inFlight.complete(const Error(MigrationUploadCancelled()));
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.step, MigrationStep.choose);
+      expect(viewModel.errorMessage, isNull);
+    });
+
+    test('starting over during preparation deletes the file', () async {
+      final repository = FakeMigrationRepository(
+        sources: [sourceJson(state: 'preparing')],
+      );
+      final viewModel = await loaded(repository);
+      expect(viewModel.step, MigrationStep.preparing);
+
+      await viewModel.startOver();
+
+      expect(viewModel.step, MigrationStep.choose);
+      expect(repository.discarded, [1]);
+    });
+
+    test('cancelling the transfer alone keeps the resumable file', () async {
+      // The other half of the pair: cancel stops the bytes and nothing else,
+      // which is what makes a gigabyte upload survive a shop's Wi-Fi.
+      final repository = FakeMigrationRepository(
+        sources: [sourceJson(state: 'uploading')],
+      );
+      repository.pendingUpload = Completer<Result<MigrationSource>>();
+      final viewModel = await loaded(repository);
+
+      unawaited(viewModel.startUpload());
+      viewModel.cancelUpload();
+
+      expect(viewModel.step, MigrationStep.uploading);
+      expect(viewModel.source!.receivedBytes, 400);
+      expect(repository.discarded, isEmpty);
+    });
   });
 }
