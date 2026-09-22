@@ -42,6 +42,26 @@ pu_env_value() {
   grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r'
 }
 
+# Set KEY=value in .env, appending the key when it is absent. The value reaches
+# awk through the environment, never `-v`, so a backslash in it stays literal.
+# The file is rewritten in place rather than replaced, so it keeps its owner and
+# its 600 mode: it holds the database password and the relay tokens.
+pu_set_env_var() {
+  local tmp
+  tmp="$(mktemp ./.env.XXXXXX)" || return 1
+  if grep -qE "^$1=" .env; then
+    PU_KEY="$1" PU_VALUE="$2" awk 'BEGIN { FS = "=" }
+      $1 == ENVIRON["PU_KEY"] { print ENVIRON["PU_KEY"] "=" ENVIRON["PU_VALUE"]; next }
+      { print }' .env >"$tmp"
+  else
+    # A hand-edited .env may not end in a newline; the key must not land on the
+    # end of someone else's line.
+    { cat .env; [ -z "$(tail -c 1 .env)" ] || echo; printf '%s=%s\n' "$1" "$2"; } >"$tmp"
+  fi || { rm -f "$tmp"; return 1; }
+  cat "$tmp" >.env || { rm -f "$tmp"; return 1; }
+  rm -f "$tmp"
+}
+
 pu_backend_port() {
   local port
   port="$(pu_env_value POINTY_BACKEND_PORT)"
@@ -246,7 +266,7 @@ pu_install_file() {
 POINTY_ADOPT_FILES="docker-compose.yml install.sh watchdog.sh
 register-autostart.sh update.sh update-agent.sh update-lib.sh
 discovery-responder.py migrate-fahd.sh
-disable-watchdog.sh
+disable-watchdog.sh change-license.sh
 wsl/bootstrap-wsl.ps1 wsl/timezone-map.txt
 .env.example VERSION.txt INSTALL.md README.md"
 

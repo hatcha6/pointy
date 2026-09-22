@@ -71,6 +71,63 @@ test_env_value_takes_the_FIRST_of_duplicate_keys() {
 }
 
 # ---------------------------------------------------------------------------
+# pu_set_env_var
+# ---------------------------------------------------------------------------
+
+test_set_env_var_replaces_a_value_and_leaves_every_other_line_alone() {
+  write_env '# relay' 'POINTY_RELAY_ENROLLMENT_TOKEN=pte1.old' \
+    'POINTY_DATABASE_URL=postgres://pointy:c2Vj==@pgbouncer:5432/pointy?a=1&b=2'
+  assert_ok pu_set_env_var POINTY_RELAY_ENROLLMENT_TOKEN pte1.new
+  assert_file_eq .env "$(printf '%s\n' '# relay' 'POINTY_RELAY_ENROLLMENT_TOKEN=pte1.new' \
+    'POINTY_DATABASE_URL=postgres://pointy:c2Vj==@pgbouncer:5432/pointy?a=1&b=2')"
+}
+
+test_set_env_var_appends_a_missing_key() {
+  write_env 'COMPOSE_PROJECT_NAME=pointy'
+  assert_ok pu_set_env_var POINTY_RELAY_ENROLLMENT_TOKEN pte1.new
+  assert_file_eq .env "$(printf '%s\n' 'COMPOSE_PROJECT_NAME=pointy' 'POINTY_RELAY_ENROLLMENT_TOKEN=pte1.new')"
+}
+
+test_set_env_var_appends_on_its_own_line_when_env_lacks_a_final_newline() {
+  printf 'COMPOSE_PROJECT_NAME=pointy' >.env
+  assert_ok pu_set_env_var POINTY_RELAY_ENROLLMENT_TOKEN pte1.new
+  assert_eq 'pointy' "$(pu_env_value COMPOSE_PROJECT_NAME)"
+  assert_eq 'pte1.new' "$(pu_env_value POINTY_RELAY_ENROLLMENT_TOKEN)"
+}
+
+test_set_env_var_writes_the_value_literally() {
+  # awk -v would turn \t into a tab; & and $() must not mean anything either.
+  write_env 'SECRET=old'
+  assert_ok pu_set_env_var SECRET 'a\tb&c$(touch pwned)=d'
+  assert_eq 'a\tb&c$(touch pwned)=d' "$(pu_env_value SECRET)"
+  assert_no_file pwned
+}
+
+test_set_env_var_ignores_a_key_that_is_only_a_prefix() {
+  write_env 'POINTY_BACKEND_PORT_INTERNAL=9999' 'POINTY_BACKEND_PORT=8080'
+  assert_ok pu_set_env_var POINTY_BACKEND_PORT 8000
+  assert_eq '9999' "$(pu_env_value POINTY_BACKEND_PORT_INTERNAL)"
+  assert_eq '8000' "$(pu_env_value POINTY_BACKEND_PORT)"
+}
+
+test_set_env_var_sets_every_copy_of_a_duplicated_key() {
+  # pu_env_value reads the first copy and compose the last; after a write they
+  # must agree, whichever one a reader takes.
+  write_env 'POINTY_RELAY_ENROLLMENT_TOKEN=pte1.a' 'POINTY_RELAY_ENROLLMENT_TOKEN=pte1.b'
+  assert_ok pu_set_env_var POINTY_RELAY_ENROLLMENT_TOKEN pte1.new
+  assert_eq 2 "$(grep -c '^POINTY_RELAY_ENROLLMENT_TOKEN=pte1.new$' .env)"
+}
+
+test_set_env_var_keeps_the_mode_of_env_and_leaves_no_temp_file() {
+  # .env holds the database password; a write must not widen who can read it.
+  write_env 'SECRET=old'
+  chmod 600 .env
+  assert_ok pu_set_env_var SECRET new
+  assert_eq '600' "$(stat -c %a .env 2>/dev/null || stat -f %Lp .env)"
+  assert_eq '' "$(find . -maxdepth 1 -name '.env.*' -print)"
+}
+
+# ---------------------------------------------------------------------------
 # pu_backend_port
 # ---------------------------------------------------------------------------
 

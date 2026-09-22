@@ -23,6 +23,7 @@ update-agent.sh         Applies relay-assigned updates automatically
 update-lib.sh           Shared update engine used by both of the above
 edge/                   The LAN front door's config (baked into its image)
 migrate-fahd.sh         One-shot legacy-data import for shops coming from Fahd
+change-license.sh       Moves this server onto a different license key
 wsl/                    The Windows install path — see "Windows hosts" below
   bootstrap-wsl.ps1       The ONLY PowerShell we ship (installs WSL, hands off)
   pointy-wsl-rootfs.tar.gz  The Linux server image, Docker already inside
@@ -171,6 +172,46 @@ license key with the relay online, which an offline install can never reach. Fli
 it back to `true` (and re-run `docker compose up -d`) once a shop has internet and
 you want to enforce licensing. The relay URLs are the same for every shop and come
 pre-filled in the template.
+
+### Changing the license key (the wrong one was redeemed)
+
+Re-running the installer with a different `license.key` changes nothing:
+`install.sh` only reads that file on the run that creates `.env`, and the key it
+recorded was spent the moment the backend redeemed it. To move a shop onto the
+right key, run this from the deploy directory while the shop is online:
+
+```sh
+sudo bash change-license.sh <new-license-key>   # or put the key in license.key and omit it
+```
+
+On Windows, inside the distro:
+
+```powershell
+wsl -d Pointy -u root --cd /opt/pointy -- bash change-license.sh <new-license-key>
+```
+
+It names the installation it is about to replace and asks before spending the
+key (`--yes` skips the question), then:
+
+1. redeems the new key with the relay and switches the backend to the
+   installation it creates. A key the relay refuses (mistyped, already used,
+   expired) changes nothing, and the script stops there;
+2. writes the key into `.env` as `POINTY_RELAY_ENROLLMENT_TOKEN`;
+3. resets the relay connector, which would otherwise go on connecting as the old
+   installation.
+
+The tills keep working throughout: the backend is not restarted. Step 1 on its
+own is `docker compose --env-file .env -f docker-compose.yml exec backend python
+manage.py relay_change_license <new-license-key>`, which leaves steps 2 and 3 to you.
+
+Then, on the operator machine:
+
+- The new installation has only what its key carried. A subscription you turned
+  on by hand for the old one, or a fleet pin or channel, has to be applied to the
+  new installation id.
+- Retire the old installation. The script prints the exact command:
+  `pointy-relay subscription disable <old-id> --reason "wrong license key; replaced by <new-id>"`.
+- The wrongly used key stays spent. Mint the shop it was meant for a fresh one.
 
 ## Verify
 

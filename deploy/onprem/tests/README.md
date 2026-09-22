@@ -37,7 +37,7 @@ mechanism. A bug here is a site visit.
 
 | Suite | Covers |
 | --- | --- |
-| `test_env_and_lock.sh` | `.env` parsing (quotes, CRLF, `=` in values, no shell evaluation), the backend port, the update lock the watchdog respects |
+| `test_env_and_lock.sh` | `.env` parsing (quotes, CRLF, `=` in values, no shell evaluation) and in-place writes, the backend port, the update lock the watchdog respects |
 | `test_health_and_containers.sh` | `/readyz` probing, compose-service→container resolution, whether the live path is available at all, waiting for a backend to serve |
 | `test_upstream.sh` | the flip: writing the pointer, `nginx -t` before reload, never leaving a rejected config on disk, and proving the move by response header |
 | `test_bundle_adoption.sh` | atomic file replacement, `UPDATE_STRATEGY.txt`, which files a bundle replaces and which are state, pinning image tags into `.env` |
@@ -47,6 +47,7 @@ mechanism. A bug here is a site visit.
 | `test_rollback_backup_staging.sh` | rolling back after traffic moved, the pre-migration dump, turning a zip or directory into an applyable bundle |
 | `test_update_agent.sh` | the agent end to end with a stubbed relay: quiet no-ops, checksum enforcement, lock discipline, status reporting, self-update |
 | `test_update_script.sh` | `update.sh` argument handling, `--force`, and leaving an operator's media alone |
+| `test_change_license.sh` | `change-license.sh`: nothing on the host changes unless the relay accepts the key, no key spent without confirmation, then `.env` and the connector's saved identity follow the new installation, under the update lock |
 
 ## Writing a test
 

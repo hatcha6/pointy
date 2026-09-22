@@ -649,6 +649,7 @@ jobs:
              deploy/onprem/update.sh \
              deploy/onprem/update-lib.sh \
              deploy/onprem/disable-watchdog.sh \
+             deploy/onprem/change-license.sh \
              deploy/onprem/discovery-responder.py \
              deploy/onprem/migrate-fahd.sh \
              deploy/onprem/INSTALL.md deploy/onprem/README.md "${BUNDLE}/"
@@ -670,7 +671,8 @@ jobs:
              "${BUNDLE}/register-autostart.sh" "${BUNDLE}/update-agent.sh" \
              "${BUNDLE}/update.sh" "${BUNDLE}/update-lib.sh" \
              "${BUNDLE}/discovery-responder.py" \
-             "${BUNDLE}/migrate-fahd.sh" "${BUNDLE}/disable-watchdog.sh"
+             "${BUNDLE}/migrate-fahd.sh" "${BUNDLE}/disable-watchdog.sh" \
+             "${BUNDLE}/change-license.sh"
 
           # The bundle is unzipped on Windows and streamed into the distro. Any
           # CRLF that sneaks in makes bash fail with "\r: command not found", and

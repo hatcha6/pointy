@@ -612,6 +612,73 @@ def ensure_relay_installation(*, client=None, config=None):
     return installation, True
 
 
+def change_relay_license(enrollment_token, *, client=None, config=None):
+    """Re-license this backend with a different key, for a shop whose install
+    redeemed the wrong one.
+
+    The new key is redeemed BEFORE anything here changes. A key the relay refuses
+    (mistyped, already used, expired), or a relay that cannot be reached, raises
+    with the current enrollment untouched, so a failed attempt never leaves the
+    shop unlicensed. Only once the relay has issued the new installation is the
+    old row replaced by it, in one transaction: other connections see the old
+    installation until the commit and the new one after, never neither.
+
+    The old installation stays on the relay as it was. Retiring it, and handing a
+    wrongly spent key back, need the operator's admin token.
+
+    Returns ``(installation, previous_installation_id)``; the previous id is empty
+    when this backend was not licensed yet.
+    """
+    from apps.analytics.models import AnalyticsEvent
+    from apps.analytics.services import record_domain_event
+
+    # The same normalisation install.sh gives license.key, so a key pasted with a
+    # line break in it still matches.
+    token = "".join(str(enrollment_token or "").split())
+    if not token:
+        raise ImproperlyConfigured("A license key is required.")
+    # Built around the NEW key: the process config holds either none (a shop that
+    # installed offline) or the spent one, and the client validates against it.
+    cfg = replace(config or relay_config(), enrollment_token=token)
+    relay_client = client or RelayControlClient(config=cfg)
+    shop_settings = ShopSettings.load()
+    provisioned = relay_client.enroll_installation(
+        enrollment_token=token,
+        shop_name=shop_settings.shop_name,
+    )
+    with transaction.atomic():
+        previous_ids = list(
+            RelayInstallation.objects.select_for_update()
+            .order_by("created_at")
+            .values_list("installation_id", flat=True)
+        )
+        RelayInstallation.objects.all().delete()
+        installation = _persist_provisioned(
+            provisioned,
+            public_api_url=relay_client.config.public_api_url,
+            connector_address=relay_client.config.connector_address,
+            shop_settings=shop_settings,
+        )
+        # The delete and save signals invalidate the cache from inside the
+        # transaction, where a request can still load the old row and cache it
+        # again. Once more after the commit, when only the new row is visible.
+        transaction.on_commit(caching.invalidate_relay_installation)
+        previous_id = previous_ids[0] if previous_ids else ""
+        record_domain_event(
+            name="relay.installation.license_changed",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            severity=AnalyticsEvent.Severity.INFO,
+            entity_type="relay_installation",
+            entity_id=installation.pk,
+            installation_id=installation.installation_id,
+            attributes={
+                "installation_id": installation.installation_id,
+                "previous_installation_id": previous_id,
+            },
+        )
+    return installation, previous_id
+
+
 def scoped_relay_client(installation, *, config=None):
     """Build a relay client authenticated as a specific installation.
 
