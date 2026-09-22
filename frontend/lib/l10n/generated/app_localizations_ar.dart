@@ -19009,7 +19009,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get integrationSettingDenominationsHint =>
-      'افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط';
+      'المبالغ التي تظهر كأزرار سريعة عند البيع؛ يمكن للكاشير دائمًا كتابة مبلغ آخر';
 
   @override
   String get integrationSettingLowBalance => 'حد تنبيه الرصيد';
@@ -19031,6 +19031,39 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get integrationSettingInvalidAmounts =>
       'أدخل مبالغ صحيحة مفصولة بفاصلة';
+
+  @override
+  String get integrationAmountListManageButton => 'إدارة المبالغ';
+
+  @override
+  String get integrationAmountListEmptyMessage =>
+      'لا توجد مبالغ سريعة محددة؛ يمكن للكاشير كتابة أي مبلغ يدويًا.';
+
+  @override
+  String get integrationAmountListDialogDescription =>
+      'أضف كل مبلغ على حدة. ستظهر هذه المبالغ كأزرار سريعة عند البيع، وسيظل بإمكان الكاشير كتابة أي مبلغ آخر يدويًا.';
+
+  @override
+  String get integrationAmountListFieldLabel => 'المبلغ';
+
+  @override
+  String get integrationAmountListFieldHint => 'مثال: 45';
+
+  @override
+  String get integrationAmountListAddButton => 'إضافة';
+
+  @override
+  String get integrationAmountListInvalidError =>
+      'أدخل مبلغًا صحيحًا أكبر من صفر.';
+
+  @override
+  String get integrationAmountListDuplicateError =>
+      'هذا المبلغ موجود في القائمة بالفعل.';
+
+  @override
+  String removeIntegrationAmountTooltip(String amount) {
+    return 'إزالة $amount';
+  }
 
   @override
   String get rechargeSearchLabelLine => 'رقم الهاتف أو اسم المستخدم';

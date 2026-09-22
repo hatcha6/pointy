@@ -32805,7 +32805,7 @@ abstract class AppLocalizations {
   ///
   ///
   /// In ar, this message translates to:
-  /// **'افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط'**
+  /// **'المبالغ التي تظهر كأزرار سريعة عند البيع؛ يمكن للكاشير دائمًا كتابة مبلغ آخر'**
   String get integrationSettingDenominationsHint;
 
   ///
@@ -32837,6 +32837,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أدخل مبالغ صحيحة مفصولة بفاصلة'**
   String get integrationSettingInvalidAmounts;
+
+  /// Opens the add/remove dialog for a quick-pick amount list.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة المبالغ'**
+  String get integrationAmountListManageButton;
+
+  /// Shown when the amount list is empty — a real, allowed state.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مبالغ سريعة محددة؛ يمكن للكاشير كتابة أي مبلغ يدويًا.'**
+  String get integrationAmountListEmptyMessage;
+
+  /// Explains the add-one-at-a-time dialog for a quick-pick amount list.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف كل مبلغ على حدة. ستظهر هذه المبالغ كأزرار سريعة عند البيع، وسيظل بإمكان الكاشير كتابة أي مبلغ آخر يدويًا.'**
+  String get integrationAmountListDialogDescription;
+
+  /// Label for the single-amount entry field.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get integrationAmountListFieldLabel;
+
+  /// Placeholder for the single-amount entry field.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 45'**
+  String get integrationAmountListFieldHint;
+
+  /// Adds the typed amount to the list.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة'**
+  String get integrationAmountListAddButton;
+
+  /// Shown when the typed amount is not a positive number.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا صحيحًا أكبر من صفر.'**
+  String get integrationAmountListInvalidError;
+
+  /// Shown when the typed amount is already in the list.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المبلغ موجود في القائمة بالفعل.'**
+  String get integrationAmountListDuplicateError;
+
+  /// Tooltip on the remove button for one amount in the quick-pick list.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة {amount}'**
+  String removeIntegrationAmountTooltip(String amount);
 
   ///
   ///

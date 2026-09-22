@@ -12136,7 +12136,7 @@
   "@integrationSettingCommissionHint": {"description": ""},
   "integrationSettingDenominations": "مبالغ الشحن السريعة",
   "@integrationSettingDenominations": {"description": ""},
-  "integrationSettingDenominationsHint": "افصل بين المبالغ بفاصلة. اتركها فارغة للإدخال اليدوي فقط",
+  "integrationSettingDenominationsHint": "المبالغ التي تظهر كأزرار سريعة عند البيع؛ يمكن للكاشير دائمًا كتابة مبلغ آخر",
   "@integrationSettingDenominationsHint": {"description": ""},
   "integrationSettingLowBalance": "حد تنبيه الرصيد",
   "@integrationSettingLowBalance": {"description": ""},
@@ -12148,6 +12148,33 @@
   "@integrationSettingOutOfRange": {"description": "", "placeholders": {"min": {"type": "String"}, "max": {"type": "String"}}},
   "integrationSettingInvalidAmounts": "أدخل مبالغ صحيحة مفصولة بفاصلة",
   "@integrationSettingInvalidAmounts": {"description": ""},
+  "integrationAmountListManageButton": "إدارة المبالغ",
+  "@integrationAmountListManageButton": {
+    "description": "Opens the add/remove dialog for a quick-pick amount list."
+  },
+  "integrationAmountListEmptyMessage": "لا توجد مبالغ سريعة محددة؛ يمكن للكاشير كتابة أي مبلغ يدويًا.",
+  "@integrationAmountListEmptyMessage": {
+    "description": "Shown when the amount list is empty — a real, allowed state."
+  },
+  "integrationAmountListDialogDescription": "أضف كل مبلغ على حدة. ستظهر هذه المبالغ كأزرار سريعة عند البيع، وسيظل بإمكان الكاشير كتابة أي مبلغ آخر يدويًا.",
+  "@integrationAmountListDialogDescription": {
+    "description": "Explains the add-one-at-a-time dialog for a quick-pick amount list."
+  },
+  "integrationAmountListFieldLabel": "المبلغ",
+  "@integrationAmountListFieldLabel": {"description": "Label for the single-amount entry field."},
+  "integrationAmountListFieldHint": "مثال: 45",
+  "@integrationAmountListFieldHint": {"description": "Placeholder for the single-amount entry field."},
+  "integrationAmountListAddButton": "إضافة",
+  "@integrationAmountListAddButton": {"description": "Adds the typed amount to the list."},
+  "integrationAmountListInvalidError": "أدخل مبلغًا صحيحًا أكبر من صفر.",
+  "@integrationAmountListInvalidError": {"description": "Shown when the typed amount is not a positive number."},
+  "integrationAmountListDuplicateError": "هذا المبلغ موجود في القائمة بالفعل.",
+  "@integrationAmountListDuplicateError": {"description": "Shown when the typed amount is already in the list."},
+  "removeIntegrationAmountTooltip": "إزالة {amount}",
+  "@removeIntegrationAmountTooltip": {
+    "description": "Tooltip on the remove button for one amount in the quick-pick list.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
   "@rechargeSearchAction": {"description": ""},
   "rechargeSearchLabelLine": "رقم الهاتف أو اسم المستخدم",
   "@rechargeSearchLabelLine": {"description": ""},

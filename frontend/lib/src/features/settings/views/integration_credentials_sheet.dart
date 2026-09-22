@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -7,6 +9,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/integrations_view_model.dart';
+import 'integration_amount_list_field.dart';
 import 'integration_presentation.dart';
 
 /// Credentials for one resale provider. Resolves true when they were saved.
@@ -157,6 +160,25 @@ class _IntegrationCredentialsFormState
     return null;
   }
 
+  /// Opens the add/remove dialog for an ``amount_list`` setting and, if the
+  /// owner confirmed a change, writes it back into that setting's controller
+  /// in the SAME delimited shape [_changedSettings] already knows how to
+  /// read — so saving this field needs no code of its own beyond what
+  /// every other setting already has.
+  Future<void> _manageAmountList(IntegrationSetting setting, String title) async {
+    final l10n = AppLocalizations.of(context)!;
+    final controller = _settings[setting.key];
+    if (controller == null) return;
+    final updated = await showIntegrationAmountListDialog(
+      context: context,
+      title: title,
+      description: l10n.integrationAmountListDialogDescription,
+      initialAmounts: _splitAmounts(controller.text),
+    );
+    if (updated == null || !mounted) return;
+    setState(() => controller.text = updated.join('، '));
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isSaving = true);
@@ -259,6 +281,23 @@ class _IntegrationCredentialsFormState
                 Builder(
                   builder: (context) {
                     final copy = integrationSettingLabel(setting.key, l10n);
+                    if (setting.isAmountList) {
+                      // A list of amounts, added and removed one at a time —
+                      // never a text field asking the owner to type them
+                      // delimited by a comma and get the separator right.
+                      return IntegrationAmountListField(
+                        label: copy.label,
+                        helper: copy.hint,
+                        icon: copy.icon,
+                        amounts: _splitAmounts(
+                          _settings[setting.key]?.text ?? '',
+                        ),
+                        enabled: !_isSaving,
+                        onManage: () => unawaited(
+                          _manageAmountList(setting, copy.label),
+                        ),
+                      );
+                    }
                     return TextFormField(
                       controller: _settings[setting.key],
                       textDirection: TextDirection.ltr,
