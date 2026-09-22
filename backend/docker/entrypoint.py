@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -29,6 +30,7 @@ def main():
     if command == "web":
         boot_started = time.monotonic()
         require_secret("DJANGO_SECRET_KEY")
+        sweep_stale_temp_files()
         timed("wait_for_dependencies", wait_for_dependencies)
         timed("run_migrations", run_migrations)
         timed("collect_static", collect_static)
@@ -63,6 +65,55 @@ def main():
         exec_process(["python", "manage.py", "shell", *args])
 
     exec_process([command, *args])
+
+
+#: How long a temporary file has to be untouched before boot treats it as debris.
+#: Comfortably longer than the slowest thing that legitimately holds one open —
+#: a multi-gigabyte restore upload — so a sweep can never pull the floor out
+#: from under a request that is still running in another container.
+_TEMP_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
+
+
+def sweep_stale_temp_files():
+    """Delete leftovers in TMPDIR that no live process is still using.
+
+    TMPDIR is a volume now, not the tmpfs it used to be, because request bodies
+    and upload spools are measured in gigabytes and RAM is what a shop's server
+    has least of. The cost of that move is that nothing clears it any more: a
+    tmpfs came up empty after every restart, and an attachment upload that is
+    interrupted between spooling its file and moving it leaves that file behind
+    for good. One a week is invisible and permanent.
+
+    Anonymous spools — the ones Django's ASGI handler makes — never appear here
+    at all; POSIX unlinks them at creation, so the kernel reclaims them when the
+    process dies. This is only for the named ones.
+
+    Never fatal: a sweep that cannot run is not a reason a shop's till does not
+    come up.
+    """
+    root = os.environ.get("TMPDIR", "").strip()
+    if not root:
+        return
+    directory = Path(root)
+    cutoff = time.time() - _TEMP_FILE_MAX_AGE_SECONDS
+    removed = 0
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        return
+    for entry in entries:
+        try:
+            if entry.stat().st_mtime >= cutoff:
+                continue
+            if entry.is_dir():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                entry.unlink()
+            removed += 1
+        except OSError:
+            continue
+    if removed:
+        print(f"[boot] cleared {removed} stale temporary file(s) from {directory}", flush=True)
 
 
 def require_secret(name):

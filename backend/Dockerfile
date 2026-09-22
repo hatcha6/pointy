@@ -140,6 +140,11 @@ RUN set -eux; \
     apt-get autoremove -y; \
     rm -rf /var/lib/apt/lists/*
 
+# /var/tmp/pointy is where this container's temporary files go (TMPDIR in the
+# compose file mounts a volume over it). It exists here, owned by the app user,
+# so that Docker gives a fresh named volume the same ownership — a volume
+# mounted over a path the image does not have comes up owned by root, and the
+# process runs as `pointy`.
 RUN groupadd --system pointy \
     && useradd --system --gid pointy --home-dir /var/lib/pointy pointy \
     && mkdir -p \
@@ -147,8 +152,9 @@ RUN groupadd --system pointy \
         /var/lib/pointy/celerybeat \
         /var/lib/pointy/media \
         /var/lib/pointy/staticfiles \
+        /var/tmp/pointy \
         /tmp/pointy-backup-staging \
-    && chown -R pointy:pointy /var/lib/pointy /tmp/pointy-backup-staging
+    && chown -R pointy:pointy /var/lib/pointy /var/tmp/pointy /tmp/pointy-backup-staging
 
 COPY --from=build /opt/pointy-venv /opt/pointy-venv
 

@@ -95,6 +95,21 @@ x-backend-environment: &backend-environment
   # Uploaded legacy-POS database files and their converted copies. A named
   # volume, not /tmp: container /tmp is a 64 MB tmpfs and these are GB-sized.
   POINTY_MIGRATION_STAGING_ROOT: /var/lib/pointy/migration
+  # Every temporary file this container writes, on a disk volume rather than in
+  # the 64 MB tmpfs at /tmp.
+  #
+  # The one that forced this is not application code at all: under ASGI, Django
+  # reads a request body into a SpooledTemporaryFile that rolls over past
+  # FILE_UPLOAD_MAX_MEMORY_SIZE (2.5 MB) into whatever TMPDIR says — before any
+  # middleware, view or upload handler runs. So a 16 MiB migration chunk, and
+  # the whole of a multi-gigabyte restore archive, were written into RAM-backed
+  # /tmp. Past 64 MB that is ENOSPC inside Django's own handler, which is
+  # outside the middleware chain: the client gets no status and no body, just a
+  # dropped connection. Attachment uploads spool the same way.
+  #
+  # Compose already knew /tmp was too small — the backup staging root was moved
+  # off it for exactly this reason. This moves everything else.
+  TMPDIR: /var/tmp/pointy
   POINTY_BACKUP_RETENTION_COUNT: "14"
   # Enforced password floor. Everything above it (length 8, not numeric-only,
   # not a common password) is advice the UI shows, not a rule that blocks a
@@ -332,6 +347,7 @@ services:
       - pointy-clients:/var/lib/pointy/clients
       - pointy-backup-staging:/tmp/pointy-backup-staging
       - pointy-migration-staging:/var/lib/pointy/migration
+      - pointy-tmp:/var/tmp/pointy
       - type: bind
         source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
         target: /mnt/pointy-external/drive-1
@@ -384,6 +400,7 @@ services:
       - pointy-backups:/var/lib/pointy/backups
       - pointy-backup-staging:/tmp/pointy-backup-staging
       - pointy-migration-staging:/var/lib/pointy/migration
+      - pointy-tmp:/var/tmp/pointy
       - type: bind
         source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
         target: /mnt/pointy-external/drive-1
@@ -433,6 +450,7 @@ services:
       - pointy-backups:/var/lib/pointy/backups
       - pointy-backup-staging:/tmp/pointy-backup-staging
       - pointy-migration-staging:/var/lib/pointy/migration
+      - pointy-tmp:/var/tmp/pointy
       - type: bind
         source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
         target: /mnt/pointy-external/drive-1
@@ -613,3 +631,7 @@ volumes:
   pointy-celerybeat:
   pointy-connector-state:
   pointy-clients:
+  # TMPDIR for the backend and the Celery containers. A volume rather than a
+  # tmpfs: what lands here is request bodies and upload spools measured in
+  # gigabytes, and RAM is the one thing a shop's server has least of.
+  pointy-tmp:
