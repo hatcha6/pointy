@@ -288,6 +288,25 @@ void main() {
       expect(viewModel.buildDraft()!.offer.code, 'topup:45');
     });
 
+    test('a phone search addresses the line by the username it found', () async {
+      // The search term and the line's identifier are different strings for
+      // LNET, and everything after the search belongs to the identifier. The
+      // history tab asked for the phone number, which is not what the
+      // provider's payments report is keyed on — so a customer with top-ups
+      // showed none, on the search a till does most.
+      final repository = _FakeLnetRepo(resolvesTo: 'alhussainbasheir');
+      final viewModel = _lnetViewModel(repository);
+      await viewModel.lookup('0910682854');
+
+      expect(repository.lookedUp, ['0910682854']);
+      expect(repository.historyLookups, ['alhussainbasheir']);
+
+      // And the cart line carries the same identifier the recharge is keyed
+      // on, not the phone number somebody typed to find it.
+      viewModel.setCustomAmount(45);
+      expect(viewModel.buildDraft()!.subscriberRef, 'alhussainbasheir');
+    });
+
     test('a typed amount reaches the cart as an ordinary line', () async {
       final viewModel = _lnetViewModel(_FakeLnetRepo());
       await viewModel.lookup('basheir.home');
@@ -450,15 +469,23 @@ IntegrationCardInfo _lnetLine(
 }
 
 class _FakeLnetRepo extends IntegrationsRepository {
-  _FakeLnetRepo({this.manyLines = false, this.noQuickPicks = false})
-    : super(PosApiService());
+  _FakeLnetRepo({
+    this.manyLines = false,
+    this.noQuickPicks = false,
+    this.resolvesTo,
+  }) : super(PosApiService());
 
   /// When true the first lookup matches three lines, as one phone number can.
   final bool manyLines;
 
   /// When true the shop has cleared its quick-pick amounts.
   final bool noQuickPicks;
+
+  /// The username a search resolves to, when it is not the search term
+  /// itself — a phone lookup answers with the line's own username.
+  final String? resolvesTo;
   final List<String> lookedUp = [];
+  final List<String> historyLookups = [];
 
   @override
   Future<Result<IntegrationCardSnapshot>> lookupCard({
@@ -488,7 +515,11 @@ class _FakeLnetRepo extends IntegrationsRepository {
     }
     return Ok(
       IntegrationCardSnapshot(
-        card: _lnetLine(cardNo, status: 'Active', expireAt: DateTime(2026, 12, 1)),
+        card: _lnetLine(
+          resolvesTo ?? cardNo,
+          status: 'Active',
+          expireAt: DateTime(2026, 12, 1),
+        ),
         offers: noQuickPicks ? const [] : const [
           IntegrationOffer(
             code: 'topup:25',
@@ -522,6 +553,7 @@ class _FakeLnetRepo extends IntegrationsRepository {
     int limit = 10,
     int offset = 0,
   }) async {
+    historyLookups.add(cardNo);
     return Ok(IntegrationHistoryPage(ok: true, kind: kind, limit: limit));
   }
 }

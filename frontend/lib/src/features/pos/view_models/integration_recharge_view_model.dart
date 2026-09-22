@@ -45,6 +45,19 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   String get cardNo => _cardNo;
   IntegrationCardSnapshot? get snapshot => _snapshot;
 
+  /// The identifier the LINE is known by, which is not always what was typed.
+  ///
+  /// A cashier searches LNET by phone number and the line's own identifier is
+  /// a username the search merely found; for HD Box the two are the same
+  /// string. Everything that addresses the line afterwards — its history, its
+  /// cart line, naming its owner — belongs to this, and only the search
+  /// itself belongs to [cardNo]. Falls back to what was typed while there is
+  /// no resolved line yet (a search still running, or several still on offer).
+  String get _resolvedCardNo {
+    final resolved = _snapshot?.card.cardNo ?? '';
+    return resolved.isEmpty ? _cardNo : resolved;
+  }
+
   /// The provider's own reason for saying no, as a stable code.
   String get refusalCode => _refusalCode;
 
@@ -219,7 +232,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
 
     final result = await _repository.loadHistory(
       providerKey: providerKey,
-      cardNo: _cardNo,
+      cardNo: _resolvedCardNo,
       kind: _historyKind,
       limit: historyPageSize,
       offset: offset,
@@ -262,9 +275,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
     return IntegrationRechargeDraft(
       provider: provider,
       serviceVariant: snapshot.serviceVariant,
-      subscriberRef: snapshot.card.cardNo.isEmpty
-          ? _cardNo
-          : snapshot.card.cardNo,
+      subscriberRef: _resolvedCardNo,
       offer: offer,
       price: offer.price,
     );
@@ -284,7 +295,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
 
     final result = await _repository.identifySubscriber(
       providerKey,
-      snapshot.card.cardNo.isEmpty ? _cardNo : snapshot.card.cardNo,
+      _resolvedCardNo,
       customerId: customerId,
       displayName: displayName,
     );

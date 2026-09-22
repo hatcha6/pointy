@@ -863,6 +863,49 @@ class LnetCardViewTests(TestCase):
         self.assertEqual(resp.data["offers_error_code"], "")
         self.assertTrue(resp.data["subscriber"]["subscriber_ref"])
 
+    def test_a_phone_search_still_offers_somewhere_to_type_an_amount(self):
+        """The till's amount field, which went missing with the quick-picks.
+
+        ``open_amount`` and the offer list fail together — both come off the
+        same OfferResult — so the failed re-search took the typed-amount
+        field with it, and the recharge screen, seeing neither a button nor
+        a field, showed "تعذّر قراءة الأسعار من المزوّد" and nothing to sell.
+        A cashier could not fall back to typing the amount, because there was
+        nowhere left to type it.
+        """
+        with patch_lnet(lnet_session()):
+            resp = self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854"
+            )
+
+        open_amount = resp.data["open_amount"]
+        self.assertIsNotNone(open_amount, resp.data)
+        self.assertEqual(open_amount["minimum"], Decimal("1"))
+
+    def test_a_shop_that_keeps_only_two_quick_picks_gets_both_and_the_field(self):
+        """Annaseem's own configuration, end to end.
+
+        Two amounts is a deliberate answer, not a broken one — the provider
+        takes any amount and the field is always there, so a short list is a
+        shop saying "these two are what people ask for". What it must never
+        mean is an empty screen.
+        """
+        IntegrationAccount.objects.filter(provider="lnet").update(
+            config={catalog.SETTING_DENOMINATIONS: ["25", "45"]}
+        )
+        with patch_lnet(lnet_session()):
+            resp = self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854"
+            )
+
+        self.assertTrue(resp.data["ok"], resp.data)
+        self.assertEqual(
+            [offer["code"] for offer in resp.data["offers"]],
+            ["topup:25", "topup:45"],
+        )
+        self.assertEqual(resp.data["offers_error_code"], "")
+        self.assertIsNotNone(resp.data["open_amount"])
+
     def test_searching_by_the_exact_username_still_works(self):
         with patch_lnet(lnet_session()):
             resp = self.client.get(
