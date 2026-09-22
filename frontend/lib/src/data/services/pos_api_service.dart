@@ -1901,6 +1901,10 @@ class PosApiService {
     );
   }
 
+  Future<Map<int, double>> fetchLineCosts(List<int> variantIds) {
+    return _sales.fetchLineCosts(variantIds);
+  }
+
   Future<SaleDiscountPreview> previewSaleDiscounts(
     SaleDiscountPreviewDraft draft,
   ) {

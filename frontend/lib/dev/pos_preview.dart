@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // Dev-only preview harness for the POS and purchasing catalog browsers.
 //
 // Renders the real catalog panes inside faithful two-pane and compact
@@ -177,6 +179,11 @@ class _PosSurfaceState extends State<_PosSurface> {
           ),
           source: 'seed',
         );
+      // One line sold at an agreed price, so the repriced badge and the
+      // original price beside it can be looked at.
+      final repriced = _viewModel.cart.first;
+      _viewModel.setCartLinePrice(repriced.lineKey, 7.25);
+      unawaited(_viewModel.toggleCostRevealed());
     }
   }
 
@@ -743,7 +750,10 @@ final PosUser _managerUser = PosUser.fromJson(const {
   'id': 1,
   'username': 'manager',
   'role': 'manager',
-  'permissions': <String>[],
+  // Named explicitly so the preview exercises the affordances they unlock:
+  // the F9 cost row on a cart line and the reprice sheet. Neither is a role
+  // default for a cashier, which is the whole point of them.
+  'permissions': <String>['sales.view_till_cost', 'sales.override_line_price'],
 });
 
 final AuthorizationCapabilities _managerCaps =
@@ -871,6 +881,19 @@ class _FakeSaleRepository extends SaleRepository {
 
   // Demo discounts so the cart totals can be previewed with deductions (a rule
   // discount + a coupon), exercising the itemized-breakdown path.
+  @override
+  /// Plausible costs so the F9 row can be looked at. Roughly two thirds of
+  /// the shelf price, which is what makes the margin figure readable — and one
+  /// line deliberately has no cost at all, because a product the shop has
+  /// never bought is a real and common state.
+  @override
+  Future<Result<Map<int, double>>> loadLineCosts(List<int> variantIds) async {
+    return Ok({
+      for (final id in variantIds)
+        if (id % 4 != 0) id: (id * 3 % 7 + 2) * 0.85,
+    });
+  }
+
   @override
   Future<Result<SaleDiscountPreview>> previewDiscounts(
     SaleDiscountPreviewDraft draft,

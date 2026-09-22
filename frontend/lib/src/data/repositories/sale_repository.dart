@@ -100,6 +100,14 @@ class SaleRepository {
     return Result.guard(() => _service.previewSaleDiscounts(draft));
   }
 
+  /// What the cart cost the shop, keyed by variant id.
+  ///
+  /// Fails as an ordinary Result: a till whose cost lookup 403s or times out
+  /// keeps selling, it simply does not show the number.
+  Future<Result<Map<int, double>>> loadLineCosts(List<int> variantIds) async {
+    return Result.guard(() => _service.fetchLineCosts(variantIds));
+  }
+
   Future<Result<SaleOrderPage>> loadOrders({
     SaleOrderQuery query = const SaleOrderQuery(),
     int page = 1,

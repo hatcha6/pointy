@@ -99,6 +99,7 @@ class SaleCheckoutDraft {
               stockUnitId: line.stockUnitId,
               stockBatchId: line.stockBatchId,
               integration: line.integration,
+              manualUnitPrice: line.manualUnitPrice,
             ),
           )
           .toList(growable: false),
@@ -169,10 +170,12 @@ class SaleDiscountPreviewDraft {
             (line) => SaleCheckoutLineDraft(
               variantId: line.variant.id,
               quantity: line.quantity,
-              // Modifiers and the unit affect price, so the discount preview must
-              // carry them to return a total the cashier can trust. (Notes don't.)
+              // Modifiers, the unit and a repriced line all affect price, so
+              // the discount preview must carry them to return a total the
+              // cashier can trust. (Notes don't.)
               modifiers: line.modifiers,
               unit: line.unitCode,
+              manualUnitPrice: line.manualUnitPrice,
             ),
           )
           .toList(growable: false),
@@ -352,6 +355,7 @@ class SaleCheckoutLineDraft {
     this.stockUnitId,
     this.stockBatchId,
     this.integration,
+    this.manualUnitPrice,
   });
 
   final int variantId;
@@ -377,12 +381,20 @@ class SaleCheckoutLineDraft {
   /// the record, not to be believed as the selling price.
   final CartLineIntegration? integration;
 
+  /// A price the cashier typed for this line. Sent only when they actually
+  /// changed it; the server refuses it outright from anyone without
+  /// `sales.override_line_price` rather than quietly charging the shelf price,
+  /// because the customer has already been told the number.
+  final double? manualUnitPrice;
+
   Map<String, Object?> toJson() {
     final normalizedNotes = notes.trim();
     final normalizedUnit = unit.trim();
     return {
       'variant': variantId,
       'quantity': formatQuantityForApi(quantity),
+      if (manualUnitPrice != null)
+        'unit_price': manualUnitPrice!.toStringAsFixed(2),
       if (normalizedUnit.isNotEmpty) 'unit': normalizedUnit,
       if (normalizedNotes.isNotEmpty) 'notes': normalizedNotes,
       if (modifiers.isNotEmpty)

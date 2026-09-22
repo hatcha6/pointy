@@ -19611,4 +19611,49 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cameraWedgeNoCameras => 'لم يتم العثور على كاميرا على هذا الجهاز.';
+
+  @override
+  String get posShortcutToggleCost => 'إظهار/إخفاء تكلفة الأصناف';
+
+  @override
+  String cartLineCostLabel(String cost) {
+    return 'التكلفة: $cost';
+  }
+
+  @override
+  String get cartLineCostUnknown => 'لا توجد تكلفة مسجلة';
+
+  @override
+  String cartLineMarginLabel(String margin) {
+    return 'الربح: $margin';
+  }
+
+  @override
+  String get cartLineRepricedBadge => 'سعر معدّل';
+
+  @override
+  String get editLinePriceTitle => 'تعديل سعر البيع';
+
+  @override
+  String get editLinePriceFieldLabel => 'سعر الوحدة';
+
+  @override
+  String editLinePriceListPrice(String price) {
+    return 'السعر الأصلي: $price';
+  }
+
+  @override
+  String get editLinePriceBelowCostWarning => 'هذا السعر أقل من التكلفة.';
+
+  @override
+  String get editLinePriceInvalid => 'أدخل سعرًا صحيحًا.';
+
+  @override
+  String get editLinePriceReset => 'إرجاع السعر الأصلي';
+
+  @override
+  String get editLinePriceTooltip => 'تعديل السعر';
+
+  @override
+  String get costRevealedBanner => 'التكلفة ظاهرة — اضغط F9 للإخفاء';
 }

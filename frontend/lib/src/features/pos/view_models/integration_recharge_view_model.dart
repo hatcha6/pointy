@@ -92,8 +92,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   bool get hasStatusHistory => _snapshot?.hasStatusHistory ?? true;
 
   /// The lines this search matched, when it matched more than one.
-  List<IntegrationCardInfo> get candidates =>
-      _snapshot?.candidates ?? const [];
+  List<IntegrationCardInfo> get candidates => _snapshot?.candidates ?? const [];
 
   /// True while the cashier still has to say which line they mean. Nothing is
   /// priced and nothing may be added to a cart until they do.
@@ -138,8 +137,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   /// Re-runs the lookup against that line's own identifier rather than
   /// trusting the row we already have: the offers, and the confirmation that
   /// this line can be topped up at all, only exist for a single line.
-  Future<void> selectLine(IntegrationCardInfo line) =>
-      lookup(line.cardNo);
+  Future<void> selectLine(IntegrationCardInfo line) => lookup(line.cardNo);
 
   /// True when the float cannot cover the selected top-up. Advisory: the sale
   /// is still recorded, and the shop tops the float up separately — but a

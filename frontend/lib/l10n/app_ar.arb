@@ -13685,5 +13685,72 @@
   "cameraWedgeNoCameras": "لم يتم العثور على كاميرا على هذا الجهاز.",
   "@cameraWedgeNoCameras": {
     "description": "Shown when no cameras are found"
+  },
+  "posShortcutToggleCost": "إظهار/إخفاء تكلفة الأصناف",
+  "@posShortcutToggleCost": {
+    "description": "F9 toggles cost visibility at the till"
+  },
+  "cartLineCostLabel": "التكلفة: {cost}",
+  "@cartLineCostLabel": {
+    "description": "Cost of one unit on a cart row",
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "cartLineCostUnknown": "لا توجد تكلفة مسجلة",
+  "@cartLineCostUnknown": {
+    "description": "Shown when the shop never bought the product"
+  },
+  "cartLineMarginLabel": "الربح: {margin}",
+  "@cartLineMarginLabel": {
+    "description": "Per-unit margin on a cart row",
+    "placeholders": {
+      "margin": {
+        "type": "String"
+      }
+    }
+  },
+  "cartLineRepricedBadge": "سعر معدّل",
+  "@cartLineRepricedBadge": {
+    "description": "Badge marking a repriced cart line"
+  },
+  "editLinePriceTitle": "تعديل سعر البيع",
+  "@editLinePriceTitle": {
+    "description": "Title of the reprice sheet"
+  },
+  "editLinePriceFieldLabel": "سعر الوحدة",
+  "@editLinePriceFieldLabel": {
+    "description": "Price field label"
+  },
+  "editLinePriceListPrice": "السعر الأصلي: {price}",
+  "@editLinePriceListPrice": {
+    "description": "The shop's own price, for reference",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "editLinePriceBelowCostWarning": "هذا السعر أقل من التكلفة.",
+  "@editLinePriceBelowCostWarning": {
+    "description": "Warned when repricing under cost"
+  },
+  "editLinePriceInvalid": "أدخل سعرًا صحيحًا.",
+  "@editLinePriceInvalid": {
+    "description": "Invalid price entry"
+  },
+  "editLinePriceReset": "إرجاع السعر الأصلي",
+  "@editLinePriceReset": {
+    "description": "Clears the manual price"
+  },
+  "editLinePriceTooltip": "تعديل السعر",
+  "@editLinePriceTooltip": {
+    "description": "Tooltip on the reprice affordance"
+  },
+  "costRevealedBanner": "التكلفة ظاهرة — اضغط F9 للإخفاء",
+  "@costRevealedBanner": {
+    "description": "Reminder that cost is on screen"
   }
 }

@@ -546,6 +546,39 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
+  /// Sets (or clears) the price a cashier typed for a cart line.
+  ///
+  /// Passing null puts the line back on the shop's own price, which is what
+  /// makes a mis-typed figure recoverable without deleting the line and
+  /// scanning it again with a customer waiting.
+  ///
+  /// The client does not enforce the permission — the server refuses an
+  /// override from anyone without `sales.override_line_price`, and refuses it
+  /// rather than quietly charging the shelf price. This only hides the
+  /// affordance from people who cannot use it.
+  void setCartLinePrice(String lineKey, double? unitPrice) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
+    if (index == -1) {
+      return;
+    }
+    final line = _cart[index];
+    // A price equal to what it would have sold for anyway is not an override:
+    // recording it as one would put a repriced badge on a line nobody changed.
+    final normalized = unitPrice == null || unitPrice == line.listUnitPrice
+        ? null
+        : unitPrice;
+    if (normalized == line.manualUnitPrice) {
+      return;
+    }
+    _cart[index] = line.copyWith(manualUnitPrice: normalized);
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+  }
+
   /// Replaces the modifier selection on a cart line (used when editing from the
   /// cart). Modifiers affect price, so the discount preview is refreshed.
   void setCartLineModifiers(String lineKey, List<CartLineModifier> modifiers) {

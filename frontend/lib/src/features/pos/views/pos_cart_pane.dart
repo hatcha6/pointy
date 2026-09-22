@@ -27,6 +27,7 @@ import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
 import 'cart_line_note_sheet.dart';
 import 'cart_line_tile.dart';
+import 'line_price_sheet.dart';
 import 'pos_batch_picker_sheet.dart';
 import 'unit_quantity_sheet.dart';
 import 'weight_entry_sheet.dart';
@@ -106,6 +107,7 @@ class PosCartPane extends StatelessWidget {
                       child: _CartScrollContent(
                         viewModel: viewModel,
                         isCartLocked: isCartLocked,
+                        capabilities: capabilities,
                       ),
                     ),
                   ),
@@ -555,10 +557,16 @@ class _CartScrollContent extends StatefulWidget {
   const _CartScrollContent({
     required this.viewModel,
     required this.isCartLocked,
+    required this.capabilities,
   });
 
   final PosViewModel viewModel;
   final bool isCartLocked;
+
+  /// Decides whether a row may show cost and offer a reprice. The server
+  /// is the authority for both; this only hides affordances nobody could
+  /// use.
+  final AuthorizationCapabilities capabilities;
 
   @override
   State<_CartScrollContent> createState() => _CartScrollContentState();
@@ -891,6 +899,22 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                                   _viewModel.trackedStockRepository == null
                               ? null
                               : () => _editLineBatch(context, line),
+                          // A top-up's price comes from the provider's live
+                          // quote plus the shop's markup — it is not the
+                          // shop's number to type over.
+                          onEditPrice:
+                              widget.isCartLocked ||
+                                  !widget.capabilities.canOverrideLinePrice ||
+                                  line.isIntegrationRecharge
+                              ? null
+                              : () => _editLinePrice(context, line),
+                          unitCost: widget.capabilities.canViewTillCost
+                              ? _viewModel.costForVariant(line.variant.id)
+                              : null,
+                          isLoadingCost:
+                              widget.capabilities.canViewTillCost &&
+                              _viewModel.isCostRevealed &&
+                              _viewModel.isLoadingCosts,
                         ),
                       );
                     },
@@ -912,6 +936,19 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   /// and refusing them would mean voiding the line and starting again. Picking
   /// the one the till would have chosen anyway clears the pin rather than
   /// setting it, so the line goes back to first-expiring-first-out.
+  Future<void> _editLinePrice(BuildContext context, CartLine line) async {
+    final price = await showLinePriceSheet(
+      context,
+      line: line,
+      unitCost: _viewModel.costForVariant(line.variant.id),
+    );
+    if (price == null) return; // dismissed, which is not the same as cleared
+    _viewModel.setCartLinePrice(
+      line.lineKey,
+      price == clearedLinePrice ? null : price,
+    );
+  }
+
   Future<void> _editLineBatch(BuildContext context, CartLine line) async {
     final repository = _viewModel.trackedStockRepository;
     if (repository == null) {
@@ -1315,9 +1352,7 @@ Future<void> _showRechargeOutcomeDialog(
     barrierDismissible: unresolved.isEmpty,
     builder: (dialogContext) => AlertDialog(
       icon: Icon(
-        unresolved.isEmpty
-            ? Icons.error_outline
-            : Icons.help_outline,
+        unresolved.isEmpty ? Icons.error_outline : Icons.help_outline,
         color: unresolved.isEmpty ? colors.danger : colors.warning,
       ),
       title: Text(
@@ -1345,8 +1380,9 @@ Future<void> _showRechargeOutcomeDialog(
                   ),
                   Text(
                     integrationErrorText(row.errorCode, l10n),
-                    style: Theme.of(dialogContext).textTheme.bodySmall
-                        ?.copyWith(color: colors.mutedInk),
+                    style: Theme.of(
+                      dialogContext,
+                    ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                   ),
                 ],
               ),

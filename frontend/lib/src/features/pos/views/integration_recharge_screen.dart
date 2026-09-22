@@ -457,9 +457,10 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
       // While several lines are still on offer nothing has been priced, so
       // naming a duration or an amount would be asking for the wrong thing.
       null when viewModel.needsLineSelection => l10n.rechargeChooseLineHeading,
-      null => viewModel.allowsCustomAmount
-          ? l10n.rechargeSelectAmountFirst
-          : l10n.rechargeSelectFirst,
+      null =>
+        viewModel.allowsCustomAmount
+            ? l10n.rechargeSelectAmountFirst
+            : l10n.rechargeSelectFirst,
       final chosen when chosen.months > 0 =>
         '${l10n.rechargeMonths(chosen.months)} · ${formatMoney(chosen.price)}',
       final chosen when chosen.isTopUp => formatMoney(chosen.price),

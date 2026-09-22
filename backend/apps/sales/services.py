@@ -158,6 +158,10 @@ def create_order_with_lines(
             # Effective price folds in the selected unit's price + modifier deltas;
             # falls back to the bare variant price for lines without either.
             unit_price=line_data.get("effective_unit_price", variant.unit_price),
+            # Only set when a cashier actually repriced this line, so the
+            # column reads as "changed, from this" rather than as a duplicate
+            # of unit_price on every ordinary sale.
+            original_unit_price=line_data.get("original_unit_price"),
             unit_cost=money(base_unit_cost * unit_factor),
             discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
             notes=line_data.get("notes", ""),

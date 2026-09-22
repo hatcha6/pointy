@@ -282,7 +282,9 @@ class _RechargeAmountFieldState extends State<RechargeAmountField> {
     super.didUpdateWidget(old);
     // A quick-pick tap clears the typed amount upstream; follow it here so the
     // field cannot keep showing a number that is not what will be sold.
-    if (widget.value == null && old.value != null && _controller.text.isNotEmpty) {
+    if (widget.value == null &&
+        old.value != null &&
+        _controller.text.isNotEmpty) {
       _controller.clear();
     }
   }
@@ -443,8 +445,9 @@ class _OfferCard extends StatelessWidget {
                           ? theme.textTheme.titleSmall
                           : theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w700,
-                              color:
-                                  isSelected ? colors.primaryDark : colors.ink,
+                              color: isSelected
+                                  ? colors.primaryDark
+                                  : colors.ink,
                             ),
                     ),
                   ),

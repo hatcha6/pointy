@@ -68,6 +68,7 @@ class CartLine {
     this.unitLabel = '',
     this.unitFactor = 1,
     this.unitPriceOverride,
+    this.manualUnitPrice,
     this.stockUnitId,
     this.stockUnitCode = '',
     this.stockBatchId,
@@ -90,6 +91,7 @@ class CartLine {
     String unitLabel = '',
     double unitFactor = 1,
     double? unitPriceOverride,
+    double? manualUnitPrice,
     int? stockUnitId,
     String stockUnitCode = '',
     int? stockBatchId,
@@ -107,6 +109,7 @@ class CartLine {
       unitLabel: unitLabel,
       unitFactor: unitFactor,
       unitPriceOverride: unitPriceOverride,
+      manualUnitPrice: manualUnitPrice,
       stockUnitId: stockUnitId,
       stockUnitCode: stockUnitCode,
       stockBatchId: stockBatchId,
@@ -142,6 +145,20 @@ class CartLine {
   /// Resolved per-unit price for [unitCode] (before modifiers); null = the bare
   /// variant price (base unit).
   final double? unitPriceOverride;
+
+  /// A price the cashier typed for this line, replacing everything computed.
+  ///
+  /// Distinct from [unitPriceOverride], which is the shop's own price for the
+  /// chosen unit — a box costing twelve times a piece is arithmetic, not a
+  /// decision. This is the decision, it needs
+  /// `sales.override_line_price`, and the server records what the line would
+  /// otherwise have sold for.
+  ///
+  /// It replaces the WHOLE per-unit price rather than the base of it, because
+  /// the number the cashier edited was the one on the row, modifiers already
+  /// folded in; re-adding a modifier delta on top would charge more than the
+  /// screen said.
+  final double? manualUnitPrice;
 
   /// The identified article this line rings up, when the product has them.
   ///
@@ -193,9 +210,17 @@ class CartLine {
   /// Quantity converted to the product's base unit (for stock-style display).
   double get baseQuantity => quantity * unitFactor;
 
-  double get unitPrice =>
+  double get unitPrice => manualUnitPrice ?? listUnitPrice;
+
+  /// What this line would sell for if nobody had repriced it. Shown struck
+  /// through beside the new price, so the change is visible on the row rather
+  /// than only in the total.
+  double get listUnitPrice =>
       (unitPriceOverride ?? variant.unitPrice) +
       modifiers.fold<double>(0, (sum, modifier) => sum + modifier.unitDelta);
+
+  /// Whether a cashier changed this line's price.
+  bool get isRepriced => manualUnitPrice != null;
 
   double get subtotal => unitPrice * quantity;
 
@@ -221,6 +246,7 @@ class CartLine {
     double? unitFactor,
     // Sentinel so the override can be cleared back to null (switching to base).
     Object? unitPriceOverride = _noChange,
+    Object? manualUnitPrice = _noChange,
     Object? stockUnitId = _noChange,
     String? stockUnitCode,
     Object? stockBatchId = _noChange,
@@ -240,6 +266,9 @@ class CartLine {
       unitPriceOverride: identical(unitPriceOverride, _noChange)
           ? this.unitPriceOverride
           : unitPriceOverride as double?,
+      manualUnitPrice: identical(manualUnitPrice, _noChange)
+          ? this.manualUnitPrice
+          : manualUnitPrice as double?,
       stockUnitId: identical(stockUnitId, _noChange)
           ? this.stockUnitId
           : stockUnitId as int?,
@@ -270,6 +299,7 @@ class CartLine {
       'unit_label': unitLabel,
       'unit_factor': unitFactor,
       'unit_price_override': unitPriceOverride,
+      'manual_unit_price': manualUnitPrice,
       'stock_unit_id': stockUnitId,
       'stock_unit_code': stockUnitCode,
       'stock_batch_id': stockBatchId,
@@ -294,6 +324,7 @@ class CartLine {
     }
     final modifiersJson = json['modifiers'];
     final override = json['unit_price_override'];
+    final manual = json['manual_unit_price'];
     return CartLine(
       variant: ProductVariant.fromJson(variantJson),
       quantity: _doubleFromJson(json['quantity']),
@@ -308,6 +339,9 @@ class CartLine {
       unitLabel: json['unit_label']?.toString() ?? '',
       unitFactor: _doubleFromJson(json['unit_factor'], fallback: 1),
       unitPriceOverride: override == null ? null : _doubleFromJson(override),
+      // A held invoice keeps the price the cashier agreed with the customer;
+      // restoring it at the shelf price would quietly change the deal.
+      manualUnitPrice: manual == null ? null : _doubleFromJson(manual),
       stockUnitId: _intOrNull(json['stock_unit_id']),
       stockUnitCode: json['stock_unit_code']?.toString() ?? '',
       stockBatchId: _intOrNull(json['stock_batch_id']),

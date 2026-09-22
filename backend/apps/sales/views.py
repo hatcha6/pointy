@@ -12,7 +12,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
-from apps.catalog.models import VariantOptionValue
+from apps.catalog.models import ProductVariant, VariantOptionValue
 from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
@@ -48,8 +48,10 @@ from .serializers import (
     RegisterCashMovementSerializer,
     RegisterSessionCloseSerializer,
     RegisterSessionSerializer,
+    LineCostRequestSerializer,
     RegisterSessionStartSerializer,
 )
+from .services import money, sale_cost_basis, selling_warehouse_id
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +149,10 @@ class OrderViewSet(
         # browsing the list. Visibility for the adjustment verbs above is widened
         # for this permission in get_queryset (the verbs keep needing add_order).
         "lookup": ("sales.process_return_lookup",),
+        # What the cart cost the shop. Its own permission, because it is the
+        # most sensitive number a shop has and a cashier does not get it by
+        # virtue of being able to sell.
+        "line_costs": ("sales.view_till_cost",),
     }
     queryset = Order.objects.with_serializer_relations()
     filterset_class = OrderFilter
@@ -314,9 +320,49 @@ class OrderViewSet(
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=["post"], url_path="line-costs")
+    def line_costs(self, request):
+        """What the variants in a cart cost, per base unit.
+
+        A POST rather than a GET because a cart is a list and a till's cart can
+        be long enough to trouble a query string; and its own endpoint rather
+        than a field on the catalog, because the catalog list serves fifty
+        products a page to everyone, while this is a handful of variants for
+        the few people allowed to see them.
+
+        The figure is the valuation ledger's, which is the same basis the
+        loss guard compares an asking price against — so a cashier who is
+        shown 12.00 and refused a sale at 11.50 is looking at the number that
+        refused them, not a different one.
+        """
+        serializer = LineCostRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        variants = list(
+            ProductVariant.objects.filter(
+                pk__in=serializer.validated_data["variants"]
+            )
+        )
+        costs = sale_cost_basis(
+            variants, warehouse=selling_warehouse_id(request)
+        )
+        return Response(
+            {
+                "costs": {
+                    str(variant_id): str(money(cost))
+                    for variant_id, cost in costs.items()
+                }
+            }
+        )
+
     @action(detail=False, methods=["post"], url_path="discount-preview")
     def discount_preview(self, request):
-        serializer = DiscountPreviewSerializer(data=request.data)
+        # The request rides along so the preview prices a repriced line the
+        # same way checkout will. Without it the cashier would see one total
+        # while typing and a different one on the payment screen, which is
+        # the kind of disagreement that makes a till untrustworthy.
+        serializer = DiscountPreviewSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         return Response(serializer.preview_data)
 

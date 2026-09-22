@@ -56,6 +56,7 @@ class _PosShortcutsSheet extends StatelessWidget {
       _PosShortcutGroup(l10n.posShortcutsSectionItems, [
         _PosShortcut(const ['F2'], l10n.posShortcutCycleUnit),
         _PosShortcut(const ['F4'], l10n.posShortcutDeleteLine),
+        _PosShortcut(const ['F9'], l10n.posShortcutToggleCost),
       ]),
       _PosShortcutGroup(l10n.posShortcutsSectionCheckout, [
         _PosShortcut([commandKey, 'Enter'], l10n.posShortcutCheckout),

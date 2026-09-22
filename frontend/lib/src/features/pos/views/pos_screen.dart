@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -699,6 +700,18 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
             }
             if (key == LogicalKeyboardKey.f4) {
               _deleteActiveLine();
+              return true;
+            }
+            // F9 shows or hides cost. A keypress rather than a screen the
+            // cashier navigates to, because the question is "what does this
+            // cost" asked mid-haggle with a customer across the counter —
+            // and the same counter is why it goes away again just as fast.
+            // Deliberately far from F4, which deletes.
+            if (key == LogicalKeyboardKey.f9) {
+              if (!capabilities.canViewTillCost) {
+                return false;
+              }
+              unawaited(viewModel.toggleCostRevealed());
               return true;
             }
             return false;

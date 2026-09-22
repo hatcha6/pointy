@@ -70,6 +70,19 @@ enum AppCapability {
   manageIntegrations,
   useIntegrations,
   recordIntegrationTopUp,
+
+  /// Sees what a product cost while selling it. The single most sensitive
+  /// number a shop has — what the owner pays a supplier — so it is off for a
+  /// cashier by default and granted per person. Even once granted the till
+  /// keeps it hidden until a keypress: a customer leaning over the counter
+  /// reads the screen too.
+  viewTillCost,
+
+  /// Changes a cart line's selling price before the sale. Separate from
+  /// [viewTillCost] because it is revenue rather than knowledge: a shop may
+  /// well want a senior cashier to know the floor without being able to
+  /// discount to it. The server records what the line would have sold for.
+  overrideLinePrice,
   viewConversations,
   manageConversations,
   manageCampaigns,
@@ -632,6 +645,18 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.recordIntegrationTopUp);
       }
+      // Cost at the till, and repricing a line there. Two rights on purpose:
+      // knowing what a thing cost and deciding what it sells for are held by
+      // different people in most shops.
+      if (_hasAny(user, const ['view_till_cost', 'sales.view_till_cost'])) {
+        capabilities.add(AppCapability.viewTillCost);
+      }
+      if (_hasAny(user, const [
+        'override_line_price',
+        'sales.override_line_price',
+      ])) {
+        capabilities.add(AppCapability.overrideLinePrice);
+      }
       // Cameras. Watching, reviewing recordings and exporting a copy are three
       // different levels of trust, so they are three permissions — a floor
       // supervisor typically holds the first two and not the third.
@@ -993,6 +1018,8 @@ class AuthorizationCapabilities {
   bool get canRecordIntegrationTopUp =>
       allows(AppCapability.recordIntegrationTopUp);
   bool get canViewConversations => allows(AppCapability.viewConversations);
+  bool get canViewTillCost => allows(AppCapability.viewTillCost);
+  bool get canOverrideLinePrice => allows(AppCapability.overrideLinePrice);
   bool get canManageConversations => allows(AppCapability.manageConversations);
   bool get canManageCampaigns => allows(AppCapability.manageCampaigns);
   bool get canSendCampaigns => allows(AppCapability.sendCampaigns);

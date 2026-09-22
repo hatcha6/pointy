@@ -1016,6 +1016,24 @@ class CheckoutLineSerializer(serializers.Serializer):
     # computed from the shop's markup setting, never taken from this payload.
     integration = IntegrationLineSerializer(required=False)
 
+    # What a cashier repriced this line to, per unit, in the cart.
+    #
+    # The ONE place a client price is believed, and only from somebody holding
+    # `sales.override_line_price`. Everything else on this line is priced
+    # server-side precisely so a till cannot assert a margin; this is the
+    # deliberate exception, and it is recorded rather than waved through: the
+    # line keeps what it would have sold for, and the shop's
+    # prevent_selling_at_loss guard still reads the overridden figure, so
+    # repricing below cost is refused exactly as a discount to the same number
+    # would be.
+    unit_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         list_serializer_class = CheckoutLineListSerializer
 
@@ -1064,12 +1082,45 @@ class CheckoutLineSerializer(serializers.Serializer):
         # A top-up is priced from the provider's live quote plus the shop's own
         # markup, not from the service product's standing price (which is zero
         # on purpose — a price nobody maintains is a price that goes stale).
+        # Applied AFTER the ordinary price resolution above, so what the
+        # cashier typed is what the line sells at — the number they were
+        # looking at in the cart already included the unit and any modifiers,
+        # and quietly re-adding a modifier delta on top would charge more than
+        # the screen said.
+        override = attrs.pop("unit_price", None)
+        if override is not None:
+            if not self._may_override_price():
+                raise serializers.ValidationError(
+                    {
+                        "unit_price": (
+                            "You do not have permission to change a price at "
+                            "the till."
+                        )
+                    }
+                )
+            previous = attrs["effective_unit_price"]
+            if override != previous:
+                attrs["original_unit_price"] = previous
+                attrs["effective_unit_price"] = override
+
         integration = attrs.get("integration")
         if integration:
             resolved_integration = resolve_line_integration(integration, variant)
             attrs["integration"] = resolved_integration
             attrs["effective_unit_price"] = resolved_integration["price"]
         return attrs
+
+    def _may_override_price(self):
+        """Whether this caller may set a line's price.
+
+        Absent a request — a direct service call, a script — nothing is
+        permitted, because there is nobody to hold the right.
+        """
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not user.is_authenticated:
+            return False
+        return user.has_perm("sales.override_line_price")
 
     def _unit_asking_price(self, attrs, resolved):
         """This particular article's own price, when it has one.
@@ -1629,6 +1680,21 @@ class ConvertQuotationSerializer(serializers.Serializer):
             register_session=self.context["register_session"],
             request=self.context.get("request"),
         )
+
+
+class LineCostRequestSerializer(serializers.Serializer):
+    """The variants a till wants the cost of.
+
+    Capped because this is an authenticated endpoint that reads the valuation
+    ledger, and a cart is a cart — nobody rings up two hundred distinct
+    products at a counter, so a request that claims to is not a cart.
+    """
+
+    variants = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=200,
+    )
 
 
 class DiscountPreviewSerializer(serializers.Serializer):

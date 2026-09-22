@@ -818,13 +818,13 @@ class SaleCheckoutOutcome {
     InvoicePrintStatus printStatus, {
     List<IntegrationChargeResult> recharges = const [],
   }) : this._(
-        isSuccess: true,
-        isStockRejected: false,
-        isLossRejected: false,
-        order: order,
-        printStatus: printStatus,
-        recharges: recharges,
-      );
+         isSuccess: true,
+         isStockRejected: false,
+         isLossRejected: false,
+         order: order,
+         printStatus: printStatus,
+         recharges: recharges,
+       );
 
   const SaleCheckoutOutcome.failure()
     : this._(isSuccess: false, isStockRejected: false, isLossRejected: false);

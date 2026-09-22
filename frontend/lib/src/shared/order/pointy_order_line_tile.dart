@@ -9,6 +9,7 @@ class PointyOrderLineTile extends StatelessWidget {
     super.key,
     required this.title,
     required this.unitPriceLabel,
+    this.onUnitPriceTap,
     required this.totalLabel,
     required this.quantity,
     required this.incrementTooltip,
@@ -27,6 +28,11 @@ class PointyOrderLineTile extends StatelessWidget {
   final String? subtitle;
   final String? detail;
   final String unitPriceLabel;
+
+  /// Makes the per-unit price tappable — used by the till to reprice a
+  /// line in place. Null everywhere else, which is every other caller and
+  /// every user without the right, so the price stays plain text.
+  final VoidCallback? onUnitPriceTap;
   final String totalLabel;
   final double quantity;
   final String? imageUrl;
@@ -48,6 +54,7 @@ class PointyOrderLineTile extends StatelessWidget {
           subtitle: subtitle,
           detail: detail,
           unitPriceLabel: unitPriceLabel,
+          onUnitPriceTap: onUnitPriceTap,
           totalLabel: totalLabel,
           quantity: quantity,
           imageUrl: imageUrl,
@@ -76,6 +83,7 @@ class _LineContent extends StatelessWidget {
     required this.subtitle,
     required this.detail,
     required this.unitPriceLabel,
+    this.onUnitPriceTap,
     required this.totalLabel,
     required this.quantity,
     required this.imageUrl,
@@ -93,6 +101,11 @@ class _LineContent extends StatelessWidget {
   final String? subtitle;
   final String? detail;
   final String unitPriceLabel;
+
+  /// Makes the per-unit price tappable — used by the till to reprice a
+  /// line in place. Null everywhere else, which is every other caller and
+  /// every user without the right, so the price stays plain text.
+  final VoidCallback? onUnitPriceTap;
   final String totalLabel;
   final double quantity;
   final String? imageUrl;
@@ -112,6 +125,7 @@ class _LineContent extends StatelessWidget {
       subtitle: subtitle,
       detail: detail,
       unitPriceLabel: unitPriceLabel,
+      onUnitPriceTap: onUnitPriceTap,
     );
     final actions = _LineActions(
       totalLabel: totalLabel,
@@ -179,12 +193,18 @@ class _ProductInfo extends StatelessWidget {
     required this.subtitle,
     required this.detail,
     required this.unitPriceLabel,
+    this.onUnitPriceTap,
   });
 
   final String title;
   final String? subtitle;
   final String? detail;
   final String unitPriceLabel;
+
+  /// Makes the per-unit price tappable — used by the till to reprice a
+  /// line in place. Null everywhere else, which is every other caller and
+  /// every user without the right, so the price stays plain text.
+  final VoidCallback? onUnitPriceTap;
 
   @override
   Widget build(BuildContext context) {
@@ -225,18 +245,66 @@ class _ProductInfo extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 4),
-        Text(
-          unitPriceLabel,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        // Tap the price to change it, when the caller allows it. The pencil
+        // used to sit on a row of its own beneath the line, which spent a
+        // whole row saying one thing; beside the number it changes, it needs
+        // neither a row nor a caption.
+        _UnitPrice(
+          label: unitPriceLabel,
+          onTap: onUnitPriceTap,
           style: switch (textTheme.bodySmall?.copyWith(
-            color: colors.mutedInk,
+            color: onUnitPriceTap == null
+                ? colors.mutedInk
+                : colors.primaryStrong,
+            fontWeight: onUnitPriceTap == null ? null : FontWeight.w700,
           )) {
             final style? => PointyTypography.numeric(style),
             null => null,
           },
         ),
       ],
+    );
+  }
+}
+
+class _UnitPrice extends StatelessWidget {
+  const _UnitPrice({required this.label, required this.style, this.onTap});
+
+  final String label;
+  final TextStyle? style;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    if (onTap == null) return text;
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: InkWell(
+        key: const ValueKey('order_line_unit_price_tap'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.only(end: 4, top: 2, bottom: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: text),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.edit_outlined,
+                size: 13,
+                color: context.pointyColors.primaryStrong,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -269,13 +337,22 @@ class _LineActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
+    // Aligned to the START when this row is on a line of its own.
+    //
+    // Beside the product info it reads as a column of totals, so it hugs the
+    // stepper. Wrapped onto its own line it did the same and left the far edge
+    // empty — the line total floating in the middle of the row with dead space
+    // beside it. On its own line it belongs at the far edge, with the stepper
+    // at the other, so the row visibly spans the width it occupies.
     final amount = FittedBox(
       fit: BoxFit.scaleDown,
-      alignment: AlignmentDirectional.centerEnd,
+      alignment: compact
+          ? AlignmentDirectional.centerStart
+          : AlignmentDirectional.centerEnd,
       child: Text(
         totalLabel,
         maxLines: 1,
-        textAlign: TextAlign.end,
+        textAlign: compact ? TextAlign.start : TextAlign.end,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: colors.ink,
           fontWeight: FontWeight.w700,

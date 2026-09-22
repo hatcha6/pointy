@@ -33749,6 +33749,84 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لم يتم العثور على كاميرا على هذا الجهاز.'**
   String get cameraWedgeNoCameras;
+
+  /// F9 toggles cost visibility at the till
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار/إخفاء تكلفة الأصناف'**
+  String get posShortcutToggleCost;
+
+  /// Cost of one unit on a cart row
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة: {cost}'**
+  String cartLineCostLabel(String cost);
+
+  /// Shown when the shop never bought the product
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تكلفة مسجلة'**
+  String get cartLineCostUnknown;
+
+  /// Per-unit margin on a cart row
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح: {margin}'**
+  String cartLineMarginLabel(String margin);
+
+  /// Badge marking a repriced cart line
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر معدّل'**
+  String get cartLineRepricedBadge;
+
+  /// Title of the reprice sheet
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل سعر البيع'**
+  String get editLinePriceTitle;
+
+  /// Price field label
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الوحدة'**
+  String get editLinePriceFieldLabel;
+
+  /// The shop's own price, for reference
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر الأصلي: {price}'**
+  String editLinePriceListPrice(String price);
+
+  /// Warned when repricing under cost
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا السعر أقل من التكلفة.'**
+  String get editLinePriceBelowCostWarning;
+
+  /// Invalid price entry
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل سعرًا صحيحًا.'**
+  String get editLinePriceInvalid;
+
+  /// Clears the manual price
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع السعر الأصلي'**
+  String get editLinePriceReset;
+
+  /// Tooltip on the reprice affordance
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل السعر'**
+  String get editLinePriceTooltip;
+
+  /// Reminder that cost is on screen
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة ظاهرة — اضغط F9 للإخفاء'**
+  String get costRevealedBanner;
 }
 
 class _AppLocalizationsDelegate

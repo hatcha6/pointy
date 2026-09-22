@@ -359,6 +359,62 @@ class PosViewModel extends ChangeNotifier {
   ProductQuery? _catalogLoadFutureQuery;
   Future<void>? _checkoutSettingsLoadFuture;
   Future<void>? _registerSessionLoadFuture;
+  // ------------------------------------------------------------ till cost
+  //
+  // Hidden until asked for, even from somebody allowed to see it. The number
+  // is what the owner pays a supplier, and a POS screen faces a counter that
+  // customers lean over — so the permission decides WHO may see it and the
+  // keypress decides WHEN, which are different questions.
+  bool _isCostRevealed = false;
+  Map<int, double> _costByVariant = const {};
+  bool _isLoadingCosts = false;
+
+  /// Whether cost is on screen right now.
+  bool get isCostRevealed => _isCostRevealed;
+
+  /// Cost per base unit for a cart line's variant, or null when it is hidden,
+  /// not yet loaded, or the shop has never bought the product.
+  double? costForVariant(int variantId) =>
+      _isCostRevealed ? _costByVariant[variantId] : null;
+
+  bool get isLoadingCosts => _isLoadingCosts;
+
+  /// Show or hide cost. Bound to F9 at the till.
+  ///
+  /// Revealing loads what is missing; hiding keeps what was loaded, because
+  /// the cashier toggling it off and on again is the common case and a second
+  /// round trip for the same cart would make the key feel broken.
+  Future<void> toggleCostRevealed() async {
+    _isCostRevealed = !_isCostRevealed;
+    notifyListeners();
+    if (_isCostRevealed) {
+      await _loadMissingCosts();
+    }
+  }
+
+  /// Fetch costs for anything in the cart we do not have yet.
+  Future<void> _loadMissingCosts() async {
+    final missing = <int>{
+      for (final line in _cart)
+        if (!_costByVariant.containsKey(line.variant.id)) line.variant.id,
+    };
+    if (missing.isEmpty || _isLoadingCosts) return;
+    _isLoadingCosts = true;
+    notifyListeners();
+
+    final result = await _saleRepository.loadLineCosts(missing.toList());
+    switch (result) {
+      case Ok<Map<int, double>>(value: final costs):
+        _costByVariant = {..._costByVariant, ...costs};
+      case Error<Map<int, double>>():
+        // A till whose cost lookup fails keeps selling; it simply shows no
+        // number. Nothing about a sale depends on this.
+        break;
+    }
+    _isLoadingCosts = false;
+    notifyListeners();
+  }
+
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
     // Overselling is disabled by default, so start by hiding out-of-stock
@@ -665,6 +721,12 @@ class PosViewModel extends ChangeNotifier {
     notifyListeners();
     _syncRevalidationGate();
     _schedulePersist();
+    // A product scanned while cost is on screen shows its cost without the
+    // cashier pressing anything again. Fetches only what is missing, so a
+    // steady cart costs nothing.
+    if (_isCostRevealed) {
+      unawaited(_loadMissingCosts());
+    }
   }
 
   /// Every state transition in the POS passes through [_notifyChanged], so

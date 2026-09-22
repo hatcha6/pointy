@@ -526,6 +526,28 @@ class Order(DocumentMixin, TimeStampedModel):
                 "process_return_lookup",
                 "Look up and return/exchange any invoice by receipt number",
             ),
+            # Two rights, deliberately separate, because they are held by
+            # different people and one of them moves money.
+            #
+            # Seeing cost is knowledge: a cashier haggling over a price needs
+            # to know the floor, and today walks to the products screen to
+            # find it. It is also the single most sensitive number in the
+            # shop — what the owner pays a supplier — so it is off by default,
+            # granted per user, and hidden behind a keypress even once granted
+            # (a customer leaning over the counter reads the screen too).
+            (
+                "view_till_cost",
+                "See what a product cost while selling it",
+            ),
+            # Changing a price is revenue. A shop may well want a senior
+            # cashier to KNOW the cost without being able to discount at will,
+            # and collapsing the two into one permission would make that
+            # impossible to express. An overridden line is stamped as such on
+            # the order, so the decision has a name against it afterwards.
+            (
+                "override_line_price",
+                "Change a line's selling price at the till",
+            ),
         ]
 
     def recalculate(self) -> None:
@@ -729,6 +751,19 @@ class OrderLine(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.001"))],
     )
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    # What this line WOULD have sold at, when a cashier repriced it at the till
+    # (sales.override_line_price). Null on every ordinary line, which is nearly
+    # all of them.
+    #
+    # Kept rather than inferred, because it cannot be inferred later: the
+    # product's price is a live number that moves, so comparing an old line
+    # against today's price sheet answers a different question than "was this
+    # one changed, and from what". A repriced line is the money decision a
+    # manager most wants to find afterwards, and it has a cashier's name
+    # against it through the order's own attribution.
+    original_unit_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # The unit this line was sold in (a UnitOfMeasure.code); blank = the product's

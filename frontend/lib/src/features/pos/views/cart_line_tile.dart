@@ -21,6 +21,9 @@ class CartLineTile extends StatelessWidget {
     this.onPickBatch,
     this.selected = false,
     this.onSelect,
+    this.onEditPrice,
+    this.unitCost,
+    this.isLoadingCost = false,
   });
 
   final CartLine line;
@@ -49,6 +52,19 @@ class CartLineTile extends StatelessWidget {
   /// lot-tracked — which is every product in most shops.
   final VoidCallback? onPickBatch;
 
+  /// Opens the reprice sheet. Null for anybody without
+  /// `sales.override_line_price`, and for a top-up, whose price is computed
+  /// from the provider's live quote and is not the shop's to set.
+  final VoidCallback? onEditPrice;
+
+  /// What one unit cost the shop, when cost is revealed (F9) and the caller
+  /// may see it. Null hides the whole row, which is the state a till is in
+  /// nearly all the time.
+  final double? unitCost;
+
+  /// Cost has been asked for and has not arrived yet.
+  final bool isLoadingCost;
+
   /// Whether this line has an identity worth printing on the row: a handset's
   /// IMEI, or the lot a pharmacy is required to name.
   bool get _showsIdentityRow =>
@@ -58,6 +74,16 @@ class CartLineTile extends StatelessWidget {
 
   bool get _showsUnitRow =>
       onSwitchUnit != null || (!line.isBaseUnit && line.unitLabel.isNotEmpty);
+
+  /// Whether there is anything to SAY about this line's money.
+  ///
+  /// Doing — repricing — is no longer in here: it moved onto the per-unit
+  /// price itself, because a lone pencil on a row of its own spent a whole row
+  /// offering one action. Which also fixed the bug that put it here: gating
+  /// the row on having a cost had hidden the pencil on every product the shop
+  /// has never bought, and on every line while cost was hidden.
+  bool get _showsMoneyRow =>
+      unitCost != null || isLoadingCost || line.isRepriced;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +107,10 @@ class CartLineTile extends StatelessWidget {
       detail: recharge == null ? line.variant.sku : null,
       // Effective unit price reflects the selected unit and any modifier deltas.
       unitPriceLabel: l10n.unitPriceEach(formatMoney(line.unitPrice)),
+      // Tap the per-unit price to change it. A pencil on a row of its own cost
+      // a whole row to offer one action, on a screen where rows are how many
+      // cart lines a cashier can see at once.
+      onUnitPriceTap: onEditPrice,
       totalLabel: formatMoney(line.total),
       quantity: line.quantity,
       imageUrl:
@@ -105,6 +135,7 @@ class CartLineTile extends StatelessWidget {
     if (line.modifiers.isEmpty &&
         !hasNoteRow &&
         !_showsUnitRow &&
+        !_showsMoneyRow &&
         !_showsIdentityRow) {
       content = tile;
     } else {
@@ -114,8 +145,15 @@ class CartLineTile extends StatelessWidget {
           tile,
           if (_showsIdentityRow)
             _CartLineIdentity(line: line, onPickBatch: onPickBatch),
-          if (_showsUnitRow)
-            _CartLineUnit(line: line, onSwitchUnit: onSwitchUnit),
+          if (_showsUnitRow || _showsMoneyRow)
+            _CartLineMeta(
+              line: line,
+              onSwitchUnit: _showsUnitRow ? onSwitchUnit : null,
+              showsUnit: _showsUnitRow,
+              unitCost: unitCost,
+              isLoadingCost: isLoadingCost,
+              onEditPrice: onEditPrice,
+            ),
           if (line.modifiers.isNotEmpty) _CartLineModifiers(line: line),
           if (hasNoteRow) _CartLineNote(line: line, onEditNote: onEditNote),
         ],
@@ -148,6 +186,126 @@ class CartLineTile extends StatelessWidget {
   }
 }
 
+/// Everything about a line that is not its name, quantity or total: the unit
+/// it sells in, what it cost, the margin, and whether somebody repriced it.
+///
+/// ONE wrapping row, deliberately. These were two — a unit chip alone on a row
+/// with most of it empty, then cost and repricing on another — which made an
+/// ordinary cart line three rows tall on a till where vertical space is how
+/// many lines a cashier can see at once. They wrap together now and fit on one
+/// row in the common case.
+///
+/// Cost appears only when it has been revealed (F9) AND the person is allowed
+/// to see it, which is why the row so often carries just a unit chip.
+class _CartLineMeta extends StatelessWidget {
+  const _CartLineMeta({
+    required this.line,
+    required this.showsUnit,
+    required this.unitCost,
+    required this.isLoadingCost,
+    this.onSwitchUnit,
+    this.onEditPrice,
+  });
+
+  final CartLine line;
+  final bool showsUnit;
+  final double? unitCost;
+  final bool isLoadingCost;
+  final VoidCallback? onSwitchUnit;
+  final VoidCallback? onEditPrice;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final cost = unitCost;
+    final margin = cost == null ? null : line.unitPrice - cost;
+    // Below cost is the thing a cashier must not miss while deciding, so it is
+    // the one state that gets a colour rather than a shade of grey.
+    final marginColor = margin == null
+        ? colors.mutedInk
+        : (margin < 0 ? colors.danger : colors.success);
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 12, end: 12, bottom: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (showsUnit) _CartLineUnit(line: line, onSwitchUnit: onSwitchUnit),
+          if (isLoadingCost && cost == null)
+            Text(
+              '…',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.mutedInk,
+              ),
+            )
+          else if (cost != null)
+            // Cost and margin as one run rather than two chips. They are read
+            // together — "it cost this, I make that" — and on a 340px cart
+            // pane two separate items plus a unit chip wrapped the row onto a
+            // second line, which is the height this whole row exists to save.
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: l10n.cartLineCostLabel(formatMoney(cost)),
+                    style: TextStyle(color: colors.mutedInk),
+                  ),
+                  TextSpan(
+                    text: '  ·  ',
+                    style: TextStyle(color: colors.line),
+                  ),
+                  TextSpan(
+                    // Below cost is the one state a cashier must not miss
+                    // while deciding, so it is the only thing here with a
+                    // colour rather than a shade of grey.
+                    text: l10n.cartLineMarginLabel(formatMoney(margin!)),
+                    style: TextStyle(
+                      color: marginColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (line.isRepriced)
+            Container(
+              decoration: BoxDecoration(
+                color: colors.warning.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(PointyRadii.chip),
+              ),
+              padding: const EdgeInsetsDirectional.symmetric(
+                horizontal: 8,
+                vertical: 3,
+              ),
+              child: Text(
+                // The old price beside the badge, because "changed" without
+                // "from what" is not something a manager can check later.
+                '${l10n.cartLineRepricedBadge} · '
+                '${formatMoney(line.listUnitPrice)}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colors.warning,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The unit chip, as a chip rather than a row.
+///
+/// It used to own a whole row of its own and left most of it empty, with cost
+/// and repricing stacked underneath in a third. A cart line is a dense thing
+/// on a till; one wrapping row of chips says the same in two thirds the height.
 class _CartLineUnit extends StatelessWidget {
   const _CartLineUnit({required this.line, this.onSwitchUnit});
 
@@ -164,65 +322,59 @@ class _CartLineUnit extends StatelessWidget {
         : unitLabel(l10n, line.variant.unit);
     final tappable = onSwitchUnit != null;
 
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(start: 12, end: 12, bottom: 8),
-      child: Align(
-        alignment: AlignmentDirectional.centerStart,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onSwitchUnit,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onSwitchUnit,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        child: Container(
+          decoration: BoxDecoration(
+            color: tappable ? colors.primaryContainer : colors.subtleFill,
             borderRadius: BorderRadius.circular(PointyRadii.chip),
-            child: Container(
-              decoration: BoxDecoration(
-                color: tappable ? colors.primaryContainer : colors.subtleFill,
-                borderRadius: BorderRadius.circular(PointyRadii.chip),
-                border: Border.all(color: colors.line),
+            border: Border.all(color: colors.line),
+          ),
+          padding: const EdgeInsetsDirectional.only(
+            start: 10,
+            end: 6,
+            top: 5,
+            bottom: 5,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.straighten_outlined,
+                size: 15,
+                color: colors.primaryStrong,
               ),
-              padding: const EdgeInsetsDirectional.only(
-                start: 10,
-                end: 6,
-                top: 5,
-                bottom: 5,
+              const SizedBox(width: 6),
+              Text(
+                unitText,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colors.primaryStrong,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.straighten_outlined,
-                    size: 15,
-                    color: colors.primaryStrong,
+              // For a pack unit, show the base-unit equivalent ("= 24 قطعة").
+              if (!line.isBaseUnit) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '= ${formatQuantity(line.baseQuantity)} '
+                  '${unitLabel(l10n, line.variant.unit)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.mutedInk,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    unitText,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: colors.primaryStrong,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  // For a pack unit, show the base-unit equivalent ("= 24 قطعة").
-                  if (!line.isBaseUnit) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      '= ${formatQuantity(line.baseQuantity)} '
-                      '${unitLabel(l10n, line.variant.unit)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.mutedInk,
-                      ),
-                    ),
-                  ],
-                  if (tappable) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.expand_more_rounded,
-                      size: 18,
-                      color: colors.primaryStrong,
-                    ),
-                  ],
-                ],
-              ),
-            ),
+                ),
+              ],
+              const Spacer(),
+              if (tappable) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.expand_more_rounded,
+                  size: 18,
+                  color: colors.primaryStrong,
+                ),
+              ],
+            ],
           ),
         ),
       ),

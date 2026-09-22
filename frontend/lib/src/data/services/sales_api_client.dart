@@ -174,6 +174,32 @@ class SalesApiClient {
     );
   }
 
+  /// What the shop paid for these variants, per base unit.
+  ///
+  /// Gated server-side on `sales.view_till_cost`, so a till without the right
+  /// gets a 403 here rather than a payload it was never meant to hold. The
+  /// figure is the valuation ledger's — the same basis the loss guard uses —
+  /// so a cashier shown 12.00 and refused a sale at 11.50 is looking at the
+  /// number that refused them.
+  Future<Map<int, double>> fetchLineCosts(List<int> variantIds) async {
+    if (variantIds.isEmpty) return const {};
+    final response = await _session.post(
+      'orders/line-costs/',
+      body: {'variants': variantIds},
+    );
+    _session.throwApiException(response, 'Line cost lookup failed with status');
+    final body = _session.decodedBody(response) as Map<String, Object?>;
+    final costs = body['costs'];
+    if (costs is! Map) return const {};
+    final parsed = <int, double>{};
+    for (final entry in costs.entries) {
+      final id = int.tryParse(entry.key.toString());
+      if (id == null) continue;
+      parsed[id] = double.tryParse(entry.value.toString()) ?? 0;
+    }
+    return parsed;
+  }
+
   Future<PrintJob> requestSaleReprint(int saleOrderId) async {
     final response = await _session.post('orders/$saleOrderId/reprint/');
     _session.ensureSuccess(response, 'Sale reprint request failed with status');
