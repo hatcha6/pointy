@@ -1492,9 +1492,15 @@
   "@smartNotificationProviderFloatLowMessage": {
     "description": "Provider float below the shop's own threshold.",
     "placeholders": {
-      "provider": {"type": "String"},
-      "amount": {"type": "String"},
-      "threshold": {"type": "String"}
+      "provider": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "threshold": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationProviderFloatEmptyTitle": "رصيد الوكالة نفد",
@@ -1502,14 +1508,18 @@
   "@smartNotificationProviderFloatEmptyMessage": {
     "description": "Provider float exhausted: no top-up can be sold.",
     "placeholders": {
-      "provider": {"type": "String"}
+      "provider": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationProviderFloatAsOf": "قراءة الرصيد بتاريخ {readAt}",
   "@smartNotificationProviderFloatAsOf": {
     "description": "When the provider float figure was last read.",
     "placeholders": {
-      "readAt": {"type": "String"}
+      "readAt": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationUnperformedRechargeTitle": "شحن مدفوع ولم يُنفَّذ",
@@ -1517,23 +1527,33 @@
   "@smartNotificationUnperformedRechargeMessage": {
     "description": "A recharge the customer paid for that the provider never performed.",
     "placeholders": {
-      "provider": {"type": "String"},
-      "reference": {"type": "String"},
-      "amount": {"type": "String"}
+      "provider": {
+        "type": "String"
+      },
+      "reference": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationRechargeSoldAt": "بيع بتاريخ {soldAt}",
   "@smartNotificationRechargeSoldAt": {
     "description": "When an unperformed recharge was sold.",
     "placeholders": {
-      "soldAt": {"type": "String"}
+      "soldAt": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationRechargeSentAt": "أُرسل بتاريخ {sentAt}",
   "@smartNotificationRechargeSentAt": {
     "description": "When an unresolved recharge was sent to the provider.",
     "placeholders": {
-      "sentAt": {"type": "String"}
+      "sentAt": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationUnresolvedRechargeTitle": "شحن غير مؤكد — لا تُعِد إرساله",
@@ -1541,9 +1561,15 @@
   "@smartNotificationUnresolvedRechargeMessage": {
     "description": "A recharge whose outcome is unknown; retrying could charge twice.",
     "placeholders": {
-      "provider": {"type": "String"},
-      "reference": {"type": "String"},
-      "amount": {"type": "String"}
+      "provider": {
+        "type": "String"
+      },
+      "reference": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationOffbookRechargeTitle": "شحن من رصيد الوكالة بلا فاتورة",
@@ -1551,8 +1577,12 @@
   "@smartNotificationOffbookRechargeMessage": {
     "description": "A provider purchase with no matching sale in Pointy.",
     "placeholders": {
-      "provider": {"type": "String"},
-      "amount": {"type": "String"}
+      "provider": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationProviderFloatDriftTitle": "رصيد الوكالة لا يطابق حسابنا",
@@ -1560,16 +1590,24 @@
   "@smartNotificationProviderFloatShortMessage": {
     "description": "The provider float is lower than Pointy's arithmetic expects.",
     "placeholders": {
-      "provider": {"type": "String"},
-      "amount": {"type": "String"}
+      "provider": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationProviderFloatOverMessage": "{provider}: الرصيد أعلى من المتوقع بمقدار {amount} — تعبئة لم تُسجَّل.",
   "@smartNotificationProviderFloatOverMessage": {
     "description": "The provider float is higher than expected: an unrecorded top-up.",
     "placeholders": {
-      "provider": {"type": "String"},
-      "amount": {"type": "String"}
+      "provider": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
     }
   },
   "smartNotificationUnknownTitle": "تنبيه جديد",
@@ -5730,18 +5768,30 @@
   "sessionCardReceiptsHeadline": "{verified} موثّق من {gross}",
   "@sessionCardReceiptsHeadline": {
     "placeholders": {
-      "verified": { "type": "String" },
-      "gross": { "type": "String" }
+      "verified": {
+        "type": "String"
+      },
+      "gross": {
+        "type": "String"
+      }
     }
   },
   "sessionCardReceiptsAllVerified": "كل مبالغ البطاقة في هذه الوردية موثّقة.",
   "sessionCardReceiptsNeedsAttention": "{count, plural, one{دفعة واحدة تحتاج مراجعة} two{دفعتان تحتاجان مراجعة} few{{count} دفعات تحتاج مراجعة} other{{count} دفعة تحتاج مراجعة}}",
   "@sessionCardReceiptsNeedsAttention": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "sessionCardReceiptsPendingNote": "{count, plural, one{دفعة واحدة ما زالت قيد التحقق} two{دفعتان ما زالتا قيد التحقق} few{{count} دفعات ما زالت قيد التحقق} other{{count} دفعة ما زالت قيد التحقق}}",
   "@sessionCardReceiptsPendingNote": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "orderCardReceiptViewButton": "عرض إيصال الجهاز",
   "orderCardReceiptSheetTitle": "إيصال جهاز البطاقة",
@@ -8368,7 +8418,11 @@
   "posCartLineBatchBadge": "دفعة {code}",
   "@posCartLineBatchBadge": {
     "description": "Badge on a POS cart line naming the lot it draws from.",
-    "placeholders": {"code": {"type": "String"}}
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
   },
   "posCartLineBatchAuto": "دفعة تلقائية",
   "@posCartLineBatchAuto": {
@@ -8377,177 +8431,347 @@
   "posCartLineExpiryBadge": "ص: {date}",
   "@posCartLineExpiryBadge": {
     "description": "Expiry badge on a POS cart line (ص = صلاحية).",
-    "placeholders": {"date": {"type": "String"}}
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
   },
   "posUnitPickerTitle": "اختر الجهاز — {product}",
   "@posUnitPickerTitle": {
     "description": "Title of the POS sheet that picks which identified article to sell.",
-    "placeholders": {"product": {"type": "String"}}
+    "placeholders": {
+      "product": {
+        "type": "String"
+      }
+    }
   },
   "posUnitPickerSearchHint": "امسح أو اكتب الرقم التسلسلي / IMEI",
-  "@posUnitPickerSearchHint": {"description": "Search hint in the POS unit picker."},
+  "@posUnitPickerSearchHint": {
+    "description": "Search hint in the POS unit picker."
+  },
   "posUnitPickerEmpty": "لا توجد أجهزة متاحة لهذا الصنف في هذا المستودع.",
-  "@posUnitPickerEmpty": {"description": "Empty state of the POS unit picker."},
+  "@posUnitPickerEmpty": {
+    "description": "Empty state of the POS unit picker."
+  },
   "posUnitPickerLoadFailed": "تعذّر تحميل الأجهزة.",
-  "@posUnitPickerLoadFailed": {"description": "Error state of the POS unit picker."},
+  "@posUnitPickerLoadFailed": {
+    "description": "Error state of the POS unit picker."
+  },
   "posUnitPickerDaysInStock": "{days, plural, zero{وصل اليوم} one{يوم واحد في المخزون} two{يومان في المخزون} few{{days} أيام في المخزون} many{{days} يومًا في المخزون} other{{days} يوم في المخزون}}",
   "@posUnitPickerDaysInStock": {
     "description": "How long an identified article has been on the shelf.",
-    "placeholders": {"days": {"type": "int"}}
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "posUnitPickerConsignment": "أمانة",
-  "@posUnitPickerConsignment": {"description": "Badge marking a consigned article in the picker."},
+  "@posUnitPickerConsignment": {
+    "description": "Badge marking a consigned article in the picker."
+  },
   "posBatchPickerTitle": "اختر الدفعة — {product}",
   "@posBatchPickerTitle": {
     "description": "Title of the POS lot picker sheet.",
-    "placeholders": {"product": {"type": "String"}}
+    "placeholders": {
+      "product": {
+        "type": "String"
+      }
+    }
   },
   "posBatchPickerEmpty": "لا توجد دفعات صالحة لهذا الصنف في هذا المستودع.",
-  "@posBatchPickerEmpty": {"description": "Empty state of the POS lot picker."},
+  "@posBatchPickerEmpty": {
+    "description": "Empty state of the POS lot picker."
+  },
   "posBatchPickerLoadFailed": "تعذّر تحميل الدفعات.",
-  "@posBatchPickerLoadFailed": {"description": "Error state of the POS lot picker."},
+  "@posBatchPickerLoadFailed": {
+    "description": "Error state of the POS lot picker."
+  },
   "posBatchPickerDaysLeft": "{days, plural, zero{ينتهي اليوم} one{يوم متبقٍ} two{يومان متبقيان} few{{days} أيام متبقية} many{{days} يومًا متبقيًا} other{{days} يوم متبقٍ}}",
   "@posBatchPickerDaysLeft": {
     "description": "Days remaining before a lot expires.",
-    "placeholders": {"days": {"type": "int"}}
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "posBatchPickerExpired": "منتهية الصلاحية",
-  "@posBatchPickerExpired": {"description": "Label for an expired lot."},
+  "@posBatchPickerExpired": {
+    "description": "Label for an expired lot."
+  },
   "posBatchPickerNoExpiry": "بدون تاريخ صلاحية",
-  "@posBatchPickerNoExpiry": {"description": "Label for a lot that never expires."},
+  "@posBatchPickerNoExpiry": {
+    "description": "Label for a lot that never expires."
+  },
   "stockBatchNoCode": "بدون رقم دفعة",
-  "@stockBatchNoCode": {"description": "Shown where a lot's code was generated rather than printed on a box."},
+  "@stockBatchNoCode": {
+    "description": "Shown where a lot's code was generated rather than printed on a box."
+  },
   "unitCaptureProgress": "{captured} / {expected}",
   "@unitCaptureProgress": {
     "description": "Residual counter on the identifier capture sheet.",
-    "placeholders": {"captured": {"type": "int"}, "expected": {"type": "int"}}
+    "placeholders": {
+      "captured": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
   },
   "unitCaptureHint": "امسح أو اكتب الرقم التسلسلي / IMEI ثم اضغط Enter",
-  "@unitCaptureHint": {"description": "Hint of the identifier capture field."},
+  "@unitCaptureHint": {
+    "description": "Hint of the identifier capture field."
+  },
   "unitCaptureEmpty": "لم يتم تسجيل أي معرّف بعد.",
-  "@unitCaptureEmpty": {"description": "Empty state of the identifier capture sheet."},
+  "@unitCaptureEmpty": {
+    "description": "Empty state of the identifier capture sheet."
+  },
   "unitCaptureDuplicate": "المعرّف {code} مسجّل بالفعل في هذا الإدخال.",
   "@unitCaptureDuplicate": {
     "description": "Refusal when the same identifier is scanned twice into one capture.",
-    "placeholders": {"code": {"type": "String"}}
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
   },
   "unitCaptureTooMany": "تم تسجيل الكمية المستلمة كاملة ({expected}).",
   "@unitCaptureTooMany": {
     "description": "Refusal when more identifiers are scanned than were accepted.",
-    "placeholders": {"expected": {"type": "int"}}
+    "placeholders": {
+      "expected": {
+        "type": "int"
+      }
+    }
   },
   "unitCaptureSplitCosts": "توزيع تكلفة السطر على كل وحدة",
-  "@unitCaptureSplitCosts": {"description": "Toggle that enables per-unit cost entry."},
+  "@unitCaptureSplitCosts": {
+    "description": "Toggle that enables per-unit cost entry."
+  },
   "unitCaptureCostResidual": "المتبقي: {amount}",
   "@unitCaptureCostResidual": {
     "description": "Live residual of the per-unit cost split; must reach zero.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "unitCaptureConfirm": "تأكيد المعرّفات",
-  "@unitCaptureConfirm": {"description": "Confirm button of the identifier capture sheet."},
+  "@unitCaptureConfirm": {
+    "description": "Confirm button of the identifier capture sheet."
+  },
   "unitCaptureConfirmLater": "حفظ وإكمال {remaining} لاحقًا",
   "@unitCaptureConfirmLater": {
     "description": "Confirm button when the shop allows capturing identifiers later.",
-    "placeholders": {"remaining": {"type": "int"}}
+    "placeholders": {
+      "remaining": {
+        "type": "int"
+      }
+    }
   },
   "batchCaptureProgress": "{captured} / {expected}",
   "@batchCaptureProgress": {
     "description": "Residual counter on the multi-lot capture sheet.",
-    "placeholders": {"captured": {"type": "String"}, "expected": {"type": "String"}}
+    "placeholders": {
+      "captured": {
+        "type": "String"
+      },
+      "expected": {
+        "type": "String"
+      }
+    }
   },
   "batchCaptureLotCode": "رقم الدفعة",
-  "@batchCaptureLotCode": {"description": "Lot code field label."},
+  "@batchCaptureLotCode": {
+    "description": "Lot code field label."
+  },
   "batchCaptureQuantity": "الكمية",
-  "@batchCaptureQuantity": {"description": "Per-lot quantity field label."},
+  "@batchCaptureQuantity": {
+    "description": "Per-lot quantity field label."
+  },
   "batchCaptureExpiry": "تاريخ الصلاحية",
-  "@batchCaptureExpiry": {"description": "Expiry field label on the lot capture sheet."},
+  "@batchCaptureExpiry": {
+    "description": "Expiry field label on the lot capture sheet."
+  },
   "batchCaptureExpiryShortcut": "+{months}ش",
   "@batchCaptureExpiryShortcut": {
     "description": "Quick expiry shortcut, in months.",
-    "placeholders": {"months": {"type": "int"}}
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
   },
   "batchCaptureAddLot": "إضافة دفعة أخرى",
-  "@batchCaptureAddLot": {"description": "Adds another lot row to the capture sheet."},
+  "@batchCaptureAddLot": {
+    "description": "Adds another lot row to the capture sheet."
+  },
   "batchCaptureConfirm": "تأكيد الدفعات",
-  "@batchCaptureConfirm": {"description": "Confirm button of the lot capture sheet."},
+  "@batchCaptureConfirm": {
+    "description": "Confirm button of the lot capture sheet."
+  },
   "purchaseReceiveCaptureRequired": "أدخل معرّفات أو دفعات الأصناف المتتبَّعة قبل تأكيد الاستلام.",
-  "@purchaseReceiveCaptureRequired": {"description": "Refusal when a tracked receipt line has no captured identifiers."},
+  "@purchaseReceiveCaptureRequired": {
+    "description": "Refusal when a tracked receipt line has no captured identifiers."
+  },
   "purchaseReceiveCaptureUnits": "إدخال المعرّفات",
-  "@purchaseReceiveCaptureUnits": {"description": "Opens the identifier capture sheet from the receiving dialog."},
+  "@purchaseReceiveCaptureUnits": {
+    "description": "Opens the identifier capture sheet from the receiving dialog."
+  },
   "purchaseReceiveCaptureLots": "إدخال الدفعات",
-  "@purchaseReceiveCaptureLots": {"description": "Opens the lot capture sheet from the receiving dialog."},
+  "@purchaseReceiveCaptureLots": {
+    "description": "Opens the lot capture sheet from the receiving dialog."
+  },
   "purchaseReceiveUnitsCaptured": "المعرّفات: {captured} من {expected}",
   "@purchaseReceiveUnitsCaptured": {
     "description": "Identifier residual on a receiving line.",
-    "placeholders": {"captured": {"type": "int"}, "expected": {"type": "int"}}
+    "placeholders": {
+      "captured": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
   },
   "purchaseReceiveLotsCaptured": "الدفعات: {captured} من {expected}",
   "@purchaseReceiveLotsCaptured": {
     "description": "Lot quantity residual on a receiving line.",
-    "placeholders": {"captured": {"type": "String"}, "expected": {"type": "String"}}
+    "placeholders": {
+      "captured": {
+        "type": "String"
+      },
+      "expected": {
+        "type": "String"
+      }
+    }
   },
   "stockUnitsTitle": "الأجهزة المسلسلة",
-  "@stockUnitsTitle": {"description": "Title of the identified-articles list."},
+  "@stockUnitsTitle": {
+    "description": "Title of the identified-articles list."
+  },
   "stockUnitsDrawerLabel": "الأجهزة المسلسلة",
-  "@stockUnitsDrawerLabel": {"description": "Navigation label for the identified-articles list."},
+  "@stockUnitsDrawerLabel": {
+    "description": "Navigation label for the identified-articles list."
+  },
   "stockUnitsSearchHint": "امسح أو اكتب معرّفًا للبحث",
-  "@stockUnitsSearchHint": {"description": "Search hint on the identified-articles list."},
+  "@stockUnitsSearchHint": {
+    "description": "Search hint on the identified-articles list."
+  },
   "stockUnitsEmptyTitle": "لا توجد أجهزة مسجّلة",
-  "@stockUnitsEmptyTitle": {"description": "Empty title of the identified-articles list."},
+  "@stockUnitsEmptyTitle": {
+    "description": "Empty title of the identified-articles list."
+  },
   "stockUnitsEmptyBody": "ستظهر هنا الأجهزة بمجرد إدخال معرّفاتها عند الاستلام.",
-  "@stockUnitsEmptyBody": {"description": "Empty body of the identified-articles list."},
+  "@stockUnitsEmptyBody": {
+    "description": "Empty body of the identified-articles list."
+  },
   "stockUnitsAwaitingIdentifier": "بانتظار المعرّف",
-  "@stockUnitsAwaitingIdentifier": {"description": "Row label for a unit that still owes its identifier."},
+  "@stockUnitsAwaitingIdentifier": {
+    "description": "Row label for a unit that still owes its identifier."
+  },
   "stockUnitsMissingIdentifiers": "{count, plural, one{وحدة واحدة بانتظار معرّفها} two{وحدتان بانتظار معرّفيهما} few{{count} وحدات بانتظار معرّفاتها} many{{count} وحدة بانتظار معرّفاتها} other{{count} وحدة بانتظار معرّفاتها}}",
   "@stockUnitsMissingIdentifiers": {
     "description": "The capture-later worklist count.",
-    "placeholders": {"count": {"type": "int"}}
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "stockUnitStatusInStock": "في المخزون",
-  "@stockUnitStatusInStock": {"description": "Unit status filter."},
+  "@stockUnitStatusInStock": {
+    "description": "Unit status filter."
+  },
   "stockUnitStatusReserved": "محجوزة",
-  "@stockUnitStatusReserved": {"description": "Unit status filter."},
+  "@stockUnitStatusReserved": {
+    "description": "Unit status filter."
+  },
   "stockUnitStatusSold": "مباعة",
-  "@stockUnitStatusSold": {"description": "Unit status filter."},
+  "@stockUnitStatusSold": {
+    "description": "Unit status filter."
+  },
   "stockUnitStatusDamaged": "تالفة",
-  "@stockUnitStatusDamaged": {"description": "Unit status filter."},
+  "@stockUnitStatusDamaged": {
+    "description": "Unit status filter."
+  },
   "stockUnitStatusWrittenOff": "مشطوبة",
-  "@stockUnitStatusWrittenOff": {"description": "Unit status filter."},
+  "@stockUnitStatusWrittenOff": {
+    "description": "Unit status filter."
+  },
   "stockUnitHistoryEmpty": "لا توجد حركات مسجّلة لهذه الوحدة.",
-  "@stockUnitHistoryEmpty": {"description": "Empty state of a unit's life timeline."},
+  "@stockUnitHistoryEmpty": {
+    "description": "Empty state of a unit's life timeline."
+  },
   "stockBatchesTitle": "الدفعات وتواريخ الصلاحية",
-  "@stockBatchesTitle": {"description": "Title of the lots list."},
+  "@stockBatchesTitle": {
+    "description": "Title of the lots list."
+  },
   "stockBatchesDrawerLabel": "الدفعات والصلاحية",
-  "@stockBatchesDrawerLabel": {"description": "Navigation label for the lots list."},
+  "@stockBatchesDrawerLabel": {
+    "description": "Navigation label for the lots list."
+  },
   "stockBatchesEmptyTitle": "لا توجد دفعات مسجّلة",
-  "@stockBatchesEmptyTitle": {"description": "Empty title of the lots list."},
+  "@stockBatchesEmptyTitle": {
+    "description": "Empty title of the lots list."
+  },
   "stockBatchesEmptyBody": "ستظهر هنا الدفعات بمجرد تسجيلها عند الاستلام.",
-  "@stockBatchesEmptyBody": {"description": "Empty body of the lots list."},
+  "@stockBatchesEmptyBody": {
+    "description": "Empty body of the lots list."
+  },
   "stockBatchesFilterAll": "الكل",
-  "@stockBatchesFilterAll": {"description": "Lot list filter."},
+  "@stockBatchesFilterAll": {
+    "description": "Lot list filter."
+  },
   "stockBatchesFilterActive": "سارية",
-  "@stockBatchesFilterActive": {"description": "Lot list filter."},
+  "@stockBatchesFilterActive": {
+    "description": "Lot list filter."
+  },
   "stockBatchesFilterQuarantined": "محجورة",
-  "@stockBatchesFilterQuarantined": {"description": "Lot list filter."},
+  "@stockBatchesFilterQuarantined": {
+    "description": "Lot list filter."
+  },
   "stockBatchesFilterExpired": "منتهية",
-  "@stockBatchesFilterExpired": {"description": "Lot list filter."},
+  "@stockBatchesFilterExpired": {
+    "description": "Lot list filter."
+  },
   "stockBatchQuarantinedBadge": "محجورة",
-  "@stockBatchQuarantinedBadge": {"description": "Badge on a quarantined lot."},
+  "@stockBatchQuarantinedBadge": {
+    "description": "Badge on a quarantined lot."
+  },
   "stockBatchQuarantineAction": "حجر الدفعة",
-  "@stockBatchQuarantineAction": {"description": "Stops a lot being sold, everywhere."},
+  "@stockBatchQuarantineAction": {
+    "description": "Stops a lot being sold, everywhere."
+  },
   "stockBatchReleaseAction": "رفع الحجر",
-  "@stockBatchReleaseAction": {"description": "Lets a quarantined lot be sold again."},
+  "@stockBatchReleaseAction": {
+    "description": "Lets a quarantined lot be sold again."
+  },
   "stockBatchQuarantineTitle": "حجر الدفعة؟",
-  "@stockBatchQuarantineTitle": {"description": "Title of the quarantine confirmation."},
+  "@stockBatchQuarantineTitle": {
+    "description": "Title of the quarantine confirmation."
+  },
   "stockBatchQuarantineBody": "سيتوقف بيع الدفعة {code} في كل الفروع فورًا. البضاعة تبقى في المخزون حتى تُشطب.",
   "@stockBatchQuarantineBody": {
     "description": "Explains that quarantine is a stop-sale, not a write-off.",
-    "placeholders": {"code": {"type": "String"}}
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
   },
   "stockBatchQuarantineConfirm": "تأكيد الحجر",
-  "@stockBatchQuarantineConfirm": {"description": "Confirms quarantining a lot."},
+  "@stockBatchQuarantineConfirm": {
+    "description": "Confirms quarantining a lot."
+  },
   "stockBatchQuarantineFailed": "تعذّر تغيير حالة الحجر.",
-  "@stockBatchQuarantineFailed": {"description": "Quarantine failure toast."},
+  "@stockBatchQuarantineFailed": {
+    "description": "Quarantine failure toast."
+  },
   "stockCountDrawerLabel": "جرد المخزون",
   "stockCountSessionsTitle": "عمليات الجرد",
   "stockCountRefreshTooltip": "تحديث عمليات الجرد",
@@ -11216,129 +11440,282 @@
     }
   },
   "collapseTitle": "دمج الأصناف المتسلسلة",
-  "@collapseTitle": {"description": "Title of the §12 collapse review screen."},
+  "@collapseTitle": {
+    "description": "Title of the §12 collapse review screen."
+  },
   "collapseIntroTitle": "صنف لكل جهاز؟",
-  "@collapseIntroTitle": {"description": "Offer shown when a catalogue looks like one product per article."},
+  "@collapseIntroTitle": {
+    "description": "Offer shown when a catalogue looks like one product per article."
+  },
   "collapseIntroBody": "إذا كان نظامك القديم ينشئ صنفًا مستقلًا لكل جهاز، يمكننا قراءة الأسماء وإعادة تجميعها: منتج واحد، خيارات، ووحدة معرّفة لكل جهاز. لا يُكتب شيء قبل موافقتك.",
-  "@collapseIntroBody": {"description": "Explains what the collapse does before it is run."},
+  "@collapseIntroBody": {
+    "description": "Explains what the collapse does before it is run."
+  },
   "collapseProposeButton": "افحص الأصناف",
-  "@collapseProposeButton": {"description": "Starts building a collapse proposal."},
+  "@collapseProposeButton": {
+    "description": "Starts building a collapse proposal."
+  },
   "collapseRebuildButton": "أعد الفحص",
-  "@collapseRebuildButton": {"description": "Rebuilds the proposal from the file."},
+  "@collapseRebuildButton": {
+    "description": "Rebuilds the proposal from the file."
+  },
   "collapseBuildingTitle": "جارٍ قراءة الأصناف",
-  "@collapseBuildingTitle": {"description": "Shown while the proposal is being built."},
+  "@collapseBuildingTitle": {
+    "description": "Shown while the proposal is being built."
+  },
   "collapseBuildingBody": "نقرأ الأصناف وفواتير الشراء والبيع لنعرف ما الذي يمثّل جهازًا بعينه. يمكنك إغلاق هذه الصفحة والعودة لاحقًا.",
-  "@collapseBuildingBody": {"description": "Reassures that building continues on the server."},
+  "@collapseBuildingBody": {
+    "description": "Reassures that building continues on the server."
+  },
   "collapseFailedTitle": "تعذر فحص الأصناف",
-  "@collapseFailedTitle": {"description": "Shown when building the proposal failed."},
+  "@collapseFailedTitle": {
+    "description": "Shown when building the proposal failed."
+  },
   "collapseHeadline": "{products} صنفًا ← {units} وحدة",
-  "@collapseHeadline": {"description": "The headline the whole screen exists to say.", "placeholders": {"products": {"type": "String"}, "units": {"type": "String"}}},
+  "@collapseHeadline": {
+    "description": "The headline the whole screen exists to say.",
+    "placeholders": {
+      "products": {
+        "type": "String"
+      },
+      "units": {
+        "type": "String"
+      }
+    }
+  },
   "collapseProducts": "منتجات",
-  "@collapseProducts": {"description": "Metric label."},
+  "@collapseProducts": {
+    "description": "Metric label."
+  },
   "collapseVariants": "خيارات",
-  "@collapseVariants": {"description": "Metric label."},
+  "@collapseVariants": {
+    "description": "Metric label."
+  },
   "collapseUnits": "وحدات معرّفة",
-  "@collapseUnits": {"description": "Metric label."},
+  "@collapseUnits": {
+    "description": "Metric label."
+  },
   "collapseUnitsSplit": "{inStock} في المخزون · {sold} مباعة",
-  "@collapseUnitsSplit": {"description": "Breakdown of the proposed units.", "placeholders": {"inStock": {"type": "String"}, "sold": {"type": "String"}}},
+  "@collapseUnitsSplit": {
+    "description": "Breakdown of the proposed units.",
+    "placeholders": {
+      "inStock": {
+        "type": "String"
+      },
+      "sold": {
+        "type": "String"
+      }
+    }
+  },
   "collapseKept": "تبقى أصنافًا كما هي",
-  "@collapseKept": {"description": "Metric label for rows the collapse leaves alone."},
+  "@collapseKept": {
+    "description": "Metric label for rows the collapse leaves alone."
+  },
   "collapseNeedsReviewCount": "{count, plural, =0{لا شيء يحتاج مراجعة} one{صف واحد يحتاج مراجعة} two{صفان يحتاجان مراجعة} few{{count} صفوف تحتاج مراجعة} other{{count} صفًا يحتاج مراجعة}}",
-  "@collapseNeedsReviewCount": {"description": "How many rows are below the confidence threshold.", "placeholders": {"count": {"type": "int"}}},
+  "@collapseNeedsReviewCount": {
+    "description": "How many rows are below the confidence threshold.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "collapseProposedProductsTitle": "المنتجات المقترحة",
-  "@collapseProposedProductsTitle": {"description": "Section header above the cluster list."},
+  "@collapseProposedProductsTitle": {
+    "description": "Section header above the cluster list."
+  },
   "collapseClusterSummary": "{units} وحدة · {variants} خيار",
-  "@collapseClusterSummary": {"description": "One proposed product's contents.", "placeholders": {"units": {"type": "String"}, "variants": {"type": "String"}}},
+  "@collapseClusterSummary": {
+    "description": "One proposed product's contents.",
+    "placeholders": {
+      "units": {
+        "type": "String"
+      },
+      "variants": {
+        "type": "String"
+      }
+    }
+  },
   "collapseFilterNeedsReview": "يحتاج مراجعة",
-  "@collapseFilterNeedsReview": {"description": "Review list filter."},
+  "@collapseFilterNeedsReview": {
+    "description": "Review list filter."
+  },
   "collapseFilterCollapsing": "سيصبح وحدات",
-  "@collapseFilterCollapsing": {"description": "Review list filter."},
+  "@collapseFilterCollapsing": {
+    "description": "Review list filter."
+  },
   "collapseFilterKept": "يبقى صنفًا",
-  "@collapseFilterKept": {"description": "Review list filter."},
+  "@collapseFilterKept": {
+    "description": "Review list filter."
+  },
   "collapseSearchHint": "ابحث باسم الصنف القديم",
-  "@collapseSearchHint": {"description": "Search field placeholder."},
+  "@collapseSearchHint": {
+    "description": "Search field placeholder."
+  },
   "collapseRowsEmpty": "لا توجد صفوف هنا.",
-  "@collapseRowsEmpty": {"description": "Empty state for the review list."},
+  "@collapseRowsEmpty": {
+    "description": "Empty state for the review list."
+  },
   "collapseBecomes": "يصبح",
-  "@collapseBecomes": {"description": "Label between the old name and the proposal."},
+  "@collapseBecomes": {
+    "description": "Label between the old name and the proposal."
+  },
   "collapseStaysProduct": "يبقى صنفًا كما هو",
-  "@collapseStaysProduct": {"description": "Shown on a row the collapse leaves alone."},
+  "@collapseStaysProduct": {
+    "description": "Shown on a row the collapse leaves alone."
+  },
   "collapseUnitInStock": "في المخزون",
-  "@collapseUnitInStock": {"description": "Proposed unit status."},
+  "@collapseUnitInStock": {
+    "description": "Proposed unit status."
+  },
   "collapseUnitSold": "مباعة",
-  "@collapseUnitSold": {"description": "Proposed unit status."},
+  "@collapseUnitSold": {
+    "description": "Proposed unit status."
+  },
   "collapseEditTitle": "مراجعة صنف",
-  "@collapseEditTitle": {"description": "Title of the per-row edit sheet."},
+  "@collapseEditTitle": {
+    "description": "Title of the per-row edit sheet."
+  },
   "collapseEditProductName": "اسم المنتج",
-  "@collapseEditProductName": {"description": "Edit field label; typing an existing name merges the two."},
+  "@collapseEditProductName": {
+    "description": "Edit field label; typing an existing name merges the two."
+  },
   "collapseEditProductNameHelp": "اكتب اسم منتج آخر لدمج هذا الصنف معه.",
-  "@collapseEditProductNameHelp": {"description": "Explains that renaming is how two clusters merge."},
+  "@collapseEditProductNameHelp": {
+    "description": "Explains that renaming is how two clusters merge."
+  },
   "collapseEditIdentifier": "المعرّف",
-  "@collapseEditIdentifier": {"description": "Edit field label for IMEI/serial."},
+  "@collapseEditIdentifier": {
+    "description": "Edit field label for IMEI/serial."
+  },
   "collapseEditStorage": "السعة",
-  "@collapseEditStorage": {"description": "Edit field label."},
+  "@collapseEditStorage": {
+    "description": "Edit field label."
+  },
   "collapseEditColour": "اللون",
-  "@collapseEditColour": {"description": "Edit field label."},
+  "@collapseEditColour": {
+    "description": "Edit field label."
+  },
   "collapseEditStatus": "حالة الوحدة",
-  "@collapseEditStatus": {"description": "Edit field label."},
+  "@collapseEditStatus": {
+    "description": "Edit field label."
+  },
   "collapseEditKeep": "اتركه صنفًا عاديًا",
-  "@collapseEditKeep": {"description": "Toggle that opts a row out of the collapse."},
+  "@collapseEditKeep": {
+    "description": "Toggle that opts a row out of the collapse."
+  },
   "collapseEditSave": "حفظ",
-  "@collapseEditSave": {"description": "Saves one edited row."},
+  "@collapseEditSave": {
+    "description": "Saves one edited row."
+  },
   "collapseRenameClusterTitle": "تسمية المنتج",
-  "@collapseRenameClusterTitle": {"description": "Dialog title for renaming a proposed product."},
+  "@collapseRenameClusterTitle": {
+    "description": "Dialog title for renaming a proposed product."
+  },
   "collapseApproveButton": "اعتمد الاقتراح",
-  "@collapseApproveButton": {"description": "Approves the proposal; nothing is written until the import runs."},
+  "@collapseApproveButton": {
+    "description": "Approves the proposal; nothing is written until the import runs."
+  },
   "collapseApprovedTitle": "تم اعتماد الاقتراح",
-  "@collapseApprovedTitle": {"description": "Shown once the plan is approved."},
+  "@collapseApprovedTitle": {
+    "description": "Shown once the plan is approved."
+  },
   "collapseApprovedBody": "سيُطبَّق عند النقل. لن تتغير الأصناف حتى تبدأ النقل الفعلي.",
-  "@collapseApprovedBody": {"description": "Explains that approval alone writes nothing."},
+  "@collapseApprovedBody": {
+    "description": "Explains that approval alone writes nothing."
+  },
   "collapseAppliedTitle": "تم تطبيق الدمج",
-  "@collapseAppliedTitle": {"description": "Shown after the import used the plan."},
+  "@collapseAppliedTitle": {
+    "description": "Shown after the import used the plan."
+  },
   "collapseWillEnableSerialized": "سيُفعَّل تتبّع الأجهزة المعرّفة في المتجر عند النقل.",
-  "@collapseWillEnableSerialized": {"description": "Warns that applying the plan turns the feature on."},
+  "@collapseWillEnableSerialized": {
+    "description": "Warns that applying the plan turns the feature on."
+  },
   "collapseAssetType": "نوع الجهاز",
-  "@collapseAssetType": {"description": "Which kind of identified thing these become."},
+  "@collapseAssetType": {
+    "description": "Which kind of identified thing these become."
+  },
   "collapseNothingToCollapse": "لم نجد في هذا الملف ما يشبه صنفًا لكل جهاز.",
-  "@collapseNothingToCollapse": {"description": "Empty result for a catalogue that is already normal."},
+  "@collapseNothingToCollapse": {
+    "description": "Empty result for a catalogue that is already normal."
+  },
   "collapseReasonNoIdentifier": "لا يوجد رقم مميّز في الاسم",
-  "@collapseReasonNoIdentifier": {"description": "Reason code."},
+  "@collapseReasonNoIdentifier": {
+    "description": "Reason code."
+  },
   "collapseReasonNoStem": "الاسم ليس فيه سوى الرقم",
-  "@collapseReasonNoStem": {"description": "Reason code."},
+  "@collapseReasonNoStem": {
+    "description": "Reason code."
+  },
   "collapseReasonWeakStem": "ما تبقّى من الاسم قصير جدًا",
-  "@collapseReasonWeakStem": {"description": "Reason code."},
+  "@collapseReasonWeakStem": {
+    "description": "Reason code."
+  },
   "collapseReasonUnlabelled": "الرقم غير مسبوق بكلمة تعرّفه",
-  "@collapseReasonUnlabelled": {"description": "Reason code."},
+  "@collapseReasonUnlabelled": {
+    "description": "Reason code."
+  },
   "collapseReasonOddLength": "طول الرقم غير معتاد لـ IMEI",
-  "@collapseReasonOddLength": {"description": "Reason code."},
+  "@collapseReasonOddLength": {
+    "description": "Reason code."
+  },
   "collapseReasonCheckDigit": "رقم التحقق في IMEI لا يطابق",
-  "@collapseReasonCheckDigit": {"description": "Reason code."},
+  "@collapseReasonCheckDigit": {
+    "description": "Reason code."
+  },
   "collapseReasonVinCheckDigit": "رقم التحقق في رقم الهيكل لا يطابق",
-  "@collapseReasonVinCheckDigit": {"description": "Reason code."},
+  "@collapseReasonVinCheckDigit": {
+    "description": "Reason code."
+  },
   "collapseReasonSecondIdentifier": "الاسم يحتوي أكثر من رقم مميّز",
-  "@collapseReasonSecondIdentifier": {"description": "Reason code."},
+  "@collapseReasonSecondIdentifier": {
+    "description": "Reason code."
+  },
   "collapseReasonSingleton": "لا يوجد صنف آخر يشبهه",
-  "@collapseReasonSingleton": {"description": "Reason code."},
+  "@collapseReasonSingleton": {
+    "description": "Reason code."
+  },
   "collapseReasonNoCost": "لا توجد فاتورة شراء لهذا الصنف",
-  "@collapseReasonNoCost": {"description": "Reason code."},
+  "@collapseReasonNoCost": {
+    "description": "Reason code."
+  },
   "collapseReasonGoneWithoutSale": "خرج من المخزون دون فاتورة بيع",
-  "@collapseReasonGoneWithoutSale": {"description": "Reason code."},
+  "@collapseReasonGoneWithoutSale": {
+    "description": "Reason code."
+  },
   "collapseReasonSoldMoreThanOnce": "بيع أكثر من مرة — ليس جهازًا بعينه",
-  "@collapseReasonSoldMoreThanOnce": {"description": "Reason code."},
+  "@collapseReasonSoldMoreThanOnce": {
+    "description": "Reason code."
+  },
   "collapseReasonPurchasedMoreThanOnce": "اشتُري أكثر من مرة — ليس جهازًا بعينه",
-  "@collapseReasonPurchasedMoreThanOnce": {"description": "Reason code."},
+  "@collapseReasonPurchasedMoreThanOnce": {
+    "description": "Reason code."
+  },
   "collapseReasonMoreThanOneOnHand": "يوجد أكثر من واحد منه في المخزون",
-  "@collapseReasonMoreThanOneOnHand": {"description": "Reason code."},
+  "@collapseReasonMoreThanOneOnHand": {
+    "description": "Reason code."
+  },
   "collapseReasonDuplicateIdentifier": "الرقم نفسه موجود في صنف آخر بالمخزون",
-  "@collapseReasonDuplicateIdentifier": {"description": "Reason code."},
+  "@collapseReasonDuplicateIdentifier": {
+    "description": "Reason code."
+  },
   "collapseReasonAlreadyInStock": "المعرّف موجود بالفعل في مخزون المتجر",
-  "@collapseReasonAlreadyInStock": {"description": "Reason code."},
+  "@collapseReasonAlreadyInStock": {
+    "description": "Reason code."
+  },
   "collapseReasonMultipleVariants": "للصنف أكثر من خيار بيع",
-  "@collapseReasonMultipleVariants": {"description": "Reason code."},
+  "@collapseReasonMultipleVariants": {
+    "description": "Reason code."
+  },
   "collapseReasonNotStockKeeping": "خدمة أو صنف محضّر — لا يُتتبّع",
-  "@collapseReasonNotStockKeeping": {"description": "Reason code."},
+  "@collapseReasonNotStockKeeping": {
+    "description": "Reason code."
+  },
   "collapseReasonEmptyName": "لا اسم لهذا الصنف",
-  "@collapseReasonEmptyName": {"description": "Reason code."},
+  "@collapseReasonEmptyName": {
+    "description": "Reason code."
+  },
   "warehousesTitle": "المخازن",
   "warehousesDrawerLabel": "المخازن",
   "warehousesEmptyTitle": "لديك مكان واحد",
@@ -11852,302 +12229,684 @@
   "lessonExitConfirmTitle": "إنهاء التدريب؟",
   "lessonExitConfirmMessage": "سيُحذف متجر التدريب بكل ما فيه.",
   "consignmentPayablesTitle": "مستحقات الأمانات",
-  "@consignmentPayablesTitle": {"description": ""},
+  "@consignmentPayablesTitle": {
+    "description": ""
+  },
   "consignmentPayablesDrawerLabel": "مستحقات الأمانات",
-  "@consignmentPayablesDrawerLabel": {"description": ""},
+  "@consignmentPayablesDrawerLabel": {
+    "description": ""
+  },
   "consignmentPayablesSearchHint": "ابحث باسم صاحب الأمانة أو رقم الجهاز",
-  "@consignmentPayablesSearchHint": {"description": ""},
+  "@consignmentPayablesSearchHint": {
+    "description": ""
+  },
   "consignmentPayablesEmptyTitle": "لا مستحقات معلّقة",
-  "@consignmentPayablesEmptyTitle": {"description": ""},
+  "@consignmentPayablesEmptyTitle": {
+    "description": ""
+  },
   "consignmentPayablesEmptyBody": "كل أمانة بيعت تم صرف مستحقاتها لصاحبها.",
-  "@consignmentPayablesEmptyBody": {"description": ""},
+  "@consignmentPayablesEmptyBody": {
+    "description": ""
+  },
   "consignmentFigurePayable": "مستحقات لأصحابها",
-  "@consignmentFigurePayable": {"description": ""},
+  "@consignmentFigurePayable": {
+    "description": ""
+  },
   "consignmentFigureReceivable": "مستحقات على أصحابها",
-  "@consignmentFigureReceivable": {"description": ""},
+  "@consignmentFigureReceivable": {
+    "description": ""
+  },
   "consignmentFigureCommission": "عمولة المحل",
-  "@consignmentFigureCommission": {"description": ""},
+  "@consignmentFigureCommission": {
+    "description": ""
+  },
   "consignmentFigureCustody": "أمانات في العهدة",
-  "@consignmentFigureCustody": {"description": ""},
+  "@consignmentFigureCustody": {
+    "description": ""
+  },
   "consignmentFigureStockValue": "قيمة البضاعة",
-  "@consignmentFigureStockValue": {"description": ""},
+  "@consignmentFigureStockValue": {
+    "description": ""
+  },
   "consignmentDisburseAction": "صرف المستحقات",
-  "@consignmentDisburseAction": {"description": ""},
+  "@consignmentDisburseAction": {
+    "description": ""
+  },
   "consignmentPayoutOneConsignor": "سند الصرف الواحد يخص صاحب أمانة واحدًا.",
-  "@consignmentPayoutOneConsignor": {"description": ""},
+  "@consignmentPayoutOneConsignor": {
+    "description": ""
+  },
   "consignmentPayoutMethodTitle": "طريقة صرف {amount}",
-  "@consignmentPayoutMethodTitle": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@consignmentPayoutMethodTitle": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "consignmentPayoutCash": "نقدًا من الصندوق",
-  "@consignmentPayoutCash": {"description": ""},
+  "@consignmentPayoutCash": {
+    "description": ""
+  },
   "consignmentPayoutCashHint": "يُسجَّل صرف نقدي من الوردية المفتوحة.",
-  "@consignmentPayoutCashHint": {"description": ""},
+  "@consignmentPayoutCashHint": {
+    "description": ""
+  },
   "consignmentPayoutBank": "تحويل بنكي",
-  "@consignmentPayoutBank": {"description": ""},
+  "@consignmentPayoutBank": {
+    "description": ""
+  },
   "consignmentSoldOnCredit": "بيعت آجل — متبقٍ {amount}",
-  "@consignmentSoldOnCredit": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@consignmentSoldOnCredit": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "consignmentWaitingDays": "{days, plural, zero{اليوم} one{منذ يوم} two{منذ يومين} few{منذ {days} أيام} many{منذ {days} يومًا} other{منذ {days} يوم}}",
-  "@consignmentWaitingDays": {"description": "", "placeholders": {"days": {"type": "int"}}},
+  "@consignmentWaitingDays": {
+    "description": "",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "consignmentResendSms": "إعادة إرسال الرسالة",
-  "@consignmentResendSms": {"description": ""},
+  "@consignmentResendSms": {
+    "description": ""
+  },
   "consignmentSmsQueued": "أُدرجت الرسالة في قائمة الإرسال.",
-  "@consignmentSmsQueued": {"description": ""},
+  "@consignmentSmsQueued": {
+    "description": ""
+  },
   "consignmentSmsFailed": "تعذّر إرسال الرسالة.",
-  "@consignmentSmsFailed": {"description": ""},
+  "@consignmentSmsFailed": {
+    "description": ""
+  },
   "consignmentDisburseDone": "تم الصرف بالسند {number}",
-  "@consignmentDisburseDone": {"description": "", "placeholders": {"number": {"type": "String"}}},
+  "@consignmentDisburseDone": {
+    "description": "",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
   "consignmentDisburseFailed": "تعذّر صرف المستحقات — تأكد من وجود وردية مفتوحة.",
-  "@consignmentDisburseFailed": {"description": ""},
+  "@consignmentDisburseFailed": {
+    "description": ""
+  },
   "consignmentPrintVoucher": "طباعة سند الاستلام",
-  "@consignmentPrintVoucher": {"description": ""},
+  "@consignmentPrintVoucher": {
+    "description": ""
+  },
   "consignmentPrintPayout": "طباعة سند الصرف",
-  "@consignmentPrintPayout": {"description": ""},
+  "@consignmentPrintPayout": {
+    "description": ""
+  },
   "consignmentPrintFailed": "تعذّرت الطباعة.",
-  "@consignmentPrintFailed": {"description": ""},
+  "@consignmentPrintFailed": {
+    "description": ""
+  },
   "consignmentVoucherReady": "سند الاستلام {number} جاهز للطباعة",
-  "@consignmentVoucherReady": {"description": "", "placeholders": {"number": {"type": "String"}}},
+  "@consignmentVoucherReady": {
+    "description": "",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
   "stockUnitOwnPrice": "سعر هذا الجهاز",
-  "@stockUnitOwnPrice": {"description": ""},
+  "@stockUnitOwnPrice": {
+    "description": ""
+  },
   "stockUnitVariantPrice": "سعر الصنف",
-  "@stockUnitVariantPrice": {"description": ""},
+  "@stockUnitVariantPrice": {
+    "description": ""
+  },
   "stockUnitConsignmentBadge": "أمانة",
-  "@stockUnitConsignmentBadge": {"description": ""},
+  "@stockUnitConsignmentBadge": {
+    "description": ""
+  },
   "stockUnitWarrantyUntil": "الضمان حتى {date}",
-  "@stockUnitWarrantyUntil": {"description": "", "placeholders": {"date": {"type": "String"}}},
+  "@stockUnitWarrantyUntil": {
+    "description": "",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "stockUnitConsignmentSection": "بيانات الأمانة",
-  "@stockUnitConsignmentSection": {"description": ""},
+  "@stockUnitConsignmentSection": {
+    "description": ""
+  },
   "stockUnitConsignor": "صاحب الأمانة",
-  "@stockUnitConsignor": {"description": ""},
+  "@stockUnitConsignor": {
+    "description": ""
+  },
   "stockUnitDeclaredValue": "القيمة المقدّرة",
-  "@stockUnitDeclaredValue": {"description": ""},
+  "@stockUnitDeclaredValue": {
+    "description": ""
+  },
   "stockUnitPayoutOwed": "المستحق لصاحبها",
-  "@stockUnitPayoutOwed": {"description": ""},
+  "@stockUnitPayoutOwed": {
+    "description": ""
+  },
   "stockUnitPayoutPaidOn": "صُرفت في",
-  "@stockUnitPayoutPaidOn": {"description": ""},
+  "@stockUnitPayoutPaidOn": {
+    "description": ""
+  },
   "stockUnitFactsSection": "بيانات الجهاز",
-  "@stockUnitFactsSection": {"description": ""},
+  "@stockUnitFactsSection": {
+    "description": ""
+  },
   "stockUnitWarehouse": "المستودع",
-  "@stockUnitWarehouse": {"description": ""},
+  "@stockUnitWarehouse": {
+    "description": ""
+  },
   "stockUnitDaysHeld": "أيام في المخزون",
-  "@stockUnitDaysHeld": {"description": ""},
+  "@stockUnitDaysHeld": {
+    "description": ""
+  },
   "stockUnitCost": "تكلفة الشراء",
-  "@stockUnitCost": {"description": ""},
+  "@stockUnitCost": {
+    "description": ""
+  },
   "stockUnitRefurbCost": "تكلفة الإصلاح",
-  "@stockUnitRefurbCost": {"description": ""},
+  "@stockUnitRefurbCost": {
+    "description": ""
+  },
   "stockUnitTotalCost": "التكلفة الإجمالية",
-  "@stockUnitTotalCost": {"description": ""},
+  "@stockUnitTotalCost": {
+    "description": ""
+  },
   "stockUnitSoldOn": "تاريخ البيع",
-  "@stockUnitSoldOn": {"description": ""},
+  "@stockUnitSoldOn": {
+    "description": ""
+  },
   "stockUnitSoldFor": "سعر البيع",
-  "@stockUnitSoldFor": {"description": ""},
+  "@stockUnitSoldFor": {
+    "description": ""
+  },
   "stockUnitAttributesSection": "الحالة والملحقات",
-  "@stockUnitAttributesSection": {"description": ""},
+  "@stockUnitAttributesSection": {
+    "description": ""
+  },
   "stockUnitTimelineSection": "سجل الجهاز",
-  "@stockUnitTimelineSection": {"description": ""},
+  "@stockUnitTimelineSection": {
+    "description": ""
+  },
   "stockUnitRepriceAction": "تعديل السعر",
-  "@stockUnitRepriceAction": {"description": ""},
+  "@stockUnitRepriceAction": {
+    "description": ""
+  },
   "stockUnitRepriceFailed": "تعذّر تعديل السعر.",
-  "@stockUnitRepriceFailed": {"description": ""},
+  "@stockUnitRepriceFailed": {
+    "description": ""
+  },
   "stockUnitWriteOffAction": "شطب الجهاز",
-  "@stockUnitWriteOffAction": {"description": ""},
+  "@stockUnitWriteOffAction": {
+    "description": ""
+  },
   "stockUnitWriteOffReason": "سبب الشطب",
-  "@stockUnitWriteOffReason": {"description": ""},
+  "@stockUnitWriteOffReason": {
+    "description": ""
+  },
   "stockUnitWriteOffFailed": "تعذّر شطب الجهاز.",
-  "@stockUnitWriteOffFailed": {"description": ""},
+  "@stockUnitWriteOffFailed": {
+    "description": ""
+  },
   "consignmentIntakeTitle": "استلام أمانة",
-  "@consignmentIntakeTitle": {"description": ""},
+  "@consignmentIntakeTitle": {
+    "description": ""
+  },
   "consignmentIntakeConsignor": "صاحب الأمانة",
-  "@consignmentIntakeConsignor": {"description": ""},
+  "@consignmentIntakeConsignor": {
+    "description": ""
+  },
   "consignmentIntakePayoutMode": "طريقة الاحتساب",
-  "@consignmentIntakePayoutMode": {"description": ""},
+  "@consignmentIntakePayoutMode": {
+    "description": ""
+  },
   "consignmentIntakeFixed": "مبلغ ثابت",
-  "@consignmentIntakeFixed": {"description": ""},
+  "@consignmentIntakeFixed": {
+    "description": ""
+  },
   "consignmentIntakeCommission": "نسبة عمولة",
-  "@consignmentIntakeCommission": {"description": ""},
+  "@consignmentIntakeCommission": {
+    "description": ""
+  },
   "consignmentIntakePayoutRate": "المبلغ المتفق عليه",
-  "@consignmentIntakePayoutRate": {"description": ""},
+  "@consignmentIntakePayoutRate": {
+    "description": ""
+  },
   "consignmentIntakeCommissionPct": "نسبة العمولة %",
-  "@consignmentIntakeCommissionPct": {"description": ""},
+  "@consignmentIntakeCommissionPct": {
+    "description": ""
+  },
   "consignmentIntakeReserve": "أقل سعر بيع",
-  "@consignmentIntakeReserve": {"description": ""},
+  "@consignmentIntakeReserve": {
+    "description": ""
+  },
   "consignmentIntakeDeclaredValue": "القيمة المقدّرة",
-  "@consignmentIntakeDeclaredValue": {"description": ""},
+  "@consignmentIntakeDeclaredValue": {
+    "description": ""
+  },
   "consignmentIntakeLiability": "المسؤولية عن الأمانة",
-  "@consignmentIntakeLiability": {"description": ""},
+  "@consignmentIntakeLiability": {
+    "description": ""
+  },
   "consignmentIntakeLiabilityOwner": "على مسؤولية صاحبها",
-  "@consignmentIntakeLiabilityOwner": {"description": ""},
+  "@consignmentIntakeLiabilityOwner": {
+    "description": ""
+  },
   "consignmentIntakeLiabilityExceptFm": "المحل ضامن عدا الظروف القاهرة",
-  "@consignmentIntakeLiabilityExceptFm": {"description": ""},
+  "@consignmentIntakeLiabilityExceptFm": {
+    "description": ""
+  },
   "consignmentIntakeLiabilityShop": "المحل ضامن",
-  "@consignmentIntakeLiabilityShop": {"description": ""},
+  "@consignmentIntakeLiabilityShop": {
+    "description": ""
+  },
   "consignmentIntakeAddItem": "إضافة صنف",
-  "@consignmentIntakeAddItem": {"description": ""},
+  "@consignmentIntakeAddItem": {
+    "description": ""
+  },
   "consignmentIntakeConfirm": "توقيع السند واستلام البضاعة",
-  "@consignmentIntakeConfirm": {"description": ""},
+  "@consignmentIntakeConfirm": {
+    "description": ""
+  },
   "consignmentIntakeFailed": "تعذّر تسجيل السند.",
-  "@consignmentIntakeFailed": {"description": ""},
+  "@consignmentIntakeFailed": {
+    "description": ""
+  },
   "consignmentIntakeFloorHint": "لن يسمح النظام ببيعها بأقل من {amount}",
-  "@consignmentIntakeFloorHint": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@consignmentIntakeFloorHint": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "returnConsignmentTitle": "أمانة مُصروفة عادت",
-  "@returnConsignmentTitle": {"description": ""},
+  "@returnConsignmentTitle": {
+    "description": ""
+  },
   "returnConsignmentBody": "تم صرف مستحقات صاحب هذه الأمانة. ماذا تريد أن تفعل؟",
-  "@returnConsignmentBody": {"description": ""},
+  "@returnConsignmentBody": {
+    "description": ""
+  },
   "returnConsignmentBuyIn": "يشتريها المحل بما دُفع",
-  "@returnConsignmentBuyIn": {"description": ""},
+  "@returnConsignmentBuyIn": {
+    "description": ""
+  },
   "returnConsignmentReopen": "تعود أمانة ويُطالَب صاحبها بالمبلغ",
-  "@returnConsignmentReopen": {"description": ""},
+  "@returnConsignmentReopen": {
+    "description": ""
+  },
   "consignmentPayoutSelected": "{count, plural, one{أمانة واحدة} two{أمانتان} few{{count} أمانات} other{{count} أمانة}}",
-  "@consignmentPayoutSelected": {"description": "", "placeholders": {"count": {"type": "int"}}},
+  "@consignmentPayoutSelected": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "treasuryConsignorPayableTitle": "منها مستحقات أمانات: {amount}",
-  "@treasuryConsignorPayableTitle": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@treasuryConsignorPayableTitle": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "treasuryCustodyHeld": "{count, plural, one{أمانة واحدة في العهدة} two{أمانتان في العهدة} few{{count} أمانات في العهدة} other{{count} أمانة في العهدة}} بقيمة مقدّرة {amount}",
-  "@treasuryCustodyHeld": {"description": "", "placeholders": {"count": {"type": "int"}, "amount": {"type": "String"}}},
+  "@treasuryCustodyHeld": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "treasuryConsignorReceivable": "ومستحق على أصحاب الأمانات: {amount}",
-  "@treasuryConsignorReceivable": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@treasuryConsignorReceivable": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "integrationsTitle": "التكاملات",
-  "@integrationsTitle": {"description": ""},
+  "@integrationsTitle": {
+    "description": ""
+  },
   "integrationsSubtitle": "شحن اشتراكات العملاء من داخل دفتر بدل مواقع المزوّدين",
-  "@integrationsSubtitle": {"description": ""},
+  "@integrationsSubtitle": {
+    "description": ""
+  },
   "integrationsPageIntro": "اربط حساب الوكالة لديك، فتصبح عمليات الشحن وأرصدتها وإيصالاتها جزءاً من حسابات المتجر.",
-  "@integrationsPageIntro": {"description": ""},
+  "@integrationsPageIntro": {
+    "description": ""
+  },
   "integrationsEmpty": "لا توجد خدمات متاحة حالياً",
-  "@integrationsEmpty": {"description": ""},
+  "@integrationsEmpty": {
+    "description": ""
+  },
   "integrationsLoadError": "تعذّر تحميل قائمة الخدمات",
-  "@integrationsLoadError": {"description": ""},
+  "@integrationsLoadError": {
+    "description": ""
+  },
   "integrationsRetry": "إعادة المحاولة",
-  "@integrationsRetry": {"description": ""},
+  "@integrationsRetry": {
+    "description": ""
+  },
   "integrationProviderHdboxName": "HD Box",
-  "@integrationProviderHdboxName": {"description": ""},
+  "@integrationProviderHdboxName": {
+    "description": ""
+  },
   "integrationProviderHdboxTagline": "اشتراكات القنوات — تجديد وتفعيل بطاقات المشتركين",
-  "@integrationProviderHdboxTagline": {"description": ""},
+  "@integrationProviderHdboxTagline": {
+    "description": ""
+  },
   "integrationProviderLnetName": "LNET",
-  "@integrationProviderLnetName": {"description": ""},
+  "@integrationProviderLnetName": {
+    "description": ""
+  },
   "integrationProviderLnetTagline": "باقات الإنترنت — شحن اشتراكات المشتركين",
-  "@integrationProviderLnetTagline": {"description": ""},
+  "@integrationProviderLnetTagline": {
+    "description": ""
+  },
   "integrationProviderQareebName": "قريب",
-  "@integrationProviderQareebName": {"description": ""},
+  "@integrationProviderQareebName": {
+    "description": ""
+  },
   "integrationProviderQareebTagline": "كروت الشحن ورصيد الهاتف",
-  "@integrationProviderQareebTagline": {"description": ""},
+  "@integrationProviderQareebTagline": {
+    "description": ""
+  },
   "integrationProviderUnknownName": "خدمة غير معروفة",
-  "@integrationProviderUnknownName": {"description": ""},
+  "@integrationProviderUnknownName": {
+    "description": ""
+  },
   "integrationProviderUnknownTagline": "هذه الخدمة غير مدعومة في هذه النسخة",
-  "@integrationProviderUnknownTagline": {"description": ""},
+  "@integrationProviderUnknownTagline": {
+    "description": ""
+  },
   "integrationAvailabilityAvailable": "متاح",
-  "@integrationAvailabilityAvailable": {"description": ""},
+  "@integrationAvailabilityAvailable": {
+    "description": ""
+  },
   "integrationAvailabilityPlanned": "قريباً",
-  "@integrationAvailabilityPlanned": {"description": ""},
+  "@integrationAvailabilityPlanned": {
+    "description": ""
+  },
   "integrationBlockedPortalUnreachable": "موقع المزوّد يحجب الاتصال من شبكتنا. ننتظر واجهة برمجية أو إذن وصول.",
-  "@integrationBlockedPortalUnreachable": {"description": ""},
+  "@integrationBlockedPortalUnreachable": {
+    "description": ""
+  },
   "integrationBlockedAwaitingAccess": "بانتظار حساب وكالة وتفاصيل الربط من المزوّد.",
-  "@integrationBlockedAwaitingAccess": {"description": ""},
+  "@integrationBlockedAwaitingAccess": {
+    "description": ""
+  },
   "integrationBlockedDriverInProgress": "قيد الإعداد. الربط مع هذا المزوّد لم يكتمل بعد.",
-  "@integrationBlockedDriverInProgress": {"description": ""},
+  "@integrationBlockedDriverInProgress": {
+    "description": ""
+  },
   "integrationCapabilityBalance": "الرصيد",
-  "@integrationCapabilityBalance": {"description": ""},
+  "@integrationCapabilityBalance": {
+    "description": ""
+  },
   "integrationCapabilityLookup": "استعلام",
-  "@integrationCapabilityLookup": {"description": ""},
+  "@integrationCapabilityLookup": {
+    "description": ""
+  },
   "integrationCapabilityRecharge": "شحن",
-  "@integrationCapabilityRecharge": {"description": ""},
+  "@integrationCapabilityRecharge": {
+    "description": ""
+  },
   "integrationStatusConnected": "متصل",
-  "@integrationStatusConnected": {"description": ""},
+  "@integrationStatusConnected": {
+    "description": ""
+  },
   "integrationStatusNotConfigured": "غير مُهيّأ",
-  "@integrationStatusNotConfigured": {"description": ""},
+  "@integrationStatusNotConfigured": {
+    "description": ""
+  },
   "integrationStatusFailed": "فشل الاتصال",
-  "@integrationStatusFailed": {"description": ""},
+  "@integrationStatusFailed": {
+    "description": ""
+  },
   "integrationStatusDisabled": "موقوف",
-  "@integrationStatusDisabled": {"description": ""},
+  "@integrationStatusDisabled": {
+    "description": ""
+  },
   "integrationBalanceLabel": "الرصيد لدى المزوّد",
-  "@integrationBalanceLabel": {"description": ""},
+  "@integrationBalanceLabel": {
+    "description": ""
+  },
   "integrationBalanceUnknown": "غير معروف",
-  "@integrationBalanceUnknown": {"description": ""},
+  "@integrationBalanceUnknown": {
+    "description": ""
+  },
   "integrationBalanceCheckedAt": "آخر تحقق: {time}",
-  "@integrationBalanceCheckedAt": {"description": "", "placeholders": {"time": {"type": "String"}}},
+  "@integrationBalanceCheckedAt": {
+    "description": "",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "integrationAccountLabel": "الحساب: {name}",
-  "@integrationAccountLabel": {"description": "", "placeholders": {"name": {"type": "String"}}},
+  "@integrationAccountLabel": {
+    "description": "",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "integrationNeverChecked": "لم يتم التحقق بعد",
-  "@integrationNeverChecked": {"description": ""},
+  "@integrationNeverChecked": {
+    "description": ""
+  },
   "integrationFieldBaseUrl": "عنوان الخدمة",
-  "@integrationFieldBaseUrl": {"description": ""},
+  "@integrationFieldBaseUrl": {
+    "description": ""
+  },
   "integrationFieldBaseUrlHint": "مثال: http://cas.example.ly:18688",
-  "@integrationFieldBaseUrlHint": {"description": ""},
+  "@integrationFieldBaseUrlHint": {
+    "description": ""
+  },
   "integrationFieldUsername": "اسم المستخدم",
-  "@integrationFieldUsername": {"description": ""},
+  "@integrationFieldUsername": {
+    "description": ""
+  },
   "integrationFieldPassword": "كلمة المرور",
-  "@integrationFieldPassword": {"description": ""},
+  "@integrationFieldPassword": {
+    "description": ""
+  },
   "integrationPasswordStoredHint": "محفوظة. اتركها فارغة للإبقاء عليها.",
-  "@integrationPasswordStoredHint": {"description": ""},
+  "@integrationPasswordStoredHint": {
+    "description": ""
+  },
   "integrationPasswordRequired": "أدخل كلمة المرور",
-  "@integrationPasswordRequired": {"description": ""},
+  "@integrationPasswordRequired": {
+    "description": ""
+  },
   "integrationUsernameRequired": "أدخل اسم المستخدم",
-  "@integrationUsernameRequired": {"description": ""},
+  "@integrationUsernameRequired": {
+    "description": ""
+  },
   "integrationConnect": "ربط الحساب",
-  "@integrationConnect": {"description": ""},
+  "@integrationConnect": {
+    "description": ""
+  },
   "integrationEdit": "تعديل البيانات",
-  "@integrationEdit": {"description": ""},
+  "@integrationEdit": {
+    "description": ""
+  },
   "integrationSave": "حفظ",
-  "@integrationSave": {"description": ""},
+  "@integrationSave": {
+    "description": ""
+  },
   "integrationCancel": "إلغاء",
-  "@integrationCancel": {"description": ""},
+  "@integrationCancel": {
+    "description": ""
+  },
   "integrationTest": "اختبار الاتصال",
-  "@integrationTest": {"description": ""},
+  "@integrationTest": {
+    "description": ""
+  },
   "integrationDisconnect": "فصل الحساب",
-  "@integrationDisconnect": {"description": ""},
+  "@integrationDisconnect": {
+    "description": ""
+  },
   "integrationDisconnectConfirmTitle": "فصل الحساب؟",
-  "@integrationDisconnectConfirmTitle": {"description": ""},
+  "@integrationDisconnectConfirmTitle": {
+    "description": ""
+  },
   "integrationDisconnectConfirmBody": "سيتم حذف بيانات الدخول المحفوظة لهذه الخدمة. لن يتأثر أي شيء لدى المزوّد.",
-  "@integrationDisconnectConfirmBody": {"description": ""},
+  "@integrationDisconnectConfirmBody": {
+    "description": ""
+  },
   "integrationDisconnectConfirmAction": "فصل",
-  "@integrationDisconnectConfirmAction": {"description": ""},
+  "@integrationDisconnectConfirmAction": {
+    "description": ""
+  },
   "integrationProbeSuccess": "تم الاتصال بنجاح",
-  "@integrationProbeSuccess": {"description": ""},
+  "@integrationProbeSuccess": {
+    "description": ""
+  },
   "integrationProbeSuccessWithBalance": "تم الاتصال — الرصيد {amount}",
-  "@integrationProbeSuccessWithBalance": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@integrationProbeSuccessWithBalance": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "integrationSaved": "تم حفظ البيانات",
-  "@integrationSaved": {"description": ""},
+  "@integrationSaved": {
+    "description": ""
+  },
   "integrationDisconnected": "تم فصل الحساب",
-  "@integrationDisconnected": {"description": ""},
+  "@integrationDisconnected": {
+    "description": ""
+  },
   "integrationErrorNotConfigured": "لم تُدخل بيانات الدخول بعد",
-  "@integrationErrorNotConfigured": {"description": ""},
+  "@integrationErrorNotConfigured": {
+    "description": ""
+  },
   "integrationErrorUnavailable": "هذه الخدمة غير متاحة بعد",
-  "@integrationErrorUnavailable": {"description": ""},
+  "@integrationErrorUnavailable": {
+    "description": ""
+  },
   "integrationErrorUnreachable": "تعذّر الوصول إلى المزوّد. تحقق من العنوان ومن الاتصال بالإنترنت.",
-  "@integrationErrorUnreachable": {"description": ""},
+  "@integrationErrorUnreachable": {
+    "description": ""
+  },
   "integrationErrorUnauthorized": "رفض المزوّد اسم المستخدم أو كلمة المرور",
-  "@integrationErrorUnauthorized": {"description": ""},
+  "@integrationErrorUnauthorized": {
+    "description": ""
+  },
   "integrationErrorNotFound": "لم يُعثر على البطاقة المطلوبة",
-  "@integrationErrorNotFound": {"description": ""},
+  "@integrationErrorNotFound": {
+    "description": ""
+  },
   "integrationErrorProviderError": "رفض المزوّد الطلب",
-  "@integrationErrorProviderError": {"description": ""},
+  "@integrationErrorProviderError": {
+    "description": ""
+  },
   "integrationErrorUnexpected": "رد المزوّد بشكل غير متوقع",
-  "@integrationErrorUnexpected": {"description": ""},
+  "@integrationErrorUnexpected": {
+    "description": ""
+  },
   "rechargeTitle": "شحن اشتراك",
-  "@rechargeTitle": {"description": ""},
+  "@rechargeTitle": {
+    "description": ""
+  },
   "rechargeCatalogAction": "شحن اشتراك",
-  "@rechargeCatalogAction": {"description": ""},
+  "@rechargeCatalogAction": {
+    "description": ""
+  },
   "rechargeSearchLabel": "رقم البطاقة",
-  "@rechargeSearchLabel": {"description": ""},
+  "@rechargeSearchLabel": {
+    "description": ""
+  },
   "rechargeSearchHint": "أدخل أو امسح رقم البطاقة",
-  "@rechargeSearchHint": {"description": ""},
+  "@rechargeSearchHint": {
+    "description": ""
+  },
   "rechargeSearchAction": "بحث",
   "integrationSettingsHeading": "شروط التعامل",
-  "@integrationSettingsHeading": {"description": ""},
+  "@integrationSettingsHeading": {
+    "description": ""
+  },
   "integrationSettingCommission": "عمولة الوكالة (%)",
-  "@integrationSettingCommission": {"description": ""},
+  "@integrationSettingCommission": {
+    "description": ""
+  },
   "integrationSettingCommissionHint": "نسبة ربح المحل من قيمة الشحن",
-  "@integrationSettingCommissionHint": {"description": ""},
+  "@integrationSettingCommissionHint": {
+    "description": ""
+  },
   "integrationSettingDenominations": "مبالغ الشحن السريعة",
-  "@integrationSettingDenominations": {"description": ""},
+  "@integrationSettingDenominations": {
+    "description": ""
+  },
   "integrationSettingDenominationsHint": "المبالغ التي تظهر كأزرار سريعة عند البيع؛ يمكن للكاشير دائمًا كتابة مبلغ آخر",
-  "@integrationSettingDenominationsHint": {"description": ""},
+  "@integrationSettingDenominationsHint": {
+    "description": ""
+  },
   "integrationSettingLowBalance": "حد تنبيه الرصيد",
-  "@integrationSettingLowBalance": {"description": ""},
+  "@integrationSettingLowBalance": {
+    "description": ""
+  },
   "integrationSettingLowBalanceHint": "ننبّهك عندما ينزل رصيد الوكالة إلى هذا المبلغ. اكتب 0 لإيقاف التنبيه",
-  "@integrationSettingLowBalanceHint": {"description": ""},
+  "@integrationSettingLowBalanceHint": {
+    "description": ""
+  },
   "integrationSettingAtLeast": "أدخل قيمة لا تقل عن {min}",
-  "@integrationSettingAtLeast": {"description": "", "placeholders": {"min": {"type": "String"}}},
+  "@integrationSettingAtLeast": {
+    "description": "",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      }
+    }
+  },
   "integrationSettingOutOfRange": "أدخل قيمة بين {min} و {max}",
-  "@integrationSettingOutOfRange": {"description": "", "placeholders": {"min": {"type": "String"}, "max": {"type": "String"}}},
+  "@integrationSettingOutOfRange": {
+    "description": "",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
   "integrationSettingInvalidAmounts": "أدخل مبالغ صحيحة مفصولة بفاصلة",
-  "@integrationSettingInvalidAmounts": {"description": ""},
+  "@integrationSettingInvalidAmounts": {
+    "description": ""
+  },
   "integrationAmountListManageButton": "إدارة المبالغ",
   "@integrationAmountListManageButton": {
     "description": "Opens the add/remove dialog for a quick-pick amount list."
@@ -12161,285 +12920,774 @@
     "description": "Explains the add-one-at-a-time dialog for a quick-pick amount list."
   },
   "integrationAmountListFieldLabel": "المبلغ",
-  "@integrationAmountListFieldLabel": {"description": "Label for the single-amount entry field."},
+  "@integrationAmountListFieldLabel": {
+    "description": "Label for the single-amount entry field."
+  },
   "integrationAmountListFieldHint": "مثال: 45",
-  "@integrationAmountListFieldHint": {"description": "Placeholder for the single-amount entry field."},
+  "@integrationAmountListFieldHint": {
+    "description": "Placeholder for the single-amount entry field."
+  },
   "integrationAmountListAddButton": "إضافة",
-  "@integrationAmountListAddButton": {"description": "Adds the typed amount to the list."},
+  "@integrationAmountListAddButton": {
+    "description": "Adds the typed amount to the list."
+  },
   "integrationAmountListInvalidError": "أدخل مبلغًا صحيحًا أكبر من صفر.",
-  "@integrationAmountListInvalidError": {"description": "Shown when the typed amount is not a positive number."},
+  "@integrationAmountListInvalidError": {
+    "description": "Shown when the typed amount is not a positive number."
+  },
   "integrationAmountListDuplicateError": "هذا المبلغ موجود في القائمة بالفعل.",
-  "@integrationAmountListDuplicateError": {"description": "Shown when the typed amount is already in the list."},
+  "@integrationAmountListDuplicateError": {
+    "description": "Shown when the typed amount is already in the list."
+  },
   "removeIntegrationAmountTooltip": "إزالة {amount}",
   "@removeIntegrationAmountTooltip": {
     "description": "Tooltip on the remove button for one amount in the quick-pick list.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
-  "@rechargeSearchAction": {"description": ""},
+  "@rechargeSearchAction": {
+    "description": ""
+  },
   "rechargeSearchLabelLine": "رقم الهاتف أو اسم المستخدم",
-  "@rechargeSearchLabelLine": {"description": ""},
+  "@rechargeSearchLabelLine": {
+    "description": ""
+  },
   "rechargeSearchHintLine": "أدخل رقم الهاتف أو اسم المستخدم أو رقم العقد",
-  "@rechargeSearchHintLine": {"description": ""},
+  "@rechargeSearchHintLine": {
+    "description": ""
+  },
   "rechargeIdlePromptLine": "أدخل رقم هاتف المشترك للاطّلاع على خطوطه وشحن رصيدها",
-  "@rechargeIdlePromptLine": {"description": ""},
+  "@rechargeIdlePromptLine": {
+    "description": ""
+  },
   "rechargeChooseLineHeading": "اختر الخط",
-  "@rechargeChooseLineHeading": {"description": ""},
+  "@rechargeChooseLineHeading": {
+    "description": ""
+  },
   "rechargeChooseLinePrompt": "{count, plural, two{هذا البحث يطابق خطّين. اختر الخط المطلوب قبل الشحن.} few{هذا البحث يطابق {count} خطوط. اختر الخط المطلوب قبل الشحن.} other{هذا البحث يطابق {count} خطاً. اختر الخط المطلوب قبل الشحن.}}",
-  "@rechargeChooseLinePrompt": {"description": "", "placeholders": {"count": {"type": "int"}}},
+  "@rechargeChooseLinePrompt": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "rechargeLineBalance": "الرصيد الحالي {amount}",
-  "@rechargeLineBalance": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@rechargeLineBalance": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeTopUpHeading": "قيمة الشحن",
-  "@rechargeTopUpHeading": {"description": ""},
+  "@rechargeTopUpHeading": {
+    "description": ""
+  },
   "rechargeCustomAmountLabel": "مبلغ آخر",
-  "@rechargeCustomAmountLabel": {"description": ""},
+  "@rechargeCustomAmountLabel": {
+    "description": ""
+  },
   "rechargeCustomAmountHint": "أدخل المبلغ بالدينار",
-  "@rechargeCustomAmountHint": {"description": ""},
+  "@rechargeCustomAmountHint": {
+    "description": ""
+  },
   "rechargeAmountBelowMinimum": "أقل مبلغ للشحن هو {amount}",
-  "@rechargeAmountBelowMinimum": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@rechargeAmountBelowMinimum": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeAmountAboveMaximum": "أكبر مبلغ للشحن هو {amount}",
-  "@rechargeAmountAboveMaximum": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@rechargeAmountAboveMaximum": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeAmountNotWhole": "أدخل مبلغاً صحيحاً بدون كسور",
-  "@rechargeAmountNotWhole": {"description": ""},
+  "@rechargeAmountNotWhole": {
+    "description": ""
+  },
   "rechargeAmountInvalid": "أدخل مبلغاً صالحاً",
-  "@rechargeAmountInvalid": {"description": ""},
+  "@rechargeAmountInvalid": {
+    "description": ""
+  },
   "rechargeTopUpNote": "يُضاف المبلغ إلى رصيد المشترك كما هو، وربح المحل هو عمولة الوكالة.",
-  "@rechargeTopUpNote": {"description": ""},
+  "@rechargeTopUpNote": {
+    "description": ""
+  },
   "rechargeIdlePrompt": "أدخل رقم بطاقة المشترك للاطّلاع على اشتراكه وأسعار التجديد",
-  "@rechargeIdlePrompt": {"description": ""},
+  "@rechargeIdlePrompt": {
+    "description": ""
+  },
   "rechargeSearching": "جارٍ البحث لدى المزوّد…",
-  "@rechargeSearching": {"description": ""},
+  "@rechargeSearching": {
+    "description": ""
+  },
   "rechargeHealthActive": "الاشتراك نشط",
-  "@rechargeHealthActive": {"description": ""},
+  "@rechargeHealthActive": {
+    "description": ""
+  },
   "rechargeHealthExpiringSoon": "يوشك على الانتهاء",
-  "@rechargeHealthExpiringSoon": {"description": ""},
+  "@rechargeHealthExpiringSoon": {
+    "description": ""
+  },
   "rechargeHealthExpired": "منتهي",
-  "@rechargeHealthExpired": {"description": ""},
+  "@rechargeHealthExpired": {
+    "description": ""
+  },
   "rechargeHealthLocked": "موقوف",
-  "@rechargeHealthLocked": {"description": ""},
+  "@rechargeHealthLocked": {
+    "description": ""
+  },
   "rechargeHealthUnknown": "حالة غير معروفة",
-  "@rechargeHealthUnknown": {"description": ""},
+  "@rechargeHealthUnknown": {
+    "description": ""
+  },
   "rechargeDaysRemaining": "{count, plural, one{يوم واحد متبقٍ} two{يومان متبقيان} few{{count} أيام متبقية} other{{count} يوماً متبقياً}}",
-  "@rechargeDaysRemaining": {"description": "", "placeholders": {"count": {"type": "int"}}},
+  "@rechargeDaysRemaining": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "rechargeDaysExpired": "{count, plural, one{انتهى منذ يوم} two{انتهى منذ يومين} few{انتهى منذ {count} أيام} other{انتهى منذ {count} يوماً}}",
-  "@rechargeDaysExpired": {"description": "", "placeholders": {"count": {"type": "int"}}},
+  "@rechargeDaysExpired": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "rechargeExpiresOn": "ينتهي في {date}",
-  "@rechargeExpiresOn": {"description": "", "placeholders": {"date": {"type": "String"}}},
+  "@rechargeExpiresOn": {
+    "description": "",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeStartedOn": "بدأ في {date}",
-  "@rechargeStartedOn": {"description": "", "placeholders": {"date": {"type": "String"}}},
+  "@rechargeStartedOn": {
+    "description": "",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "rechargePackageLabel": "الباقة",
-  "@rechargePackageLabel": {"description": ""},
+  "@rechargePackageLabel": {
+    "description": ""
+  },
   "rechargeProviderStatus": "حالة المزوّد",
-  "@rechargeProviderStatus": {"description": ""},
+  "@rechargeProviderStatus": {
+    "description": ""
+  },
   "rechargeRenewHeading": "مدة التجديد",
-  "@rechargeRenewHeading": {"description": ""},
+  "@rechargeRenewHeading": {
+    "description": ""
+  },
   "rechargeSwitchHeading": "أو انتقل إلى باقة أخرى",
-  "@rechargeSwitchHeading": {"description": ""},
+  "@rechargeSwitchHeading": {
+    "description": ""
+  },
   "rechargeMonths": "{count, plural, one{شهر واحد} two{شهران} few{{count} أشهر} other{{count} شهراً}}",
-  "@rechargeMonths": {"description": "", "placeholders": {"count": {"type": "int"}}},
+  "@rechargeMonths": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "rechargeOffersUnavailable": "تعذّر قراءة الأسعار من المزوّد. أعد المحاولة.",
-  "@rechargeOffersUnavailable": {"description": ""},
+  "@rechargeOffersUnavailable": {
+    "description": ""
+  },
   "rechargePriceLiveNote": "الأسعار مقروءة من المزوّد الآن، وقد تتغيّر بين عملية وأخرى.",
-  "@rechargePriceLiveNote": {"description": ""},
+  "@rechargePriceLiveNote": {
+    "description": ""
+  },
   "rechargeFloatLabel": "رصيد الوكالة",
-  "@rechargeFloatLabel": {"description": ""},
+  "@rechargeFloatLabel": {
+    "description": ""
+  },
   "rechargeFloatShort": "رصيد الوكالة {balance} لا يغطّي {cost}. سجّل البيع الآن وارصد الرصيد لاحقاً.",
-  "@rechargeFloatShort": {"description": "", "placeholders": {"balance": {"type": "String"}, "cost": {"type": "String"}}},
+  "@rechargeFloatShort": {
+    "description": "",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      },
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeHistoryTitle": "سجلّ البطاقة",
-  "@rechargeHistoryTitle": {"description": ""},
+  "@rechargeHistoryTitle": {
+    "description": ""
+  },
   "rechargeHistoryPurchases": "عمليات الشحن",
-  "@rechargeHistoryPurchases": {"description": ""},
+  "@rechargeHistoryPurchases": {
+    "description": ""
+  },
   "rechargeHistoryStatuses": "تغيّرات الحالة",
-  "@rechargeHistoryStatuses": {"description": ""},
+  "@rechargeHistoryStatuses": {
+    "description": ""
+  },
   "rechargeHistoryOurs": "من متجرنا",
-  "@rechargeHistoryOurs": {"description": ""},
+  "@rechargeHistoryOurs": {
+    "description": ""
+  },
   "rechargeHistoryOther": "وكيل آخر",
-  "@rechargeHistoryOther": {"description": ""},
+  "@rechargeHistoryOther": {
+    "description": ""
+  },
   "rechargeHistoryEmpty": "لا يوجد سجلّ لهذه البطاقة",
-  "@rechargeHistoryEmpty": {"description": ""},
+  "@rechargeHistoryEmpty": {
+    "description": ""
+  },
   "rechargeHistoryError": "تعذّر تحميل السجلّ",
-  "@rechargeHistoryError": {"description": ""},
+  "@rechargeHistoryError": {
+    "description": ""
+  },
   "rechargeHistoryAutomatic": "تلقائي",
-  "@rechargeHistoryAutomatic": {"description": ""},
+  "@rechargeHistoryAutomatic": {
+    "description": ""
+  },
   "rechargeHistoryPage": "صفحة {page} من {count}",
-  "@rechargeHistoryPage": {"description": "", "placeholders": {"page": {"type": "int"}, "count": {"type": "int"}}},
+  "@rechargeHistoryPage": {
+    "description": "",
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "rechargeHistoryPrevious": "السابق",
-  "@rechargeHistoryPrevious": {"description": ""},
+  "@rechargeHistoryPrevious": {
+    "description": ""
+  },
   "rechargeHistoryNext": "التالي",
-  "@rechargeHistoryNext": {"description": ""},
+  "@rechargeHistoryNext": {
+    "description": ""
+  },
   "rechargeHistoryStatusChange": "{from} ← {to}",
-  "@rechargeHistoryStatusChange": {"description": "", "placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}},
+  "@rechargeHistoryStatusChange": {
+    "description": "",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeAddToCart": "أضف إلى السلة",
-  "@rechargeAddToCart": {"description": ""},
+  "@rechargeAddToCart": {
+    "description": ""
+  },
   "rechargeSelectAmountFirst": "اختر قيمة الشحن أو أدخل مبلغاً أولاً",
-  "@rechargeSelectAmountFirst": {"description": ""},
+  "@rechargeSelectAmountFirst": {
+    "description": ""
+  },
   "rechargeSelectFirst": "اختر مدة أو باقة أولاً",
-  "@rechargeSelectFirst": {"description": ""},
+  "@rechargeSelectFirst": {
+    "description": ""
+  },
   "rechargeAddedToCart": "أُضيف الشحن إلى السلة",
-  "@rechargeAddedToCart": {"description": ""},
+  "@rechargeAddedToCart": {
+    "description": ""
+  },
   "rechargeCartLineTitle": "شحن {provider}",
-  "@rechargeCartLineTitle": {"description": "", "placeholders": {"provider": {"type": "String"}}},
+  "@rechargeCartLineTitle": {
+    "description": "",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeCartLineSubtitle": "بطاقة {card} — {option}",
-  "@rechargeCartLineSubtitle": {"description": "", "placeholders": {"card": {"type": "String"}, "option": {"type": "String"}}},
+  "@rechargeCartLineSubtitle": {
+    "description": "",
+    "placeholders": {
+      "card": {
+        "type": "String"
+      },
+      "option": {
+        "type": "String"
+      }
+    }
+  },
   "rechargePendingNote": "يُسجَّل البيع ثم يُنفَّذ الشحن لدى المزوّد مباشرة، وتظهر النتيجة بعد إتمام الدفع.",
-  "@rechargePendingNote": {"description": ""},
+  "@rechargePendingNote": {
+    "description": ""
+  },
   "rechargeCostLabel": "تكلفة على المتجر",
-  "@rechargeCostLabel": {"description": ""},
+  "@rechargeCostLabel": {
+    "description": ""
+  },
   "rechargeChangeCard": "بطاقة أخرى",
-  "@rechargeChangeCard": {"description": ""},
+  "@rechargeChangeCard": {
+    "description": ""
+  },
   "rechargeNoProviders": "لا توجد خدمة شحن مُهيّأة. اربط حساباً من إعدادات المتجر ← التكاملات.",
-  "@rechargeNoProviders": {"description": ""},
+  "@rechargeNoProviders": {
+    "description": ""
+  },
   "integrationPricesTitle": "أسعار البيع",
-  "@integrationPricesTitle": {"description": ""},
+  "@integrationPricesTitle": {
+    "description": ""
+  },
   "integrationPricesSubtitle": "حدّد سعر البيع لكل مدة. ما لم تُسعّره يُباع بالتكلفة.",
-  "@integrationPricesSubtitle": {"description": ""},
+  "@integrationPricesSubtitle": {
+    "description": ""
+  },
   "integrationPricesEmpty": "لم تُقرأ أي أسعار بعد. ابحث عن بطاقة مرة واحدة من شاشة البيع، ثم عد إلى هنا.",
-  "@integrationPricesEmpty": {"description": ""},
+  "@integrationPricesEmpty": {
+    "description": ""
+  },
   "integrationPricesCost": "التكلفة",
-  "@integrationPricesCost": {"description": ""},
+  "@integrationPricesCost": {
+    "description": ""
+  },
   "integrationPricesSell": "سعر البيع",
-  "@integrationPricesSell": {"description": ""},
+  "@integrationPricesSell": {
+    "description": ""
+  },
   "integrationPricesMargin": "الربح",
-  "@integrationPricesMargin": {"description": ""},
+  "@integrationPricesMargin": {
+    "description": ""
+  },
   "integrationPricesUnset": "بالتكلفة",
-  "@integrationPricesUnset": {"description": ""},
+  "@integrationPricesUnset": {
+    "description": ""
+  },
   "integrationPricesBelowCost": "أقل من التكلفة — رفع المزوّد سعره",
-  "@integrationPricesBelowCost": {"description": ""},
+  "@integrationPricesBelowCost": {
+    "description": ""
+  },
   "integrationPricesBelowCostBanner": "مزوّد رفع أسعاره: بعض المدد أصبح سعر بيعها أقل من تكلفتها.",
-  "@integrationPricesBelowCostBanner": {"description": ""},
+  "@integrationPricesBelowCostBanner": {
+    "description": ""
+  },
   "integrationPricesSave": "حفظ الأسعار",
-  "@integrationPricesSave": {"description": ""},
+  "@integrationPricesSave": {
+    "description": ""
+  },
   "integrationPricesSaved": "تم حفظ الأسعار",
-  "@integrationPricesSaved": {"description": ""},
+  "@integrationPricesSaved": {
+    "description": ""
+  },
   "integrationPricesAction": "الأسعار",
-  "@integrationPricesAction": {"description": ""},
+  "@integrationPricesAction": {
+    "description": ""
+  },
   "integrationPricesPriced": "{count} من {total} مسعّرة",
-  "@integrationPricesPriced": {"description": "", "placeholders": {"count": {"type": "int"}, "total": {"type": "int"}}},
+  "@integrationPricesPriced": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "integrationPricesRenewals": "التجديد",
-  "@integrationPricesRenewals": {"description": ""},
+  "@integrationPricesRenewals": {
+    "description": ""
+  },
   "integrationPricesSwitches": "تغيير الباقة",
-  "@integrationPricesSwitches": {"description": ""},
+  "@integrationPricesSwitches": {
+    "description": ""
+  },
   "integrationPricesLastSeen": "آخر قراءة: {date}",
-  "@integrationPricesLastSeen": {"description": "", "placeholders": {"date": {"type": "String"}}},
+  "@integrationPricesLastSeen": {
+    "description": "",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "integrationPricesFollowingSuggestion": "السعر الموصى به من المزوّد: {price}",
-  "@integrationPricesFollowingSuggestion": {"description": "", "placeholders": {"price": {"type": "String"}}},
+  "@integrationPricesFollowingSuggestion": {
+    "description": "",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
   "integrationPricesUnsetHint": "اتركه فارغاً لاتّباع سعر المزوّد الموصى به",
-  "@integrationPricesUnsetHint": {"description": ""},
+  "@integrationPricesUnsetHint": {
+    "description": ""
+  },
   "invoiceRechargeTitle": "شحن اشتراك",
-  "@invoiceRechargeTitle": {"description": ""},
+  "@invoiceRechargeTitle": {
+    "description": ""
+  },
   "invoiceRechargeCard": "بطاقة {card}",
-  "@invoiceRechargeCard": {"description": "", "placeholders": {"card": {"type": "String"}}},
+  "@invoiceRechargeCard": {
+    "description": "",
+    "placeholders": {
+      "card": {
+        "type": "String"
+      }
+    }
+  },
   "invoiceRechargeFor": "لـ {name}",
-  "@invoiceRechargeFor": {"description": "", "placeholders": {"name": {"type": "String"}}},
+  "@invoiceRechargeFor": {
+    "description": "",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "invoiceRechargePending": "بانتظار التنفيذ لدى المزوّد",
-  "@invoiceRechargePending": {"description": ""},
+  "@invoiceRechargePending": {
+    "description": ""
+  },
   "invoiceRechargeConfirmed": "نُفِّذ لدى المزوّد",
-  "@invoiceRechargeConfirmed": {"description": ""},
+  "@invoiceRechargeConfirmed": {
+    "description": ""
+  },
   "invoiceRechargeFailed": "رفضه المزوّد",
-  "@invoiceRechargeFailed": {"description": ""},
+  "@invoiceRechargeFailed": {
+    "description": ""
+  },
   "invoiceRechargeCancelled": "أُلغيت العملية",
-  "@invoiceRechargeCancelled": {"description": ""},
+  "@invoiceRechargeCancelled": {
+    "description": ""
+  },
   "invoiceRechargeReference": "مرجع المزوّد {reference}",
-  "@invoiceRechargeReference": {"description": "", "placeholders": {"reference": {"type": "String"}}},
+  "@invoiceRechargeReference": {
+    "description": "",
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
   "invoiceRechargeConfirmedAt": "بتاريخ {date}",
-  "@invoiceRechargeConfirmedAt": {"description": "", "placeholders": {"date": {"type": "String"}}},
+  "@invoiceRechargeConfirmedAt": {
+    "description": "",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "invoiceRechargeCost": "التكلفة على المتجر {amount}",
-  "@invoiceRechargeCost": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@invoiceRechargeCost": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "integrationFloatTitle": "رصيد الوكالة",
-  "@integrationFloatTitle": {"description": ""},
+  "@integrationFloatTitle": {
+    "description": ""
+  },
   "integrationFloatAction": "الرصيد",
-  "@integrationFloatAction": {"description": ""},
+  "@integrationFloatAction": {
+    "description": ""
+  },
   "integrationFloatExpected": "الرصيد المتوقَّع",
-  "@integrationFloatExpected": {"description": ""},
+  "@integrationFloatExpected": {
+    "description": ""
+  },
   "integrationFloatReported": "حسب المزوّد",
-  "@integrationFloatReported": {"description": ""},
+  "@integrationFloatReported": {
+    "description": ""
+  },
   "integrationFloatToppedUp": "مجموع الشحن",
-  "@integrationFloatToppedUp": {"description": ""},
+  "@integrationFloatToppedUp": {
+    "description": ""
+  },
   "integrationFloatDrawn": "المسحوب المؤكَّد",
-  "@integrationFloatDrawn": {"description": ""},
+  "@integrationFloatDrawn": {
+    "description": ""
+  },
   "integrationFloatCommitted": "مباع ولم يُنفَّذ بعد",
-  "@integrationFloatCommitted": {"description": ""},
+  "@integrationFloatCommitted": {
+    "description": ""
+  },
   "integrationFloatDriftShort": "المزوّد يقول {amount} أقل مما نتوقّع — صُرف من الرصيد خارج دفتر.",
-  "@integrationFloatDriftShort": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@integrationFloatDriftShort": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "integrationFloatDriftOver": "المزوّد يقول {amount} أكثر مما نتوقّع — شحن لم يُسجَّل في دفتر.",
-  "@integrationFloatDriftOver": {"description": "", "placeholders": {"amount": {"type": "String"}}},
+  "@integrationFloatDriftOver": {
+    "description": "",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "integrationFloatExplainer": "شحن الرصيد ليس مصروفاً: المال انتقل من صندوقك إلى المزوّد، ويصبح تكلفة عند تنفيذ عملية شحن.",
-  "@integrationFloatExplainer": {"description": ""},
+  "@integrationFloatExplainer": {
+    "description": ""
+  },
   "integrationTopUpTitle": "تسجيل شحن رصيد",
-  "@integrationTopUpTitle": {"description": ""},
+  "@integrationTopUpTitle": {
+    "description": ""
+  },
   "integrationTopUpAmount": "المبلغ المدفوع",
-  "@integrationTopUpAmount": {"description": ""},
+  "@integrationTopUpAmount": {
+    "description": ""
+  },
   "integrationTopUpSource": "خرج من",
-  "@integrationTopUpSource": {"description": ""},
+  "@integrationTopUpSource": {
+    "description": ""
+  },
   "integrationTopUpSourceNone": "بدون تحديد",
-  "@integrationTopUpSourceNone": {"description": ""},
+  "@integrationTopUpSourceNone": {
+    "description": ""
+  },
   "integrationTopUpReference": "رقم الحوالة أو الإيصال",
-  "@integrationTopUpReference": {"description": ""},
+  "@integrationTopUpReference": {
+    "description": ""
+  },
   "integrationTopUpSave": "تسجيل",
-  "@integrationTopUpSave": {"description": ""},
+  "@integrationTopUpSave": {
+    "description": ""
+  },
   "integrationTopUpSaved": "تم تسجيل شحن الرصيد",
-  "@integrationTopUpSaved": {"description": ""},
+  "@integrationTopUpSaved": {
+    "description": ""
+  },
   "integrationTopUpAmountRequired": "أدخل مبلغاً أكبر من صفر",
-  "@integrationTopUpAmountRequired": {"description": ""},
+  "@integrationTopUpAmountRequired": {
+    "description": ""
+  },
   "rechargeSubscriberUnknown": "بطاقة غير معروفة — من صاحبها؟",
-  "@rechargeSubscriberUnknown": {"description": ""},
+  "@rechargeSubscriberUnknown": {
+    "description": ""
+  },
   "rechargeSubscriberName": "اسم صاحب البطاقة",
-  "@rechargeSubscriberName": {"description": ""},
+  "@rechargeSubscriberName": {
+    "description": ""
+  },
   "rechargeSubscriberSave": "حفظ",
-  "@rechargeSubscriberSave": {"description": ""},
+  "@rechargeSubscriberSave": {
+    "description": ""
+  },
   "rechargeSubscriberSaved": "تم حفظ اسم صاحب البطاقة",
-  "@rechargeSubscriberSaved": {"description": ""},
+  "@rechargeSubscriberSaved": {
+    "description": ""
+  },
   "rechargeSubscriberLifetime": "{count, plural, one{عملية شحن واحدة} two{عمليتا شحن} few{{count} عمليات شحن} other{{count} عملية شحن}} بقيمة {amount} لدى كل الوكلاء",
-  "@rechargeSubscriberLifetime": {"description": "", "placeholders": {"count": {"type": "int"}, "amount": {"type": "String"}}},
+  "@rechargeSubscriberLifetime": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeSubscriberDevice": "الجهاز {model}",
-  "@rechargeSubscriberDevice": {"description": "", "placeholders": {"model": {"type": "String"}}},
+  "@rechargeSubscriberDevice": {
+    "description": "",
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
   "integrationStatusActive": "نشط",
-  "@integrationStatusActive": {"description": ""},
+  "@integrationStatusActive": {
+    "description": ""
+  },
   "integrationStatusOnHold": "موقوف",
-  "@integrationStatusOnHold": {"description": ""},
+  "@integrationStatusOnHold": {
+    "description": ""
+  },
   "integrationStatusSoonToExpire": "يوشك على الانتهاء",
-  "@integrationStatusSoonToExpire": {"description": ""},
+  "@integrationStatusSoonToExpire": {
+    "description": ""
+  },
   "integrationStatusInactive": "غير مفعّل",
-  "@integrationStatusInactive": {"description": ""},
+  "@integrationStatusInactive": {
+    "description": ""
+  },
   "integrationStatusLocked": "مقفل",
-  "@integrationStatusLocked": {"description": ""},
+  "@integrationStatusLocked": {
+    "description": ""
+  },
   "integrationStatusSuspended": "معلّق",
-  "@integrationStatusSuspended": {"description": ""},
+  "@integrationStatusSuspended": {
+    "description": ""
+  },
   "integrationStatusExpired": "منتهي الصلاحية",
-  "@integrationStatusExpired": {"description": ""},
+  "@integrationStatusExpired": {
+    "description": ""
+  },
   "rechargeCatalogActionFor": "شحن {provider}",
-  "@rechargeCatalogActionFor": {"description": "", "placeholders": {"provider": {"type": "String"}}},
+  "@rechargeCatalogActionFor": {
+    "description": "",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
   "integrationTopUpAction": "شحن رصيد",
-  "@integrationTopUpAction": {"description": ""},
+  "@integrationTopUpAction": {
+    "description": ""
+  },
   "integrationErrorInsufficientFloat": "رصيد الوكالة لا يكفي. اشحن الرصيد ثم أعد المحاولة.",
-  "@integrationErrorInsufficientFloat": {"description": ""},
+  "@integrationErrorInsufficientFloat": {
+    "description": ""
+  },
   "integrationErrorIndeterminate": "أُرسل الطلب ولم تصلنا نتيجته. لا تُعد المحاولة — تحقّق من البطاقة لدى المزوّد أولاً.",
-  "@integrationErrorIndeterminate": {"description": ""},
+  "@integrationErrorIndeterminate": {
+    "description": ""
+  },
   "rechargeChargedTitle": "تم الشحن لدى المزوّد",
-  "@rechargeChargedTitle": {"description": ""},
+  "@rechargeChargedTitle": {
+    "description": ""
+  },
   "rechargeRefusedTitle": "لم يُنفَّذ الشحن",
-  "@rechargeRefusedTitle": {"description": ""},
+  "@rechargeRefusedTitle": {
+    "description": ""
+  },
   "rechargeUnknownTitle": "نتيجة الشحن غير معروفة",
-  "@rechargeUnknownTitle": {"description": ""},
+  "@rechargeUnknownTitle": {
+    "description": ""
+  },
   "rechargeUnknownBody": "أُرسل طلب الشحن ولم تصلنا نتيجته، وقد يكون نُفِّذ فعلاً. لا تُعد الإرسال: تحقّق من البطاقة لدى المزوّد، وستتم المطابقة تلقائياً مع سجل المزوّد.",
-  "@rechargeUnknownBody": {"description": ""},
+  "@rechargeUnknownBody": {
+    "description": ""
+  },
   "rechargeRetryAction": "إعادة المحاولة",
-  "@rechargeRetryAction": {"description": ""},
+  "@rechargeRetryAction": {
+    "description": ""
+  },
   "rechargeTopUpAction": "شحن رصيد الوكالة",
-  "@rechargeTopUpAction": {"description": ""},
+  "@rechargeTopUpAction": {
+    "description": ""
+  },
   "rechargeNeedsAttentionBadge": "بحاجة إلى مراجعة",
-  "@rechargeNeedsAttentionBadge": {"description": ""},
+  "@rechargeNeedsAttentionBadge": {
+    "description": ""
+  },
   "rechargeProviderReceiptTitle": "إيصال المزوّد",
-  "@rechargeProviderReceiptTitle": {"description": ""},
+  "@rechargeProviderReceiptTitle": {
+    "description": ""
+  },
   "rechargeReceiptCard": "البطاقة",
-  "@rechargeReceiptCard": {"description": ""},
+  "@rechargeReceiptCard": {
+    "description": ""
+  },
   "rechargeReceiptMonths": "المدة (شهر)",
-  "@rechargeReceiptMonths": {"description": ""},
+  "@rechargeReceiptMonths": {
+    "description": ""
+  },
   "rechargeReceiptFrom": "من",
-  "@rechargeReceiptFrom": {"description": ""},
+  "@rechargeReceiptFrom": {
+    "description": ""
+  },
   "rechargeReceiptTo": "إلى",
-  "@rechargeReceiptTo": {"description": ""},
+  "@rechargeReceiptTo": {
+    "description": ""
+  },
   "rechargeAttemptCount": "عدد المحاولات: {count}",
-  "@rechargeAttemptCount": {"description": "", "placeholders": {"count": {"type": "int"}}},
+  "@rechargeAttemptCount": {
+    "description": "",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "integrationTopUpActionFor": "شحن رصيد {provider}",
-  "@integrationTopUpActionFor": {"description": "", "placeholders": {"provider": {"type": "String"}}}
+  "@integrationTopUpActionFor": {
+    "description": "",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "cameraWedgeSectionTitle": "الكاميرا كقارئ باركود",
+  "@cameraWedgeSectionTitle": {
+    "description": "Device settings section for using a camera as a barcode scanner"
+  },
+  "cameraWedgeToggleTitle": "استخدم كاميرا هذا الجهاز لقراءة الباركود",
+  "@cameraWedgeToggleTitle": {
+    "description": "Switch label enabling the camera barcode wedge on this device"
+  },
+  "cameraWedgeToggleDescription": "وجّه الكاميرا نحو الطاولة، وضع المنتج تحتها ليُقرأ تلقائيًا كما لو كان بقارئ باركود. الأسرع مع رموز QR — مثل رمز إيصال جهاز الدفع الذي لا يقرأه القارئ العادي. الباركود الخطي (EAN) أبطأ لأن الكاميرا تتحقق منه مرتين قبل قبوله.",
+  "@cameraWedgeToggleDescription": {
+    "description": "Explains what the camera wedge does and why 1D is slower"
+  },
+  "cameraWedgeUnsupported": "كاميرا هذا الجهاز غير مدعومة لقراءة الباركود.",
+  "@cameraWedgeUnsupported": {
+    "description": "Shown when the platform has no camera source"
+  },
+  "cameraWedgeRunning": "الكاميرا تعمل الآن كقارئ باركود.",
+  "@cameraWedgeRunning": {
+    "description": "Status shown when the camera wedge is active"
+  },
+  "cameraWedgeFailed": "تعذّر تشغيل الكاميرا. تأكد من توصيلها ومن السماح للتطبيق باستخدامها.",
+  "@cameraWedgeFailed": {
+    "description": "Shown when the camera could not be started"
+  },
+  "cameraWedgeCameraLabel": "الكاميرا المستخدمة",
+  "@cameraWedgeCameraLabel": {
+    "description": "Label for the camera picker"
+  },
+  "cameraWedgeCameraAutomatic": "تلقائي (أول كاميرا)",
+  "@cameraWedgeCameraAutomatic": {
+    "description": "Automatic camera choice"
+  },
+  "cameraWedgeRefreshCameras": "تحديث قائمة الكاميرات",
+  "@cameraWedgeRefreshCameras": {
+    "description": "Button to re-enumerate cameras"
+  },
+  "cameraWedgeNoCameras": "لم يتم العثور على كاميرا على هذا الجهاز.",
+  "@cameraWedgeNoCameras": {
+    "description": "Shown when no cameras are found"
+  },
+  "cameraWedgeTwoDimensionalOnly": "على هذا الجهاز تقرأ الكاميرا رموز QR والرموز ثنائية الأبعاد فقط. يبقى الباركود الخطي (EAN) على قارئ الطاولة كما هو.",
+  "@cameraWedgeTwoDimensionalOnly": {
+    "description": "Windows snapshot backend reads 2D only"
+  }
 }

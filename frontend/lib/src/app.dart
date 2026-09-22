@@ -14,6 +14,8 @@ import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
+import 'shared/barcode/camera_wedge/camera_wedge_controller.dart';
+import 'shared/barcode/camera_wedge/camera_wedge_scope.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'shared/documents/document_trail_scope.dart';
 import 'features/auth/view_models/auth_view_model.dart';
@@ -186,20 +188,28 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                   // Above the Navigator, not inside `home`: pushed routes are
                   // siblings of the first route, so a scope installed there
                   // would be invisible to every screen but the first.
-                  child: ValueListenableBuilder<CompanionBridge?>(
-                    valueListenable: _dependencies.companionBridgeListenable,
-                    builder: (context, bridge, railChild) => CompanionScope(
-                      bridge: bridge,
-                      repository: _dependencies.companionRepository,
-                      // Same reasoning, one level in: every screen that shows a
-                      // document can offer its history without a constructor
-                      // parameter for it.
-                      child: DocumentTrailScope(
-                        repository: _dependencies.documentTrailRepository,
-                        child: railChild ?? const SizedBox.shrink(),
+                  child: ValueListenableBuilder<CameraWedgeController?>(
+                    valueListenable: _dependencies.cameraWedgeListenable,
+                    builder: (context, wedge, companionChild) =>
+                        CameraWedgeScope(
+                          controller: wedge,
+                          child: companionChild ?? const SizedBox.shrink(),
+                        ),
+                    child: ValueListenableBuilder<CompanionBridge?>(
+                      valueListenable: _dependencies.companionBridgeListenable,
+                      builder: (context, bridge, railChild) => CompanionScope(
+                        bridge: bridge,
+                        repository: _dependencies.companionRepository,
+                        // Same reasoning, one level in: every screen that shows a
+                        // document can offer its history without a constructor
+                        // parameter for it.
+                        child: DocumentTrailScope(
+                          repository: _dependencies.documentTrailRepository,
+                          child: railChild ?? const SizedBox.shrink(),
+                        ),
                       ),
+                      child: child ?? const SizedBox.shrink(),
                     ),
-                    child: child ?? const SizedBox.shrink(),
                   ),
                 ),
               ),

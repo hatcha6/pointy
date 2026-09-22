@@ -19577,4 +19577,42 @@ class AppLocalizationsAr extends AppLocalizations {
   String integrationTopUpActionFor(String provider) {
     return 'شحن رصيد $provider';
   }
+
+  @override
+  String get cameraWedgeSectionTitle => 'الكاميرا كقارئ باركود';
+
+  @override
+  String get cameraWedgeToggleTitle =>
+      'استخدم كاميرا هذا الجهاز لقراءة الباركود';
+
+  @override
+  String get cameraWedgeToggleDescription =>
+      'وجّه الكاميرا نحو الطاولة، وضع المنتج تحتها ليُقرأ تلقائيًا كما لو كان بقارئ باركود. الأسرع مع رموز QR — مثل رمز إيصال جهاز الدفع الذي لا يقرأه القارئ العادي. الباركود الخطي (EAN) أبطأ لأن الكاميرا تتحقق منه مرتين قبل قبوله.';
+
+  @override
+  String get cameraWedgeUnsupported =>
+      'كاميرا هذا الجهاز غير مدعومة لقراءة الباركود.';
+
+  @override
+  String get cameraWedgeRunning => 'الكاميرا تعمل الآن كقارئ باركود.';
+
+  @override
+  String get cameraWedgeFailed =>
+      'تعذّر تشغيل الكاميرا. تأكد من توصيلها ومن السماح للتطبيق باستخدامها.';
+
+  @override
+  String get cameraWedgeCameraLabel => 'الكاميرا المستخدمة';
+
+  @override
+  String get cameraWedgeCameraAutomatic => 'تلقائي (أول كاميرا)';
+
+  @override
+  String get cameraWedgeRefreshCameras => 'تحديث قائمة الكاميرات';
+
+  @override
+  String get cameraWedgeNoCameras => 'لم يتم العثور على كاميرا على هذا الجهاز.';
+
+  @override
+  String get cameraWedgeTwoDimensionalOnly =>
+      'على هذا الجهاز تقرأ الكاميرا رموز QR والرموز ثنائية الأبعاد فقط. يبقى الباركود الخطي (EAN) على قارئ الطاولة كما هو.';
 }

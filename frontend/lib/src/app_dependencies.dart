@@ -65,6 +65,8 @@ import 'data/services/server_state_watcher.dart';
 import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/companion/companion_bridge.dart';
+import 'shared/barcode/camera_wedge/camera_wedge_controller.dart';
+import 'shared/barcode/camera_wedge/camera_wedge_source.dart';
 import 'features/activity_log/view_models/activity_log_view_model.dart';
 import 'features/reports/view_models/reports_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
@@ -367,6 +369,16 @@ class PointyAppDependencies {
       ValueNotifier(null);
 
   CompanionBridge? get companionBridge => companionBridgeListenable.value;
+
+  /// The counter camera acting as a scanner on THIS machine, when the shop has
+  /// switched it on here. A notifier for the same reason the companion bridge
+  /// is one: it appears asynchronously, after a stored per-device preference
+  /// has been read, so the widget publishing it to the screen tree has to be
+  /// told when rather than guess from the auth transition.
+  final ValueNotifier<CameraWedgeController?> cameraWedgeListenable =
+      ValueNotifier(null);
+
+  CameraWedgeController? get cameraWedge => cameraWedgeListenable.value;
   late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
   late final EmployeeRepository employeeRepository;
@@ -652,6 +664,7 @@ class PointyAppDependencies {
         ),
       );
       unawaited(_startCompanionBridge());
+      unawaited(syncCameraWedge());
       // Start listening for other devices' edits only once there is a session
       // to make the request with; an anonymous poll would just 401 forever.
       serverStateWatcher.start();
@@ -674,8 +687,57 @@ class PointyAppDependencies {
       analyticsEngine.setCurrentUser(null);
       serverStateWatcher.stop();
       _stopCompanionBridge();
+      _stopCameraWedge();
       _disposeSessionViewModels();
     }
+  }
+
+  /// Start or stop the counter camera to match the stored preference.
+  ///
+  /// Called on sign-in and whenever the setting is changed, so a shop that
+  /// turns it on does not have to restart the till to use it.
+  Future<void> syncCameraWedge() async {
+    if (CameraWedgeController.backend == CameraWedgeBackend.none) return;
+    final result = await deviceSettingsRepository.loadCameraWedgeEnabled();
+    final wanted = switch (result) {
+      Ok<bool>(value: final enabled) => enabled,
+      // Storage that will not answer is not permission to switch a camera on.
+      Error<bool>() => false,
+    };
+    final deviceResult = await deviceSettingsRepository
+        .loadCameraWedgeDeviceId();
+    final deviceId = switch (deviceResult) {
+      Ok<String?>(value: final id) => id,
+      Error<String?>() => null,
+    };
+
+    if (!wanted) {
+      _stopCameraWedge();
+      return;
+    }
+    if (authViewModel.status != AuthStatus.authenticated) return;
+    // Switching cameras means stopping the old one: two controllers holding
+    // one device is a black frame on some platforms and a crash on others,
+    // and a shop changing the setting expects the NEW camera to be the one
+    // reading.
+    if (cameraWedgeListenable.value != null && deviceId == _cameraWedgeDeviceId) {
+      return;
+    }
+    _stopCameraWedge();
+    _cameraWedgeDeviceId = deviceId;
+    final controller = CameraWedgeController();
+    cameraWedgeListenable.value = controller;
+    await controller.start(deviceId: deviceId);
+  }
+
+  /// Which camera the running wedge was started on, so a settings change can
+  /// tell "already running on this one" from "running on the wrong one".
+  String? _cameraWedgeDeviceId;
+
+  void _stopCameraWedge() {
+    final controller = cameraWedgeListenable.value;
+    cameraWedgeListenable.value = null;
+    unawaited(controller?.dispose());
   }
 
   Future<void> _startCompanionBridge() async {

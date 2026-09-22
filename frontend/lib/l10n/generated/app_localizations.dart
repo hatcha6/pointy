@@ -33689,6 +33689,72 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'شحن رصيد {provider}'**
   String integrationTopUpActionFor(String provider);
+
+  /// Device settings section for using a camera as a barcode scanner
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا كقارئ باركود'**
+  String get cameraWedgeSectionTitle;
+
+  /// Switch label enabling the camera barcode wedge on this device
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدم كاميرا هذا الجهاز لقراءة الباركود'**
+  String get cameraWedgeToggleTitle;
+
+  /// Explains what the camera wedge does and why 1D is slower
+  ///
+  /// In ar, this message translates to:
+  /// **'وجّه الكاميرا نحو الطاولة، وضع المنتج تحتها ليُقرأ تلقائيًا كما لو كان بقارئ باركود. الأسرع مع رموز QR — مثل رمز إيصال جهاز الدفع الذي لا يقرأه القارئ العادي. الباركود الخطي (EAN) أبطأ لأن الكاميرا تتحقق منه مرتين قبل قبوله.'**
+  String get cameraWedgeToggleDescription;
+
+  /// Shown when the platform has no camera source
+  ///
+  /// In ar, this message translates to:
+  /// **'كاميرا هذا الجهاز غير مدعومة لقراءة الباركود.'**
+  String get cameraWedgeUnsupported;
+
+  /// Status shown when the camera wedge is active
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا تعمل الآن كقارئ باركود.'**
+  String get cameraWedgeRunning;
+
+  /// Shown when the camera could not be started
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تشغيل الكاميرا. تأكد من توصيلها ومن السماح للتطبيق باستخدامها.'**
+  String get cameraWedgeFailed;
+
+  /// Label for the camera picker
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا المستخدمة'**
+  String get cameraWedgeCameraLabel;
+
+  /// Automatic camera choice
+  ///
+  /// In ar, this message translates to:
+  /// **'تلقائي (أول كاميرا)'**
+  String get cameraWedgeCameraAutomatic;
+
+  /// Button to re-enumerate cameras
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث قائمة الكاميرات'**
+  String get cameraWedgeRefreshCameras;
+
+  /// Shown when no cameras are found
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على كاميرا على هذا الجهاز.'**
+  String get cameraWedgeNoCameras;
+
+  /// Windows snapshot backend reads 2D only
+  ///
+  /// In ar, this message translates to:
+  /// **'على هذا الجهاز تقرأ الكاميرا رموز QR والرموز ثنائية الأبعاد فقط. يبقى الباركود الخطي (EAN) على قارئ الطاولة كما هو.'**
+  String get cameraWedgeTwoDimensionalOnly;
 }
 
 class _AppLocalizationsDelegate

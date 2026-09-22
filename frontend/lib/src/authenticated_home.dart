@@ -1075,6 +1075,10 @@ class _AuthenticatedRoutes implements AppNavigation {
         analyticsEngine: dependencies.analyticsEngine,
         capabilities: capabilities,
         navigation: this,
+        // Flipping the switch starts or stops the camera immediately, rather
+        // than at the next sign-in: a shop setting this up is standing at the
+        // counter with a product in hand, waiting to see it work.
+        onCameraWedgeChanged: dependencies.syncCameraWedge,
       ),
     );
   }

@@ -17,6 +17,8 @@ class DeviceSettingsStorageService {
   static const _kitchenStationConfigsKey = 'kitchen_station_configs';
   static const _priceCheckerConfigKey = 'price_checker_config';
   static const _dashboardCameraIdsKey = 'dashboard_camera_ids';
+  static const _cameraWedgeEnabledKey = 'camera_wedge_enabled';
+  static const _cameraWedgeDeviceIdKey = 'camera_wedge_device_id';
 
   Future<DeviceUsageMode?> loadDeviceUsageMode() async {
     final store = await AppKeyValueStore.instance();
@@ -33,6 +35,50 @@ class DeviceSettingsStorageService {
       _deviceUsageModeKey,
       deviceUsageModeToJson(usageMode),
     );
+  }
+
+  /// Whether a camera on this machine acts as a barcode scanner.
+  ///
+  /// Per device, like the printers and the dashboard cameras, and for the same
+  /// reason: it describes the hardware in front of somebody, not the shop. One
+  /// till has a camera on a stand over the counter and the office PC does not.
+  ///
+  /// `null` means nobody has chosen, which is NOT the same as off: the caller
+  /// decides the default, and the default is off, because a camera that starts
+  /// reading barcodes without being asked is a surprise.
+  Future<bool?> loadCameraWedgeEnabled() async {
+    final store = await AppKeyValueStore.instance();
+    return switch (await store.getString(_cameraWedgeEnabledKey)) {
+      'true' => true,
+      'false' => false,
+      _ => null,
+    };
+  }
+
+  Future<void> saveCameraWedgeEnabled(bool enabled) async {
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_cameraWedgeEnabledKey, enabled ? 'true' : 'false');
+  }
+
+  /// Which camera on this machine is the one over the counter.
+  ///
+  /// A till often has two — a built-in webcam facing the cashier and the one
+  /// on a stand facing the counter — and reading barcodes off the wrong one
+  /// is the whole feature failing. Blank means "whichever is first", which is
+  /// right for the common case of exactly one.
+  Future<String?> loadCameraWedgeDeviceId() async {
+    final store = await AppKeyValueStore.instance();
+    final value = await store.getString(_cameraWedgeDeviceIdKey);
+    return (value == null || value.isEmpty) ? null : value;
+  }
+
+  Future<void> saveCameraWedgeDeviceId(String? deviceId) async {
+    final store = await AppKeyValueStore.instance();
+    if (deviceId == null || deviceId.isEmpty) {
+      await store.remove(_cameraWedgeDeviceIdKey);
+      return;
+    }
+    await store.setString(_cameraWedgeDeviceIdKey, deviceId);
   }
 
   /// The light/dark/system preference for this device. `null` when the user has

@@ -67,6 +67,19 @@ dependencies:
   sqflite_common_ffi: ^2.3.3
   sqlite3_flutter_libs: ^0.5.24
   mobile_scanner: ^7.2.0
+  # Camera-as-barcode-scanner on the platforms mobile_scanner does not reach.
+  # camera_windows is the Flutter team's own Windows implementation and is the
+  # ONLY way to get frames from a UVC camera on a Windows till: it has no image
+  # stream (`startImageStream` throws UnimplementedError there), so the wedge
+  # takes stills instead. camera_platform_interface is what addresses it
+  # without also pulling the Android/iOS/web implementations, which
+  # mobile_scanner already covers.
+  camera_platform_interface: ^2.10.0
+  camera_windows: ^0.2.6+5
+  # Pure Dart, so it decodes on every platform with no native build to break.
+  # QR/2-D only — it ships no 1-D readers — which matches where a camera is
+  # actually good; see CameraWedgeSymbology.
+  zxing2: ^0.2.4
   pdf: ^3.12.0
   printing: ^5.14.3
   qr: ^3.0.2

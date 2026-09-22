@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -33,7 +34,11 @@ class DeviceSettingsScreen extends StatelessWidget {
     required this.analyticsEngine,
     required this.capabilities,
     required this.navigation,
+    this.onCameraWedgeChanged,
   });
+
+  /// Start or stop the counter camera the moment the switch is flipped.
+  final Future<void> Function()? onCameraWedgeChanged;
 
   final DeviceSettingsViewModel deviceSettingsViewModel;
   final PrintingSettingsViewModel printingSettingsViewModel;
@@ -97,6 +102,7 @@ class DeviceSettingsScreen extends StatelessWidget {
                   priceCheckerController: priceCheckerController,
                   priceCheckerRepository: priceCheckerRepository,
                   analyticsEngine: analyticsEngine,
+                  onCameraWedgeChanged: onCameraWedgeChanged,
                 ),
               ),
             );
@@ -117,7 +123,12 @@ class _DeviceSettingsBody extends StatelessWidget {
     required this.priceCheckerRepository,
     required this.capabilities,
     required this.analyticsEngine,
+    this.onCameraWedgeChanged,
   });
+
+  /// Lets the app start or stop the camera the moment the switch is flipped,
+  /// so a shop that turns it on does not have to restart the till.
+  final Future<void> Function()? onCameraWedgeChanged;
 
   final DeviceSettingsViewModel deviceSettingsViewModel;
   final PrintingSettingsViewModel printingSettingsViewModel;
@@ -255,6 +266,156 @@ class _DeviceSettingsBody extends StatelessWidget {
             ),
           ),
         ),
+        SizedBox(height: spacing.lg),
+        AdaptiveMaxWidth(
+          width: AppContentWidth.form,
+          child: PointyDetailSection(
+            icon: Icons.photo_camera_outlined,
+            title: l10n.cameraWedgeSectionTitle,
+            child: _CameraWedgePanel(
+              viewModel: deviceSettingsViewModel,
+              onChanged: onCameraWedgeChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The counter camera, offered only where it can actually run.
+///
+/// A switch, not a wizard: pointing a camera at the counter is a physical act
+/// and the software's whole job is to stay out of the way afterwards. The
+/// description says plainly that 2-D is fast and 1-D is slower, because that
+/// is true and a shop that expects otherwise will think it is broken.
+class _CameraWedgePanel extends StatefulWidget {
+  const _CameraWedgePanel({required this.viewModel, this.onChanged});
+
+  final DeviceSettingsViewModel viewModel;
+  final Future<void> Function()? onChanged;
+
+  @override
+  State<_CameraWedgePanel> createState() => _CameraWedgePanelState();
+}
+
+class _CameraWedgePanelState extends State<_CameraWedgePanel> {
+  @override
+  void initState() {
+    super.initState();
+    // Asking the OS which cameras exist is cheap and the answer changes when
+    // somebody plugs one in, so it is read when the screen opens rather than
+    // cached with the rest of the settings.
+    unawaited(widget.viewModel.loadCameraWedgeDevices());
+  }
+
+  DeviceSettingsViewModel get viewModel => widget.viewModel;
+  Future<void> Function()? get onChanged => widget.onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    if (!viewModel.cameraWedgeSupported) {
+      return PointyInlineMessage(
+        message: l10n.cameraWedgeUnsupported,
+        icon: Icons.info_outline,
+        compact: true,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile.adaptive(
+          key: const ValueKey('camera_wedge_toggle'),
+          contentPadding: EdgeInsets.zero,
+          value: viewModel.cameraWedgeEnabled,
+          onChanged: viewModel.isSaving
+              ? null
+              : (value) => unawaited(
+                  viewModel.updateCameraWedgeEnabled(
+                    value,
+                    onChanged: onChanged,
+                  ),
+                ),
+          title: Text(l10n.cameraWedgeToggleTitle),
+          subtitle: Padding(
+            padding: EdgeInsetsDirectional.only(top: spacing.xs),
+            child: Text(l10n.cameraWedgeToggleDescription),
+          ),
+          secondary: const Icon(Icons.photo_camera_outlined),
+        ),
+        if (viewModel.cameraWedgeReadsTwoDimensionalOnly) ...[
+          SizedBox(height: spacing.sm),
+          PointyInlineMessage(
+            message: l10n.cameraWedgeTwoDimensionalOnly,
+            icon: Icons.qr_code_2_outlined,
+            compact: true,
+          ),
+        ],
+        if (viewModel.cameraWedgeEnabled) ...[
+          SizedBox(height: spacing.md),
+          // Only worth asking once the feature is on: a till often has a
+          // webcam facing the cashier as well as the one on a stand facing
+          // the counter, and reading off the wrong one is the whole feature
+          // failing.
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String?>(
+                  key: const ValueKey('camera_wedge_device_picker'),
+                  initialValue: viewModel.cameraWedgeDeviceId,
+                  decoration: InputDecoration(
+                    labelText: l10n.cameraWedgeCameraLabel,
+                    prefixIcon: const Icon(Icons.videocam_outlined),
+                  ),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(l10n.cameraWedgeCameraAutomatic),
+                    ),
+                    for (final device in viewModel.cameraWedgeDevices)
+                      DropdownMenuItem<String?>(
+                        value: device.id,
+                        child: Text(device.label),
+                      ),
+                  ],
+                  onChanged: viewModel.isSaving
+                      ? null
+                      : (value) => unawaited(
+                          viewModel.updateCameraWedgeDevice(
+                            value,
+                            onChanged: onChanged,
+                          ),
+                        ),
+                ),
+              ),
+              SizedBox(width: spacing.sm),
+              IconButton(
+                key: const ValueKey('camera_wedge_refresh_button'),
+                tooltip: l10n.cameraWedgeRefreshCameras,
+                onPressed: () => unawaited(viewModel.loadCameraWedgeDevices()),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          if (viewModel.cameraWedgeDevices.isEmpty) ...[
+            SizedBox(height: spacing.sm),
+            PointyInlineMessage(
+              message: l10n.cameraWedgeNoCameras,
+              icon: Icons.info_outline,
+              compact: true,
+            ),
+          ],
+          SizedBox(height: spacing.sm),
+          PointyInlineMessage(
+            message: l10n.cameraWedgeRunning,
+            icon: Icons.check_circle_outline,
+            compact: true,
+          ),
+        ],
       ],
     );
   }
