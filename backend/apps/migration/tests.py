@@ -9,6 +9,7 @@ a source's file from ``POINTY_MIGRATION_STAGING_ROOT`` and deletes it when the
 import lands, and neither of those should touch a real deployment's volume.
 """
 
+import errno
 import io
 import sqlite3
 import tempfile
@@ -1587,6 +1588,74 @@ class UploadTests(MigrationTestBase):
         staged = storage.staged_path(source)
         self.assertEqual(staged.parent.resolve(), self.staging.resolve())
         self.assertNotIn("..", source.staged_filename)
+
+    def test_a_bodyless_chunk_is_refused_not_crashed(self):
+        """No body reached the view, so there is nothing to read off.
+
+        DRF hands the parser ``None`` when a request carries no length, and
+        calling ``.read()`` on that raised an AttributeError — a 500, which the
+        client receives as Django's HTML page and reports as a JSON parse error.
+        """
+        source = self._begin(b"z" * 20)
+        with self.assertRaises(Exception) as ctx:
+            uploads.append_chunk(source, 0, None)
+        self.assertIn("محتوى", str(ctx.exception))
+        self.assertEqual(MigrationSource.objects.get(pk=source.pk).received_bytes, 0)
+
+    def test_a_full_disk_is_reported_as_a_refusal_with_a_reason(self):
+        """ENOSPC is the operator's problem, and must say so rather than crash."""
+        source = self._begin(b"z" * 64)
+
+        def _full(*args, **kwargs):
+            raise OSError(errno.ENOSPC, "No space left on device")
+
+        with mock.patch.object(uploads, "_write_at", _full):
+            with self.assertRaises(Exception) as ctx:
+                uploads.append_chunk(source, 0, io.BytesIO(b"z" * 64))
+        message = str(ctx.exception)
+        self.assertIn("مساحة", message)
+        self.assertEqual(MigrationSource.objects.get(pk=source.pk).received_bytes, 0)
+
+    def test_a_write_that_dies_halfway_does_not_double_on_retry(self):
+        """The bytes that landed before the failure must not be written twice.
+
+        ``received_bytes`` does not advance when a chunk fails, so the client
+        retries the same offset — correctly. While the file was opened for
+        append, those retried bytes landed *after* the partial ones and the
+        upload finished at the right size with the database shifted at the seam.
+        """
+        payload = bytes(range(256)) * 4
+        source = self._begin(payload)
+
+        class _DiesHalfway(io.BytesIO):
+            def read(self, size=-1):
+                data = super().read(size)
+                if self.tell() >= 512:
+                    raise OSError(errno.EIO, "I/O error")
+                return data
+
+        with self.assertRaises(Exception):
+            uploads.append_chunk(source, 0, _DiesHalfway(payload))
+        source.refresh_from_db()
+        self.assertEqual(source.received_bytes, 0)
+
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload))
+        self.assertEqual(source.received_bytes, len(payload))
+        self.assertEqual(storage.staged_path(source).read_bytes(), payload)
+
+    def test_stray_bytes_past_the_offset_are_cut_back(self):
+        """Whatever a previous attempt left behind, the file follows the offset."""
+        payload = b"".join(bytes([index % 256]) * 32 for index in range(16))
+        source = self._begin(payload)
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload[:128]))
+
+        staged = storage.staged_path(source)
+        with open(staged, "ab") as handle:
+            handle.write(b"!" * 99)
+
+        source = uploads.append_chunk(source, 128, io.BytesIO(payload[128:]))
+        self.assertEqual(source.received_bytes, len(payload))
+        self.assertEqual(staged.read_bytes(), payload)
 
 
 class IdentifyTests(MigrationTestBase):

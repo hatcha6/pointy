@@ -21,6 +21,7 @@ that must not survive here.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 from pathlib import Path
@@ -118,8 +119,27 @@ def append_chunk(source: MigrationSource, offset: int, stream) -> MigrationSourc
         path = storage.staged_path(locked)
         if path is None:
             raise ValidationError({"detail": "لم نعثر على الملف المرفوع."})
+        if stream is None:
+            # No body reached the view — a request with no Content-Length, or a
+            # proxy that dropped it. Reading ``.read()`` off that used to be an
+            # AttributeError, which is to say a 500 and an HTML page.
+            raise ValidationError({"detail": "لم يصل أي محتوى مع هذا الجزء."})
 
-        written = _append(path, stream, limit=locked.declared_size_bytes - locked.received_bytes)
+        try:
+            written = _write_at(
+                path,
+                stream,
+                start=locked.received_bytes,
+                limit=locked.declared_size_bytes - locked.received_bytes,
+            )
+        except OSError as exc:
+            # A full or unwritable staging volume is the likeliest reason a
+            # chunk cannot be stored, and it is the operator's to fix — so it is
+            # answered as a refusal that says which, not as a crash. Left
+            # uncaught it reached the client as Django's HTML error page, which
+            # every Pointy client parses as JSON and reports as a character on
+            # line 2: a disk-space problem wearing the costume of a parse bug.
+            raise ValidationError({"detail": _write_failure_detail(exc)}) from exc
         locked.received_bytes += written
         if locked.received_bytes >= locked.declared_size_bytes:
             locked.upload_state = MigrationSource.UploadState.UPLOADED
@@ -127,8 +147,18 @@ def append_chunk(source: MigrationSource, offset: int, stream) -> MigrationSourc
     return locked
 
 
-def _append(path: Path, stream, *, limit: int) -> int:
-    """Write the stream to the end of ``path``, at most ``limit`` bytes.
+def _write_at(path: Path, stream, *, start: int, limit: int) -> int:
+    """Write the stream into ``path`` at ``start``, at most ``limit`` bytes.
+
+    Positioned rather than appended, and truncated to the end of what was
+    written. Appending assumed the file was already exactly ``received_bytes``
+    long, which holds right up until a write fails halfway: the bytes that did
+    land stayed on disk, ``received_bytes`` did not move, and the client's retry
+    — sent to the same offset, and correct to send — appended its chunk *after*
+    the partial one. The upload then completed at the right byte count with a
+    database shifted at the seam, which is the silent corruption the offset
+    check exists to prevent. Seeking makes the file's shape follow from
+    ``received_bytes`` on every attempt instead of from the last attempt's luck.
 
     ``fsync`` before returning: ``received_bytes`` is a promise that these bytes
     survive a power cut, and on a shop's server behind a generator that is not a
@@ -136,16 +166,34 @@ def _append(path: Path, stream, *, limit: int) -> int:
     existed in the page cache.
     """
     written = 0
-    with open(path, "ab") as handle:
+    with open(path, "r+b") as handle:
+        handle.seek(start)
         while written < limit:
             chunk = stream.read(min(_READ_CHUNK, limit - written))
             if not chunk:
                 break
             handle.write(chunk)
             written += len(chunk)
+        handle.truncate()
         handle.flush()
         os.fsync(handle.fileno())
     return written
+
+
+def _write_failure_detail(exc: OSError) -> str:
+    """Say which storage problem this was, in the words an owner can act on."""
+    if exc.errno in (errno.ENOSPC, errno.EDQUOT):
+        free = storage.free_space_bytes()
+        return (
+            "لا توجد مساحة كافية على الخادم لحفظ الملف "
+            f"(المتاح {free // (1 << 20)} ميجابايت). "
+            "فرّغ مساحة على الخادم ثم أعد المحاولة."
+        )
+    if exc.errno in (errno.EROFS, errno.EACCES, errno.EPERM):
+        return "تعذّرت الكتابة في مساحة التخزين على الخادم. راجع صلاحيات مجلد الترحيل."
+    if exc.errno == errno.ENOENT:
+        return "لم نعثر على الملف المرفوع على الخادم. ابدأ الرفع من جديد."
+    return f"تعذّر حفظ هذا الجزء على الخادم ({exc.strerror or exc.__class__.__name__})."
 
 
 def complete_upload(source: MigrationSource, *, expected_checksum="") -> MigrationSource:

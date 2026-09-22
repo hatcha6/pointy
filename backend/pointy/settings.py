@@ -166,6 +166,11 @@ if TESTING or os.environ.get("POINTY_ENABLE_TESTKIT"):
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    # Turns an unhandled 500 on an API path into JSON. Sits this high so almost
+    # every layer below is inside it, and above CORS's own work so a crash
+    # answered to a browser still carries its headers. See apps.core.api_errors
+    # for why it reads the response rather than hooking process_exception.
+    "apps.core.api_errors.ApiErrorResponseMiddleware",
     "django.middleware.security.SecurityMiddleware",
     # Compresses JSON payloads (skips SSE + images — see apps.core.gzip).
     # Native tills talk straight to uvicorn, so this is the only gzip layer

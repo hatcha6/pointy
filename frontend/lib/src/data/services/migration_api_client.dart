@@ -105,7 +105,11 @@ class MigrationApiClient {
       queryParameters: {'offset': '$offset'},
       timeout: PosApiSession.longRunningRequestTimeout,
     );
-    final decoded = _session.decodedBody(response);
+    // Read the body defensively: this is the one call here that has to look
+    // inside it before checking the status (a 409 carries the real offset), so
+    // an error body that is not JSON must not throw and take the status code
+    // down with it.
+    final decoded = _session.decodedBodyOrNull(response);
     final body = decoded is Map<String, Object?>
         ? decoded
         : const <String, Object?>{};

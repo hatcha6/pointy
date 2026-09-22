@@ -941,6 +941,24 @@ class PosApiSession {
 
   Object? decodedBody(http.Response response) => jsonDecode(body(response));
 
+  /// [decodedBody], except that a body which is not JSON yields `null`.
+  ///
+  /// Not every error body comes from Django. A proxy in front of it answers
+  /// 413 and 502 with its own HTML, and Django's own last-resort 500 page
+  /// opens with a newline — so decoding it throws `Unexpected character (at
+  /// line 2, character 1)`. Thrown from a call that happens *before* the
+  /// status code is read, that exception is all the caller ever sees: the
+  /// status, the endpoint and the server's own explanation are all lost behind
+  /// a parse error about a document nobody meant to parse. Use this wherever
+  /// the body being read might be an error body.
+  Object? decodedBodyOrNull(http.Response response) {
+    try {
+      return jsonDecode(body(response));
+    } on FormatException {
+      return null;
+    }
+  }
+
   void ensureSuccess(http.Response response, String message) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('$message ${response.statusCode}');
