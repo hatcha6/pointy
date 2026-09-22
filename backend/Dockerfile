@@ -140,17 +140,26 @@ RUN set -eux; \
     apt-get autoremove -y; \
     rm -rf /var/lib/apt/lists/*
 
-# /var/tmp/pointy is where this container's temporary files go (TMPDIR in the
-# compose file mounts a volume over it). It exists here, owned by the app user,
-# so that Docker gives a fresh named volume the same ownership — a volume
-# mounted over a path the image does not have comes up owned by root, and the
-# process runs as `pointy`.
+# EVERY path the compose file mounts a volume over is created here, owned by
+# the app user — and that is the whole reason this list exists, not tidiness.
+# A named volume mounted over a path the image does NOT have comes up owned by
+# root, this process runs as `pointy`, and the failure is a silent
+# PermissionError the first time something writes there. Two paths were
+# missing that way: /var/lib/pointy/migration, which is why a shop's database
+# import failed thirty times in a row with "Permission denied:
+# /var/lib/pointy/migration/source-N-raw.sql" (Annaseem, 2026-09-21), and
+# /var/lib/pointy/clients beside it.
+#
+# apps/core/test_container_volumes.py holds this list to the compose file, so
+# the next volume cannot be added without the directory that makes it usable.
 RUN groupadd --system pointy \
     && useradd --system --gid pointy --home-dir /var/lib/pointy pointy \
     && mkdir -p \
         /var/lib/pointy/backups \
         /var/lib/pointy/celerybeat \
+        /var/lib/pointy/clients \
         /var/lib/pointy/media \
+        /var/lib/pointy/migration \
         /var/lib/pointy/staticfiles \
         /var/tmp/pointy \
         /tmp/pointy-backup-staging \
