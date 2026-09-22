@@ -76,10 +76,13 @@ dependencies:
   # mobile_scanner already covers.
   camera_platform_interface: ^2.10.0
   camera_windows: ^0.2.6+5
-  # Pure Dart, so it decodes on every platform with no native build to break.
-  # QR/2-D only — it ships no 1-D readers — which matches where a camera is
-  # actually good; see CameraWedgeSymbology.
-  zxing2: ^0.2.4
+  # zxing-cpp itself, through FFI: the SAME engine the backend runs
+  # (apps/companion/decoding.py) and the same one tools/camera-wedge-lab
+  # measured, so its findings transfer exactly rather than approximately.
+  # Android, iOS, macOS, Windows and Linux, with the C++ sources vendored in
+  # the package — nothing is fetched at build time — and CI already compiles
+  # Windows (release.yml build-windows), which is what proves it.
+  flutter_zxing: ^2.2.1
   pdf: ^3.12.0
   printing: ^5.14.3
   qr: ^3.0.2

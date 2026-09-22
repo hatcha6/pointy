@@ -33,10 +33,6 @@ class DeviceSettingsViewModel extends ChangeNotifier {
   bool get cameraWedgeSupported =>
       CameraWedgeController.backend != CameraWedgeBackend.none;
 
-  /// True where this platform's wedge reads 2-D codes only, so the setting can
-  /// say so instead of letting a shop discover it on a bag of rice.
-  bool get cameraWedgeReadsTwoDimensionalOnly =>
-      CameraWedgeController.readsTwoDimensionalOnly;
 
   /// Cameras this machine can see. Empty until [loadCameraWedgeDevices] has
   /// run, and on platforms whose backend cannot enumerate (mobile_scanner

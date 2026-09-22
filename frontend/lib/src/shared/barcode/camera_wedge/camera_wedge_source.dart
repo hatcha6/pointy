@@ -45,11 +45,10 @@ enum CameraWedgeBackend {
   /// the wedge never sees pixels here. 1-D and 2-D.
   platformScanner,
 
-  /// Stills through `camera_windows`, decoded with pure-Dart `zxing2`. The
-  /// Windows till's path, because there is no image stream there. **2-D
-  /// only** — zxing2 ships no 1-D readers — so a till here keeps using the
-  /// counter wedge for EAN-13 and gains the receipt QR codes it never could
-  /// read.
+  /// Stills through `camera_windows`/`camera_linux`, decoded by zxing-cpp
+  /// through `flutter_zxing`. The desktop till's path, because there is no
+  /// image stream there. 1-D and 2-D, and the same engine the backend and the
+  /// measurement lab use — so it is slower than a live stream, not narrower.
   snapshot,
 
   /// Nothing available. The feature is hidden rather than broken.

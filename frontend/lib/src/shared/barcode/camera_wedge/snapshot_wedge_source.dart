@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:camera_platform_interface/camera_platform_interface.dart';
-import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
-import 'package:zxing2/qrcode.dart';
+import 'package:flutter_zxing/flutter_zxing.dart' as zxing;
 
 import 'camera_wedge_policy.dart';
 import 'camera_wedge_source.dart';
@@ -17,18 +15,22 @@ import 'camera_wedge_source.dart';
 ///     throw UnimplementedError('Streaming is not currently supported on Windows')
 ///     — camera_windows/lib/camera_windows.dart
 ///
-/// So this takes stills in a loop instead. That is slower than the ~80
-/// attempts/second the same decoder manages off a live stream, and the
-/// difference lands exactly where it can be afforded: a 2-D code is
-/// Reed-Solomon protected and believed on one good read, so a payment
-/// terminal's receipt QR — the thing the counter wedge cannot read at
-/// all — resolves on the first still that comes out sharp.
+/// So this takes stills in a loop instead, and hands each one to **zxing-cpp**
+/// through `flutter_zxing`. That is the same engine the backend already runs
+/// (`apps/companion/decoding.py`) and the same one `tools/camera-wedge-lab`
+/// measured, so everything the lab found — the 12% checksum-passing misread
+/// rate that [CameraWedgePolicy] exists to defeat, the rotation behaviour —
+/// transfers exactly rather than approximately. C++ is what makes that
+/// possible: one decoder, five platforms, sources vendored in the package so
+/// nothing is fetched at build time.
 ///
-/// **It reads 2-D only.** `zxing2` is pure Dart, which is what keeps this path
-/// free of any native build that could break a Windows release, and it ships
-/// no 1-D readers. A till here still scans EAN-13 the way it always has, with
-/// the wedge on the counter. Swapping in a multi-format decoder later is a
-/// change to [_decode] and nothing else.
+/// Stills are slower than the ~80 attempts/second the same decoder manages off
+/// a live stream, and the difference lands where it can be afforded: a 2-D
+/// code is Reed-Solomon protected and believed on one good read, so a payment
+/// terminal's receipt QR — the thing the counter wedge cannot read at all —
+/// resolves on the first still that comes out sharp. A 1-D barcode needs two
+/// agreeing looks and is correspondingly slower here, which is the trade a
+/// shop accepts for not buying a scanner.
 class SnapshotWedgeSource implements CameraWedgeSource {
   SnapshotWedgeSource({
     this.interval = const Duration(milliseconds: 250),
@@ -81,8 +83,8 @@ class SnapshotWedgeSource implements CameraWedgeSource {
     final cameraId = await _platform.createCameraWithSettings(
       chosen,
       const MediaSettings(
-        // Enough pixels across a QR at counter height without paying for a
-        // 4K still on every attempt.
+        // Enough pixels across a barcode at counter height without paying for
+        // a 4K still on every attempt.
         resolutionPreset: ResolutionPreset.high,
         enableAudio: false,
       ),
@@ -93,19 +95,39 @@ class SnapshotWedgeSource implements CameraWedgeSource {
     _loop = _pump();
   }
 
+  /// What the lab learned, as decoder settings.
+  ///
+  /// `tryRotate` and `tryHarder` are both on because a cashier puts an item
+  /// down however it lands: with `tryHarder` off, a tilted EAN-13 sat unread
+  /// for 14.7 seconds — 59 consecutive failed attempts while sharp and
+  /// still — because the linear scanner sweeps a few rows along one axis and
+  /// nothing crossed the bars. It costs a few milliseconds against a budget
+  /// measured in hundreds.
+  static zxing.DecodeParams get _params => zxing.DecodeParams(
+        format: zxing.Format.any,
+        tryHarder: true,
+        tryRotate: true,
+        tryInverted: true,
+        maxNumberOfSymbols: 1,
+      );
+
   Future<void> _pump() async {
     while (_running) {
       final cameraId = _cameraId;
       if (cameraId == null) break;
       try {
         final file = await _platform.takePicture(cameraId);
-        final bytes = await file.readAsBytes();
-        // Decoding a full-resolution still on the UI isolate would jank the
-        // till on every attempt, and the till is what the cashier is using.
-        final found = await compute(_decode, bytes);
-        if (found != null && _running) {
+        final code = await zxing.zx.readBarcodeImagePathString(
+          file.path,
+          _params,
+        );
+        final text = code.text?.trim();
+        if (code.isValid && text != null && text.isNotEmpty && _running) {
           _readings.add(
-            CameraWedgeReading(value: found, symbology: 'QRCode'),
+            CameraWedgeReading(
+              value: text,
+              symbology: _symbologyName(code.format),
+            ),
           );
         }
       } catch (_) {
@@ -117,6 +139,28 @@ class SnapshotWedgeSource implements CameraWedgeSource {
       await Future<void>.delayed(interval);
     }
   }
+
+  /// zxing's format is a bitmask; [CameraWedgeSymbology] speaks names, because
+  /// that is what every other source reports and the policy must judge them
+  /// all by the same rule. An unmapped format falls through to the least
+  /// trusted class, which costs a slower scan rather than a wrong one.
+  static String _symbologyName(int? format) => switch (format) {
+        zxing.Format.qrCode => 'QRCode',
+        zxing.Format.microQRCode => 'MicroQRCode',
+        zxing.Format.dataMatrix => 'DataMatrix',
+        zxing.Format.aztec => 'Aztec',
+        zxing.Format.pdf417 => 'PDF417',
+        zxing.Format.ean13 => 'EAN13',
+        zxing.Format.ean8 => 'EAN8',
+        zxing.Format.upca => 'UPCA',
+        zxing.Format.upce => 'UPCE',
+        zxing.Format.code128 => 'Code128',
+        zxing.Format.code93 => 'Code93',
+        zxing.Format.code39 => 'Code39',
+        zxing.Format.itf => 'ITF',
+        zxing.Format.codabar => 'Codabar',
+        _ => 'unknown',
+      };
 
   @override
   Future<void> stop() async {
@@ -138,32 +182,5 @@ class SnapshotWedgeSource implements CameraWedgeSource {
   Future<void> dispose() async {
     await stop();
     await _readings.close();
-  }
-}
-
-/// Runs on a background isolate — must be a top-level function.
-String? _decode(Uint8List bytes) {
-  try {
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return null;
-    final source = RGBLuminanceSource(
-      decoded.width,
-      decoded.height,
-      decoded
-          .convert(numChannels: 4)
-          .getBytes(order: img.ChannelOrder.abgr)
-          .buffer
-          .asInt32List(),
-    );
-    final result = QRCodeReader().decode(
-      BinaryBitmap(HybridBinarizer(source)),
-    );
-    final text = result.text.trim();
-    return text.isEmpty ? null : text;
-  } on NotFoundException {
-    // The overwhelmingly common case: a counter with nothing on it.
-    return null;
-  } catch (_) {
-    return null;
   }
 }

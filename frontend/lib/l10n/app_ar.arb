@@ -13685,9 +13685,5 @@
   "cameraWedgeNoCameras": "لم يتم العثور على كاميرا على هذا الجهاز.",
   "@cameraWedgeNoCameras": {
     "description": "Shown when no cameras are found"
-  },
-  "cameraWedgeTwoDimensionalOnly": "على هذا الجهاز تقرأ الكاميرا رموز QR والرموز ثنائية الأبعاد فقط. يبقى الباركود الخطي (EAN) على قارئ الطاولة كما هو.",
-  "@cameraWedgeTwoDimensionalOnly": {
-    "description": "Windows snapshot backend reads 2D only"
   }
 }

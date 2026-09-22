@@ -33749,12 +33749,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لم يتم العثور على كاميرا على هذا الجهاز.'**
   String get cameraWedgeNoCameras;
-
-  /// Windows snapshot backend reads 2D only
-  ///
-  /// In ar, this message translates to:
-  /// **'على هذا الجهاز تقرأ الكاميرا رموز QR والرموز ثنائية الأبعاد فقط. يبقى الباركود الخطي (EAN) على قارئ الطاولة كما هو.'**
-  String get cameraWedgeTwoDimensionalOnly;
 }
 
 class _AppLocalizationsDelegate

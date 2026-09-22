@@ -11,6 +11,8 @@ PODS:
     - libserialport
   - flutter_tts (0.0.1):
     - FlutterMacOS
+  - flutter_zxing (0.0.1):
+    - FlutterMacOS
   - FlutterMacOS (1.0.0)
   - libserialport (0.1.1)
   - mobile_scanner (7.0.0):
@@ -55,6 +57,9 @@ PODS:
     - sqlite3/session
   - url_launcher_macos (0.0.1):
     - FlutterMacOS
+  - video_player_avfoundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - wakelock_plus (0.0.1):
     - FlutterMacOS
 
@@ -64,6 +69,7 @@ DEPENDENCIES:
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - flutter_libserialport (from `Flutter/ephemeral/.symlinks/plugins/flutter_libserialport/macos`)
   - flutter_tts (from `Flutter/ephemeral/.symlinks/plugins/flutter_tts/macos`)
+  - flutter_zxing (from `Flutter/ephemeral/.symlinks/plugins/flutter_zxing/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - mobile_scanner (from `Flutter/ephemeral/.symlinks/plugins/mobile_scanner/darwin`)
   - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
@@ -73,6 +79,7 @@ DEPENDENCIES:
   - sqflite_darwin (from `Flutter/ephemeral/.symlinks/plugins/sqflite_darwin/darwin`)
   - sqlite3_flutter_libs (from `Flutter/ephemeral/.symlinks/plugins/sqlite3_flutter_libs/darwin`)
   - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
+  - video_player_avfoundation (from `Flutter/ephemeral/.symlinks/plugins/video_player_avfoundation/darwin`)
   - wakelock_plus (from `Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos`)
 
 SPEC REPOS:
@@ -91,6 +98,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_libserialport/macos
   flutter_tts:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_tts/macos
+  flutter_zxing:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_zxing/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
   mobile_scanner:
@@ -109,6 +118,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/sqlite3_flutter_libs/darwin
   url_launcher_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
+  video_player_avfoundation:
+    :path: Flutter/ephemeral/.symlinks/plugins/video_player_avfoundation/darwin
   wakelock_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos
 
@@ -118,6 +129,7 @@ SPEC CHECKSUMS:
   file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
   flutter_libserialport: 2c523cb8d8203fc6d1b0da88190da31ac970eb93
   flutter_tts: ae915565cc6948444b513acc8ee021993281e027
+  flutter_zxing: 91e9d17c79c60860450e8879cced0ec54f6a2601
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   libserialport: 1cb25e66ef3c92a8e59c2ea3820302c3fa2268cd
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
@@ -129,6 +141,7 @@ SPEC CHECKSUMS:
   sqlite3: a51c07cf16e023d6c48abd5e5791a61a47354921
   sqlite3_flutter_libs: b3e120efe9a82017e5552a620f696589ed4f62ab
   url_launcher_macos: f87a979182d112f911de6820aefddaf56ee9fbfd
+  video_player_avfoundation: 3453f792138786248960ca029747fcd9f318ef52
   wakelock_plus: 917609be14d812ddd9e9528876538b2263aaa03b
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009

@@ -20,11 +20,9 @@ import 'snapshot_wedge_source.dart';
 /// point of the feature is that nobody looks at the camera: it hovers over the
 /// counter, and things are read by being put down.
 class CameraWedgeController extends ChangeNotifier {
-  CameraWedgeController({
-    CameraWedgeSource? source,
-    CameraWedgePolicy? policy,
-  })  : _source = source ?? _sourceForThisPlatform(),
-        _policy = policy ?? CameraWedgePolicy();
+  CameraWedgeController({CameraWedgeSource? source, CameraWedgePolicy? policy})
+    : _source = source ?? _sourceForThisPlatform(),
+      _policy = policy ?? CameraWedgePolicy();
 
   final CameraWedgeSource? _source;
   final CameraWedgePolicy _policy;
@@ -47,29 +45,25 @@ class CameraWedgeController extends ChangeNotifier {
 
   /// Whether this platform can run a camera wedge at all, and how.
   ///
-  /// `mobile_scanner` where it exists; stills on Windows, where it does not
-  /// and where the tills are. Linux has neither an endorsed camera plugin nor
-  /// a stream, so it reports none rather than offering a switch that does
-  /// nothing — the same rule `camera_scanning_support.dart` already follows.
+  /// `mobile_scanner` where it exists; stills through zxing-cpp on the
+  /// desktops where it does not — which is where the tills are. Every platform
+  /// Pointy ships on now has one or the other, so `none` describes a future
+  /// platform rather than a gap.
   static CameraWedgeBackend get backend {
     if (cameraScanningSupported) return CameraWedgeBackend.platformScanner;
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-      return CameraWedgeBackend.snapshot;
-    }
-    return CameraWedgeBackend.none;
+    if (kIsWeb) return CameraWedgeBackend.none;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows ||
+      TargetPlatform.linux => CameraWedgeBackend.snapshot,
+      _ => CameraWedgeBackend.none,
+    };
   }
 
-  /// True where the wedge reads 2-D codes only, so the shop can be told
-  /// plainly rather than concluding it is broken on a bag of rice.
-  static bool get readsTwoDimensionalOnly =>
-      backend == CameraWedgeBackend.snapshot;
-
-  static CameraWedgeSource? _sourceForThisPlatform() =>
-      switch (backend) {
-        CameraWedgeBackend.platformScanner => MobileScannerWedgeSource(),
-        CameraWedgeBackend.snapshot => SnapshotWedgeSource(),
-        CameraWedgeBackend.none => null,
-      };
+  static CameraWedgeSource? _sourceForThisPlatform() => switch (backend) {
+    CameraWedgeBackend.platformScanner => MobileScannerWedgeSource(),
+    CameraWedgeBackend.snapshot => SnapshotWedgeSource(),
+    CameraWedgeBackend.none => null,
+  };
 
   /// What the guard has thrown away this session: disagreeing reads (each one
   /// a wrong product that did not reach a cart) and re-reads of an item still

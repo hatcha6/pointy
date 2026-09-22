@@ -19611,8 +19611,4 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cameraWedgeNoCameras => 'لم يتم العثور على كاميرا على هذا الجهاز.';
-
-  @override
-  String get cameraWedgeTwoDimensionalOnly =>
-      'على هذا الجهاز تقرأ الكاميرا رموز QR والرموز ثنائية الأبعاد فقط. يبقى الباركود الخطي (EAN) على قارئ الطاولة كما هو.';
 }

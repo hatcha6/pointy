@@ -347,14 +347,6 @@ class _CameraWedgePanelState extends State<_CameraWedgePanel> {
           ),
           secondary: const Icon(Icons.photo_camera_outlined),
         ),
-        if (viewModel.cameraWedgeReadsTwoDimensionalOnly) ...[
-          SizedBox(height: spacing.sm),
-          PointyInlineMessage(
-            message: l10n.cameraWedgeTwoDimensionalOnly,
-            icon: Icons.qr_code_2_outlined,
-            compact: true,
-          ),
-        ],
         if (viewModel.cameraWedgeEnabled) ...[
           SizedBox(height: spacing.md),
           // Only worth asking once the feature is on: a till often has a
