@@ -22,7 +22,7 @@ class CustomerLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         full_name = clean_str(record.full_name)
         if not full_name:
-            raise LoaderError("Customer name is required.", code="missing_name")
+            raise LoaderError("اسم العميل مطلوب.", code="missing_name")
 
         phone = clean_str(record.phone)
         email = clean_str(record.email)

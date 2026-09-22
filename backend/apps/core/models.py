@@ -370,6 +370,32 @@ class ShopSettings(TimeStampedModel):
         null=True,
         validators=[MinValueValidator(0)],
     )
+    # Ceiling on the one-off discount a cashier may take off a single invoice at
+    # the till (``Order.extra_discount_amount`` — the haggling line, not the
+    # discount engine's rules or coupons, which are the owner's own policy and
+    # are not capped by this).
+    #
+    # Per invoice, deliberately, not per day or per shift. A daily allowance is
+    # the wrong shape for a counter: it is spent by lunchtime on small sales and
+    # then unavailable for the one large customer it existed for, and it makes
+    # every cashier's authority depend on what the cashier before them already
+    # gave away. A per-invoice ceiling asks the question that is actually being
+    # asked — "is THIS discount one a cashier may give?" — and the same answer
+    # holds at nine in the morning and at closing.
+    #
+    # Null = no ceiling: the amount is bounded only by the invoice itself (a
+    # discount can never exceed what the goods are worth). That is the default,
+    # so a shop that updates into this feature gets the field working without
+    # having to go and configure it first. 0 is the opposite and a legitimate
+    # setting: nobody discounts at the till at all, and the field disappears
+    # from the sell screen.
+    max_invoice_discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
     # Purchase suggestions: the purchasing screen offers the products and
     # quantities this shop habitually buys from the chosen supplier (see
     # apps.purchasing.suggestions). On by default because it is additive — every

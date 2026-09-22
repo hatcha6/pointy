@@ -48,6 +48,10 @@ void main() {
     'enable_kitchen_operations': false,
     'enable_job_tracking': false,
     'pos_cash_purchase_limit': null,
+    // Zero, not null: on this setting zero is an answer ("nobody discounts at
+    // the till") rather than the absence of one, and it is the value most
+    // likely to be dropped on the way through a money field.
+    'max_invoice_discount_amount': '0.00',
     'enforce_customer_credit_limits': false,
     'default_customer_credit_limit': null,
     'default_payment_terms_days': 0,
@@ -88,6 +92,7 @@ void main() {
     'enable_kitchen_operations': true,
     'enable_job_tracking': true,
     'pos_cash_purchase_limit': '250.00',
+    'max_invoice_discount_amount': '150.00',
     'enforce_customer_credit_limits': true,
     'default_customer_credit_limit': '800.00',
     'default_payment_terms_days': 30,
@@ -141,6 +146,7 @@ void main() {
       expect(json['enforce_customer_credit_limits'], isTrue);
       expect(json['default_customer_credit_limit'], '800.00');
       expect(json['pos_cash_purchase_limit'], '250.00');
+      expect(json['max_invoice_discount_amount'], '150.00');
       expect(json['enable_surveillance'], isTrue);
       expect(json['surveillance_pre_roll_seconds'], 35);
       expect(json['inventory_valuation_method'], 'fifo');

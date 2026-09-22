@@ -47,7 +47,22 @@ class MoneyAccount(TimeStampedModel):
     kind = models.CharField(max_length=8, choices=Kind.choices, db_index=True)
     # Bank-only descriptive fields; blank for a cash box.
     bank_name = models.CharField(max_length=120, blank=True)
+    # Which bank, as the Central Bank's own register names it. An OPAQUE string
+    # here on purpose: the register — slug, Arabic name, English name and the
+    # trademark image — lives in the client, beside the logo files it points at
+    # (``frontend/lib/src/shared/payments/libyan_banks.dart``), and mirroring it
+    # into Python would create a second list to keep in step with the first. A
+    # slug this build has never heard of is not an error; the client falls back
+    # to ``bank_name``, exactly as it already does for a bank whose trademark is
+    # not bundled.
+    bank_slug = models.CharField(max_length=32, blank=True)
     account_number = models.CharField(max_length=64, blank=True)
+    # Stored unformatted (no spaces) and never validated against a checksum
+    # here: a Libyan IBAN a shop reads off its own statement is the number the
+    # customer must transfer to, and refusing to save one because this build
+    # disagrees about its check digits would leave the shop unable to record
+    # the only string that matters.
+    iban = models.CharField(max_length=34, blank=True)
     # What the account held on ``opening_at``. Derived flows are only counted
     # from that day onward, so a shop that has been trading for years starts
     # from a number its owner actually recognises instead of from a replay of

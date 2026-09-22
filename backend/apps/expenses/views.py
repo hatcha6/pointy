@@ -64,10 +64,14 @@ class ExpenseViewSet(
         "created_by",
         "cash_movement",
         "register_session",
+        # The list draws each row's bank mark; without this that is a query
+        # per row the moment a shop starts naming accounts.
+        "money_account",
     )
     filterset_fields = {
         "category": ["exact"],
         "payment_method": ["exact"],
+        "money_account": ["exact"],
         # spent_at is a DateField, so range lookups only (no __date transform).
         "spent_at": ["exact", "gte", "lte"],
     }

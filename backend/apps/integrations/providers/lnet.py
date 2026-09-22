@@ -59,6 +59,7 @@ import json
 import re
 from datetime import datetime, timezone as utc_timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from functools import partial
 from html import unescape
 from urllib.parse import urlsplit
 
@@ -66,7 +67,7 @@ import requests
 
 from apps.core.timeutils import business_timezone
 
-from .. import session_cache
+from .. import connection_pool, session_cache
 from ..catalog import SETTING_COMMISSION_PERCENT, SETTING_DENOMINATIONS
 
 from ..telemetry import (
@@ -100,6 +101,7 @@ from .base import (
     RechargeOption,
     RechargeResult,
     SubscriberProfile,
+    in_parallel,
     register,
 )
 
@@ -182,6 +184,17 @@ utc = utc_timezone.utc
 BEGINNING_OF_TIME = datetime(1970, 1, 1, tzinfo=utc)
 
 
+def _new_session(account):
+    """A session of this driver's own, on the portal's shared connection pool.
+
+    The session is per-call — it carries the account's cookies and
+    ``requests.Session`` is not thread-safe — but the sockets underneath it
+    are not, so a lookup a minute after the last one finds the connection
+    already open. See ``apps.integrations.connection_pool``.
+    """
+    return connection_pool.warm(requests.Session(), account.resolved_base_url())
+
+
 @register("lnet")
 class LnetProvider(IntegrationProvider):
     #: No status feed: the portal keeps no per-line state log an agency can
@@ -201,6 +214,11 @@ class LnetProvider(IntegrationProvider):
         #: this flags: whether ``_get`` is allowed to spend a retry
         #: re-logging in if this session turns out to be dead.
         self._session_from_cache = False
+        #: The CSRF token that came with ``_session``. A fallback only —
+        #: every write re-reads its own page's token before using it — but it
+        #: has to travel with the session it belongs to, so that reusing the
+        #: live session does not hand back an empty one.
+        self._token = ""
 
     # --- configuration -----------------------------------------------------
     @property
@@ -266,13 +284,19 @@ class LnetProvider(IntegrationProvider):
     def _login(self, *, force: bool = False) -> tuple[requests.Session | None, str, str, str]:
         """Return ``(session, csrf_token, error_code, error_detail)``.
 
-        Tries ``session_cache`` first unless ``force`` — a cache hit skips
-        BOTH network calls this login otherwise costs (the login page for a
-        token, then the POST), which is the more expensive of the two logins
-        this app drives. A card lookup used to mean a login plus up to three
-        searches tried again for offers, then again for the profile; now the
-        login happens at most once. ``force=True`` is the one-shot retry in
+        Tries the session this instance is already holding, then
+        ``session_cache`` — which skips BOTH network calls this login
+        otherwise costs (the login page for a token, then the POST) — and
+        only then the network. ``force=True`` is the one-shot retry in
         ``_get``, after a cached session has already proven to be dead.
+
+        **The live session comes first, and that is not a micro-optimisation.**
+        Rebuilding a ``requests.Session`` from cached cookies throws away its
+        connection pool, so the next call opens a new socket and pays a fresh
+        TLS handshake to a portal on the other side of a Libyan uplink. One
+        card lookup calls this three times — lookup, offers, profile — so a
+        cache that answered without a *login* still cost three handshakes for
+        work that could travel on one connection.
 
         The returned token is a fallback only. Every write re-reads its own
         page's token before using it (see ``recharge``) — a cache hit simply
@@ -281,16 +305,19 @@ class LnetProvider(IntegrationProvider):
         actually sends.
         """
         if not force:
+            if self._session is not None:
+                return self._session, self._token, "", ""
             cached = session_cache.load("lnet", self.account)
             if cached is not None:
-                session = requests.Session()
+                session = _new_session(self.account)
                 session.cookies.update(cached.get("cookies") or {})
                 self._session = session
+                self._token = cached.get("token") or ""
                 self._session_from_cache = True
-                return session, cached.get("token") or "", "", ""
+                return session, self._token, "", ""
 
         self._session_from_cache = False
-        session = requests.Session()
+        session = _new_session(self.account)
         self._note(STEP_LOGIN_PAGE)
         try:
             page = session.get(self._url(LOGIN_PATH), timeout=self._timeout)
@@ -335,6 +362,7 @@ class LnetProvider(IntegrationProvider):
         # Prefer a token from the page we actually landed on.
         landed_token = _csrf_token(body) or token
         self._session = session
+        self._token = landed_token
         session_cache.save(
             "lnet", self.account, {"cookies": dict(session.cookies), "token": landed_token}
         )
@@ -375,7 +403,13 @@ class LnetProvider(IntegrationProvider):
         return response, "", ""
 
     def _search(self, token: str, term: str, mode: str):
-        """One search, as the portal's own filter form issues it."""
+        """One search, as the portal's own filter form issues it.
+
+        Returns ``(rows, error_code, detail, shape_ok)``. ``shape_ok`` is
+        returned rather than recorded here because several of these run at
+        once in :meth:`_find_lines`, and telemetry a worker thread writes
+        whenever it happens to finish is telemetry nobody can read.
+        """
         self._note(STEP_SEARCH)
         response, code, detail = self._get(
             USERS_PATH,
@@ -386,33 +420,103 @@ class LnetProvider(IntegrationProvider):
             },
         )
         if response is None:
-            return None, code, detail
+            return None, code, detail, None
         body = response.text or ""
         # THE signal worth having. A results table with no rows is a customer
         # who has no line; no results table at all is our parser gone blind on
         # markup that changed. Both would otherwise arrive as "not found", and
         # only one of them is a bug we have to go and fix.
-        self._observe(shape_ok=_has_user_table(body))
-        return _parse_user_rows(body), "", ""
+        return _parse_user_rows(body), "", "", _has_user_table(body)
 
-    def _find_lines(self, token: str, term: str):
+    def _find_lines(self, token: str, term: str, *, lead: str = ""):
         """Every line matching ``term``, trying each way the portal can search.
 
-        Stops at the first mode that matches anything rather than merging: a
-        term that is somebody's phone number and somebody else's contract
-        number would otherwise return two unrelated households to choose
-        between, which is worse than the ambiguity it is trying to solve.
+        Answers with the first mode **in priority order** that matched
+        anything, rather than merging: a term that is somebody's phone number
+        and somebody else's contract number would otherwise return two
+        unrelated households to choose between, which is worse than the
+        ambiguity it is trying to solve.
+
+        **The leading mode goes alone; the rest go together.** This used to
+        walk all three one at a time, which is the cheapest thing to do in
+        requests and the most expensive thing to do in seconds — a term the
+        portal does not know by phone number paid for the phone search in
+        full before the username search had even started. Measured on the
+        Annaseem till, a lookup that took one round trip came back in ~1.4s
+        and one that took three took 4.4s: the same search, three times the
+        wait, with a customer standing at the counter.
+
+        Which mode leads is the till's to say, and that is what makes the
+        ordinary search fast rather than merely faster: a phone number and a
+        contract number are both digits, so nothing here could ever tell them
+        apart, and the picker beside the search box can. A cashier who picks
+        right pays one request and one wait.
+
+        Leading alone rather than firing everything at once is deliberate.
+        The lead is usually right, so the ordinary case costs exactly the one
+        request it always did — and this portal runs a WAF that answers a
+        whole network with a flat 403 (see :meth:`_get`), which is not
+        something to provoke by tripling every search a shop makes. What this
+        caps is the bad case: two round trips, not three.
         """
         term = (term or "").strip()
         if not term:
             return [], ERROR_NOT_FOUND, "no search term"
-        for mode in _search_modes_for(term):
-            rows, code, detail = self._search(token, term, mode)
-            if rows is None:
-                return None, code, detail
+        modes = _search_modes_for(term, lead)
+        shape_seen: list[bool] = []
+
+        def answer(result):
+            # A results table rendered for ANY mode means the parser still
+            # sees what it expects; only a search that rendered no table at
+            # all is the blindness signal. Folded here, on the request's own
+            # thread, so the row never depends on which worker finished last.
+            if shape_seen:
+                self._observe(shape_ok=any(shape_seen))
+            return result
+
+        rows, code, detail, shape_ok = self._search(token, term, modes[0])
+        if shape_ok is not None:
+            shape_seen.append(shape_ok)
+        if rows is None:
+            return answer((None, code, detail))
+        if rows:
+            return answer((rows, "", ""))
+
+        rest = modes[1:]
+        if not rest:
+            return answer(([], ERROR_NOT_FOUND, "no line matched"))
+
+        # One driver per search: a ``requests.Session`` is not thread-safe,
+        # and ``_get`` replaces ``self._session`` outright when a dead session
+        # forces a relogin. Each sibling hits the session cache, so the extra
+        # instances cost no extra login.
+        results = in_parallel(
+            [
+                partial(type(self)(self.account)._search_isolated, term, mode)
+                for mode in rest
+            ]
+        )
+        shape_seen.extend(shape for *_rest, shape in results if shape is not None)
+        for rows, code, detail, _shape in results:
             if rows:
-                return rows, "", ""
-        return [], ERROR_NOT_FOUND, "no line matched"
+                return answer((rows, "", ""))
+        # Nothing matched anywhere. A transport failure is worth reporting
+        # over a clean "no such line": they are different problems.
+        for rows, code, detail, _shape in results:
+            if rows is None:
+                return answer((None, code, detail))
+        return answer(([], ERROR_NOT_FOUND, "no line matched"))
+
+    def _search_isolated(self, term: str, mode: str):
+        """One search on this instance's own session, for a worker thread.
+
+        Logs in first — from the cache, in the ordinary case, costing no
+        network call — because a sibling built for one search has none yet.
+        """
+        session, token, code, detail = self._login()
+        if session is None:
+            return None, code, detail, None
+        return self._search(token, term, mode)
 
     def _resolve(self, token: str, username: str):
         """The one line called ``username``, as an exact match.
@@ -476,18 +580,22 @@ class LnetProvider(IntegrationProvider):
             account_label=self.account.username,
         )
 
-    def lookup(self, card_no: str) -> LookupResult:
+    def lookup(self, card_no: str, *, search_by: str = "") -> LookupResult:
         """Find the line, or lines, behind what the cashier typed.
 
-        ``card_no`` is a phone number, a username or a contract number — the
-        till does not have to know which. One household can hold several lines,
-        so this answers with all of them and leaves the choosing to a human.
+        ``card_no`` is a phone number, a username or a contract number, and
+        ``search_by`` is the till saying which — the picker beside the search
+        box, not a guess. It is a hint about where to look first, never a
+        restriction on where to look: see :func:`_search_modes_for`.
+
+        One household can hold several lines, so this answers with all of
+        them and leaves the choosing to a human.
         """
         session, token, code, detail = self._login()
         if session is None:
             return LookupResult(ok=False, error_code=code, error_detail=detail)
 
-        rows, code, detail = self._find_lines(token, card_no)
+        rows, code, detail = self._find_lines(token, card_no, lead=search_by)
         if rows is None:
             return LookupResult(ok=False, error_code=code, error_detail=detail)
         if not rows:
@@ -1002,17 +1110,31 @@ def _parse_payment_rows(html: str) -> list[_PaymentRow]:
     return found
 
 
-def _search_modes_for(term: str) -> tuple[str, ...]:
+def _search_modes_for(term: str, lead: str = "") -> tuple[str, ...]:
     """Which of the portal's three searches to try, and in what order.
 
-    A till types a phone number almost always, so that leads unless the term
-    obviously is not one.
+    ``lead`` is the cashier's own answer to "what is this number?", taken from
+    the picker beside the search box. It is worth far more than anything that
+    can be inferred from the digits: a phone number and a contract number are
+    both digits, so without it every till search is a guess that costs a round
+    trip per wrong guess. With it, the ordinary search is one request and one
+    wait.
+
+    It orders the modes; it does not restrict them. A cashier who leaves the
+    picker on the wrong entry still finds the customer, just a second slower —
+    which is the old behaviour, and a much better failure than "not found" for
+    a line that is plainly there.
     """
     compact = term.replace(" ", "").replace("-", "")
     if compact.isdigit():
-        return SEARCH_MODES
-    # Usernames carry letters and dots; a phone search for one is a wasted trip.
-    return (SEARCH_BY_USERNAME, SEARCH_BY_CONTRACT)
+        modes = SEARCH_MODES
+    else:
+        # Usernames carry letters and dots; a phone search for one is a
+        # wasted trip whatever the picker says.
+        modes = (SEARCH_BY_USERNAME, SEARCH_BY_CONTRACT)
+    if lead in modes:
+        return (lead,) + tuple(m for m in modes if m != lead)
+    return modes
 
 
 def _parse_datetime(value) -> datetime | None:

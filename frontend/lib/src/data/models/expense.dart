@@ -1,3 +1,5 @@
+import 'bank_account_ref.dart';
+
 /// Payment methods an expense can be settled with. Mirrors the backend
 /// ``Expense.PaymentMethod`` choices.
 enum ExpensePaymentMethod {
@@ -30,6 +32,7 @@ class Expense {
     required this.notes,
     required this.paidFromRegister,
     required this.createdByUsername,
+    this.bankAccount,
   });
 
   final int id;
@@ -43,6 +46,10 @@ class Expense {
   final String notes;
   final bool paidFromRegister;
   final String? createdByUsername;
+
+  /// Which of the shop's bank accounts this money left. Null on cash, and on
+  /// every expense a shop with one bank account recorded.
+  final BankAccountRef? bankAccount;
 
   factory Expense.fromJson(Map<String, Object?> json) {
     return Expense(
@@ -61,6 +68,7 @@ class Expense {
       notes: json['notes']?.toString() ?? '',
       paidFromRegister: json['paid_from_register'] == true,
       createdByUsername: json['created_by_username']?.toString(),
+      bankAccount: BankAccountRef.fromPaymentJson(json),
     );
   }
 }
@@ -91,6 +99,7 @@ class ExpenseDraft {
     this.reference = '',
     this.notes = '',
     this.payFromRegister = false,
+    this.moneyAccountId,
   });
 
   final int categoryId;
@@ -101,6 +110,12 @@ class ExpenseDraft {
   final String reference;
   final String notes;
   final bool payFromRegister;
+
+  /// The bank account the money left. Sent as an explicit null on a cash
+  /// expense — unlike every other draft in the app, which omits the key —
+  /// because this one also EDITS: an expense switched from card to cash has to
+  /// clear the bank it used to name, and an omitted key would leave it.
+  final int? moneyAccountId;
 
   Map<String, Object?> toJson() {
     return {
@@ -115,6 +130,9 @@ class ExpenseDraft {
       'reference': reference,
       'notes': notes,
       'pay_from_register': payFromRegister,
+      'money_account': paymentMethod == ExpensePaymentMethod.cash
+          ? null
+          : moneyAccountId,
     };
   }
 }

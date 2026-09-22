@@ -7,11 +7,16 @@ class SplitTenderInput {
     required this.method,
     required this.amount,
     this.cardReceipt,
+    this.moneyAccountId,
   });
 
   final PaymentMethod method;
   final double amount;
   final CardPaymentReceipt? cardReceipt;
+
+  /// The bank account this tender lands in, when the cashier (or the slip's
+  /// own terminal) named one.
+  final int? moneyAccountId;
 }
 
 class SplitTenderPaymentSummary {
@@ -128,6 +133,11 @@ class SplitTenderPaymentCalculator {
             cardReceiptUrl: tender.method == PaymentMethod.card
                 ? tender.cardReceipt?.sourceUrl ?? ''
                 : '',
+            // Cash never names a bank: the money is in the drawer, and the
+            // drawer is already attributed by the register session.
+            moneyAccountId: tender.method == PaymentMethod.cash
+                ? null
+                : tender.moneyAccountId,
           ),
         );
       }

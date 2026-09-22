@@ -6,6 +6,7 @@ import '../../../data/models/variant_option.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
+import 'opening_stock_fields.dart';
 import 'variant_identity_watcher.dart';
 import '../../../shared/components/pointy_progress.dart';
 import '../../../shared/components/pointy_searchable_picker.dart';
@@ -248,6 +249,8 @@ class GeneratedVariantsPreview extends StatelessWidget {
     required this.onActiveChanged,
     required this.numberValidator,
     this.conflictsBySignature = const {},
+    this.openingQuantityControllers,
+    this.openingCostControllers,
   });
 
   /// Duplicate SKU/barcode errors per generated row, keyed by combination
@@ -261,6 +264,12 @@ class GeneratedVariantsPreview extends StatelessWidget {
   final Map<String, TextEditingController> skuControllers;
   final Map<String, TextEditingController> barcodeControllers;
   final Map<String, TextEditingController> priceControllers;
+
+  /// Per-row opening stock. Null when the form is not offering it — from
+  /// inside a purchase order, or to somebody without the stock permission —
+  /// and the rows then carry no opening fields at all.
+  final Map<String, TextEditingController>? openingQuantityControllers;
+  final Map<String, TextEditingController>? openingCostControllers;
   final Map<String, bool> activeBySignature;
   final String? defaultSignature;
   final ValueChanged<String> onDefaultChanged;
@@ -296,6 +305,10 @@ class GeneratedVariantsPreview extends StatelessWidget {
                 onActiveChanged(combination.signature, value),
             numberValidator: numberValidator,
             conflicts: conflictsBySignature[combination.signature] ?? const {},
+            openingQuantityController:
+                openingQuantityControllers?[combination.signature],
+            openingCostController:
+                openingCostControllers?[combination.signature],
           ),
           if (combination != combinations.last) const SizedBox(height: 8),
         ],
@@ -472,6 +485,8 @@ class _GeneratedVariantTile extends StatelessWidget {
     required this.onActiveChanged,
     required this.numberValidator,
     this.conflicts = const {},
+    this.openingQuantityController,
+    this.openingCostController,
   });
 
   final Map<CatalogIdentityField, CatalogIdentityConflict> conflicts;
@@ -480,6 +495,8 @@ class _GeneratedVariantTile extends StatelessWidget {
   final TextEditingController skuController;
   final TextEditingController barcodeController;
   final TextEditingController priceController;
+  final TextEditingController? openingQuantityController;
+  final TextEditingController? openingCostController;
   final bool isActive;
   final bool isDefault;
   final VoidCallback onDefaultChanged;
@@ -579,6 +596,15 @@ class _GeneratedVariantTile extends StatelessWidget {
               ),
               validator: numberValidator,
             ),
+            if (openingQuantityController != null &&
+                openingCostController != null) ...[
+              const SizedBox(height: 8),
+              OpeningStockFields(
+                dense: true,
+                quantityController: openingQuantityController!,
+                costController: openingCostController!,
+              ),
+            ],
             const SizedBox(height: 4),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

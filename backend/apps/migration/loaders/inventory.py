@@ -45,14 +45,14 @@ class StockLoader(BaseLoader):
         variant_pk = resolver.resolve(VARIANT, record.variant_source_key)
         if variant_pk is None:
             raise LoaderError(
-                f"Stock references unknown product/variant {record.variant_source_key!r}.",
+                f"كمية تشير إلى صنف غير معروف {record.variant_source_key!r}.",
                 code="unresolved_variant",
             )
         # One query fetches the variant + its product (for the service check).
         variant = ProductVariant.objects.select_related("product").filter(pk=variant_pk).first()
         if variant is None:
             raise LoaderError(
-                f"Stock references unknown product/variant {record.variant_source_key!r}.",
+                f"كمية تشير إلى صنف غير معروف {record.variant_source_key!r}.",
                 code="unresolved_variant",
             )
 
@@ -65,7 +65,7 @@ class StockLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "stock_not_tracked",
-                        "Product does not track stock (service/made-to-order); skipped.",
+                        "هذا الصنف لا يُمسك له مخزون (خدمة أو تحضير عند الطلب) — تم تجاهل الكمية.",
                         source_key=str(record.variant_source_key),
                     )
                 ],
@@ -94,12 +94,23 @@ class StockLoader(BaseLoader):
         later movement would compound. The quantity is still imported — it is
         the shop's real (wrong) number, and a stock count is what fixes it — but
         the ledger is not opened on it.
+
+        **Zero on-hand with a known cost is not the same thing.** The bin is
+        written at the source's rate holding nothing, and no ledger entry is
+        posted — there is no stock to post. That rate is what
+        ``valuation_service`` reads as ``previous_rate``, so the first sale of a
+        product the shop has never bought *through Pointy* is costed at what the
+        old system says it costs instead of falling through to a last-purchase
+        lookup that finds nothing and books the whole price as profit. It is the
+        entire content of a cost-only import (see
+        ``reconstruct.STOCK_SOURCE_COST_ONLY``), and it is equally right for a
+        product that is simply out of stock today.
         """
         from apps.core.models import ShopSettings
 
         warehouse_id = resolve_warehouse_id(None)
         method = ShopSettings.load().inventory_valuation_method
-        rate = unit_cost.quantize(_RATE) if quantity > 0 else Decimal("0")
+        rate = unit_cost.quantize(_RATE) if quantity >= 0 else Decimal("0")
         value = (quantity * rate).quantize(_RATE) if quantity > 0 else Decimal("0")
         state = [[str(quantity), str(rate)]] if quantity > 0 else []
         StockValuationBin.objects.update_or_create(

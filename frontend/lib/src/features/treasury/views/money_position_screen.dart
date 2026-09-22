@@ -6,13 +6,17 @@ import '../../../data/models/money_position.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/payments/bank_mark.dart';
+import '../../../shared/payments/libyan_banks.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/money_position_view_model.dart';
 import 'money_account_details_sheet.dart';
+import 'money_account_editor_sheet.dart';
 import 'money_count_sheet.dart';
+import 'money_funding_sheet.dart';
 import 'money_transfer_sheet.dart';
 import 'treasury_ui.dart';
 
@@ -66,6 +70,15 @@ class _MoneyPositionScreenState extends State<MoneyPositionScreen> {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.treasuryTitle),
             actions: [
+              IconButton(
+                key: const ValueKey('treasury_add_account_button'),
+                tooltip: l10n.treasuryActionAddAccount,
+                onPressed: () => showMoneyAccountEditorSheet(
+                  context,
+                  viewModel: widget.viewModel,
+                ),
+                icon: const Icon(Icons.add_card_outlined),
+              ),
               if (widget.onOpenPaymentsLedger != null)
                 IconButton(
                   tooltip: l10n.treasuryLedgerLink,
@@ -125,12 +138,19 @@ class _MoneyPositionBody extends StatelessWidget {
         icon: Icons.account_balance_wallet_outlined,
         title: l10n.treasuryEmptyTitle,
         message: l10n.treasuryEmptyMessage,
+        action: FilledButton.icon(
+          onPressed: () =>
+              showMoneyAccountEditorSheet(context, viewModel: viewModel),
+          icon: const Icon(Icons.add),
+          label: Text(l10n.treasuryActionAddAccount),
+        ),
       );
     }
 
     final totals = viewModel.totals;
     final cash = viewModel.position!.cashAccounts;
     final bank = viewModel.position!.bankAccounts;
+    final provider = viewModel.position!.providerAccounts;
 
     return RefreshIndicator(
       onRefresh: viewModel.load,
@@ -160,6 +180,15 @@ class _MoneyPositionBody extends StatelessWidget {
             PointySectionHeader(title: l10n.treasurySectionBank),
             SizedBox(height: spacing.sm),
             ..._accountCards(context, bank),
+          ],
+          // Its own heading, not folded in beside the banks: a float is the
+          // shop's money sitting with a resale provider, and it cannot settle
+          // a supplier or pay a wage.
+          if (provider.isNotEmpty) ...[
+            SizedBox(height: spacing.lg),
+            PointySectionHeader(title: l10n.treasurySectionProvider),
+            SizedBox(height: spacing.sm),
+            ..._accountCards(context, provider),
           ],
           if (onOpenPaymentsLedger != null) ...[
             SizedBox(height: spacing.lg),
@@ -308,27 +337,49 @@ class _QuickActions extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final busy = viewModel.isSubmitting;
 
-    return Row(
+    // Four actions, wrapped rather than squeezed into one row: on a phone
+    // four buttons across are four unreadable labels.
+    return Wrap(
+      spacing: spacing.sm,
+      runSpacing: spacing.sm,
       children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: busy
-                ? null
-                : () => showMoneyTransferSheet(context, viewModel: viewModel),
-            icon: const Icon(Icons.move_down),
-            label: Text(l10n.treasuryActionDeposit),
-          ),
+        FilledButton.icon(
+          key: const ValueKey('treasury_add_funds_button'),
+          onPressed: busy
+              ? null
+              : () => showMoneyFundingSheet(
+                  context,
+                  viewModel: viewModel,
+                  direction: MoneyFundingDirection.addFunds,
+                ),
+          icon: const Icon(Icons.add),
+          label: Text(l10n.treasuryActionAddFunds),
         ),
-        SizedBox(width: spacing.sm),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: busy
-                ? null
-                : () =>
-                      showMoneyCountPickerSheet(context, viewModel: viewModel),
-            icon: const Icon(Icons.fact_check_outlined),
-            label: Text(l10n.treasuryActionCount),
-          ),
+        OutlinedButton.icon(
+          onPressed: busy
+              ? null
+              : () => showMoneyTransferSheet(context, viewModel: viewModel),
+          icon: const Icon(Icons.move_down),
+          label: Text(l10n.treasuryActionDeposit),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('treasury_withdraw_button'),
+          onPressed: busy
+              ? null
+              : () => showMoneyFundingSheet(
+                  context,
+                  viewModel: viewModel,
+                  direction: MoneyFundingDirection.withdraw,
+                ),
+          icon: const Icon(Icons.arrow_outward),
+          label: Text(l10n.treasuryActionWithdraw),
+        ),
+        OutlinedButton.icon(
+          onPressed: busy
+              ? null
+              : () => showMoneyCountPickerSheet(context, viewModel: viewModel),
+          icon: const Icon(Icons.fact_check_outlined),
+          label: Text(l10n.treasuryActionCount),
         ),
       ],
     );
@@ -337,6 +388,12 @@ class _QuickActions extends StatelessWidget {
 
 /// One account: what it should hold, when it was last proved, and a tap into
 /// the arithmetic behind it.
+///
+/// Deliberately carries NO controls of its own. Everything an owner can do to
+/// an account — count it, transfer from it, show its IBAN as a code, edit it —
+/// lives in the sheet the whole card opens, where each gets a word instead of
+/// an icon. The card is a figure to read; a strip of buttons under every
+/// balance competes with the one tap the card already is.
 class _AccountCard extends StatelessWidget {
   const _AccountCard({required this.entry, required this.onTap});
 
@@ -362,21 +419,32 @@ class _AccountCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                backgroundColor: colors.primaryContainer,
-                foregroundColor: colors.primaryStrong,
-                child: Icon(treasuryAccountIcon(account)),
-              ),
+              // The bank's own mark where it has one — that is how an owner
+              // picks their account out of a list at a glance — and the
+              // generic avatar for a cash box or an unidentified account.
+              _AccountAvatar(account: account),
               SizedBox(width: spacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      account.name,
-                      style: textTheme.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            account.name,
+                            style: textTheme.titleMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (account.isDefault && !account.isCash)
+                          PointyStatusPill(
+                            label: l10n.treasuryAccountDefaultLabel,
+                            icon: Icons.push_pin_outlined,
+                            color: colors.mutedInk,
+                          ),
+                      ],
                     ),
                     // A shop that named the account after its bank would
                     // otherwise read the same words twice.
@@ -421,6 +489,32 @@ class _AccountCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The bank's mark, or the generic icon for anything without one.
+class _AccountAvatar extends StatelessWidget {
+  const _AccountAvatar({required this.account});
+
+  final MoneyAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final bank = account.bankSlug.isEmpty
+        ? null
+        : bankForSlug(account.bankSlug);
+    if (bank != null) {
+      return SizedBox.square(
+        dimension: 40,
+        child: Center(child: BankLogo(bank: bank, size: 40)),
+      );
+    }
+    return CircleAvatar(
+      backgroundColor: colors.primaryContainer,
+      foregroundColor: colors.primaryStrong,
+      child: Icon(treasuryAccountIcon(account)),
     );
   }
 }

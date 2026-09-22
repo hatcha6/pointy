@@ -38,7 +38,7 @@ class MoneyAccountLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         name = clean_str(record.name)
         if not name:
-            raise LoaderError("Money account name is required.", code="missing_name")
+            raise LoaderError("اسم الخزينة أو الحساب مطلوب.", code="missing_name")
         kind = record.kind if record.kind in _KINDS else MoneyAccount.Kind.CASH
 
         instance = resolver.existing(MoneyAccount, self.entity_type, record.source_key)

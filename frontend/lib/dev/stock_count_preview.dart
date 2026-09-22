@@ -22,7 +22,10 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
+import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_category.dart';
+import 'package:pointy_frontend/src/data/models/product_unit.dart';
+import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/product_category_query.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
@@ -166,7 +169,11 @@ Widget _countingItem() {
       title: Text('الجرد'),
       style: PointyAppBarStyle.highFocus,
       actions: [
-        IconButton(onPressed: null, icon: Icon(Icons.search), tooltip: 'بحث'),
+        IconButton(
+          onPressed: null,
+          icon: Icon(Icons.search),
+          tooltip: 'رجوع للبحث',
+        ),
         IconButton(
           onPressed: null,
           icon: Icon(Icons.document_scanner_outlined),
@@ -180,13 +187,22 @@ Widget _countingItem() {
       total: 48,
       progress: 21 / 48,
       variant: _variants[0],
-      input: '18',
-      onSearch: () {},
+      input: '3',
+      searchTerm: '',
+      searchResults: _variants,
+      countUnits: _variants[0].productDetail?.units ?? const [],
+      countUnitCode: 'carton',
+      onCountUnitSelected: (_) {},
+      onSearchChanged: (_) {},
+      onPickVariant: (_) {},
       onCamera: () {},
       onDigit: (_) {},
       onDecimal: () {},
       onBackspace: () {},
       onClear: () {},
+      onInputChanged: (_) {},
+      onSubmitInput: () {},
+      onBackToSearch: () {},
       footer: PointyStickyActionFooter(
         primaryAction: FilledButton.icon(
           onPressed: () {},
@@ -194,6 +210,11 @@ Widget _countingItem() {
           label: const Text('حفظ والتالي'),
         ),
         secondaryActions: [
+          OutlinedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('رجوع'),
+          ),
           OutlinedButton.icon(
             onPressed: () {},
             icon: const Icon(Icons.fact_check_outlined),
@@ -481,7 +502,25 @@ class _FakeCatalogRepository extends CatalogRepository {
     required ProductQuery query,
     int page = 1,
   }) async {
-    return Ok(ProductVariantPage(variants: variants, hasMore: false));
+    // Filters like the server does (name or code, case-insensitive) so the
+    // preview exercises the real "type, Enter, take the top match" loop rather
+    // than always answering with the whole list.
+    final term = query.search.trim().toLowerCase();
+    final matches = term.isEmpty
+        ? variants
+        : variants
+              .where(
+                (variant) =>
+                    variant.displayLabel.toLowerCase().contains(term) ||
+                    variant.sku.toLowerCase().contains(term),
+              )
+              .toList(growable: false);
+    return Ok(
+      ProductVariantPage(
+        variants: page == 1 ? matches : const [],
+        hasMore: false,
+      ),
+    );
   }
 
   @override
@@ -506,7 +545,7 @@ class _FakeCatalogRepository extends CatalogRepository {
 // Fake data
 // ---------------------------------------------------------------------------
 
-ProductVariant _variant(int id, String name, String sku) {
+ProductVariant _variant(int id, String name, String sku, {int packOf = 0}) {
   return ProductVariant(
     id: id,
     productId: id,
@@ -514,11 +553,30 @@ ProductVariant _variant(int id, String name, String sku) {
     unitPrice: 10,
     productName: name,
     displayName: name,
+    // A packed product, so the preview shows the "counting in cartons" strip
+    // that most of a real shop's catalog needs.
+    productDetail: packOf == 0
+        ? null
+        : Product(
+            id: id,
+            name: name,
+            quantityOnHand: 0,
+            units: [
+              ProductUnit(
+                unit: const UnitOfMeasure(
+                  id: 9,
+                  code: 'carton',
+                  name: 'كرتونة',
+                ),
+                factorToBase: packOf.toDouble(),
+              ),
+            ],
+          ),
   );
 }
 
 final List<ProductVariant> _variants = [
-  _variant(1, 'عصير برتقال طبيعي 1 لتر', 'JUI-ORG-1L'),
+  _variant(1, 'عصير برتقال طبيعي 1 لتر', 'JUI-ORG-1L', packOf: 24),
   _variant(2, 'مياه معدنية 600 مل', 'WTR-600'),
   _variant(3, 'شيبس بطاطس بالملح', 'CHP-SLT'),
   _variant(4, 'قهوة عربية محمصة 250 جم', 'COF-AR-250'),
@@ -536,6 +594,32 @@ final StockCount _currentSession = StockCount(
   note: 'جرد نهاية الشهر',
   ownerName: 'سارة',
   createdAt: DateTime(2026, 6, 15, 9, 30),
+  // Two items this counter has already entered, so the search list shows the
+  // "عددت N" badge that tells them what is done.
+  lines: const [
+    StockCountLine(
+      id: 901,
+      stockCountId: 104,
+      variantId: 2,
+      countedQuantity: 36,
+      expectedQuantity: 36,
+      variance: 0,
+      needsReview: false,
+      applied: false,
+      staleAtApply: false,
+    ),
+    StockCountLine(
+      id: 902,
+      stockCountId: 104,
+      variantId: 4,
+      countedQuantity: 8,
+      expectedQuantity: 8,
+      variance: 0,
+      needsReview: false,
+      applied: false,
+      staleAtApply: false,
+    ),
+  ],
 );
 
 final List<StockCount> _history = [

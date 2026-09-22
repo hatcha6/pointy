@@ -32,7 +32,9 @@ class MoneyAccountSerializer(serializers.ModelSerializer):
             "name",
             "kind",
             "bank_name",
+            "bank_slug",
             "account_number",
+            "iban",
             "opening_balance",
             "opening_at",
             "is_default",
@@ -49,10 +51,18 @@ class MoneyAccountSerializer(serializers.ModelSerializer):
         kind = attrs.get("kind", getattr(self.instance, "kind", None))
         if kind == MoneyAccount.Kind.CASH:
             # A cash box has no bank identity; silently keeping stale values
-            # would show a bank number under a cash account.
+            # would show a bank number — or worse, an IBAN a customer might be
+            # asked to transfer to — under a cash account.
             attrs["bank_name"] = ""
+            attrs["bank_slug"] = ""
             attrs["account_number"] = ""
+            attrs["iban"] = ""
         return attrs
+
+    def validate_iban(self, value):
+        # Stored the way it is compared and shown: no spaces, upper case. A
+        # shop copies an IBAN off a statement that prints it in groups of four.
+        return "".join(str(value or "").split()).upper()
 
     def _clear_other_defaults(self, instance):
         MoneyAccount.objects.filter(kind=instance.kind, is_default=True).exclude(

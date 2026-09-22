@@ -1,3 +1,4 @@
+import 'bank_account_ref.dart';
 import 'product_variant.dart';
 import 'query.dart';
 import 'receipt_capture.dart';
@@ -178,6 +179,23 @@ class PurchaseOrderPage {
   }
 }
 
+/// What kind of event established a cost.
+enum ProductCostSource {
+  /// A line on a purchase order — the shop bought it.
+  purchase,
+
+  /// An opening balance: stock the shop already owned when it typed the
+  /// product in, entered with what it cost. No supplier, no order.
+  opening;
+
+  static ProductCostSource fromJson(Object? value) {
+    return value?.toString() == 'opening'
+        ? ProductCostSource.opening
+        // Absent means an older backend, which only ever served purchases.
+        : ProductCostSource.purchase;
+  }
+}
+
 class ProductCostHistoryEntry {
   const ProductCostHistoryEntry({
     required this.productId,
@@ -185,6 +203,7 @@ class ProductCostHistoryEntry {
     required this.unitCost,
     required this.quantity,
     required this.total,
+    this.source = ProductCostSource.purchase,
     this.variantName,
     this.purchaseOrderId,
     this.purchaseOrderNumber,
@@ -201,6 +220,11 @@ class ProductCostHistoryEntry {
 
   final int productId;
   final int variantId;
+
+  /// Whether this row is a purchase or an opening balance. A row with no
+  /// supplier means different things for the two, so the label reads this
+  /// rather than inferring from a null.
+  final ProductCostSource source;
   final String? variantName;
   final int? purchaseOrderId;
   final String? purchaseOrderNumber;
@@ -251,6 +275,7 @@ class ProductCostHistoryEntry {
     return ProductCostHistoryEntry(
       productId: _intFromJson(json['product'] ?? json['product_id']),
       variantId: _intFromJson(json['variant'] ?? json['variant_id']),
+      source: ProductCostSource.fromJson(json['source']),
       variantName: json['variant_name']?.toString(),
       purchaseOrderId: _nullableIntFromJson(
         json['purchase_order'] ?? json['purchase_order_id'] ?? json['order'],
@@ -383,9 +408,9 @@ class ProductMarginImpact {
 }
 
 /// Per-variant cost roll-up powering the product/variant detail cost metrics
-/// and the "Change prices" dialog. Costs are derived from received purchase
-/// history on the backend; any field can be null when a variant has never been
-/// purchased.
+/// and the "Change prices" dialog. The backend derives it from two sources:
+/// received purchase history, and the opening balance a shop typed in when it
+/// created the product. Any figure can be null when a variant has neither.
 class VariantCostSummary {
   const VariantCostSummary({
     required this.productId,
@@ -393,6 +418,7 @@ class VariantCostSummary {
     required this.variantName,
     required this.unitPrice,
     required this.purchasesCount,
+    this.openingsCount = 0,
     this.lowestCost,
     this.highestCost,
     this.lastCost,
@@ -404,12 +430,17 @@ class VariantCostSummary {
   final String variantName;
   final double unitPrice;
   final int purchasesCount;
+
+  /// Opening balances behind these figures. Counted apart from [purchasesCount]
+  /// because "bought 3 times" and "opened once" are different sentences — but
+  /// both establish a cost, which is why [hasCost] reads the pair.
+  final int openingsCount;
   final double? lowestCost;
   final double? highestCost;
   final double? lastCost;
   final double? averageCost;
 
-  bool get hasCost => purchasesCount > 0;
+  bool get hasCost => purchasesCount > 0 || openingsCount > 0;
 
   factory VariantCostSummary.fromJson(Map<String, Object?> json) {
     return VariantCostSummary(
@@ -418,6 +449,7 @@ class VariantCostSummary {
       variantName: json['variant_name']?.toString() ?? '',
       unitPrice: _moneyFromJson(json['unit_price']),
       purchasesCount: _intFromJson(json['purchases_count']),
+      openingsCount: _intFromJson(json['openings_count']),
       lowestCost: _nullableMoneyFromJson(json['lowest_cost']),
       highestCost: _nullableMoneyFromJson(json['highest_cost']),
       lastCost: _nullableMoneyFromJson(json['last_cost']),

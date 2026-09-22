@@ -12,6 +12,7 @@ from .collapse_serializers import CollapsePlanSerializer
 from .models import MigrationRun, MigrationSource
 from .serializers import (
     EntitySpecSerializer,
+    ImportScopeSerializer,
     MigrationIssueSerializer,
     MigrationRunCreateSerializer,
     MigrationRunSerializer,
@@ -56,6 +57,7 @@ class MigrationSystemsView(views.APIView):
             {
                 "systems": MigrationSystemSerializer.catalogue(),
                 "entities": EntitySpecSerializer.catalogue(),
+                "scopes": ImportScopeSerializer.catalogue(),
                 "upload": {
                     "chunk_size": uploads.chunk_size(),
                     "max_bytes": settings.POINTY_MIGRATION_MAX_UPLOAD_BYTES,
@@ -192,6 +194,7 @@ class MigrationRunViewSet(viewsets.ModelViewSet):
             serializer.validated_data["source"],
             mode=serializer.validated_data["mode"],
             entities=serializer.validated_data.get("selected_entities") or [],
+            scope=serializer.validated_data.get("scope") or "",
             options=serializer.validated_data.get("options") or {},
             user=request.user,
         )

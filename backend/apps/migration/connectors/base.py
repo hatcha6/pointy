@@ -30,6 +30,25 @@ class ExtractContext:
     # Scratch space for a connector to memoise cross-entity lookups for one run
     # (e.g. group the BARCODE table by item once and reuse it).
     cache: dict = field(default_factory=dict)
+    #: Everything this run will import, dependency-closed — the run's *scope*.
+    #: A connector reads it when a record's correct value depends on what else
+    #: is coming: a party's balance is the source's opening figure when the
+    #: invoices that moved it are in the run, and its current figure when they
+    #: are not (see ``scopes``). Empty means "not stated" — treat as everything.
+    selected_entities: frozenset = field(default_factory=frozenset)
+    #: The resolved answer to that question, so every connector reads the same
+    #: one rather than each re-deriving it: ``opening`` or ``current``.
+    party_balance_basis: str = "opening"
+    #: Emit only products the source says it currently holds. A shop that has
+    #: been trading for fifteen years carries thousands of item cards it has not
+    #: sold since 2014, and moving them into a new POS makes every search and
+    #: every stocktake worse. Honoured only by connectors that declare
+    #: ``supports_stock_filter`` — a quantity is not a field every source has.
+    only_stocked_products: bool = False
+
+    def includes(self, entity_type: str) -> bool:
+        """Is this entity part of the run? (Unstated scope means yes.)"""
+        return not self.selected_entities or entity_type in self.selected_entities
 
 
 @dataclass(frozen=True)
@@ -75,6 +94,10 @@ class BaseConnector(abc.ABC):
     required_transport: str = ""
     #: Canonical entity types this connector can extract (ENTITY_PLAN keys).
     supported_entities: tuple[str, ...] = ()
+    #: True when this connector can honour ``ExtractContext.only_stocked_products``
+    #: — i.e. its item card carries an on-hand quantity. Declared rather than
+    #: assumed so the UI never offers a filter that would silently do nothing.
+    supports_stock_filter: bool = False
     #: Declared schema variants this connector recognises.
     versions: tuple[VersionSpec, ...] = ()
     #: What this vendor's file looks like *before* preparation, when that is a

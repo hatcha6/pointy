@@ -27,7 +27,14 @@ void main() {
     'upload_state': state,
     'error_message': error,
     'system_key': systemKey,
-    'supported_entities': const ['product', 'sale'],
+    'supported_entities': const [
+      'category',
+      'product',
+      'customer',
+      'party_balance',
+      'sale',
+    ],
+    'supports_stock_filter': true,
     'analysis': const {
       'entities': {
         'product': {'count': 34112},
@@ -105,8 +112,16 @@ void main() {
     expect(viewModel.step, MigrationStep.review);
     expect(viewModel.analysis.countFor('product'), 34112);
     expect(viewModel.analysis.historyFrom, '2019-03-14');
-    // Everything the connector supports is on by default.
-    expect(viewModel.selectedEntities, {'product', 'sale'});
+    // A prepared file opens on the "everything" scope, which is every entity
+    // the connector supports — the default is unchanged, it is just named now.
+    expect(viewModel.scopeKey, 'everything');
+    expect(viewModel.selectedEntities, {
+      'category',
+      'product',
+      'customer',
+      'party_balance',
+      'sale',
+    });
   });
 
   test('a finished import shows its result, not the file picker', () async {
@@ -224,6 +239,129 @@ void main() {
       expect(viewModel.step, MigrationStep.uploading);
       expect(viewModel.source!.receivedBytes, 400);
       expect(repository.discarded, isEmpty);
+    });
+  });
+
+  group('import scopes', () {
+    // Taking part of a shop is not a filter: it changes what the numbers left
+    // behind mean. These lock the two places that shows up in the UI — what
+    // gets picked, and what the owner is told about the consequences.
+
+    test(
+      'a preset picks its entities and the options that go with them',
+      () async {
+        final viewModel = await loaded(
+          FakeMigrationRepository(sources: [sourceJson()]),
+        );
+
+        viewModel.applyScope('opening_position');
+
+        expect(viewModel.selectedEntities, {
+          'category',
+          'product',
+          'customer',
+          'party_balance',
+        });
+        // Cost without quantity travels with the scope. Offered as a separate
+        // checkbox it would be the one nobody ticks, and the shop would open
+        // with no cost on anything.
+        expect(viewModel.stockSource, MigrationStockSource.costOnly);
+      },
+    );
+
+    test('hand-editing the list stops claiming to be a preset', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+      viewModel.applyScope('opening_position');
+
+      viewModel.toggleEntity('sale', true);
+
+      expect(viewModel.scopeKey, 'custom');
+    });
+
+    test('the scope travels with the run', () async {
+      final repository = FakeMigrationRepository(sources: [sourceJson()]);
+      final viewModel = await loaded(repository);
+      viewModel.applyScope('opening_position');
+
+      await viewModel.startRun(dryRun: true);
+
+      expect(repository.startedRuns.single['scope'], 'opening_position');
+    });
+
+    test('a hand-made selection sends no scope at all', () async {
+      final repository = FakeMigrationRepository(sources: [sourceJson()]);
+      final viewModel = await loaded(repository);
+      viewModel.toggleEntity('sale', false);
+
+      await viewModel.startRun(dryRun: true);
+
+      expect(repository.startedRuns.single['scope'], isNull);
+    });
+
+    test('what a selection drags in with it is named, not implied', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+      viewModel.applyScope('custom');
+      for (final entity in viewModel.selectedEntities.toList()) {
+        viewModel.toggleEntity(entity, false);
+      }
+
+      viewModel.toggleEntity('sale', true);
+
+      // Sales cannot resolve a line without products, or an owner without
+      // customers; the screen says so before the run rather than after.
+      expect(viewModel.impliedEntities, containsAll(['product', 'customer']));
+    });
+
+    test('leaving the history behind carries todays balances', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+
+      viewModel.applyScope('opening_position');
+
+      expect(viewModel.carriesCurrentBalances, isTrue);
+    });
+
+    test('bringing the history carries the opening ones instead', () async {
+      // Same file, same parties, a different figure — and the difference is
+      // every invoice counted twice if it goes the wrong way.
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+
+      viewModel.applyScope('everything');
+
+      expect(viewModel.carriesCurrentBalances, isFalse);
+    });
+
+    test('in-stock-only and the invoice history refuse to combine', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+      viewModel.applyScope('everything');
+
+      viewModel.setOnlyStockedProducts(true);
+
+      expect(viewModel.stockFilterConflicts, contains('sale'));
+      expect(viewModel.canStartRun, isFalse);
+    });
+
+    test('in-stock-only is fine without the history, and is sent', () async {
+      final repository = FakeMigrationRepository(sources: [sourceJson()]);
+      final viewModel = await loaded(repository);
+      viewModel.applyScope('opening_position');
+
+      viewModel.setOnlyStockedProducts(true);
+      await viewModel.startRun(dryRun: true);
+
+      expect(viewModel.canStartRun, isTrue);
+      final options =
+          repository.startedRuns.single['options']! as Map<String, Object?>;
+      expect(options['only_stocked_products'], isTrue);
     });
   });
 }

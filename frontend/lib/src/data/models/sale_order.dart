@@ -1,3 +1,4 @@
+import 'bank_account_ref.dart';
 import 'cart_line.dart';
 import 'modifier_group.dart';
 import 'print_job.dart';
@@ -50,6 +51,7 @@ class SaleCheckoutDraft {
     this.dueDate,
     this.reserveStock = false,
     this.receiptDelivery,
+    this.extraDiscountAmount = 0,
   });
 
   final List<SaleCheckoutLineDraft> lines;
@@ -75,6 +77,12 @@ class SaleCheckoutDraft {
   /// falls back to whether any agent is reading the queue.
   final ReceiptDelivery? receiptDelivery;
 
+  /// The haggle: one discount the cashier takes off this invoice, on top of any
+  /// rule or coupon. Bounded by the shop's per-invoice ceiling
+  /// (`ShopSettings.maxInvoiceDiscountAmount`) and by the cart itself — the
+  /// backend clamps to both and stores what it actually gave.
+  final double extraDiscountAmount;
+
   factory SaleCheckoutDraft.fromCart({
     required List<CartLine> cart,
     required List<SaleCheckoutPaymentDraft> payments,
@@ -86,6 +94,7 @@ class SaleCheckoutDraft {
     DateTime? dueDate,
     bool reserveStock = false,
     ReceiptDelivery? receiptDelivery,
+    double extraDiscountAmount = 0,
   }) {
     return SaleCheckoutDraft(
       lines: cart
@@ -112,6 +121,7 @@ class SaleCheckoutDraft {
       dueDate: dueDate,
       reserveStock: reserveStock,
       receiptDelivery: receiptDelivery,
+      extraDiscountAmount: extraDiscountAmount,
     );
   }
 
@@ -121,6 +131,8 @@ class SaleCheckoutDraft {
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
       if (customerId != null) 'customer': customerId,
       if (normalizedCouponCode.isNotEmpty) 'coupon_code': normalizedCouponCode,
+      if (extraDiscountAmount > 0)
+        'extra_discount_amount': extraDiscountAmount.toStringAsFixed(2),
       'payments': payments.map((payment) => payment.toJson()).toList(),
       if (saleType != SaleType.standard) 'sale_type': saleType.apiValue,
       if (saleType == SaleType.quotation && validUntil != null)
@@ -153,16 +165,22 @@ class SaleDiscountPreviewDraft {
     required this.lines,
     this.customerId,
     this.couponCode = '',
+    this.extraDiscountAmount = 0,
   });
 
   final List<SaleCheckoutLineDraft> lines;
   final int? customerId;
   final String couponCode;
 
+  /// Previewed on the same terms it is charged on: the total the cashier reads
+  /// is the total the drawer will ask for.
+  final double extraDiscountAmount;
+
   factory SaleDiscountPreviewDraft.fromCart({
     required List<CartLine> cart,
     int? customerId,
     String couponCode = '',
+    double extraDiscountAmount = 0,
   }) {
     return SaleDiscountPreviewDraft(
       lines: cart
@@ -181,6 +199,7 @@ class SaleDiscountPreviewDraft {
           .toList(growable: false),
       customerId: customerId,
       couponCode: couponCode,
+      extraDiscountAmount: extraDiscountAmount,
     );
   }
 
@@ -190,6 +209,8 @@ class SaleDiscountPreviewDraft {
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
       if (customerId != null) 'customer': customerId,
       if (normalizedCouponCode.isNotEmpty) 'coupon_code': normalizedCouponCode,
+      if (extraDiscountAmount > 0)
+        'extra_discount_amount': extraDiscountAmount.toStringAsFixed(2),
     };
   }
 }
@@ -204,11 +225,25 @@ class SaleDiscountPreview {
     this.lossLines = const [],
     this.rulesActive = true,
     this.rulesVersion = '',
+    this.extraDiscountAmount = 0,
+    this.maxExtraDiscountAmount = 0,
   });
 
   final double subtotal;
+
+  /// EVERY discount on this cart — the engine's rules and coupons plus
+  /// [extraDiscountAmount]. `total` is `subtotal - discountTotal`, so a totals
+  /// panel that lists the rules separately must list the manual discount
+  /// separately too, or the lines it shows will not add up to the total.
   final double discountTotal;
   final double total;
+
+  /// The manual share of [discountTotal] the server actually applied, and the
+  /// most this cart could carry. They differ when the cart shrank under a
+  /// discount already typed — the till reads them back and shows the discount
+  /// held down to what the sale is worth, instead of letting checkout refuse it.
+  final double extraDiscountAmount;
+  final double maxExtraDiscountAmount;
   final List<AppliedDiscountInfo> appliedDiscounts;
   final List<String> unappliedCouponCodes;
   final List<SaleLossLine> lossLines;
@@ -226,6 +261,8 @@ class SaleDiscountPreview {
       subtotal: _moneyFromJson(json['subtotal']),
       discountTotal: _moneyFromJson(json['discount_total']),
       total: _moneyFromJson(json['total']),
+      extraDiscountAmount: _moneyFromJson(json['extra_discount_amount']),
+      maxExtraDiscountAmount: _moneyFromJson(json['max_extra_discount_amount']),
       rulesActive: json['rules_active'] is bool
           ? json['rules_active'] as bool
           : true,
@@ -328,11 +365,17 @@ class SaleCheckoutPaymentDraft {
     required this.method,
     required this.amount,
     this.cardReceiptUrl = '',
+    this.moneyAccountId,
   });
 
   final PaymentMethod method;
   final double amount;
   final String cardReceiptUrl;
+
+  /// The bank account this tender lands in. Omitted — not sent as null — when
+  /// the cashier named none, so the server routes it exactly as it did before
+  /// the field existed.
+  final int? moneyAccountId;
 
   Map<String, Object?> toJson() {
     final normalizedReceiptUrl = cardReceiptUrl.trim();
@@ -341,6 +384,7 @@ class SaleCheckoutPaymentDraft {
       'amount': amount.toStringAsFixed(2),
       if (normalizedReceiptUrl.isNotEmpty)
         'card_receipt_url': normalizedReceiptUrl,
+      if (moneyAccountId != null) 'money_account': moneyAccountId,
     };
   }
 }
@@ -453,6 +497,7 @@ class SaleOrder {
     this.lineCount = 0,
     this.hasReturnableItems = false,
     this.discountTotal = 0,
+    this.extraDiscountAmount = 0,
     this.appliedDiscounts = const [],
     this.saleType = SaleType.standard,
     this.amountPaid = 0,
@@ -521,7 +566,16 @@ class SaleOrder {
   /// not have to load them.
   final CardReceiptStatus cardReceiptStatus;
   final double subtotal;
+
+  /// EVERY discount on this invoice: the engine's rules and coupons plus
+  /// [extraDiscountAmount], which is already folded in. `total` is
+  /// `subtotal - discountTotal`.
   final double discountTotal;
+
+  /// The share of [discountTotal] a cashier took off by hand at the till. Zero
+  /// on an ordinary sale. Recorded on the invoice so the decision has a number
+  /// and a name against it, though the money itself lives on the lines.
+  final double extraDiscountAmount;
   final double total;
   final SaleType saleType;
   final double amountPaid;
@@ -608,6 +662,7 @@ class SaleOrder {
           .toList(growable: false),
       subtotal: _moneyFromJson(json['subtotal']),
       discountTotal: _moneyFromJson(json['discount_total']),
+      extraDiscountAmount: _moneyFromJson(json['extra_discount_amount']),
       total: _moneyFromJson(json['total']),
       saleType: SaleType.fromApiValue(json['sale_type']),
       amountPaid: _moneyFromJson(json['amount_paid']),
@@ -654,6 +709,7 @@ class SalePayment {
     required this.commissionAmount,
     this.externalReference = '',
     this.cardReceipt,
+    this.bankAccount,
     this.createdAt,
   });
 
@@ -664,6 +720,10 @@ class SalePayment {
   final double commissionAmount;
   final String externalReference;
   final SalePaymentCardReceipt? cardReceipt;
+
+  /// Which of the shop's bank accounts took this tender. Null on cash, and on
+  /// every card or transfer a shop with one account took — the ordinary case.
+  final BankAccountRef? bankAccount;
   final DateTime? createdAt;
 
   factory SalePayment.fromJson(Map<String, Object?> json) {
@@ -679,6 +739,7 @@ class SalePayment {
               json['card_receipt_data'] as Map<String, Object?>,
             )
           : null,
+      bankAccount: BankAccountRef.fromPaymentJson(json),
       createdAt: _dateTimeFromJson(json['created_at']),
     );
   }

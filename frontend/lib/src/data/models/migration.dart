@@ -10,6 +10,7 @@ class MigrationSystem {
     required this.supportedEntities,
     required this.versions,
     required this.implemented,
+    required this.supportsStockFilter,
   });
 
   final String systemKey;
@@ -18,6 +19,10 @@ class MigrationSystem {
   final List<String> versions;
   final bool implemented;
 
+  /// Whether this system's item card carries an on-hand quantity — and so
+  /// whether "only what I still stock" can be offered for a file it wrote.
+  final bool supportsStockFilter;
+
   factory MigrationSystem.fromJson(Map<String, Object?> json) {
     return MigrationSystem(
       systemKey: _str(json['system_key']),
@@ -25,6 +30,7 @@ class MigrationSystem {
       supportedEntities: _stringList(json['supported_entities']),
       versions: _stringList(json['versions']),
       implemented: json['implemented'] as bool? ?? false,
+      supportsStockFilter: json['supports_stock_filter'] as bool? ?? false,
     );
   }
 }
@@ -34,17 +40,68 @@ class MigrationEntitySpec {
     required this.entityType,
     required this.label,
     required this.implemented,
+    required this.dependencies,
   });
 
   final String entityType;
+
+  /// The server's own English wording. Only a fallback: the screen renders
+  /// Arabic keyed on [entityType], so a build that knows the entity never shows
+  /// this. It is what an entity added after this build shipped falls back to.
   final String label;
   final bool implemented;
+
+  /// What this entity needs in the same run. Carried so the screen can say
+  /// "sales bring products and customers with them" *before* the run, instead
+  /// of the owner discovering it in the summary afterwards.
+  final List<String> dependencies;
 
   factory MigrationEntitySpec.fromJson(Map<String, Object?> json) {
     return MigrationEntitySpec(
       entityType: _str(json['entity_type']),
       label: _str(json['label']),
       implemented: json['implemented'] as bool? ?? false,
+      dependencies: _stringList(json['dependencies']),
+    );
+  }
+}
+
+/// A named answer to "how much of this shop are we taking?".
+///
+/// A scope pins the entities *and* the options that make them mean what they
+/// say — leaving the invoice history behind changes which balance figure each
+/// customer starts on, and that is not something to leave to a checkbox.
+class MigrationScope {
+  const MigrationScope({
+    required this.key,
+    required this.label,
+    required this.description,
+    required this.entities,
+    required this.options,
+    required this.isPreset,
+  });
+
+  final String key;
+
+  /// The server's Arabic fallback; the screen prefers its own copy keyed on
+  /// [key] so the wording can be revised without a backend release.
+  final String label;
+  final String description;
+
+  /// Null for the free selection, which has no fixed entity set.
+  final List<String>? entities;
+  final Map<String, Object?> options;
+  final bool isPreset;
+
+  factory MigrationScope.fromJson(Map<String, Object?> json) {
+    final raw = json['entities'];
+    return MigrationScope(
+      key: _str(json['key']),
+      label: _str(json['label']),
+      description: _str(json['description']),
+      entities: raw == null ? null : _stringList(raw),
+      options: _map(json['options']),
+      isPreset: json['is_preset'] as bool? ?? true,
     );
   }
 }
@@ -64,7 +121,14 @@ class MigrationUploadConfig {
   static const fallback = MigrationUploadConfig(
     chunkSize: 16 * 1024 * 1024,
     maxBytes: 8 * 1024 * 1024 * 1024,
-    acceptedExtensions: ['.mdb', '.accdb', '.sqlite', '.sqlite3', '.db', '.sql'],
+    acceptedExtensions: [
+      '.mdb',
+      '.accdb',
+      '.sqlite',
+      '.sqlite3',
+      '.db',
+      '.sql',
+    ],
   );
 
   /// Extensions without the leading dot, which is what `file_picker` wants.
@@ -89,21 +153,40 @@ class MigrationCatalog {
   const MigrationCatalog({
     required this.systems,
     required this.entities,
+    required this.scopes,
     required this.upload,
   });
 
   final List<MigrationSystem> systems;
   final List<MigrationEntitySpec> entities;
+  final List<MigrationScope> scopes;
   final MigrationUploadConfig upload;
+
+  /// Everything [entityType] needs in the same run, transitively.
+  Set<String> dependenciesOf(Iterable<String> entityTypes) {
+    final byType = {for (final spec in entities) spec.entityType: spec};
+    final closed = <String>{};
+    final pending = [...entityTypes];
+    while (pending.isNotEmpty) {
+      final entity = pending.removeLast();
+      if (!closed.add(entity)) continue;
+      pending.addAll(byType[entity]?.dependencies ?? const []);
+    }
+    return closed;
+  }
 
   factory MigrationCatalog.fromJson(Map<String, Object?> json) {
     return MigrationCatalog(
       systems: [
-        for (final item in _list(json['systems'])) MigrationSystem.fromJson(item),
+        for (final item in _list(json['systems']))
+          MigrationSystem.fromJson(item),
       ],
       entities: [
         for (final item in _list(json['entities']))
           MigrationEntitySpec.fromJson(item),
+      ],
+      scopes: [
+        for (final item in _list(json['scopes'])) MigrationScope.fromJson(item),
       ],
       upload: MigrationUploadConfig.fromJson(_map(json['upload'])),
     );
@@ -268,6 +351,7 @@ class MigrationSource {
     required this.detection,
     required this.analysis,
     required this.supportedEntities,
+    required this.supportsStockFilter,
     required this.lastRunAt,
     required this.purgedAt,
   });
@@ -290,6 +374,10 @@ class MigrationSource {
   final MigrationDetection detection;
   final MigrationAnalysis analysis;
   final List<String> supportedEntities;
+
+  /// Whether the detected system records a quantity per item — and so whether
+  /// "only the products I still stock" can be offered for this file.
+  final bool supportsStockFilter;
   final DateTime? lastRunAt;
   final DateTime? purgedAt;
 
@@ -339,6 +427,7 @@ class MigrationSource {
       detection: MigrationDetection.fromJson(_map(json['detection'])),
       analysis: MigrationAnalysis.fromJson(_map(json['analysis'])),
       supportedEntities: _stringList(json['supported_entities']),
+      supportsStockFilter: json['supports_stock_filter'] as bool? ?? false,
       lastRunAt: _dateOrNull(json['last_run_at']),
       purgedAt: _dateOrNull(json['purged_at']),
     );
@@ -357,7 +446,8 @@ class MigrationUploadTicket {
     return MigrationUploadTicket(
       source: MigrationSource.fromJson(_map(json['source'])),
       chunkSize:
-          _intOrNull(json['chunk_size']) ?? MigrationUploadConfig.fallback.chunkSize,
+          _intOrNull(json['chunk_size']) ??
+          MigrationUploadConfig.fallback.chunkSize,
     );
   }
 }

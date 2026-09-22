@@ -3,10 +3,13 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../core/parsing.dart';
 import '../../data/models/purchase_submission.dart' show SupplierPaymentMethod;
+import '../../data/models/money_position.dart';
 import '../../data/models/sale_order.dart' show PaymentMethod;
 import '../../features/pos/views/payment/card_receipt_validation_dialog.dart';
 import '../formatters.dart';
 import '../payment_labels.dart';
+import '../../features/treasury/view_models/bank_routing.dart';
+import 'bank_account_picker.dart';
 import '../tutor/anchors.dart';
 import '../tutor/tutor_target.dart';
 
@@ -19,6 +22,7 @@ class RecordPaymentMethodOption {
     required this.label,
     required this.icon,
     this.allowsCardReceipt = false,
+    this.usesBankAccount = false,
   });
 
   final String apiValue;
@@ -30,6 +34,11 @@ class RecordPaymentMethodOption {
   /// for customer card collections (money IN); left false for supplier card
   /// pay-outs (money OUT — there's no shop-terminal receipt to scan).
   final bool allowsCardReceipt;
+
+  /// Whether this method moves money through a bank account the shop can name.
+  /// Cash never does (it is the drawer), and neither does supplier credit,
+  /// which is a promise rather than a payment.
+  final bool usesBankAccount;
 }
 
 /// The cashier's intent from [RecordPaymentDialog]. Printing/idempotency are the
@@ -42,6 +51,7 @@ class RecordPaymentResult {
     this.notes = '',
     this.cardReceiptUrl = '',
     this.printProof = false,
+    this.moneyAccountId,
   });
 
   final String methodApiValue;
@@ -50,6 +60,10 @@ class RecordPaymentResult {
   final String notes;
   final String cardReceiptUrl;
   final bool printProof;
+
+  /// Which of the shop's bank accounts the money moved through. Null on cash,
+  /// and whenever the shop has not configured accounts worth choosing between.
+  final int? moneyAccountId;
 }
 
 /// The single record-payment dialog shared by every flow (customer per-invoice,
@@ -67,6 +81,11 @@ Future<RecordPaymentResult?> showRecordPaymentDialog(
   String? proofToggleLabel,
   List<String> trustedCardTerminalIds = const [],
 }) {
+  // The shop's bank accounts, read from the ambient routing store. Absent in
+  // previews and tests, and empty until an owner configures more than the one
+  // account every install is seeded with — in both cases this dialog is
+  // exactly what it was.
+  final bankAccounts = BankRoutingScope.accountsOf(context);
   return showDialog<RecordPaymentResult>(
     context: context,
     builder: (_) => _RecordPaymentDialog(
@@ -78,6 +97,7 @@ Future<RecordPaymentResult?> showRecordPaymentDialog(
       showNotes: showNotes,
       proofToggleLabel: proofToggleLabel,
       trustedCardTerminalIds: trustedCardTerminalIds,
+      bankAccounts: bankAccounts,
     ),
   );
 }
@@ -92,6 +112,7 @@ class _RecordPaymentDialog extends StatefulWidget {
     required this.showNotes,
     required this.proofToggleLabel,
     required this.trustedCardTerminalIds,
+    required this.bankAccounts,
   });
 
   final String title;
@@ -102,6 +123,7 @@ class _RecordPaymentDialog extends StatefulWidget {
   final bool showNotes;
   final String? proofToggleLabel;
   final List<String> trustedCardTerminalIds;
+  final List<MoneyAccount> bankAccounts;
 
   @override
   State<_RecordPaymentDialog> createState() => _RecordPaymentDialogState();
@@ -116,6 +138,9 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
   final TextEditingController _notesController = TextEditingController();
   bool _showAmountError = false;
   bool _printProof = false;
+  late int? _moneyAccountId = BankAccountPicker.initialSelection(
+    widget.bankAccounts,
+  );
 
   RecordPaymentMethodOption get _selectedMethod =>
       widget.methods.firstWhere((option) => option.apiValue == _method);
@@ -174,6 +199,19 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
                   setState(() => _method = method);
                 },
               ),
+              // Only for the methods that reach a bank. A cash collection has
+              // no account to name, and offering one would invite an answer
+              // the server is right to refuse.
+              if (_selectedMethod.usesBankAccount &&
+                  BankAccountPicker.isUseful(widget.bankAccounts)) ...[
+                const SizedBox(height: 12),
+                BankAccountPicker(
+                  accounts: widget.bankAccounts,
+                  selectedId: _moneyAccountId,
+                  onChanged: (value) => setState(() => _moneyAccountId = value),
+                  dense: true,
+                ),
+              ],
               const SizedBox(height: 12),
               TutorTarget(
                 anchor: TutorAnchor.recordPaymentAmountField,
@@ -286,6 +324,9 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
         notes: _notesController.text.trim(),
         cardReceiptUrl: cardReceiptUrl,
         printProof: widget.proofToggleLabel != null && _printProof,
+        moneyAccountId: _selectedMethod.usesBankAccount
+            ? _moneyAccountId
+            : null,
       ),
     );
   }
@@ -308,6 +349,7 @@ List<RecordPaymentMethodOption> customerPaymentMethodOptions(
         label: paymentMethodLabel(l10n, method),
         icon: paymentMethodIcon(method),
         allowsCardReceipt: method == PaymentMethod.card,
+        usesBankAccount: method != PaymentMethod.cash,
       ),
   ];
 }
@@ -329,6 +371,10 @@ List<RecordPaymentMethodOption> supplierPaymentMethodOptions(
         apiValue: method.apiValue,
         label: supplierPaymentMethodLabel(l10n, method),
         icon: supplierPaymentMethodIcon(method),
+        // Supplier credit is a promise, not money leaving a bank.
+        usesBankAccount:
+            method == SupplierPaymentMethod.transfer ||
+            method == SupplierPaymentMethod.card,
       ),
   ];
 }

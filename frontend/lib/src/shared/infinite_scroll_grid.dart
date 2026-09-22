@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'components/pointy_skeleton.dart';
 import 'components/pointy_progress.dart';
+import 'design/design.dart';
 
 class InfiniteScrollView<T> extends StatefulWidget {
   const InfiniteScrollView({
@@ -19,6 +21,8 @@ class InfiniteScrollView<T> extends StatefulWidget {
     this.loadMoreExtent = 480,
     this.skeletonItemBuilder,
     this.skeletonItemCount = 8,
+    this.loadMoreFailed = false,
+    this.loadMoreErrorMessage,
   });
 
   final List<T> items;
@@ -42,6 +46,21 @@ class InfiniteScrollView<T> extends StatefulWidget {
   /// a centered spinner.
   final WidgetBuilder? skeletonItemBuilder;
   final int skeletonItemCount;
+
+  /// The last page request failed. The rows already fetched stay on screen and
+  /// a retry footer is shown at the end of the list; the automatic
+  /// scroll-to-the-bottom trigger stands down until the reader asks again, so a
+  /// server that is answering errors is not hammered once per scroll frame.
+  ///
+  /// This is deliberately separate from [hasMore]: a failed page says nothing
+  /// about whether more rows exist. Answering a failure by clearing [hasMore]
+  /// ends pagination for the life of the view model — one network blip and the
+  /// list is frozen at its first page with no way back.
+  final bool loadMoreFailed;
+
+  /// Shown above the retry button when [loadMoreFailed]. Without one the footer
+  /// is the button alone.
+  final String? loadMoreErrorMessage;
 
   @override
   State<InfiniteScrollView<T>> createState() => _InfiniteScrollViewState<T>();
@@ -78,6 +97,7 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
         _loadInFlight ||
         widget.isLoadingInitial ||
         widget.isLoadingMore ||
+        widget.loadMoreFailed ||
         !widget.hasMore) {
       return;
     }
@@ -155,7 +175,41 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
                 padding: EdgeInsets.all(16),
                 child: Center(child: PointySpinner()),
               ),
+            )
+          else if (widget.loadMoreFailed)
+            SliverToBoxAdapter(child: _loadMoreErrorFooter(context)),
+        ],
+      ),
+    );
+  }
+
+  /// The end of a list that stopped early. The reader is already looking at the
+  /// bottom of the rows when this appears, which is the one place a retry is
+  /// worth offering.
+  Widget _loadMoreErrorFooter(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final message = widget.loadMoreErrorMessage;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (message != null) ...[
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.pointyColors.danger),
             ),
+            const SizedBox(height: 8),
+          ],
+          FilledButton.tonalIcon(
+            // Straight to onLoadMore: the automatic trigger is standing down
+            // (see loadMoreFailed), and a tap is the reader asking for it.
+            onPressed: () => widget.onLoadMore(),
+            icon: const Icon(Icons.refresh),
+            label: Text(l10n.retryButton),
+          ),
         ],
       ),
     );
@@ -188,6 +242,8 @@ class InfiniteScrollGrid<T> extends StatefulWidget {
     this.loadMoreExtent = 480,
     this.skeletonItemBuilder,
     this.skeletonItemCount = 8,
+    this.loadMoreFailed = false,
+    this.loadMoreErrorMessage,
   });
 
   final List<T> items;
@@ -202,6 +258,12 @@ class InfiniteScrollGrid<T> extends StatefulWidget {
   final double loadMoreExtent;
   final WidgetBuilder? skeletonItemBuilder;
   final int skeletonItemCount;
+
+  /// See [InfiniteScrollView.loadMoreFailed].
+  final bool loadMoreFailed;
+
+  /// See [InfiniteScrollView.loadMoreErrorMessage].
+  final String? loadMoreErrorMessage;
 
   @override
   State<InfiniteScrollGrid<T>> createState() => _InfiniteScrollGridState<T>();
@@ -222,6 +284,8 @@ class _InfiniteScrollGridState<T> extends State<InfiniteScrollGrid<T>> {
       loadMoreExtent: widget.loadMoreExtent,
       skeletonItemBuilder: widget.skeletonItemBuilder,
       skeletonItemCount: widget.skeletonItemCount,
+      loadMoreFailed: widget.loadMoreFailed,
+      loadMoreErrorMessage: widget.loadMoreErrorMessage,
       sliverBuilder: (context, delegate) {
         return SliverGrid(
           gridDelegate: widget.gridDelegate,
@@ -248,6 +312,8 @@ class InfiniteScrollList<T> extends StatelessWidget {
     this.loadMoreExtent = 480,
     this.skeletonItemBuilder,
     this.skeletonItemCount = 8,
+    this.loadMoreFailed = false,
+    this.loadMoreErrorMessage,
   });
 
   final List<T> items;
@@ -264,6 +330,12 @@ class InfiniteScrollList<T> extends StatelessWidget {
   final WidgetBuilder? skeletonItemBuilder;
   final int skeletonItemCount;
 
+  /// See [InfiniteScrollView.loadMoreFailed].
+  final bool loadMoreFailed;
+
+  /// See [InfiniteScrollView.loadMoreErrorMessage].
+  final String? loadMoreErrorMessage;
+
   @override
   Widget build(BuildContext context) {
     return InfiniteScrollView<T>(
@@ -279,6 +351,8 @@ class InfiniteScrollList<T> extends StatelessWidget {
       loadMoreExtent: loadMoreExtent,
       skeletonItemBuilder: skeletonItemBuilder,
       skeletonItemCount: skeletonItemCount,
+      loadMoreFailed: loadMoreFailed,
+      loadMoreErrorMessage: loadMoreErrorMessage,
       sliverBuilder: (context, delegate) {
         if (separatorBuilder == null) {
           return SliverList(delegate: delegate);

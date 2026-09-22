@@ -663,6 +663,7 @@ Future<void> _showSupplierPaymentDialog(
     amount: result.amount,
     reference: result.reference,
     notes: result.notes,
+    moneyAccountId: result.moneyAccountId,
     printProof: result.printProof,
   );
   if (!context.mounted || !didRecord) {

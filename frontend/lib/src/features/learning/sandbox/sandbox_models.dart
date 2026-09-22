@@ -120,7 +120,15 @@ class SandboxOrderLine {
   /// How much of this line has come back. Lessons about returns assert on it.
   double returnedQuantity = 0;
 
-  double get total => quantity * unitPrice;
+  /// This line's share of whatever came off the invoice. The practice shop puts
+  /// a discount on the lines for the same reason the real one does: a returned
+  /// line is credited what it sold for, and a trainee who refunds a haggled
+  /// sale should get back the money the customer actually paid.
+  double discountTotal = 0;
+
+  double get subtotal => quantity * unitPrice;
+
+  double get total => subtotal - discountTotal;
 }
 
 class SandboxOrder {
@@ -151,6 +159,19 @@ class SandboxOrder {
   final String cashierName;
   final int? customerId;
   final String customerName;
+
+  /// The discount the cashier typed for this sale. Recorded for the receipt and
+  /// the invoice screen; the money itself lives on the lines.
+  double extraDiscountAmount = 0;
+
+  /// What the goods are worth before anything comes off.
+  double get subtotal =>
+      lines.fold<double>(0, (sum, line) => sum + line.subtotal);
+
+  /// Everything that came off, summed from the lines — exactly how the real
+  /// ``Order.recalculate`` reaches the same figure.
+  double get discountTotal =>
+      lines.fold<double>(0, (sum, line) => sum + line.discountTotal);
 
   double get total => lines.fold<double>(0, (sum, line) => sum + line.total);
 

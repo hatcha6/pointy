@@ -12,13 +12,17 @@ import '../../../core/result.dart';
 import '../../../data/models/expense.dart';
 import '../../../data/models/expense_category.dart';
 import '../../../data/models/expense_ledger_entry.dart';
+import '../../../data/models/money_position.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/payments/bank_account_picker.dart';
+import '../../../shared/payments/bank_account_row.dart';
 import '../../../shared/query_controls/query_empty_state.dart';
+import '../../treasury/view_models/bank_routing.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/expense_categories_view_model.dart';
@@ -496,7 +500,24 @@ class _LedgerEntryTile extends StatelessWidget {
             ? expenseSourceLabel(l10n, entry.source)
             : entry.description,
       ),
-      subtitle: Text(subtitleParts.join(' · ')),
+      subtitle: entry.bankAccount == null
+          ? Text(subtitleParts.join(' · '))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(subtitleParts.join(' · ')),
+                const SizedBox(height: 2),
+                // Which bank it left, with that bank's own mark. Only ever
+                // drawn when the row names one, so a shop with a single
+                // account sees the list it always saw.
+                BankAccountRow(
+                  account: entry.bankAccount!,
+                  compact: true,
+                  markSize: 16,
+                ),
+              ],
+            ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -631,6 +652,36 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
   late DateTime _spentAt = widget.expense?.spentAt ?? DateTime.now();
   bool _payFromRegister = false;
 
+  /// The shop's bank accounts, read once from the ambient routing store. Empty
+  /// in previews and tests, and for a shop that has not identified an account
+  /// — in both cases the form is exactly what it was.
+  List<MoneyAccount> _bankAccounts = const [];
+
+  /// Which account the money left. Seeded from the expense being edited, or
+  /// from the shop's default the first time a bank method is chosen.
+  late int? _moneyAccountId = widget.expense?.bankAccount?.id;
+  bool _didSeedAccount = false;
+
+  bool get _usesBankAccount => _method != ExpensePaymentMethod.cash;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bankAccounts = BankRoutingScope.accountsOf(context);
+    // Seeded once the accounts actually arrive — this runs again when the
+    // routing store finishes loading, and marking it done on the first empty
+    // pass would leave the picker showing no selection at all.
+    //
+    // Never over an answer that came back from the server: an expense being
+    // edited already knows which bank it left.
+    if (!_didSeedAccount &&
+        _moneyAccountId == null &&
+        _bankAccounts.isNotEmpty) {
+      _didSeedAccount = true;
+      _moneyAccountId = BankAccountPicker.initialSelection(_bankAccounts);
+    }
+  }
+
   int? _initialCategoryId() {
     final existing = widget.expense?.categoryId;
     if (existing != null &&
@@ -736,6 +787,18 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
                   () => _method = value ?? ExpensePaymentMethod.cash,
                 ),
               ),
+              // Only for the methods that can reach a bank. Cash left the
+              // drawer, which the pay-out switch below already attributes.
+              if (_usesBankAccount &&
+                  BankAccountPicker.isUseful(_bankAccounts)) ...[
+                const SizedBox(height: 12),
+                BankAccountPicker(
+                  accounts: _bankAccounts,
+                  selectedId: _moneyAccountId,
+                  onChanged: (value) => setState(() => _moneyAccountId = value),
+                  dense: true,
+                ),
+              ],
               const SizedBox(height: 8),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -817,6 +880,7 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
             widget.expense == null &&
             _method == ExpensePaymentMethod.cash &&
             _payFromRegister,
+        moneyAccountId: _usesBankAccount ? _moneyAccountId : null,
       ),
     );
   }

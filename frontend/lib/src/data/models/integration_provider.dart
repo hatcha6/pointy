@@ -48,6 +48,47 @@ IntegrationAvailability integrationAvailabilityFromJson(Object? value) {
   };
 }
 
+/// How a provider's portal can be asked to find a subscriber.
+///
+/// Stable codes, matching ``apps.integrations.providers.lnet``. A phone
+/// number and a contract number are both digits, so nothing on the server
+/// can tell them apart: it either guesses and pays a round trip per wrong
+/// guess, or the person holding the number says which it is. The till asks.
+///
+/// The pick ORDERS the search, it does not fence it — a cashier who leaves
+/// the picker on the wrong entry waits a moment longer and still finds the
+/// customer.
+enum IntegrationSearchMode { phone, username, contract }
+
+String integrationSearchModeToJson(IntegrationSearchMode mode) {
+  return switch (mode) {
+    IntegrationSearchMode.phone => 'mobile',
+    IntegrationSearchMode.username => 'username',
+    IntegrationSearchMode.contract => 'contract_number',
+  };
+}
+
+/// Which searches this provider offers, best first — empty where there is
+/// only one way to look and therefore no choice worth putting on screen.
+///
+/// Lives here rather than arriving from the server because the picker is on
+/// screen BEFORE the first lookup, and because it is the same kind of
+/// per-provider knowledge `integrationSubscriberPrompt` already keeps client
+/// side. The codes are the contract; the Arabic is in
+/// `integration_presentation.dart`.
+List<IntegrationSearchMode> integrationSearchModes(IntegrationProviderKey key) {
+  return switch (key) {
+    IntegrationProviderKey.lnet => const [
+      IntegrationSearchMode.phone,
+      IntegrationSearchMode.username,
+      IntegrationSearchMode.contract,
+    ],
+    // HD Box knows a subscriber by the number printed on their card, and
+    // nothing else. A picker with one row is worse than no picker.
+    _ => const [],
+  };
+}
+
 /// Why a planned provider is not ready. Stable codes; the page phrases them.
 abstract final class IntegrationBlockedReason {
   static const portalUnreachable = 'portal_unreachable';

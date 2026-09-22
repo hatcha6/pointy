@@ -41,7 +41,7 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
-from .. import session_cache
+from .. import connection_pool, session_cache
 from ..telemetry import (
     STEP_FORM,
     STEP_LOGIN,
@@ -116,6 +116,17 @@ _LOGIN_FORM_RE = re.compile(r'name=["\']password["\']', re.I)
 _ERROR_PAGE_RE = re.compile(r"We made a mistake|<title>\s*ERROR\s*</title>", re.I)
 
 
+def _new_session(account):
+    """A session of this driver's own, on the portal's shared connection pool.
+
+    The session is per-call — it carries the account's cookies and
+    ``requests.Session`` is not thread-safe — but the sockets underneath it
+    are not, so a lookup a minute after the last one finds the connection
+    already open. See ``apps.integrations.connection_pool``.
+    """
+    return connection_pool.warm(requests.Session(), account.resolved_base_url())
+
+
 @register("hdbox")
 class HdBoxProvider(IntegrationProvider):
     def __init__(self, account):
@@ -149,24 +160,32 @@ class HdBoxProvider(IntegrationProvider):
     def _login(self, *, force: bool = False) -> tuple[requests.Session | None, str, str]:
         """Return ``(session, error_code, error_detail)``.
 
-        Tries ``session_cache`` first unless ``force`` — a cache hit costs no
-        network call at all, which is the entire point: three capability
-        calls for one card (lookup, offers, profile) used to mean three of
-        these round trips, and now mean at most one. ``force=True`` is the
+        Tries the session this instance is already holding, then
+        ``session_cache``, and only then the network. ``force=True`` is the
         one-shot retry in ``_authenticated_get``, after a cached session has
         already proven to be dead; it always logs in for real.
+
+        **The live session comes first, and that is not a micro-optimisation.**
+        Rebuilding a ``requests.Session`` from cached cookies throws away its
+        connection pool, so the next call opens a new socket and pays a fresh
+        TLS handshake to a portal on the other side of a Libyan uplink. One
+        card lookup calls this three times — lookup, offers, profile — so a
+        cache that answered without a *login* still cost three handshakes for
+        work that could travel on one connection.
         """
         if not force:
+            if self._session is not None:
+                return self._session, "", ""
             cached = session_cache.load("hdbox", self.account)
             if cached is not None:
-                session = requests.Session()
+                session = _new_session(self.account)
                 session.cookies.update(cached.get("cookies") or {})
                 self._session = session
                 self._session_from_cache = True
                 return session, "", ""
 
         self._session_from_cache = False
-        session = requests.Session()
+        session = _new_session(self.account)
         self._note(STEP_LOGIN)
         try:
             response = session.post(
@@ -236,7 +255,10 @@ class HdBoxProvider(IntegrationProvider):
             account_label=_parse_account_label(body) or self.account.username,
         )
 
-    def lookup(self, card_no: str) -> LookupResult:
+    def lookup(self, card_no: str, *, search_by: str = "") -> LookupResult:
+        # ``search_by`` is accepted and unused: this CAS knows a subscriber by
+        # one thing, the number printed on their card, so there is no choice
+        # for a till to offer and nothing here to steer.
         card_no = (card_no or "").strip()
         # The provider's own UI refuses a non-numeric card before it asks, and
         # the endpoint answers a bare 404 for one. Fail here with a code the

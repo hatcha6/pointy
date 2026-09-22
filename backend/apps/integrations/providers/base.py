@@ -15,6 +15,7 @@ Error codes are contract; the Arabic wording lives in the Flutter layer.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -379,8 +380,16 @@ class IntegrationProvider:
         """Authenticate and report the agency float. Must never raise."""
         raise NotImplementedError
 
-    def lookup(self, card_no: str) -> LookupResult:
-        """Find one subscriber card. Must never raise."""
+    def lookup(self, card_no: str, *, search_by: str = "") -> LookupResult:
+        """Find one subscriber card. Must never raise.
+
+        ``search_by`` is the till's own answer to "what kind of number is
+        this?", from the picker beside the search box. A driver whose portal
+        offers one way to search ignores it; one that offers several uses it
+        to decide where to look FIRST, never to decide where it is allowed to
+        look. A wrong pick must cost a slower search, never a customer who
+        cannot be found.
+        """
         return LookupResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
     def purchase_history(self, card_no: str, *, limit: int = 10, offset: int = 0):
@@ -461,6 +470,84 @@ def register(provider_key: str):
         return observe(cls)
 
     return _decorator
+
+
+def in_parallel(calls):
+    """Run independent provider calls at the same time; answer in order.
+
+    These integrations drive somebody else's website over a Libyan uplink,
+    where one round trip measured 0.6–2.6 seconds in the field. What that
+    makes expensive is not the work, it is the **queue**: a card lookup that
+    reads three different pages one after another spends three of those
+    waits end to end while a customer stands at the counter, and the second
+    page never needed the first one's answer.
+
+    So anything genuinely independent goes through here and costs the
+    slowest of the set rather than the sum.
+
+    One rule for a callable passed in, and it is load-bearing: it must drive
+    **its own driver instance**. ``requests.Session`` is not thread-safe, and
+    a driver replaces ``self._session`` outright when a dead session forces a
+    relogin mid-call, so two capability methods sharing one instance would
+    race over the socket they are both reading from. Build the driver inside
+    the callable (``provider_for(account)``); the session cache means the
+    extra instance costs no extra login.
+
+    Each worker is given the till's **identity** and nothing else.
+    ``apps.analytics.context`` keeps that identity — device, user, open
+    register session — in ``ContextVar``s, and a worker thread starts with an
+    empty context, so without this every telemetry row these calls write
+    would come out anonymous; an integration row nobody can join to a
+    register session is most of the reason the telemetry exists.
+
+    Carrying it **field by field, rather than by copying the whole context,
+    is the load-bearing part.** Django reaches its connections through
+    ``asgiref.local.Local``, which is a ``ContextVar`` too — so a copied
+    context hands the worker the *request's own* database connection. It
+    would then be used from two threads at once, and the
+    ``close_old_connections`` below would close the connection its caller is
+    still inside — under a ``TestCase`` that ends the test's atomic block and
+    every later test in the class dies in ``setUp``; in production it is a
+    connection pulled out from under a live request.
+
+    A fresh context means a worker that needs a connection gets **its own**,
+    which is safe to close, and is closed on the way out. But its own
+    connection is also its own transaction, so anything it writes commits on
+    its own — outside the request's, surviving a rollback. Nothing here
+    should touch the ORM at all; the one thing that can is the telemetry
+    every driver call records, which inserts on whatever thread fills the
+    buffer. So a worker runs under :func:`apps.analytics.buffer.held`, which
+    lets it queue rows and leaves the writing to a thread allowed to write.
+
+    Exceptions propagate to the caller, as they would have done in a loop.
+    """
+    calls = list(calls)
+    if len(calls) < 2:
+        return [call() for call in calls]
+    identity = _current_identity()
+    with ThreadPoolExecutor(
+        max_workers=len(calls), thread_name_prefix="integration"
+    ) as pool:
+        futures = [pool.submit(_isolated, call, identity) for call in calls]
+        return [future.result() for future in futures]
+
+
+def _current_identity() -> dict:
+    from apps.analytics import context
+
+    return context.current_identity()
+
+
+def _isolated(call, identity: dict):
+    from django.db import close_old_connections
+
+    from apps.analytics import buffer, context
+
+    try:
+        with context.request_identity(identity), buffer.held():
+            return call()
+    finally:
+        close_old_connections()
 
 
 def provider_for(account) -> IntegrationProvider:

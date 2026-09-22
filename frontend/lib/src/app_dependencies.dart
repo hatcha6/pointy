@@ -33,6 +33,7 @@ import 'data/repositories/operations_repository.dart';
 import 'data/repositories/modifier_group_repository.dart';
 import 'data/repositories/payments_repository.dart';
 import 'data/repositories/treasury_repository.dart';
+import 'features/treasury/view_models/bank_routing.dart';
 import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/scales_repository.dart';
 import 'data/repositories/surveillance_repository.dart';
@@ -172,6 +173,7 @@ class PointyAppDependencies {
     purchaseRepository = PurchaseRepository(service);
     paymentsRepository = PaymentsRepository(service);
     treasuryRepository = TreasuryRepository(service);
+    bankRouting = BankRouting(treasuryRepository);
     stockCountRepository = StockCountRepository(service);
     trackedStockRepository = TrackedStockRepository(service);
     trackedStockViewModel = TrackedStockViewModel(trackedStockRepository);
@@ -414,6 +416,10 @@ class PointyAppDependencies {
   late final PurchaseRepository purchaseRepository;
   late final PaymentsRepository paymentsRepository;
   late final TreasuryRepository treasuryRepository;
+
+  /// Where card and transfer money lands — read by the till, the
+  /// record-payment dialog and the settings screen through [BankRoutingScope].
+  late final BankRouting bankRouting;
   late final StockCountRepository stockCountRepository;
   late final TrackedStockRepository trackedStockRepository;
   late final TrackedStockViewModel trackedStockViewModel;
@@ -687,7 +693,7 @@ class PointyAppDependencies {
       analyticsEngine.setCurrentUser(null);
       serverStateWatcher.stop();
       _stopCompanionBridge();
-      _stopCameraWedge();
+      unawaited(syncCameraWedge());
       _disposeSessionViewModels();
     }
   }
@@ -696,7 +702,29 @@ class PointyAppDependencies {
   ///
   /// Called on sign-in and whenever the setting is changed, so a shop that
   /// turns it on does not have to restart the till to use it.
-  Future<void> syncCameraWedge() async {
+  ///
+  /// Serialized, because the settings screen can fire this twice in a second —
+  /// flip the switch off and straight back on, or change camera — and the two
+  /// runs would overlap on the one piece of hardware. Releasing a camera is
+  /// not instant (the capture loop has to finish whatever still it is waiting
+  /// on), and `camera_windows` refuses point blank to open a device it has not
+  /// been told to let go of:
+  ///
+  ///     "Camera with given device id already exists. Existing camera must be
+  ///      disposed before creating it again."
+  ///
+  /// which is a switch that turns the feature off and then will not turn it
+  /// back on.
+  Future<void> syncCameraWedge() {
+    return _cameraWedgeSync = _cameraWedgeSync
+        .then((_) => _applyCameraWedgeSetting())
+        // One failed sync must not wedge every sync after it.
+        .catchError((Object _) {});
+  }
+
+  Future<void> _cameraWedgeSync = Future<void>.value();
+
+  Future<void> _applyCameraWedgeSetting() async {
     if (CameraWedgeController.backend == CameraWedgeBackend.none) return;
     final result = await deviceSettingsRepository.loadCameraWedgeEnabled();
     final wanted = switch (result) {
@@ -711,19 +739,26 @@ class PointyAppDependencies {
       Error<String?>() => null,
     };
 
-    if (!wanted) {
-      _stopCameraWedge();
+    // The camera runs when the shop has asked for it AND somebody is signed
+    // in, and stops the moment either stops being true. Both conditions in one
+    // place on purpose: sign-out used to take a different route out of here,
+    // and a route that returns early is a camera left watching the counter
+    // with nobody at the till.
+    if (!wanted || authViewModel.status != AuthStatus.authenticated) {
+      await _stopCameraWedge();
       return;
     }
-    if (authViewModel.status != AuthStatus.authenticated) return;
     // Switching cameras means stopping the old one: two controllers holding
     // one device is a black frame on some platforms and a crash on others,
     // and a shop changing the setting expects the NEW camera to be the one
     // reading.
-    if (cameraWedgeListenable.value != null && deviceId == _cameraWedgeDeviceId) {
+    if (cameraWedgeListenable.value != null &&
+        deviceId == _cameraWedgeDeviceId) {
       return;
     }
-    _stopCameraWedge();
+    // Awaited, not fired off: the new controller must not ask for the camera
+    // until the old one has actually given it back.
+    await _stopCameraWedge();
     _cameraWedgeDeviceId = deviceId;
     final controller = CameraWedgeController();
     cameraWedgeListenable.value = controller;
@@ -734,10 +769,10 @@ class PointyAppDependencies {
   /// tell "already running on this one" from "running on the wrong one".
   String? _cameraWedgeDeviceId;
 
-  void _stopCameraWedge() {
+  Future<void> _stopCameraWedge() async {
     final controller = cameraWedgeListenable.value;
     cameraWedgeListenable.value = null;
-    unawaited(controller?.dispose());
+    await controller?.dispose();
   }
 
   Future<void> _startCompanionBridge() async {

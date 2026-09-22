@@ -52,6 +52,22 @@ class Payment(DocumentMixin, TimeStampedModel):
         blank=True,
         null=True,
     )
+    # Which of the shop's bank accounts this money landed in.
+    #
+    # NULL is the ordinary answer and means exactly what it meant before this
+    # column existed: "the shop has not said", so the money position routes it
+    # to the default account of its kind. A shop that never opens a second bank
+    # account never writes anything here and sees the figures it saw yesterday.
+    #
+    # Only a bank account is ever named. Cash goes in the drawer — there is one
+    # of those per till, and the drawer already attributes it (``register_session``).
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.PROTECT,
+        related_name="payments",
+        blank=True,
+        null=True,
+    )
     # Audit + cash-drawer attribution. ``register_session`` is the session that
     # COLLECTED this payment: it defaults to the order's session at checkout, but
     # a debt invoice settled in a later shift is attributed to the COLLECTING
@@ -90,7 +106,65 @@ class Payment(DocumentMixin, TimeStampedModel):
                 fields=["method", "-paid_at"],
                 name="payments_method_paid_idx",
             ),
+            # The money position now asks the same range question once per bank
+            # account ("what landed in THIS one"), so the account joins the
+            # method in front of the date.
+            models.Index(
+                fields=["money_account", "method", "-paid_at"],
+                name="payments_account_paid_idx",
+            ),
         ]
 
     def __str__(self) -> str:
         return f"{self.method} {self.amount} for {self.order_id}"
+
+
+class CardTerminal(TimeStampedModel):
+    """One card machine standing on the counter, and the bank behind it.
+
+    A shop with two terminals from two banks has always had a problem this
+    system could not express: both produce "card" payments, and both were
+    routed to whichever bank account happened to be the default. The owner
+    reconciling a statement then found one bank's total containing the other
+    bank's takings.
+
+    The terminal id is what closes it, because it is already the one field on a
+    receipt that identifies *which machine took this payment* — the same field
+    the trust check reads. So the shop names its terminals once, says which
+    account each one feeds, and every scanned slip routes itself.
+
+    This model is also the single statement of which terminals the shop owns.
+    ``ShopSettings.trusted_card_terminal_ids`` is kept as a MIRROR of the
+    active rows (``apps.payments.terminals`` is the only writer) so that older
+    clients, which know only that list, keep working — both reading it and
+    PATCHing it.
+    """
+
+    # Stored normalised (upper case, no spaces) because that is the only form
+    # two spellings of the same machine can be compared in. See
+    # ``card_receipts.ocr.normalize_terminal_id``.
+    terminal_id = models.CharField(max_length=64, unique=True)
+    # What the cashier calls it — "الصندوق الأمامي", "ماكينة الجمهورية". Blank
+    # is fine; the id is shown then.
+    label = models.CharField(max_length=120, blank=True)
+    # The bank account this machine settles into. NULL means "not said yet",
+    # which routes exactly as it did before: to the default bank account.
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.SET_NULL,
+        related_name="card_terminals",
+        blank=True,
+        null=True,
+    )
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "terminal_id"]
+
+    def __str__(self) -> str:
+        return self.label or self.terminal_id
+
+    @property
+    def display_name(self) -> str:
+        return self.label or self.terminal_id

@@ -65,6 +65,7 @@ import 'features/operations/views/job_history_screen.dart';
 import 'features/operations/views/jobs_screen.dart';
 import 'features/payments/view_models/payments_hub_view_model.dart';
 import 'features/payments/views/payments_hub_screen.dart';
+import 'features/treasury/view_models/bank_routing.dart';
 import 'features/treasury/view_models/money_position_view_model.dart';
 import 'features/treasury/views/money_position_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
@@ -90,6 +91,7 @@ import 'features/inventory/views/consignment_payables_screen.dart';
 import 'features/inventory/views/stock_batches_screen.dart';
 import 'features/inventory/views/stock_units_screen.dart';
 import 'features/settings/view_models/warehouses_view_model.dart';
+import 'features/settings/view_models/factory_reset_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/view_models/integrations_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
@@ -155,10 +157,44 @@ class AuthenticatedHome extends StatelessWidget {
       child: NotificationCenterHost(
         viewModel: dependencies.notificationCenterViewModel,
         onOpenAlert: routes.openBusinessAlert,
-        child: home,
+        child: _BankRoutingLoader(
+          routing: dependencies.bankRouting,
+          child: home,
+        ),
       ),
     );
   }
+}
+
+/// Fetches the shop's bank accounts and terminal mapping once, after sign-in.
+///
+/// It has to happen here rather than in the payment sheet: the sheet needs the
+/// answer the instant it opens, and a request fired as the cashier reaches for
+/// "confirm" would either block the busiest screen in the shop or arrive after
+/// the decision it was meant to inform. A widget rather than a call in
+/// ``build`` because a build must not have side effects — the screen tracker
+/// taught that lesson once already.
+class _BankRoutingLoader extends StatefulWidget {
+  const _BankRoutingLoader({required this.routing, required this.child});
+
+  final BankRouting routing;
+  final Widget child;
+
+  @override
+  State<_BankRoutingLoader> createState() => _BankRoutingLoaderState();
+}
+
+class _BankRoutingLoaderState extends State<_BankRoutingLoader> {
+  @override
+  void initState() {
+    super.initState();
+    // Idempotent and cached; a failure is silence, and the app behaves as it
+    // did before bank accounts existed.
+    unawaited(widget.routing.load());
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Builds every top-level screen and implements [AppNavigation], so the
@@ -927,6 +963,13 @@ class _AuthenticatedRoutes implements AppNavigation {
           dependencies.shopSettingsRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
+        factoryResetViewModel: FactoryResetViewModel(
+          dependencies.shopSettingsRepository,
+        ),
+        // The card-terminal registry lives with the money accounts it points
+        // at, so the settings screen borrows the treasury repository rather
+        // than growing a client of its own.
+        treasuryRepository: dependencies.treasuryRepository,
         assetTypesViewModel: AssetTypesViewModel(
           dependencies.operationsRepository,
         ),

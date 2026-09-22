@@ -100,12 +100,13 @@ class MigrationTestBase(TestCase):
             )
         return source
 
-    def run_sync(self, source, mode, entities=None, options=None):
+    def run_sync(self, source, mode, entities=None, options=None, scope=None):
         run = services.queue_migration_run(
             source,
             mode=mode,
             entities=entities,
             options=options,
+            scope=scope,
             user=None,
             dispatch=False,
         )

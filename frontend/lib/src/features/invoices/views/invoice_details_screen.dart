@@ -405,6 +405,7 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
       method: PaymentMethod.fromApiValue(result.methodApiValue),
       amount: result.amount,
       cardReceiptUrl: result.cardReceiptUrl,
+      moneyAccountId: result.moneyAccountId,
       printProof: result.printProof,
     );
   }

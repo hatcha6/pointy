@@ -23,6 +23,7 @@ import '../view_models/variant_generation.dart';
 import 'pricing_currency_field.dart';
 import 'product_form_fields.dart';
 import 'modifier_group_selector.dart';
+import 'opening_stock_fields.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
 import 'product_units_editor.dart';
@@ -38,6 +39,7 @@ class ProductForm extends StatefulWidget {
     required this.viewModel,
     this.onCreated,
     this.initialBarcode,
+    this.showOpeningStock = false,
   });
 
   final CatalogViewModel viewModel;
@@ -51,6 +53,15 @@ class ProductForm extends StatefulWidget {
   /// opened for a scanned code that matched no existing product, so the created
   /// product resolves on the next scan.
   final String? initialBarcode;
+
+  /// Whether to offer an opening quantity and cost for stock the shop already
+  /// has. Off by default, and off in particular when the form is opened from
+  /// inside a purchase order: that order is about to bring the stock in at a
+  /// cost of its own, and entering it twice would double the shelf.
+  ///
+  /// The caller passes the caller's own permission — the server checks it
+  /// again, since a hidden field is a courtesy and not a control.
+  final bool showOpeningStock;
 
   @override
   State<ProductForm> createState() => _ProductFormState();
@@ -67,10 +78,16 @@ class _ProductFormState extends State<ProductForm> {
   final _skuController = TextEditingController();
   final _barcodeController = TextEditingController();
   final _priceController = TextEditingController();
+  final _openingQuantityController = TextEditingController();
+  final _openingCostController = TextEditingController();
   final Map<String, TextEditingController> _generatedNameControllers = {};
   final Map<String, TextEditingController> _generatedSkuControllers = {};
   final Map<String, TextEditingController> _generatedBarcodeControllers = {};
   final Map<String, TextEditingController> _generatedPriceControllers = {};
+  final Map<String, TextEditingController>
+  _generatedOpeningQuantityControllers = {};
+  final Map<String, TextEditingController> _generatedOpeningCostControllers =
+      {};
   final Map<String, bool> _generatedActiveBySignature = {};
 
   /// Blank = the shop's own currency, which is every product unless said
@@ -122,6 +139,13 @@ class _ProductFormState extends State<ProductForm> {
   }
 
   bool get _usesGeneratedVariants => _selectedVariantOptions.isNotEmpty;
+
+  /// Opening stock is offered only for products that actually keep stock. A
+  /// service has no shelf and a made-to-order dish is assembled when it is
+  /// ordered, so the server refuses the pair for both — the form agrees rather
+  /// than letting somebody type a number that will be rejected.
+  bool get _showsOpeningStock =>
+      widget.showOpeningStock && !_isService && !_isPrepared;
 
   List<VariantCombination> get _generatedCombinations {
     return generateVariantCombinations(
@@ -210,6 +234,8 @@ class _ProductFormState extends State<ProductForm> {
     _priceController.removeListener(_syncGeneratedPricesFromBase);
     _priceController.removeListener(_refreshPricePreview);
     _priceController.dispose();
+    _openingQuantityController.dispose();
+    _openingCostController.dispose();
     for (final controller in _generatedNameControllers.values) {
       controller.dispose();
     }
@@ -220,6 +246,12 @@ class _ProductFormState extends State<ProductForm> {
       controller.dispose();
     }
     for (final controller in _generatedPriceControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _generatedOpeningQuantityControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _generatedOpeningCostControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -467,6 +499,14 @@ class _ProductFormState extends State<ProductForm> {
                                                 _generationErrorText(context),
                                             conflictsBySignature:
                                                 _generatedConflicts,
+                                            openingQuantityControllers:
+                                                _showsOpeningStock
+                                                ? _generatedOpeningQuantityControllers
+                                                : null,
+                                            openingCostControllers:
+                                                _showsOpeningStock
+                                                ? _generatedOpeningCostControllers
+                                                : null,
                                           )
                                         else ...[
                                           PricingCurrencyField(
@@ -531,6 +571,25 @@ class _ProductFormState extends State<ProductForm> {
                                         ],
                                       ],
                                     ),
+                                    if (_showsOpeningStock &&
+                                        !_usesGeneratedVariants) ...[
+                                      const SizedBox(height: 20),
+                                      ProductFormSection(
+                                        icon: Icons.play_circle_outline,
+                                        title: l10n.openingStockSectionTitle,
+                                        children: [
+                                          OpeningStockFields(
+                                            key: const ValueKey(
+                                              'product_opening_stock',
+                                            ),
+                                            quantityController:
+                                                _openingQuantityController,
+                                            costController:
+                                                _openingCostController,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -687,6 +746,19 @@ class _ProductFormState extends State<ProductForm> {
                     _generatedActiveBySignature[combination.signature] ?? true,
                 isDefault: combination.signature == _defaultGeneratedSignature,
                 optionValueIds: combination.valueIds,
+                openingQuantity: _showsOpeningStock
+                    ? _parseNumber(
+                        _generatedOpeningQuantityControllers[combination
+                                .signature]
+                            ?.text,
+                      )
+                    : null,
+                openingUnitCost: _showsOpeningStock
+                    ? _parseNumber(
+                        _generatedOpeningCostControllers[combination.signature]
+                            ?.text,
+                      )
+                    : null,
               ),
           ]
         : const <ProductVariantDraft>[];
@@ -714,6 +786,12 @@ class _ProductFormState extends State<ProductForm> {
       modifierGroupIds: _selectedModifierGroupIds.toList(),
       categoryIds: [for (final category in _selectedCategories) category.id],
       variants: generatedVariants,
+      openingQuantity: _showsOpeningStock
+          ? _parseNumber(_openingQuantityController.text)
+          : null,
+      openingUnitCost: _showsOpeningStock
+          ? _parseNumber(_openingCostController.text)
+          : null,
     );
 
     final imageSelection = _selectedImage;
@@ -933,6 +1011,17 @@ class _ProductFormState extends State<ProductForm> {
         _generatedPriceControllers.remove(entry.key);
       }
     }
+    for (final map in [
+      _generatedOpeningQuantityControllers,
+      _generatedOpeningCostControllers,
+    ]) {
+      for (final entry in [...map.entries]) {
+        if (!signatures.contains(entry.key)) {
+          entry.value.dispose();
+          map.remove(entry.key);
+        }
+      }
+    }
     _generatedActiveBySignature.removeWhere(
       (signature, _) => !signatures.contains(signature),
     );
@@ -963,6 +1052,17 @@ class _ProductFormState extends State<ProductForm> {
       _generatedPriceControllers.putIfAbsent(
         combination.signature,
         () => TextEditingController(text: _priceController.text),
+      );
+      _generatedOpeningQuantityControllers.putIfAbsent(
+        combination.signature,
+        // Blank, not copied from the single-variant field: a shop holding six
+        // sizes holds a different number of each, and a prefilled quantity is
+        // the one default that would be wrong on every row.
+        TextEditingController.new,
+      );
+      _generatedOpeningCostControllers.putIfAbsent(
+        combination.signature,
+        () => TextEditingController(text: _openingCostController.text),
       );
       _generatedActiveBySignature.putIfAbsent(
         combination.signature,
@@ -1256,6 +1356,8 @@ class _GeneratedVariantFormStep extends StatelessWidget {
     required this.numberValidator,
     required this.generationErrorText,
     required this.conflictsBySignature,
+    this.openingQuantityControllers,
+    this.openingCostControllers,
   });
 
   final TextEditingController skuController;
@@ -1268,6 +1370,8 @@ class _GeneratedVariantFormStep extends StatelessWidget {
   final Map<String, TextEditingController> skuControllers;
   final Map<String, TextEditingController> barcodeControllers;
   final Map<String, TextEditingController> priceControllers;
+  final Map<String, TextEditingController>? openingQuantityControllers;
+  final Map<String, TextEditingController>? openingCostControllers;
   final Map<String, bool> activeBySignature;
   final String? defaultSignature;
   final void Function(VariantOption option, int valueId) onToggleValue;
@@ -1345,6 +1449,8 @@ class _GeneratedVariantFormStep extends StatelessWidget {
           onActiveChanged: onVariantActiveChanged,
           numberValidator: numberValidator,
           conflictsBySignature: conflictsBySignature,
+          openingQuantityControllers: openingQuantityControllers,
+          openingCostControllers: openingCostControllers,
         ),
       ],
     );

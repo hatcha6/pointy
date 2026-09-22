@@ -20,6 +20,8 @@ import '../query_controls/debounced_search_field.dart';
 import '../responsive/responsive.dart';
 import '../date_formatters.dart';
 import '../../features/invoices/views/card_receipt_viewer_sheet.dart';
+import '../../data/models/bank_account_ref.dart';
+import '../payments/bank_account_row.dart';
 import '../payments/card_receipt_status.dart';
 
 typedef SaleOrderReprintAction = Future<bool> Function(SaleOrder order);
@@ -1026,6 +1028,15 @@ class _PaymentsSection extends StatelessWidget {
                     ],
                     trailing: Text(formatMoney(payment.amount)),
                   ),
+                  // Which bank took it. Also per payment, and for the same
+                  // reason: a sale split across two terminals is two banks,
+                  // and this row is where a reconciliation against a statement
+                  // starts. Absent — the ordinary case — it draws nothing.
+                  if (payment.bankAccount != null)
+                    _PaymentBankRow(
+                      label: l10n.paymentDepositedIntoLabel,
+                      account: payment.bankAccount!,
+                    ),
                 ],
                 if (hasCardReceipt) ...[
                   const SizedBox(height: 12),
@@ -1044,6 +1055,43 @@ class _PaymentsSection extends StatelessWidget {
                 ],
               ],
             ),
+    );
+  }
+}
+
+/// "أُودع في · مصرف الجمهورية" beneath a payment row.
+///
+/// Indented under the tender it belongs to, so a split sale reads as two
+/// payments each with its own bank rather than as four facts in a column.
+class _PaymentBankRow extends StatelessWidget {
+  const _PaymentBankRow({required this.label, required this.account});
+
+  final String label;
+  final BankAccountRef account;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 40, top: 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: BankAccountRow(
+              account: account,
+              compact: true,
+              markSize: 18,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1076,6 +1124,15 @@ class _TotalsSection extends StatelessWidget {
                     : l10n.discountCouponAppliedLabel(discount.couponCode),
                 value: -discount.discountAmount,
               ),
+          // The cashier's own discount, named as such rather than left as the
+          // unexplained gap between the total above and the rules below it.
+          // This is the row a manager reviewing a sale is looking for: a
+          // decision somebody made, on an invoice that names who made it.
+          if (order.extraDiscountAmount > 0)
+            TotalRow(
+              label: l10n.invoiceDiscountLabel,
+              value: -order.extraDiscountAmount,
+            ),
           const Divider(),
           TotalRow(label: l10n.total, value: order.total, isStrong: true),
         ],

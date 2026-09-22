@@ -20,6 +20,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../settings/views/integration_presentation.dart';
+import '../../treasury/view_models/bank_routing.dart';
 import '../view_models/pos_view_model.dart';
 import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
@@ -521,11 +522,17 @@ class PosCartPane extends StatelessWidget {
   }
 
   Future<PaymentSheetResult?> _showPaymentDialog(BuildContext context) {
+    // Where the shop's card and transfer money goes. Absent in previews and
+    // tests, and empty until an owner configures a second bank account — in
+    // both cases the sheet is exactly what it was.
+    final routing = BankRoutingScope.maybeOf(context);
     // Nothing may redraw the sell screen while money is being taken.
     return viewModel.duringCriticalInteraction(
       () => showPosPaymentSheet(
         context: context,
         total: viewModel.total,
+        bankAccounts: routing?.bankAccounts ?? const [],
+        accountForTerminal: routing?.accountForTerminal,
         enableCashPayments: viewModel.enableCashPayments,
         enableCardPayments: viewModel.enableCardPayments,
         enableTransferPayments: viewModel.enableTransferPayments,

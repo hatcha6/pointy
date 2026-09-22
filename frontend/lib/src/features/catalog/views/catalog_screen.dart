@@ -349,6 +349,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ),
           child: ProductForm(
             viewModel: viewModel,
+            // A shop typing in a product it already owns says so here rather
+            // than raising a purchase order against a supplier it never
+            // bought from. Gated on the stock permission, which the server
+            // checks again.
+            showOpeningStock: capabilities.canCreateStockMovement,
             onCreated: (_) => Navigator.of(sheetContext).pop(),
           ),
         );

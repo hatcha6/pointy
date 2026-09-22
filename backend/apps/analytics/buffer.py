@@ -27,6 +27,7 @@ import contextlib
 import logging
 import threading
 import time
+from contextvars import ContextVar
 
 from django.conf import settings
 
@@ -35,6 +36,45 @@ logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 _pending: list = []
 _oldest_at = 0.0
+
+#: Set inside :func:`held`, on the thread that must not write.
+_holding: ContextVar[bool] = ContextVar("pointy_analytics_buffer_held", default=False)
+
+
+@contextlib.contextmanager
+def held():
+    """Queue events without inserting them, for a thread that may not write.
+
+    ``enqueue`` normally inserts on whatever thread happens to fill the
+    buffer, which is right for a request and wrong for a **worker** one —
+    ``apps.integrations.providers.base.in_parallel`` reads two provider pages
+    at once, and each of those calls records telemetry. A worker has its own
+    database connection, outside the request's transaction, so an insert
+    there commits on its own: in production it escapes the request's
+    rollback, and under a ``TestCase`` it survives the test entirely and
+    turns up in the next one's queries.
+
+    Inside this block rows are only ever appended. They are written by the
+    next ordinary enqueue or flush, on a thread that is allowed to, which is
+    what the buffer does with a tail anyway.
+    """
+    token = _holding.set(True)
+    try:
+        yield
+    finally:
+        _holding.reset(token)
+
+
+def _hold(events) -> bool:
+    """Park ``events`` in the buffer without ever inserting. True if parked."""
+    if not _holding.get():
+        return False
+    global _oldest_at
+    with _lock:
+        if not _pending:
+            _oldest_at = time.monotonic()
+        _pending.extend(events)
+    return True
 
 
 def buffer_size() -> int:
@@ -47,6 +87,8 @@ def _max_age_seconds() -> float:
 
 def enqueue(event) -> None:
     """Queue an unsaved ``AnalyticsEvent`` for bulk insertion."""
+    if _hold([event]):
+        return
     size = buffer_size()
     if size <= 0:
         _insert([event])
@@ -71,6 +113,8 @@ def enqueue_many(events) -> None:
     once and must not pay a per-event lock round-trip."""
     events = list(events)
     if not events:
+        return
+    if _hold(events):
         return
     size = buffer_size()
     if size <= 0:

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/result.dart';
 import '../../../data/models/money_position.dart';
 import '../../../data/repositories/treasury_repository.dart';
+import 'bank_routing.dart';
 
 /// Drives the money position screen (الخزينة): the shop-wide balances, the
 /// breakdown behind each account, and the two writes that keep them honest —
@@ -143,6 +144,39 @@ class MoneyPositionViewModel extends ChangeNotifier {
       return false;
     }
     await load();
+    return true;
+  }
+
+  /// Creates an account, or saves changes to one.
+  ///
+  /// Reloads rather than patching the list: making an account the default
+  /// un-defaults another, and an opening balance re-derives every figure on the
+  /// screen — both are the server's arithmetic, not a guess this client should
+  /// make.
+  Future<bool> saveAccount(
+    MoneyAccount account, {
+    int? accountId,
+    BankRouting? routing,
+  }) async {
+    if (_isSubmitting) {
+      return false;
+    }
+    _isSubmitting = true;
+    notifyListeners();
+
+    final result = accountId == null
+        ? await _repository.createAccount(account)
+        : await _repository.updateAccount(accountId, account.toJson());
+    _isSubmitting = false;
+    if (result is! Ok<MoneyAccount>) {
+      notifyListeners();
+      return false;
+    }
+    await load();
+    // The till's picker reads its own cached copy of these accounts; a new
+    // bank account that only appeared on this screen would be invisible at
+    // checkout until the app restarted.
+    await routing?.load(force: true);
     return true;
   }
 

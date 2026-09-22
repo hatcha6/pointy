@@ -185,6 +185,7 @@ class MigrationApiClient {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    String? scope,
     Map<String, Object?> options = const {},
   }) async {
     final response = await _session.post(
@@ -193,6 +194,7 @@ class MigrationApiClient {
         'source': sourceId,
         'mode': mode,
         'selected_entities': entities,
+        if (scope != null && scope.isNotEmpty) 'scope': scope,
         'options': options,
       },
     );

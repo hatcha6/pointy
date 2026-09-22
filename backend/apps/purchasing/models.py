@@ -1155,6 +1155,18 @@ class SupplierPayment(DocumentMixin, TimeStampedModel):
         blank=True,
         null=True,
     )
+    # Which of the shop's bank accounts this money left. NULL means the shop
+    # did not say, and routes to the default account of its kind — the
+    # behaviour of every row written before this column existed. Only a bank
+    # account is ever named: a cash pay-out already carries its drawer
+    # (``cash_movement``).
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.PROTECT,
+        related_name="supplier_payments",
+        blank=True,
+        null=True,
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -1171,6 +1183,11 @@ class SupplierPayment(DocumentMixin, TimeStampedModel):
             models.Index(
                 fields=["method", "-paid_at"],
                 name="supplier_payment_method_idx",
+            ),
+            # …and now asks it once per bank account.
+            models.Index(
+                fields=["money_account", "method", "-paid_at"],
+                name="supplier_payment_account_idx",
             ),
         ]
 

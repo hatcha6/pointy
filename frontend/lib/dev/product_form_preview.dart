@@ -141,7 +141,12 @@ class _HomeState extends State<_Home> {
           constraints: const BoxConstraints(maxWidth: 640),
           child: _showVariantSheet
               ? ProductVariantFormSheet(viewModel: _buildDetailsViewModel())
-              : ProductForm(viewModel: _catalogViewModel),
+              : ProductForm(
+                  viewModel: _catalogViewModel,
+                  // The harness stands in for a manager, who is who the
+                  // opening-stock pair is for.
+                  showOpeningStock: true,
+                ),
         ),
       ),
     );

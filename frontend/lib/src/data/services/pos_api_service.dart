@@ -7,6 +7,7 @@ import '../models/password_policy.dart';
 import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
+import '../models/factory_reset.dart';
 import '../models/bill_of_materials.dart';
 import '../models/bought_together_product.dart';
 import '../models/catalog_identity_conflict.dart';
@@ -44,6 +45,7 @@ import '../models/document_trail_event.dart';
 import '../models/expense.dart';
 import '../models/expense_category.dart';
 import '../models/expense_ledger_entry.dart';
+import '../models/card_terminal.dart';
 import '../models/money_position.dart';
 import '../models/fraud_finding.dart';
 import '../models/purchase_submission.dart';
@@ -501,12 +503,14 @@ class PosApiService {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    String? scope,
     Map<String, Object?> options = const {},
   }) {
     return _migration.startRun(
       sourceId: sourceId,
       mode: mode,
       entities: entities,
+      scope: scope,
       options: options,
     );
   }
@@ -746,6 +750,20 @@ class PosApiService {
 
   Future<int> purgeAnalyticsEvents() {
     return _shopSettings.purgeAnalyticsEvents();
+  }
+
+  Future<FactoryResetPreview> fetchFactoryResetPreview() {
+    return _shopSettings.fetchFactoryResetPreview();
+  }
+
+  Future<FactoryResetOutcome> performFactoryReset({
+    required String password,
+    required String confirmation,
+  }) {
+    return _shopSettings.performFactoryReset(
+      password: password,
+      confirmation: confirmation,
+    );
   }
 
   Future<AnalyticsExportFile> exportAnalyticsEvents(
@@ -1878,6 +1896,7 @@ class PosApiService {
     required String method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
     String? idempotencyKey,
   }) {
     return _sales.recordInvoicePayment(
@@ -1885,6 +1904,7 @@ class PosApiService {
       method: method,
       amount: amount,
       cardReceiptUrl: cardReceiptUrl,
+      moneyAccountId: moneyAccountId,
       idempotencyKey: idempotencyKey,
     );
   }
@@ -2029,6 +2049,25 @@ class PosApiService {
     Map<String, Object?> changes,
   ) {
     return _treasury.updateAccount(accountId, changes);
+  }
+
+  Future<List<CardTerminal>> fetchCardTerminals() {
+    return _treasury.fetchCardTerminals();
+  }
+
+  Future<CardTerminal> createCardTerminal(CardTerminal terminal) {
+    return _treasury.createCardTerminal(terminal);
+  }
+
+  Future<CardTerminal> updateCardTerminal(
+    int terminalId,
+    Map<String, Object?> changes,
+  ) {
+    return _treasury.updateCardTerminal(terminalId, changes);
+  }
+
+  Future<void> deleteCardTerminal(int terminalId) {
+    return _treasury.deleteCardTerminal(terminalId);
   }
 
   Future<Expense> fetchExpense(int expenseId) {
@@ -2224,7 +2263,12 @@ class PosApiService {
   Future<IntegrationCardSnapshot> fetchIntegrationCard({
     required String providerKey,
     required String cardNo,
-  }) => _integrations.fetchCard(providerKey: providerKey, cardNo: cardNo);
+    String searchBy = '',
+  }) => _integrations.fetchCard(
+    providerKey: providerKey,
+    cardNo: cardNo,
+    searchBy: searchBy,
+  );
 
   /// Perform an order's sold recharges. At most once per line, server-side.
   Future<List<IntegrationChargeResult>> chargeIntegrationRecharges({

@@ -1,21 +1,19 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../core/result.dart';
-import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
-import '../../../data/models/product_variant_page.dart';
 import '../../../data/repositories/catalog_repository.dart';
-import '../../../shared/design/design.dart';
-import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/responsive/responsive.dart';
-import '../../../shared/components/pointy_progress.dart';
+import '../view_models/stock_count_item_search_view_model.dart';
+import 'stock_count_search_panel.dart';
 
-/// Search/browse fallback for unlabeled goods. Returns the selected variant or
-/// null on dismiss. Service and made-to-order products (which carry no stock)
-/// are filtered out.
+/// "What is this thing?" — the picker for a code nothing in the shop answers
+/// to. Returns the selected variant or null on dismiss.
+///
+/// This is the ONE place the count still opens a search in a sheet, because the
+/// question is modal by nature: an unidentified article is in the counter's
+/// hand and the answer attaches to that scan. The resting search lives inline
+/// on the counting screen ([StockCountSearchPanel]).
 Future<ProductVariant?> showStockCountItemSearchSheet(
   BuildContext context, {
   required CatalogRepository catalogRepository,
@@ -37,60 +35,19 @@ class _ItemSearchSheet extends StatefulWidget {
 }
 
 class _ItemSearchSheetState extends State<_ItemSearchSheet> {
-  final TextEditingController _controller = TextEditingController();
-  Timer? _debounce;
-  List<ProductVariant> _results = const [];
-  bool _isLoading = false;
-  bool _hasError = false;
-  int _requestToken = 0;
+  late final StockCountItemSearchViewModel _viewModel;
 
   @override
   void initState() {
     super.initState();
-    _search('');
+    _viewModel = StockCountItemSearchViewModel(widget.catalogRepository)
+      ..search('');
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
-    _controller.dispose();
+    _viewModel.dispose();
     super.dispose();
-  }
-
-  void _onChanged(String value) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () => _search(value));
-    setState(() {});
-  }
-
-  Future<void> _search(String value) async {
-    final token = ++_requestToken;
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
-    final result = await widget.catalogRepository.loadProductVariants(
-      query: ProductQuery(
-        search: value.trim(),
-        availability: ProductAvailabilityFilter.active,
-      ),
-      page: 1,
-    );
-    if (!mounted || token != _requestToken) {
-      return;
-    }
-    setState(() {
-      _isLoading = false;
-      switch (result) {
-        case Ok<ProductVariantPage>():
-          _results = result.value.variants
-              .where((variant) => !variant.isService && !variant.isPrepared)
-              .toList(growable: false);
-        case Error<ProductVariantPage>():
-          _results = const [];
-          _hasError = true;
-      }
-    });
   }
 
   @override
@@ -100,165 +57,48 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        spacing.lg,
-        spacing.xs,
-        spacing.lg,
-        spacing.md,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.stockCountSearchItem,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          SizedBox(height: spacing.sm),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            onChanged: _onChanged,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _controller.text.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: MaterialLocalizations.of(
-                        context,
-                      ).deleteButtonTooltip,
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _controller.clear();
-                        _onChanged('');
-                      },
+      // The soft keyboard opens the moment this sheet does (the field takes
+      // focus), and a modal bottom sheet is NOT inset for it — without this the
+      // list the counter is meant to pick from sits behind the keyboard.
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Padding(
+        padding: EdgeInsetsDirectional.fromSTEB(0, spacing.xs, 0, spacing.md),
+        child: ListenableBuilder(
+          listenable: _viewModel,
+          builder: (context, _) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: EdgeInsetsDirectional.symmetric(
+                    horizontal: spacing.lg,
+                  ),
+                  child: Text(
+                    l10n.stockCountSearchItem,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-              hintText: l10n.stockCountSearchHint,
-            ),
-          ),
-          SizedBox(height: spacing.sm),
-          Flexible(child: _buildResults(context, l10n)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResults(BuildContext context, AppLocalizations l10n) {
-    if (_isLoading && _results.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: PointySpinner()),
-      );
-    }
-    if (_hasError) {
-      return _CenteredNote(
-        icon: Icons.error_outline,
-        message: l10n.stockCountLoadError,
-      );
-    }
-    if (_results.isEmpty) {
-      return _CenteredNote(
-        icon: Icons.search_off,
-        message: l10n.stockCountSearchEmpty,
-      );
-    }
-    return ListView.separated(
-      shrinkWrap: true,
-      padding: EdgeInsets.zero,
-      itemCount: _results.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 4),
-      itemBuilder: (context, index) => _ResultRow(variant: _results[index]),
-    );
-  }
-}
-
-class _ResultRow extends StatelessWidget {
-  const _ResultRow({required this.variant});
-
-  final ProductVariant variant;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = AdaptiveSpacing.of(context);
-    final colors = context.pointyColors;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(PointyRadii.card),
-      child: InkWell(
-        onTap: () => Navigator.of(context).pop(variant),
-        borderRadius: BorderRadius.circular(PointyRadii.card),
-        child: Padding(
-          padding: EdgeInsets.all(spacing.sm),
-          child: Row(
-            children: [
-              ProductImageThumbnail(
-                imageUrl: variant.primaryImage?.contentUrl,
-                fallbackText: variant.displayLabel,
-                size: 44,
-                borderRadius: 10,
-              ),
-              SizedBox(width: spacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      variant.displayLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (variant.sku.isNotEmpty)
-                      Text(
-                        variant.sku,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colors.mutedInk,
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
-              ),
-              SizedBox(width: spacing.sm),
-              Icon(Icons.add_circle_outline, color: colors.primaryStrong),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CenteredNote extends StatelessWidget {
-  const _CenteredNote({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.pointyColors;
-    final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 32, color: colors.lineStrong),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: textTheme.bodyMedium?.copyWith(color: colors.mutedInk),
-            ),
-          ],
+                // A bounded height: the results list must be allowed to scroll
+                // inside the sheet rather than push it past the screen.
+                Flexible(
+                  child: StockCountSearchPanel(
+                    term: _viewModel.term,
+                    results: _viewModel.results,
+                    isLoading: _viewModel.isLoading,
+                    hasError: _viewModel.hasError,
+                    hasMore: _viewModel.hasMore,
+                    onSearch: _viewModel.search,
+                    onLoadMore: _viewModel.loadMore,
+                    onRetry: _viewModel.retry,
+                    onPick: (variant) => Navigator.of(context).pop(variant),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

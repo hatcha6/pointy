@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+
+import requests
 from datetime import timedelta
 from datetime import timezone as dt_timezone
 from decimal import Decimal
@@ -24,6 +27,8 @@ from apps.core.roles import (
     MANAGER_GROUP,
     ensure_role_groups,
 )
+from apps.analytics import buffer as analytics_buffer
+from apps.analytics import context as analytics_context
 from apps.core.timeutils import business_timezone
 from apps.customers.models import Customer
 from apps.expenses.models import Expense
@@ -39,6 +44,7 @@ from apps.treasury.position import treasury_position
 import json
 
 from . import catalog
+from . import connection_pool
 from . import float_ledger
 from . import telemetry as integ_telemetry
 from . import recharge
@@ -50,6 +56,7 @@ from .models import (
     IntegrationSubscriber,
 )
 from .providers import is_implemented, provider_for
+from .providers.base import in_parallel  # noqa: E402
 from .providers.base import (
     ERROR_INDETERMINATE,
     ERROR_NOT_CONFIGURED,
@@ -63,7 +70,12 @@ from .providers.base import (
 )
 from .providers.base import HistoryResult, RechargeOption
 from .providers import hdbox
-from .providers.hdbox import HdBoxProvider
+from .providers.hdbox import (
+    DETAIL_VIEW_PATH,
+    LIST_PATH,
+    RENEW_VIEW_PATH,
+    HdBoxProvider,
+)
 from .provisioning import service_variant_for
 from .services import (
     probe_account,
@@ -92,11 +104,21 @@ class _FakeResponse:
 
 
 class _FakeSession:
-    """Stands in for requests.Session: canned POST login + scripted GETs."""
+    """Stands in for requests.Session: canned POST login + scripted GETs.
 
-    def __init__(self, login_response, get_responses):
+    GETs are answered in the order they were scripted, which is the right
+    shape for a driver that talks in a fixed sequence. Pass ``routes``
+    instead — ``{url_fragment: response}`` — wherever the caller makes two
+    calls **at once**: "the next response in the list" has no meaning when
+    two threads are asking, and a test that depends on which of them got
+    there first is a test that will lie eventually.
+    """
+
+    def __init__(self, login_response, get_responses=(), *, routes=None):
         self._login_response = login_response
         self._get_responses = list(get_responses)
+        self._routes = dict(routes or {})
+        self._lock = threading.Lock()
         self.get_calls = []
         self.post_calls = []
         # A real Session always has one; _login reads it on a successful
@@ -105,12 +127,22 @@ class _FakeSession:
         self.cookies = {}
 
     def post(self, url, **kwargs):
-        self.post_calls.append((url, kwargs))
+        with self._lock:
+            self.post_calls.append((url, kwargs))
         return self._login_response
 
+    def mount(self, prefix, adapter):
+        """A real Session has one; the drivers mount a shared pool on it."""
+
     def get(self, url, **kwargs):
-        self.get_calls.append((url, kwargs))
-        return self._get_responses.pop(0)
+        with self._lock:
+            self.get_calls.append((url, kwargs))
+            if not self._routes:
+                return self._get_responses.pop(0)
+        for fragment, response in self._routes.items():
+            if fragment in url:
+                return response
+        raise AssertionError(f"unscripted GET {url}")
 
 
 def make_account(**kwargs) -> IntegrationAccount:
@@ -778,14 +810,15 @@ class TillApiTests(TestCase):
             '"status":"On hold","statusId":6,"startDay":1669500000,'
             '"expireDay":1785621599,"packageName":"HDBOX Full package"}]}'
         )
+        # The card view reads the renew form and the card detail AT THE SAME
+        # TIME, so these are routed by path rather than handed out in order.
         session = _FakeSession(
             _FakeResponse(AUTHED_PAGE),
-            # login → lookup, → renew form, → card detail
-            [
-                _FakeResponse(card_json),
-                _FakeResponse(RENEW_FORM),
-                _FakeResponse(DETAIL_FORM),
-            ],
+            routes={
+                LIST_PATH: _FakeResponse(card_json),
+                RENEW_VIEW_PATH: _FakeResponse(RENEW_FORM),
+                DETAIL_VIEW_PATH: _FakeResponse(DETAIL_FORM),
+            },
         )
         with patch_session(session):
             resp = self.client.get("/api/integrations/hdbox/card/?card_no=210906803499")
@@ -1392,11 +1425,11 @@ class PriceListApiTests(TestCase):
         )
         session = _FakeSession(
             _FakeResponse(AUTHED_PAGE),
-            [
-                _FakeResponse(card_json),
-                _FakeResponse(RENEW_FORM),
-                _FakeResponse(DETAIL_FORM),
-            ],
+            routes={
+                LIST_PATH: _FakeResponse(card_json),
+                RENEW_VIEW_PATH: _FakeResponse(RENEW_FORM),
+                DETAIL_VIEW_PATH: _FakeResponse(DETAIL_FORM),
+            },
         )
         with patch_session(session):
             resp = self.client.get("/api/integrations/hdbox/card/?card_no=210906803499")
@@ -2929,6 +2962,9 @@ class _LnetFakeSession:
             raise AssertionError(f"unscripted POST {url}")
         return found
 
+    def mount(self, prefix, adapter):
+        """A real Session has one; the drivers mount a shared pool on it."""
+
 
 class _LnetResponse(_FakeResponse):
     def __init__(self, text, status_code=200, url="https://b/lnet-billing/public/"):
@@ -3866,6 +3902,12 @@ class IntegrationTelemetryTests(TestCase):
 
     def setUp(self):
         integ_telemetry.reset()
+        # The analytics buffer is process-global and deliberately outlives a
+        # request, so rows another test enqueued and never flushed are still
+        # sitting in it — and this class counts rows. Django rolls back the
+        # database between tests; it cannot roll back a module-level list.
+        analytics_buffer.reset()
+        self.addCleanup(analytics_buffer.reset)
         # One row per provider, so a test that loops must reuse this one.
         self.account = lnet_account()
 
@@ -4062,3 +4104,517 @@ class IntegrationTelemetryTests(TestCase):
                     getattr(getattr(type(driver), method), "_observed", False),
                     f"{key}.{method} is unobserved",
                 )
+
+
+# --- how long a cashier waits ------------------------------------------------
+
+
+class _PathRoutedHdBoxSession:
+    """An HD Box session that routes by URL and can be made to block.
+
+    ``_FakeSession`` hands out its canned GETs with ``pop(0)``, which is fine
+    for a driver that talks in a fixed order and useless for one that makes
+    two calls at once. This routes on the path instead, and optionally waits
+    on a barrier so a test can tell "at the same time" from "one after the
+    other" rather than trusting a stopwatch.
+    """
+
+    def __init__(self, pages, *, barrier=None, barrier_paths=()):
+        self.pages = dict(pages)
+        self.barrier = barrier
+        self.barrier_paths = tuple(barrier_paths)
+        self.get_calls = []
+        self.post_calls = []
+        self.cookies = {}
+        self.barrier_broken = False
+
+    def post(self, url, **kwargs):
+        self.post_calls.append((url, kwargs))
+        return _FakeResponse(AUTHED_PAGE)
+
+    def mount(self, prefix, adapter):
+        """A real Session has one; the drivers mount a shared pool on it."""
+
+    def get(self, url, **kwargs):
+        self.get_calls.append((url, kwargs))
+        if self.barrier is not None and any(p in url for p in self.barrier_paths):
+            try:
+                self.barrier.wait()
+            except threading.BrokenBarrierError:
+                self.barrier_broken = True
+        for fragment, response in self.pages.items():
+            if fragment in url:
+                return response
+        raise AssertionError(f"unscripted GET {url}")
+
+
+@CACHED_PROVIDER_SESSIONS
+class ProviderConnectionReuseTests(TestCase):
+    """One card lookup, one connection.
+
+    The session cache stopped a card lookup paying for three *logins*. It did
+    not stop it paying for three *connections*: every ``_login()`` built a
+    fresh ``requests.Session`` from the cached cookies, and a fresh Session is
+    a fresh connection pool — so lookup, offers and profile each opened their
+    own socket and paid their own TLS handshake to a portal on the far side of
+    a Libyan uplink. The field export (2026-09-22) shows a floor of roughly
+    0.6-1.5s on calls that transfer almost nothing, which is what that looks
+    like from the outside.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(analytics_buffer.reset)
+
+    def test_hdbox_keeps_one_session_across_the_whole_chain(self):
+        card_json = (
+            '{"status":"success","total":1,"rows":[{"cardNo":"210906803499",'
+            '"status":"Active","statusId":3}]}'
+        )
+        session = _FakeSession(
+            _FakeResponse(AUTHED_PAGE),
+            [
+                _FakeResponse(card_json),
+                _FakeResponse(RENEW_FORM),
+                _FakeResponse(DETAIL_FORM),
+            ],
+        )
+        with patch_session(session) as session_class:
+            driver = HdBoxProvider(make_account())
+            self.assertTrue(driver.lookup("210906803499").ok)
+            self.assertTrue(driver.offers("210906803499").ok)
+            self.assertTrue(driver.subscriber_profile("210906803499").ok)
+
+        # One Session constructed means one connection pool means one
+        # handshake, not three.
+        self.assertEqual(session_class.call_count, 1)
+
+    def test_lnet_keeps_one_session_across_the_whole_chain(self):
+        session = lnet_session()
+        with patch_lnet(session) as session_class:
+            driver = LnetProvider(lnet_account())
+            lookup = driver.lookup("alhussainbasheir")
+            self.assertTrue(lookup.ok, lookup.error_detail)
+            self.assertTrue(
+                driver.offers("alhussainbasheir", resolved=lookup.card).ok
+            )
+
+        self.assertEqual(session_class.call_count, 1)
+
+    def test_a_reused_session_still_carries_its_csrf_token(self):
+        # The token travels with the session it belongs to. Handing back an
+        # empty one would not break a write — every write re-reads its own
+        # page's token — but it would quietly drop the fallback.
+        with patch_lnet(lnet_session()):
+            driver = LnetProvider(lnet_account())
+            _first, first_token, code, _detail = driver._login()
+            self.assertEqual(code, "")
+            _second, second_token, _code, _detail = driver._login()
+
+        self.assertTrue(first_token)
+        self.assertEqual(second_token, first_token)
+
+
+class CardViewConcurrencyTests(TestCase):
+    """The offer ladder and the detail page are read at the same time.
+
+    They are two different pages about one line and neither needs the other's
+    answer, so reading them one after the other spends a cashier both waits.
+    Proved with a barrier rather than a clock: if the two reads are sequential
+    the second never arrives, the first times out waiting, and this fails.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.cashier = User.objects.create_user(username="csh2", password="x")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.cashier)
+        make_account()
+        self.addCleanup(analytics_buffer.reset)
+
+    def test_offers_and_profile_are_read_together(self):
+        card_json = (
+            '{"status":"success","total":1,"rows":[{"cardNo":"210906803499",'
+            '"status":"Active","statusId":3}]}'
+        )
+        barrier = threading.Barrier(2, timeout=10)
+        session = _PathRoutedHdBoxSession(
+            {
+                LIST_PATH: _FakeResponse(card_json),
+                RENEW_VIEW_PATH: _FakeResponse(RENEW_FORM),
+                DETAIL_VIEW_PATH: _FakeResponse(DETAIL_FORM),
+            },
+            barrier=barrier,
+            barrier_paths=(RENEW_VIEW_PATH, DETAIL_VIEW_PATH),
+        )
+        with patch_session(session):
+            resp = self.client.get(
+                "/api/integrations/hdbox/card/?card_no=210906803499"
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["ok"], resp.data)
+        # Both arms reached the barrier, so both were in flight at once.
+        self.assertFalse(session.barrier_broken)
+        self.assertTrue(resp.data["offers"])
+        self.assertTrue(resp.data["subscriber"])
+
+
+class _LnetSearchSession(_LnetFakeSession):
+    """An LNET session that answers per search mode, and can block.
+
+    Every search is the same URL with different query parameters, so routing
+    by path — which is all ``_LnetFakeSession`` does — cannot tell a phone
+    search from a contract search. This can, which is what it takes to say
+    anything about which searches were issued and when.
+    """
+
+    def __init__(self, by_mode, *, barrier=None, barrier_modes=(), **kwargs):
+        super().__init__(
+            pages={
+                "/login": _LnetResponse(LNET_LOGIN_PAGE),
+                "/admin/settings/users/recharge/": _LnetResponse(LNET_RECHARGE_FORM),
+            },
+            posts={"/login": _LnetResponse(LNET_HOME_PAGE)},
+            **kwargs,
+        )
+        self.by_mode = dict(by_mode)
+        self.barrier = barrier
+        self.barrier_modes = tuple(barrier_modes)
+        self.barrier_broken = False
+
+    @property
+    def search_modes(self):
+        return [
+            k["params"]["search_by"] for _u, k in self.get_calls if "params" in k
+        ]
+
+    def get(self, url, **kwargs):
+        mode = (kwargs.get("params") or {}).get("search_by")
+        if mode is None:
+            return super().get(url, **kwargs)
+        self.get_calls.append((url, kwargs))
+        if self.barrier is not None and mode in self.barrier_modes:
+            try:
+                self.barrier.wait()
+            except threading.BrokenBarrierError:
+                self.barrier_broken = True
+        return _LnetResponse(self.by_mode.get(mode, lnet_users_page()))
+
+
+@CACHED_PROVIDER_SESSIONS
+class LnetSearchFanOutTests(TestCase):
+    """Three searches, one wait.
+
+    The portal can be asked by phone number, by username or by contract
+    number, and a term made of digits could be any of them. Asking in turn
+    meant a term it does not know by phone paid for that search in full
+    before the username search had even started: the field export
+    (2026-09-22) has the same lookup landing at ~1.4s when one mode answered
+    and 4.4s when the third one did.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(analytics_buffer.reset)
+
+    def test_the_mode_a_till_types_most_still_costs_one_request(self):
+        # A phone number the portal knows by phone number. Nothing is fanned
+        # out, because nothing needed to be: this is the ordinary counter
+        # search and it must not send the portal two requests it cannot use.
+        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).lookup("0910682854")
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertEqual(session.search_modes, ["mobile"])
+
+    def test_the_modes_left_after_a_miss_go_together(self):
+        # Proved with a barrier, not a clock: if username and contract are
+        # searched one after the other, the first waits alone and times out.
+        barrier = threading.Barrier(2, timeout=10)
+        session = _LnetSearchSession(
+            {"contract_number": LNET_ONE_LINE},
+            barrier=barrier,
+            barrier_modes=("username", "contract_number"),
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).lookup("0910682854")
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertFalse(session.barrier_broken)
+        self.assertEqual(sorted(session.search_modes[1:]), ["contract_number", "username"])
+        # The leading mode still went first, and alone.
+        self.assertEqual(session.search_modes[0], "mobile")
+
+    def test_a_term_two_modes_both_know_answers_by_priority_not_by_speed(self):
+        # The whole reason the old loop stopped at the first hit: a term that
+        # is one household's username and another's contract number must not
+        # come back as two unrelated households. Running the searches together
+        # must not turn that into "whichever thread finished first".
+        session = _LnetSearchSession(
+            {"username": LNET_ONE_LINE, "contract_number": LNET_THREE_LINES}
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).lookup("0910682854")
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertEqual(len(result.candidates), 1)
+        self.assertEqual(result.card.card_no, "alhussainbasheir")
+
+    def test_nothing_anywhere_is_still_not_found(self):
+        session = _LnetSearchSession({})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).lookup("0000000000")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_NOT_FOUND)
+        self.assertEqual(sorted(session.search_modes), ["contract_number", "mobile", "username"])
+
+    def test_a_lettered_term_never_wastes_a_mobile_search(self):
+        session = _LnetSearchSession({"contract_number": LNET_ONE_LINE})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).lookup("basheir.home")
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertNotIn("mobile", session.search_modes)
+        self.assertEqual(session.search_modes[0], "username")
+
+
+class ParallelCallIdentityTests(TestCase):
+    """A row written by a worker thread still names the till that asked.
+
+    ``apps.analytics.context`` keeps identity in ``ContextVar``s, and a
+    ``ThreadPoolExecutor`` thread starts with an **empty** context — so
+    reading the offer ladder on a worker would quietly have written an
+    anonymous row for every card lookup in the shop. An integration row that
+    cannot be joined to a register session is most of the reason this
+    telemetry is collected at all.
+    """
+
+    def _rows_written_by(self, calls):
+        written = []
+        with mock.patch(
+            "apps.analytics.buffer.enqueue", side_effect=written.append
+        ):
+            answers = in_parallel(calls)
+        return answers, written
+
+    def _report(self, operation):
+        def call():
+            integ_telemetry.record(
+                integ_telemetry.CallReport(provider="lnet", operation=operation)
+            )
+            return operation
+
+        return call
+
+    def test_a_parallel_call_keeps_the_register_session(self):
+        with analytics_context.request_identity(
+            {"device_id": "till-7", "register_session_id": "4"}
+        ):
+            answers, written = self._rows_written_by(
+                [self._report("offers"), self._report("profile")]
+            )
+
+        # Answers come back in the order they were asked for, not the order
+        # the threads happened to finish in.
+        self.assertEqual(answers, ["offers", "profile"])
+        self.assertEqual(len(written), 2)
+        for event in written:
+            self.assertEqual(event.attributes.get("register_session_id"), "4")
+            self.assertEqual(event.device_id, "till-7")
+
+    def test_the_same_holds_when_there_is_nothing_to_parallelise(self):
+        # One call runs inline, and must not be a different animal.
+        with analytics_context.request_identity({"register_session_id": "9"}):
+            _answers, written = self._rows_written_by([self._report("offers")])
+
+        self.assertEqual(written[0].attributes.get("register_session_id"), "9")
+
+    def test_a_worker_never_writes_the_row_itself(self):
+        # A worker has its own connection, so an insert there commits outside
+        # the request's transaction: it escapes a rollback in production and
+        # survives the whole test run under a TestCase. The row must be
+        # queued by the worker and written by somebody allowed to write.
+        from apps.analytics.models import AnalyticsEvent
+
+        analytics_buffer.reset()
+        self.addCleanup(analytics_buffer.reset)
+        before = AnalyticsEvent.objects.filter(
+            name=integ_telemetry.EVENT_NAME
+        ).count()
+
+        with analytics_context.request_identity({"register_session_id": "4"}):
+            in_parallel([self._report("offers"), self._report("profile")])
+
+        self.assertEqual(
+            AnalyticsEvent.objects.filter(name=integ_telemetry.EVENT_NAME).count(),
+            before,
+            "a worker thread inserted a row on its own connection",
+        )
+        analytics_buffer.flush()
+        self.assertEqual(
+            AnalyticsEvent.objects.filter(name=integ_telemetry.EVENT_NAME).count(),
+            before + 2,
+        )
+
+
+class ProviderConnectionPoolTests(TestCase):
+    """A connection that outlives the request that opened it.
+
+    Reusing a driver's session removed two of the three handshakes one card
+    lookup paid for. This removes the third from every lookup after the
+    first: the sockets live in a pool belonging to the portal, not to the
+    request, so a cashier's second search of the shift starts with the
+    connection already open.
+    """
+
+    def setUp(self):
+        connection_pool.reset()
+        self.addCleanup(connection_pool.reset)
+
+    def test_two_sessions_for_one_portal_share_its_pool(self):
+        first = connection_pool.warm(requests.Session(), "https://portal.example")
+        second = connection_pool.warm(requests.Session(), "https://portal.example")
+
+        # The same adapter object means the same urllib3 pools underneath —
+        # which is the only part that is safe to share, and the only part
+        # worth sharing.
+        self.assertIs(first.get_adapter("https://portal.example/x"),
+                      second.get_adapter("https://portal.example/x"))
+        self.assertIsNot(first, second)
+
+    def test_two_portals_never_share_a_pool(self):
+        one = connection_pool.warm(requests.Session(), "https://a.example")
+        two = connection_pool.warm(requests.Session(), "https://b.example")
+
+        self.assertIsNot(one.get_adapter("https://a.example/x"),
+                         two.get_adapter("https://b.example/x"))
+        self.assertEqual(connection_pool.pooled_hosts(),
+                         ["https://a.example", "https://b.example"])
+
+    def test_a_portal_with_no_url_is_simply_not_pooled(self):
+        session = connection_pool.warm(requests.Session(), "")
+        self.assertEqual(connection_pool.pooled_hosts(), [])
+        self.assertIsNotNone(session)
+
+    def test_a_write_is_never_retried_after_it_has_been_sent(self):
+        """The money rule, as a regression guard.
+
+        A pooled connection can be dead, so one retry is allowed. A read
+        failure means the request DID leave this machine and the portal may
+        already have acted on it — and ``recharge`` is a POST that credits a
+        customer. Sending it twice is two top-ups and one payment. If anyone
+        ever widens this policy, this test is what should stop them.
+        """
+        policy = connection_pool._RETRY
+
+        self.assertEqual(policy.read, 0, "a sent request must never be replayed")
+        self.assertNotIn("POST", policy.allowed_methods)
+        self.assertIn("GET", policy.allowed_methods)
+        # A connect failure never reached the portal, so it is safe to retry
+        # for anything — that is the retry this pool actually exists to spend.
+        self.assertEqual(policy.connect, 1)
+
+    def test_a_driver_opens_its_portal_pool(self):
+        account = lnet_account()
+        with patch_lnet(lnet_session()):
+            LnetProvider(account).lookup("alhussainbasheir")
+
+        # The fake Session records the mount rather than performing it, so
+        # what this proves is that the driver asks for the pool at all.
+        self.assertEqual(
+            connection_pool.pooled_hosts(), [account.resolved_base_url()]
+        )
+
+
+@CACHED_PROVIDER_SESSIONS
+class LnetSearchModePickerTests(TestCase):
+    """What the cashier says the number is, and what that saves.
+
+    A phone number and a contract number are both digits: nothing on the
+    server can tell them apart, so every till search used to be a guess that
+    cost a round trip per wrong guess. The picker beside the search box is
+    the cheapest possible fix — the person holding the number already knows.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(analytics_buffer.reset)
+        connection_pool.reset()
+        self.addCleanup(connection_pool.reset)
+        ensure_role_groups()
+        User = get_user_model()
+        self.cashier = User.objects.create_user(username="csh3", password="x")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.cashier)
+        self.account = lnet_account()
+
+    def test_a_contract_number_named_as_one_costs_a_single_search(self):
+        # The case the old code was worst at: digits the portal does not know
+        # by phone, so it walked mobile, then username, then contract — three
+        # round trips, ~4.4s on the Annaseem till. Named, it is one.
+        session = _LnetSearchSession({"contract_number": LNET_ONE_LINE})
+        with patch_lnet(session):
+            result = LnetProvider(self.account).lookup(
+                "214737", search_by="contract_number"
+            )
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertEqual(session.search_modes, ["contract_number"])
+
+    def test_the_default_pick_is_still_the_phone_search(self):
+        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
+        with patch_lnet(session):
+            LnetProvider(self.account).lookup("0910682854", search_by="mobile")
+
+        self.assertEqual(session.search_modes, ["mobile"])
+
+    def test_a_wrong_pick_still_finds_the_line(self):
+        # The picker orders the search; it must never fence it. A cashier who
+        # leaves it on the wrong entry waits a second longer — they do not
+        # get told the customer does not exist.
+        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
+        with patch_lnet(session):
+            result = LnetProvider(self.account).lookup(
+                "0910682854", search_by="contract_number"
+            )
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertEqual(session.search_modes[0], "contract_number")
+        self.assertIn("mobile", session.search_modes)
+
+    def test_a_pick_the_portal_does_not_offer_is_ignored(self):
+        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
+        with patch_lnet(session):
+            result = LnetProvider(self.account).lookup(
+                "0910682854", search_by="iris-scan"
+            )
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertEqual(session.search_modes[0], "mobile")
+
+    def test_a_lettered_term_never_leads_with_a_phone_search(self):
+        # Whatever the picker says. A username has letters in it and the
+        # phone search cannot match one, so leading with it is a wasted trip.
+        session = _LnetSearchSession({"username": LNET_ONE_LINE})
+        with patch_lnet(session):
+            LnetProvider(self.account).lookup("basheir.home", search_by="mobile")
+
+        self.assertNotIn("mobile", session.search_modes)
+
+    def test_the_till_passes_the_pick_through_to_the_portal(self):
+        session = _LnetSearchSession({"contract_number": LNET_ONE_LINE})
+        with patch_lnet(session):
+            resp = self.client.get(
+                "/api/integrations/lnet/card/"
+                "?card_no=214737&search_by=contract_number"
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["ok"], resp.data)
+        self.assertEqual(session.search_modes, ["contract_number"])

@@ -117,6 +117,7 @@ class SalesApiClient {
     required String method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
     String? idempotencyKey,
   }) async {
     final normalizedReceiptUrl = cardReceiptUrl.trim();
@@ -127,6 +128,9 @@ class SalesApiClient {
         'amount': amount.toStringAsFixed(2),
         if (normalizedReceiptUrl.isNotEmpty)
           'card_receipt_url': normalizedReceiptUrl,
+        // Omitted, never sent as null: a server that receives no account
+        // routes the money the way it always did.
+        'money_account': ?moneyAccountId,
       },
       idempotencyKey: idempotencyKey,
     );

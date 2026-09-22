@@ -8,6 +8,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/money_position_view_model.dart';
+import '../../../shared/payments/bank_account_details_sheet.dart';
+import 'money_account_editor_sheet.dart';
 import 'money_count_sheet.dart';
 import 'money_transfer_sheet.dart';
 import 'treasury_ui.dart';
@@ -133,34 +135,60 @@ class _Actions extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final busy = viewModel.isSubmitting;
 
-    return Row(
+    final account = entry.account;
+    final hasBankDetails =
+        account.iban.isNotEmpty || account.accountNumber.isNotEmpty;
+
+    // Wrapped, not squeezed into one row: these are four actions on a phone,
+    // and four labels across is four labels nobody can read.
+    return Wrap(
+      spacing: spacing.sm,
+      runSpacing: spacing.sm,
       children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: busy
-                ? null
-                : () => showMoneyCountSheet(
-                    context,
-                    viewModel: viewModel,
-                    entry: entry,
-                  ),
-            icon: const Icon(Icons.fact_check_outlined),
-            label: Text(l10n.treasuryActionCount),
-          ),
+        FilledButton.icon(
+          onPressed: busy
+              ? null
+              : () => showMoneyCountSheet(
+                  context,
+                  viewModel: viewModel,
+                  entry: entry,
+                ),
+          icon: const Icon(Icons.fact_check_outlined),
+          label: Text(l10n.treasuryActionCount),
         ),
-        SizedBox(width: spacing.sm),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: busy
-                ? null
-                : () => showMoneyTransferSheet(
-                    context,
-                    viewModel: viewModel,
-                    fromAccountId: entry.account.id,
-                  ),
-            icon: const Icon(Icons.move_down),
-            label: Text(l10n.treasuryActionTransfer),
+        OutlinedButton.icon(
+          onPressed: busy
+              ? null
+              : () => showMoneyTransferSheet(
+                  context,
+                  viewModel: viewModel,
+                  fromAccountId: account.id,
+                ),
+          icon: const Icon(Icons.move_down),
+          label: Text(l10n.treasuryActionTransfer),
+        ),
+        // Where the bank details a customer transfers to are shown — and
+        // where they are typed in, which is why editing lives here beside
+        // them rather than as an icon on the card.
+        if (hasBankDetails)
+          OutlinedButton.icon(
+            key: const ValueKey('treasury_details_bank_button'),
+            onPressed: () =>
+                showBankAccountDetailsSheet(context, account: account),
+            icon: const Icon(Icons.qr_code_2_outlined),
+            label: Text(l10n.treasuryBankDetailsButton),
           ),
+        OutlinedButton.icon(
+          key: const ValueKey('treasury_details_edit_button'),
+          onPressed: busy
+              ? null
+              : () => showMoneyAccountEditorSheet(
+                  context,
+                  viewModel: viewModel,
+                  account: account,
+                ),
+          icon: const Icon(Icons.edit_outlined),
+          label: Text(l10n.treasuryAccountEditTooltip),
         ),
       ],
     );

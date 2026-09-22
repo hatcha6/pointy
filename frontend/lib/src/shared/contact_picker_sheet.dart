@@ -253,6 +253,7 @@ class _CustomerPickerState extends State<_CustomerPicker> {
   var _isLoadingMore = false;
   var _hasMore = true;
   var _hasError = false;
+  var _loadMoreFailed = false;
   var _nextPage = 1;
 
   @override
@@ -291,6 +292,8 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         isLoadingInitial: _isLoading,
         isLoadingMore: _isLoadingMore,
         hasError: _hasError,
+        loadMoreFailed: _loadMoreFailed,
+        loadMoreErrorMessage: l10n.contactsLoadError,
         errorBuilder: (context) => PointyErrorState(
           title: l10n.contactsLoadError,
           icon: Icons.person_search_outlined,
@@ -343,13 +346,19 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         _isLoading = true;
         _hasError = false;
         _hasMore = true;
+        _loadMoreFailed = false;
         _nextPage = 1;
       });
     } else {
       if (_isLoading || _isLoadingMore || !_hasMore) {
         return;
       }
-      setState(() => _isLoadingMore = true);
+      // Cleared here so the list's retry button, which calls straight back
+      // into this method, can get past the automatic trigger's stand-down.
+      setState(() {
+        _isLoadingMore = true;
+        _loadMoreFailed = false;
+      });
     }
 
     final result = await widget.repository.loadCustomers(
@@ -377,8 +386,15 @@ class _CustomerPickerState extends State<_CustomerPicker> {
           }
           _isLoading = false;
           _isLoadingMore = false;
-          _hasMore = false;
-          _hasError = true;
+          // Only the FIRST page failing is the sheet's error state. A later
+          // page that fails keeps the rows already on screen, keeps hasMore
+          // (the failure says nothing about what the shop has) and does not
+          // advance the page number, so the retry asks for the same page.
+          _hasError = reset;
+          _loadMoreFailed = !reset;
+          if (reset) {
+            _hasMore = false;
+          }
         });
     }
   }
@@ -400,6 +416,7 @@ class _SupplierPickerState extends State<_SupplierPicker> {
   var _isLoadingMore = false;
   var _hasMore = true;
   var _hasError = false;
+  var _loadMoreFailed = false;
   var _nextPage = 1;
 
   @override
@@ -438,6 +455,8 @@ class _SupplierPickerState extends State<_SupplierPicker> {
         isLoadingInitial: _isLoading,
         isLoadingMore: _isLoadingMore,
         hasError: _hasError,
+        loadMoreFailed: _loadMoreFailed,
+        loadMoreErrorMessage: l10n.contactsLoadError,
         errorBuilder: (context) => PointyErrorState(
           title: l10n.contactsLoadError,
           icon: Icons.person_search_outlined,
@@ -489,13 +508,19 @@ class _SupplierPickerState extends State<_SupplierPicker> {
         _isLoading = true;
         _hasError = false;
         _hasMore = true;
+        _loadMoreFailed = false;
         _nextPage = 1;
       });
     } else {
       if (_isLoading || _isLoadingMore || !_hasMore) {
         return;
       }
-      setState(() => _isLoadingMore = true);
+      // Cleared here so the list's retry button, which calls straight back
+      // into this method, can get past the automatic trigger's stand-down.
+      setState(() {
+        _isLoadingMore = true;
+        _loadMoreFailed = false;
+      });
     }
 
     final result = await widget.repository.loadSuppliers(
@@ -523,8 +548,15 @@ class _SupplierPickerState extends State<_SupplierPicker> {
           }
           _isLoading = false;
           _isLoadingMore = false;
-          _hasMore = false;
-          _hasError = true;
+          // Only the FIRST page failing is the sheet's error state. A later
+          // page that fails keeps the rows already on screen, keeps hasMore
+          // (the failure says nothing about what the shop has) and does not
+          // advance the page number, so the retry asks for the same page.
+          _hasError = reset;
+          _loadMoreFailed = !reset;
+          if (reset) {
+            _hasMore = false;
+          }
         });
     }
   }

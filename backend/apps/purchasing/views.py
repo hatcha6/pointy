@@ -30,6 +30,8 @@ from apps.catalog.models import Product, ProductVariant, VariantOptionValue
 from apps.core.idempotency import run_idempotent_request
 from apps.core.pagination import UncountedPageNumberPagination
 from apps.core.permissions import HasPointyPermission
+from apps.inventory.models import StockLedgerEntry
+from apps.inventory.opening_balance import opening_cost_entries
 from .models import (
     PurchaseLine,
     PurchaseOrder,
@@ -40,6 +42,7 @@ from .models import (
 )
 from .serializers import (
     ProductCostHistorySerializer,
+    ProductOpeningCostSerializer,
     PurchaseAdjustmentHistorySerializer,
     PurchaseDiscountPreviewSerializer,
     PurchaseOrderExchangeSerializer,
@@ -169,6 +172,7 @@ class SupplierPaymentViewSet(
         "supplier",
         "purchase_order",
         "created_by",
+        "money_account",
     )
     # Dict form so ``paid_at`` exposes range/day lookups for the Payments hub
     # (money-OUT date window), mirroring PaymentViewSet/OrderViewSet.
@@ -295,7 +299,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             "adjustments__created_by",
             "adjustments__supplier_credit",
             "audit_events__created_by",
-            "supplier_payments",
+            # With the bank each payment left: the details screen names it and
+            # draws the bank's mark, which is a query per payment without this.
+            Prefetch(
+                "supplier_payments",
+                queryset=SupplierPayment.objects.select_related("money_account"),
+            ),
             "supplier_credits",
             "attachments",
         )
@@ -591,15 +600,43 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         )
         if variant is not None:
             queryset = queryset.filter(variant=variant)
-        page = self.paginate_queryset(queryset)
-        serializer = ProductCostHistorySerializer(
-            page if page is not None else queryset,
-            many=True,
-            context=self.get_serializer_context(),
+        # A purchase is not the only thing that establishes a cost. Stock the
+        # shop already owned when it typed the product in was opened at a cost
+        # too, and a history that showed only purchases told a shop that had
+        # never raised a PO that it had no cost data — while the till was
+        # showing one.
+        rows = _MergedCostRows(
+            queryset,
+            opening_cost_entries(product=product, variant=variant).prefetch_related(
+                Prefetch(
+                    "variant__option_values",
+                    queryset=VariantOptionValue.objects.select_related("option"),
+                ),
+            ),
         )
+        page = self.paginate_queryset(rows)
+        data = self._cost_rows_data(page if page is not None else list(rows[:]))
         if page is not None:
-            return self.get_paginated_response(serializer.data)
-        return Response(serializer.data)
+            return self.get_paginated_response(data)
+        return Response(data)
+
+    def _cost_rows_data(self, rows):
+        """Serialize a page that holds both kinds of cost event.
+
+        One serializer per kind rather than one polymorphic one: they share a
+        row shape, not a model, and pretending a ledger entry is a purchase
+        line is how a null supplier starts reading as a purchase with its
+        supplier left blank.
+        """
+        context = self.get_serializer_context()
+        purchase = ProductCostHistorySerializer(context=context)
+        opening = ProductOpeningCostSerializer(context=context)
+        return [
+            (
+                opening if isinstance(row, StockLedgerEntry) else purchase
+            ).to_representation(row)
+            for row in rows
+        ]
 
     @action(detail=False, methods=["get"], url_path="product-margin-impact")
     def product_margin_impact(self, request):
@@ -620,6 +657,13 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             if latest_line is None
             else latest_purchase_line_for_variant(variant.pk, before_line=latest_line)
         )
+        # The block this feeds sits directly under the cost overview, which
+        # already counts opening balances. Leaving it on purchases alone put
+        # "12.50" and "not specified" one above the other on the same screen
+        # for the same variant.
+        latest_line, previous_line = self._two_newest_cost_events(
+            variant, latest_line, previous_line
+        )
         return Response(
             product_margin_impact_payload(
                 product=product,
@@ -629,14 +673,35 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             )
         )
 
+    def _two_newest_cost_events(self, variant, latest_line, previous_line):
+        """The last two things that set this variant's cost, of either kind.
+
+        The two newest purchase lines are already in hand, and an opening
+        balance can only displace one of them — so merging the openings into
+        that pair and taking the top two is the same answer a full merge would
+        give, without the full merge.
+        """
+        candidates = [line for line in (latest_line, previous_line) if line is not None]
+        candidates += [
+            _OpeningCostLine(entry)
+            for entry in opening_cost_entries(variant=variant)
+        ]
+        if not candidates:
+            return None, None
+        candidates.sort(key=_cost_row_sort_key, reverse=True)
+        return candidates[0], (candidates[1] if len(candidates) > 1 else None)
+
     @action(detail=False, methods=["get"], url_path="product-cost-summary")
     def product_cost_summary(self, request):
         """Per-variant lowest/highest/last/average cost for a product.
 
         Powers the "Lowest / Highest / Last cost" metrics on the product &
-        variant detail screens and the Change-prices dialog. Costs are derived
-        from received purchase history (excluding cancelled POs); ``last_cost``
-        uses the most recent line so it can differ from the lowest/highest.
+        variant detail screens and the Change-prices dialog. Two sources feed
+        it: received purchase history (excluding cancelled POs) and the opening
+        balances a shop typed in when it created the product — a shop that
+        never raised a PO still has costs, and this used to report that it had
+        none while the till showed one. ``last_cost`` is whichever of the two
+        happened most recently, so it can differ from the lowest/highest.
         """
         product = self._get_required_product()
         variants = list(product.variants.all().order_by("-is_default", "name", "id"))
@@ -673,23 +738,68 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         last_lines = latest_purchase_lines_for_variants(
             variant.pk for variant in variants
         )
+        # Opening balances are the other thing that establishes a cost, and
+        # for a shop that typed its shelves in rather than buying them through
+        # Pointy they are the ONLY thing. One query for the whole product.
+        openings_by_variant = {}
+        for entry in opening_cost_entries(product=product):
+            openings_by_variant.setdefault(entry.variant_id, []).append(entry)
         payload = []
         for variant in variants:
             stats = stats_by_variant.get(variant.pk)
             last_line = last_lines.get(variant.pk)
+            openings = openings_by_variant.get(variant.pk, [])
+            costs = [
+                cost
+                for cost in (
+                    stats["lowest_cost"] if stats else None,
+                    stats["highest_cost"] if stats else None,
+                    *(entry.valuation_rate for entry in openings),
+                )
+                if cost is not None
+            ]
+            # Averaged over events, not over sources: a variant bought three
+            # times and opened once is a mean of four costs, so folding the
+            # purchase mean back in has to carry the count it was taken over.
+            purchases_count = stats["purchases_count"] if stats else 0
+            total_count = purchases_count + len(openings)
+            average = None
+            if total_count:
+                total = sum(
+                    (entry.valuation_rate for entry in openings), Decimal("0")
+                )
+                if stats and purchases_count:
+                    total += Decimal(stats["average_cost"]) * purchases_count
+                average = total / total_count
+            # ``last_cost`` is the most RECENT cost, whichever kind of event
+            # set it — an opening balance typed today outranks a purchase from
+            # last year, and vice versa.
+            last_cost = (
+                None if last_line is None else last_line.effective_base_unit_cost
+            )
+            newest_opening = max(
+                openings, key=lambda entry: entry.posting_at, default=None
+            )
+            if newest_opening is not None and (
+                last_line is None
+                or newest_opening.posting_at >= last_line.created_at
+            ):
+                last_cost = _money_2dp(newest_opening.valuation_rate)
             payload.append(
                 {
                     "product": product.pk,
                     "variant": variant.pk,
                     "variant_name": variant.display_name,
                     "unit_price": variant.unit_price,
-                    "lowest_cost": _money_2dp(stats["lowest_cost"]) if stats else None,
-                    "highest_cost": _money_2dp(stats["highest_cost"]) if stats else None,
-                    "average_cost": _money_2dp(stats["average_cost"]) if stats else None,
-                    "last_cost": (
-                        None if last_line is None else last_line.effective_base_unit_cost
-                    ),
-                    "purchases_count": stats["purchases_count"] if stats else 0,
+                    "lowest_cost": _money_2dp(min(costs)) if costs else None,
+                    "highest_cost": _money_2dp(max(costs)) if costs else None,
+                    "average_cost": _money_2dp(average),
+                    "last_cost": last_cost,
+                    "purchases_count": purchases_count,
+                    # Openings are counted separately: "bought 3 times" and
+                    # "opened once" are different sentences, and a client that
+                    # says "3 purchases" must not start saying 4.
+                    "openings_count": len(openings),
                 }
             )
         return Response(payload)
@@ -1053,6 +1163,80 @@ def _money_2dp(value):
     """Quantize a (possibly high-precision) per-base-unit cost to money — the
     SQL divide by ``unit_factor`` yields 6dp intermediates."""
     return None if value is None else Decimal(value).quantize(Decimal("0.01"))
+
+
+class _OpeningCostLine:
+    """An opening balance in the shape the margin maths reads a purchase line.
+
+    Never saved and never a ``PurchaseLine``: the margin block asks a cost
+    event two questions — what it cost per base unit, and which row it was —
+    and an opening balance answers the first while having no answer to the
+    second. ``pk`` is None rather than borrowed from the ledger entry, because
+    a client following ``latest_purchase_line`` to a purchase order must not
+    be handed an id that points at something else entirely.
+    """
+
+    pk = None
+
+    def __init__(self, entry):
+        self.entry = entry
+        # Named ``created_at`` so it sorts through the same key a purchase
+        # line does.
+        self.created_at = entry.posting_at
+        self.base_unit_cost = _money_2dp(entry.valuation_rate)
+        self.effective_base_unit_cost = self.base_unit_cost
+
+
+def _cost_row_sort_key(row):
+    """Newest first, deterministically, across two tables.
+
+    The second element breaks a tie between a purchase line and an opening
+    balance stamped in the same instant — without it the two could swap places
+    between one page request and the next, which on an offset-paginated list
+    means a row served twice and another never served at all.
+    """
+    if isinstance(row, StockLedgerEntry):
+        return (row.posting_at, 1, row.pk)
+    if isinstance(row, _OpeningCostLine):
+        return (row.created_at, 1, row.entry.pk)
+    return (row.created_at, 0, row.pk)
+
+
+class _MergedCostRows:
+    """Purchase lines and opening balances as one newest-first sequence.
+
+    Paginated by Django's own ``Paginator``, which asks a sequence for its
+    length and then for one slice — both answerable without materialising
+    either source. The length is two COUNTs. A slice fetches at most ``stop``
+    purchase lines (exactly what offset pagination was already costing) and
+    merges them against the opening entries — a handful, since a variant is
+    opened when its product is created and not again.
+
+    Taking ``stop`` lines is enough because both inputs are already sorted: a
+    purchase line lying beyond index ``stop`` of its own list cannot reach the
+    first ``stop`` places of the merged one, since every line ahead of it in
+    that list is ahead of it in the merge too.
+    """
+
+    def __init__(self, purchase_lines, openings):
+        self._lines = purchase_lines
+        # The cheap side of the merge, read whole: one row per variant that
+        # was opened, against a purchase history that can run to thousands.
+        self._openings = sorted(openings, key=_cost_row_sort_key, reverse=True)
+
+    def count(self):
+        return self._lines.count() + len(self._openings)
+
+    def __len__(self):
+        return self.count()
+
+    def __getitem__(self, window):
+        stop = window.stop
+        lines = self._lines[:stop] if stop is not None else self._lines
+        merged = sorted(
+            [*lines, *self._openings], key=_cost_row_sort_key, reverse=True
+        )
+        return merged[window]
 
 
 def margin_amount(variant, line):

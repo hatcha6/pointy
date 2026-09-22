@@ -99,6 +99,10 @@ def _dump() -> str:
         (1, 10, "1001", "لصقة", "قطعة", 1, 5, 5, 5, 0, 20, 15, 10, 0, 3, 1, None, 2, 1),
         (1, 11, "1002", "كابل شحن", "قطعة", 1, 12, 12, 12, 0, 3, 30, 0, 0, 0, 1, None, 2, 1),
         (1, 12, "1003", "سماعة", "قطعة", 1, 8, 8, 8, 0, 4, 20, 0, 0, 0, 1, None, 2, 1),
+        # An item card the shop has not held since 2014 and never deleted. Every
+        # catalogue of this age is full of them, and whether they come across is
+        # a decision the owner gets to make (``only_stocked_products``).
+        (1, 13, "1004", "شاحن قديم", "قطعة", 1, 6, 6, 6, 0, 0, 14, 0, 0, 0, 1, None, 2, 1),
     )
     insert(
         "amilkrt",
@@ -268,7 +272,13 @@ class KassTestBase(MigrationTestBase):
         source.refresh_from_db()
         return source
 
-    def extract(self, entity_type):
+    def extract(self, entity_type, *, scope=None, basis=None):
+        """Extract one entity, optionally under a stated run scope.
+
+        ``scope``/``basis`` exist because some records only have a meaning
+        relative to the rest of the run — a party's balance most of all. The
+        default (no scope) is what the engine hands a full import.
+        """
         source = getattr(self, "_source", None)
         if source is None:
             source = self._source = self.prepared_source()
@@ -276,9 +286,15 @@ class KassTestBase(MigrationTestBase):
         transport = build_transport(
             "sqlite", {"database": str(storage.prepared_path(source))}
         )
-        ctx = getattr(self, "_ctx", None)
-        if ctx is None:
-            ctx = self._ctx = ExtractContext()
+        if scope is None and basis is None:
+            ctx = getattr(self, "_ctx", None)
+            if ctx is None:
+                ctx = self._ctx = ExtractContext()
+        else:
+            ctx = ExtractContext(
+                selected_entities=frozenset(scope or ()),
+                party_balance_basis=basis or "opening",
+            )
         with transport:
             return list(connector.extract(entity_type, transport, ctx))
 
@@ -421,7 +437,7 @@ class KassDetectionTests(KassTestBase):
     def test_the_owner_is_told_what_is_inside(self):
         source = self.prepared_source()
         entities = source.analysis["entities"]
-        self.assertEqual(entities["product"]["count"], 3)
+        self.assertEqual(entities["product"]["count"], 4)
         self.assertEqual(entities["customer"]["count"], 5)
         self.assertEqual(source.analysis["conversion"]["encoding"], "cp1256")
 
@@ -501,12 +517,39 @@ class KassSalesTests(KassTestBase):
         self.assertEqual(occurred.hour, 10)
 
     def test_customers_who_only_have_a_balance_get_an_opening_invoice(self):
-        sales = {record.source_key: record for record in self.extract("sale")}
-        opening = sales["opening:party:4"]
-        self.assertEqual(opening.sale_type, "credit")
-        self.assertEqual(opening.lines[0].unit_price, Decimal("40.00"))
+        balances = {
+            record.source_key: record
+            for record in self.extract("party_balance")
+            if record.party_kind == "customer"
+        }
+        opening = balances["opening:party:4"]
+        self.assertEqual(opening.amount, Decimal("40.00"))
         # Dated before the history, not on the day of the import.
-        self.assertLess(opening.occurred_at.date().isoformat(), "2026-02-01")
+        self.assertLess(opening.as_of.date().isoformat(), "2026-02-01")
+
+    def test_the_opening_documents_are_not_emitted_twice(self):
+        """PARTY_BALANCE owns them, so the sale stream must not repeat them.
+
+        Both streams carrying the same ``opening:party:N`` key would load the
+        same debt through two entities — and because the key is stable, the
+        second would quietly *update* the first rather than fail, leaving a
+        number that looks right and a run that counted it twice.
+        """
+        openings = [
+            record
+            for record in self.extract("sale")
+            if record.source_key.startswith("opening:")
+        ]
+        self.assertEqual(openings, [])
+
+    def test_openings_come_back_to_the_sale_stream_when_nothing_else_carries_them(self):
+        """A scope that asks for sales without balances still gets the debts."""
+        openings = [
+            record
+            for record in self.extract("sale", scope=("sale", "customer"))
+            if record.source_key.startswith("opening:")
+        ]
+        self.assertTrue(openings)
 
     def test_a_return_is_matched_to_the_sale_it_came_off(self):
         matched = {
@@ -566,9 +609,12 @@ class KassMoneyTests(KassTestBase):
         self.assertIn("buy-1", orders)
 
     def test_suppliers_owed_from_before_get_an_opening_order(self):
-        orders = {record.source_key: record for record in self.extract("purchase_order")}
-        opening = orders["opening:party:3"]
-        self.assertEqual(opening.lines[0].unit_cost, Decimal("100.00"))
+        balances = {
+            record.source_key: record
+            for record in self.extract("party_balance")
+            if record.party_kind == "supplier"
+        }
+        self.assertEqual(balances["opening:party:3"].amount, Decimal("100.00"))
 
 
 class KassPeopleTests(KassTestBase):
@@ -620,8 +666,8 @@ class KassImportTests(KassTestBase):
         self.assertIn("return_without_sale", codes)
 
     def test_the_catalogue_lands(self):
-        self.assertCreated(Product, 4)  # three items + the opening-balance item
-        self.assertCreated(ProductVariant, 4)
+        self.assertCreated(Product, 5)  # four items + the opening-balance item
+        self.assertCreated(ProductVariant, 5)
         self.assertCreated(ProductCategory, 2)
 
     def test_stock_arrives_with_a_cost_behind_it(self):

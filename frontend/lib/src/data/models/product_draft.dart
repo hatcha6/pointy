@@ -24,6 +24,8 @@ class ProductDraft {
     this.variants = const [],
     this.pricingCurrency = '',
     this.variantPriceAmount,
+    this.openingQuantity,
+    this.openingUnitCost,
   });
 
   final String variantSku;
@@ -54,6 +56,13 @@ class ProductDraft {
   /// priced in the shop's own currency — then [variantUnitPrice] is the price.
   final double? variantPriceAmount;
 
+  /// Stock the shop already has of the default variant, and what one unit of it
+  /// cost. Create-only: the server opens a valued stock balance so the product
+  /// has a real cost from day one instead of waiting for a purchase order.
+  /// Ignored when [variants] carries generated rows — those bring their own.
+  final double? openingQuantity;
+  final double? openingUnitCost;
+
   Map<String, Object?> toJson() {
     return {
       'name': name,
@@ -82,6 +91,10 @@ class ProductDraft {
             'price_amount': variantPriceAmount!.toStringAsFixed(2),
           'is_active': isActive,
           'option_values': optionValueIds,
+          if (openingQuantity != null && openingQuantity! > 0) ...{
+            'opening_quantity': openingQuantity!.toStringAsFixed(3),
+            'opening_unit_cost': (openingUnitCost ?? 0).toStringAsFixed(6),
+          },
         }
       else
         'variants': [

@@ -167,6 +167,32 @@ def resolve_unit(
     )
 
 
+def resolve_unit_for_count(
+    product: Product, code: str | None, *, field: str = "unit"
+) -> ResolvedUnit:
+    """Resolve a unit for **counting** a shelf, which is not a transaction.
+
+    A carton is a carton standing on a shelf whether or not the shop sells by
+    the carton, so this skips the sale/purchase availability gates that
+    :func:`resolve_unit` applies. Refusing to count in a purchase-only unit
+    would not make the count safer — it would push the counter into converting
+    in their head, which is where the wrong number comes from.
+    """
+    if not code or code == _base_code(product):
+        return base_resolved(product)
+    product_unit = _product_unit_by_code(product, code)
+    if product_unit is None or not product_unit.unit.is_active:
+        raise UnitConversionError(field, f"Unknown unit '{code}' for this product.")
+    return ResolvedUnit(
+        code=code,
+        factor=product_unit.factor_to_base,
+        is_base=False,
+        allows_fractional=product_unit.unit.allows_fractional,
+        product_unit=product_unit,
+        unit=product_unit.unit,
+    )
+
+
 def validate_quantity(quantity: Decimal, resolved: ResolvedUnit, *, field: str = "quantity") -> None:
     """Quantity-acceptability seam for a transaction line.
 

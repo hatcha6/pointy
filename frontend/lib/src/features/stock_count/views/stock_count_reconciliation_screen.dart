@@ -91,9 +91,19 @@ class _StockCountReconciliationScreenState
         ..showSnackBar(SnackBar(content: Text(l10n.stockCountApplied)));
       Navigator.of(context).pop(true);
     } else if (_viewModel.applyError) {
+      // The server's sentence when it wrote one — it names the items that
+      // would go negative, which is the only thing the manager can act on.
+      final reason = _viewModel.applyErrorMessage;
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.stockCountApplyError)));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(reason.isEmpty ? l10n.stockCountApplyError : reason),
+            duration: reason.isEmpty
+                ? const Duration(seconds: 4)
+                : const Duration(seconds: 10),
+          ),
+        );
       _viewModel.acknowledgeApplyError();
     }
   }

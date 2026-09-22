@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/stock_count.dart';
 import '../../../data/models/stock_count_draft.dart';
@@ -13,6 +14,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/stock_count_repository.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
+import 'stock_count_item_search_view_model.dart';
 
 /// The one quiet variance question, surfaced once after an entry crosses the
 /// threshold. Holding [expected] here is the ONLY place the system quantity is
@@ -64,6 +66,7 @@ class StockCountSessionViewModel extends ChangeNotifier {
        _entryStorage = entryStorage {
     _seedFromSession(session);
     unawaited(_restoreEntry());
+    unawaited(search(''));
   }
 
   final StockCountRepository _repository;
@@ -111,6 +114,22 @@ class StockCountSessionViewModel extends ChangeNotifier {
   int? _selectedLotId;
   bool _isLoadingLots = false;
 
+  // -- counting in cartons (units of measure) -----------------------------
+  // A shop whose goods arrive in cartons of 24 counts cartons. Blank means the
+  // product's base unit, which is what every count was before and what a shop
+  // that packs nothing will always send.
+  String _countUnitCode = '';
+
+  // -- the resting surface: search --------------------------------------
+  // A count is a walk down a shelf, and the thing in hand is usually not the
+  // thing with a readable barcode. The resting state of the counting screen is
+  // therefore the search itself — not a button that opens one — because the
+  // counter reaches for it between every pair of items and a dialog cost two
+  // taps and a wait, every single time.
+  late final StockCountItemSearchViewModel itemSearch =
+      StockCountItemSearchViewModel(_catalogRepository)
+        ..addListener(notifyListeners);
+
   StockCount get session => _session;
   ProductVariant? get currentVariant => _currentVariant;
   String get input => _input;
@@ -144,6 +163,41 @@ class StockCountSessionViewModel extends ChangeNotifier {
   int? get selectedLotId => _selectedLotId;
   bool get isLoadingLots => _isLoadingLots;
 
+  /// Units the item in hand can be counted in: its base unit first, then every
+  /// pack the product is defined in.
+  ///
+  /// Purchase-only packs are included on purpose. Counting is not selling — a
+  /// carton the shop only ever buys in is still a carton standing on a shelf,
+  /// and the server resolves it the same way.
+  List<ProductUnit> get countUnitsForCurrent =>
+      _currentVariant?.productDetail?.units ?? const [];
+
+  /// The unit the typed number is in. Blank = the product's base unit.
+  String get countUnitCode => _countUnitCode;
+
+  void selectCountUnit(String code) {
+    if (_countUnitCode == code) {
+      return;
+    }
+    _countUnitCode = code;
+    notifyListeners();
+  }
+
+  String get searchTerm => itemSearch.term;
+  List<ProductVariant> get searchResults => itemSearch.results;
+  bool get isSearching => itemSearch.isLoading;
+  bool get searchError => itemSearch.hasError;
+  bool get searchHasMore => itemSearch.hasMore;
+
+  /// What THIS counter has already entered for a variant, or null when they
+  /// have not counted it yet.
+  ///
+  /// Blind-safe: it is the counter's own number coming back to them, never the
+  /// system's. Showing it on the search list is what lets someone walking a
+  /// shelf of 20,000 lines see what they have already done — and skip an item
+  /// they do not want to count right now.
+  double? countedQuantityFor(int variantId) => _countedByVariant[variantId];
+
   void selectLot(int? lotId) {
     _selectedLotId = lotId;
     _input = '';
@@ -168,6 +222,11 @@ class StockCountSessionViewModel extends ChangeNotifier {
     }
     return (countedCount / expectedCount).clamp(0, 1).toDouble();
   }
+
+  /// Whether the typed count is a number at all. Separate from [canSubmit]
+  /// (which also covers the lot picker and an in-flight save) so pressing
+  /// Enter on "1.2.3" says why instead of doing nothing.
+  bool get hasValidInput => _parsedInput() != null;
 
   bool get canSubmit =>
       _currentVariant != null &&
@@ -195,6 +254,9 @@ class StockCountSessionViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _persistDebounce?.cancel();
+    itemSearch
+      ..removeListener(notifyListeners)
+      ..dispose();
     super.dispose();
   }
 
@@ -218,7 +280,12 @@ class StockCountSessionViewModel extends ChangeNotifier {
       }
       await _entryStorage.save(
         _entryScope,
-        jsonEncode({'variant': variant.toCartJson(), 'input': _input}),
+        jsonEncode({
+          'variant': variant.toCartJson(),
+          'input': _input,
+          // Without this a restored "3" means three pieces, not three cartons.
+          'unit': _countUnitCode,
+        }),
       );
     } catch (_) {
       // Best-effort — storage may be unavailable (e.g. in tests).
@@ -255,10 +322,30 @@ class StockCountSessionViewModel extends ChangeNotifier {
         variantJson.cast<String, Object?>(),
       );
       _input = input;
+      _countUnitCode = map['unit']?.toString() ?? '';
       notifyListeners();
     } on FormatException {
       // Corrupt entry — ignore.
     }
+  }
+
+  // -- search ---------------------------------------------------------------
+
+  Future<void> search(String term) => itemSearch.search(term);
+  Future<void> loadMoreSearchResults() => itemSearch.loadMore();
+  Future<void> retrySearch() => itemSearch.retry();
+
+  /// The Enter key's half of the fast loop: type a name (or a code), press
+  /// Enter, and the best match is in hand with the quantity field waiting.
+  /// Returns false when nothing matched, so the screen can say so instead of
+  /// silently doing nothing.
+  Future<bool> selectTopSearchMatch(String term) async {
+    final match = await itemSearch.resolveTopMatch(term);
+    if (match == null) {
+      return false;
+    }
+    selectVariant(match);
+    return true;
   }
 
   // -- scanning / selection ------------------------------------------------
@@ -355,6 +442,9 @@ class StockCountSessionViewModel extends ChangeNotifier {
     _scanMiss = false;
     _selectedLotId = null;
     _lotsForCurrent = const [];
+    // A unit belongs to the item in hand, never to the session: the next thing
+    // off the shelf is not necessarily packed the same way.
+    _countUnitCode = '';
     notifyListeners();
     if (countsByLot) {
       unawaited(_loadLots(variant));
@@ -382,10 +472,28 @@ class StockCountSessionViewModel extends ChangeNotifier {
     _input = '';
     _selectedLotId = null;
     _lotsForCurrent = const [];
+    _countUnitCode = '';
     notifyListeners();
   }
 
   // -- keypad --------------------------------------------------------------
+
+  /// Sets the count from a real text field.
+  ///
+  /// The on-screen keypad is the phone path; a till has a keyboard and a
+  /// counter who can type faster than they can tap. Both write the same
+  /// string, so whichever is in use the other stays in step.
+  void setInput(String value) {
+    // Keep only what a quantity can be. A wedge burst that lands here while
+    // the field has focus is undone by BarcodeScanListener a moment later; the
+    // filter means what it leaves behind in the meantime is at least a number.
+    final cleaned = value.replaceAll(RegExp(r'[^0-9.]'), '');
+    if (cleaned == _input) {
+      return;
+    }
+    _input = cleaned;
+    notifyListeners();
+  }
 
   void appendDigit(String digit) {
     _input = '$_input$digit';
@@ -465,6 +573,7 @@ class StockCountSessionViewModel extends ChangeNotifier {
         countedQuantity: quantity,
         mode: mode,
         batchId: countsByLot ? _selectedLotId : null,
+        unitCode: _countUnitCode,
       ),
     );
 
@@ -475,6 +584,14 @@ class StockCountSessionViewModel extends ChangeNotifier {
         _countedByVariant[variant.id] = line.countedQuantity;
         _currentVariant = null;
         _input = '';
+        _selectedLotId = null;
+        _lotsForCurrent = const [];
+        _countUnitCode = '';
+        // This item is done: the next one starts from an empty field, not from
+        // the word that found this one. (Backing out of an item deliberately
+        // does NOT reset it — there the counter is still looking at the list
+        // they just picked the wrong row from.)
+        unawaited(itemSearch.reset());
         if (line.needsReview) {
           // Blind invariant: expected is read into the prompt only — never shown
           // on the counting surface itself.

@@ -212,17 +212,27 @@ SandboxProduct _createProduct(SandboxShop shop, SandboxRequest request) {
   if (rows.isEmpty && single is Map<String, Object?>) {
     rows.add(single);
   }
-  final variants = <({String name, String sku, String barcode, double price})>[
-    for (final row in rows)
-      (
-        name: row['name']?.toString() ?? '',
-        sku: row['sku']?.toString() ?? '',
-        barcode: row['barcode']?.toString() ?? '',
-        price: request.money(row['unit_price']),
-      ),
-  ];
+  final variants =
+      <
+        ({
+          String name,
+          String sku,
+          String barcode,
+          double price,
+          double opening,
+        })
+      >[
+        for (final row in rows)
+          (
+            name: row['name']?.toString() ?? '',
+            sku: row['sku']?.toString() ?? '',
+            barcode: row['barcode']?.toString() ?? '',
+            price: request.money(row['unit_price']),
+            opening: request.money(row['opening_quantity']),
+          ),
+      ];
   if (variants.isEmpty) {
-    variants.add((name: '', sku: '', barcode: '', price: 0));
+    variants.add((name: '', sku: '', barcode: '', price: 0, opening: 0));
   }
 
   final product = shop.createProduct(

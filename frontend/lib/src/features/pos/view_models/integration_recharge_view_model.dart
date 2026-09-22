@@ -36,6 +36,34 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   Exception? _failure;
   IntegrationOffer? _selectedOffer;
 
+  /// What the cashier says the number in the box IS.
+  ///
+  /// Defaults to the phone number, which is what a till types almost always.
+  /// It orders the portal's search rather than fencing it: a phone number and
+  /// a contract number are both digits, so the server cannot tell them apart
+  /// and without this it asks every way in turn — three round trips and
+  /// ~4.4s against LNET, measured. A wrong pick costs a slower search, never
+  /// a customer who cannot be found.
+  IntegrationSearchMode _searchMode = IntegrationSearchMode.phone;
+
+  IntegrationSearchMode get searchMode => _searchMode;
+
+  /// The searches this provider offers. Empty where there is only one way to
+  /// look, and the till shows no picker at all.
+  List<IntegrationSearchMode> get searchModes =>
+      integrationSearchModes(provider);
+
+  /// Whether the search box may hold letters. A username has them; a phone
+  /// number and a contract number do not, and a digits-only field is what
+  /// keeps a cashier from mistyping one.
+  bool get allowsLetters => _searchMode == IntegrationSearchMode.username;
+
+  void selectSearchMode(IntegrationSearchMode mode) {
+    if (_searchMode == mode) return;
+    _searchMode = mode;
+    notifyListeners();
+  }
+
   IntegrationHistoryKind _historyKind = IntegrationHistoryKind.purchases;
   IntegrationHistoryPage? _historyPage;
   bool _isHistoryLoading = false;
@@ -188,6 +216,9 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
     final result = await _repository.lookupCard(
       providerKey: providerKey,
       cardNo: trimmed,
+      searchBy: searchModes.isEmpty
+          ? ''
+          : integrationSearchModeToJson(_searchMode),
     );
     switch (result) {
       case Ok<IntegrationCardSnapshot>(value: final snapshot):

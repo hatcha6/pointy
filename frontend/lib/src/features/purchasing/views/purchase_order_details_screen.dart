@@ -22,6 +22,7 @@ import '../../../shared/order/quantity_adjustment_dialog.dart';
 import '../../../shared/order_totals.dart';
 import '../../../shared/units.dart';
 import '../../../shared/payment_labels.dart';
+import '../../../shared/payments/bank_account_row.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../printing/views/print_audit_sheet.dart';
@@ -171,6 +172,13 @@ class _PurchaseOrderDetailsBody extends StatelessWidget {
           SizedBox(height: spacing.md),
           _PurchaseOrderAdjustmentHistory(order: order),
           SizedBox(height: spacing.md),
+          // Only once there is something to show. A section reading "no
+          // payments yet" on every unpaid order is a row the owner learns to
+          // scroll past, and then misses when it does carry something.
+          if (order.payments.isNotEmpty) ...[
+            _PurchaseOrderPaymentHistory(order: order),
+            SizedBox(height: spacing.md),
+          ],
           _Section(
             title: l10n.total,
             icon: Icons.summarize_outlined,
@@ -755,6 +763,67 @@ String _adjustmentTypeLabel(
     PurchaseAdjustmentType.refund => l10n.purchaseAdjustmentTypeRefund,
     PurchaseAdjustmentType.exchange => l10n.purchaseAdjustmentTypeExchange,
   };
+}
+
+/// What was paid against this order, and out of which bank.
+///
+/// The screen showed a "paid" total and nothing behind it, which is enough
+/// until a shop has two banks — and then the figure is the one thing the owner
+/// cannot reconcile, because it does not say which account is short.
+class _PurchaseOrderPaymentHistory extends StatelessWidget {
+  const _PurchaseOrderPaymentHistory({required this.order});
+
+  final PurchaseOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return _Section(
+      title: l10n.purchaseOrderPaidTotalLabel,
+      icon: Icons.payments_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (index, payment) in order.payments.indexed) ...[
+            if (index > 0) const SizedBox(height: 8),
+            PointyDataRow(
+              leading: Icon(supplierPaymentMethodIcon(payment.method)),
+              title: supplierPaymentMethodLabel(l10n, payment.method),
+              subtitle: [
+                if (payment.paidAt != null) formatDate(payment.paidAt!),
+                if (payment.reference.isNotEmpty) payment.reference,
+              ].join(' • '),
+              trailing: Text(formatMoney(payment.amount)),
+            ),
+            // Absent on cash, and on every payment a one-bank shop made.
+            if (payment.bankAccount != null)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 40, top: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      l10n.paymentPaidFromLabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: context.pointyColors.mutedInk,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: BankAccountRow(
+                        account: payment.bankAccount!,
+                        compact: true,
+                        markSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _Section extends StatelessWidget {

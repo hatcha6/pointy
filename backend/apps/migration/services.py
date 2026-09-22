@@ -26,10 +26,11 @@ from apps.core.dispatch import enqueue_or_raise
 
 from .connectors import get_connector
 from .engine import MigrationEngine
-from .entity_plan import ENTITY_PLAN_BY_TYPE, PRODUCT
+from .entity_plan import ENTITY_PLAN_BY_TYPE, PRODUCT, resolve_selection
 from .exceptions import CompatibilityError, MigrationError
 from .models import CollapseCandidate, CollapsePlan, MigrationRun, MigrationSource
 from .preparation import pipeline
+from .scopes import apply_scope, stock_filter_conflict
 
 
 def record_migration_event(*, name, user, entity_id, attributes=None, metrics=None, severity=None):
@@ -139,7 +140,7 @@ def _ensure_no_active_run() -> None:
 
 
 def queue_migration_run(
-    source, *, mode, entities=None, options=None, user=None, dispatch=True
+    source, *, mode, entities=None, options=None, scope=None, user=None, dispatch=True
 ) -> MigrationRun:
     if not source.is_ready:
         raise ValidationError({"detail": "هذا الملف غير جاهز للنقل بعد."})
@@ -148,18 +149,48 @@ def queue_migration_run(
         raise ValidationError({"detail": f"Unknown source system: {source.system_key}."})
 
     supported = set(connector.supported_entities)
+    # A named scope answers both questions at once — what to bring, and the
+    # options that make it mean what it says (``scopes``). An explicit selection
+    # or option the caller also sent still wins, so "this scope, but…" stays
+    # expressible; ``custom`` (or no scope at all) is the free selection.
+    entities, options = apply_scope(
+        scope, entities=entities, options=options, available=sorted(supported)
+    )
     requested = [entity for entity in (entities or []) if entity in ENTITY_PLAN_BY_TYPE]
     unsupported = [entity for entity in requested if entity not in supported]
     if unsupported:
         raise ValidationError({"detail": f"This system cannot transfer: {', '.join(unsupported)}."})
-    selected = requested or list(supported)
+    # Stored dependency-closed: the row is what the run will actually do, not
+    # what someone happened to tick. A selection that is quietly incoherent is
+    # worse than one that is refused — it produces an import that looks like it
+    # worked.
+    selected = list(resolve_selection(requested or None, available=supported).entities)
 
     options = dict(options or {})
+    if options.get("only_stocked_products") and not connector.supports_stock_filter:
+        raise ValidationError(
+            {"detail": "هذا النظام لا يسجّل كمية لكل صنف، فلا يمكن الاقتصار على الأصناف المتوفرة."}
+        )
+    conflicting = stock_filter_conflict(options, selected)
+    if conflicting:
+        # Refused rather than warned: the run would "succeed" with a warning per
+        # line for every product the shop stopped stocking years ago.
+        raise ValidationError(
+            {
+                "detail": (
+                    "لا يمكن نقل سجل الفواتير مع الاقتصار على الأصناف المتوفرة — "
+                    "الفواتير القديمة تشير إلى أصناف لن تُنقل."
+                ),
+                "entities": list(conflicting),
+            }
+        )
     plan = _resolve_collapse_plan(source, options)
     if plan is not None and PRODUCT in supported:
         # Without the catalogue pass nothing redirects a legacy key, so every
         # sale would resolve to a product that was never created.
-        selected = sorted({*selected, PRODUCT})
+        selected = list(
+            resolve_selection({*selected, PRODUCT}, available=supported).entities
+        )
 
     _ensure_no_active_run()
     run = MigrationRun.objects.create(
@@ -178,6 +209,7 @@ def queue_migration_run(
             "mode": mode,
             "run_id": run.pk,
             "entities": selected,
+            "scope": scope or "custom",
             "collapse_plan": plan.pk if plan else None,
         },
     )

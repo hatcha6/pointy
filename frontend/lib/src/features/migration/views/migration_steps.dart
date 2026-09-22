@@ -10,6 +10,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/migration_view_model.dart';
 import 'collapse_review_page.dart';
 import 'migration_formatting.dart';
+import 'migration_labels.dart';
 
 /// Renders whichever step of the migration the work is actually at.
 class MigrationStepView extends StatelessWidget {
@@ -530,9 +531,14 @@ class _ReviewStep extends StatelessWidget {
         else
           _ContentsGrid(viewModel: viewModel),
         SizedBox(height: spacing.md),
+        _ScopeSelection(viewModel: viewModel),
+        SizedBox(height: spacing.md),
+        _ScopeConsequences(viewModel: viewModel),
         _EntitySelection(viewModel: viewModel),
         SizedBox(height: spacing.md),
         _StockSourceSelection(viewModel: viewModel),
+        SizedBox(height: spacing.md),
+        _StockFilterToggle(viewModel: viewModel),
         SizedBox(height: spacing.md),
         _CollapseOffer(viewModel: viewModel),
         if (lastRun != null && lastRun.isDryRun) ...[
@@ -554,6 +560,7 @@ class _ContentsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final entities = viewModel.analysis.entities;
     return LayoutBuilder(
@@ -569,7 +576,11 @@ class _ContentsGrid extends StatelessWidget {
                     (constraints.maxWidth - spacing.sm * (columns - 1)) /
                     columns,
                 child: _CountTile(
-                  label: viewModel.entityLabel(entity.entityType),
+                  label: migrationEntityLabel(
+                    l10n,
+                    entity.entityType,
+                    fallback: viewModel.entityLabel(entity.entityType),
+                  ),
                   count: entity.count,
                 ),
               ),
@@ -638,7 +649,7 @@ class _EntitySelection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l10n.migrationWhatToTransferTitle,
+            l10n.migrationEntityListTitle,
             style: theme.textTheme.titleSmall,
           ),
           SizedBox(height: spacing.sm),
@@ -648,7 +659,13 @@ class _EntitySelection extends StatelessWidget {
             children: [
               for (final entity in entities)
                 FilterChip(
-                  label: Text(viewModel.entityLabel(entity)),
+                  label: Text(
+                    migrationEntityLabel(
+                      l10n,
+                      entity,
+                      fallback: viewModel.entityLabel(entity),
+                    ),
+                  ),
                   selected: viewModel.selectedEntities.contains(entity),
                   onSelected: (selected) =>
                       viewModel.toggleEntity(entity, selected),
@@ -656,6 +673,122 @@ class _EntitySelection extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "How much of this shop are we taking?", asked before the tick-boxes.
+///
+/// A scope is not a shortcut for ticking several boxes: it also pins the
+/// options that make those boxes mean what they say. Leaving the invoice
+/// history behind changes which balance each customer starts on, and asking
+/// for products without quantities has to still carry the costs. Offering
+/// those as separate checkboxes is how a shop ends up with a plausible,
+/// silently wrong set of numbers.
+class _ScopeSelection extends StatelessWidget {
+  const _ScopeSelection({required this.viewModel});
+
+  final MigrationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final spacing = AdaptiveSpacing.of(context);
+    final scopes = viewModel.scopes;
+    if (scopes.isEmpty) return const SizedBox.shrink();
+
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.migrationWhatToTransferTitle,
+            style: theme.textTheme.titleSmall,
+          ),
+          SizedBox(height: spacing.xs),
+          for (final scope in scopes)
+            Builder(
+              builder: (context) {
+                final copy = migrationScopeCopy(l10n, scope.key);
+                return _StockSourceTile(
+                  label: copy?.label ?? scope.label,
+                  subtitle: copy?.subtitle ?? scope.description,
+                  selected: viewModel.scopeKey == scope.key,
+                  onTap: () => viewModel.applyScope(scope.key),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the chosen scope means for the numbers, said before the run.
+///
+/// Two things change quietly when part of a shop is left behind, and both are
+/// stated here rather than discovered in the summary afterwards: entities that
+/// had to come along because something selected cannot run without them, and
+/// which of the old system's two balance figures each party will start on.
+class _ScopeConsequences extends StatelessWidget {
+  const _ScopeConsequences({required this.viewModel});
+
+  final MigrationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final implied = viewModel.impliedEntities;
+    final conflicts = viewModel.stockFilterConflicts;
+    final notices = <Widget>[
+      if (conflicts.isNotEmpty)
+        PointyInlineMessage.warning(message: l10n.migrationOnlyStockedConflict),
+      if (implied.isNotEmpty)
+        PointyInlineMessage(
+          message: l10n.migrationImpliedEntitiesNotice(
+            migrationEntityList(l10n, implied),
+          ),
+        ),
+      if (viewModel.selectedEntities.contains('party_balance'))
+        PointyInlineMessage(
+          message: viewModel.carriesCurrentBalances
+              ? l10n.migrationCurrentBalancesNotice
+              : l10n.migrationOpeningBalancesNotice,
+        ),
+    ];
+    if (notices.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final notice in notices) ...[notice, SizedBox(height: spacing.sm)],
+      ],
+    );
+  }
+}
+
+/// "Only the products I still stock."
+///
+/// Offered only when the detected system records a quantity per item — a
+/// filter the connector would silently ignore is worse than no filter.
+class _StockFilterToggle extends StatelessWidget {
+  const _StockFilterToggle({required this.viewModel});
+
+  final MigrationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (!viewModel.canFilterByStock) return const SizedBox.shrink();
+    return _Card(
+      child: SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        value: viewModel.onlyStockedProducts,
+        onChanged: viewModel.setOnlyStockedProducts,
+        title: Text(l10n.migrationOnlyStockedLabel),
+        subtitle: Text(l10n.migrationOnlyStockedSubtitle),
       ),
     );
   }
@@ -698,17 +831,20 @@ class _StockSourceSelection extends StatelessWidget {
         MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotLabel,
         MigrationStockSource.reconstruct =>
           l10n.migrationStockSourceReconstructLabel,
+        MigrationStockSource.costOnly => l10n.migrationStockSourceCostOnlyLabel,
         MigrationStockSource.none => l10n.migrationStockSourceNoneLabel,
       };
 
-  String _subtitle(AppLocalizations l10n, MigrationStockSource option) =>
-      switch (option) {
-        MigrationStockSource.snapshot =>
-          l10n.migrationStockSourceSnapshotSubtitle,
-        MigrationStockSource.reconstruct =>
-          l10n.migrationStockSourceReconstructSubtitle,
-        MigrationStockSource.none => l10n.migrationStockSourceNoneSubtitle,
-      };
+  String _subtitle(
+    AppLocalizations l10n,
+    MigrationStockSource option,
+  ) => switch (option) {
+    MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotSubtitle,
+    MigrationStockSource.reconstruct =>
+      l10n.migrationStockSourceReconstructSubtitle,
+    MigrationStockSource.costOnly => l10n.migrationStockSourceCostOnlySubtitle,
+    MigrationStockSource.none => l10n.migrationStockSourceNoneSubtitle,
+  };
 }
 
 /// One stock-source choice, as a tappable card.
@@ -912,7 +1048,10 @@ class _ReviewActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
-    final busy = viewModel.isStartingRun;
+    // A run the server would refuse is not offered: the contradiction is
+    // already spelled out above, and a button that only ever 400s is worse
+    // than one that is not there.
+    final busy = viewModel.isStartingRun || !viewModel.canStartRun;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1070,6 +1209,7 @@ class _StageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (stages.isEmpty) {
       return const _Card(child: Center(child: PointySpinner()));
     }
@@ -1078,7 +1218,11 @@ class _StageCard extends StatelessWidget {
         stages: [
           for (final stage in stages)
             PointyStageEntry(
-              label: stage.label,
+              label: migrationStageLabel(
+                l10n,
+                stage.key,
+                fallback: stage.label,
+              ),
               status: _status(stage.status),
               detail: stage.detail,
               percent: stage.percent,
@@ -1112,7 +1256,11 @@ class _RunSummary extends StatelessWidget {
       rows: [
         for (final summary in summaries)
           PointySummaryRow(
-            label: viewModel.entityLabel(summary.entityType),
+            label: migrationEntityLabel(
+              l10n,
+              summary.entityType,
+              fallback: viewModel.entityLabel(summary.entityType),
+            ),
             value: [
               if (summary.created > 0)
                 '${formatCount(summary.created)} ${l10n.migrationSummaryCreated}',
@@ -1160,7 +1308,11 @@ class _IssueList extends StatelessWidget {
                     ? context.pointyColors.danger
                     : context.pointyColors.warning,
               ),
-              title: viewModel.entityLabel(issue.entityType),
+              title: migrationEntityLabel(
+                l10n,
+                issue.entityType,
+                fallback: viewModel.entityLabel(issue.entityType),
+              ),
               subtitle: issue.message,
             ),
         ],

@@ -618,6 +618,27 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
         many=True,
         required=False,
     )
+    # Stock the shop already owns on the day the product is typed in, and what
+    # it cost. Write-only and create-only: this opens a valuation that has no
+    # earlier opinion to overwrite, so re-sending it on an edit would be a
+    # second opening rather than a correction (see ``validate``). Both are per
+    # BASE unit, like ``unit_price`` beside them.
+    opening_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        required=False,
+        allow_null=True,
+        min_value=0,
+        write_only=True,
+    )
+    opening_unit_cost = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        min_value=0,
+        write_only=True,
+    )
 
     def validate_sku(self, value):
         return value.strip().upper()
@@ -648,6 +669,33 @@ class DefaultProductVariantField(serializers.Field):
         )
         serializer.is_valid(raise_exception=True)
         return serializer.validated_data
+
+
+def _pop_opening_stock(variant_data):
+    """Take the opening pair off a variant payload before the model sees it.
+
+    ``opening_quantity``/``opening_unit_cost`` are not columns on
+    ``ProductVariant`` — they describe a stock event, not the product — so they
+    have to come out before the row is written or the create raises on an
+    unexpected keyword.
+    """
+    return (
+        variant_data.pop("opening_quantity", None),
+        variant_data.pop("opening_unit_cost", None),
+    )
+
+
+def _request_warehouse_id(request):
+    """Where this client's stock lives, or the shop's only place.
+
+    The same answer the manual-adjustment endpoint gives, so a product created
+    at a till stocks that till's warehouse rather than always the default one.
+    ``selling_warehouse_id`` falls back to the shop's default at every step, so
+    a request without a device header is answered rather than refused.
+    """
+    from apps.sales.registers import selling_warehouse_id
+
+    return selling_warehouse_id(request)
 
 
 def _derive_base_price(target, foreign_amount):
@@ -945,6 +993,27 @@ class ProductVariantInputSerializer(serializers.Serializer):
         many=True,
         required=False,
     )
+    # Stock the shop already owns on the day the product is typed in, and what
+    # it cost. Write-only and create-only: this opens a valuation that has no
+    # earlier opinion to overwrite, so re-sending it on an edit would be a
+    # second opening rather than a correction (see ``validate``). Both are per
+    # BASE unit, like ``unit_price`` beside them.
+    opening_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        required=False,
+        allow_null=True,
+        min_value=0,
+        write_only=True,
+    )
+    opening_unit_cost = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        min_value=0,
+        write_only=True,
+    )
 
     def validate_sku(self, value):
         return value.strip().upper()
@@ -1131,8 +1200,74 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {field: "Default must be the base unit or one of the product's units."}
                 )
+        self._validate_opening_stock(attrs)
         raise_identity_conflicts(self._identity_conflicts(attrs))
         return attrs
+
+    def _validate_opening_stock(self, attrs):
+        """Who may open a shelf, and when.
+
+        Opening stock is a stock write wearing a catalog write's clothes, so it
+        answers to the stock permission rather than to ``add_product``: a clerk
+        trusted to type a new product's name is not thereby trusted to declare
+        that the shop owns forty of it. The check lives here rather than in the
+        viewset's ``permission_map`` because the *product* create is allowed
+        either way — it is only the two extra numbers that are not.
+
+        Create-only, and refused rather than ignored on an edit. A second
+        opening on a shelf that already has a history is not a correction of
+        the first one; the honest tool for that is a stock count or an
+        adjustment, both of which say so in the stock history.
+        """
+        rows = [
+            row
+            for row in ([attrs.get("default_variant")] + list(attrs.get("variants") or []))
+            if row is not None
+        ]
+        wanted = [
+            row
+            for row in rows
+            if (row.get("opening_quantity") or 0) > 0
+            or row.get("opening_unit_cost") is not None
+        ]
+        if not wanted:
+            return
+        if self.instance is not None:
+            raise serializers.ValidationError(
+                {
+                    "opening_quantity": (
+                        "Opening stock can only be set when the product is created. "
+                        "Use a stock adjustment or a stock count to change stock later."
+                    )
+                }
+            )
+        is_service = attrs.get("is_service", False)
+        is_prepared = attrs.get("is_prepared", False)
+        if is_service or is_prepared:
+            raise serializers.ValidationError(
+                {
+                    "opening_quantity": (
+                        "This product does not keep stock (service or made-to-order)."
+                    )
+                }
+            )
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not user.has_perm("inventory.add_stockmovement"):
+            raise serializers.ValidationError(
+                {"opening_quantity": "You do not have permission to open stock."}
+            )
+        for row in wanted:
+            if (row.get("opening_quantity") or 0) <= 0:
+                # A cost with nothing to value is not half an answer, it is a
+                # typo: nothing would be written and the number would vanish.
+                raise serializers.ValidationError(
+                    {
+                        "opening_quantity": (
+                            "An opening cost needs an opening quantity to value."
+                        )
+                    }
+                )
 
     def _identity_conflicts(self, attrs):
         """Duplicate SKUs/barcodes anywhere in a product write.
@@ -1344,9 +1479,11 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 if units_data is not None:
                     self._apply_units_data(product, units_data)
                 if variants_data is not None:
-                    self._apply_variants_data(product, variants_data)
+                    self._apply_variants_data(product, variants_data, opening=True)
                 else:
-                    self._apply_default_variant_data(product, default_variant_data)
+                    self._apply_default_variant_data(
+                        product, default_variant_data, opening=True
+                    )
                 return product
         except DjangoValidationError as error:
             raise_serializer_validation(error)
@@ -1421,7 +1558,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             )
         )
 
-    def _apply_default_variant_data(self, product, default_variant_data):
+    def _apply_default_variant_data(self, product, default_variant_data, *, opening=False):
         if default_variant_data is None:
             return
         variant_data = dict(default_variant_data)
@@ -1431,13 +1568,16 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         # or a product created in one request would store the dollar figure and
         # never derive a dinar one.
         foreign_amount = variant_data.pop("price_amount", None)
+        opening_stock = _pop_opening_stock(variant_data)
         variant = product.ensure_default_variant(**variant_data)
         _derive_base_price(variant, foreign_amount)
         if option_values is not None:
             validate_variant_option_values(product, option_values, variant=variant)
             variant.option_values.set(option_values)
+        if opening:
+            self._open_stock(variant, opening_stock)
 
-    def _apply_variants_data(self, product, variants_data):
+    def _apply_variants_data(self, product, variants_data, *, opening=False):
         if not variants_data:
             return
         default_count = sum(1 for data in variants_data if data.get("is_default"))
@@ -1451,7 +1591,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         self._validate_variant_payload_combinations(variants_data)
 
         for variant_data in variants_data:
-            self._upsert_product_variant(product, variant_data)
+            self._upsert_product_variant(product, variant_data, opening=opening)
 
     def _validate_variant_payload_combinations(self, variants_data):
         signatures = set()
@@ -1472,13 +1612,14 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 )
             signatures.add(signature)
 
-    def _upsert_product_variant(self, product, variant_data):
+    def _upsert_product_variant(self, product, variant_data, *, opening=False):
         data = dict(variant_data)
         variant_id = data.pop("id", None)
         option_values = data.pop("option_values", [])
         # Same reason as the default-variant path: this writes the model
         # directly, so the derivation has to happen explicitly.
         foreign_amount = data.pop("price_amount", None)
+        opening_stock = _pop_opening_stock(data)
 
         if variant_id is None:
             variant = None
@@ -1514,6 +1655,29 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             variant.save()
         _derive_base_price(variant, foreign_amount)
         variant.option_values.set(option_values)
+        if opening:
+            self._open_stock(variant, opening_stock)
+
+    def _open_stock(self, variant, opening_stock):
+        """Put the stock the owner says they already have onto the shelf.
+
+        Inside the product's own ``transaction.atomic`` block, so a product
+        that could not be stocked is not created either — a half-written
+        product with a shelf nobody asked for is worse than a refused save.
+        """
+        quantity, unit_cost = opening_stock
+        if quantity is None or quantity <= 0:
+            return
+        from apps.inventory.opening_balance import open_stock_balance
+
+        request = self.context.get("request")
+        open_stock_balance(
+            variant=variant,
+            quantity=quantity,
+            unit_cost=unit_cost or 0,
+            warehouse=_request_warehouse_id(request),
+            user=getattr(request, "user", None),
+        )
 
 
 class ProductBulkActionSerializer(serializers.Serializer):

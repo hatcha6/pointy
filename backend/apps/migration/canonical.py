@@ -131,6 +131,42 @@ class CanonicalSupplier(CanonicalRecord):
     is_active: bool = True
 
 
+@dataclass
+class CanonicalPartyBalance(CanonicalRecord):
+    """What a customer owes the shop, or the shop owes a supplier, as a figure.
+
+    Legacy systems keep two numbers per party: the balance they were opened
+    with, and the balance they stand at now. Which one Pointy should start them
+    on depends entirely on whether the documents in between are being imported:
+
+    * bringing the history over → carry the **opening** balance, and let the
+      invoices and receipts move it to today's figure themselves;
+    * leaving the history behind → carry the **current** balance, because
+      nothing else is coming that would ever move it.
+
+    Getting that backwards is silent and expensive — a shop that imports only
+    its parties and gets ``opening`` starts every customer on a debt from years
+    ago, and one that imports the full history and gets ``current`` counts every
+    invoice twice. So the basis is chosen from the run's scope (see
+    ``scopes.resolve_party_balance_basis``), recorded on the record, and
+    reported in the run summary rather than assumed.
+    """
+
+    #: ``customer`` or ``supplier``.
+    party_kind: str = "customer"
+    party_source_key: str = ""
+    #: Always positive; ``party_kind`` is the side. A customer's amount is what
+    #: they owe the shop (receivable); a supplier's is what the shop owes them.
+    amount: Decimal = Decimal("0")
+    #: When the balance is struck. Dated before the shop's history so an
+    #: inherited debt does not read as having been incurred this morning.
+    as_of: datetime | None = None
+    #: ``opening`` or ``current`` — which of the source's two figures this is.
+    basis: str = "opening"
+    #: For the issue log, so a problem names a person and not a key.
+    party_name: str = ""
+
+
 # --- transactional ----------------------------------------------------------
 
 

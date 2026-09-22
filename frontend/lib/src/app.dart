@@ -14,6 +14,7 @@ import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
+import 'features/treasury/view_models/bank_routing.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_controller.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_scope.dart';
 import 'features/pos/view_models/pos_view_model.dart';
@@ -205,7 +206,13 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                         // parameter for it.
                         child: DocumentTrailScope(
                           repository: _dependencies.documentTrailRepository,
-                          child: railChild ?? const SizedBox.shrink(),
+                          // And one more: the till, the record-payment dialog
+                          // and the settings screen all need to know which
+                          // bank account a card or transfer lands in.
+                          child: BankRoutingScope(
+                            routing: _dependencies.bankRouting,
+                            child: railChild ?? const SizedBox.shrink(),
+                          ),
                         ),
                       ),
                       child: child ?? const SizedBox.shrink(),

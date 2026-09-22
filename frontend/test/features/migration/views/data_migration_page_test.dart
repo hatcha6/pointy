@@ -47,7 +47,14 @@ void main() {
       'display_name': 'برنامج فهد',
       'detected_version': 'fahd-mdb-recon-1',
     },
-    'supported_entities': const ['product', 'sale'],
+    'supported_entities': const [
+      'category',
+      'product',
+      'customer',
+      'party_balance',
+      'sale',
+    ],
+    'supports_stock_filter': true,
     'analysis': const {
       'entities': {
         'product': {'count': 34112},
@@ -297,6 +304,82 @@ void main() {
     final rail = tester.widget<PointyStepRail>(find.byType(PointyStepRail));
     expect(rail.currentIndex, 2);
     expect(rail.steps, hasLength(5));
+    viewModel.dispose();
+  });
+
+  testWidgets('the review step asks how much of the shop to take', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+    expect(find.text(l10n.migrationWhatToTransferTitle), findsOneWidget);
+    expect(find.text(l10n.migrationScopeEverythingLabel), findsOneWidget);
+    expect(find.text(l10n.migrationScopeOpeningPositionLabel), findsOneWidget);
+    viewModel.dispose();
+  });
+
+  testWidgets('entities are named in Arabic, never in the server\'s English', (
+    tester,
+  ) async {
+    // The regression this guards: the screen used to render the label the API
+    // sends, which is English and meant for logs. The Arabic for every entity
+    // was already in the ARB and simply never used.
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+    expect(find.text('Products'), findsNothing);
+    expect(find.text('Sales'), findsNothing);
+    expect(find.text(l10n.migrationEntityProduct), findsWidgets);
+    viewModel.dispose();
+  });
+
+  testWidgets('choosing to leave the history says what that does to balances', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    viewModel.applyScope('opening_position');
+    await tester.pumpAndSettle();
+
+    // The consequence is stated before the run, not discovered after it.
+    expect(find.text(l10n.migrationCurrentBalancesNotice), findsOneWidget);
+    viewModel.dispose();
+  });
+
+  testWidgets('a contradictory choice is explained and not offered', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    viewModel.applyScope('everything');
+    viewModel.setOnlyStockedProducts(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.migrationOnlyStockedConflict), findsOneWidget);
+    final preview = tester.widget<ButtonStyleButton>(
+      find
+          .ancestor(
+            of: find.text(l10n.migrationPreviewButton),
+            matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+          )
+          .first,
+    );
+    expect(preview.onPressed, isNull);
     viewModel.dispose();
   });
 }

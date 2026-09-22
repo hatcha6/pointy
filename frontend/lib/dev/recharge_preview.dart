@@ -50,7 +50,6 @@ class _Scenario {
   /// What the harness types into the search box on load. Empty leaves the
   /// screen in its resting state.
   final String search;
-
 }
 
 const _hdBoxCard = '210906803499';
@@ -58,29 +57,68 @@ const _lnetPhone = '0910682854';
 
 const List<_Scenario> _kScenarios = [
   // --- HD Box: a ladder of months against one card -----------------------
-  _Scenario('expired', 'HD Box · منتهي', IntegrationProviderKey.hdbox,
-      search: _hdBoxCard),
-  _Scenario('active', 'HD Box · نشط', IntegrationProviderKey.hdbox,
-      search: _hdBoxCard),
-  _Scenario('expiring', 'HD Box · يوشك', IntegrationProviderKey.hdbox,
-      search: _hdBoxCard),
-  _Scenario('empty-history', 'HD Box · بلا سجل', IntegrationProviderKey.hdbox,
-      search: _hdBoxCard),
-  _Scenario('notfound', 'HD Box · غير موجود', IntegrationProviderKey.hdbox,
-      search: _hdBoxCard),
+  _Scenario(
+    'expired',
+    'HD Box · منتهي',
+    IntegrationProviderKey.hdbox,
+    search: _hdBoxCard,
+  ),
+  _Scenario(
+    'active',
+    'HD Box · نشط',
+    IntegrationProviderKey.hdbox,
+    search: _hdBoxCard,
+  ),
+  _Scenario(
+    'expiring',
+    'HD Box · يوشك',
+    IntegrationProviderKey.hdbox,
+    search: _hdBoxCard,
+  ),
+  _Scenario(
+    'empty-history',
+    'HD Box · بلا سجل',
+    IntegrationProviderKey.hdbox,
+    search: _hdBoxCard,
+  ),
+  _Scenario(
+    'notfound',
+    'HD Box · غير موجود',
+    IntegrationProviderKey.hdbox,
+    search: _hdBoxCard,
+  ),
   _Scenario('idle', 'HD Box · البداية', IntegrationProviderKey.hdbox),
   // --- LNET: stored value against a line ---------------------------------
-  _Scenario('lnet-lines', 'LNET · عدة خطوط', IntegrationProviderKey.lnet,
-      search: _lnetPhone),
-  _Scenario('lnet-single', 'LNET · خط واحد', IntegrationProviderKey.lnet,
-      search: 'alhussainbasheir'),
-  _Scenario('lnet-expired', 'LNET · منتهي', IntegrationProviderKey.lnet,
-      search: 'basheir.shop'),
-  _Scenario('lnet-low-float', 'LNET · رصيد وكالة ضعيف',
-      IntegrationProviderKey.lnet,
-      search: 'alhussainbasheir'),
-  _Scenario('lnet-notfound', 'LNET · غير موجود', IntegrationProviderKey.lnet,
-      search: '0910000000'),
+  _Scenario(
+    'lnet-lines',
+    'LNET · عدة خطوط',
+    IntegrationProviderKey.lnet,
+    search: _lnetPhone,
+  ),
+  _Scenario(
+    'lnet-single',
+    'LNET · خط واحد',
+    IntegrationProviderKey.lnet,
+    search: 'alhussainbasheir',
+  ),
+  _Scenario(
+    'lnet-expired',
+    'LNET · منتهي',
+    IntegrationProviderKey.lnet,
+    search: 'basheir.shop',
+  ),
+  _Scenario(
+    'lnet-low-float',
+    'LNET · رصيد وكالة ضعيف',
+    IntegrationProviderKey.lnet,
+    search: 'alhussainbasheir',
+  ),
+  _Scenario(
+    'lnet-notfound',
+    'LNET · غير موجود',
+    IntegrationProviderKey.lnet,
+    search: '0910000000',
+  ),
   _Scenario('lnet-idle', 'LNET · البداية', IntegrationProviderKey.lnet),
 ];
 
@@ -242,6 +280,7 @@ class _FakeRepo extends IntegrationsRepository {
   Future<Result<IntegrationCardSnapshot>> lookupCard({
     required String providerKey,
     required String cardNo,
+    String searchBy = '',
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     if (scenario == 'notfound' || scenario == 'lnet-notfound') {
@@ -393,61 +432,69 @@ const _lnetOpenAmount = IntegrationOpenAmount(
 
 const _lnetOffers = [
   IntegrationOffer(
-      code: 'topup:10',
-      kind: 'topup',
-      label: '10 LYD',
-      cost: 9.5,
-      price: 10,
-      faceValue: 10),
+    code: 'topup:10',
+    kind: 'topup',
+    label: '10 LYD',
+    cost: 9.5,
+    price: 10,
+    faceValue: 10,
+  ),
   IntegrationOffer(
-      code: 'topup:20',
-      kind: 'topup',
-      label: '20 LYD',
-      cost: 19,
-      price: 20,
-      faceValue: 20),
+    code: 'topup:20',
+    kind: 'topup',
+    label: '20 LYD',
+    cost: 19,
+    price: 20,
+    faceValue: 20,
+  ),
   IntegrationOffer(
-      code: 'topup:25',
-      kind: 'topup',
-      label: '25 LYD',
-      cost: 23.75,
-      price: 25,
-      faceValue: 25),
+    code: 'topup:25',
+    kind: 'topup',
+    label: '25 LYD',
+    cost: 23.75,
+    price: 25,
+    faceValue: 25,
+  ),
   IntegrationOffer(
-      code: 'topup:30',
-      kind: 'topup',
-      label: '30 LYD',
-      cost: 28.5,
-      price: 30,
-      faceValue: 30),
+    code: 'topup:30',
+    kind: 'topup',
+    label: '30 LYD',
+    cost: 28.5,
+    price: 30,
+    faceValue: 30,
+  ),
   IntegrationOffer(
-      code: 'topup:40',
-      kind: 'topup',
-      label: '40 LYD',
-      cost: 38,
-      price: 40,
-      faceValue: 40),
+    code: 'topup:40',
+    kind: 'topup',
+    label: '40 LYD',
+    cost: 38,
+    price: 40,
+    faceValue: 40,
+  ),
   IntegrationOffer(
-      code: 'topup:45',
-      kind: 'topup',
-      label: '45 LYD',
-      cost: 42.75,
-      price: 45,
-      faceValue: 45),
+    code: 'topup:45',
+    kind: 'topup',
+    label: '45 LYD',
+    cost: 42.75,
+    price: 45,
+    faceValue: 45,
+  ),
   IntegrationOffer(
-      code: 'topup:50',
-      kind: 'topup',
-      label: '50 LYD',
-      cost: 47.5,
-      price: 50,
-      faceValue: 50),
+    code: 'topup:50',
+    kind: 'topup',
+    label: '50 LYD',
+    cost: 47.5,
+    price: 50,
+    faceValue: 50,
+  ),
   IntegrationOffer(
-      code: 'topup:100',
-      kind: 'topup',
-      label: '100 LYD',
-      cost: 95,
-      price: 100,
-      faceValue: 100),
+    code: 'topup:100',
+    kind: 'topup',
+    label: '100 LYD',
+    cost: 95,
+    price: 100,
+    faceValue: 100,
+  ),
 ];
 
 const _lnetVariant = IntegrationServiceVariant(
@@ -507,8 +554,9 @@ IntegrationCardSnapshot _lnetSnapshot(String scenario, String searched) {
       status: expired ? 'Expired' : 'Active',
       startAt: expired ? DateTime(2026, 1, 2) : DateTime(2026, 8, 24),
       expireAt: expired ? DateTime(2026, 2, 2) : DateTime(2026, 9, 23),
-      packageName:
-          expired ? 'Unlimited Home Basic Plus' : 'Unlimited Home Basic',
+      packageName: expired
+          ? 'Unlimited Home Basic Plus'
+          : 'Unlimited Home Basic',
       cardBalance: expired ? 0 : 12.5,
     ),
     offers: _lnetOffers,

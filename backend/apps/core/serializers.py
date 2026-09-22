@@ -44,10 +44,16 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "is_active",
+            "is_superuser",
             "role",
             "permissions",
         ]
-        read_only_fields = ["id", "role", "permissions"]
+        # ``is_superuser`` is reported, never accepted: the owner account is the
+        # one thing the users screen must not be able to hand out. The client
+        # reads it to decide whether to offer the factory reset at all — a
+        # danger zone that 403s after the password is typed is worse than one
+        # that is not there.
+        read_only_fields = ["id", "role", "permissions", "is_superuser"]
 
     def get_role(self, user):
         return assigned_role_from_group_names(
@@ -581,6 +587,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "connected_integrations",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
+            # Ceiling on the discount a cashier may take off one invoice at the
+            # till. Null = no ceiling, 0 = no till discounts at all.
+            "max_invoice_discount_amount",
             "enable_purchase_suggestions",
             # Cameras. Gates every surveillance surface in the client; the
             # backend turns it on the first time a recorder connects.
@@ -644,6 +653,25 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def update(self, instance, validated_data):
+        # ``trusted_card_terminal_ids`` is the OLD shape of the terminal
+        # registry: a bare list of ids, with no bank behind them. Clients that
+        # only know that shape still PATCH it, so a write here is reconciled
+        # into ``payments.CardTerminal`` rows — adding what is new, deactivating
+        # what is gone, and leaving the bank mapping on the rows it keeps. The
+        # registry then rewrites this field, which is why it is assigned here
+        # and not left to ``ModelSerializer`` to set.
+        terminal_ids = validated_data.pop("trusted_card_terminal_ids", _TERMINALS_UNSET)
+        instance = super().update(instance, validated_data)
+        if terminal_ids is not _TERMINALS_UNSET:
+            from apps.payments import terminals
+
+            terminals.sync_from_id_list(terminal_ids)
+            instance.refresh_from_db(fields=["trusted_card_terminal_ids"])
+        return instance
+
+
+_TERMINALS_UNSET = object()
 
 
 def shop_has_stock_history() -> bool:

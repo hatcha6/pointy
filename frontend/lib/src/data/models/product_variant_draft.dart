@@ -10,6 +10,8 @@ class ProductVariantDraft {
     this.isDefault = false,
     this.optionValueIds = const [],
     this.priceAmount,
+    this.openingQuantity,
+    this.openingUnitCost,
   });
 
   final int? id;
@@ -27,6 +29,13 @@ class ProductVariantDraft {
   /// as independent numbers, so they cannot disagree.
   final double? priceAmount;
 
+  /// Stock the shop already has of this variant, and what one unit of it cost.
+  /// Accepted only when the product is created — the server opens a valued
+  /// stock balance and refuses the pair on an edit. Both are per base unit,
+  /// like [unitPrice] beside them.
+  final double? openingQuantity;
+  final double? openingUnitCost;
+
   Map<String, Object?> toJson({bool includeProduct = true}) {
     return {
       if (id != null) 'id': id,
@@ -39,6 +48,10 @@ class ProductVariantDraft {
       'is_active': isActive,
       'is_default': isDefault,
       'option_values': optionValueIds,
+      if (openingQuantity != null && openingQuantity! > 0) ...{
+        'opening_quantity': openingQuantity!.toStringAsFixed(3),
+        'opening_unit_cost': (openingUnitCost ?? 0).toStringAsFixed(6),
+      },
     };
   }
 }

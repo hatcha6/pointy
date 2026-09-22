@@ -42,6 +42,34 @@
         "lib/dev/integrations_preview.dart"
       ],
       "port": 8793
+    },
+    {
+      "name": "treasury-preview",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "8794",
+        "-t",
+        "lib/dev/treasury_preview.dart"
+      ],
+      "port": 8794
+    },
+    {
+      "name": "pos-preview",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "8795",
+        "-t",
+        "lib/dev/pos_preview.dart"
+      ],
+      "port": 8795
     }
   ]
 }

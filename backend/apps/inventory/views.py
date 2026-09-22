@@ -16,6 +16,11 @@ from apps.catalog.services import (
     category_ids_with_descendants,
     variant_detail_queryset,
 )
+from apps.catalog.units import (
+    UnitConversionError,
+    resolve_unit_for_count,
+    to_base_quantity,
+)
 from apps.core.idempotency import run_idempotent_request
 from apps.documents import services as document_services
 from apps.documents.statuses import DocumentStatus
@@ -50,6 +55,7 @@ from .services import (
     stock_count_needs_review,
     stock_snapshot,
 )
+from .oversell import may_oversell_document
 from .valuation_service import post_movement_valuations
 from .stock_count_serializers import (
     StockCountDetailSerializer,
@@ -469,6 +475,7 @@ class StockCountViewSet(
         counted_quantity = input_serializer.validated_data["counted_quantity"]
         mode = input_serializer.validated_data["mode"]
         batch = input_serializer.validated_data.get("batch")
+        unit_code = input_serializer.validated_data.get("unit", "")
 
         stock_count = self.get_object()
         if stock_count.status != StockCount.Status.IN_PROGRESS:
@@ -496,6 +503,19 @@ class StockCountViewSet(
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # "Three cartons" becomes "72 pieces" once, here, before anything reads
+        # it — every quantity below this line, and every one stored, is base
+        # units. Sales and purchasing convert at the same seam for the same
+        # reason.
+        try:
+            resolved_unit = resolve_unit_for_count(product, unit_code)
+        except UnitConversionError as error:
+            return Response(
+                {error.field: error.message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        counted_quantity = to_base_quantity(counted_quantity, resolved_unit)
+
         if batch is not None and batch.variant_id != variant.pk:
             return Response(
                 {"batch": "هذه الدفعة ليست من هذا الصنف."},
@@ -767,17 +787,30 @@ class StockCountViewSet(
                 stock_count, actor=request.user
             )
 
-            lines = stock_count.lines.select_for_update(
-                # ``of="self"`` because the lot is nullable and Postgres
-                # refuses ``FOR UPDATE`` on the nullable side of an outer join
-                # (``postgres-for-update-nullable-join``). The rows being
-                # locked are the count's own lines anyway.
-                of=("self",)
-            ).select_related(
-                "variant",
-                "variant__product",
-                "batch",
+            lines = list(
+                stock_count.lines.select_for_update(
+                    # ``of="self"`` because the lot is nullable and Postgres
+                    # refuses ``FOR UPDATE`` on the nullable side of an outer
+                    # join (``postgres-for-update-nullable-join``). The rows
+                    # being locked are the count's own lines anyway.
+                    of=("self",)
+                ).select_related(
+                    "variant",
+                    "variant__product",
+                    "batch",
+                )
             )
+            # May this place go below zero? One question, one answer, resolved
+            # once for the whole document — the same door a transfer and a sale
+            # go through. The count used to refuse on its own authority, which
+            # made it the one path in the app that ignored a shop's deliberate
+            # "yes"; and it refused on the FIRST short line, so a manager had to
+            # discover the rest one failed apply at a time.
+            may_go_negative = may_oversell_document(
+                stock_count.warehouse_id,
+                variants=[line.variant for line in lines],
+            )
+            shortfalls = []
             for line in lines:
                 stock_item = lock_stock_item(
                     variant=line.variant, warehouse=stock_count.warehouse_id
@@ -857,15 +890,24 @@ class StockCountViewSet(
                     movement_type = StockMovement.Type.INCREASE
                 else:
                     movement_type = StockMovement.Type.DECREASE
-                    if stock_item.quantity_on_hand + delta < 0:
-                        raise serializers.ValidationError(
+                    if (
+                        not may_go_negative
+                        and stock_item.quantity_on_hand + delta < 0
+                    ):
+                        # Collect, do not raise: the manager needs the whole
+                        # list of items to walk back to, not the first one.
+                        shortfalls.append(
                             {
-                                "variant": (
-                                    f"Applying the count would make "
-                                    f"{line.variant.sku} negative."
-                                )
+                                "variant": line.variant_id,
+                                "variant_name": line.variant.full_name,
+                                "counted": float(line.counted_quantity),
+                                "available": float(stock_item.quantity_on_hand),
+                                "shortfall": float(
+                                    -(stock_item.quantity_on_hand + delta)
+                                ),
                             }
                         )
+                        continue
                 stock_item.quantity_on_hand = stock_item.quantity_on_hand + delta
                 save_stock_item_quantities(stock_item)
                 plan = allocate_adjustment(
@@ -901,6 +943,26 @@ class StockCountViewSet(
                     ]
                 )
                 applied_movements += 1
+
+            if shortfalls:
+                # Nothing is written: applying is one act, and half a count
+                # applied is a shelf nobody can reason about afterwards. The
+                # sentence names the items, because "some items" sends a
+                # manager back to a list of thousands.
+                names = [row["variant_name"] for row in shortfalls[:5]]
+                rest = len(shortfalls) - len(names)
+                listed = "، ".join(names)
+                if rest > 0:
+                    listed = f"{listed} و{rest} غيرها"
+                raise serializers.ValidationError(
+                    {
+                        "detail": (
+                            f"تطبيق هذا الجرد سيجعل رصيد هذه الأصناف بالسالب: "
+                            f"{listed}. بيعت كمية بعد عدّها — أعد عدّها."
+                        ),
+                        "stock": shortfalls,
+                    }
+                )
 
             # Applying is what submits a count: it is the moment the shelf
             # actually changes. The lifecycle stamps who and when, recomputes

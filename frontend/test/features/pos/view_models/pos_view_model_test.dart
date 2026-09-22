@@ -48,6 +48,7 @@ void main() {
   _registerQuantityCoalescingTests();
   _registerTillBlindSpotTests();
   _registerAutoPrintFloorTests();
+  _registerInvoiceDiscountTests();
   test(
     'cart totals update and checkout locks mutations until success',
     () async {
@@ -1872,14 +1873,14 @@ void main() {
       expect(
         storage.clearedScopes,
         isNot(contains('user-2')),
-        reason: "the incoming cashier's saved work was cleared before it "
+        reason:
+            "the incoming cashier's saved work was cleared before it "
             'had been read',
       );
       expect(till.cart.single.variant.id, _teaVariant.id);
       expect(storage.peek('user-1'), isNotNull);
     });
   });
-
 }
 
 PosViewModel _viewModel(
@@ -2602,6 +2603,215 @@ void _registerQuantityCoalescingTests() {
 /// Auto-print with a floor: a shop that sells one loaf of bread at a time does
 /// not want a slip for every loaf, but the cashier must still be able to print
 /// one when the customer asks.
+void _registerInvoiceDiscountTests() {
+  group("the cashier's discount on an invoice", () {
+    /// A shop with no discount rules, which is most shops: the till computes
+    /// its own totals locally once it has latched that, so this is the path a
+    /// manual discount most often takes.
+    _FakePosApiService api({double? limit}) => _FakePosApiService(
+      discountsVersion: '7',
+      shopSettings: _invoiceDiscountSettings(limit),
+      catalogPages: const {
+        1: [_coffeeVariant, _teaVariant],
+      },
+      onPreviewDiscounts: (draft) async {
+        final subtotal = draft.lines.fold<double>(
+          0,
+          (sum, line) => sum + 3.5 * line.quantity,
+        );
+        final extra = draft.extraDiscountAmount.clamp(0.0, subtotal);
+        return SaleDiscountPreview(
+          subtotal: subtotal,
+          discountTotal: extra,
+          total: subtotal - extra,
+          extraDiscountAmount: extra,
+          maxExtraDiscountAmount: subtotal,
+          rulesActive: false,
+          rulesVersion: '7',
+        );
+      },
+    );
+
+    Future<PosViewModel> ready(_FakePosApiService apiService) async {
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+      await viewModel.loadCheckoutSettings();
+      return viewModel;
+    }
+
+    test(
+      'a discount comes off the total the cashier is about to take',
+      () async {
+        final viewModel = await ready(api());
+
+        viewModel.addVariant(_coffeeVariant);
+        await _settle();
+        expect(viewModel.total, 3.5);
+
+        viewModel.updateExtraDiscountAmount(1);
+        await _settle();
+
+        expect(viewModel.extraDiscountAmount, 1);
+        expect(viewModel.appliedExtraDiscountAmount, 1);
+        expect(viewModel.total, 2.5);
+      },
+    );
+
+    test('the shop ceiling holds the box down as it is typed', () async {
+      // Felt here, not at payment in front of the customer. The server
+      // enforces the same number, which is what makes it a limit.
+      final viewModel = await ready(api(limit: 2));
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      viewModel.updateExtraDiscountAmount(50);
+      await _settle();
+
+      expect(viewModel.invoiceDiscountLimit, 2);
+      expect(viewModel.extraDiscountAmount, 2);
+      expect(viewModel.total, 1.5);
+    });
+
+    test('a zero ceiling takes the box off the sell screen', () async {
+      final viewModel = await ready(api(limit: 0));
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      viewModel.updateExtraDiscountAmount(1);
+      await _settle();
+
+      expect(viewModel.canDiscountInvoice, isFalse);
+      expect(viewModel.extraDiscountAmount, 0);
+      expect(viewModel.total, 3.5);
+    });
+
+    test('no ceiling set means the sale itself is the only bound', () async {
+      final viewModel = await ready(api());
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      viewModel.updateExtraDiscountAmount(500);
+      await _settle();
+
+      expect(viewModel.invoiceDiscountLimit, isNull);
+      // The till keeps what was typed; the server applies what the cart can
+      // carry, and the panel follows the server.
+      expect(viewModel.extraDiscountAmount, 500);
+      expect(viewModel.appliedExtraDiscountAmount, 3.5);
+      expect(viewModel.total, 0);
+    });
+
+    test('clearing the cart clears the haggle with it', () async {
+      // Otherwise it comes off the next customer's sale, decided by nobody.
+      final viewModel = await ready(api());
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      viewModel.updateExtraDiscountAmount(1);
+      await _settle();
+      viewModel.clearCart();
+      await _settle();
+
+      expect(viewModel.extraDiscountAmount, 0);
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(viewModel.total, 3.5);
+    });
+
+    test('the discount rides with the sale it was agreed on', () async {
+      // Parking a haggled sale and serving the next customer must not carry
+      // the discount across — and coming back to it must not lose it.
+      final viewModel = await ready(api());
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      viewModel.updateExtraDiscountAmount(1);
+      await _settle();
+      final haggled = viewModel.saleSessions
+          .firstWhere((session) => session.isActive)
+          .id;
+
+      viewModel.startNewSaleSession();
+      await _settle();
+      viewModel.addVariant(_teaVariant);
+      await _settle();
+      expect(viewModel.extraDiscountAmount, 0);
+      // Tea at its own full price: nothing of the other sale's haggle here.
+      expect(viewModel.total, 2.75);
+
+      viewModel.switchSaleSession(haggled);
+      await _settle();
+      expect(viewModel.extraDiscountAmount, 1);
+      expect(viewModel.total, 2.5);
+    });
+
+    test('checkout tenders the discounted total', () async {
+      final drafts = <SaleCheckoutDraft>[];
+      final apiService = _FakePosApiService(
+        discountsVersion: '7',
+        shopSettings: _invoiceDiscountSettings(null),
+        catalogPages: const {
+          1: [_coffeeVariant, _teaVariant],
+        },
+        onPreviewDiscounts: (draft) async {
+          final extra = draft.extraDiscountAmount.clamp(0.0, 3.5);
+          return SaleDiscountPreview(
+            subtotal: 3.5,
+            discountTotal: extra,
+            total: 3.5 - extra,
+            extraDiscountAmount: extra,
+            maxExtraDiscountAmount: 3.5,
+            rulesActive: false,
+            rulesVersion: '7',
+          );
+        },
+        onCheckout: (draft, _) async {
+          drafts.add(draft);
+          return _saleOrder(total: 2.5, lines: const []);
+        },
+      );
+      final viewModel = await ready(apiService);
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      viewModel.updateExtraDiscountAmount(1);
+      await _settle();
+      await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 2.5),
+        ],
+      );
+      await _settle();
+
+      expect(drafts.single.toJson()['extra_discount_amount'], '1.00');
+    });
+  });
+}
+
+ShopSettings _invoiceDiscountSettings(double? limit) => ShopSettings(
+  shopName: 'نقطة البيع',
+  receiptHeader: '',
+  receiptFooter: '',
+  enableOnlineInvoices: false,
+  requireOpeningCash: false,
+  autoPrintReceipts: false,
+  allowOverselling: true,
+  preventSellingAtLoss: false,
+  lowStockThreshold: 5,
+  cashierReturnWindowHours: 42,
+  enableCashPayments: true,
+  enableCardPayments: true,
+  enableTransferPayments: true,
+  requireCardPaymentReceipt: false,
+  trustedCardTerminalIds: const [],
+  cardCommissionPercent: 0,
+  transferCommissionPercent: 0,
+  maxInvoiceDiscountAmount: limit,
+);
+
 void _registerAutoPrintFloorTests() {
   group('the auto-print floor', () {
     Future<(PosViewModel, _StubPrintingRepository, List<SaleCheckoutDraft>)>
@@ -2769,72 +2979,81 @@ void _registerTillBlindSpotTests() {
   }
 
   group('a scan that finds nothing is recorded', () {
-    test('the code that missed is written down, with how it was entered',
-        () async {
-      final sink = _FakeAnalyticsSink();
-      final engine = engineWith(sink, 'scan-miss');
-      final viewModel = _viewModel(
-        _FakePosApiService(
-          catalogPages: const {
-            1: [_coffeeVariant],
-          },
-        ),
-        analyticsEngine: engine,
-      );
-      addTearDown(viewModel.dispose);
-      addTearDown(engine.dispose);
+    test(
+      'the code that missed is written down, with how it was entered',
+      () async {
+        final sink = _FakeAnalyticsSink();
+        final engine = engineWith(sink, 'scan-miss');
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            catalogPages: const {
+              1: [_coffeeVariant],
+            },
+          ),
+          analyticsEngine: engine,
+        );
+        addTearDown(viewModel.dispose);
+        addTearDown(engine.dispose);
 
-      expect(await viewModel.addVariantByBarcode('1000001'), isTrue);
-      expect(
-        await viewModel.addVariantByBarcode(
-          '5000009',
-          source: 'hardware_scanner',
-        ),
-        isFalse,
-      );
-      await _settle();
-      await engine.flush();
+        expect(await viewModel.addVariantByBarcode('1000001'), isTrue);
+        expect(
+          await viewModel.addVariantByBarcode(
+            '5000009',
+            source: 'hardware_scanner',
+          ),
+          isFalse,
+        );
+        await _settle();
+        await engine.flush();
 
-      final misses = sink.acceptedEvents
-          .where((event) => event.name == 'pos.scan.unmatched')
-          .toList(growable: false);
-
-      expect(misses, hasLength(1), reason: 'the hit must not be recorded too');
-      // The list of codes here is directly actionable: these are the products
-      // whose barcode needs adding, in the order the shop meets them.
-      expect(misses.single.attributes['barcode'], '5000009');
-      expect(misses.single.attributes['source'], 'hardware_scanner');
-      expect(misses.single.attributes['is_numeric'], isTrue);
-      expect(misses.single.metrics['barcode_length'], 7);
-      expect(misses.single.severity, AnalyticsEventSeverity.warning);
-    });
-
-    test('every attempt counts, because trying five times is the finding',
-        () async {
-      final sink = _FakeAnalyticsSink();
-      final engine = engineWith(sink, 'scan-retry');
-      final viewModel = _viewModel(
-        _FakePosApiService(catalogPages: const {1: []}),
-        analyticsEngine: engine,
-      );
-      addTearDown(viewModel.dispose);
-      addTearDown(engine.dispose);
-
-      await viewModel.addVariantByBarcode('5000009');
-      await viewModel.addVariantByBarcode('5000009');
-      await viewModel.addVariantByBarcode('5000009');
-      await _settle();
-      await engine.flush();
-
-      expect(
-        sink.acceptedEvents
+        final misses = sink.acceptedEvents
             .where((event) => event.name == 'pos.scan.unmatched')
-            .length,
-        3,
-        reason: 'a cashier scanning the same missing item three times is a '
-            'stronger signal than one that did, not a duplicate to collapse',
-      );
-    });
+            .toList(growable: false);
+
+        expect(
+          misses,
+          hasLength(1),
+          reason: 'the hit must not be recorded too',
+        );
+        // The list of codes here is directly actionable: these are the products
+        // whose barcode needs adding, in the order the shop meets them.
+        expect(misses.single.attributes['barcode'], '5000009');
+        expect(misses.single.attributes['source'], 'hardware_scanner');
+        expect(misses.single.attributes['is_numeric'], isTrue);
+        expect(misses.single.metrics['barcode_length'], 7);
+        expect(misses.single.severity, AnalyticsEventSeverity.warning);
+      },
+    );
+
+    test(
+      'every attempt counts, because trying five times is the finding',
+      () async {
+        final sink = _FakeAnalyticsSink();
+        final engine = engineWith(sink, 'scan-retry');
+        final viewModel = _viewModel(
+          _FakePosApiService(catalogPages: const {1: []}),
+          analyticsEngine: engine,
+        );
+        addTearDown(viewModel.dispose);
+        addTearDown(engine.dispose);
+
+        await viewModel.addVariantByBarcode('5000009');
+        await viewModel.addVariantByBarcode('5000009');
+        await viewModel.addVariantByBarcode('5000009');
+        await _settle();
+        await engine.flush();
+
+        expect(
+          sink.acceptedEvents
+              .where((event) => event.name == 'pos.scan.unmatched')
+              .length,
+          3,
+          reason:
+              'a cashier scanning the same missing item three times is a '
+              'stronger signal than one that did, not a duplicate to collapse',
+        );
+      },
+    );
   });
 
   group('what the cashier searched for is recorded', () {
@@ -2866,33 +3085,35 @@ void _registerTillBlindSpotTests() {
       expect(searches.single.severity, AnalyticsEventSeverity.warning);
     });
 
-    test('a search that lands is recorded too, so the miss rate has a floor',
-        () async {
-      final sink = _FakeAnalyticsSink();
-      final engine = engineWith(sink, 'search-hit');
-      final viewModel = _viewModel(
-        _FakePosApiService(
-          catalogPages: const {
-            1: [_coffeeVariant],
-          },
-        ),
-        analyticsEngine: engine,
-      );
-      addTearDown(viewModel.dispose);
-      addTearDown(engine.dispose);
+    test(
+      'a search that lands is recorded too, so the miss rate has a floor',
+      () async {
+        final sink = _FakeAnalyticsSink();
+        final engine = engineWith(sink, 'search-hit');
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            catalogPages: const {
+              1: [_coffeeVariant],
+            },
+          ),
+          analyticsEngine: engine,
+        );
+        addTearDown(viewModel.dispose);
+        addTearDown(engine.dispose);
 
-      await viewModel.updateSearch('coffee');
-      await _settle();
-      await engine.flush();
+        await viewModel.updateSearch('coffee');
+        await _settle();
+        await engine.flush();
 
-      final search = sink.acceptedEvents.firstWhere(
-        (event) => event.name == 'catalog.search',
-      );
+        final search = sink.acceptedEvents.firstWhere(
+          (event) => event.name == 'catalog.search',
+        );
 
-      expect(search.attributes['has_results'], isTrue);
-      expect(search.metrics['result_count'], greaterThan(0));
-      expect(search.severity, AnalyticsEventSeverity.info);
-    });
+        expect(search.attributes['has_results'], isTrue);
+        expect(search.metrics['result_count'], greaterThan(0));
+        expect(search.severity, AnalyticsEventSeverity.info);
+      },
+    );
 
     test('browsing is not a search', () async {
       // The grid reloads for a silent refresh, a screen re-entry and a filter

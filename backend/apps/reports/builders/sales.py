@@ -37,6 +37,11 @@ from .scope import (
     settled_orders,
 )
 
+#: What the discount-rules breakdown calls the discounts that came from no rule
+#: at all — the cashier's own, typed at the till. Arabic, like every other label
+#: a shop reads, and named as the authority behind it rather than as a rule.
+MANUAL_DISCOUNT_ROW_NAME = "خصم من الكاشير (بدون قاعدة)"
+
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
 QTY_FIELD = DecimalField(max_digits=14, decimal_places=3)
 ZERO_QTY = Value(Decimal("0"), output_field=QTY_FIELD)
@@ -457,6 +462,10 @@ def discount_audit(context):
         void_total=money_sum_filtered("total", Q(status=Order.Status.VOID)),
         void_count=Count("id", filter=Q(status=Order.Status.VOID)),
         discounted_order_count=Count("id", filter=Q(discount_total__gt=0)),
+        manual_discount=money_sum("extra_discount_amount"),
+        manual_discount_count=Count(
+            "id", filter=Q(extra_discount_amount__gt=0)
+        ),
     )
     adjustment_totals = adjustments.aggregate(
         refund_total=money_sum("amount"),
@@ -476,7 +485,7 @@ def discount_audit(context):
         "summary": figures,
         "sections": [
             context.metrics(figures),
-            _discount_rule_section(orders, context),
+            _discount_rule_section(orders, context, totals),
             _giveaway_by_staff_section(orders, adjustments, context),
             _voids_and_refunds_section(orders, adjustments, context),
         ],
@@ -484,7 +493,16 @@ def discount_audit(context):
     }
 
 
-def _discount_rule_section(orders, context):
+def _discount_rule_section(orders, context, totals):
+    """What each discount rule gave away — plus what the counter gave away on
+    its own authority, which belongs in the same list.
+
+    A cashier's one-off discount has no rule and therefore no ``AppliedDiscount``
+    row, so without its own line here the breakdown stops adding up to the
+    headline above it: the owner reads a shop that gave away 400 and a list that
+    accounts for 250, with nothing saying where the rest went. It is also the
+    line they most want, because it is the one nobody authorised in advance.
+    """
     from apps.discounts.models import AppliedDiscount
 
     limit = context.row_limit("discount_rules")
@@ -507,6 +525,18 @@ def _discount_rule_section(orders, context):
         }
         for row in bounded.rows
     ]
+    manual_total = decimal_from(money(totals["manual_discount"]))
+    extra_rows = 0
+    if manual_total > 0:
+        extra_rows = 1
+        rows.append(
+            {
+                "rule_name": MANUAL_DISCOUNT_ROW_NAME,
+                "times_used": totals["manual_discount_count"],
+                "amount": money(totals["manual_discount"]),
+            }
+        )
+        rows.sort(key=lambda row: decimal_from(row["amount"]), reverse=True)
     return report_section(
         "discount_rules",
         [
@@ -515,7 +545,7 @@ def _discount_rule_section(orders, context):
             Column("amount", ColumnType.MONEY, total=True),
         ],
         rows,
-        total_count=bounded.total_count,
+        total_count=bounded.total_count + extra_rows,
         limit=bounded.limit,
     )
 

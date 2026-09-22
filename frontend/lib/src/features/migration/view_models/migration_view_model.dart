@@ -18,14 +18,29 @@ import 'collapse_view_model.dart';
 /// * [reconstruct] — compute on-hand from the transaction history (purchases
 ///   minus sales); for shops whose stored balances drifted but whose invoices
 ///   are intact. Requires importing the purchase + sale history.
-/// * [none] — import products with no quantities and count physically later.
+/// * [costOnly] — carry what the goods cost but none of the quantities. Not the
+///   same as [none]: the unit cost rides on the stock record, so dropping that
+///   record leaves every product unvalued and the first sale of each one books
+///   the whole selling price as profit.
+/// * [none] — import products with no quantities and no costs.
 enum MigrationStockSource {
   snapshot,
   reconstruct,
+  costOnly,
   none;
 
   /// The value sent in the run's ``options.stock_source``.
-  String get wireValue => name;
+  String get wireValue => switch (this) {
+    MigrationStockSource.costOnly => 'cost_only',
+    _ => name,
+  };
+
+  static MigrationStockSource fromWire(Object? value) => switch (value) {
+    'snapshot' => MigrationStockSource.snapshot,
+    'reconstruct' => MigrationStockSource.reconstruct,
+    'cost_only' => MigrationStockSource.costOnly,
+    _ => MigrationStockSource.none,
+  };
 }
 
 /// Where the owner is in the migration.
@@ -77,6 +92,8 @@ class MigrationViewModel extends ChangeNotifier {
   MigrationSource? _source;
   final Set<String> _selectedEntities = <String>{};
   MigrationStockSource _stockSource = MigrationStockSource.none;
+  String _scopeKey = '';
+  bool _onlyStockedProducts = false;
   MigrationRun? _activeRun;
   MigrationRun? _lastRun;
   List<MigrationIssue> _issues = const [];
@@ -106,6 +123,61 @@ class MigrationViewModel extends ChangeNotifier {
   MigrationUploadProgress? get uploadProgress => _uploadProgress;
   Set<String> get selectedEntities => _selectedEntities;
   MigrationStockSource get stockSource => _stockSource;
+
+  /// The named scope in play, or the free selection when none is chosen.
+  String get scopeKey => _scopeKey.isEmpty ? 'custom' : _scopeKey;
+  bool get isCustomScope => scopeKey == 'custom';
+  List<MigrationScope> get scopes => _catalog?.scopes ?? const [];
+
+  /// Whether the owner asked to leave behind products the old system says are
+  /// out of stock. Only meaningful when the detected system records a quantity.
+  bool get onlyStockedProducts => _onlyStockedProducts && canFilterByStock;
+  bool get canFilterByStock => _source?.supportsStockFilter ?? false;
+
+  /// Entities the selection did not ask for but cannot run without. Shown
+  /// before the run, so nothing arrives in the summary unannounced.
+  List<String> get impliedEntities {
+    final catalog = _catalog;
+    if (catalog == null) return const [];
+    final available = supportedEntities.toSet();
+    final implied =
+        catalog
+            .dependenciesOf(_selectedEntities)
+            .where((entity) => available.contains(entity))
+            .toSet()
+          ..removeAll(_selectedEntities);
+    return [
+      for (final spec in catalog.entities)
+        if (implied.contains(spec.entityType)) spec.entityType,
+    ];
+  }
+
+  /// True when the run will carry each party's balance as it stands *today*
+  /// rather than the balance they were opened with — which is the right answer
+  /// exactly when none of the documents that moved it are being imported.
+  bool get carriesCurrentBalances {
+    if (!_selectedEntities.contains('party_balance')) return false;
+    const movers = {
+      'sale',
+      'sale_return',
+      'payment',
+      'purchase_order',
+      'supplier_payment',
+    };
+    final running = {..._selectedEntities, ...impliedEntities};
+    return running.intersection(movers).isEmpty;
+  }
+
+  /// The contradiction the server refuses: bringing the invoice history while
+  /// dropping the products it references.
+  List<String> get stockFilterConflicts {
+    if (!onlyStockedProducts) return const [];
+    const referencing = {'sale', 'sale_return', 'purchase_order'};
+    final running = {..._selectedEntities, ...impliedEntities};
+    return running.intersection(referencing).toList()..sort();
+  }
+
+  bool get canStartRun => stockFilterConflicts.isEmpty;
   MigrationRun? get activeRun => _activeRun;
   MigrationRun? get lastRun => _lastRun;
   MigrationRun? get currentRun => _activeRun ?? _lastRun;
@@ -273,9 +345,10 @@ class MigrationViewModel extends ChangeNotifier {
   }
 
   void _syncSelectedEntities() {
-    _selectedEntities
-      ..clear()
-      ..addAll(supportedEntities);
+    // A freshly identified file opens on a named scope rather than on every
+    // box ticked: "everything" is a choice too, and saying so out loud is what
+    // makes the alternatives visible at all.
+    applyScope(_scopeKey.isEmpty ? 'everything' : _scopeKey);
   }
 
   // --- choosing + uploading -------------------------------------------
@@ -431,17 +504,49 @@ class MigrationViewModel extends ChangeNotifier {
   }
 
   // --- choices ---------------------------------------------------------
+  /// Adopt a named scope: its entity set *and* the options that go with it.
+  ///
+  /// The options travel with the entities deliberately. Leaving the invoice
+  /// history behind changes which balance figure each party starts on, and
+  /// "products without quantities" has to still carry the costs — neither is
+  /// something to leave to whatever the previous scope happened to set.
+  void applyScope(String key) {
+    _scopeKey = key;
+    final scope = scopes.where((item) => item.key == key).firstOrNull;
+    final available = supportedEntities.toSet();
+    if (scope == null || !scope.isPreset || scope.entities == null) {
+      if (_selectedEntities.isEmpty) _selectedEntities.addAll(available);
+      notifyListeners();
+      return;
+    }
+    _selectedEntities
+      ..clear()
+      ..addAll(scope.entities!.where(available.contains));
+    final stock = scope.options['stock_source'];
+    if (stock != null) _stockSource = MigrationStockSource.fromWire(stock);
+    notifyListeners();
+  }
+
   void toggleEntity(String entityType, bool selected) {
     if (selected) {
       _selectedEntities.add(entityType);
     } else {
       _selectedEntities.remove(entityType);
     }
+    // Hand-editing the list is what "custom" means; pretending the preset is
+    // still in force would misdescribe the run about to happen.
+    _scopeKey = 'custom';
     notifyListeners();
   }
 
   void setStockSource(MigrationStockSource value) {
     _stockSource = value;
+    _scopeKey = 'custom';
+    notifyListeners();
+  }
+
+  void setOnlyStockedProducts(bool value) {
+    _onlyStockedProducts = value;
     notifyListeners();
   }
 
@@ -458,8 +563,10 @@ class MigrationViewModel extends ChangeNotifier {
       sourceId: source.id,
       mode: dryRun ? 'dry_run' : 'import',
       entities: _selectedEntities.toList(),
+      scope: isCustomScope ? null : _scopeKey,
       options: {
         'stock_source': _stockSource.wireValue,
+        if (onlyStockedProducts) 'only_stocked_products': true,
         // Only an approved plan travels. The server refuses anything else, and
         // sending an unapproved one would turn a dry run into a 400.
         if (willCollapse) 'collapse_plan': collapsePlan!.id,

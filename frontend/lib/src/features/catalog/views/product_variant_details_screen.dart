@@ -248,14 +248,24 @@ class _ProductCostHistorySection extends StatelessWidget {
               emptyBuilder: (context) => Text(l10n.productCostHistoryEmpty),
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, entry) {
+                final isOpening = entry.source == ProductCostSource.opening;
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
-                  leading: const Icon(Icons.inventory_2_outlined),
+                  leading: Icon(
+                    isOpening
+                        ? Icons.play_circle_outline
+                        : Icons.inventory_2_outlined,
+                  ),
                   title: Text(
-                    entry.supplierName?.isNotEmpty == true
-                        ? entry.supplierName!
-                        : l10n.noSupplierSelectedLabel,
+                    // An opening balance has no supplier because there was no
+                    // purchase — saying "no supplier selected" would read as a
+                    // purchase somebody forgot to fill in.
+                    isOpening
+                        ? l10n.openingStockCostSourceLabel
+                        : (entry.supplierName?.isNotEmpty == true
+                              ? entry.supplierName!
+                              : l10n.noSupplierSelectedLabel),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -635,11 +645,7 @@ class _StockByPlacePanel extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Icon(
-                    _placeIcon(row.kind),
-                    size: 18,
-                    color: colors.mutedInk,
-                  ),
+                  Icon(_placeIcon(row.kind), size: 18, color: colors.mutedInk),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(

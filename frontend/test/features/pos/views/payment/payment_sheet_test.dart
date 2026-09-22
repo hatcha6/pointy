@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
+import 'package:pointy_frontend/src/data/models/money_position.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/features/companion/companion_bridge.dart';
 import 'package:pointy_frontend/src/features/companion/companion_scope.dart';
@@ -879,6 +880,8 @@ Future<void> _pumpPaymentSheet(
   double height = 844,
   bool requireCardReceipt = false,
   List<String> trustedCardTerminalIds = const [],
+  List<MoneyAccount> bankAccounts = const [],
+  MoneyAccount? Function(String terminalId)? accountForTerminal,
   CompanionBridge? companionBridge,
   DateTime Function()? clock,
 }) async {
@@ -912,6 +915,8 @@ Future<void> _pumpPaymentSheet(
                 enableTransferPayments: enableTransfer,
                 requireCardReceipt: requireCardReceipt,
                 trustedCardTerminalIds: trustedCardTerminalIds,
+                bankAccounts: bankAccounts,
+                accountForTerminal: accountForTerminal,
                 clock: clock ?? DateTime.now,
                 showPrintInvoiceToggle: showPrintInvoiceToggle,
                 printInvoiceAfterPayment: printInvoiceAfterPayment,

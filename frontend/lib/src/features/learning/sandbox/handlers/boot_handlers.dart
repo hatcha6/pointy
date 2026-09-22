@@ -39,7 +39,13 @@ SandboxReply handleBoot(SandboxShop shop, SandboxRequest request) {
       request.on('GET', 'discounts/') != null ||
       request.on('GET', 'warehouses/') != null ||
       request.on('GET', 'modifier-groups/') != null ||
-      request.on('GET', 'payment-cards/') != null) {
+      request.on('GET', 'payment-cards/') != null ||
+      // The practice shop keeps its money in one place, so the till's bank
+      // picker never appears and checkout teaches the same steps it always
+      // did. Answering empty rather than 501 is what keeps it that way: a
+      // lesson must not be interrupted by a screen about bank accounts.
+      request.on('GET', 'money-accounts/') != null ||
+      request.on('GET', 'card-terminals/') != null) {
     return (200, page(const []));
   }
   if (request.on('GET', 'currencies/') != null) {

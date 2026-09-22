@@ -32,6 +32,10 @@ SYSTEM_WRITE_CALLERS = {
     "apps/documents/services.py": "the in-place correction route runs the domain's own rewrite",
     "apps/migration/loaders/purchasing.py": "an import reconstructs and replays historical documents",
     "apps/migration/loaders/sales.py": "an import reconstructs and replays historical documents",
+    "apps/migration/loaders/parties.py": (
+        "withdraws the placeholder document an earlier import raised for a "
+        "balance the source no longer carries"
+    ),
     "apps/migration/loaders/employees.py": (
         "an import replays payroll runs that were paid before Pointy existed"
     ),

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../data/models/card_payment_receipt.dart';
+import '../../../../data/models/money_position.dart';
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/components/components.dart';
 import '../../../../shared/decimal_text_input_formatter.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/payment_labels.dart';
+import '../../../../shared/payments/bank_account_picker.dart';
 import '../../../../shared/responsive/responsive.dart';
 import '../../../../shared/tutor/anchors.dart';
 import '../../../../shared/tutor/tutor_target.dart';
@@ -33,6 +35,10 @@ class TenderLineEditor extends StatelessWidget {
     required this.cardReceipt,
     required this.canValidateCardReceipt,
     required this.onValidateCardReceipt,
+    this.bankAccounts = const [],
+    this.moneyAccountId,
+    this.autoSelectedTerminal,
+    this.onMoneyAccountChanged,
   });
 
   final int index;
@@ -53,6 +59,17 @@ class TenderLineEditor extends StatelessWidget {
   final CardPaymentReceipt? cardReceipt;
   final bool canValidateCardReceipt;
   final VoidCallback onValidateCardReceipt;
+
+  /// The shop's bank accounts. Empty hides the account control completely,
+  /// which is the ordinary case and leaves this line exactly as it was.
+  final List<MoneyAccount> bankAccounts;
+  final int? moneyAccountId;
+  final String? autoSelectedTerminal;
+  final ValueChanged<int?>? onMoneyAccountChanged;
+
+  /// Cash goes in the drawer that is open; only card and transfer reach a bank.
+  bool get _takesABankAccount =>
+      method == PaymentMethod.card || method == PaymentMethod.transfer;
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +164,24 @@ class TenderLineEditor extends StatelessWidget {
                       ),
                     ]
                   : const <Widget>[];
+              // Under the amount, not beside the method: the cashier picks how
+              // they were paid first, and only then — and only for the two
+              // methods that can reach a bank — is there a bank to name.
+              final accountControls =
+                  _takesABankAccount &&
+                      onMoneyAccountChanged != null &&
+                      BankAccountPicker.isUseful(bankAccounts)
+                  ? <Widget>[
+                      SizedBox(height: spacing.sm),
+                      BankAccountPicker(
+                        accounts: bankAccounts,
+                        selectedId: moneyAccountId,
+                        autoSelectedTerminal: autoSelectedTerminal,
+                        onChanged: onMoneyAccountChanged!,
+                        dense: true,
+                      ),
+                    ]
+                  : const <Widget>[];
 
               if (constraints.maxWidth < 420) {
                 return Column(
@@ -157,6 +192,7 @@ class TenderLineEditor extends StatelessWidget {
                     methodField,
                     SizedBox(height: spacing.sm),
                     amountField,
+                    ...accountControls,
                     ...receiptControls,
                   ],
                 );
@@ -175,6 +211,7 @@ class TenderLineEditor extends StatelessWidget {
                       SizedBox(width: 160, child: amountField),
                     ],
                   ),
+                  ...accountControls,
                   ...receiptControls,
                 ],
               );

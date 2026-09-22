@@ -7,6 +7,7 @@ import '../../../data/models/stock_count.dart';
 import '../../../data/models/stock_count_draft.dart';
 import '../../../data/models/stock_count_line.dart';
 import '../../../data/repositories/stock_count_repository.dart';
+import '../../../data/services/api_error_detail.dart';
 
 /// Drives the finish screen: only the lines that differ, plus the manager-gated
 /// Apply that commits the adjustments.
@@ -35,6 +36,7 @@ class StockCountReconciliationViewModel extends ChangeNotifier {
   bool _hasLoadError = false;
   bool _isApplying = false;
   bool _applyError = false;
+  String _applyErrorMessage = '';
   StockCount? _appliedResult;
 
   StockCount get session => _session;
@@ -55,6 +57,13 @@ class StockCountReconciliationViewModel extends ChangeNotifier {
   bool get hasLoadError => _hasLoadError;
   bool get isApplying => _isApplying;
   bool get applyError => _applyError;
+
+  /// Why the server refused, in its own words, or empty when it gave none.
+  ///
+  /// A count is refused for exactly one interesting reason — applying it would
+  /// drive named items below zero — and the server names them. "Could not
+  /// apply" sends a manager back to a shelf of thousands with nothing to go on.
+  String get applyErrorMessage => _applyErrorMessage;
   StockCount? get appliedResult => _appliedResult;
 
   Future<void> load() async {
@@ -102,6 +111,7 @@ class StockCountReconciliationViewModel extends ChangeNotifier {
         _session = applied;
       case Error<StockCount>():
         _applyError = true;
+        _applyErrorMessage = apiErrorDetail(result.exception, maxParts: 1);
     }
 
     _isApplying = false;
@@ -111,6 +121,7 @@ class StockCountReconciliationViewModel extends ChangeNotifier {
 
   void acknowledgeApplyError() {
     _applyError = false;
+    _applyErrorMessage = '';
     notifyListeners();
   }
 }

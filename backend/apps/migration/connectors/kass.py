@@ -89,6 +89,7 @@ from ..entity_plan import (
     EXPENSE,
     EXPENSE_CATEGORY,
     MONEY_ACCOUNT,
+    PARTY_BALANCE,
     PAYMENT,
     PAYROLL_RUN,
     PRODUCT,
@@ -157,6 +158,8 @@ class KassConnector(BaseConnector):
     display_name = "نظام كاس (دلفي)"
     implemented = True
     required_transport = "sqlite"
+    # kamkrt.NawRasid is the item card's on-hand quantity.
+    supports_stock_filter = True
     supported_entities = (
         UNIT,
         CATEGORY,
@@ -164,6 +167,7 @@ class KassConnector(BaseConnector):
         STOCK,
         CUSTOMER,
         SUPPLIER,
+        PARTY_BALANCE,
         PURCHASE_ORDER,
         SUPPLIER_PAYMENT,
         SALE,
@@ -219,6 +223,7 @@ class KassConnector(BaseConnector):
             STOCK: self._stock,
             CUSTOMER: self._customers,
             SUPPLIER: self._suppliers,
+            PARTY_BALANCE: self._party_balances,
             PURCHASE_ORDER: self._purchase_orders,
             SUPPLIER_PAYMENT: self._supplier_payments,
             SALE: self._sales,
@@ -299,6 +304,8 @@ class KassConnector(BaseConnector):
             name = _clean(record.get("senfdisc"))
             if item is None or not name:
                 continue
+            if ctx.only_stocked_products and _to_decimal(record.get("nawrasid")) <= ZERO:
+                continue
             unit = _clean(record.get("unit"))
             if not unit or unit == ".":
                 unit = _DEFAULT_UNIT_NAME
@@ -341,6 +348,10 @@ class KassConnector(BaseConnector):
             record = _lower(row)
             item = _to_int(record.get("senfno"))
             if item is None:
+                continue
+            # Mirrors the product filter exactly: a stock row for a product that
+            # was never emitted would be an unresolved-variant error per item.
+            if ctx.only_stocked_products and _to_decimal(record.get("nawrasid")) <= ZERO:
                 continue
             reorder = _to_int(record.get("lessrasid"))
             yield canonical.CanonicalStock(
@@ -415,13 +426,16 @@ class KassConnector(BaseConnector):
                 party["sold_to"] = True
 
         # A party with a balance and no documents at all still has to land
-        # somewhere, or their debt is silently dropped.
+        # somewhere, or their debt is silently dropped. Both figures are
+        # consulted, not just the opening one: a balances-only import reads the
+        # *current* balance, and a party who has one of those and no opening
+        # would otherwise be given no role and dropped before it was read.
         for party in parties.values():
             if party["is_placeholder"] or party["sold_to"] or party["bought_from"]:
                 continue
-            if party["opening_payable"] > 0:
+            if party["opening_payable"] > 0 or party["balance"] > 0:
                 party["bought_from"] = True
-            elif party["opening_receivable"] > 0:
+            elif party["opening_receivable"] > 0 or party["balance"] < 0:
                 party["sold_to"] = True
 
         ctx.cache["kass_parties"] = parties
@@ -715,7 +729,11 @@ class KassConnector(BaseConnector):
                 raw=header,
             )
 
-        yield from self._opening_sales(transport, ctx)
+        # Only when nothing else is carrying them. When PARTY_BALANCE is in
+        # the run it owns every opening document, on both sides, and
+        # emitting them here as well would owe each debt twice.
+        if not ctx.includes(PARTY_BALANCE):
+            yield from self._opening_sales(transport, ctx)
 
     def _opening_sales(self, transport, ctx):
         """One credit invoice per customer who already owed money."""
@@ -744,6 +762,71 @@ class KassConnector(BaseConnector):
                 ],
                 raw={"opening_balance_for": party["name"]},
             )
+
+    # --- party balances --------------------------------------------------
+    def _party_balances(self, transport, ctx):
+        """What each party stands at, on the basis this run calls for.
+
+        KASS keeps both figures on the party card: ``FirstRasid`` is what they
+        were opened with and ``NawRasid`` is where they stand today, the two
+        joined by every document in between
+
+            NawRasid = FirstRasid + purchases − payments_out − sales
+                       + returns + receipts
+
+        so which one to carry is decided by whether those documents are coming
+        too. ``ctx.party_balance_basis`` is that decision, made once for the run
+        (see ``scopes.resolve_party_balance_basis``); reading the wrong one is
+        silent and produces a plausible number, which is why it is not guessed
+        here.
+
+        The sign convention is the source's own, proved against every party in
+        the field dump: a positive balance is money the shop owes, a negative
+        one is money it is owed.
+        """
+        opened_at = self._history_start(transport, ctx)
+        current = ctx.party_balance_basis == "current"
+        for number, party in sorted(self._parties(transport, ctx).items()):
+            # مبيعات نقدية and its kind are counter placeholders, not people;
+            # their "balance" is the day's cash takings.
+            if party["is_placeholder"]:
+                continue
+            if current:
+                balance = party["balance"]
+                payable = balance if balance > 0 else ZERO
+                receivable = -balance if balance < 0 else ZERO
+            else:
+                payable = party["opening_payable"]
+                receivable = party["opening_receivable"]
+
+            # A party with nothing owed still gets a record. Silence is not the
+            # same as zero: if this shop was first imported on the current basis
+            # and is now being re-imported with its history, the opening
+            # document raised for that earlier balance has to be *withdrawn*,
+            # and the only thing that can withdraw it is a record saying the
+            # balance is now zero. Skipping them left خالد owing 120.
+            if party["sold_to"]:
+                yield canonical.CanonicalPartyBalance(
+                    source_key=f"opening:party:{number}",
+                    party_kind="customer",
+                    party_source_key=f"party:{number}",
+                    amount=receivable.quantize(_MONEY),
+                    as_of=opened_at,
+                    basis=ctx.party_balance_basis,
+                    party_name=party["name"],
+                    raw=party["row"],
+                )
+            if party["bought_from"]:
+                yield canonical.CanonicalPartyBalance(
+                    source_key=f"opening:party:{number}",
+                    party_kind="supplier",
+                    party_source_key=f"party:{number}",
+                    amount=payable.quantize(_MONEY),
+                    as_of=opened_at,
+                    basis=ctx.party_balance_basis,
+                    party_name=party["name"],
+                    raw=party["row"],
+                )
 
     def _history_start(self, transport, ctx) -> datetime:
         """The day before the first document — where opening balances sit.
@@ -886,7 +969,8 @@ class KassConnector(BaseConnector):
                 raw=header,
             )
 
-        yield from self._opening_purchases(transport, ctx)
+        if not ctx.includes(PARTY_BALANCE):
+            yield from self._opening_purchases(transport, ctx)
 
     def _opening_purchases(self, transport, ctx):
         """One received, unpaid order per supplier the shop already owed."""

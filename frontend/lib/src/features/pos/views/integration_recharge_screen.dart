@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/error_messages.dart';
 import '../../../data/models/integration_card.dart';
+import '../../../data/models/integration_provider.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
@@ -177,26 +178,39 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
 
   Widget _buildSearchField(BuildContext context, AppLocalizations l10n) {
     final viewModel = widget.viewModel;
+    final prompt = integrationSubscriberPrompt(viewModel.provider, l10n);
+    // The picker says which number this is, so the hint saying "phone or
+    // username or contract" would be repeating it — and on a phone-width
+    // till the two together leave the hint as an ellipsis.
+    final hasPicker = viewModel.searchModes.length >= 2;
     return TextField(
       controller: _cardController,
       focusNode: _cardFocus,
-      // Digits only: the provider rejects anything else before it even looks,
-      // so the keyboard should not offer the cashier a way to get it wrong.
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      // A username has letters in it; a phone number and a contract number do
+      // not, and a digits-only field is what stops a cashier mistyping one.
+      // So the keyboard follows the picker rather than being fixed.
+      keyboardType: viewModel.allowsLetters
+          ? TextInputType.text
+          : TextInputType.number,
+      inputFormatters: viewModel.allowsLetters
+          ? const []
+          : [FilteringTextInputFormatter.digitsOnly],
       textDirection: TextDirection.ltr,
       textInputAction: TextInputAction.search,
       onSubmitted: (_) => _search(),
       decoration: InputDecoration(
-        labelText: integrationSubscriberPrompt(
-          widget.viewModel.provider,
-          l10n,
-        ).label,
-        hintText: integrationSubscriberPrompt(
-          widget.viewModel.provider,
-          l10n,
-        ).hint,
-        prefixIcon: const Icon(Icons.sim_card_outlined),
+        // The label says what the field holds; the picker says which kind
+        // this one is. Repeating the mode in both reads as a bug, and the
+        // hint repeating it a third time is what left it as an ellipsis.
+        labelText: prompt.label,
+        hintText: hasPicker ? null : prompt.hint,
+        prefixIcon: _buildSearchModePicker(context, l10n),
+        // The picker is a control, not an icon, so it needs room to be one —
+        // but only it does. A plain icon keeps the default box, or it ends up
+        // squashed against the border on every provider that has no picker.
+        prefixIconConstraints: hasPicker
+            ? const BoxConstraints(minWidth: 0, minHeight: 0)
+            : null,
         suffixIcon: IconButton(
           icon: viewModel.isSearching
               ? const SizedBox.square(
@@ -206,6 +220,75 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
               : const Icon(Icons.search),
           onPressed: viewModel.isSearching ? null : _search,
           tooltip: l10n.rechargeSearchAction,
+        ),
+      ),
+    );
+  }
+
+  /// What the cashier says the number IS, in front of the box they type it in.
+  ///
+  /// The person holding the number knows whether it is a phone number or a
+  /// contract number; the server cannot tell — they are both digits — and
+  /// guessing costs it a round trip to the portal per wrong guess, measured
+  /// at three trips and ~4.4s on a real till. So the till asks, once, and the
+  /// ordinary lookup becomes a single request.
+  ///
+  /// Shown only where the provider really offers a choice: HD Box knows a
+  /// subscriber by the number on their card and nothing else, and a picker
+  /// with one row in it is worse than no picker.
+  Widget _buildSearchModePicker(BuildContext context, AppLocalizations l10n) {
+    final viewModel = widget.viewModel;
+    final modes = viewModel.searchModes;
+    if (modes.length < 2) return const Icon(Icons.sim_card_outlined);
+
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+    final selected = integrationSearchModeLabel(viewModel.searchMode, l10n);
+    return Padding(
+      padding: EdgeInsetsDirectional.only(start: spacing.sm, end: spacing.xs),
+      child: PopupMenuButton<IntegrationSearchMode>(
+        key: const ValueKey('recharge_search_mode_picker'),
+        tooltip: l10n.rechargeSearchByLabel,
+        enabled: !viewModel.isSearching,
+        initialValue: viewModel.searchMode,
+        onSelected: (mode) {
+          viewModel.selectSearchMode(mode);
+          // The field's formatter changes with the pick, and a contract
+          // number left in the box when the cashier switches to "username"
+          // is not what they are about to search for.
+          _cardController.clear();
+          _cardFocus.requestFocus();
+        },
+        itemBuilder: (context) => [
+          for (final mode in modes)
+            PopupMenuItem<IntegrationSearchMode>(
+              value: mode,
+              child: Row(
+                children: [
+                  Icon(integrationSearchModeLabel(mode, l10n).icon, size: 18),
+                  SizedBox(width: spacing.sm),
+                  Text(integrationSearchModeLabel(mode, l10n).label),
+                ],
+              ),
+            ),
+        ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(selected.icon, size: 20, color: theme.colorScheme.primary),
+            SizedBox(width: spacing.xs),
+            Text(
+              selected.label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            Icon(
+              Icons.arrow_drop_down,
+              size: 20,
+              color: theme.colorScheme.primary,
+            ),
+          ],
         ),
       ),
     );

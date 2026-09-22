@@ -23,6 +23,8 @@ class PointyDataList<T> extends StatelessWidget {
     this.loadMoreExtent = 480,
     this.skeletonItemBuilder,
     this.skeletonItemCount = 6,
+    this.loadMoreFailed = false,
+    this.loadMoreErrorMessage,
   });
 
   final List<T> items;
@@ -48,6 +50,13 @@ class PointyDataList<T> extends StatelessWidget {
   /// unusual row shape.
   final WidgetBuilder? skeletonItemBuilder;
   final int skeletonItemCount;
+
+  /// See [InfiniteScrollView.loadMoreFailed]. Note this is about a page AFTER
+  /// the first; [hasError] is the first page failing with nothing to show.
+  final bool loadMoreFailed;
+
+  /// See [InfiniteScrollView.loadMoreErrorMessage].
+  final String? loadMoreErrorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +96,8 @@ class PointyDataList<T> extends StatelessWidget {
       header: header,
       padding: padding,
       loadMoreExtent: loadMoreExtent,
+      loadMoreFailed: loadMoreFailed,
+      loadMoreErrorMessage: loadMoreErrorMessage,
       separatorBuilder: separatorBuilder ?? (_, _) => const SizedBox(height: 8),
     );
 

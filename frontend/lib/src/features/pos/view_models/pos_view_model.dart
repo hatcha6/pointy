@@ -449,6 +449,14 @@ class PosViewModel extends ChangeNotifier {
       ..touch();
   }
 
+  double get _extraDiscountAmount => _activeSaleSession.extraDiscountAmount;
+
+  set _extraDiscountAmount(double value) {
+    _activeSaleSession
+      ..extraDiscountAmount = value
+      ..touch();
+  }
+
   SaleDiscountPreview? get _discountPreview {
     return _activeSaleSession.discountPreview;
   }
@@ -597,6 +605,32 @@ class PosViewModel extends ChangeNotifier {
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
   String get couponCode => _couponCode;
+
+  /// What the cashier typed into the invoice-discount box.
+  double get extraDiscountAmount => _extraDiscountAmount;
+
+  /// What of it the server actually applied. Below [extraDiscountAmount] only
+  /// when the cart cannot carry the whole thing — the display follows this one,
+  /// so the cashier is never shown a discount the sale is not getting.
+  double get appliedExtraDiscountAmount =>
+      _discountPreview?.extraDiscountAmount ?? 0;
+
+  /// The largest discount this cart could take, from the last preview.
+  double get maxExtraDiscountAmount =>
+      _discountPreview?.maxExtraDiscountAmount ?? 0;
+
+  /// Whether this shop lets the counter discount at all. Defaults to yes while
+  /// settings are still loading, matching every other permissive default here —
+  /// the server refuses the discount either way if the shop has turned it off.
+  bool get canDiscountInvoice =>
+      _checkoutSettings?.allowsInvoiceDiscount ?? true;
+
+  /// The shop's per-invoice ceiling, or null when there is none.
+  double? get invoiceDiscountLimit =>
+      (_checkoutSettings?.hasInvoiceDiscountLimit ?? false)
+      ? _checkoutSettings?.maxInvoiceDiscountAmount
+      : null;
+
   SaleDiscountPreview? get discountPreview => _discountPreview;
   bool get isLoadingDiscountPreview => _isLoadingDiscountPreview;
   bool get hasDiscountPreviewError => _hasDiscountPreviewError;
@@ -865,6 +899,31 @@ class PosViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
+  /// Set the one-off discount for this invoice.
+  ///
+  /// Held to the shop's ceiling here as well as on the server. The client guard
+  /// is what the cashier actually feels — the box stops at the limit instead of
+  /// accepting a number and having checkout reject it later — and the server
+  /// guard is what makes the limit real.
+  void updateExtraDiscountAmount(double value) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final limit = invoiceDiscountLimit;
+    var next = value.isFinite && value > 0 ? value : 0.0;
+    if (!canDiscountInvoice) {
+      next = 0;
+    } else if (limit != null && next > limit) {
+      next = limit;
+    }
+    if (next == _extraDiscountAmount) {
+      return;
+    }
+    _extraDiscountAmount = next;
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+  }
+
   PosSaleSessionSummary _saleSessionSummary(_PosSaleSession session) {
     final subtotal = _saleSessionSubtotal(session);
     return PosSaleSessionSummary(
@@ -906,6 +965,11 @@ class _PosSaleSession {
   final List<CartLine> cart = [];
   Customer? selectedCustomer;
   String couponCode = '';
+
+  /// The one-off discount the cashier typed for THIS sale. Per sale session, so
+  /// parking a haggled sale and ringing up the next customer does not carry the
+  /// discount over — and coming back to it does.
+  double extraDiscountAmount = 0;
   final Map<String, _PosCheckoutAttempt> _checkoutAttemptsBySignature = {};
   SaleDiscountPreview? discountPreview;
   bool isLoadingDiscountPreview = false;

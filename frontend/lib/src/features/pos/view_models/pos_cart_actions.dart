@@ -408,6 +408,9 @@ extension PosCartActions on PosViewModel {
     _trackCartCleared(removedLines, source: source);
     _cart.clear();
     _couponCode = '';
+    // The haggle belonged to the basket that just went away. Carrying it over
+    // would take money off the next customer's sale without anybody deciding to.
+    _extraDiscountAmount = 0;
     _discountPreview = null;
     _hasDiscountPreviewError = false;
     _touchActiveSaleSession();

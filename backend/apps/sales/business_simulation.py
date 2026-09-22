@@ -1792,9 +1792,41 @@ class Simulation:
         ]
         return self.discount_engine.calculate(discount_lines, customer_id, coupon_codes)
 
-    def _order_line_discounts(self, specs, per_line_discount):
+    def _random_invoice_discount(self, specs, per_line_discount):
+        """A cashier's one-off discount for this invoice, or nothing.
+
+        Kept strictly inside what the cart can still carry, because a discount
+        larger than the goods is a *different* property (the clamp) and the
+        targeted tests prove that one on its own. What this generates is the
+        ordinary case the oracle is here for: a real amount, on a real cart, to
+        be spread across real lines without creating or losing a cent.
+        """
+        if self.rng.random() >= 0.17:
+            return ZERO
+        room = ZERO
+        for index, spec in enumerate(specs):
+            subtotal = even2(spec["eff_price"] * spec["quantity"])
+            room += subtotal - min(
+                per_line_discount.get(str(index), ZERO), subtotal
+            )
+        # Leave at least a cent on the sale: a zero total takes no payment, and
+        # ``op_standard_sale`` would simply throw the case away.
+        room = room - CENT
+        if room <= ZERO:
+            return ZERO
+        cents = self.rng.randint(1, int((room * HUNDRED).to_integral_value()))
+        return up2(Decimal(cents) / HUNDRED)
+
+    def _order_line_discounts(self, specs, per_line_discount, extra=ZERO):
         """The discount each ORDER LINE stores — the oracle's own port of
         ``apps.sales.services.order_line_discounts``.
+
+        Covers both kinds. ``extra`` is the cashier's own one-off discount for
+        the invoice, spread across the lines in proportion to the room each has
+        left after the engine, through the same largest-remainder allocator —
+        and summed into the same column, because that is exactly what the
+        backend does and the whole point of this port is to disagree with it
+        when it is wrong.
 
         The engine (ported above as ``OracleDiscountEngine``) allocates in the
         discount regime, ``up2``, and caps a line at *its* subtotal. An order
@@ -1804,15 +1836,27 @@ class Simulation:
         ``even2`` subtotal — computed here from the oracle's own ``eff_price``
         and ``quantity``, never read back from the order.
         """
-        return {
-            str(index): min(
-                per_line_discount.get(str(index), ZERO),
-                even2(spec["eff_price"] * spec["quantity"]),
-            )
+        subtotals = {
+            str(index): even2(spec["eff_price"] * spec["quantity"])
             for index, spec in enumerate(specs)
         }
+        engine = {
+            key: min(per_line_discount.get(key, ZERO), subtotal)
+            for key, subtotal in subtotals.items()
+        }
+        extra = up2(extra or ZERO)
+        if extra <= ZERO:
+            return engine
+        room = {key: subtotals[key] - engine[key] for key in subtotals}
+        extra = min(extra, up2(sum(room.values(), ZERO)))
+        if extra <= ZERO:
+            return engine
+        combined = dict(engine)
+        for key, share in allocate_discount_amount(extra, room).items():
+            combined[key] = min(up2(combined[key] + share), subtotals[key])
+        return combined
 
-    def _order_totals(self, specs, per_line_discount):
+    def _order_totals(self, specs, per_line_discount, extra=ZERO):
         subtotal = even2(
             sum((even2(s["eff_price"] * s["quantity"]) for s in specs), ZERO)
         )
@@ -1820,7 +1864,8 @@ class Simulation:
         # an allocation a cent above its own line used to take that cent off the
         # order as well. Ported from the documented backend rule.
         discount_total = sum(
-            self._order_line_discounts(specs, per_line_discount).values(), ZERO
+            self._order_line_discounts(specs, per_line_discount, extra).values(),
+            ZERO,
         )
         discount_total = min(even2(discount_total), subtotal)
         total = even2(subtotal - discount_total)
@@ -1849,10 +1894,48 @@ class Simulation:
         base_cost = self.oracle.cost_basis(variant_id, base_quantity)
         return even2(base_cost * unit_factor)
 
-    def _build_order_rec(self, order, specs, per_line_discount, sale_type, customer_id):
+    def _build_order_rec(
+        self,
+        order,
+        specs,
+        per_line_discount,
+        sale_type,
+        customer_id,
+        extra_discount=ZERO,
+    ):
         issues_stock = sale_type != Order.SaleType.QUOTATION
-        subtotal, discount_total, total = self._order_totals(specs, per_line_discount)
-        line_discounts = self._order_line_discounts(specs, per_line_discount)
+        subtotal, discount_total, total = self._order_totals(
+            specs, per_line_discount, extra_discount
+        )
+        line_discounts = self._order_line_discounts(
+            specs, per_line_discount, extra_discount
+        )
+        # The column the invoice stores is the discount actually GIVEN, held
+        # down to what the cart could carry — not what was asked for.
+        expected_extra = min(
+            up2(extra_discount or ZERO),
+            max(
+                even2(
+                    sum(
+                        (even2(s["eff_price"] * s["quantity"]) for s in specs),
+                        ZERO,
+                    )
+                )
+                - sum(
+                    min(
+                        per_line_discount.get(str(index), ZERO),
+                        even2(spec["eff_price"] * spec["quantity"]),
+                    )
+                    for index, spec in enumerate(specs)
+                ),
+                ZERO,
+            ),
+        )
+        self.assert_money(
+            order.extra_discount_amount,
+            expected_extra,
+            f"order#{order.pk} extra_discount_amount",
+        )
         for index, spec in enumerate(specs):
             gross = spec["eff_price"] * spec["quantity"]
             if gross <= ZERO:
@@ -2425,7 +2508,12 @@ class Simulation:
         if "FREEKG" in coupon_codes:
             specs = self._force_half_cent_free_line(specs)
         per_line_discount, _ = self._compute_discounts(specs, customer_id, coupon_codes)
-        _, _, total = self._order_totals(specs, per_line_discount)
+        # The haggle at the counter, on roughly one sale in six — often enough
+        # that a run exercises the spread across every cart shape this world
+        # generates (half-cent lines, engine-emptied lines, single-line carts),
+        # rare enough that the ordinary sale stays the thing most runs prove.
+        extra_discount = self._random_invoice_discount(specs, per_line_discount)
+        _, _, total = self._order_totals(specs, per_line_discount, extra_discount)
         if total <= ZERO:
             return False
         payments = self.split_amount(total, list(self.PAYMENT_METHODS))
@@ -2436,11 +2524,17 @@ class Simulation:
             payments_data=[{"method": m, "amount": a} for m, a in payments],
             customer=customer,
             coupon_codes=coupon_codes,
+            extra_discount_amount=extra_discount,
             sale_type=Order.SaleType.STANDARD,
             request=None,
         )
         rec = self._build_order_rec(
-            order, specs, per_line_discount, Order.SaleType.STANDARD, customer_id
+            order,
+            specs,
+            per_line_discount,
+            Order.SaleType.STANDARD,
+            customer_id,
+            extra_discount,
         )
         self._apply_sale_stock(specs)
         for method, amount in payments:

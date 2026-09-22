@@ -24,11 +24,72 @@ import 'camera_wedge_policy.dart';
 
 /// A camera the wedge could run on. `id` is whatever the backend uses to
 /// address it and is never shown; `label` is what the shop sees.
+///
+/// Those two are NOT the same string on Windows, and treating them as one is
+/// what put a MediaFoundation symbolic link in front of a cashier:
+///
+///     Integrated Webcam <\\?\usb#vid_1bcf&pid_2b94&mi_00#6&316f151d&0&0000#{e5323777-…}\global>
+///
+/// `camera_windows` builds that string itself — `display_name + " <" +
+/// device_id + ">"` in `CaptureDeviceInfo::GetUniqueDeviceName` — and parses
+/// the whole thing back apart when it is asked to open the camera. So the id
+/// has to be kept intact, and only the display half may be shown.
 class CameraWedgeDevice {
   const CameraWedgeDevice({required this.id, required this.label});
 
+  /// Split a platform device name into the part to keep and the part to show.
+  ///
+  /// The suffix is stripped by the same rule `camera_windows` uses to read it
+  /// (`CaptureDeviceInfo::ParseDeviceInfoFromCameraName`: last space, `<`
+  /// after it, `>` at the end). A name that does not match that shape is
+  /// shown whole rather than guessed at — every other platform's names are
+  /// already human, and a half-cut label is worse than an honest one.
+  factory CameraWedgeDevice.fromPlatformName(String name) =>
+      CameraWedgeDevice(id: name, label: displayNameFrom(name));
+
   final String id;
   final String label;
+
+  /// The shop-facing half of a platform device name. Exposed for tests; the
+  /// rest of the app goes through [CameraWedgeDevice.fromPlatformName].
+  static String displayNameFrom(String name) {
+    if (!name.endsWith('>')) return name;
+    final space = name.lastIndexOf(' ');
+    if (space <= 0 || space + 1 >= name.length) return name;
+    if (name[space + 1] != '<') return name;
+    final display = name.substring(0, space).trim();
+    // A device that reports nothing but an id still needs a row to pick.
+    return display.isEmpty ? name : display;
+  }
+
+  /// Make every label in [devices] distinct.
+  ///
+  /// A till with two identical webcams — the common case for the one facing
+  /// the cashier and the one on the stand — would otherwise show the same
+  /// name twice with no way to tell which is which, and picking the counter
+  /// camera would be a coin flip. Numbering them is not informative, but it
+  /// is honest about there being two, and the pick is remembered.
+  static List<CameraWedgeDevice> disambiguated(
+    List<CameraWedgeDevice> devices,
+  ) {
+    final counts = <String, int>{};
+    for (final device in devices) {
+      counts[device.label] = (counts[device.label] ?? 0) + 1;
+    }
+    final seen = <String, int>{};
+    return [
+      for (final device in devices)
+        if ((counts[device.label] ?? 0) < 2)
+          device
+        else
+          CameraWedgeDevice(
+            id: device.id,
+            label:
+                '${device.label} '
+                '(${seen[device.label] = (seen[device.label] ?? 0) + 1})',
+          ),
+    ];
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -36,6 +97,9 @@ class CameraWedgeDevice {
 
   @override
   int get hashCode => Object.hash(id, label);
+
+  @override
+  String toString() => 'CameraWedgeDevice($label)';
 }
 
 /// Which implementation this platform would use, if any.

@@ -7034,7 +7034,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get defaultVariantBadge => 'افتراضي';
 
   @override
-  String get productCostHistoryTitle => 'تكلفة الشراء والهامش';
+  String get productCostHistoryTitle => 'التكلفة والهامش';
 
   @override
   String get productCostHistoryLoadError =>
@@ -7042,11 +7042,40 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get productCostHistoryEmpty =>
-      'لا توجد مشتريات مسجلة لهذا المنتج بعد.';
+      'لا توجد تكلفة مسجلة لهذا المنتج بعد — لا مشتريات ولا رصيد افتتاحي.';
 
   @override
   String productCostHistoryPackCost(String cost, String unit) {
     return '$cost لكل $unit';
+  }
+
+  @override
+  String get openingStockCostSourceLabel => 'رصيد افتتاحي';
+
+  @override
+  String get openingStockSectionTitle => 'الرصيد الافتتاحي';
+
+  @override
+  String get openingStockSectionHint =>
+      'الكمية الموجودة لديك الآن من هذا المنتج وتكلفة الوحدة. تُسجَّل كرصيد افتتاحي في المخزون دون أمر شراء.';
+
+  @override
+  String get openingStockQuantityLabel => 'الكمية الحالية';
+
+  @override
+  String get openingStockUnitCostLabel => 'تكلفة الوحدة';
+
+  @override
+  String get openingStockUnitCostHelper =>
+      'ما دفعته في الوحدة الواحدة. تُستخدم لحساب الربح وقيمة المخزون.';
+
+  @override
+  String get openingStockCostNeedsQuantityError =>
+      'أدخل الكمية الافتتاحية حتى تُحتسب التكلفة.';
+
+  @override
+  String openingStockValueLabel(String value) {
+    return 'قيمة الرصيد الافتتاحي: $value';
   }
 
   @override
@@ -13920,6 +13949,32 @@ class AppLocalizationsAr extends AppLocalizations {
   String get stockCountSearchEmpty => 'لا توجد أصناف مطابقة.';
 
   @override
+  String get stockCountSearchLoadError =>
+      'تعذّر تحميل الأصناف. تحقّق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String stockCountAlreadyCounted(String quantity) {
+    return 'عددت $quantity';
+  }
+
+  @override
+  String get stockCountBackToSearch => 'رجوع للبحث';
+
+  @override
+  String get stockCountCountUnit => 'تعدّ بـ';
+
+  @override
+  String get stockCountInvalidQuantity => 'أدخل كمية صحيحة قبل الحفظ.';
+
+  @override
+  String stockCountUnitEquals(String quantity, String unit) {
+    return '= $quantity $unit';
+  }
+
+  @override
+  String get stockCountSkipItem => 'رجوع';
+
+  @override
   String stockCountItemUnit(String unit) {
     return 'الوحدة: $unit';
   }
@@ -18996,6 +19051,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get rechargeSearchAction => 'بحث';
 
   @override
+  String get rechargeSearchByLabel => 'ابحث بـ';
+
+  @override
+  String get rechargeSearchByPhone => 'رقم الهاتف';
+
+  @override
+  String get rechargeSearchByUsername => 'اسم المستخدم';
+
+  @override
+  String get rechargeSearchByContract => 'رقم العقد';
+
+  @override
   String get integrationSettingsHeading => 'شروط التعامل';
 
   @override
@@ -19656,4 +19723,483 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get costRevealedBanner => 'التكلفة ظاهرة — اضغط F9 للإخفاء';
+
+  @override
+  String get invoiceDiscountLabel => 'خصم على الفاتورة';
+
+  @override
+  String get invoiceDiscountAddAction => 'إضافة خصم';
+
+  @override
+  String get invoiceDiscountDialogTitle => 'خصم على الفاتورة';
+
+  @override
+  String get invoiceDiscountFieldLabel => 'قيمة الخصم';
+
+  @override
+  String get invoiceDiscountFieldHint => 'مبلغ يُخصم من إجمالي هذه الفاتورة';
+
+  @override
+  String invoiceDiscountCartTotal(String amount) {
+    return 'أقصى ما تتحمله هذه الفاتورة $amount';
+  }
+
+  @override
+  String invoiceDiscountLimitHint(String amount) {
+    return 'أقصى خصم مسموح به للفاتورة $amount';
+  }
+
+  @override
+  String invoiceDiscountOverLimitError(String amount) {
+    return 'لا يمكن تجاوز $amount';
+  }
+
+  @override
+  String invoiceDiscountCappedNotice(String amount) {
+    return 'الفاتورة لا تتحمل سوى $amount، وهذا ما طُبّق.';
+  }
+
+  @override
+  String get invoiceDiscountClearAction => 'إزالة الخصم';
+
+  @override
+  String get invoiceDiscountSettingLabel => 'أقصى خصم للفاتورة الواحدة';
+
+  @override
+  String get invoiceDiscountSettingHelp =>
+      'الحد الأقصى للخصم الذي يدخله الكاشير على فاتورة واحدة. اتركه فارغاً لإلغاء الحد، أو ضع صفراً لمنع الخصم من شاشة البيع.';
+
+  @override
+  String get migrationEntityPartyBalance => 'أرصدة العملاء والموردين';
+
+  @override
+  String get migrationEntitySaleReturn => 'المرتجعات';
+
+  @override
+  String get migrationEntityPayrollRun => 'مسيّرات الرواتب';
+
+  @override
+  String get migrationEntityMoneyAccount => 'الخزائن والحسابات';
+
+  @override
+  String get migrationEntityCollapse => 'الوحدات المعرّفة';
+
+  @override
+  String get migrationStageIdentify => 'التعرف على الملف';
+
+  @override
+  String get migrationStageConvert => 'تحويل قاعدة البيانات';
+
+  @override
+  String get migrationStagePrepare => 'إعادة بناء الفواتير';
+
+  @override
+  String get migrationStageDetect => 'التعرف على النظام';
+
+  @override
+  String get migrationStageAnalyze => 'قراءة المحتويات';
+
+  @override
+  String get migrationStageTidy => 'تنظيف الملفات المؤقتة';
+
+  @override
+  String get migrationStageCatalogue => 'قراءة الأصناف';
+
+  @override
+  String get migrationStageHistory => 'قراءة الشراء والبيع';
+
+  @override
+  String get migrationStageCluster => 'تجميع الأصناف المتشابهة';
+
+  @override
+  String get migrationStagePropose => 'تجهيز الاقتراح';
+
+  @override
+  String get migrationScopeEverythingLabel => 'كل شيء';
+
+  @override
+  String get migrationScopeEverythingSubtitle =>
+      'الأصناف والعملاء والموردون وكامل سجل الفواتير والمدفوعات والمصروفات، كما هو في النظام القديم.';
+
+  @override
+  String get migrationScopeOpeningPositionLabel => 'نبدأ من الوضع الحالي';
+
+  @override
+  String get migrationScopeOpeningPositionSubtitle =>
+      'الأصناف بأسعارها وتكلفتها، والعملاء بما عليهم اليوم، والموردون بما لهم اليوم — بدون نقل سجل الفواتير القديم.';
+
+  @override
+  String get migrationScopeCatalogueOnlyLabel => 'الأصناف فقط';
+
+  @override
+  String get migrationScopeCatalogueOnlySubtitle =>
+      'قائمة الأصناف والتصنيفات والأسعار، بدون عملاء ولا أرصدة ولا فواتير.';
+
+  @override
+  String get migrationScopeCustomLabel => 'تحديد يدوي';
+
+  @override
+  String get migrationScopeCustomSubtitle => 'اختيار ما يُنقل بندًا بندًا.';
+
+  @override
+  String migrationImpliedEntitiesNotice(String entities) {
+    return 'سيُنقل أيضًا: $entities — لأن ما اخترته لا يعمل بدونه.';
+  }
+
+  @override
+  String get migrationCurrentBalancesNotice =>
+      'لن يُنقل سجل الفواتير، لذلك يبدأ كل عميل ومورّد برصيده كما هو اليوم في النظام القديم.';
+
+  @override
+  String get migrationOpeningBalancesNotice =>
+      'سيُنقل سجل الفواتير، لذلك يبدأ كل عميل ومورّد برصيده الافتتاحي وتُحرّكه الفواتير بعده.';
+
+  @override
+  String get migrationOnlyStockedLabel => 'الأصناف المتوفرة فقط';
+
+  @override
+  String get migrationOnlyStockedSubtitle =>
+      'تجاهل الأصناف التي يقول النظام القديم إن كميتها صفر — أصناف لم تُبع منذ سنوات ولم تُحذف.';
+
+  @override
+  String get migrationOnlyStockedConflict =>
+      'لا يمكن جمع «الأصناف المتوفرة فقط» مع نقل سجل الفواتير: الفواتير القديمة تشير إلى أصناف لن تُنقل.';
+
+  @override
+  String get migrationStockSourceCostOnlyLabel => 'التكلفة فقط، بدون كميات';
+
+  @override
+  String get migrationStockSourceCostOnlySubtitle =>
+      'ننقل تكلفة كل صنف حتى يُحسب الربح صحيحًا من أول عملية بيع، وتبدأ الكميات من الصفر لتجردها بنفسك.';
+
+  @override
+  String get bankAccountIbanLabel => 'رقم الآيبان (IBAN)';
+
+  @override
+  String get bankAccountNumberLabel => 'رقم الحساب';
+
+  @override
+  String get bankAccountNoIdentifiers =>
+      'لم يُسجَّل رقم حساب أو آيبان لهذا الحساب بعد. أضِفه من شاشة الخزينة ليظهر هنا كرمز يمسحه الزبون.';
+
+  @override
+  String get copyButton => 'نسخ';
+
+  @override
+  String get copiedToClipboard => 'تم النسخ.';
+
+  @override
+  String get paymentBankAccountLabel => 'الحساب البنكي';
+
+  @override
+  String paymentBankAccountAuto(String terminal) {
+    return 'اختير تلقائيًا من الماكينة $terminal';
+  }
+
+  @override
+  String get paymentBankAccountShowDetails => 'عرض رقم الحساب';
+
+  @override
+  String get treasuryActionAddFunds => 'إضافة رصيد';
+
+  @override
+  String get treasuryAddFundsTitle => 'إضافة رصيد إلى الخزينة';
+
+  @override
+  String get treasuryAddFundsHint =>
+      'مال يدخل من خارج المحل — رأس مال من المالك أو قرض. لا يُحتسب إيرادًا ولا يظهر في الأرباح.';
+
+  @override
+  String get treasuryAddFundsTo => 'يُضاف إلى';
+
+  @override
+  String get treasuryAddFundsAmount => 'المبلغ';
+
+  @override
+  String get treasuryAddFundsReason => 'السبب (اختياري)';
+
+  @override
+  String get treasuryAddFundsReasonCapital => 'رأس مال';
+
+  @override
+  String get treasuryAddFundsReasonLoan => 'قرض';
+
+  @override
+  String get treasuryAddFundsReasonOwner => 'من المالك';
+
+  @override
+  String get treasuryAddFundsSubmit => 'إضافة الرصيد';
+
+  @override
+  String get treasuryAddFundsSaved => 'تمت إضافة الرصيد.';
+
+  @override
+  String get treasuryActionWithdraw => 'سحب';
+
+  @override
+  String get treasuryWithdrawTitle => 'سحب من الخزينة';
+
+  @override
+  String get treasuryWithdrawHint =>
+      'مال يخرج من المحل إلى المالك. ليس مصروفًا ولا يُخصم من الأرباح.';
+
+  @override
+  String get treasuryWithdrawFrom => 'يُسحب من';
+
+  @override
+  String get treasuryWithdrawSubmit => 'تسجيل السحب';
+
+  @override
+  String get treasuryWithdrawSaved => 'تم تسجيل السحب.';
+
+  @override
+  String get treasuryActionAddAccount => 'حساب جديد';
+
+  @override
+  String get treasuryAccountNewTitle => 'حساب جديد';
+
+  @override
+  String get treasuryAccountEditTitle => 'تعديل الحساب';
+
+  @override
+  String get treasuryAccountNameLabel => 'اسم الحساب';
+
+  @override
+  String get treasuryAccountNameRequired => 'اكتب اسمًا للحساب.';
+
+  @override
+  String get treasuryAccountKindLabel => 'النوع';
+
+  @override
+  String get treasuryAccountKindCash => 'صندوق نقدي';
+
+  @override
+  String get treasuryAccountKindBank => 'حساب بنكي';
+
+  @override
+  String get treasuryAccountBankLabel => 'المصرف';
+
+  @override
+  String get treasuryAccountBankUnset => 'بدون تحديد';
+
+  @override
+  String get treasuryAccountBankSearchHint => 'ابحث عن المصرف';
+
+  @override
+  String get treasuryAccountNumberLabel => 'رقم الحساب (اختياري)';
+
+  @override
+  String get treasuryAccountIbanLabel => 'الآيبان IBAN (اختياري)';
+
+  @override
+  String get treasuryAccountIbanHelper =>
+      'يظهر للزبون كرمز QR عند الدفع بالتحويل، فلا تُملى الأرقام واحدًا واحدًا.';
+
+  @override
+  String get treasuryAccountOpeningBalanceLabel => 'الرصيد الافتتاحي';
+
+  @override
+  String get treasuryAccountOpeningAtLabel => 'تاريخ الرصيد الافتتاحي';
+
+  @override
+  String get treasuryAccountDefaultLabel => 'الحساب الافتراضي';
+
+  @override
+  String get treasuryAccountDefaultHint =>
+      'تُرحَّل إليه كل حركة لم يُحدَّد لها حساب.';
+
+  @override
+  String get treasuryAccountActiveLabel => 'مُفعَّل';
+
+  @override
+  String get treasuryAccountSaveButton => 'حفظ';
+
+  @override
+  String get treasuryAccountSaved => 'تم حفظ الحساب.';
+
+  @override
+  String get treasuryAccountSaveFailed => 'تعذّر حفظ الحساب.';
+
+  @override
+  String get treasurySectionProvider => 'أرصدة لدى الموردين';
+
+  @override
+  String get treasuryBankDetailsButton => 'رقم الحساب والآيبان';
+
+  @override
+  String get treasuryAccountEditTooltip => 'تعديل الحساب';
+
+  @override
+  String get trustedCardTerminalAccountLabel => 'يُودَع في';
+
+  @override
+  String get trustedCardTerminalAccountUnset => 'الحساب الافتراضي';
+
+  @override
+  String get trustedCardTerminalLabelFieldLabel => 'اسم الماكينة (اختياري)';
+
+  @override
+  String get trustedCardTerminalLabelFieldHint => 'مثال: ماكينة الجمهورية';
+
+  @override
+  String get trustedCardTerminalNoBankAccounts =>
+      'أنشئ حسابًا بنكيًا في شاشة الخزينة لتربط كل ماكينة بمصرفها، فتُرحَّل مبالغها تلقائيًا.';
+
+  @override
+  String get trustedCardTerminalUnmappedWarning =>
+      'ماكينة بلا مصرف: تُرحَّل مبالغها إلى الحساب الافتراضي.';
+
+  @override
+  String get trustedCardTerminalRemoveTooltip => 'حذف الماكينة';
+
+  @override
+  String get paymentDepositedIntoLabel => 'أُودع في';
+
+  @override
+  String get paymentPaidFromLabel => 'دُفع من';
+
+  @override
+  String get migrationEntityListTitle => 'البنود المشمولة';
+
+  @override
+  String get bankAccountNumberMissingHint =>
+      'لم يُسجَّل رقم الحساب لهذا الحساب. أضِفه من تعديل الحساب ليُعرض كرمز أيضًا.';
+
+  @override
+  String get bankAccountIbanMissingHint =>
+      'لم يُسجَّل الآيبان لهذا الحساب. أضِفه من تعديل الحساب ليُعرض كرمز أيضًا.';
+
+  @override
+  String get dangerZoneTitle => 'منطقة الخطر';
+
+  @override
+  String get dangerZoneSubtitle => 'إفراغ المتجر والبدء من جديد';
+
+  @override
+  String get dangerZoneLoadError => 'تعذّر حساب ما سيُحذف';
+
+  @override
+  String get factoryResetCalloutTitle => 'هذا الإجراء لا يمكن التراجع عنه';
+
+  @override
+  String get factoryResetCalloutMessage =>
+      'سيُفرَغ المتجر بالكامل: كل الأصناف والمبيعات والمشتريات والعملاء والمخزون والحسابات وكل ما استُورد من النظام القديم. لا توجد طريقة للاسترجاع إلا من نسخة احتياطية أُخذت قبل التنفيذ.';
+
+  @override
+  String get factoryResetWhatGoesTitle => 'ما الذي سيُحذف';
+
+  @override
+  String get factoryResetWhatGoesDescription =>
+      'هذه أعداد ما هو مسجّل في المتجر الآن. سيُحذف كل ما في القائمة وما يتفرّع عنه.';
+
+  @override
+  String get factoryResetNothingToRemove =>
+      'لا توجد بيانات لحذفها. المتجر فارغ أصلا.';
+
+  @override
+  String get factoryResetCountProducts => 'الأصناف';
+
+  @override
+  String get factoryResetCountCategories => 'المجموعات';
+
+  @override
+  String get factoryResetCountCustomers => 'العملاء';
+
+  @override
+  String get factoryResetCountSuppliers => 'الموردون';
+
+  @override
+  String get factoryResetCountOrders => 'الفواتير';
+
+  @override
+  String get factoryResetCountPurchaseOrders => 'أوامر الشراء';
+
+  @override
+  String get factoryResetCountPayments => 'الدفعات';
+
+  @override
+  String get factoryResetCountStockMovements => 'حركات المخزون';
+
+  @override
+  String get factoryResetCountExpenses => 'المصروفات';
+
+  @override
+  String get factoryResetCountEmployees => 'الموظفون';
+
+  @override
+  String get factoryResetCountJobs => 'أوامر العمل';
+
+  @override
+  String get factoryResetCountImports => 'عمليات الاستيراد';
+
+  @override
+  String get factoryResetCountUsers => 'حسابات المستخدمين';
+
+  @override
+  String get factoryResetWhatStaysTitle => 'ما الذي سيبقى';
+
+  @override
+  String get factoryResetKeepsSettings =>
+      'إعدادات المتجر: الاسم والعملة والخيارات والشعار';
+
+  @override
+  String get factoryResetKeepsDevices =>
+      'الطابعات والموازين والكاميرات وأجهزة عرض الأسعار وبيانات ربط المزوّدين';
+
+  @override
+  String get factoryResetKeepsLicense =>
+      'الترخيص وربط المتجر بالخدمة، والمخازن والحسابات المالية الأساسية';
+
+  @override
+  String get factoryResetBackupMessage =>
+      'تأكد أن هذه النسخة تكفيك قبل المتابعة.';
+
+  @override
+  String get factoryResetNoBackupTitle => 'لا توجد نسخة احتياطية موثّقة';
+
+  @override
+  String get factoryResetNoBackupMessage =>
+      'لم يكتمل أي نسخ احتياطي موثّق على هذا الخادم. إن نفّذت الإفراغ الآن فلن يكون هناك ما يُسترجع منه. خذ نسخة احتياطية أولا من إعدادات النسخ الاحتياطي.';
+
+  @override
+  String get factoryResetButton => 'إفراغ المتجر والبدء من جديد';
+
+  @override
+  String get factoryResetRunningButton => 'جارٍ إفراغ المتجر...';
+
+  @override
+  String get factoryResetDialogTitle => 'تأكيد إفراغ المتجر';
+
+  @override
+  String get factoryResetPasswordLabel => 'كلمة مرور حسابك';
+
+  @override
+  String get factoryResetConfirmationLabel => 'اسم المتجر';
+
+  @override
+  String get factoryResetDialogConfirm => 'أفرِغ المتجر';
+
+  @override
+  String get factoryResetDoneMessage =>
+      'أُفرِغ المتجر. سجّل الدخول من جديد للبدء.';
+
+  @override
+  String factoryResetKeepsAdmin(String username) {
+    return 'حسابك أنت ($username) بكلمة المرور نفسها';
+  }
+
+  @override
+  String factoryResetBackupTitle(String date) {
+    return 'آخر نسخة احتياطية موثّقة: $date';
+  }
+
+  @override
+  String factoryResetDialogMessage(String shopName) {
+    return 'سيُحذف كل شيء نهائيا. أدخل كلمة مرورك، ثم اكتب اسم المتجر «$shopName» للتأكيد.';
+  }
+
+  @override
+  String factoryResetConfirmationHelper(String shopName) {
+    return 'اكتب: $shopName';
+  }
 }

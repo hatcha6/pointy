@@ -1,7 +1,14 @@
-/// A place the shop's money sits: the cash box, or a bank account.
+import 'bank_account_ref.dart';
+
+/// A place the shop's money sits: the cash box, a bank account, or the float a
+/// resale provider holds for the shop.
 enum MoneyAccountKind {
   cash('cash'),
-  bank('bank');
+  bank('bank'),
+  // Named here rather than folded into `cash`: a provider float IS the shop's
+  // money, but it cannot pay a wage, and the fallback below would otherwise
+  // file it under the cash box and add it to the drawer's total.
+  provider('provider');
 
   const MoneyAccountKind(this.apiValue);
 
@@ -22,7 +29,9 @@ class MoneyAccount {
     required this.name,
     required this.kind,
     this.bankName = '',
+    this.bankSlug = '',
     this.accountNumber = '',
+    this.iban = '',
     this.openingBalance = 0,
     this.openingAt,
     this.isDefault = false,
@@ -36,7 +45,14 @@ class MoneyAccount {
   final String name;
   final MoneyAccountKind kind;
   final String bankName;
+
+  /// The Central Bank's slug for this bank, which is how its mark is found.
+  /// Blank for a cash box and for a bank the shop typed by hand.
+  final String bankSlug;
   final String accountNumber;
+
+  /// What a customer transfers to. Stored unspaced; shown in groups of four.
+  final String iban;
   final double openingBalance;
   final DateTime? openingAt;
   final bool isDefault;
@@ -56,7 +72,9 @@ class MoneyAccount {
       name: json['name']?.toString() ?? '',
       kind: MoneyAccountKind.fromApiValue(json['kind']),
       bankName: json['bank_name']?.toString() ?? '',
+      bankSlug: json['bank_slug']?.toString() ?? '',
       accountNumber: json['account_number']?.toString() ?? '',
+      iban: json['iban']?.toString() ?? '',
       openingBalance: _moneyFromJson(json['opening_balance']),
       openingAt: _dateTimeFromJson(json['opening_at']),
       isDefault: json['is_default'] == true,
@@ -72,7 +90,9 @@ class MoneyAccount {
       'name': name,
       'kind': kind.apiValue,
       'bank_name': bankName,
+      'bank_slug': bankSlug,
       'account_number': accountNumber,
+      'iban': iban,
       'opening_balance': openingBalance.toStringAsFixed(2),
       if (openingAt != null)
         'opening_at': openingAt!.toIso8601String().split('T').first,
@@ -87,7 +107,9 @@ class MoneyAccount {
     String? name,
     MoneyAccountKind? kind,
     String? bankName,
+    String? bankSlug,
     String? accountNumber,
+    String? iban,
     double? openingBalance,
     DateTime? openingAt,
     bool? isDefault,
@@ -98,7 +120,9 @@ class MoneyAccount {
       name: name ?? this.name,
       kind: kind ?? this.kind,
       bankName: bankName ?? this.bankName,
+      bankSlug: bankSlug ?? this.bankSlug,
       accountNumber: accountNumber ?? this.accountNumber,
+      iban: iban ?? this.iban,
       openingBalance: openingBalance ?? this.openingBalance,
       openingAt: openingAt ?? this.openingAt,
       isDefault: isDefault ?? this.isDefault,
@@ -108,6 +132,14 @@ class MoneyAccount {
       notes: notes,
     );
   }
+
+  /// How this account reads on a payment row, an invoice, a purchase order.
+  BankAccountRef get asRef => BankAccountRef(
+    id: id,
+    name: name,
+    bankSlug: bankSlug,
+    bankName: bankName,
+  );
 }
 
 /// One named line of the arithmetic behind a balance. The codes are a backend
@@ -314,10 +346,17 @@ class MoneyPosition {
 
   bool get isEmpty => accounts.isEmpty;
 
-  List<MoneyAccountPosition> get cashAccounts =>
-      accounts.where((entry) => entry.account.isCash).toList();
-  List<MoneyAccountPosition> get bankAccounts =>
-      accounts.where((entry) => !entry.account.isCash).toList();
+  List<MoneyAccountPosition> get cashAccounts => _ofKind(MoneyAccountKind.cash);
+
+  /// Only real bank accounts. A provider float is the shop's money sitting
+  /// with a resale provider — it belongs under its own heading, not beside
+  /// the bank balances an owner reconciles against statements.
+  List<MoneyAccountPosition> get bankAccounts => _ofKind(MoneyAccountKind.bank);
+  List<MoneyAccountPosition> get providerAccounts =>
+      _ofKind(MoneyAccountKind.provider);
+
+  List<MoneyAccountPosition> _ofKind(MoneyAccountKind kind) =>
+      accounts.where((entry) => entry.account.kind == kind).toList();
 
   factory MoneyPosition.fromJson(Map<String, Object?> json) {
     final rawAccounts = json['accounts'];

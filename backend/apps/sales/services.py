@@ -23,6 +23,7 @@ from apps.discounts.services import (
     DiscountEngine,
     DiscountLineInput,
     DiscountUsageLimitExceeded,
+    allocate_discount_amount,
     persist_applied_discounts,
 )
 from apps.catalog.services import preload_line_variants
@@ -118,7 +119,15 @@ def create_order_with_lines(
             customer=customer,
             coupon_codes=coupon_codes,
         )
-    discount_by_line_key = order_line_discounts(lines_data, discount_result)
+    # The cashier's one-off discount, held down to what this cart can carry —
+    # and written back into ``order_fields``, so the column stores the discount
+    # actually given rather than the figure that was typed at a fuller cart.
+    order_fields["extra_discount_amount"] = clamped_manual_discount(
+        lines_data, discount_result, order_fields.get("extra_discount_amount")
+    )
+    discount_by_line_key = order_line_discounts(
+        lines_data, discount_result, order_fields["extra_discount_amount"]
+    )
 
     # Snapshot the special day(s) active right now (shop-local) onto the sale so
     # forecasting has a stable per-sale signal. Defensive by contract: a holidays
@@ -273,6 +282,11 @@ def preview_sales_discounts(*, lines_data, customer=None, coupon_codes=()):
 
 def discount_allocations_by_line_key(discount_result):
     allocations = {}
+    # Tolerates ``None`` so the guards below can ask one question — "what comes
+    # off this line?" — whether or not the engine has run. A cart can carry a
+    # manual discount and no engine result at all.
+    if discount_result is None:
+        return allocations
     for application in discount_result.applications:
         for allocation in application.allocations:
             allocations[allocation.line_key] = money(
@@ -303,8 +317,16 @@ def order_line_subtotals(lines_data):
     return subtotals
 
 
-def order_line_discounts(lines_data, discount_result):
+def order_line_discounts(lines_data, discount_result, extra_discount_amount=None):
     """Per-line discounts **in the order's own rounding regime**, by line key.
+
+    Covers both kinds: what the engine's rules and coupons allocated, plus the
+    cashier's own one-off discount for this invoice
+    (``Order.extra_discount_amount``), spread over the lines here. The two are
+    summed per line on purpose. A discount is a discount by the time it reaches
+    ``OrderLine.discount_total``, and everything downstream — the Z-Report,
+    every rollup, profit, the return desk — reads that one column and is
+    therefore right about a haggled sale without knowing the feature exists.
 
     The discount engine allocates in its regime — 2dp HALF_UP — and caps each
     line at *its* subtotal (``DiscountLineInput.subtotal``). An order line
@@ -328,14 +350,93 @@ def order_line_discounts(lines_data, discount_result):
     not be handed back at all. And the uncapped cent reached the document too,
     so a cart holding the free item plus 6.00 of other goods charged 5.99.
     """
+    subtotals, engine_discounts = _engine_line_discounts(
+        lines_data, discount_result
+    )
+    extra = money(extra_discount_amount or Decimal("0.00"))
+    if extra <= Decimal("0.00"):
+        return engine_discounts
+    return _with_manual_discount(subtotals, engine_discounts, extra)
+
+
+def _engine_line_discounts(lines_data, discount_result):
+    """``(subtotals, engine_discounts)`` by line key, each capped as documented
+    above. One place, because the two callers below must agree about what a
+    line is worth and what is already off it — and because the allocation map
+    is built ONCE here. Reading it per line made this quadratic on a path the
+    POS fires on every cart edit.
+    """
+    subtotals = order_line_subtotals(lines_data)
     allocated = discount_allocations_by_line_key(discount_result)
-    return {
+    return subtotals, {
         key: min(allocated.get(key, Decimal("0.00")), subtotal)
-        for key, subtotal in order_line_subtotals(lines_data).items()
+        for key, subtotal in subtotals.items()
     }
 
 
-def expected_order_totals(lines_data, discount_result):
+def manual_discount_room(lines_data, discount_result):
+    """The largest manual discount these lines can still carry.
+
+    What the goods are worth less whatever the engine's rules and coupons have
+    already taken off them. A discount cannot exceed it — a sale that charges
+    less than nothing is not a sale — so this is the bound every caller clamps
+    to before the amount reaches a line, a total, or the stored document.
+    """
+    subtotals, engine_discounts = _engine_line_discounts(
+        lines_data, discount_result
+    )
+    return max(
+        money(
+            sum(subtotals.values(), Decimal("0.00"))
+            - sum(engine_discounts.values(), Decimal("0.00"))
+        ),
+        Decimal("0.00"),
+    )
+
+
+def clamped_manual_discount(lines_data, discount_result, amount):
+    """``amount``, held down to what this cart can actually carry.
+
+    The clamp is not a formality. The figure the cashier typed is checked
+    against the shop's ceiling when it arrives, but the cart can shrink between
+    the preview and the tender — remove the one expensive line and a 50 dinar
+    discount is suddenly larger than the sale. Clamping here is what keeps the
+    stored ``Order.extra_discount_amount`` equal to the discount actually
+    given, which is what the receipt prints and what an owner reads back.
+    """
+    return min(
+        max(money(amount or Decimal("0.00")), Decimal("0.00")),
+        manual_discount_room(lines_data, discount_result),
+    )
+
+
+def _with_manual_discount(subtotals, engine_discounts, extra):
+    """Spread the cashier's one-off discount over the lines, in proportion to
+    what each still costs after the engine's rules.
+
+    The same largest-remainder allocator the engine itself uses, so not one cent
+    is created or lost, and the same weighting ``PurchaseOrder`` uses on the
+    buying side: each line's weight is the room it has left, and ``extra`` is
+    clamped to the sum of those weights, so no share can ever exceed the line
+    it lands on and no line can be discounted below zero.
+    """
+    room = {
+        key: max(subtotal - engine_discounts[key], Decimal("0.00"))
+        for key, subtotal in subtotals.items()
+    }
+    extra = min(extra, money(sum(room.values(), Decimal("0.00"))))
+    if extra <= Decimal("0.00"):
+        return engine_discounts
+    combined = dict(engine_discounts)
+    for allocation in allocate_discount_amount(extra, room):
+        combined[allocation.line_key] = min(
+            money(combined[allocation.line_key] + allocation.amount),
+            subtotals[allocation.line_key],
+        )
+    return combined
+
+
+def expected_order_totals(lines_data, discount_result, extra_discount_amount=None):
     """``(subtotal, discount_total, total)`` the order for ``lines_data`` will store.
 
     Deliberately NOT ``discount_result.subtotal/.total``. The two live in
@@ -376,11 +477,55 @@ def expected_order_totals(lines_data, discount_result):
     # this the same number Order.recalculate reaches from the stored lines, so
     # the preview, the tender check and the saved order cannot disagree.
     discount_total = sum(
-        order_line_discounts(lines_data, discount_result).values(),
+        order_line_discounts(
+            lines_data, discount_result, extra_discount_amount
+        ).values(),
         Decimal("0.00"),
     )
     discount_total = min(money(discount_total), subtotal)
     return subtotal, discount_total, money(subtotal - discount_total)
+
+
+def validate_manual_discount_allowed(amount, *, settings=None):
+    """Refuse a till discount above the shop's per-invoice ceiling.
+
+    Server-side because the ceiling is the whole point of the feature. The sell
+    screen already stops the cashier typing past it, which is where a limit
+    should be felt — but a limit that only exists in the client is a limit that
+    holds until somebody posts to the API, and this one is guarding the
+    difference between a shop's day's takings and its day's takings minus
+    whatever a cashier decided.
+
+    Null ceiling = no ceiling; the amount is still bounded by the cart itself
+    (``clamped_manual_discount``). Zero = the shop does not discount at the
+    till, and the only amount that passes is nothing.
+    """
+    amount = money(amount or Decimal("0.00"))
+    if amount <= Decimal("0.00"):
+        return
+    if settings is None:
+        settings = ShopSettings.load()
+    ceiling = settings.max_invoice_discount_amount
+    if ceiling is None:
+        return
+    ceiling = money(ceiling)
+    if amount <= ceiling:
+        return
+    if ceiling <= Decimal("0.00"):
+        raise serializers.ValidationError(
+            {
+                "extra_discount_amount": (
+                    "الخصم اليدوي غير مسموح به في هذا المحل."
+                )
+            }
+        )
+    raise serializers.ValidationError(
+        {
+            "extra_discount_amount": (
+                f"أقصى خصم مسموح به للفاتورة الواحدة هو {ceiling:.2f}."
+            )
+        }
+    )
 
 
 def unapplied_coupon_codes(discount_result, coupon_codes):
@@ -524,7 +669,13 @@ def line_units(line_data, by_id, by_code):
     return units
 
 
-def validate_consignment_floor(lines_data, discount_result=None, *, settings=None):
+def validate_consignment_floor(
+    lines_data,
+    discount_result=None,
+    *,
+    extra_discount_amount=None,
+    settings=None,
+):
     """Refuse a fixed-payout consignment sold below what it will cost.
 
     ``prevent_selling_at_loss`` compares an asking price against
@@ -546,10 +697,11 @@ def validate_consignment_floor(lines_data, discount_result=None, *, settings=Non
     by_id, by_code = units_named_by_lines(lines_data)
     if not by_id and not by_code:
         return
-    discount_by_line_key = (
-        discount_allocations_by_line_key(discount_result)
-        if discount_result is not None
-        else {}
+    # Everything coming off the line, the cashier's own discount included: a
+    # floor that only counted the engine's rules would be walked straight
+    # through by typing the same number into the discount box instead.
+    discount_by_line_key = order_line_discounts(
+        lines_data, discount_result, extra_discount_amount
     )
     refusals = []
     for line_data in lines_data:
@@ -597,11 +749,17 @@ def validate_consignment_floor(lines_data, discount_result=None, *, settings=Non
         )
 
 
-def checkout_loss_lines(lines_data, discount_result=None, *, warehouse=None):
-    discount_by_line_key = (
-        discount_allocations_by_line_key(discount_result)
-        if discount_result is not None
-        else {}
+def checkout_loss_lines(
+    lines_data,
+    discount_result=None,
+    *,
+    extra_discount_amount=None,
+    warehouse=None,
+):
+    # As above: a manual discount is what most often pushes a line under its
+    # cost, so it is the last thing this guard may be blind to.
+    discount_by_line_key = order_line_discounts(
+        lines_data, discount_result, extra_discount_amount
     )
     # Batch the cost lookup across every cart line (was one query per line, on the
     # preview that fires on every keystroke).
@@ -709,11 +867,16 @@ def sale_loss_line_payload(
 
 
 def validate_checkout_loss_sales_allowed(
-    *, settings, lines_data, discount_result, warehouse=None
+    *, settings, lines_data, discount_result, extra_discount_amount=None, warehouse=None
 ):
     if not settings.prevent_selling_at_loss:
         return
-    loss_lines = checkout_loss_lines(lines_data, discount_result, warehouse=warehouse)
+    loss_lines = checkout_loss_lines(
+        lines_data,
+        discount_result,
+        extra_discount_amount=extra_discount_amount,
+        warehouse=warehouse,
+    )
     if loss_lines:
         raise serializers.ValidationError(sale_loss_blocked_payload(loss_lines))
 
@@ -896,6 +1059,7 @@ def checkout_order(
     customer=None,
     coupon_codes=(),
     discount_result=None,
+    extra_discount_amount=None,
     sale_type=Order.SaleType.STANDARD,
     valid_until=None,
     due_date=None,
@@ -915,15 +1079,33 @@ def checkout_order(
     # a day: bulk-load the lines' variants so the per-line product /
     # categories / option_values reads below cost a constant few queries.
     preload_line_variants(lines_data)
+    # Give every line its own key before anything reads a per-line figure back
+    # by one. ``checkout_line_key`` answers "0" for a line nobody has keyed, so
+    # on a direct service call that brought no ``discount_result`` an entire
+    # multi-line cart collapsed onto a single key — and the guards below, which
+    # look a line's discount up by key, handed EVERY line the whole invoice
+    # discount. A cart of two comfortably profitable items was then refused as
+    # a sale at a loss the moment a cashier took a dinar off it.
+    #
+    # Idempotent (it keys by position), and the serializer path has usually run
+    # it already via ``calculate_sales_discounts``; this makes the invariant
+    # hold for every caller rather than for the ones that happen to.
+    prepare_discount_lines(lines_data)
     validate_sale_variants_sellable(lines_data)
     validate_integration_lines_carry_their_top_up(lines_data)
     validate_checkout_loss_sales_allowed(
         settings=settings,
         lines_data=lines_data,
         discount_result=discount_result,
+        extra_discount_amount=extra_discount_amount,
         warehouse=warehouse_id,
     )
-    validate_consignment_floor(lines_data, discount_result, settings=settings)
+    validate_consignment_floor(
+        lines_data,
+        discount_result,
+        extra_discount_amount=extra_discount_amount,
+        settings=settings,
+    )
     # Quotations (عرض سعر) never move stock; standard and credit (آجل) sales
     # deduct on-hand at issue. A quotation may instead hold stock via a
     # reservation (reserve_stock_for_quote, below).
@@ -951,6 +1133,7 @@ def checkout_order(
             settings=settings,
         ),
         reserves_stock=bool(reserve_stock) and is_quotation,
+        extra_discount_amount=extra_discount_amount,
         lines_data=lines_data,
         coupon_codes=coupon_codes,
         discount_result=discount_result,
@@ -997,6 +1180,9 @@ def checkout_order(
             receipt_url = payment_data.get("card_receipt_url", "")
             if receipt_url:
                 serializer_data["card_receipt_url"] = receipt_url
+            money_account = payment_data.get("money_account")
+            if money_account is not None:
+                serializer_data["money_account"] = money_account.pk
             payment_serializer = PaymentSerializer(
                 data=serializer_data,
                 context={
@@ -1502,6 +1688,7 @@ def record_customer_payment(
     amount,
     register_session,
     card_receipt_url="",
+    money_account=None,
     request=None,
     allow_cross_owner=False,
     card_receipt_amount_validated=False,
@@ -1533,6 +1720,8 @@ def record_customer_payment(
     serializer_data = {"order": locked.pk, "method": method, "amount": amount}
     if card_receipt_url:
         serializer_data["card_receipt_url"] = card_receipt_url
+    if money_account is not None:
+        serializer_data["money_account"] = getattr(money_account, "pk", money_account)
     payment_serializer = PaymentSerializer(
         data=serializer_data,
         context={
@@ -1581,6 +1770,7 @@ def record_customer_account_payment(
     amount,
     register_session,
     card_receipt_url="",
+    money_account=None,
     request=None,
 ):
     """Apply a payment to a customer's outstanding debt invoices, oldest first.
@@ -1667,6 +1857,9 @@ def record_customer_account_payment(
             register_session=register_session,
             request=request,
             card_receipt_url=card_receipt_url,
+            # One collection, one bank: every split row lands in the account
+            # the swipe (or the cashier) named, not just the first invoice's.
+            money_account=money_account,
             card_receipt_amount_validated=card_receipt_amount_validated,
             card_receipt_expected_amount=card_receipt_expected_amount,
             # Cross-cashier: settle whoever's debt this customer owes.
@@ -2088,6 +2281,43 @@ def line_refund_amount(line, quantity):
     return money(gross_amount - line_refund_discount(line, quantity))
 
 
+def proportional_cent_split(amount, weights, *, order):
+    """Split ``amount`` across ``weights`` in proportion, exactly to the cent.
+
+    Largest-remainder rounding: every share is floored, then the leftover cents
+    go to the biggest fractional parts first, so the parts always sum back to
+    ``amount`` rather than to ``amount`` minus a rounding crumb. ``order`` is
+    the deterministic tie-break — two shops on the same data must split a half
+    cent the same way, and dict order is not a promise. Ties go to the LAST
+    key in ``order``, which is exactly what this code has always done: it
+    ranked on ``(remainder, method)`` descending, and ``order`` is those same
+    methods ascending. Ranking on the POSITION rather than on the key itself
+    is what lets the same splitter take account ids too, where ``None`` cannot
+    be compared against an integer.
+
+    One implementation, used at both levels of a refund (across the methods
+    that paid, then across the accounts inside a method), so a refund cannot be
+    split by two subtly different roundings.
+    """
+    total = sum(weights.values(), Decimal("0.00"))
+    if total <= 0:
+        return {}
+    floored = {}
+    remainder = {}
+    for index, key in enumerate(order):
+        share = (amount * weights[key]) / total
+        floor_share = share.quantize(MONEY_PLACES, rounding=ROUND_DOWN)
+        floored[key] = floor_share
+        remainder[key] = (share - floor_share, index)
+
+    allocated = sum(floored.values(), Decimal("0.00"))
+    leftover_cents = int(((amount - allocated) / MONEY_PLACES).to_integral_value())
+    ranked = sorted(order, key=lambda key: remainder[key], reverse=True)
+    for index in range(leftover_cents):
+        floored[ranked[index % len(ranked)]] += MONEY_PLACES
+    return floored
+
+
 def refund_tender_allocations(order, amount):
     """Split a refund across the order's original tenders, proportional to how
     much each tender actually paid (net of any earlier refunds).
@@ -2114,25 +2344,56 @@ def refund_tender_allocations(order, amount):
         return [(refund_method_for_order(order), amount)]
 
     methods = sorted(net_by_method)
-    total_net = sum(net_by_method.values(), Decimal("0.00"))
-    floored = {}
-    remainder = {}
-    for method in methods:
-        share = (amount * net_by_method[method]) / total_net
-        floor_share = share.quantize(MONEY_PLACES, rounding=ROUND_DOWN)
-        floored[method] = floor_share
-        remainder[method] = share - floor_share
-
-    allocated = sum(floored.values(), Decimal("0.00"))
-    leftover_cents = int(((amount - allocated) / MONEY_PLACES).to_integral_value())
-    # Largest-remainder rounding: hand the leftover cents to the tenders with the
-    # biggest fractional part first, tie-broken deterministically by method name,
-    # so the per-tender amounts always sum back to exactly ``amount``.
-    ranked = sorted(methods, key=lambda method: (remainder[method], method), reverse=True)
-    for index in range(leftover_cents):
-        floored[ranked[index % len(ranked)]] += MONEY_PLACES
-
+    floored = proportional_cent_split(amount, net_by_method, order=methods)
     return [(method, floored[method]) for method in methods if floored[method] > 0]
+
+
+def refund_tender_account_allocations(order, allocations):
+    """Say which bank account each method's refund share comes back out of.
+
+    A card sale taken on the Jumhouria terminal and refunded must reduce the
+    Jumhouria account, not whichever account happens to be the default — that
+    is the whole point of tagging a payment with its account, and a refund that
+    ignored it would put the shop's two banks permanently out by the value of
+    every return.
+
+    Deliberately a SECOND pass over ``allocations`` rather than one split keyed
+    on (method, account): the per-method amounts are then bit-identical to what
+    this code paid out before accounts existed, so no test, report or oracle
+    expectation moves by the cent that a different grouping would round away.
+
+    Yields ``(method, money_account_id, amount)``.
+    """
+    from apps.payments.models import Payment
+
+    net_by_key = {}
+    rows = (
+        Payment.objects.filter(order=order)
+        .values("method", "money_account")
+        .annotate(total=Sum("amount"))
+    )
+    for row in rows:
+        net = money(row["total"] or Decimal("0.00"))
+        if net > 0:
+            net_by_key.setdefault(row["method"], {})[row["money_account"]] = net
+
+    for method, method_amount in allocations:
+        accounts = net_by_key.get(method) or {}
+        if len(accounts) <= 1:
+            # The ordinary case, and the only one before this feature: one
+            # account (or none named at all) took every payment of this method.
+            account_id = next(iter(accounts), None)
+            yield method, account_id, method_amount
+            continue
+        # Untagged first, then by id, so the tie-break never depends on NULL
+        # sorting against an integer.
+        ordering = sorted(
+            accounts, key=lambda value: (value is not None, value or 0)
+        )
+        split = proportional_cent_split(method_amount, accounts, order=ordering)
+        for account_id in ordering:
+            if split[account_id] > 0:
+                yield method, account_id, split[account_id]
 
 
 def create_order_adjustment(
@@ -2202,13 +2463,18 @@ def create_order_adjustment(
         )
 
     # One negative payment per original tender so each method's ledger and the
-    # cash drawer are reduced by exactly their share of the refund.
-    for method, alloc in allocations:
+    # cash drawer are reduced by exactly their share of the refund — and, when
+    # a method was taken across two bank accounts, one per account so each
+    # bank is reduced by its own share.
+    for method, account_id, alloc in refund_tender_account_allocations(
+        order, allocations
+    ):
         commission_percent, commission_amount = payment_commission_values(method, -alloc)
         Payment.objects.create(
             order=order,
             method=method,
             amount=-alloc,
+            money_account_id=account_id,
             commission_percent=commission_percent,
             commission_amount=commission_amount,
             external_reference=f"{adjustment.adjustment_type}:{adjustment.pk}",

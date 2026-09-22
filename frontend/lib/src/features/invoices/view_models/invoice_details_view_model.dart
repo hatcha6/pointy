@@ -106,6 +106,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     required PaymentMethod method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
     bool printProof = false,
   }) async {
     if (_isRecordingPayment) {
@@ -125,6 +126,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
       method: method.apiValue,
       amount: amount,
       cardReceiptUrl: cardReceiptUrl,
+      moneyAccountId: moneyAccountId,
       idempotencyKey: _idempotencyKeyFor(signature),
     );
     final didRecord = result is Ok<SaleOrder>;

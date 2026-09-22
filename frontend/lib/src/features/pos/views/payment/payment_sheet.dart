@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../data/models/card_payment_receipt.dart';
+import '../../../../data/models/money_position.dart';
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../../shared/barcode/scan_feedback_sounds.dart';
@@ -16,6 +17,7 @@ import '../../../../shared/responsive/responsive.dart';
 import '../../../../shared/tutor/anchors.dart';
 import '../../../../shared/tutor/tutor_target.dart';
 import '../../../../shared/components/components.dart';
+import '../../../../shared/payments/bank_account_picker.dart';
 import '../../models/split_tender_payment.dart';
 import 'card_receipt_validation_dialog.dart';
 import 'payment_method_segmented_control.dart';
@@ -65,6 +67,8 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
   required bool enableTransferPayments,
   required bool requireCardReceipt,
   required List<String> trustedCardTerminalIds,
+  List<MoneyAccount> bankAccounts = const [],
+  MoneyAccount? Function(String terminalId)? accountForTerminal,
   required bool showPrintInvoiceToggle,
   required bool printInvoiceAfterPayment,
   required ValueChanged<bool> onPrintInvoiceChanged,
@@ -86,6 +90,8 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
       enableTransferPayments: enableTransferPayments,
       requireCardReceipt: requireCardReceipt,
       trustedCardTerminalIds: trustedCardTerminalIds,
+      bankAccounts: bankAccounts,
+      accountForTerminal: accountForTerminal,
       showPrintInvoiceToggle: showPrintInvoiceToggle,
       printInvoiceAfterPayment: printInvoiceAfterPayment,
       onPrintInvoiceChanged: onPrintInvoiceChanged,
@@ -121,6 +127,8 @@ class PaymentSheet extends StatefulWidget {
     required this.enableTransferPayments,
     required this.requireCardReceipt,
     required this.trustedCardTerminalIds,
+    this.bankAccounts = const [],
+    this.accountForTerminal,
     required this.showPrintInvoiceToggle,
     required this.printInvoiceAfterPayment,
     required this.onPrintInvoiceChanged,
@@ -143,6 +151,15 @@ class PaymentSheet extends StatefulWidget {
   final bool enableTransferPayments;
   final bool requireCardReceipt;
   final List<String> trustedCardTerminalIds;
+
+  /// The shop's active bank accounts. Empty — the default — hides the account
+  /// control entirely and checkout is exactly what it was.
+  final List<MoneyAccount> bankAccounts;
+
+  /// Which account a slip from this terminal belongs to. Null when the shop
+  /// has mapped no terminals, in which case a scanned receipt still attaches
+  /// to its payment; it just does not choose a bank.
+  final MoneyAccount? Function(String terminalId)? accountForTerminal;
   final bool showPrintInvoiceToggle;
   final bool printInvoiceAfterPayment;
   final ValueChanged<bool> onPrintInvoiceChanged;
@@ -236,10 +253,16 @@ class _PaymentSheetState extends State<PaymentSheet> {
         _TenderLineInput(
           method: methods.first,
           amount: widget.total.toStringAsFixed(2),
+          moneyAccountId: _defaultBankAccountId,
         ),
       );
     }
   }
+
+  /// The account a new tender starts on. Null whenever the control would not
+  /// be shown, so a shop that has configured nothing sends nothing.
+  int? get _defaultBankAccountId =>
+      BankAccountPicker.initialSelection(widget.bankAccounts);
 
   @override
   void dispose() {
@@ -512,6 +535,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
         _TenderLineInput(
           method: methods.first,
           amount: widget.total.toStringAsFixed(2),
+          moneyAccountId: _defaultBankAccountId,
         ),
       );
     } else {
@@ -644,6 +668,11 @@ class _PaymentSheetState extends State<PaymentSheet> {
                 entry.$2.method == PaymentMethod.card &&
                 _calculator.parseAmount(entry.$2.amountController.text) > 0,
             onValidateCardReceipt: () => _validateCardReceipt(entry.$1),
+            bankAccounts: widget.bankAccounts,
+            moneyAccountId: entry.$2.moneyAccountId,
+            autoSelectedTerminal: entry.$2.autoSelectedTerminal,
+            onMoneyAccountChanged: (accountId) =>
+                _updateTenderAccount(entry.$1, accountId),
           ),
         ],
         SizedBox(height: spacing.sm),
@@ -1121,6 +1150,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
         continue;
       }
       tender.cardReceipt = receipt;
+      _applyTerminalAccount(tender, receipt);
       _pendingCardReceipt = null;
       _scanError = null;
       _showPaymentError = false;
@@ -1141,6 +1171,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
       return;
     }
     tender.cardReceipt = null;
+    // The account the slip chose goes back with it. Keeping it would leave a
+    // line claiming a bank on the authority of a receipt it no longer holds.
+    if (tender.autoSelectedTerminal != null) {
+      tender.moneyAccountId = _defaultBankAccountId;
+      tender.autoSelectedTerminal = null;
+    }
     _pendingCardReceipt = receipt;
   }
 
@@ -1165,6 +1201,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
 
     setState(() {
       tender.cardReceipt = receipt;
+      _applyTerminalAccount(tender, receipt);
       _activeTenderIndex = index;
       _showPaymentError = false;
       _scanError = null;
@@ -1193,6 +1230,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
               : (summary.remaining > 0
                     ? summary.remaining.toStringAsFixed(2)
                     : ''),
+          moneyAccountId: _defaultBankAccountId,
         ),
       );
       _activeTenderIndex = _tenders.length - 1;
@@ -1282,6 +1320,48 @@ class _PaymentSheetState extends State<PaymentSheet> {
       _activeTenderIndex = editedIndex;
       _showPaymentError = false;
     });
+  }
+
+  /// The cashier naming the bank themselves. Drops the "chosen by terminal X"
+  /// note: once a person has overruled the mapping, saying the till decided
+  /// would be a claim about this payment that is no longer true.
+  void _updateTenderAccount(int index, int? accountId) {
+    setState(() {
+      final tender = _tenders[index];
+      tender.moneyAccountId = accountId;
+      tender.autoSelectedTerminal = null;
+      _activeTenderIndex = index;
+    });
+  }
+
+  /// Point a payment line at the account the machine that printed its slip
+  /// settles into.
+  ///
+  /// Only ever fills a line the cashier has not already decided for
+  /// themselves — except when the line is still sitting on the account it was
+  /// merely *seeded* with, which nobody chose. That distinction is the whole
+  /// behaviour: the shop mapped its terminals precisely so this would not have
+  /// to be done by hand, and a cashier who did reach for the dropdown must not
+  /// have their answer overwritten by the next scan.
+  void _applyTerminalAccount(
+    _TenderLineInput tender,
+    CardPaymentReceipt receipt,
+  ) {
+    final resolve = widget.accountForTerminal;
+    if (resolve == null || receipt.terminalId.isEmpty) {
+      return;
+    }
+    if (tender.moneyAccountId != null &&
+        tender.moneyAccountId != _defaultBankAccountId &&
+        tender.autoSelectedTerminal == null) {
+      return;
+    }
+    final account = resolve(receipt.terminalId);
+    if (account == null) {
+      return;
+    }
+    tender.moneyAccountId = account.id;
+    tender.autoSelectedTerminal = receipt.terminalId;
   }
 
   void _updateTenderMethod(int index, PaymentMethod method) {
@@ -1422,6 +1502,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
           method: tender.method,
           amount: _calculator.parseAmount(tender.amountController.text),
           cardReceipt: tender.cardReceipt,
+          moneyAccountId: tender.moneyAccountId,
         ),
     ];
   }
@@ -1540,12 +1621,24 @@ class _PaymentHeader extends StatelessWidget {
 }
 
 class _TenderLineInput {
-  _TenderLineInput({required this.method, required String amount})
-    : amountController = TextEditingController(text: amount);
+  _TenderLineInput({
+    required this.method,
+    required String amount,
+    this.moneyAccountId,
+  }) : amountController = TextEditingController(text: amount);
 
   PaymentMethod method;
   final TextEditingController amountController;
   CardPaymentReceipt? cardReceipt;
+
+  /// The bank account this tender lands in. Null means "not said", which the
+  /// server routes the way it always did.
+  int? moneyAccountId;
+
+  /// The terminal whose slip chose [moneyAccountId], when one did. Cleared the
+  /// moment the cashier picks an account themselves — the note must never claim
+  /// the till decided something a person overruled.
+  String? autoSelectedTerminal;
 
   void dispose() {
     amountController.dispose();

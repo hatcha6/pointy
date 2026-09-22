@@ -14,12 +14,20 @@ SandboxReply handleSelling(SandboxShop shop, SandboxRequest request) {
     // truth here — a training shop has no discount rules — and it lets the POS
     // latch that and stop asking.
     final subtotal = _subtotal(shop, request, 'lines');
+    // ...except the cashier's own discount, which is not a rule and is plain
+    // arithmetic. A practice shop that ignored it would show a trainee a total
+    // that never moved, which is the opposite of what the lesson teaches.
+    final extra = request
+        .money(request.body['extra_discount_amount'])
+        .clamp(0.0, subtotal);
     return (
       200,
       {
         'subtotal': money(subtotal),
-        'discount_total': money(0),
-        'total': money(subtotal),
+        'discount_total': money(extra),
+        'total': money(subtotal - extra),
+        'extra_discount_amount': money(extra),
+        'max_extra_discount_amount': money(subtotal),
         'applied_discounts': const <Object?>[],
         'unapplied_coupon_codes': const <Object?>[],
         'loss_lines': const <Object?>[],
@@ -121,6 +129,7 @@ SandboxReply handleSelling(SandboxShop shop, SandboxRequest request) {
     payments: payments,
     saleType: request.body['sale_type']?.toString() ?? 'standard',
     customerId: request.id('customer'),
+    extraDiscountAmount: request.money(request.body['extra_discount_amount']),
   );
   return (201, orderJson(order));
 }

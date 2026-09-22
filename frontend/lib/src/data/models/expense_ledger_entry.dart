@@ -1,3 +1,5 @@
+import 'bank_account_ref.dart';
+
 /// Where a ledger row originates. Stable codes returned by the backend; the UI
 /// maps them to Arabic labels + colored badges.
 enum ExpenseLedgerSource {
@@ -40,6 +42,7 @@ class ExpenseLedgerEntry {
     required this.paymentMethod,
     required this.reference,
     required this.relatedId,
+    this.bankAccount,
   });
 
   final ExpenseLedgerSource source;
@@ -50,6 +53,11 @@ class ExpenseLedgerEntry {
   final String paymentMethod;
   final String reference;
   final int? relatedId;
+
+  /// The bank this money left, for the sources that know. Null on cash, on a
+  /// shop that names no accounts, and on every source that carries no account
+  /// of its own.
+  final BankAccountRef? bankAccount;
 
   /// Only ad-hoc expense rows can be edited/deleted from the ledger.
   bool get isEditable => source == ExpenseLedgerSource.expense;
@@ -64,6 +72,7 @@ class ExpenseLedgerEntry {
       paymentMethod: json['payment_method']?.toString() ?? '',
       reference: json['reference']?.toString() ?? '',
       relatedId: (json['related_id'] as num?)?.toInt(),
+      bankAccount: BankAccountRef.fromPaymentJson(json),
     );
   }
 }

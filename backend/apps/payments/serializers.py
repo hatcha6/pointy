@@ -5,6 +5,8 @@ from rest_framework import serializers
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.sales.models import Order
+from apps.treasury.models import MoneyAccount
+from . import terminals
 from .card_receipts import (
     CardReceiptError,
     amount_matches,
@@ -14,6 +16,34 @@ from .card_receipts import (
 from .models import Payment
 
 _MISSING = object()
+
+
+def validate_bank_money_account(account, method, *, field="money_account"):
+    """Refuse an account that cannot possibly have received this money.
+
+    Both rules exist because the alternative is a figure nobody can explain: a
+    cash sale filed against a bank account makes a bank balance that no
+    statement will ever agree with, and a payment into the cash box would be
+    counted twice — once here and once in the drawer.
+    """
+    if account is None:
+        return None
+    # The one statement of which methods move money through a bank, borrowed
+    # from the module that has to agree with it — the money position routes on
+    # exactly this list, and a second copy here would eventually disagree.
+    from apps.treasury.position import BANK_METHODS
+
+    if account.kind != MoneyAccount.Kind.BANK:
+        raise serializers.ValidationError(
+            {field: "Only a bank account can be named on a payment."}
+        )
+    if not account.is_active:
+        raise serializers.ValidationError({field: "Account is not active."})
+    if method not in BANK_METHODS:
+        raise serializers.ValidationError(
+            {field: "Only a card or transfer payment lands in a bank account."}
+        )
+    return account
 
 
 def payment_commission_values(method, amount):
@@ -32,6 +62,15 @@ class PaymentSerializer(serializers.ModelSerializer):
         allow_blank=True,
         trim_whitespace=True,
     )
+    # Which bank account took this money. Omitted by every till that has not
+    # been told about the shop's accounts, and by every shop that has only one
+    # — and then resolved from the terminal that printed the slip, or left null
+    # so the money position routes it the way it always did.
+    money_account = serializers.PrimaryKeyRelatedField(
+        queryset=MoneyAccount.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Payment
@@ -45,6 +84,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "external_reference",
             "card_receipt_data",
             "card_receipt_url",
+            "money_account",
             "created_at",
             "updated_at",
         ]
@@ -146,6 +186,8 @@ class PaymentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"card_receipt_url": "Card receipt validation is required."}
                 )
+        if "money_account" in attrs:
+            validate_bank_money_account(attrs["money_account"], method)
         if order is None or amount is None or amount <= 0:
             return attrs
 
@@ -170,6 +212,18 @@ class PaymentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"amount": "Payment total cannot exceed the order total."}
                 )
+
+        # A slip that names its terminal names its bank: the shop said once,
+        # in settings, which account each machine settles into, and the cashier
+        # never has to say it again. Only ever fills a blank — a cashier who
+        # picked an account has overruled the mapping on purpose, and a wrongly
+        # mapped terminal must not be able to silently move their money.
+        if not validated_data.get("money_account"):
+            resolved = terminals.account_for_receipt(
+                validated_data.get("card_receipt_data")
+            )
+            if resolved is not None and resolved.is_active:
+                validated_data["money_account"] = resolved
 
         percent, commission = payment_commission_values(
             validated_data["method"],
@@ -269,3 +323,70 @@ class PaymentLedgerSerializer(serializers.ModelSerializer):
     def get_customer_name(self, payment):
         customer = payment.order.customer if payment.order_id else None
         return customer.full_name if customer is not None else None
+
+
+class CardTerminalSerializer(serializers.ModelSerializer):
+    """A card machine and the bank account it settles into.
+
+    The account is echoed back in enough detail to draw the shop's own bank
+    row — name, bank, mark — so the settings screen can show *which bank this
+    terminal feeds* without a second request per terminal.
+    """
+
+    money_account_name = serializers.CharField(
+        source="money_account.name", read_only=True, default=""
+    )
+    money_account_bank_slug = serializers.CharField(
+        source="money_account.bank_slug", read_only=True, default=""
+    )
+    money_account_bank_name = serializers.CharField(
+        source="money_account.bank_name", read_only=True, default=""
+    )
+
+    class Meta:
+        from .models import CardTerminal as _CardTerminal
+
+        model = _CardTerminal
+        fields = (
+            "id",
+            "terminal_id",
+            "label",
+            "money_account",
+            "money_account_name",
+            "money_account_bank_slug",
+            "money_account_bank_name",
+            "is_active",
+            "display_order",
+        )
+
+    def validate_terminal_id(self, value):
+        terminal_id = terminals.normalize(value)
+        if not terminal_id:
+            raise serializers.ValidationError("A terminal id is required.")
+        from .models import CardTerminal
+
+        clash = CardTerminal.objects.filter(terminal_id=terminal_id)
+        if self.instance is not None:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError("This terminal is already registered.")
+        return terminal_id
+
+    def validate_money_account(self, account):
+        if account is None:
+            return None
+        if account.kind != MoneyAccount.Kind.BANK:
+            raise serializers.ValidationError(
+                "A terminal settles into a bank account."
+            )
+        return account
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        terminals.refresh_settings_mirror()
+        return instance
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        terminals.refresh_settings_mirror()
+        return instance

@@ -48,7 +48,7 @@ class EmployeeLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         full_name = clean_str(record.full_name)
         if not full_name:
-            raise LoaderError("Employee name is required.", code="missing_name")
+            raise LoaderError("اسم الموظف مطلوب.", code="missing_name")
 
         phone = clean_str(record.phone)
         instance = resolver.existing(Employee, self.entity_type, record.source_key)
@@ -127,17 +127,17 @@ class PayrollRunLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "unresolved_employee",
-                        f"Payroll line references unknown employee "
-                        f"{line.employee_source_key!r}; skipped.",
+                        f"سطر راتب يشير إلى موظف غير معروف "
+                        f"{line.employee_source_key!r} — تم تجاهل السطر.",
                         source_key=str(record.source_key),
                     )
                 )
                 continue
             specs.append((employee_pk, line))
         if not specs:
-            raise LoaderError("Payroll run has no resolvable lines.", code="no_lines")
+            raise LoaderError("لا يوجد في مسيّر الرواتب أي سطر يمكن ربطه بموظف.", code="no_lines")
         if record.period_start is None or record.period_end is None:
-            raise LoaderError("Payroll run has no period.", code="missing_period")
+            raise LoaderError("مسيّر الرواتب بلا فترة محددة.", code="missing_period")
 
         run = resolver.existing(PayrollRun, self.entity_type, record.source_key)
         action = UPDATED if run is not None else CREATED

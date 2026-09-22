@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../../core/result.dart';
 import '../models/analytics_export.dart';
+import '../models/factory_reset.dart';
 import '../models/shop_settings.dart';
 import '../models/system_backup.dart';
 import '../services/pos_api_service.dart';
@@ -73,6 +74,22 @@ class ShopSettingsRepository {
 
   Future<Result<int>> purgeAnalyticsEvents() async {
     return Result.guard(_service.purgeAnalyticsEvents);
+  }
+
+  Future<Result<FactoryResetPreview>> loadFactoryResetPreview() async {
+    return Result.guard(_service.fetchFactoryResetPreview);
+  }
+
+  Future<Result<FactoryResetOutcome>> performFactoryReset({
+    required String password,
+    required String confirmation,
+  }) async {
+    return Result.guard(
+      () => _service.performFactoryReset(
+        password: password,
+        confirmation: confirmation,
+      ),
+    );
   }
 
   Future<Result<AnalyticsExportFile>> exportAnalyticsEvents(

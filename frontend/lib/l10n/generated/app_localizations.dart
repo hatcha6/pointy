@@ -12358,7 +12358,7 @@ abstract class AppLocalizations {
   /// No description provided for @productCostHistoryTitle.
   ///
   /// In ar, this message translates to:
-  /// **'تكلفة الشراء والهامش'**
+  /// **'التكلفة والهامش'**
   String get productCostHistoryTitle;
 
   /// No description provided for @productCostHistoryLoadError.
@@ -12370,7 +12370,7 @@ abstract class AppLocalizations {
   /// No description provided for @productCostHistoryEmpty.
   ///
   /// In ar, this message translates to:
-  /// **'لا توجد مشتريات مسجلة لهذا المنتج بعد.'**
+  /// **'لا توجد تكلفة مسجلة لهذا المنتج بعد — لا مشتريات ولا رصيد افتتاحي.'**
   String get productCostHistoryEmpty;
 
   /// Cost-history subtitle detail for a line bought in a multi-piece pack: the pack price and pack name (e.g. '162.00 لكل كرتون'). The trailing figure on the row stays per base unit so rows are comparable.
@@ -12378,6 +12378,54 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{cost} لكل {unit}'**
   String productCostHistoryPackCost(String cost, String unit);
+
+  /// Title of a cost-history row that came from an opening balance rather than a purchase order. Shown where a purchase row shows its supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد افتتاحي'**
+  String get openingStockCostSourceLabel;
+
+  /// No description provided for @openingStockSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد الافتتاحي'**
+  String get openingStockSectionTitle;
+
+  /// No description provided for @openingStockSectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية الموجودة لديك الآن من هذا المنتج وتكلفة الوحدة. تُسجَّل كرصيد افتتاحي في المخزون دون أمر شراء.'**
+  String get openingStockSectionHint;
+
+  /// No description provided for @openingStockQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية الحالية'**
+  String get openingStockQuantityLabel;
+
+  /// No description provided for @openingStockUnitCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الوحدة'**
+  String get openingStockUnitCostLabel;
+
+  /// No description provided for @openingStockUnitCostHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما دفعته في الوحدة الواحدة. تُستخدم لحساب الربح وقيمة المخزون.'**
+  String get openingStockUnitCostHelper;
+
+  /// No description provided for @openingStockCostNeedsQuantityError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل الكمية الافتتاحية حتى تُحتسب التكلفة.'**
+  String get openingStockCostNeedsQuantityError;
+
+  /// Live total under the opening-stock fields: quantity multiplied by unit cost, so the owner can sanity-check the pair before saving.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة الرصيد الافتتاحي: {value}'**
+  String openingStockValueLabel(String value);
 
   /// No description provided for @productDocumentHistoryTitle.
   ///
@@ -24000,6 +24048,48 @@ abstract class AppLocalizations {
   /// **'لا توجد أصناف مطابقة.'**
   String get stockCountSearchEmpty;
 
+  /// No description provided for @stockCountSearchLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الأصناف. تحقّق من الاتصال وحاول مرة أخرى.'**
+  String get stockCountSearchLoadError;
+
+  /// Badge on a search row this counter has already entered a count for. Shows THEIR number, never the system's.
+  ///
+  /// In ar, this message translates to:
+  /// **'عددت {quantity}'**
+  String stockCountAlreadyCounted(String quantity);
+
+  /// No description provided for @stockCountBackToSearch.
+  ///
+  /// In ar, this message translates to:
+  /// **'رجوع للبحث'**
+  String get stockCountBackToSearch;
+
+  /// No description provided for @stockCountCountUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعدّ بـ'**
+  String get stockCountCountUnit;
+
+  /// No description provided for @stockCountInvalidQuantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كمية صحيحة قبل الحفظ.'**
+  String get stockCountInvalidQuantity;
+
+  /// Live conversion hint under the count field when counting in a pack unit (3 cartons = 72 pieces).
+  ///
+  /// In ar, this message translates to:
+  /// **'= {quantity} {unit}'**
+  String stockCountUnitEquals(String quantity, String unit);
+
+  /// No description provided for @stockCountSkipItem.
+  ///
+  /// In ar, this message translates to:
+  /// **'رجوع'**
+  String get stockCountSkipItem;
+
   /// Unit label on the counting item card.
   ///
   /// In ar, this message translates to:
@@ -32778,6 +32868,30 @@ abstract class AppLocalizations {
   /// **'بحث'**
   String get rechargeSearchAction;
 
+  /// No description provided for @rechargeSearchByLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بـ'**
+  String get rechargeSearchByLabel;
+
+  /// No description provided for @rechargeSearchByPhone.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف'**
+  String get rechargeSearchByPhone;
+
+  /// No description provided for @rechargeSearchByUsername.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get rechargeSearchByUsername;
+
+  /// No description provided for @rechargeSearchByContract.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم العقد'**
+  String get rechargeSearchByContract;
+
   ///
   ///
   /// In ar, this message translates to:
@@ -33827,6 +33941,870 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'التكلفة ظاهرة — اضغط F9 للإخفاء'**
   String get costRevealedBanner;
+
+  /// Label for the cashier's one-off discount on a POS sale
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم على الفاتورة'**
+  String get invoiceDiscountLabel;
+
+  /// Affordance shown on the totals panel when no invoice discount is set yet
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خصم'**
+  String get invoiceDiscountAddAction;
+
+  /// Title of the invoice discount editor
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم على الفاتورة'**
+  String get invoiceDiscountDialogTitle;
+
+  /// Label of the invoice discount amount field
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة الخصم'**
+  String get invoiceDiscountFieldLabel;
+
+  /// Hint under the invoice discount amount field
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ يُخصم من إجمالي هذه الفاتورة'**
+  String get invoiceDiscountFieldHint;
+
+  /// Shows the most this sale can carry: its value less any rule discounts already applied
+  ///
+  /// In ar, this message translates to:
+  /// **'أقصى ما تتحمله هذه الفاتورة {amount}'**
+  String invoiceDiscountCartTotal(String amount);
+
+  /// Helper text naming the shop's per-invoice discount ceiling
+  ///
+  /// In ar, this message translates to:
+  /// **'أقصى خصم مسموح به للفاتورة {amount}'**
+  String invoiceDiscountLimitHint(String amount);
+
+  /// Error shown when the typed discount exceeds the shop ceiling
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن تجاوز {amount}'**
+  String invoiceDiscountOverLimitError(String amount);
+
+  /// Shown when the cart is worth less than the discount that was typed, so only part of it applied
+  ///
+  /// In ar, this message translates to:
+  /// **'الفاتورة لا تتحمل سوى {amount}، وهذا ما طُبّق.'**
+  String invoiceDiscountCappedNotice(String amount);
+
+  /// Clears the invoice discount
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الخصم'**
+  String get invoiceDiscountClearAction;
+
+  /// Settings label for the per-invoice discount ceiling
+  ///
+  /// In ar, this message translates to:
+  /// **'أقصى خصم للفاتورة الواحدة'**
+  String get invoiceDiscountSettingLabel;
+
+  /// Settings helper text for the per-invoice discount ceiling
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأقصى للخصم الذي يدخله الكاشير على فاتورة واحدة. اتركه فارغاً لإلغاء الحد، أو ضع صفراً لمنع الخصم من شاشة البيع.'**
+  String get invoiceDiscountSettingHelp;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرصدة العملاء والموردين'**
+  String get migrationEntityPartyBalance;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجعات'**
+  String get migrationEntitySaleReturn;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسيّرات الرواتب'**
+  String get migrationEntityPayrollRun;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخزائن والحسابات'**
+  String get migrationEntityMoneyAccount;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدات المعرّفة'**
+  String get migrationEntityCollapse;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعرف على الملف'**
+  String get migrationStageIdentify;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل قاعدة البيانات'**
+  String get migrationStageConvert;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة بناء الفواتير'**
+  String get migrationStagePrepare;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعرف على النظام'**
+  String get migrationStageDetect;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'قراءة المحتويات'**
+  String get migrationStageAnalyze;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنظيف الملفات المؤقتة'**
+  String get migrationStageTidy;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'قراءة الأصناف'**
+  String get migrationStageCatalogue;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'قراءة الشراء والبيع'**
+  String get migrationStageHistory;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجميع الأصناف المتشابهة'**
+  String get migrationStageCluster;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجهيز الاقتراح'**
+  String get migrationStagePropose;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل شيء'**
+  String get migrationScopeEverythingLabel;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف والعملاء والموردون وكامل سجل الفواتير والمدفوعات والمصروفات، كما هو في النظام القديم.'**
+  String get migrationScopeEverythingSubtitle;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'نبدأ من الوضع الحالي'**
+  String get migrationScopeOpeningPositionLabel;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف بأسعارها وتكلفتها، والعملاء بما عليهم اليوم، والموردون بما لهم اليوم — بدون نقل سجل الفواتير القديم.'**
+  String get migrationScopeOpeningPositionSubtitle;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف فقط'**
+  String get migrationScopeCatalogueOnlyLabel;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'قائمة الأصناف والتصنيفات والأسعار، بدون عملاء ولا أرصدة ولا فواتير.'**
+  String get migrationScopeCatalogueOnlySubtitle;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد يدوي'**
+  String get migrationScopeCustomLabel;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار ما يُنقل بندًا بندًا.'**
+  String get migrationScopeCustomSubtitle;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُنقل أيضًا: {entities} — لأن ما اخترته لا يعمل بدونه.'**
+  String migrationImpliedEntitiesNotice(String entities);
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يُنقل سجل الفواتير، لذلك يبدأ كل عميل ومورّد برصيده كما هو اليوم في النظام القديم.'**
+  String get migrationCurrentBalancesNotice;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُنقل سجل الفواتير، لذلك يبدأ كل عميل ومورّد برصيده الافتتاحي وتُحرّكه الفواتير بعده.'**
+  String get migrationOpeningBalancesNotice;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف المتوفرة فقط'**
+  String get migrationOnlyStockedLabel;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل الأصناف التي يقول النظام القديم إن كميتها صفر — أصناف لم تُبع منذ سنوات ولم تُحذف.'**
+  String get migrationOnlyStockedSubtitle;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن جمع «الأصناف المتوفرة فقط» مع نقل سجل الفواتير: الفواتير القديمة تشير إلى أصناف لن تُنقل.'**
+  String get migrationOnlyStockedConflict;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة فقط، بدون كميات'**
+  String get migrationStockSourceCostOnlyLabel;
+
+  /// Data migration screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'ننقل تكلفة كل صنف حتى يُحسب الربح صحيحًا من أول عملية بيع، وتبدأ الكميات من الصفر لتجردها بنفسك.'**
+  String get migrationStockSourceCostOnlySubtitle;
+
+  /// Bank account details sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الآيبان (IBAN)'**
+  String get bankAccountIbanLabel;
+
+  /// Bank account details sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب'**
+  String get bankAccountNumberLabel;
+
+  /// Bank account details sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل رقم حساب أو آيبان لهذا الحساب بعد. أضِفه من شاشة الخزينة ليظهر هنا كرمز يمسحه الزبون.'**
+  String get bankAccountNoIdentifiers;
+
+  /// Generic copy action.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get copyButton;
+
+  /// Generic copy confirmation.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم النسخ.'**
+  String get copiedToClipboard;
+
+  /// Bank account picker at checkout and on payment dialogs.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب البنكي'**
+  String get paymentBankAccountLabel;
+
+  /// Bank account picker: the terminal chose the account.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختير تلقائيًا من الماكينة {terminal}'**
+  String paymentBankAccountAuto(String terminal);
+
+  /// Bank account picker: open the IBAN/QR sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض رقم الحساب'**
+  String get paymentBankAccountShowDetails;
+
+  /// Treasury quick action: put money in from outside the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة رصيد'**
+  String get treasuryActionAddFunds;
+
+  /// Treasury add-funds sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة رصيد إلى الخزينة'**
+  String get treasuryAddFundsTitle;
+
+  /// Treasury add-funds sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'مال يدخل من خارج المحل — رأس مال من المالك أو قرض. لا يُحتسب إيرادًا ولا يظهر في الأرباح.'**
+  String get treasuryAddFundsHint;
+
+  /// Treasury add-funds sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُضاف إلى'**
+  String get treasuryAddFundsTo;
+
+  /// Treasury add-funds sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get treasuryAddFundsAmount;
+
+  /// Treasury add-funds sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب (اختياري)'**
+  String get treasuryAddFundsReason;
+
+  /// Treasury add-funds preset reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'رأس مال'**
+  String get treasuryAddFundsReasonCapital;
+
+  /// Treasury add-funds preset reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'قرض'**
+  String get treasuryAddFundsReasonLoan;
+
+  /// Treasury add-funds preset reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'من المالك'**
+  String get treasuryAddFundsReasonOwner;
+
+  /// Treasury add-funds sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة الرصيد'**
+  String get treasuryAddFundsSubmit;
+
+  /// Treasury add-funds sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت إضافة الرصيد.'**
+  String get treasuryAddFundsSaved;
+
+  /// Treasury quick action: owner takes money out.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب'**
+  String get treasuryActionWithdraw;
+
+  /// Treasury withdraw sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب من الخزينة'**
+  String get treasuryWithdrawTitle;
+
+  /// Treasury withdraw sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'مال يخرج من المحل إلى المالك. ليس مصروفًا ولا يُخصم من الأرباح.'**
+  String get treasuryWithdrawHint;
+
+  /// Treasury withdraw sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُسحب من'**
+  String get treasuryWithdrawFrom;
+
+  /// Treasury withdraw sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل السحب'**
+  String get treasuryWithdrawSubmit;
+
+  /// Treasury withdraw sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل السحب.'**
+  String get treasuryWithdrawSaved;
+
+  /// Treasury: create a money account.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب جديد'**
+  String get treasuryActionAddAccount;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب جديد'**
+  String get treasuryAccountNewTitle;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الحساب'**
+  String get treasuryAccountEditTitle;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الحساب'**
+  String get treasuryAccountNameLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب اسمًا للحساب.'**
+  String get treasuryAccountNameRequired;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'النوع'**
+  String get treasuryAccountKindLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'صندوق نقدي'**
+  String get treasuryAccountKindCash;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب بنكي'**
+  String get treasuryAccountKindBank;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصرف'**
+  String get treasuryAccountBankLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تحديد'**
+  String get treasuryAccountBankUnset;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن المصرف'**
+  String get treasuryAccountBankSearchHint;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب (اختياري)'**
+  String get treasuryAccountNumberLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'الآيبان IBAN (اختياري)'**
+  String get treasuryAccountIbanLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'يظهر للزبون كرمز QR عند الدفع بالتحويل، فلا تُملى الأرقام واحدًا واحدًا.'**
+  String get treasuryAccountIbanHelper;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد الافتتاحي'**
+  String get treasuryAccountOpeningBalanceLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الرصيد الافتتاحي'**
+  String get treasuryAccountOpeningAtLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب الافتراضي'**
+  String get treasuryAccountDefaultLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُرحَّل إليه كل حركة لم يُحدَّد لها حساب.'**
+  String get treasuryAccountDefaultHint;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُفعَّل'**
+  String get treasuryAccountActiveLabel;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get treasuryAccountSaveButton;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الحساب.'**
+  String get treasuryAccountSaved;
+
+  /// Treasury account editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الحساب.'**
+  String get treasuryAccountSaveFailed;
+
+  /// Treasury: provider float section.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرصدة لدى الموردين'**
+  String get treasurySectionProvider;
+
+  /// Treasury account card action.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب والآيبان'**
+  String get treasuryBankDetailsButton;
+
+  /// Treasury account card action.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الحساب'**
+  String get treasuryAccountEditTooltip;
+
+  /// Card terminal settings: which bank account this terminal feeds.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُودَع في'**
+  String get trustedCardTerminalAccountLabel;
+
+  /// Card terminal settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب الافتراضي'**
+  String get trustedCardTerminalAccountUnset;
+
+  /// Card terminal settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الماكينة (اختياري)'**
+  String get trustedCardTerminalLabelFieldLabel;
+
+  /// Card terminal settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: ماكينة الجمهورية'**
+  String get trustedCardTerminalLabelFieldHint;
+
+  /// Card terminal settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ حسابًا بنكيًا في شاشة الخزينة لتربط كل ماكينة بمصرفها، فتُرحَّل مبالغها تلقائيًا.'**
+  String get trustedCardTerminalNoBankAccounts;
+
+  /// Card terminal settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماكينة بلا مصرف: تُرحَّل مبالغها إلى الحساب الافتراضي.'**
+  String get trustedCardTerminalUnmappedWarning;
+
+  /// Card terminal settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الماكينة'**
+  String get trustedCardTerminalRemoveTooltip;
+
+  /// Invoice / purchase order details: the bank a payment landed in.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُودع في'**
+  String get paymentDepositedIntoLabel;
+
+  /// Purchase order details: the bank a payment left.
+  ///
+  /// In ar, this message translates to:
+  /// **'دُفع من'**
+  String get paymentPaidFromLabel;
+
+  /// Data migration screen: heading over the per-entity chips, under the scope question.
+  ///
+  /// In ar, this message translates to:
+  /// **'البنود المشمولة'**
+  String get migrationEntityListTitle;
+
+  /// Bank account details sheet: the other identifier has not been entered.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل رقم الحساب لهذا الحساب. أضِفه من تعديل الحساب ليُعرض كرمز أيضًا.'**
+  String get bankAccountNumberMissingHint;
+
+  /// Bank account details sheet: the other identifier has not been entered.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل الآيبان لهذا الحساب. أضِفه من تعديل الحساب ليُعرض كرمز أيضًا.'**
+  String get bankAccountIbanMissingHint;
+
+  /// Title of the shop-settings sub-page holding irreversible actions.
+  ///
+  /// In ar, this message translates to:
+  /// **'منطقة الخطر'**
+  String get dangerZoneTitle;
+
+  /// Settings list subtitle under the danger zone entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'إفراغ المتجر والبدء من جديد'**
+  String get dangerZoneSubtitle;
+
+  /// Shown when the danger zone cannot load the counts of what a reset would remove.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حساب ما سيُحذف'**
+  String get dangerZoneLoadError;
+
+  /// Danger callout heading at the top of the danger zone.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الإجراء لا يمكن التراجع عنه'**
+  String get factoryResetCalloutTitle;
+
+  /// Danger callout body: says plainly that the shop is emptied and that only a prior backup can bring it back.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُفرَغ المتجر بالكامل: كل الأصناف والمبيعات والمشتريات والعملاء والمخزون والحسابات وكل ما استُورد من النظام القديم. لا توجد طريقة للاسترجاع إلا من نسخة احتياطية أُخذت قبل التنفيذ.'**
+  String get factoryResetCalloutMessage;
+
+  /// Section heading over the counted list of what a factory reset removes.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الذي سيُحذف'**
+  String get factoryResetWhatGoesTitle;
+
+  /// Explains that the numbers below are live counts of the shop's own records.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه أعداد ما هو مسجّل في المتجر الآن. سيُحذف كل ما في القائمة وما يتفرّع عنه.'**
+  String get factoryResetWhatGoesDescription;
+
+  /// Shown in place of the counts when the shop has no data at all.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بيانات لحذفها. المتجر فارغ أصلا.'**
+  String get factoryResetNothingToRemove;
+
+  /// Danger zone count row: products.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف'**
+  String get factoryResetCountProducts;
+
+  /// Danger zone count row: product categories.
+  ///
+  /// In ar, this message translates to:
+  /// **'المجموعات'**
+  String get factoryResetCountCategories;
+
+  /// Danger zone count row: customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get factoryResetCountCustomers;
+
+  /// Danger zone count row: suppliers.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموردون'**
+  String get factoryResetCountSuppliers;
+
+  /// Danger zone count row: sales orders/invoices.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get factoryResetCountOrders;
+
+  /// Danger zone count row: purchase orders.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوامر الشراء'**
+  String get factoryResetCountPurchaseOrders;
+
+  /// Danger zone count row: payments.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات'**
+  String get factoryResetCountPayments;
+
+  /// Danger zone count row: stock movements.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات المخزون'**
+  String get factoryResetCountStockMovements;
+
+  /// Danger zone count row: expenses.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصروفات'**
+  String get factoryResetCountExpenses;
+
+  /// Danger zone count row: employee records.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون'**
+  String get factoryResetCountEmployees;
+
+  /// Danger zone count row: operations jobs.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوامر العمل'**
+  String get factoryResetCountJobs;
+
+  /// Danger zone count row: data-migration runs imported from an old system.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الاستيراد'**
+  String get factoryResetCountImports;
+
+  /// Danger zone count row: user accounts that will be deleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسابات المستخدمين'**
+  String get factoryResetCountUsers;
+
+  /// Section heading over the list of what a factory reset does not touch.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الذي سيبقى'**
+  String get factoryResetWhatStaysTitle;
+
+  /// Danger zone: shop settings survive the reset.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات المتجر: الاسم والعملة والخيارات والشعار'**
+  String get factoryResetKeepsSettings;
+
+  /// Danger zone: configured peripherals and integration credentials survive the reset.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعات والموازين والكاميرات وأجهزة عرض الأسعار وبيانات ربط المزوّدين'**
+  String get factoryResetKeepsDevices;
+
+  /// Danger zone: the licence/enrolment and the seeded warehouses and money accounts survive.
+  ///
+  /// In ar, this message translates to:
+  /// **'الترخيص وربط المتجر بالخدمة، والمخازن والحسابات المالية الأساسية'**
+  String get factoryResetKeepsLicense;
+
+  /// Backup callout body when a verified backup exists.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكد أن هذه النسخة تكفيك قبل المتابعة.'**
+  String get factoryResetBackupMessage;
+
+  /// Backup callout heading when the shop has never completed a verified backup.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نسخة احتياطية موثّقة'**
+  String get factoryResetNoBackupTitle;
+
+  /// Backup callout body when there is no backup: says outright that there is nothing to restore from.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يكتمل أي نسخ احتياطي موثّق على هذا الخادم. إن نفّذت الإفراغ الآن فلن يكون هناك ما يُسترجع منه. خذ نسخة احتياطية أولا من إعدادات النسخ الاحتياطي.'**
+  String get factoryResetNoBackupMessage;
+
+  /// The destructive button that opens the factory reset confirmation.
+  ///
+  /// In ar, this message translates to:
+  /// **'إفراغ المتجر والبدء من جديد'**
+  String get factoryResetButton;
+
+  /// Label on the reset button while the reset is running.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ إفراغ المتجر...'**
+  String get factoryResetRunningButton;
+
+  /// Title of the two-field confirmation dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد إفراغ المتجر'**
+  String get factoryResetDialogTitle;
+
+  /// Password field label in the factory reset dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة مرور حسابك'**
+  String get factoryResetPasswordLabel;
+
+  /// Shop-name confirmation field label in the factory reset dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المتجر'**
+  String get factoryResetConfirmationLabel;
+
+  /// Confirm button in the factory reset dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفرِغ المتجر'**
+  String get factoryResetDialogConfirm;
+
+  /// Snack bar shown after a successful reset, before the app returns to the login screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُفرِغ المتجر. سجّل الدخول من جديد للبدء.'**
+  String get factoryResetDoneMessage;
+
+  /// Danger zone: names the one account that survives.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسابك أنت ({username}) بكلمة المرور نفسها'**
+  String factoryResetKeepsAdmin(String username);
+
+  /// Backup callout heading naming when the last verified backup completed.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر نسخة احتياطية موثّقة: {date}'**
+  String factoryResetBackupTitle(String date);
+
+  /// Body of the factory reset dialog: asks for the password and the typed shop name.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحذف كل شيء نهائيا. أدخل كلمة مرورك، ثم اكتب اسم المتجر «{shopName}» للتأكيد.'**
+  String factoryResetDialogMessage(String shopName);
+
+  /// Helper line under the confirmation field, showing the exact text to type.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب: {shopName}'**
+  String factoryResetConfirmationHelper(String shopName);
 }
 
 class _AppLocalizationsDelegate

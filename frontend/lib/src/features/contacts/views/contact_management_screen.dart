@@ -549,6 +549,8 @@ class _CustomerList extends StatelessWidget {
       hasMore: viewModel.hasMoreCustomers,
       isLoadingInitial: viewModel.isLoading,
       isLoadingMore: viewModel.isLoadingMoreCustomers,
+      loadMoreFailed: viewModel.customerLoadMoreFailed,
+      loadMoreErrorMessage: l10n.contactsLoadError,
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.person_outline,
         title: l10n.emptyCustomers,
@@ -663,6 +665,8 @@ class _SupplierList extends StatelessWidget {
       hasMore: viewModel.hasMoreSuppliers,
       isLoadingInitial: viewModel.isLoading,
       isLoadingMore: viewModel.isLoadingMoreSuppliers,
+      loadMoreFailed: viewModel.supplierLoadMoreFailed,
+      loadMoreErrorMessage: l10n.contactsLoadError,
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.local_shipping_outlined,
         title: l10n.emptySuppliers,

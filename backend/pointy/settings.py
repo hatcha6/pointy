@@ -1182,6 +1182,15 @@ REST_FRAMEWORK = {
         # of a brand-new installation.
         "setup": env("DJANGO_THROTTLE_SETUP", default="20/hour"),
         "password_change": env("DJANGO_THROTTLE_PASSWORD_CHANGE", default="10/min"),
+        # Deleting the shop is not something anyone does twice in a minute, and
+        # the endpoint checks the administrator's password before it runs — so
+        # this is both a brute-force bucket and a guard against a stuck client
+        # firing the same irreversible request again.
+        "factory_reset": (
+            None
+            if TESTING
+            else env("DJANGO_THROTTLE_FACTORY_RESET", default="5/hour")
+        ),
         # Telemetry has its own bucket so a backlog flush can only ever refuse
         # telemetry. Steady-state ingest across the whole fleet is a handful of
         # requests a minute; this sits far above that and far below the 2,242 a

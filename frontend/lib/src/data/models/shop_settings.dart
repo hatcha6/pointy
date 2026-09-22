@@ -62,6 +62,7 @@ class ShopSettings {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.maxInvoiceDiscountAmount,
     this.enforceCustomerCreditLimits = false,
     this.defaultCustomerCreditLimit,
     this.defaultPaymentTermsDays = 0,
@@ -131,6 +132,12 @@ class ShopSettings {
   /// sell screen). Null or 0 = no cap.
   final double? posCashPurchaseLimit;
 
+  /// Ceiling on the discount a cashier may take off one invoice at the till.
+  /// Null = no ceiling (the amount is still bounded by the sale itself). 0 is
+  /// the opposite and deliberate: this shop does not discount at the counter,
+  /// and the sell screen hides the field entirely.
+  final double? maxInvoiceDiscountAmount;
+
   /// Master switch for credit ceilings. Off by default: a shop already trading
   /// on آجل keeps selling exactly as it did until an owner asks for the rule.
   final bool enforceCustomerCreditLimits;
@@ -184,6 +191,16 @@ class ShopSettings {
 
   bool get hasPosCashPurchaseLimit =>
       posCashPurchaseLimit != null && posCashPurchaseLimit! > 0;
+
+  /// Whether a cashier may discount an invoice at all. Unlike the cash-purchase
+  /// cap, 0 is a real answer here and it is "no" — so an explicit zero turns the
+  /// field off rather than meaning "no rule".
+  bool get allowsInvoiceDiscount =>
+      maxInvoiceDiscountAmount == null || maxInvoiceDiscountAmount! > 0;
+
+  /// Whether the ceiling actually bounds anything, as opposed to being absent.
+  bool get hasInvoiceDiscountLimit =>
+      maxInvoiceDiscountAmount != null && maxInvoiceDiscountAmount! > 0;
 
   /// Whether the shop has expressed any default at all. Unlike the cash-purchase
   /// cap, 0 counts: it means "no credit by default", not "no rule".
@@ -300,6 +317,9 @@ class ShopSettings {
       posCashPurchaseLimit: json['pos_cash_purchase_limit'] == null
           ? null
           : _moneyFromJson(json['pos_cash_purchase_limit'], 0),
+      maxInvoiceDiscountAmount: json['max_invoice_discount_amount'] == null
+          ? null
+          : _moneyFromJson(json['max_invoice_discount_amount'], 0),
       enforceCustomerCreditLimits: _boolFromJson(
         json['enforce_customer_credit_limits'],
         false,
@@ -392,6 +412,7 @@ class ShopSettingsDraft {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.maxInvoiceDiscountAmount,
     this.enforceCustomerCreditLimits = false,
     this.defaultCustomerCreditLimit,
     this.defaultPaymentTermsDays = 0,
@@ -439,6 +460,7 @@ class ShopSettingsDraft {
   final bool enableKitchenOperations;
   final bool enableJobTracking;
   final double? posCashPurchaseLimit;
+  final double? maxInvoiceDiscountAmount;
   final bool enablePurchaseSuggestions;
   final bool enableSurveillance;
   final int surveillancePreRollSeconds;
@@ -480,6 +502,7 @@ class ShopSettingsDraft {
       defaultPaymentTermsBasis: settings.defaultPaymentTermsBasis,
       allowCashierCustomerAccess: settings.allowCashierCustomerAccess,
       posCashPurchaseLimit: settings.posCashPurchaseLimit,
+      maxInvoiceDiscountAmount: settings.maxInvoiceDiscountAmount,
       enableRepairOperations: settings.enableRepairOperations,
       enableProductionOperations: settings.enableProductionOperations,
       enableKitchenOperations: settings.enableKitchenOperations,
@@ -542,6 +565,7 @@ class ShopSettingsDraft {
     PaymentTermsBasis? defaultPaymentTermsBasis,
     bool? allowCashierCustomerAccess,
     Object? posCashPurchaseLimit = _keep,
+    Object? maxInvoiceDiscountAmount = _keep,
     bool? enableRepairOperations,
     bool? enableProductionOperations,
     bool? enableKitchenOperations,
@@ -603,6 +627,9 @@ class ShopSettingsDraft {
       posCashPurchaseLimit: identical(posCashPurchaseLimit, _keep)
           ? this.posCashPurchaseLimit
           : posCashPurchaseLimit as double?,
+      maxInvoiceDiscountAmount: identical(maxInvoiceDiscountAmount, _keep)
+          ? this.maxInvoiceDiscountAmount
+          : maxInvoiceDiscountAmount as double?,
       enableRepairOperations:
           enableRepairOperations ?? this.enableRepairOperations,
       enableProductionOperations:
@@ -660,6 +687,9 @@ class ShopSettingsDraft {
       'enable_kitchen_operations': enableKitchenOperations,
       'enable_job_tracking': enableJobTracking,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
+      'max_invoice_discount_amount': maxInvoiceDiscountAmount?.toStringAsFixed(
+        2,
+      ),
       'enforce_customer_credit_limits': enforceCustomerCreditLimits,
       'default_payment_terms_days': defaultPaymentTermsDays,
       'default_payment_terms_basis': defaultPaymentTermsBasis.apiValue,

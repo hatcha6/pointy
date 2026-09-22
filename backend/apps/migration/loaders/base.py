@@ -82,7 +82,7 @@ class NotImplementedLoader(BaseLoader):
 
     def load(self, record, resolver, *, dry_run: bool) -> LoadOutcome:
         raise LoaderError(
-            f"Importing {self.entity_type!r} records is not supported yet.",
+            f"نقل سجلات {self.entity_type!r} غير مدعوم بعد.",
             code="not_implemented",
         )
 

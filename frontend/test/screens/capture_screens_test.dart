@@ -447,6 +447,26 @@ void main() {
     );
   }, skip: !_capture);
 
+  testWidgets('recharge - LNET, the search-mode picker', (tester) async {
+    await shoot(
+      tester,
+      size: kPhone,
+      name: 'recharge_search_mode',
+      child: _Host(viewModel: _rechargeLnet()),
+    );
+  }, skip: !_capture);
+
+  testWidgets('recharge - LNET, the picker open', (tester) async {
+    await shoot(
+      tester,
+      size: kPhone,
+      name: 'recharge_search_mode_open',
+      child: _Host(viewModel: _rechargeLnet()),
+      after: (tester) =>
+          tester.tap(find.byKey(const ValueKey('recharge_search_mode_picker'))),
+    );
+  }, skip: !_capture);
+
   testWidgets('recharge - as a dialog on a till', (tester) async {
     await shoot(
       tester,
@@ -492,6 +512,13 @@ void main() {
       child: _Host(viewModel: _recharge(refusal: 'not_found')),
     );
   }, skip: !_capture);
+}
+
+IntegrationRechargeViewModel _rechargeLnet() {
+  return IntegrationRechargeViewModel(
+    repository: _RechargeRepo(),
+    provider: IntegrationProviderKey.lnet,
+  );
 }
 
 IntegrationRechargeViewModel _recharge({String? refusal}) {
@@ -607,6 +634,7 @@ class _RechargeRepo extends IntegrationsRepository {
   Future<Result<IntegrationCardSnapshot>> lookupCard({
     required String providerKey,
     required String cardNo,
+    String searchBy = '',
   }) async {
     if (refusal != null) {
       return Error(IntegrationProviderRefusal(refusal!));

@@ -835,11 +835,20 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
         source="purchase_order.submitted_at",
         read_only=True,
     )
+    # Which kind of event set this cost. Cost history merges purchase lines
+    # with opening balances (see ``ProductOpeningCostSerializer``), and a row
+    # with no supplier is a different thing from a purchase whose supplier was
+    # left blank — the client labels the two differently.
+    source = serializers.SerializerMethodField()
+
+    def get_source(self, line):
+        return "purchase"
 
     class Meta:
         model = PurchaseLine
         fields = [
             "id",
+            "source",
             "product",
             "variant",
             "variant_name",
@@ -865,6 +874,96 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
 
     def get_unit_label(self, line):
         return unit_label_for(line.unit or line.variant.product.unit, self.context)
+
+
+def _rate_field():
+    """One opening balance's cost per base unit, as money."""
+    return serializers.DecimalField(
+        source="valuation_rate",
+        max_digits=18,
+        decimal_places=2,
+        read_only=True,
+    )
+
+
+class ProductOpeningCostSerializer(serializers.Serializer):
+    """An opening balance rendered in the cost-history row shape.
+
+    Same keys as ``ProductCostHistorySerializer`` so the two can be merged into
+    one list and one client model reads both. The purchase-only keys are
+    present and null rather than absent: an opening balance has no supplier and
+    no order, and saying so is what lets the client label it as what it is
+    instead of as a purchase with fields missing.
+
+    Every figure is already per BASE unit — the ledger has no other
+    denomination — so ``unit_factor`` is 1 and the per-pack and per-base costs
+    are the same number.
+    """
+
+    id = serializers.IntegerField(read_only=True)
+    source = serializers.SerializerMethodField()
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
+    variant = serializers.IntegerField(source="variant_id", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    purchase_order = serializers.SerializerMethodField()
+    order_number = serializers.SerializerMethodField()
+    supplier = serializers.SerializerMethodField()
+    supplier_name = serializers.SerializerMethodField()
+    quantity = serializers.DecimalField(
+        source="quantity_change",
+        max_digits=14,
+        decimal_places=3,
+        read_only=True,
+    )
+    unit = serializers.SerializerMethodField()
+    unit_label = serializers.SerializerMethodField()
+    unit_factor = serializers.SerializerMethodField()
+    # Declared as DecimalFields over the ledger's own rate rather than as
+    # method fields, so they render exactly as the purchase row's do — a
+    # quantized string. A method field would hand DRF a raw Decimal, which the
+    # JSON renderer turns into a float, and one list would then carry money in
+    # two shapes.
+    unit_cost = _rate_field()
+    effective_unit_cost = _rate_field()
+    base_unit_cost = _rate_field()
+    effective_base_unit_cost = _rate_field()
+    landed_unit_cost = serializers.SerializerMethodField()
+    expiry_date = serializers.SerializerMethodField()
+    received_at = serializers.DateTimeField(source="posting_at", read_only=True)
+    submitted_at = serializers.DateTimeField(source="posting_at", read_only=True)
+    created_at = serializers.DateTimeField(source="posting_at", read_only=True)
+
+    def get_source(self, entry):
+        return "opening"
+
+    def get_purchase_order(self, entry):
+        return None
+
+    def get_order_number(self, entry):
+        return None
+
+    def get_supplier(self, entry):
+        return None
+
+    def get_supplier_name(self, entry):
+        return None
+
+    def get_unit(self, entry):
+        return entry.variant.product.unit
+
+    def get_unit_label(self, entry):
+        return unit_label_for(entry.variant.product.unit, self.context)
+
+    def get_unit_factor(self, entry):
+        # Already a string, for the same reason the rates above are: the
+        # purchase row's unit_factor is a DecimalField and renders as one.
+        return "1.000000"
+
+    def get_landed_unit_cost(self, entry):
+        return None
+
+    def get_expiry_date(self, entry):
+        return None
 
 
 class PurchaseAdjustmentHistorySerializer(serializers.ModelSerializer):
@@ -1627,7 +1726,20 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
     )
     payment_status = serializers.CharField(read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
+    # What was actually paid against this order, and out of which bank. The
+    # details screen showed a "paid" total and nothing behind it, so a shop
+    # reconciling a statement had the figure but not the movements it is made
+    # of — and, with two banks, no way to tell which one is short.
+    #
+    # Already prefetched with its account (``PurchaseOrderViewSet``), so this
+    # costs no query per row.
+    payments = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
+
+    def get_payments(self, order) -> list:
+        return SupplierPaymentSerializer(
+            order.supplier_payments.all(), many=True
+        ).data
     supplier_invoice_attachments = serializers.SerializerMethodField()
 
     class Meta:
@@ -1680,6 +1792,7 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
             "balance_due",
             "payment_status",
             "is_overdue",
+            "payments",
             "attachments",
             "supplier_invoice_attachments",
             "can_return",
@@ -2419,6 +2532,18 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
         source="created_by.username",
         read_only=True,
     )
+    # Named on the payment so the purchase-order details screen can say which
+    # of the shop's banks the money actually left, with that bank's own mark —
+    # the same row the invoice details screen draws for a sale.
+    money_account_name = serializers.CharField(
+        source="money_account.name", read_only=True, default=""
+    )
+    money_account_bank_slug = serializers.CharField(
+        source="money_account.bank_slug", read_only=True, default=""
+    )
+    money_account_bank_name = serializers.CharField(
+        source="money_account.bank_name", read_only=True, default=""
+    )
 
     class Meta:
         model = SupplierPayment
@@ -2433,6 +2558,10 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             "reference",
             "notes",
             "paid_at",
+            "money_account",
+            "money_account_name",
+            "money_account_bank_slug",
+            "money_account_bank_name",
             "register_session",
             "cash_movement",
             "created_by_username",
@@ -2445,6 +2574,9 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             "id",
             "supplier_name",
             "purchase_order_number",
+            "money_account_name",
+            "money_account_bank_slug",
+            "money_account_bank_name",
             "register_session",
             "cash_movement",
             "created_by_username",
@@ -2468,6 +2600,16 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             entity_id=getattr(self.instance, "pk", None),
             action="purchasing.supplier_payment",
         )
+        if "money_account" in attrs:
+            from apps.payments.serializers import validate_bank_money_account
+
+            # The same rule the till enforces, and for the same reason: money
+            # that left by card or transfer left a named bank, and money that
+            # left the drawer did not leave a bank at all.
+            validate_bank_money_account(
+                attrs["money_account"],
+                attrs.get("method", getattr(self.instance, "method", None)),
+            )
         return super().validate(attrs)
 
     def create(self, validated_data):

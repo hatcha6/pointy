@@ -1,4 +1,5 @@
 import '../models/analytics_export.dart';
+import '../models/factory_reset.dart';
 import '../models/shop_settings.dart';
 import '../models/system_backup.dart';
 import 'analytics_export_receiver.dart';
@@ -130,6 +131,44 @@ class ShopSettingsApiClient {
       }
     }
     return 0;
+  }
+
+  /// What a factory reset would remove, counted, plus the shop name the owner
+  /// has to type back and the date of the last verified backup.
+  Future<FactoryResetPreview> fetchFactoryResetPreview() async {
+    final response = await _session.get('shop-settings/factory-reset/');
+    _session.ensureSuccess(
+      response,
+      'Factory reset preview failed with status',
+    );
+    return FactoryResetPreview.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Empty the shop. Owner-only, irreversible, and gated twice on the server —
+  /// once on the administrator's own password, once on the typed shop name.
+  ///
+  /// [throwApiException] rather than [ensureSuccess] so the body survives: a
+  /// refusal here is almost always "that password is wrong" or "that is not
+  /// this shop's name", and the field errors are the whole message.
+  Future<FactoryResetOutcome> performFactoryReset({
+    required String password,
+    required String confirmation,
+  }) async {
+    final response = await _session.post(
+      'shop-settings/factory-reset/',
+      body: {'password': password, 'confirmation': confirmation},
+      // One truncate over ~130 tables, but the file sweep in front of it walks
+      // every stored attachment and every uploaded legacy database. A client
+      // timeout would report a failure for a reset that has already happened —
+      // the single worst thing to be wrong about on this screen.
+      timeout: const Duration(minutes: 10),
+    );
+    _session.throwApiException(response, 'Factory reset failed with status');
+    return FactoryResetOutcome.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<AnalyticsExportFile> exportAnalyticsEvents(

@@ -22,6 +22,8 @@ class ContactManagementViewModel extends ChangeNotifier {
   bool _hasError = false;
   bool _hasMoreCustomers = true;
   bool _hasMoreSuppliers = true;
+  bool _customerLoadMoreFailed = false;
+  bool _supplierLoadMoreFailed = false;
   int _nextCustomerPage = 1;
   int _nextSupplierPage = 1;
   int _loadRevision = 0;
@@ -37,6 +39,13 @@ class ContactManagementViewModel extends ChangeNotifier {
   bool get hasMoreCustomers => _hasMoreCustomers;
   bool get hasMoreSuppliers => _hasMoreSuppliers;
 
+  /// The last page request failed. Separate from [hasError], which is the
+  /// first page failing with nothing to show, and separate from
+  /// [hasMoreCustomers] — a failed request says nothing about whether the
+  /// shop has more customers. The list offers a retry at its end.
+  bool get customerLoadMoreFailed => _customerLoadMoreFailed;
+  bool get supplierLoadMoreFailed => _supplierLoadMoreFailed;
+
   Future<void> loadContacts() async {
     // Drop stale responses: a newer load (fresher search text) supersedes
     // this one even while its requests are still in flight.
@@ -45,6 +54,8 @@ class ContactManagementViewModel extends ChangeNotifier {
     _hasError = false;
     _hasMoreCustomers = true;
     _hasMoreSuppliers = true;
+    _customerLoadMoreFailed = false;
+    _supplierLoadMoreFailed = false;
     _nextCustomerPage = 1;
     _nextSupplierPage = 1;
     notifyListeners();
@@ -94,6 +105,9 @@ class ContactManagementViewModel extends ChangeNotifier {
     }
 
     _isLoadingMoreCustomers = true;
+    // Clearing it here is what makes the list's retry button work: the tap
+    // calls straight back into this method.
+    _customerLoadMoreFailed = false;
     notifyListeners();
 
     final result = await _repository.loadCustomers(
@@ -106,8 +120,12 @@ class ContactManagementViewModel extends ChangeNotifier {
         _hasMoreCustomers = result.value.hasMore;
         _nextCustomerPage += 1;
       case Error<CustomerPage>():
-        _hasMoreCustomers = false;
-        _hasError = true;
+        // The page number is NOT advanced and hasMore is left alone, so the
+        // next attempt asks for the same page again. Clearing hasMore here
+        // used to end pagination for the life of this (app-lifetime) view
+        // model: one dropped request and the list was stuck on its first
+        // page, scrolling forever with nothing arriving.
+        _customerLoadMoreFailed = true;
     }
 
     _isLoadingMoreCustomers = false;
@@ -120,6 +138,7 @@ class ContactManagementViewModel extends ChangeNotifier {
     }
 
     _isLoadingMoreSuppliers = true;
+    _supplierLoadMoreFailed = false;
     notifyListeners();
 
     final result = await _repository.loadSuppliers(
@@ -132,8 +151,8 @@ class ContactManagementViewModel extends ChangeNotifier {
         _hasMoreSuppliers = result.value.hasMore;
         _nextSupplierPage += 1;
       case Error<SupplierPage>():
-        _hasMoreSuppliers = false;
-        _hasError = true;
+        // See loadMoreCustomers: the page is retried, not abandoned.
+        _supplierLoadMoreFailed = true;
     }
 
     _isLoadingMoreSuppliers = false;

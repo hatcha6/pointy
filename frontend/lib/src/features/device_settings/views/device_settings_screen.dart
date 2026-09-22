@@ -11,8 +11,11 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/services/auto_start_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/barcode/camera_wedge/camera_wedge_scope.dart';
+import '../../../shared/barcode/camera_wedge/camera_wedge_source.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/price_checker/price_checker_mode_controller.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
@@ -312,6 +315,27 @@ class _CameraWedgePanelState extends State<_CameraWedgePanel> {
   DeviceSettingsViewModel get viewModel => widget.viewModel;
   Future<void> Function()? get onChanged => widget.onChanged;
 
+  /// The cameras to offer, plus the one that was picked and is no longer here.
+  ///
+  /// A `DropdownButton` asserts that its value is among its items, so a shop
+  /// that unplugged the camera it had chosen used to open this screen and hit
+  /// that assertion. Keeping the absent camera in the list is also the honest
+  /// answer: the setting still points at it, and saying so is more use than
+  /// quietly showing "automatic".
+  List<CameraWedgeDevice> get _devices {
+    final devices = viewModel.cameraWedgeDevices;
+    final picked = viewModel.cameraWedgeDeviceId;
+    if (picked == null || devices.any((device) => device.id == picked)) {
+      return devices;
+    }
+    return [...devices, CameraWedgeDevice.fromPlatformName(picked)];
+  }
+
+  String? get _selectableDeviceId {
+    final picked = viewModel.cameraWedgeDeviceId;
+    return _devices.any((device) => device.id == picked) ? picked : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -358,7 +382,11 @@ class _CameraWedgePanelState extends State<_CameraWedgePanel> {
               Expanded(
                 child: DropdownButtonFormField<String?>(
                   key: const ValueKey('camera_wedge_device_picker'),
-                  initialValue: viewModel.cameraWedgeDeviceId,
+                  initialValue: _selectableDeviceId,
+                  // Without this the menu lays a camera's name out at its
+                  // natural width and lets it wrap down the screen; the field
+                  // is the width the name has to live in.
+                  isExpanded: true,
                   decoration: InputDecoration(
                     labelText: l10n.cameraWedgeCameraLabel,
                     prefixIcon: const Icon(Icons.videocam_outlined),
@@ -366,12 +394,24 @@ class _CameraWedgePanelState extends State<_CameraWedgePanel> {
                   items: [
                     DropdownMenuItem<String?>(
                       value: null,
-                      child: Text(l10n.cameraWedgeCameraAutomatic),
+                      child: Text(
+                        l10n.cameraWedgeCameraAutomatic,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    for (final device in viewModel.cameraWedgeDevices)
+                    for (final device in _devices)
                       DropdownMenuItem<String?>(
                         value: device.id,
-                        child: Text(device.label),
+                        child: Text(
+                          // A camera's name is Latin text in an Arabic
+                          // screen: without an isolate the bidi algorithm
+                          // reorders its trailing punctuation and digits
+                          // around the surrounding direction.
+                          ltrIsolated(device.label),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   onChanged: viewModel.isSaving
@@ -402,13 +442,52 @@ class _CameraWedgePanelState extends State<_CameraWedgePanel> {
             ),
           ],
           SizedBox(height: spacing.sm),
-          PointyInlineMessage(
-            message: l10n.cameraWedgeRunning,
-            icon: Icons.check_circle_outline,
-            compact: true,
-          ),
+          // The state of the actual camera, not of the switch. This used to
+          // say "running" whenever the toggle was on, which is what a shop
+          // read while the camera it had picked was failing every still.
+          const _CameraWedgeStatus(),
         ],
       ],
+    );
+  }
+}
+
+/// Says whether the camera is reading, and admits when it is not.
+///
+/// Listens to the running wedge rather than to the switch, because those are
+/// different facts: a camera can be switched on, opened, and still fail every
+/// still it is asked for — a camera already held by another program, one that
+/// was unplugged, one whose driver will not hand over a photo. Every one of
+/// those used to read as "the camera is working now".
+class _CameraWedgeStatus extends StatelessWidget {
+  const _CameraWedgeStatus();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final controller = CameraWedgeScope.controllerOf(context);
+    if (controller == null) {
+      return PointyInlineMessage(
+        message: l10n.cameraWedgeRunning,
+        icon: Icons.check_circle_outline,
+        compact: true,
+      );
+    }
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => controller.failure != null
+          ? PointyInlineMessage(
+              key: const ValueKey('camera_wedge_failed_message'),
+              message: l10n.productImageCameraUnavailable,
+              icon: Icons.error_outline,
+              compact: true,
+            )
+          : PointyInlineMessage(
+              key: const ValueKey('camera_wedge_running_message'),
+              message: l10n.cameraWedgeRunning,
+              icon: Icons.check_circle_outline,
+              compact: true,
+            ),
     );
   }
 }

@@ -126,6 +126,7 @@ class SaleRepository {
     required String method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
     String? idempotencyKey,
   }) async {
     return Result.guard(
@@ -134,6 +135,7 @@ class SaleRepository {
         method: method,
         amount: amount,
         cardReceiptUrl: cardReceiptUrl,
+        moneyAccountId: moneyAccountId,
         idempotencyKey: idempotencyKey,
       ),
     );

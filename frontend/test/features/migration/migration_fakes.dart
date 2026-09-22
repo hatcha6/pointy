@@ -57,11 +57,72 @@ class FakeMigrationRepository implements MigrationRepository {
           'supported_entities': ['product'],
           'versions': ['fahd-mdb-recon-1'],
           'implemented': true,
+          'supports_stock_filter': true,
         },
       ],
       'entities': [
-        {'entity_type': 'product', 'label': 'الأصناف', 'implemented': true},
-        {'entity_type': 'sale', 'label': 'المبيعات', 'implemented': true},
+        {
+          'entity_type': 'category',
+          'label': 'Categories',
+          'implemented': true,
+          'dependencies': <String>[],
+        },
+        {
+          'entity_type': 'product',
+          'label': 'Products',
+          'implemented': true,
+          'dependencies': ['category'],
+        },
+        {
+          'entity_type': 'customer',
+          'label': 'Customers',
+          'implemented': true,
+          'dependencies': <String>[],
+        },
+        {
+          'entity_type': 'party_balance',
+          'label': 'Customer & supplier balances',
+          'implemented': true,
+          'dependencies': ['customer'],
+        },
+        {
+          'entity_type': 'sale',
+          'label': 'Sales',
+          'implemented': true,
+          'dependencies': ['customer', 'product'],
+        },
+      ],
+      'scopes': [
+        {
+          'key': 'everything',
+          'label': 'كل شيء',
+          'description': '',
+          'entities': [
+            'category',
+            'product',
+            'customer',
+            'party_balance',
+            'sale',
+          ],
+          'options': {'stock_source': 'snapshot'},
+          'is_preset': true,
+        },
+        {
+          'key': 'opening_position',
+          'label': 'نبدأ من الوضع الحالي',
+          'description': '',
+          'entities': ['category', 'product', 'customer', 'party_balance'],
+          'options': {'stock_source': 'cost_only'},
+          'is_preset': true,
+        },
+        {
+          'key': 'custom',
+          'label': 'تحديد يدوي',
+          'description': '',
+          'entities': null,
+          'options': <String, Object?>{},
+          'is_preset': false,
+        },
       ],
       'upload': {'chunk_size': 1024, 'max_bytes': 8589934592},
     }),
@@ -88,9 +149,15 @@ class FakeMigrationRepository implements MigrationRepository {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    String? scope,
     Map<String, Object?> options = const {},
   }) async {
-    startedRuns.add({'mode': mode, 'entities': entities, 'options': options});
+    startedRuns.add({
+      'mode': mode,
+      'entities': entities,
+      'scope': scope,
+      'options': options,
+    });
     return Ok(MigrationRun.fromJson(const {'id': 1, 'status': 'queued'}));
   }
 

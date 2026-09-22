@@ -52,6 +52,7 @@ class MigrationRepository {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    String? scope,
     Map<String, Object?> options = const {},
   }) {
     return Result.guard(
@@ -59,6 +60,7 @@ class MigrationRepository {
         sourceId: sourceId,
         mode: mode,
         entities: entities,
+        scope: scope,
         options: options,
       ),
     );

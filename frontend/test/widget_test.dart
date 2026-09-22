@@ -3011,6 +3011,9 @@ void main() {
       findsNothing,
     );
 
+    // The terminal manager writes each change straight to the server — a
+    // terminal is a money route another screen reads, not a preference that
+    // waits for "save" — so the list here is what came back from it.
     await tester.tap(
       find.byKey(const ValueKey('manage_trusted_card_terminals_button')),
     );
@@ -3043,9 +3046,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(ltrIsolated('ABC123')), findsNothing);
 
-    await tester.tap(
-      find.byKey(const ValueKey('trusted_card_terminals_done_button')),
-    );
+    await tester.tap(find.byKey(const ValueKey('card_terminals_done_button')));
     await tester.pumpAndSettle();
     expect(find.text(ltrIsolated('0JA8Y13W')), findsOneWidget);
 
@@ -5089,6 +5090,21 @@ PosApiService _mockApiService({
   var configuredBackupDestinationPath = backupDestinationPath;
   var configuredBackupScheduleEnabled = backupScheduleEnabled;
   var configuredBackupScheduledTime = backupScheduledTime;
+  // The registry the card-terminal routes below add to, update and delete —
+  // seeded from the shop settings so a test that starts with trusted terminals
+  // sees them in the manager too.
+  final cardTerminals = <Map<String, Object?>>[
+    for (final (index, terminalId)
+        in shopSettingsTrustedCardTerminalIds.indexed)
+      {
+        'id': index + 1,
+        'terminal_id': terminalId,
+        'label': '',
+        'money_account': null,
+        'is_active': true,
+        'display_order': index,
+      },
+  ];
 
   return PosApiService(
     client: MockClient((request) async {
@@ -6196,6 +6212,62 @@ PosApiService _mockApiService({
           'previous': null,
           'results': <Object?>[],
         });
+      }
+
+      // The shop's money accounts and card machines. The practice fake keeps
+      // ONE bank account, which is what an untouched install has: the till's
+      // bank picker stays hidden and checkout is unchanged, while the terminal
+      // registry is still a real list that can be added to and removed from.
+      if (path.endsWith('/money-accounts/')) {
+        return _jsonResponseList(const [
+          {
+            'id': 1,
+            'name': 'المصرف',
+            'kind': 'bank',
+            'bank_name': '',
+            'bank_slug': '',
+            'account_number': '',
+            'iban': '',
+            'opening_balance': '0.00',
+            'is_default': true,
+            'is_active': true,
+          },
+        ]);
+      }
+
+      if (path.endsWith('/card-terminals/')) {
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          final terminal = {
+            'id': cardTerminals.length + 1,
+            'terminal_id': body['terminal_id'],
+            'label': body['label'] ?? '',
+            'money_account': body['money_account'],
+            'is_active': true,
+            'display_order': cardTerminals.length,
+          };
+          cardTerminals.add(terminal);
+          return _jsonResponse(terminal);
+        }
+        return _jsonResponseList(cardTerminals);
+      }
+
+      final terminalMatch = RegExp(r'/card-terminals/(\d+)/$').firstMatch(path);
+      if (terminalMatch != null) {
+        final id = int.parse(terminalMatch.group(1)!);
+        final index = cardTerminals.indexWhere(
+          (terminal) => terminal['id'] == id,
+        );
+        if (index < 0) {
+          return http.Response('not found', 404);
+        }
+        if (request.method == 'DELETE') {
+          cardTerminals.removeAt(index);
+          return http.Response('', 204);
+        }
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        cardTerminals[index] = {...cardTerminals[index], ...body};
+        return _jsonResponse(cardTerminals[index]);
       }
 
       return http.Response('not found', 404);

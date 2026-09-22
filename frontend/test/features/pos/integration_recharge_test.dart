@@ -241,7 +241,11 @@ void main() {
       expect(spec.priceOf(45), 47.75);
       // And a markup too small to clear face value never drops below it.
       const tiny = IntegrationOpenAmount(
-        minimum: 1, step: 1, costRatio: 0.95, pricePerUnit: 0.95, priceFixed: 1,
+        minimum: 1,
+        step: 1,
+        costRatio: 0.95,
+        pricePerUnit: 0.95,
+        priceFixed: 1,
       );
       expect(tiny.priceOf(45), 45);
     });
@@ -252,13 +256,17 @@ void main() {
 
       viewModel.setCustomAmount(0);
       expect(viewModel.selectedOffer, isNull);
-      expect(viewModel.customAmountProblem,
-          IntegrationAmountProblem.notPositive);
+      expect(
+        viewModel.customAmountProblem,
+        IntegrationAmountProblem.notPositive,
+      );
 
       viewModel.setCustomAmount(45.5);
       expect(viewModel.selectedOffer, isNull);
-      expect(viewModel.customAmountProblem,
-          IntegrationAmountProblem.notAMultiple);
+      expect(
+        viewModel.customAmountProblem,
+        IntegrationAmountProblem.notAMultiple,
+      );
 
       viewModel.setCustomAmount(45);
       expect(viewModel.customAmountProblem, isNull);
@@ -276,36 +284,42 @@ void main() {
       expect(viewModel.selectedOffer!.code, 'topup:25');
     });
 
-    test('clearing the quick-picks does not read as a broken provider', () async {
-      // An owner who wants amounts typed every time gets an empty grid and a
-      // working field, not a warning that the provider is down.
-      final viewModel = _lnetViewModel(_FakeLnetRepo(noQuickPicks: true));
-      await viewModel.lookup('basheir.home');
+    test(
+      'clearing the quick-picks does not read as a broken provider',
+      () async {
+        // An owner who wants amounts typed every time gets an empty grid and a
+        // working field, not a warning that the provider is down.
+        final viewModel = _lnetViewModel(_FakeLnetRepo(noQuickPicks: true));
+        await viewModel.lookup('basheir.home');
 
-      expect(viewModel.sellableOffers, isEmpty);
-      expect(viewModel.allowsCustomAmount, isTrue);
-      viewModel.setCustomAmount(45);
-      expect(viewModel.buildDraft()!.offer.code, 'topup:45');
-    });
+        expect(viewModel.sellableOffers, isEmpty);
+        expect(viewModel.allowsCustomAmount, isTrue);
+        viewModel.setCustomAmount(45);
+        expect(viewModel.buildDraft()!.offer.code, 'topup:45');
+      },
+    );
 
-    test('a phone search addresses the line by the username it found', () async {
-      // The search term and the line's identifier are different strings for
-      // LNET, and everything after the search belongs to the identifier. The
-      // history tab asked for the phone number, which is not what the
-      // provider's payments report is keyed on — so a customer with top-ups
-      // showed none, on the search a till does most.
-      final repository = _FakeLnetRepo(resolvesTo: 'alhussainbasheir');
-      final viewModel = _lnetViewModel(repository);
-      await viewModel.lookup('0910682854');
+    test(
+      'a phone search addresses the line by the username it found',
+      () async {
+        // The search term and the line's identifier are different strings for
+        // LNET, and everything after the search belongs to the identifier. The
+        // history tab asked for the phone number, which is not what the
+        // provider's payments report is keyed on — so a customer with top-ups
+        // showed none, on the search a till does most.
+        final repository = _FakeLnetRepo(resolvesTo: 'alhussainbasheir');
+        final viewModel = _lnetViewModel(repository);
+        await viewModel.lookup('0910682854');
 
-      expect(repository.lookedUp, ['0910682854']);
-      expect(repository.historyLookups, ['alhussainbasheir']);
+        expect(repository.lookedUp, ['0910682854']);
+        expect(repository.historyLookups, ['alhussainbasheir']);
 
-      // And the cart line carries the same identifier the recharge is keyed
-      // on, not the phone number somebody typed to find it.
-      viewModel.setCustomAmount(45);
-      expect(viewModel.buildDraft()!.subscriberRef, 'alhussainbasheir');
-    });
+        // And the cart line carries the same identifier the recharge is keyed
+        // on, not the phone number somebody typed to find it.
+        viewModel.setCustomAmount(45);
+        expect(viewModel.buildDraft()!.subscriberRef, 'alhussainbasheir');
+      },
+    );
 
     test('a typed amount reaches the cart as an ordinary line', () async {
       final viewModel = _lnetViewModel(_FakeLnetRepo());
@@ -385,6 +399,94 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('لم يُعثر على البطاقة المطلوبة'), findsOneWidget);
+    });
+  });
+  group('what the cashier says the number is', () {
+    // A phone number and a contract number are both digits, so the server
+    // cannot tell them apart: it asks the portal every way in turn, three
+    // round trips and ~4.4s on a real till. The person holding the number
+    // knows. The picker is how they say so.
+
+    test('the phone search is what the till starts on', () {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+
+      expect(viewModel.searchMode, IntegrationSearchMode.phone);
+      expect(viewModel.searchModes, hasLength(3));
+      expect(viewModel.allowsLetters, isFalse);
+    });
+
+    test('a provider with one way to search offers no choice', () {
+      // HD Box knows a subscriber by the number on their card and nothing
+      // else. A picker with one row in it is worse than no picker.
+      expect(_viewModel(_FakeRepo()).searchModes, isEmpty);
+    });
+
+    test('the pick reaches the provider', () async {
+      final repo = _FakeLnetRepo();
+      final viewModel = _lnetViewModel(repo);
+      viewModel.selectSearchMode(IntegrationSearchMode.contract);
+      await viewModel.lookup('214737');
+
+      expect(repo.lastSearchBy, 'contract_number');
+    });
+
+    test('a provider with no choice sends no pick at all', () async {
+      final repo = _FakeRepo();
+      await _viewModel(repo).lookup('210906803499');
+
+      expect(repo.lastSearchBy, isEmpty);
+    });
+
+    test('searching by username is what lets letters be typed', () {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+
+      expect(viewModel.allowsLetters, isFalse);
+      viewModel.selectSearchMode(IntegrationSearchMode.username);
+      expect(viewModel.allowsLetters, isTrue);
+      viewModel.selectSearchMode(IntegrationSearchMode.contract);
+      expect(viewModel.allowsLetters, isFalse);
+    });
+
+    testWidgets('the picker sits in front of the search box', (tester) async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo());
+      await tester.pumpWidget(_harness(viewModel));
+
+      final picker = find.byKey(const ValueKey('recharge_search_mode_picker'));
+      expect(picker, findsOneWidget);
+      // It says which mode is armed without being opened: a cashier must be
+      // able to see they are about to search the wrong way.
+      expect(find.text('رقم الهاتف'), findsOneWidget);
+    });
+
+    testWidgets('choosing a mode re-arms the field', (tester) async {
+      final repo = _FakeLnetRepo();
+      final viewModel = _lnetViewModel(repo);
+      await tester.pumpWidget(_harness(viewModel));
+
+      await tester.enterText(find.byType(TextField).first, '0910682854');
+      await tester.tap(
+        find.byKey(const ValueKey('recharge_search_mode_picker')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('رقم العقد').last);
+      await tester.pumpAndSettle();
+
+      expect(viewModel.searchMode, IntegrationSearchMode.contract);
+      // The old term belonged to the old question; leaving it in the box is
+      // how a cashier searches for a phone number as a contract number.
+      expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        isEmpty,
+      );
+    });
+
+    testWidgets('no picker where there is nothing to pick', (tester) async {
+      await tester.pumpWidget(_harness(_viewModel(_FakeRepo())));
+
+      expect(
+        find.byKey(const ValueKey('recharge_search_mode_picker')),
+        findsNothing,
+      );
     });
   });
 }
@@ -487,12 +589,17 @@ class _FakeLnetRepo extends IntegrationsRepository {
   final List<String> lookedUp = [];
   final List<String> historyLookups = [];
 
+  /// What the till said the typed number IS. Empty when it said nothing.
+  String lastSearchBy = '';
+
   @override
   Future<Result<IntegrationCardSnapshot>> lookupCard({
     required String providerKey,
     required String cardNo,
+    String searchBy = '',
   }) async {
     lookedUp.add(cardNo);
+    lastSearchBy = searchBy;
     // A phone number matches every line; a username matches only its own.
     final isPhone = manyLines && !cardNo.contains('.');
     if (isPhone) {
@@ -503,10 +610,16 @@ class _FakeLnetRepo extends IntegrationsRepository {
           serviceVariant: _lnetServiceVariant,
           needsSelection: true,
           candidates: [
-            _lnetLine('basheir.home', status: 'Active',
-                expireAt: DateTime(2026, 12, 1)),
-            _lnetLine('basheir.shop', status: 'Expired',
-                expireAt: DateTime(2026, 2, 2)),
+            _lnetLine(
+              'basheir.home',
+              status: 'Active',
+              expireAt: DateTime(2026, 12, 1),
+            ),
+            _lnetLine(
+              'basheir.shop',
+              status: 'Expired',
+              expireAt: DateTime(2026, 2, 2),
+            ),
             _lnetLine('basheir.old', status: 'Suspended'),
           ],
           balance: 518.8,
@@ -520,24 +633,26 @@ class _FakeLnetRepo extends IntegrationsRepository {
           status: 'Active',
           expireAt: DateTime(2026, 12, 1),
         ),
-        offers: noQuickPicks ? const [] : const [
-          IntegrationOffer(
-            code: 'topup:25',
-            kind: 'topup',
-            label: '25 LYD',
-            cost: 23.75,
-            price: 25,
-            faceValue: 25,
-          ),
-          IntegrationOffer(
-            code: 'topup:45',
-            kind: 'topup',
-            label: '45 LYD',
-            cost: 42.75,
-            price: 45,
-            faceValue: 45,
-          ),
-        ],
+        offers: noQuickPicks
+            ? const []
+            : const [
+                IntegrationOffer(
+                  code: 'topup:25',
+                  kind: 'topup',
+                  label: '25 LYD',
+                  cost: 23.75,
+                  price: 25,
+                  faceValue: 25,
+                ),
+                IntegrationOffer(
+                  code: 'topup:45',
+                  kind: 'topup',
+                  label: '45 LYD',
+                  cost: 42.75,
+                  price: 45,
+                  faceValue: 45,
+                ),
+              ],
         openAmount: _lnetOpenAmount,
         serviceVariant: _lnetServiceVariant,
         balance: 518.8,
@@ -573,11 +688,16 @@ class _FakeRepo extends IntegrationsRepository {
   int lastOffset = 0;
   IntegrationHistoryKind lastKind = IntegrationHistoryKind.purchases;
 
+  /// What the till said the typed number IS. Empty when it said nothing.
+  String lastSearchBy = '';
+
   @override
   Future<Result<IntegrationCardSnapshot>> lookupCard({
     required String providerKey,
     required String cardNo,
+    String searchBy = '',
   }) async {
+    lastSearchBy = searchBy;
     if (fail) return Error(Exception('network down'));
     if (refusal != null) {
       return Error(IntegrationProviderRefusal(refusal!));

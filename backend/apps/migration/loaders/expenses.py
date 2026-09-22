@@ -31,7 +31,7 @@ class ExpenseCategoryLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         name = clean_str(record.name)
         if not name:
-            raise LoaderError("Expense category name is required.", code="missing_name")
+            raise LoaderError("اسم نوع المصروف مطلوب.", code="missing_name")
         instance = resolver.existing(ExpenseCategory, self.entity_type, record.source_key)
         if instance is None:
             instance = ExpenseCategory.objects.filter(name=name).first()
@@ -51,7 +51,7 @@ class ExpenseLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         amount = to_decimal(record.amount)
         if amount <= 0:
-            raise LoaderError("Expense amount must be greater than zero.", code="invalid_amount")
+            raise LoaderError("مبلغ المصروف يجب أن يكون أكبر من صفر.", code="invalid_amount")
 
         category_name = clean_str(record.category_name) or _DEFAULT_CATEGORY
         category, _created = ExpenseCategory.objects.get_or_create(name=category_name)

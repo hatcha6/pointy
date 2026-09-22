@@ -10,9 +10,11 @@ import '../../../core/parsing.dart';
 import '../../../data/models/analytics_export.dart';
 import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/contact.dart' show PaymentTermsBasis;
+import '../../../data/models/card_terminal.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/models/system_backup.dart';
 import '../../../data/services/analytics_export_downloader.dart';
+import '../../../data/repositories/treasury_repository.dart';
 import '../../../data/services/client_update_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -20,6 +22,9 @@ import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/payments/bank_account_row.dart';
+import '../../treasury/view_models/bank_routing.dart';
+import 'card_terminals_sheet.dart';
 import '../../../shared/shell/shell.dart';
 import '../../attendance/view_models/attendance_view_model.dart';
 import '../../attendance/views/attendance_settings_page.dart';
@@ -34,6 +39,7 @@ import '../view_models/sales_channels_view_model.dart';
 import '../view_models/warehouses_view_model.dart';
 import '../../scales/view_models/scales_view_model.dart';
 import '../../scales/views/scales_screen.dart';
+import '../view_models/factory_reset_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
 import '../view_models/integrations_view_model.dart';
 import '../view_models/messaging_settings_view_model.dart';
@@ -54,6 +60,7 @@ import 'integrations_page.dart';
 import 'messaging_settings_page.dart';
 import 'exchange_rates_page.dart';
 import 'analytics_purge_section.dart';
+import 'danger_zone_page.dart';
 import 'subscription_status_page.dart';
 import '../../../shared/formatters.dart';
 
@@ -64,6 +71,7 @@ class ShopSettingsScreen extends StatelessWidget {
   const ShopSettingsScreen({
     super.key,
     required this.viewModel,
+    required this.factoryResetViewModel,
     required this.salesChannelsViewModel,
     required this.warehousesViewModel,
     required this.transfersViewModel,
@@ -85,9 +93,14 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.clientUpdateService,
     required this.capabilities,
     required this.navigation,
+    this.treasuryRepository,
   });
 
   final ShopSettingsViewModel viewModel;
+
+  /// Drives the danger zone. Constructed eagerly with the screen but idle
+  /// until that page is opened — it loads nothing on its own.
+  final FactoryResetViewModel factoryResetViewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WarehousesViewModel warehousesViewModel;
   final TransfersViewModel transfersViewModel;
@@ -95,6 +108,9 @@ class ShopSettingsScreen extends StatelessWidget {
 
   /// Only for picking which handsets a transfer is carrying.
   final TrackedStockRepository? trackedStockRepository;
+
+  /// Reads and writes the card-terminal registry. Null in previews and tests.
+  final TreasuryRepository? treasuryRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
   final ScalesViewModel scalesViewModel;
@@ -145,11 +161,18 @@ class ShopSettingsScreen extends StatelessWidget {
             capabilities: capabilities,
             child: _ShopSettingsBody(
               viewModel: viewModel,
+              factoryResetViewModel: factoryResetViewModel,
+              // Owner-only, and checked again on the server. Offering it to a
+              // manager who would be deleted by their own press is the one
+              // version of this screen that must not exist.
+              canResetShop: navigation.currentUser.isSuperuser,
+              onResetComplete: navigation.logout,
               salesChannelsViewModel: salesChannelsViewModel,
               warehousesViewModel: warehousesViewModel,
               transfersViewModel: transfersViewModel,
               warehouseRepository: warehouseRepository,
               trackedStockRepository: trackedStockRepository,
+              treasuryRepository: treasuryRepository,
               priceCheckersViewModel: priceCheckersViewModel,
               cameraSettingsViewModel: cameraSettingsViewModel,
               scalesViewModel: scalesViewModel,
@@ -183,6 +206,9 @@ class ShopSettingsScreen extends StatelessWidget {
 class _ShopSettingsBody extends StatelessWidget {
   const _ShopSettingsBody({
     required this.viewModel,
+    required this.factoryResetViewModel,
+    required this.canResetShop,
+    required this.onResetComplete,
     required this.salesChannelsViewModel,
     required this.warehousesViewModel,
     required this.transfersViewModel,
@@ -210,9 +236,17 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.canManageAttendance,
     required this.canManageMessaging,
     required this.canManageIntegrations,
+    this.treasuryRepository,
   });
 
   final ShopSettingsViewModel viewModel;
+  final FactoryResetViewModel factoryResetViewModel;
+
+  /// Whether the signed-in account is the owner. False hides the danger zone
+  /// entirely rather than disabling it: a greyed-out "empty the shop" invites
+  /// the wrong conversation.
+  final bool canResetShop;
+  final void Function(BuildContext context) onResetComplete;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WarehousesViewModel warehousesViewModel;
   final TransfersViewModel transfersViewModel;
@@ -220,6 +254,9 @@ class _ShopSettingsBody extends StatelessWidget {
 
   /// Only for picking which handsets a transfer is carrying.
   final TrackedStockRepository? trackedStockRepository;
+
+  /// Reads and writes the card-terminal registry. Null in previews and tests.
+  final TreasuryRepository? treasuryRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
   final ScalesViewModel scalesViewModel;
@@ -270,11 +307,15 @@ class _ShopSettingsBody extends StatelessWidget {
 
     return _ShopSettingsForm(
       viewModel: viewModel,
+      factoryResetViewModel: factoryResetViewModel,
+      canResetShop: canResetShop,
+      onResetComplete: onResetComplete,
       salesChannelsViewModel: salesChannelsViewModel,
       warehousesViewModel: warehousesViewModel,
       transfersViewModel: transfersViewModel,
       warehouseRepository: warehouseRepository,
       trackedStockRepository: trackedStockRepository,
+      treasuryRepository: treasuryRepository,
       priceCheckersViewModel: priceCheckersViewModel,
       cameraSettingsViewModel: cameraSettingsViewModel,
       scalesViewModel: scalesViewModel,
@@ -305,6 +346,9 @@ class _ShopSettingsBody extends StatelessWidget {
 class _ShopSettingsForm extends StatefulWidget {
   const _ShopSettingsForm({
     required this.viewModel,
+    required this.factoryResetViewModel,
+    required this.canResetShop,
+    required this.onResetComplete,
     required this.salesChannelsViewModel,
     required this.warehousesViewModel,
     required this.transfersViewModel,
@@ -333,9 +377,17 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.canManageMessaging,
     required this.canManageIntegrations,
     required this.settings,
+    this.treasuryRepository,
   });
 
   final ShopSettingsViewModel viewModel;
+  final FactoryResetViewModel factoryResetViewModel;
+
+  /// Whether the signed-in account is the owner. False hides the danger zone
+  /// entirely rather than disabling it: a greyed-out "empty the shop" invites
+  /// the wrong conversation.
+  final bool canResetShop;
+  final void Function(BuildContext context) onResetComplete;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WarehousesViewModel warehousesViewModel;
   final TransfersViewModel transfersViewModel;
@@ -343,6 +395,9 @@ class _ShopSettingsForm extends StatefulWidget {
 
   /// Only for picking which handsets a transfer is carrying.
   final TrackedStockRepository? trackedStockRepository;
+
+  /// Reads and writes the card-terminal registry. Null in previews and tests.
+  final TreasuryRepository? treasuryRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
   final ScalesViewModel scalesViewModel;
@@ -381,6 +436,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _autoPrintMinLineCountController;
   late final TextEditingController _autoPrintMinTotalController;
   late final TextEditingController _posCashPurchaseLimitController;
+  late final TextEditingController _maxInvoiceDiscountController;
   late final TextEditingController _defaultCustomerCreditLimitController;
   late final TextEditingController _defaultPaymentTermsDaysController;
   late PaymentTermsBasis _defaultPaymentTermsBasis;
@@ -460,6 +516,13 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         _formatPosCashPurchaseLimit(widget.settings.posCashPurchaseLimit),
       );
       _setControllerText(
+        _maxInvoiceDiscountController,
+        // Formatted like the credit limit, not like the cash-purchase cap: an
+        // explicit 0 has to survive a round trip here, because 0 means "no
+        // discounting at the till" rather than "no rule".
+        _formatCreditLimit(widget.settings.maxInvoiceDiscountAmount),
+      );
+      _setControllerText(
         _defaultCustomerCreditLimitController,
         _formatCreditLimit(widget.settings.defaultCustomerCreditLimit),
       );
@@ -505,6 +568,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _autoPrintMinLineCountController.dispose();
     _autoPrintMinTotalController.dispose();
     _posCashPurchaseLimitController.dispose();
+    _maxInvoiceDiscountController.dispose();
     _defaultCustomerCreditLimitController.dispose();
     _defaultPaymentTermsDaysController.dispose();
     _analyticsSearchController.dispose();
@@ -539,6 +603,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
     _posCashPurchaseLimitController = TextEditingController(
       text: _formatPosCashPurchaseLimit(settings.posCashPurchaseLimit),
+    );
+    _maxInvoiceDiscountController = TextEditingController(
+      text: _formatCreditLimit(settings.maxInvoiceDiscountAmount),
     );
     _defaultCustomerCreditLimitController = TextEditingController(
       text: _formatCreditLimit(settings.defaultCustomerCreditLimit),
@@ -633,6 +700,21 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   /// cash-purchase cap below, where 0 would simply disable the feature.
   double? _parseDefaultCustomerCreditLimit() {
     final text = _defaultCustomerCreditLimitController.text.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    final parsed = double.tryParse(text);
+    if (parsed == null || parsed < 0) {
+      return null;
+    }
+    return parsed;
+  }
+
+  /// Blank = no ceiling. An explicit 0 is kept, because it is the setting that
+  /// turns till discounting off — dropping it (as the cash-purchase cap does)
+  /// would make "nobody discounts here" impossible to express.
+  double? _parseMaxInvoiceDiscount() {
+    final text = _maxInvoiceDiscountController.text.trim();
     if (text.isEmpty) {
       return null;
     }
@@ -910,6 +992,22 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                         ),
                       ],
                     ),
+                    // Last, in a section of its own, and only for the owner.
+                    // Everything above this line is something a shop changes;
+                    // what is below it is something a shop does once.
+                    if (widget.canResetShop) ...[
+                      SizedBox(height: spacing.lg),
+                      PointySettingsSection(
+                        children: [
+                          PointySettingsTile(
+                            icon: Icons.dangerous_outlined,
+                            title: l10n.dangerZoneTitle,
+                            subtitle: l10n.dangerZoneSubtitle,
+                            onTap: () => _openDangerZone(context),
+                          ),
+                        ],
+                      ),
+                    ],
                     if (widget.viewModel.hasSaveError) ...[
                       SizedBox(height: spacing.md),
                       PointyErrorState(
@@ -1171,6 +1269,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         enabled: !widget.viewModel.isSaving,
         returnWindowText: _formatCashierReturnWindow(l10n),
         posCashPurchaseLimitController: _posCashPurchaseLimitController,
+        maxInvoiceDiscountController: _maxInvoiceDiscountController,
         onRequireOpeningCashChanged: (value) {
           setState(() => _requireOpeningCash = value);
           refresh();
@@ -1464,19 +1563,42 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     BuildContext context,
     VoidCallback refresh,
   ) async {
-    final updatedTerminalIds = await showDialog<List<String>>(
-      context: context,
-      builder: (context) => _TrustedCardTerminalsDialog(
-        initialTerminalIds: _trustedCardTerminalIds,
-      ),
-    );
-    if (updatedTerminalIds == null) {
+    final repository = widget.treasuryRepository;
+    if (repository == null) {
+      // No backend wired (a preview, a test): fall back to the id-only
+      // editor, which is still a correct — if less useful — answer.
+      final updatedTerminalIds = await showDialog<List<String>>(
+        context: context,
+        builder: (context) => _TrustedCardTerminalsDialog(
+          initialTerminalIds: _trustedCardTerminalIds,
+        ),
+      );
+      if (updatedTerminalIds == null) {
+        return;
+      }
+      setState(() {
+        _trustedCardTerminalIds = _normalizeTrustedTerminalIds(
+          updatedTerminalIds,
+        );
+      });
+      refresh();
       return;
     }
 
+    final routing = BankRoutingScope.maybeOf(context);
+    await showCardTerminalsSheet(context, repository: repository);
+    if (!mounted) {
+      return;
+    }
+    // The sheet has already saved every change. This only re-seeds the
+    // settings form's own draft from what the server now holds, so a later
+    // "save" on this screen PATCHes the same list back instead of an older
+    // one — which would deactivate a terminal the owner just added.
     setState(() {
       _trustedCardTerminalIds = _normalizeTrustedTerminalIds(
-        updatedTerminalIds,
+        (routing?.terminals ?? const [])
+            .where((terminal) => terminal.isActive)
+            .map((terminal) => terminal.terminalId),
       );
     });
     refresh();
@@ -1642,6 +1764,17 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             _BackupOperationsPage(viewModel: widget.viewModel),
+      ),
+    );
+  }
+
+  Future<void> _openDangerZone(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DangerZonePage(
+          viewModel: widget.factoryResetViewModel,
+          onResetComplete: widget.onResetComplete,
+        ),
       ),
     );
   }
@@ -1970,6 +2103,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       defaultPaymentTermsBasis: _defaultPaymentTermsBasis,
       allowCashierCustomerAccess: _allowCashierCustomerAccess,
       posCashPurchaseLimit: _parsePosCashPurchaseLimit(),
+      maxInvoiceDiscountAmount: _parseMaxInvoiceDiscount(),
       inventoryValuationMethod: _inventoryValuationMethod,
     );
   }

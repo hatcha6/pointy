@@ -166,3 +166,16 @@ class CompanionUploadRateThrottle(_FailOpenThrottleMixin, SimpleRateThrottle):
         device = getattr(request, "companion_device", None)
         ident = f"device:{device.pk}" if device is not None else self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class FactoryResetRateThrottle(_FailOpenThrottleMixin, UserRateThrottle):
+    """Throttle factory-reset attempts per authenticated administrator.
+
+    The endpoint verifies the administrator's own password before it deletes
+    anything, so without a bucket a hijacked session could grind at it. Its own
+    scope rather than sharing ``password_change``: a shop that has just failed
+    to reset should still be able to change a password, and the one-a-minute
+    shape here would be an odd ceiling on that.
+    """
+
+    scope = "factory_reset"

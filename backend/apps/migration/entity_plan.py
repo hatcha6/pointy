@@ -37,6 +37,7 @@ SUPPLIER_PAYMENT = "supplier_payment"
 SALE_RETURN = "sale_return"
 MONEY_ACCOUNT = "money_account"
 PAYROLL_RUN = "payroll_run"
+PARTY_BALANCE = "party_balance"
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,16 @@ ENTITY_PLAN: tuple[EntitySpec, ...] = (
         "Purchase orders",
         canonical.CanonicalPurchaseOrder,
         (SUPPLIER, VARIANT),
+    ),
+    # What each party owes (or is owed) carried as a balance in its own right,
+    # rather than as the arithmetic of invoices nobody asked for. Placed before
+    # the transactional entities so an opening document exists before any
+    # receipt tries to allocate against it.
+    EntitySpec(
+        PARTY_BALANCE,
+        "Customer & supplier balances",
+        canonical.CanonicalPartyBalance,
+        (CUSTOMER, SUPPLIER),
     ),
     EntitySpec(
         SUPPLIER_PAYMENT,
@@ -141,3 +152,81 @@ def ordered_entities(selected: list[str] | None = None) -> list[EntitySpec]:
 
 def all_entity_types() -> list[str]:
     return [spec.entity_type for spec in ENTITY_PLAN]
+
+
+@dataclass(frozen=True)
+class Selection:
+    """A requested set of entities, made coherent.
+
+    A selection is not just a filter: ``sale`` without ``product`` is not "sales
+    only", it is every sale line failing to resolve a variant. So a requested set
+    is *closed* over ``EntitySpec.dependencies`` before the engine sees it, and
+    what the closure had to add is reported rather than applied silently — the
+    owner who ticked three boxes is owed the sentence that says a fourth came
+    with them.
+    """
+
+    #: The entities that will actually run, in ENTITY_PLAN order.
+    entities: tuple[str, ...]
+    #: What the caller asked for (minus anything unrecognised).
+    requested: tuple[str, ...]
+    #: Pulled in because something requested depends on them.
+    added: tuple[str, ...]
+    #: Names that are not entities at all.
+    unknown: tuple[str, ...]
+
+    def __contains__(self, entity_type: str) -> bool:
+        return entity_type in self.entities
+
+    def as_dict(self) -> dict:
+        return {
+            "entities": list(self.entities),
+            "requested": list(self.requested),
+            "added": list(self.added),
+            "unknown": list(self.unknown),
+        }
+
+
+def dependency_closure(selected) -> set[str]:
+    """``selected`` plus every entity it transitively depends on."""
+    closed: set[str] = set()
+    pending = [entity for entity in (selected or []) if entity in ENTITY_PLAN_BY_TYPE]
+    while pending:
+        entity = pending.pop()
+        if entity in closed:
+            continue
+        closed.add(entity)
+        pending.extend(ENTITY_PLAN_BY_TYPE[entity].dependencies)
+    return closed
+
+
+def resolve_selection(selected, *, available=None) -> Selection:
+    """Close a requested selection over its dependencies and order it.
+
+    ``available`` is what the source can actually produce (a connector's
+    ``supported_entities``); anything outside it is dropped, because a
+    dependency the file does not contain is not something we can add.
+    ``selected`` of ``None`` or empty means "everything available".
+    """
+    universe = set(available) if available is not None else set(all_entity_types())
+    requested_raw = list(selected or [])
+    unknown = tuple(
+        dict.fromkeys(entity for entity in requested_raw if entity not in ENTITY_PLAN_BY_TYPE)
+    )
+    requested = {entity for entity in requested_raw if entity in ENTITY_PLAN_BY_TYPE}
+    if not requested:
+        requested = set(universe)
+    closed = dependency_closure(requested) & universe
+    requested &= universe
+    return Selection(
+        entities=tuple(spec.entity_type for spec in ENTITY_PLAN if spec.entity_type in closed),
+        requested=tuple(
+            spec.entity_type for spec in ENTITY_PLAN if spec.entity_type in requested
+        ),
+        added=tuple(
+            spec.entity_type
+            for spec in ENTITY_PLAN
+            if spec.entity_type in closed - requested
+        ),
+        unknown=unknown,
+    )

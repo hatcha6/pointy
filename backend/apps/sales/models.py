@@ -228,6 +228,18 @@ class RegisterCashMovement(TimeStampedModel):
         return f"{self.get_movement_type_display()} {self.amount} for {self.register_session}"
 
 
+def _payments_with_their_bank():
+    """Payments with the bank account they landed in already loaded.
+
+    A function rather than a module constant because ``apps.payments.models``
+    imports this module — the import has to happen when the prefetch is built,
+    not when this file is read.
+    """
+    from apps.payments.models import Payment
+
+    return Payment.objects.select_related("money_account")
+
+
 class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
     """Sale-type/status aware filters for sales orders.
 
@@ -335,7 +347,10 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
             "register_session__owner__date_joined",
         ).prefetch_related(
             "lines__adjustment_lines",
-            "payments",
+            # ``select_related`` on the bank, not a bare prefetch: the invoice
+            # details screen names the account each tender landed in and draws
+            # its mark, which without this is a query per payment row.
+            Prefetch("payments", queryset=_payments_with_their_bank()),
             "applied_discounts",
             "exchanges__replacement_order",
             "exchanges__created_by",
@@ -479,6 +494,34 @@ class Order(DocumentMixin, TimeStampedModel):
     )
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # The one-off discount the cashier typed for THIS sale — the haggle at the
+    # counter, independent of the discount engine's rules and coupons. Named to
+    # match ``purchasing.PurchaseOrder.extra_discount_amount``, which is the
+    # same idea on the buying side and whose lesson this field inherits whole:
+    # it is recorded here, but it is **not** applied here.
+    #
+    # It is spread across the order's lines at checkout
+    # (``services.order_line_discounts``) so every line's ``discount_total``
+    # carries its share, exactly as an engine discount would. That is what
+    # makes it show up, unbidden and correctly, in the forty-odd places that
+    # already sum a discount: the Z-Report, per-product and per-category
+    # rollups, profit, the dashboard, the AI tools, and the return desk, which
+    # credits a handed-back line net of what was taken off it. Leaving it on
+    # the document instead would have made every one of those overstate revenue
+    # and margin by exactly this number, and would have refunded a customer
+    # more than they paid.
+    #
+    # So: this column is the audit trail and the number a receipt prints. The
+    # lines are the arithmetic. ``db_default`` because an older backend still
+    # serving during a live update writes INSERTs that name no such column (see
+    # DOCUMENT_LIFECYCLE_PLAN.md §11).
+    extra_discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        db_default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # Snapshot of the special-day keys (apps.holidays) active on the shop-local
     # date of the sale — an immutable feature signal for forecasting that must

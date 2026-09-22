@@ -70,11 +70,17 @@ def expected_units(stock_count, variant=None):
     elif stock_count.scope == stock_count.Scope.CATEGORY and stock_count.category_id:
         from apps.catalog.services import category_ids_with_descendants
 
+        # A product belongs to categories (plural, M2M) and always has — there
+        # is no ``category_id`` column to filter on, and the helper takes a set
+        # of ids, not one. Both mistakes only fired on a category-scoped count
+        # of serialized stock, so the endpoint 500'd where a full count was
+        # fine. ``distinct`` because a product in two of the chosen categories
+        # would otherwise list its units twice.
         rows = rows.filter(
-            variant__product__category_id__in=category_ids_with_descendants(
-                stock_count.category_id
+            variant__product__categories__id__in=category_ids_with_descendants(
+                [stock_count.category_id]
             )
-        )
+        ).distinct()
     return rows
 
 

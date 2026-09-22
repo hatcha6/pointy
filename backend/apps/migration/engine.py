@@ -24,7 +24,14 @@ from django.db import transaction
 from .collapse.apply import CollapseSession
 from .connectors import get_connector
 from .connectors.base import ExtractContext
-from .entity_plan import PRODUCT, PURCHASE_ORDER, SALE, STOCK, ordered_entities
+from .entity_plan import (
+    PRODUCT,
+    PURCHASE_ORDER,
+    SALE,
+    STOCK,
+    ENTITY_PLAN_BY_TYPE,
+    resolve_selection,
+)
 from .exceptions import CompatibilityError, MigrationError
 from .identity import IdentityResolver
 from .loaders import get_loader
@@ -32,11 +39,13 @@ from .loaders.base import ERROR, FAILED
 from .models import MigrationIssue, MigrationRun
 from .preparation.stages import Stage, StageTracker
 from .reconstruct import (
+    STOCK_SOURCE_COST_ONLY,
     STOCK_SOURCE_NONE,
     STOCK_SOURCE_RECONSTRUCT,
     StockReconstructor,
     resolve_stock_source,
 )
+from .scopes import resolve_party_balance_basis
 from .transports import build_transport
 
 #: Stage key for the collapse's unit phase — not an ENTITY_PLAN entity, because
@@ -59,6 +68,28 @@ def _friendly(exc: Exception) -> str:
     return message[:480]
 
 
+class _CostOnlyStock:
+    """Keep the source's cost, drop the source's quantity.
+
+    A shop that does not trust the old system's counts still needs to know what
+    its goods cost — otherwise the first sale of every product books the entire
+    selling price as profit. Zeroing the quantity here rather than in the loader
+    keeps one stock loader with one meaning, and means the valuation bin is
+    still opened, at the source's rate, holding nothing.
+    """
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    @property
+    def entity_type(self):
+        return self._inner.entity_type
+
+    def load(self, record, resolver, *, dry_run):
+        record.quantity_on_hand = 0
+        return self._inner.load(record, resolver, dry_run=dry_run)
+
+
 class MigrationEngine:
     def __init__(self, run: MigrationRun):
         self.run = run
@@ -75,6 +106,9 @@ class MigrationEngine:
         # redirects the catalogue loaders and builds the units at the end.
         self._collapse = CollapseSession.for_run(run)
         self._tracker: StageTracker | None = None
+        # Set by _specs_to_run, before anything extracts.
+        self._selection = None
+        self._balance_basis = ""
 
     # --- public entrypoint ----------------------------------------------
     def execute(self) -> dict:
@@ -96,9 +130,22 @@ class MigrationEngine:
             # in memory and persisted with the rest of the report afterwards.
             persist=not self.dry_run,
         )
+        # Connectors are told the scope, not just the options. Some records
+        # only have a meaning relative to what else is being imported — a
+        # party's balance most of all (``scopes.resolve_party_balance_basis``).
+        self._balance_basis = resolve_party_balance_basis(
+            self.run.options, self._selection.entities
+        )
+        self._persist_resolved_scope()
         context = ExtractContext(
             source=self.source,
             run_options=dict(self.run.options or {}),
+            selected_entities=frozenset(self._selection.entities),
+            party_balance_basis=self._balance_basis,
+            only_stocked_products=(
+                bool((self.run.options or {}).get("only_stocked_products"))
+                and connector.supports_stock_filter
+            ),
         )
         resolver = IdentityResolver(self.source, self.run, dry_run=self.dry_run)
         if self._collapse is not None:
@@ -176,9 +223,13 @@ class MigrationEngine:
         loader = get_loader(spec.entity_type)
         if loader is not None and self._collapse is not None:
             loader = self._collapse.wrap(loader, spec.entity_type)
+        if loader is not None and spec.entity_type == STOCK and (
+            self._stock_source == STOCK_SOURCE_COST_ONLY
+        ):
+            loader = _CostOnlyStock(loader)
         if loader is None:
             self._add_issue(
-                spec.entity_type, "", ERROR, "no_loader", "No loader is registered for this entity."
+                spec.entity_type, "", ERROR, "no_loader", "لا يوجد مُحمِّل لهذا النوع من السجلات."
             )
             if self._tracker is not None:
                 self._tracker.skip(spec.entity_type, "لا يوجد مُحمِّل لهذا النوع")
@@ -342,6 +393,7 @@ class MigrationEngine:
 
     def _persist_summary(self):
         self.run.summary = self._summary
+
         fields = ["summary", "updated_at"]
         if self._tracker is not None and not self._tracker.persist:
             # Dry run: the tracker never wrote (its writes would be rolled back
@@ -350,29 +402,60 @@ class MigrationEngine:
             fields.insert(1, "stages")
         self.run.save(update_fields=fields)
 
+    def _persist_resolved_scope(self):
+        """Record what this run decided about itself, next to what was asked.
+
+        Both answers change what the numbers *mean*, and someone reading the
+        report a month later has no other way to recover them: which entities
+        actually ran (including the ones dependency closure had to add), and
+        which of the source's two party figures was carried. Written once, at
+        the start, so a run that fails halfway still says what it was doing.
+        """
+        if self._selection is None:
+            return
+        options = dict(self.run.options or {})
+        options["resolved"] = dict(
+            self._selection.as_dict(),
+            party_balance_basis=self._balance_basis,
+            stock_source=self._stock_source,
+        )
+        self.run.options = options
+        self.run.save(update_fields=["options", "updated_at"])
+
     # --- finalisation ----------------------------------------------------
     def _specs_to_run(self, connector):
+        """What this run actually walks, and in what order.
+
+        Three things narrow or widen the operator's tick-boxes, and all three
+        have to happen before anything extracts, because the connectors are told
+        the answer (an entity's meaning can depend on what else is in the run —
+        see ``scopes``).
+        """
         supported = set(connector.supported_entities)
-        selected = set(self.run.selected_entities or []) or supported
+        selected = set(self.run.selected_entities or []) or set(supported)
         # The stock-source mode decides how (and whether) the stock entity runs:
         #   snapshot    → import the source's stored quantities (the STOCK entity)
-        #   none        → products with no quantities (drop STOCK)
+        #   cost_only   → run STOCK for its costs, with the quantities zeroed
+        #   none        → products with no quantities and no costs (drop STOCK)
         #   reconstruct → drop STOCK and compute on-hand from the purchase + sale
         #                 history instead, which therefore must be part of the run
         #                 (auto-included here even if the operator didn't tick it).
         if self._stock_source in (STOCK_SOURCE_NONE, STOCK_SOURCE_RECONSTRUCT):
             selected.discard(STOCK)
+        if self._stock_source == STOCK_SOURCE_COST_ONLY:
+            selected |= {STOCK} & supported
         if self._stock_source == STOCK_SOURCE_RECONSTRUCT:
             selected |= {SALE, PURCHASE_ORDER} & supported
         if self._collapse is not None:
             # The catalogue pass is where a legacy key learns what it became;
             # without it every sale would resolve to nothing.
             selected |= {PRODUCT} & supported
-        return [
-            spec
-            for spec in ordered_entities()
-            if spec.entity_type in selected and spec.entity_type in supported
-        ]
+        # Close over dependencies last, so anything the three rules above added
+        # drags its own prerequisites in with it. Without this, "sales only"
+        # means every sale line failing to resolve a variant — quietly, one
+        # warning at a time, 900,000 times.
+        self._selection = resolve_selection(selected, available=supported)
+        return [ENTITY_PLAN_BY_TYPE[entity] for entity in self._selection.entities]
 
     def _persist_compat(self, report):
         self.source.detected_version = report.detected_version or ""

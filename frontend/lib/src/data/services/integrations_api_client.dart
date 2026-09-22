@@ -70,13 +70,23 @@ class IntegrationsApiClient {
 
   /// Everything the till needs about one subscriber, in one round trip: the
   /// card, today's prices, and the variant a cart line must point at.
+  ///
+  /// [searchBy] is what the cashier said the number IS, from the picker
+  /// beside the search box. A phone number and a contract number are both
+  /// digits, so without it the portal has to be asked every way in turn —
+  /// measured at three round trips and ~4.4s against LNET. It orders the
+  /// search; a wrong pick is slower, never a customer who cannot be found.
   Future<IntegrationCardSnapshot> fetchCard({
     required String providerKey,
     required String cardNo,
+    String searchBy = '',
   }) async {
     final response = await _session.get(
       'integrations/$providerKey/card/',
-      query: {'card_no': cardNo},
+      query: {
+        'card_no': cardNo,
+        if (searchBy.isNotEmpty) 'search_by': searchBy,
+      },
     );
     _session.throwApiException(response, 'Card lookup failed with status');
     final decoded = _session.decodedBody(response) as Map<String, Object?>;
@@ -192,7 +202,10 @@ class IntegrationsApiClient {
       'integrations/fulfillments/charge/',
       body: {'order': ?orderId, 'fulfillment': ?fulfillmentId},
     );
-    _session.throwApiException(response, 'Performing the recharge failed with status');
+    _session.throwApiException(
+      response,
+      'Performing the recharge failed with status',
+    );
     final decoded = _session.decodedBody(response) as Map<String, Object?>;
     return (decoded['results'] as List<Object?>? ?? const [])
         .whereType<Map<String, Object?>>()

@@ -39,7 +39,7 @@ class UnitLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         code = clean_str(record.code).lower()
         if not code:
-            raise LoaderError("Unit code is required.", code="missing_code")
+            raise LoaderError("رمز وحدة القياس مطلوب.", code="missing_code")
         name = clean_str(record.name) or code
         dimension = (
             record.dimension if record.dimension in _VALID_DIMENSIONS else UnitDimension.COUNT
@@ -67,7 +67,7 @@ class CategoryLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         name = clean_str(record.name)
         if not name:
-            raise LoaderError("Category name is required.", code="missing_name")
+            raise LoaderError("اسم التصنيف مطلوب.", code="missing_name")
 
         issues: list[Issue] = []
         parent = None
@@ -78,7 +78,7 @@ class CategoryLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "unresolved_parent",
-                        "Parent category not found; imported at the top level.",
+                        "لم يُعثر على التصنيف الأب — نُقل التصنيف إلى المستوى الأعلى.",
                         source_key=str(record.source_key),
                     )
                 )
@@ -104,7 +104,7 @@ class ProductLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         name = clean_str(record.name)
         if not name:
-            raise LoaderError("Product name is required.", code="missing_name")
+            raise LoaderError("اسم الصنف مطلوب.", code="missing_name")
 
         issues: list[Issue] = []
         instance = resolver.existing(Product, self.entity_type, record.source_key)
@@ -128,7 +128,7 @@ class ProductLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "unresolved_category",
-                        f"Category {category_key!r} not found; skipped.",
+                        f"تصنيف غير معروف {category_key!r} — لم يُربط بالصنف.",
                         source_key=str(record.source_key),
                     )
                 )
@@ -162,12 +162,12 @@ class VariantLoader(BaseLoader):
         product = resolver.existing(Product, PRODUCT, record.product_source_key)
         if product is None:
             raise LoaderError(
-                f"Variant references unknown product {record.product_source_key!r}.",
+                f"نوع يشير إلى صنف غير معروف {record.product_source_key!r}.",
                 code="unresolved_product",
             )
         sku = normalize_sku(record.sku)
         if not sku:
-            raise LoaderError("Variant SKU is required.", code="missing_sku")
+            raise LoaderError("رمز النوع (SKU) مطلوب.", code="missing_sku")
         barcode = normalize_barcode(record.barcode)
 
         issues: list[Issue] = []
@@ -195,7 +195,7 @@ class VariantLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "default_variant_exists",
-                        "Product already has a default variant; imported as non-default.",
+                        "الصنف له نوع افتراضي بالفعل — نُقل هذا النوع كنوع غير افتراضي.",
                         source_key=str(record.source_key),
                     )
                 )
@@ -219,7 +219,7 @@ class ProductUnitLoader(BaseLoader):
         product_pk = resolver.resolve(PRODUCT, record.product_source_key)
         if product_pk is None:
             raise LoaderError(
-                f"Product unit references unknown product {record.product_source_key!r}.",
+                f"وحدة بيع تشير إلى صنف غير معروف {record.product_source_key!r}.",
                 code="unresolved_product",
             )
         unit_pk = resolver.resolve(UNIT, record.unit_source_key)
@@ -230,13 +230,13 @@ class ProductUnitLoader(BaseLoader):
             unit_pk = unit.pk if unit else None
         if unit_pk is None:
             raise LoaderError(
-                f"Product unit references unknown unit {record.unit_source_key!r}.",
+                f"وحدة بيع تشير إلى وحدة قياس غير معروفة {record.unit_source_key!r}.",
                 code="unresolved_unit",
             )
         factor = to_decimal(record.factor_to_base, Decimal("1"))
         if factor <= 0:
             raise LoaderError(
-                "Product unit conversion factor must be greater than zero.",
+                "معامل تحويل وحدة البيع يجب أن يكون أكبر من صفر.",
                 code="invalid_factor",
             )
 
@@ -299,8 +299,7 @@ class ProductUnitLoader(BaseLoader):
                         Issue(
                             WARNING,
                             "unit_barcode_conflict",
-                            f"Barcode {code!r} already resolves to another product; "
-                            "not attached.",
+                            f"الباركود {code!r} مستخدم لصنف آخر — لم يُضَف.",
                             source_key=str(record.source_key),
                         )
                     )
@@ -315,8 +314,7 @@ class ProductUnitLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "unit_barcode_conflict",
-                        f"Barcode {code!r} already resolves to another unit; "
-                        "not attached.",
+                        f"الباركود {code!r} مستخدم لوحدة بيع أخرى — لم يُضَف.",
                         source_key=str(record.source_key),
                     )
                 )

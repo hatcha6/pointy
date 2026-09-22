@@ -85,6 +85,19 @@ class Expense(DocumentMixin, TimeStampedModel):
         blank=True,
         null=True,
     )
+    # Which of the shop's bank accounts this money left. NULL means the shop
+    # did not say, and routes to the default bank account — the behaviour of
+    # every row written before this column existed.
+    #
+    # Only a bank account is ever named, and only for a card or transfer. A
+    # cash expense left the drawer, which ``cash_movement`` already attributes.
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.PROTECT,
+        related_name="expenses",
+        blank=True,
+        null=True,
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -95,6 +108,14 @@ class Expense(DocumentMixin, TimeStampedModel):
 
     class Meta:
         ordering = ["-spent_at", "-created_at"]
+        indexes = [
+            # The money position asks "what left THIS bank account" once per
+            # account over a date range; ``spent_at`` is the money date.
+            models.Index(
+                fields=["money_account", "payment_method", "-spent_at"],
+                name="expense_account_spent_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.description} {self.amount}"

@@ -264,7 +264,7 @@ def _expense_rows(start, end):
     queryset = (
         Expense.objects.live()
         .filter(spent_at__gte=start, spent_at__lte=end)
-        .select_related("category")
+        .select_related("category", "money_account")
     )
     return [
         _row(
@@ -276,6 +276,7 @@ def _expense_rows(start, end):
             payment_method=expense.payment_method,
             reference=expense.reference,
             related_id=expense.pk,
+            money_account=expense.money_account,
         )
         for expense in queryset
     ]
@@ -375,7 +376,18 @@ def _commission_rows(start_dt, end_dt, period_end):
 # --- helpers -----------------------------------------------------------------
 
 
-def _row(*, source, date, amount, description, category=None, payment_method="", reference="", related_id=None):
+def _row(
+    *,
+    source,
+    date,
+    amount,
+    description,
+    category=None,
+    payment_method="",
+    reference="",
+    related_id=None,
+    money_account=None,
+):
     amount_value = _decimal_from(amount)
     return {
         "source": source,
@@ -386,10 +398,15 @@ def _row(*, source, date, amount, description, category=None, payment_method="",
         "payment_method": payment_method,
         "reference": reference,
         "related_id": related_id,
+        # Which bank the money left, for the sources that know. Blank for the
+        # rest rather than absent, so one row shape serves every source and the
+        # client never has to ask which keys this row happens to carry.
+        "money_account": money_account,
     }
 
 
 def _public_row(row):
+    account = row.get("money_account")
     return {
         "source": row["source"],
         "date": row["date"].isoformat(),
@@ -399,6 +416,10 @@ def _public_row(row):
         "payment_method": row["payment_method"],
         "reference": row["reference"],
         "related_id": row["related_id"],
+        "money_account": account.pk if account is not None else None,
+        "money_account_name": account.name if account is not None else "",
+        "money_account_bank_slug": account.bank_slug if account is not None else "",
+        "money_account_bank_name": account.bank_name if account is not None else "",
     }
 
 

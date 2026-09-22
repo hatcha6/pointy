@@ -46,7 +46,7 @@ class SupplierLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         name = clean_str(record.name)
         if not name:
-            raise LoaderError("Supplier name is required.", code="missing_name")
+            raise LoaderError("اسم المورّد مطلوب.", code="missing_name")
 
         phone = clean_str(record.phone)
         instance = resolver.existing(Supplier, self.entity_type, record.source_key)
@@ -82,7 +82,7 @@ class PurchaseOrderLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "unresolved_variant",
-                        f"Purchase line references unknown product {line.variant_source_key!r}; skipped.",
+                        f"سطر شراء يشير إلى صنف غير معروف {line.variant_source_key!r} — تم تجاهل السطر.",
                         source_key=str(record.source_key),
                     )
                 )
@@ -92,7 +92,7 @@ class PurchaseOrderLoader(BaseLoader):
                 continue
             line_specs.append((variant_pk, quantity, to_decimal(line.unit_cost)))
         if not line_specs:
-            raise LoaderError("Purchase order has no resolvable line items.", code="no_lines")
+            raise LoaderError("لا يوجد في فاتورة الشراء أي سطر يمكن ربطه بصنف.", code="no_lines")
 
         supplier_pk = resolver.resolve(SUPPLIER, record.supplier_source_key)
         if supplier_pk is None:
@@ -192,13 +192,13 @@ class SupplierPaymentLoader(BaseLoader):
         amount = to_decimal(record.amount)
         if amount <= 0:
             raise LoaderError(
-                "Supplier payment amount must be greater than zero.",
+                "مبلغ دفعة المورّد يجب أن يكون أكبر من صفر.",
                 code="invalid_amount",
             )
         supplier_pk = resolver.resolve(SUPPLIER, record.supplier_source_key)
         if supplier_pk is None:
             raise LoaderError(
-                f"Supplier payment references unknown supplier {record.supplier_source_key!r}.",
+                f"دفعة تشير إلى مورّد غير معروف {record.supplier_source_key!r}.",
                 code="unresolved_supplier",
             )
 

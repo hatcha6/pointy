@@ -33,6 +33,7 @@ import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/purchase_suggestion.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
+import 'package:pointy_frontend/src/data/models/money_position.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
@@ -597,6 +598,28 @@ class _PaymentSurfaceState extends State<_PaymentSurface> {
       enableTransferPayments: true,
       requireCardReceipt: false,
       trustedCardTerminalIds: const [],
+      // A shop with two identified banks, so the account control is on screen.
+      // A shop with the one generic account every install is seeded with
+      // passes nothing here and the sheet is exactly what it was.
+      bankAccounts: const [
+        MoneyAccount(
+          id: 1,
+          name: 'حساب المحل',
+          kind: MoneyAccountKind.bank,
+          bankName: 'مصرف الجمهورية',
+          bankSlug: 'jbank',
+          iban: 'LY83002104000000201050050',
+          isDefault: true,
+        ),
+        MoneyAccount(
+          id: 2,
+          name: 'حساب الأمان',
+          kind: MoneyAccountKind.bank,
+          bankName: 'مصرف الأمان',
+          bankSlug: 'aman',
+          iban: 'LY19002200000000993011447',
+        ),
+      ],
       showPrintInvoiceToggle: true,
       printInvoiceAfterPayment: _print,
       onPrintInvoiceChanged: (value) => _print = value,
@@ -903,12 +926,19 @@ class _FakeSaleRepository extends SaleRepository {
         SaleDiscountPreview(subtotal: 0, discountTotal: 0, total: 0),
       );
     }
-    return const Ok(
+    // The rules take 1.50; whatever the cashier typed comes off on top, so the
+    // preview exercises both discount rows at once.
+    const ruleDiscount = 1.50;
+    const subtotal = 10.20;
+    final extra = draft.extraDiscountAmount.clamp(0.0, subtotal - ruleDiscount);
+    return Ok(
       SaleDiscountPreview(
-        subtotal: 10.20,
-        discountTotal: 1.50,
-        total: 8.70,
-        appliedDiscounts: [
+        subtotal: subtotal,
+        discountTotal: ruleDiscount + extra,
+        total: subtotal - ruleDiscount - extra,
+        extraDiscountAmount: extra,
+        maxExtraDiscountAmount: subtotal - ruleDiscount,
+        appliedDiscounts: const [
           AppliedDiscountInfo(
             ruleName: 'خصم ترحيبي',
             source: '',

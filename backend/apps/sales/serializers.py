@@ -27,6 +27,7 @@ from apps.discounts.cache import (
     rules_version as discount_rules_version,
 )
 from apps.discounts.models import DiscountRule
+from apps.treasury.models import MoneyAccount
 from apps.discounts.services import rounding_metadata_payload
 from .tracked_lines import order_line_identifiers
 from .tracked_return import BUY_IN, CONSIGNMENT_ACTIONS
@@ -57,7 +58,10 @@ from .services import (
     record_customer_payment,
     reschedule_credit_invoice_due_date,
     return_order_items,
+    clamped_manual_discount,
+    manual_discount_room,
     unapplied_coupon_codes,
+    validate_manual_discount_allowed,
     validate_order_adjustment_allowed,
     void_order,
 )
@@ -440,6 +444,22 @@ class OrderPaymentSerializer(serializers.Serializer):
     )
     external_reference = serializers.CharField(read_only=True)
     card_receipt_data = serializers.JSONField(read_only=True)
+    # Which bank took this money, spelled out rather than left as an id: the
+    # invoice details screen draws the bank's own mark beside the tender, and
+    # a details surface that had to fetch an account per payment row would be
+    # the list-row-is-not-a-document trap in a new place.
+    money_account = serializers.IntegerField(
+        source="money_account_id", read_only=True
+    )
+    money_account_name = serializers.CharField(
+        source="money_account.name", read_only=True, default=""
+    )
+    money_account_bank_slug = serializers.CharField(
+        source="money_account.bank_slug", read_only=True, default=""
+    )
+    money_account_bank_name = serializers.CharField(
+        source="money_account.bank_name", read_only=True, default=""
+    )
     created_at = serializers.DateTimeField(read_only=True)
 
 
@@ -565,6 +585,7 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "exchanges",
             "subtotal",
             "discount_total",
+            "extra_discount_amount",
             "total",
             "applied_discounts",
             "public_invoice_url",
@@ -601,6 +622,7 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "customer_email",
             "subtotal",
             "discount_total",
+            "extra_discount_amount",
             "total",
             "applied_discounts",
             "public_invoice_url",
@@ -838,6 +860,7 @@ class PublicInvoiceSerializer(serializers.ModelSerializer):
             "lines",
             "subtotal",
             "discount_total",
+            "extra_discount_amount",
             "total",
             "created_at",
         ]
@@ -1206,6 +1229,15 @@ class CheckoutPaymentSerializer(serializers.Serializer):
         trim_whitespace=True,
         write_only=True,
     )
+    # Which bank account this tender lands in. Absent from a shop that has not
+    # created one, from a till too old to say, and from every cash line — all
+    # of which route exactly as they did before the field existed.
+    money_account = serializers.PrimaryKeyRelatedField(
+        queryset=MoneyAccount.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1262,6 +1294,17 @@ class CheckoutSerializer(serializers.Serializer):
         allow_empty=True,
         write_only=True,
     )
+    # The haggle: one discount the cashier takes off this invoice, on top of
+    # whatever the engine's rules and coupons already did. Bounded by the
+    # shop's per-invoice ceiling (ShopSettings.max_invoice_discount_amount) and
+    # by the cart itself.
+    extra_discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        default=Decimal("0.00"),
+    )
     sale_type = serializers.ChoiceField(
         choices=Order.SaleType.choices,
         required=False,
@@ -1297,11 +1340,24 @@ class CheckoutSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"coupon_codes": "Coupon code is invalid or unavailable."}
             )
+        # Judge the ceiling against what the cashier asked for, then clamp to
+        # what the cart can carry. That order matters: clamping first would let
+        # an over-ceiling discount through whenever the cart happened to be
+        # small enough to absorb it, which is the case the ceiling exists for.
+        validate_manual_discount_allowed(
+            attrs.get("extra_discount_amount"), settings=settings
+        )
+        extra_discount_amount = clamped_manual_discount(
+            attrs["lines"], discount_result, attrs.get("extra_discount_amount")
+        )
+        attrs["extra_discount_amount"] = extra_discount_amount
         # The amount to tender is the order's total, not the discount engine's:
         # the two round a half-cent line differently, and gating payments on the
         # engine's figure asks for a cent the order then refuses (see
         # expected_order_totals).
-        _, _, total = expected_order_totals(attrs["lines"], discount_result)
+        _, _, total = expected_order_totals(
+            attrs["lines"], discount_result, extra_discount_amount
+        )
 
         from apps.payments.models import Payment
 
@@ -1463,6 +1519,7 @@ class CheckoutSerializer(serializers.Serializer):
             customer=validated_data.get("customer"),
             coupon_codes=validated_data.get("coupon_codes", ()),
             discount_result=validated_data.get("discount_result"),
+            extra_discount_amount=validated_data.get("extra_discount_amount"),
             sale_type=validated_data.get("sale_type", Order.SaleType.STANDARD),
             valid_until=validated_data.get("valid_until"),
             due_date=validated_data.get("due_date"),
@@ -1523,6 +1580,11 @@ class CustomerInvoicePaymentSerializer(serializers.Serializer):
         allow_blank=True,
         trim_whitespace=True,
     )
+    money_account = serializers.PrimaryKeyRelatedField(
+        queryset=MoneyAccount.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1536,6 +1598,7 @@ class CustomerInvoicePaymentSerializer(serializers.Serializer):
             method=self.validated_data["method"],
             amount=self.validated_data["amount"],
             card_receipt_url=self.validated_data.get("card_receipt_url", ""),
+            money_account=self.validated_data.get("money_account"),
             register_session=self.context["register_session"],
             request=self.context.get("request"),
         )
@@ -1558,6 +1621,11 @@ class CustomerAccountPaymentSerializer(serializers.Serializer):
         allow_blank=True,
         trim_whitespace=True,
     )
+    money_account = serializers.PrimaryKeyRelatedField(
+        queryset=MoneyAccount.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1575,6 +1643,7 @@ class CustomerAccountPaymentSerializer(serializers.Serializer):
             method=self.validated_data["method"],
             amount=self.validated_data["amount"],
             card_receipt_url=self.validated_data.get("card_receipt_url", ""),
+            money_account=self.validated_data.get("money_account"),
             register_session=self.context["register_session"],
             request=self.context.get("request"),
         )
@@ -1716,9 +1785,21 @@ class DiscountPreviewSerializer(serializers.Serializer):
         allow_empty=True,
         write_only=True,
     )
+    # Previewed on the same terms it is charged on, so the total on the screen
+    # is the total the drawer asks for.
+    extra_discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        default=Decimal("0.00"),
+    )
 
     def validate(self, attrs):
         coupon_codes = normalized_checkout_coupon_codes(attrs)
+        # The same ceiling checkout enforces, refused at the same moment the
+        # cashier types it rather than held back until they try to take money.
+        validate_manual_discount_allowed(attrs.get("extra_discount_amount"))
         # Preview runs on every cart edit -> use the Redis-guarded path. Checkout
         # (above) stays on the live calculate_sales_discounts.
         discount_result = preview_sales_discounts(
@@ -1728,6 +1809,9 @@ class DiscountPreviewSerializer(serializers.Serializer):
         )
         attrs["coupon_codes"] = coupon_codes
         attrs["discount_result"] = discount_result
+        attrs["extra_discount_amount"] = clamped_manual_discount(
+            attrs["lines"], discount_result, attrs.get("extra_discount_amount")
+        )
         return attrs
 
     @property
@@ -1741,13 +1825,24 @@ class DiscountPreviewSerializer(serializers.Serializer):
         # The cart figures the cashier reads — and then tenders — must be the
         # ones the order will store, so the preview can never quote a total
         # checkout would reject (see expected_order_totals).
+        extra_discount_amount = self.validated_data.get(
+            "extra_discount_amount"
+        ) or Decimal("0.00")
         subtotal, discount_total, total = expected_order_totals(
-            self.validated_data["lines"], discount_result
+            self.validated_data["lines"], discount_result, extra_discount_amount
         )
         return {
             "subtotal": f"{subtotal:.2f}",
             "discount_total": f"{discount_total:.2f}",
             "total": f"{total:.2f}",
+            # What the cart can still carry, and what of the typed amount
+            # actually landed. The till reads these back: a cashier who typed 50
+            # on a cart that then lost a line sees the discount shrink to what
+            # the sale can bear instead of watching checkout refuse it.
+            "extra_discount_amount": f"{extra_discount_amount:.2f}",
+            "max_extra_discount_amount": (
+                f"{manual_discount_room(self.validated_data['lines'], discount_result):.2f}"
+            ),
             "applied_discounts": [
                 {
                     "rule_id": application.rule_id,
@@ -1773,6 +1868,7 @@ class DiscountPreviewSerializer(serializers.Serializer):
             "loss_lines": checkout_loss_lines(
                 self.validated_data["lines"],
                 discount_result,
+                extra_discount_amount=extra_discount_amount,
             ),
             # Gate state for the POS: when no active rule targets sales, the
             # client latches "no rules @ this version" and stops previewing on

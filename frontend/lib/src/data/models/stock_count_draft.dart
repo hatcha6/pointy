@@ -29,11 +29,17 @@ class StockCountLineDraft {
     required this.countedQuantity,
     this.mode = StockCountEntryMode.replace,
     this.batchId,
+    this.unitCode = '',
   });
 
   final int variantId;
   final double countedQuantity;
   final StockCountEntryMode mode;
+
+  /// The unit the counter counted **in** — a carton, a box — or blank for the
+  /// product's base unit. The server converts once, at the edge, and stores
+  /// base units like every other quantity in the app.
+  final String unitCode;
 
   /// Which lot was counted. A batch-tracked variant is counted one lot at a
   /// time — the counter is standing in one room counting the packs of one lot
@@ -47,6 +53,7 @@ class StockCountLineDraft {
       'counted_quantity': countedQuantity.toStringAsFixed(3),
       'mode': mode == StockCountEntryMode.add ? 'add' : 'replace',
       if (batchId != null) 'batch': batchId,
+      if (unitCode.isNotEmpty) 'unit': unitCode,
     };
   }
 }

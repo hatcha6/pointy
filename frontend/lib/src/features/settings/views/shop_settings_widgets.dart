@@ -363,6 +363,7 @@ class _RegisterSessionSettingsFields extends StatelessWidget {
     required this.enabled,
     required this.returnWindowText,
     required this.posCashPurchaseLimitController,
+    required this.maxInvoiceDiscountController,
     required this.onRequireOpeningCashChanged,
     required this.onTap,
   });
@@ -371,6 +372,7 @@ class _RegisterSessionSettingsFields extends StatelessWidget {
   final bool enabled;
   final String returnWindowText;
   final TextEditingController posCashPurchaseLimitController;
+  final TextEditingController maxInvoiceDiscountController;
   final ValueChanged<bool> onRequireOpeningCashChanged;
   final VoidCallback onTap;
 
@@ -405,6 +407,22 @@ class _RegisterSessionSettingsFields extends StatelessWidget {
             helperText: l10n.posCashPurchaseLimitSettingHelp,
             helperMaxLines: 3,
             prefixIcon: const Icon(Icons.shopping_basket_outlined),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // How much a cashier may take off one invoice by hand. Blank is no
+        // ceiling; zero takes the discount box off the sell screen entirely.
+        TextFormField(
+          key: const ValueKey('max_invoice_discount_field'),
+          controller: maxInvoiceDiscountController,
+          enabled: enabled,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [DecimalTextInputFormatter()],
+          decoration: InputDecoration(
+            labelText: l10n.invoiceDiscountSettingLabel,
+            helperText: l10n.invoiceDiscountSettingHelp,
+            helperMaxLines: 4,
+            prefixIcon: const Icon(Icons.discount_outlined),
           ),
         ),
       ],
@@ -712,7 +730,7 @@ class _TrustedCardTerminalListField extends StatelessWidget {
               )
             else
               ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 156),
+                constraints: const BoxConstraints(maxHeight: 220),
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: terminalIds.length,
@@ -720,7 +738,14 @@ class _TrustedCardTerminalListField extends StatelessWidget {
                       const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final terminalId = terminalIds[index];
-                    return _TrustedCardTerminalListRow(terminalId: terminalId);
+                    return _TrustedCardTerminalListRow(
+                      terminalId: terminalId,
+                      // The bank this machine feeds, when the shop has said.
+                      // Read from the same cached registry the till routes by,
+                      // so what this row claims and what checkout does cannot
+                      // disagree.
+                      terminal: _terminalFor(context, terminalId),
+                    );
                   },
                 ),
               ),
@@ -731,15 +756,30 @@ class _TrustedCardTerminalListField extends StatelessWidget {
   }
 }
 
+/// The registered terminal behind an id, or null when the registry has not
+/// loaded (or this build has no scope — a preview, a test).
+CardTerminal? _terminalFor(BuildContext context, String terminalId) {
+  final routing = BankRoutingScope.maybeOf(context);
+  for (final terminal in routing?.terminals ?? const <CardTerminal>[]) {
+    if (terminal.terminalId == terminalId && terminal.isActive) {
+      return terminal;
+    }
+  }
+  return null;
+}
+
 class _TrustedCardTerminalListRow extends StatelessWidget {
-  const _TrustedCardTerminalListRow({required this.terminalId});
+  const _TrustedCardTerminalListRow({required this.terminalId, this.terminal});
 
   final String terminalId;
+  final CardTerminal? terminal;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final account = terminal?.bankAccount;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -751,24 +791,60 @@ class _TrustedCardTerminalListRow extends StatelessWidget {
           horizontal: 12,
           vertical: 8,
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.confirmation_number_outlined,
-              color: colors.mutedInk,
-              size: 20,
+            Row(
+              children: [
+                Icon(
+                  Icons.confirmation_number_outlined,
+                  color: colors.mutedInk,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    terminal?.label.isNotEmpty == true
+                        ? '${terminal!.label} · ${ltrIsolated(terminalId)}'
+                        : ltrIsolated(terminalId),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                ltrIsolated(terminalId),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+            if (account != null) ...[
+              const SizedBox(height: 6),
+              Padding(
+                // Indented under the id so the eye reads "this machine → this
+                // bank" rather than two facts side by side.
+                padding: const EdgeInsetsDirectional.only(start: 30),
+                child: Row(
+                  children: [
+                    Icon(Icons.south_east, size: 14, color: colors.mutedInk),
+                    const SizedBox(width: 6),
+                    Text(
+                      l10n.trustedCardTerminalAccountLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.mutedInk,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: BankAccountRow(
+                        account: account,
+                        compact: true,
+                        markSize: 18,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),

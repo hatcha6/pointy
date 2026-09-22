@@ -36,6 +36,12 @@ from .models import MoneyAccount, MoneyTransfer
 from .movements import account_movements
 from .position import treasury_position
 
+# Three aggregates per bank account: sales+commission in one pass over
+# ``Payment``, supplier payments, and expenses. Consignor payouts and payroll
+# carry no account, so they stay with the default and are not paid for again
+# per account.
+QUERIES_PER_BANK_ACCOUNT = 3
+
 BASE_ROWS = 6
 
 
@@ -124,16 +130,42 @@ class TreasuryQueryScalingTests(TestCase):
 
     # --- tests -----------------------------------------------------------
 
-    def test_the_position_does_not_scale_with_the_number_of_accounts(self):
+    def test_a_bank_account_costs_a_fixed_number_of_queries(self):
+        """Adding a bank account costs the same two aggregates every time.
+
+        It used to cost nothing, because every card payment in the shop was
+        attributed to one default account. Now each account asks its own
+        question over its own window — it has to, since two accounts opened in
+        different months cannot share a range — so the guard is no longer "flat"
+        but "a small constant per account, and never a query per ROW".
+
+        Three is the budget: the payments aggregate (sales and commission in
+        one pass), the supplier-payments aggregate and the expenses aggregate.
+        Anything more means a per-account lookup crept back in — a
+        ``select_related`` that was dropped, or a last-count fetch that stopped
+        being batched.
+        """
         self._seed_movements(BASE_ROWS)
         baseline = self._position_queries()
 
         self._add_bank_accounts(4)
         self.assertEqual(
             self._position_queries(),
+            baseline + 4 * QUERIES_PER_BANK_ACCOUNT,
+            "A bank account costs more than its two aggregates — something is "
+            "being looked up per account instead of batched across them.",
+        )
+
+    def test_a_bank_account_costs_the_same_however_many_rows_it_holds(self):
+        self._seed_movements(BASE_ROWS)
+        self._add_bank_accounts(2)
+        baseline = self._position_queries()
+
+        self._seed_movements(BASE_ROWS)
+        self.assertEqual(
+            self._position_queries(),
             baseline,
-            "Each account is aggregating for itself — derived flows must be "
-            "computed once per kind and routed to that kind's default account.",
+            "Per-account attribution must still aggregate in SQL.",
         )
 
     def test_the_position_does_not_scale_with_the_number_of_movements(self):

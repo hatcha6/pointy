@@ -4175,9 +4175,9 @@
   "actionsColumn": "إجراءات",
   "openVariantDetailsTooltip": "فتح تفاصيل الخيار",
   "defaultVariantBadge": "افتراضي",
-  "productCostHistoryTitle": "تكلفة الشراء والهامش",
+  "productCostHistoryTitle": "التكلفة والهامش",
   "productCostHistoryLoadError": "تعذر تحميل تاريخ تكلفة الشراء لهذا المنتج.",
-  "productCostHistoryEmpty": "لا توجد مشتريات مسجلة لهذا المنتج بعد.",
+  "productCostHistoryEmpty": "لا توجد تكلفة مسجلة لهذا المنتج بعد — لا مشتريات ولا رصيد افتتاحي.",
   "productCostHistoryPackCost": "{cost} لكل {unit}",
   "@productCostHistoryPackCost": {
     "description": "Cost-history subtitle detail for a line bought in a multi-piece pack: the pack price and pack name (e.g. '162.00 لكل كرتون'). The trailing figure on the row stays per base unit so rows are comparable.",
@@ -4186,6 +4186,25 @@
         "type": "String"
       },
       "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "openingStockCostSourceLabel": "رصيد افتتاحي",
+  "@openingStockCostSourceLabel": {
+    "description": "Title of a cost-history row that came from an opening balance rather than a purchase order. Shown where a purchase row shows its supplier."
+  },
+  "openingStockSectionTitle": "الرصيد الافتتاحي",
+  "openingStockSectionHint": "الكمية الموجودة لديك الآن من هذا المنتج وتكلفة الوحدة. تُسجَّل كرصيد افتتاحي في المخزون دون أمر شراء.",
+  "openingStockQuantityLabel": "الكمية الحالية",
+  "openingStockUnitCostLabel": "تكلفة الوحدة",
+  "openingStockUnitCostHelper": "ما دفعته في الوحدة الواحدة. تُستخدم لحساب الربح وقيمة المخزون.",
+  "openingStockCostNeedsQuantityError": "أدخل الكمية الافتتاحية حتى تُحتسب التكلفة.",
+  "openingStockValueLabel": "قيمة الرصيد الافتتاحي: {value}",
+  "@openingStockValueLabel": {
+    "description": "Live total under the opening-stock fields: quantity multiplied by unit cost, so the owner can sanity-check the pair before saving.",
+    "placeholders": {
+      "value": {
         "type": "String"
       }
     }
@@ -8811,6 +8830,32 @@
   "stockCountSaveError": "تعذّر حفظ العدّة. حاول مرة أخرى.",
   "stockCountFinishButton": "إنهاء ومراجعة",
   "stockCountSearchEmpty": "لا توجد أصناف مطابقة.",
+  "stockCountSearchLoadError": "تعذّر تحميل الأصناف. تحقّق من الاتصال وحاول مرة أخرى.",
+  "stockCountAlreadyCounted": "عددت {quantity}",
+  "@stockCountAlreadyCounted": {
+    "description": "Badge on a search row this counter has already entered a count for. Shows THEIR number, never the system's.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "stockCountBackToSearch": "رجوع للبحث",
+  "stockCountCountUnit": "تعدّ بـ",
+  "stockCountInvalidQuantity": "أدخل كمية صحيحة قبل الحفظ.",
+  "stockCountUnitEquals": "= {quantity} {unit}",
+  "@stockCountUnitEquals": {
+    "description": "Live conversion hint under the count field when counting in a pack unit (3 cartons = 72 pieces).",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "stockCountSkipItem": "رجوع",
   "stockCountItemUnit": "الوحدة: {unit}",
   "@stockCountItemUnit": {
     "description": "Unit label on the counting item card.",
@@ -12854,6 +12899,10 @@
     "description": ""
   },
   "rechargeSearchAction": "بحث",
+  "rechargeSearchByLabel": "ابحث بـ",
+  "rechargeSearchByPhone": "رقم الهاتف",
+  "rechargeSearchByUsername": "اسم المستخدم",
+  "rechargeSearchByContract": "رقم العقد",
   "integrationSettingsHeading": "شروط التعامل",
   "@integrationSettingsHeading": {
     "description": ""
@@ -13752,5 +13801,631 @@
   "costRevealedBanner": "التكلفة ظاهرة — اضغط F9 للإخفاء",
   "@costRevealedBanner": {
     "description": "Reminder that cost is on screen"
+  },
+  "invoiceDiscountLabel": "خصم على الفاتورة",
+  "@invoiceDiscountLabel": {
+    "description": "Label for the cashier's one-off discount on a POS sale"
+  },
+  "invoiceDiscountAddAction": "إضافة خصم",
+  "@invoiceDiscountAddAction": {
+    "description": "Affordance shown on the totals panel when no invoice discount is set yet"
+  },
+  "invoiceDiscountDialogTitle": "خصم على الفاتورة",
+  "@invoiceDiscountDialogTitle": {
+    "description": "Title of the invoice discount editor"
+  },
+  "invoiceDiscountFieldLabel": "قيمة الخصم",
+  "@invoiceDiscountFieldLabel": {
+    "description": "Label of the invoice discount amount field"
+  },
+  "invoiceDiscountFieldHint": "مبلغ يُخصم من إجمالي هذه الفاتورة",
+  "@invoiceDiscountFieldHint": {
+    "description": "Hint under the invoice discount amount field"
+  },
+  "invoiceDiscountCartTotal": "أقصى ما تتحمله هذه الفاتورة {amount}",
+  "@invoiceDiscountCartTotal": {
+    "description": "Shows the most this sale can carry: its value less any rule discounts already applied",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceDiscountLimitHint": "أقصى خصم مسموح به للفاتورة {amount}",
+  "@invoiceDiscountLimitHint": {
+    "description": "Helper text naming the shop's per-invoice discount ceiling",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceDiscountOverLimitError": "لا يمكن تجاوز {amount}",
+  "@invoiceDiscountOverLimitError": {
+    "description": "Error shown when the typed discount exceeds the shop ceiling",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceDiscountCappedNotice": "الفاتورة لا تتحمل سوى {amount}، وهذا ما طُبّق.",
+  "@invoiceDiscountCappedNotice": {
+    "description": "Shown when the cart is worth less than the discount that was typed, so only part of it applied",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceDiscountClearAction": "إزالة الخصم",
+  "@invoiceDiscountClearAction": {
+    "description": "Clears the invoice discount"
+  },
+  "invoiceDiscountSettingLabel": "أقصى خصم للفاتورة الواحدة",
+  "@invoiceDiscountSettingLabel": {
+    "description": "Settings label for the per-invoice discount ceiling"
+  },
+  "invoiceDiscountSettingHelp": "الحد الأقصى للخصم الذي يدخله الكاشير على فاتورة واحدة. اتركه فارغاً لإلغاء الحد، أو ضع صفراً لمنع الخصم من شاشة البيع.",
+  "@invoiceDiscountSettingHelp": {
+    "description": "Settings helper text for the per-invoice discount ceiling"
+  },
+  "migrationEntityPartyBalance": "أرصدة العملاء والموردين",
+  "@migrationEntityPartyBalance": {
+    "description": "Data migration screen."
+  },
+  "migrationEntitySaleReturn": "المرتجعات",
+  "@migrationEntitySaleReturn": {
+    "description": "Data migration screen."
+  },
+  "migrationEntityPayrollRun": "مسيّرات الرواتب",
+  "@migrationEntityPayrollRun": {
+    "description": "Data migration screen."
+  },
+  "migrationEntityMoneyAccount": "الخزائن والحسابات",
+  "@migrationEntityMoneyAccount": {
+    "description": "Data migration screen."
+  },
+  "migrationEntityCollapse": "الوحدات المعرّفة",
+  "@migrationEntityCollapse": {
+    "description": "Data migration screen."
+  },
+  "migrationStageIdentify": "التعرف على الملف",
+  "@migrationStageIdentify": {
+    "description": "Data migration screen."
+  },
+  "migrationStageConvert": "تحويل قاعدة البيانات",
+  "@migrationStageConvert": {
+    "description": "Data migration screen."
+  },
+  "migrationStagePrepare": "إعادة بناء الفواتير",
+  "@migrationStagePrepare": {
+    "description": "Data migration screen."
+  },
+  "migrationStageDetect": "التعرف على النظام",
+  "@migrationStageDetect": {
+    "description": "Data migration screen."
+  },
+  "migrationStageAnalyze": "قراءة المحتويات",
+  "@migrationStageAnalyze": {
+    "description": "Data migration screen."
+  },
+  "migrationStageTidy": "تنظيف الملفات المؤقتة",
+  "@migrationStageTidy": {
+    "description": "Data migration screen."
+  },
+  "migrationStageCatalogue": "قراءة الأصناف",
+  "@migrationStageCatalogue": {
+    "description": "Data migration screen."
+  },
+  "migrationStageHistory": "قراءة الشراء والبيع",
+  "@migrationStageHistory": {
+    "description": "Data migration screen."
+  },
+  "migrationStageCluster": "تجميع الأصناف المتشابهة",
+  "@migrationStageCluster": {
+    "description": "Data migration screen."
+  },
+  "migrationStagePropose": "تجهيز الاقتراح",
+  "@migrationStagePropose": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeEverythingLabel": "كل شيء",
+  "@migrationScopeEverythingLabel": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeEverythingSubtitle": "الأصناف والعملاء والموردون وكامل سجل الفواتير والمدفوعات والمصروفات، كما هو في النظام القديم.",
+  "@migrationScopeEverythingSubtitle": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeOpeningPositionLabel": "نبدأ من الوضع الحالي",
+  "@migrationScopeOpeningPositionLabel": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeOpeningPositionSubtitle": "الأصناف بأسعارها وتكلفتها، والعملاء بما عليهم اليوم، والموردون بما لهم اليوم — بدون نقل سجل الفواتير القديم.",
+  "@migrationScopeOpeningPositionSubtitle": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeCatalogueOnlyLabel": "الأصناف فقط",
+  "@migrationScopeCatalogueOnlyLabel": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeCatalogueOnlySubtitle": "قائمة الأصناف والتصنيفات والأسعار، بدون عملاء ولا أرصدة ولا فواتير.",
+  "@migrationScopeCatalogueOnlySubtitle": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeCustomLabel": "تحديد يدوي",
+  "@migrationScopeCustomLabel": {
+    "description": "Data migration screen."
+  },
+  "migrationScopeCustomSubtitle": "اختيار ما يُنقل بندًا بندًا.",
+  "@migrationScopeCustomSubtitle": {
+    "description": "Data migration screen."
+  },
+  "migrationImpliedEntitiesNotice": "سيُنقل أيضًا: {entities} — لأن ما اخترته لا يعمل بدونه.",
+  "@migrationImpliedEntitiesNotice": {
+    "description": "Data migration screen.",
+    "placeholders": {
+      "entities": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationCurrentBalancesNotice": "لن يُنقل سجل الفواتير، لذلك يبدأ كل عميل ومورّد برصيده كما هو اليوم في النظام القديم.",
+  "@migrationCurrentBalancesNotice": {
+    "description": "Data migration screen."
+  },
+  "migrationOpeningBalancesNotice": "سيُنقل سجل الفواتير، لذلك يبدأ كل عميل ومورّد برصيده الافتتاحي وتُحرّكه الفواتير بعده.",
+  "@migrationOpeningBalancesNotice": {
+    "description": "Data migration screen."
+  },
+  "migrationOnlyStockedLabel": "الأصناف المتوفرة فقط",
+  "@migrationOnlyStockedLabel": {
+    "description": "Data migration screen."
+  },
+  "migrationOnlyStockedSubtitle": "تجاهل الأصناف التي يقول النظام القديم إن كميتها صفر — أصناف لم تُبع منذ سنوات ولم تُحذف.",
+  "@migrationOnlyStockedSubtitle": {
+    "description": "Data migration screen."
+  },
+  "migrationOnlyStockedConflict": "لا يمكن جمع «الأصناف المتوفرة فقط» مع نقل سجل الفواتير: الفواتير القديمة تشير إلى أصناف لن تُنقل.",
+  "@migrationOnlyStockedConflict": {
+    "description": "Data migration screen."
+  },
+  "migrationStockSourceCostOnlyLabel": "التكلفة فقط، بدون كميات",
+  "@migrationStockSourceCostOnlyLabel": {
+    "description": "Data migration screen."
+  },
+  "migrationStockSourceCostOnlySubtitle": "ننقل تكلفة كل صنف حتى يُحسب الربح صحيحًا من أول عملية بيع، وتبدأ الكميات من الصفر لتجردها بنفسك.",
+  "@migrationStockSourceCostOnlySubtitle": {
+    "description": "Data migration screen."
+  },
+  "bankAccountIbanLabel": "رقم الآيبان (IBAN)",
+  "@bankAccountIbanLabel": {
+    "description": "Bank account details sheet."
+  },
+  "bankAccountNumberLabel": "رقم الحساب",
+  "@bankAccountNumberLabel": {
+    "description": "Bank account details sheet."
+  },
+  "bankAccountNoIdentifiers": "لم يُسجَّل رقم حساب أو آيبان لهذا الحساب بعد. أضِفه من شاشة الخزينة ليظهر هنا كرمز يمسحه الزبون.",
+  "@bankAccountNoIdentifiers": {
+    "description": "Bank account details sheet."
+  },
+  "copyButton": "نسخ",
+  "@copyButton": {
+    "description": "Generic copy action."
+  },
+  "copiedToClipboard": "تم النسخ.",
+  "@copiedToClipboard": {
+    "description": "Generic copy confirmation."
+  },
+  "paymentBankAccountLabel": "الحساب البنكي",
+  "@paymentBankAccountLabel": {
+    "description": "Bank account picker at checkout and on payment dialogs."
+  },
+  "paymentBankAccountAuto": "اختير تلقائيًا من الماكينة {terminal}",
+  "@paymentBankAccountAuto": {
+    "description": "Bank account picker: the terminal chose the account.",
+    "placeholders": {
+      "terminal": {
+        "type": "String"
+      }
+    }
+  },
+  "paymentBankAccountShowDetails": "عرض رقم الحساب",
+  "@paymentBankAccountShowDetails": {
+    "description": "Bank account picker: open the IBAN/QR sheet."
+  },
+  "treasuryActionAddFunds": "إضافة رصيد",
+  "@treasuryActionAddFunds": {
+    "description": "Treasury quick action: put money in from outside the shop."
+  },
+  "treasuryAddFundsTitle": "إضافة رصيد إلى الخزينة",
+  "@treasuryAddFundsTitle": {
+    "description": "Treasury add-funds sheet."
+  },
+  "treasuryAddFundsHint": "مال يدخل من خارج المحل — رأس مال من المالك أو قرض. لا يُحتسب إيرادًا ولا يظهر في الأرباح.",
+  "@treasuryAddFundsHint": {
+    "description": "Treasury add-funds sheet."
+  },
+  "treasuryAddFundsTo": "يُضاف إلى",
+  "@treasuryAddFundsTo": {
+    "description": "Treasury add-funds sheet."
+  },
+  "treasuryAddFundsAmount": "المبلغ",
+  "@treasuryAddFundsAmount": {
+    "description": "Treasury add-funds sheet."
+  },
+  "treasuryAddFundsReason": "السبب (اختياري)",
+  "@treasuryAddFundsReason": {
+    "description": "Treasury add-funds sheet."
+  },
+  "treasuryAddFundsReasonCapital": "رأس مال",
+  "@treasuryAddFundsReasonCapital": {
+    "description": "Treasury add-funds preset reason."
+  },
+  "treasuryAddFundsReasonLoan": "قرض",
+  "@treasuryAddFundsReasonLoan": {
+    "description": "Treasury add-funds preset reason."
+  },
+  "treasuryAddFundsReasonOwner": "من المالك",
+  "@treasuryAddFundsReasonOwner": {
+    "description": "Treasury add-funds preset reason."
+  },
+  "treasuryAddFundsSubmit": "إضافة الرصيد",
+  "@treasuryAddFundsSubmit": {
+    "description": "Treasury add-funds sheet."
+  },
+  "treasuryAddFundsSaved": "تمت إضافة الرصيد.",
+  "@treasuryAddFundsSaved": {
+    "description": "Treasury add-funds sheet."
+  },
+  "treasuryActionWithdraw": "سحب",
+  "@treasuryActionWithdraw": {
+    "description": "Treasury quick action: owner takes money out."
+  },
+  "treasuryWithdrawTitle": "سحب من الخزينة",
+  "@treasuryWithdrawTitle": {
+    "description": "Treasury withdraw sheet."
+  },
+  "treasuryWithdrawHint": "مال يخرج من المحل إلى المالك. ليس مصروفًا ولا يُخصم من الأرباح.",
+  "@treasuryWithdrawHint": {
+    "description": "Treasury withdraw sheet."
+  },
+  "treasuryWithdrawFrom": "يُسحب من",
+  "@treasuryWithdrawFrom": {
+    "description": "Treasury withdraw sheet."
+  },
+  "treasuryWithdrawSubmit": "تسجيل السحب",
+  "@treasuryWithdrawSubmit": {
+    "description": "Treasury withdraw sheet."
+  },
+  "treasuryWithdrawSaved": "تم تسجيل السحب.",
+  "@treasuryWithdrawSaved": {
+    "description": "Treasury withdraw sheet."
+  },
+  "treasuryActionAddAccount": "حساب جديد",
+  "@treasuryActionAddAccount": {
+    "description": "Treasury: create a money account."
+  },
+  "treasuryAccountNewTitle": "حساب جديد",
+  "@treasuryAccountNewTitle": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountEditTitle": "تعديل الحساب",
+  "@treasuryAccountEditTitle": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountNameLabel": "اسم الحساب",
+  "@treasuryAccountNameLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountNameRequired": "اكتب اسمًا للحساب.",
+  "@treasuryAccountNameRequired": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountKindLabel": "النوع",
+  "@treasuryAccountKindLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountKindCash": "صندوق نقدي",
+  "@treasuryAccountKindCash": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountKindBank": "حساب بنكي",
+  "@treasuryAccountKindBank": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountBankLabel": "المصرف",
+  "@treasuryAccountBankLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountBankUnset": "بدون تحديد",
+  "@treasuryAccountBankUnset": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountBankSearchHint": "ابحث عن المصرف",
+  "@treasuryAccountBankSearchHint": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountNumberLabel": "رقم الحساب (اختياري)",
+  "@treasuryAccountNumberLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountIbanLabel": "الآيبان IBAN (اختياري)",
+  "@treasuryAccountIbanLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountIbanHelper": "يظهر للزبون كرمز QR عند الدفع بالتحويل، فلا تُملى الأرقام واحدًا واحدًا.",
+  "@treasuryAccountIbanHelper": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountOpeningBalanceLabel": "الرصيد الافتتاحي",
+  "@treasuryAccountOpeningBalanceLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountOpeningAtLabel": "تاريخ الرصيد الافتتاحي",
+  "@treasuryAccountOpeningAtLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountDefaultLabel": "الحساب الافتراضي",
+  "@treasuryAccountDefaultLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountDefaultHint": "تُرحَّل إليه كل حركة لم يُحدَّد لها حساب.",
+  "@treasuryAccountDefaultHint": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountActiveLabel": "مُفعَّل",
+  "@treasuryAccountActiveLabel": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountSaveButton": "حفظ",
+  "@treasuryAccountSaveButton": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountSaved": "تم حفظ الحساب.",
+  "@treasuryAccountSaved": {
+    "description": "Treasury account editor."
+  },
+  "treasuryAccountSaveFailed": "تعذّر حفظ الحساب.",
+  "@treasuryAccountSaveFailed": {
+    "description": "Treasury account editor."
+  },
+  "treasurySectionProvider": "أرصدة لدى الموردين",
+  "@treasurySectionProvider": {
+    "description": "Treasury: provider float section."
+  },
+  "treasuryBankDetailsButton": "رقم الحساب والآيبان",
+  "@treasuryBankDetailsButton": {
+    "description": "Treasury account card action."
+  },
+  "treasuryAccountEditTooltip": "تعديل الحساب",
+  "@treasuryAccountEditTooltip": {
+    "description": "Treasury account card action."
+  },
+  "trustedCardTerminalAccountLabel": "يُودَع في",
+  "@trustedCardTerminalAccountLabel": {
+    "description": "Card terminal settings: which bank account this terminal feeds."
+  },
+  "trustedCardTerminalAccountUnset": "الحساب الافتراضي",
+  "@trustedCardTerminalAccountUnset": {
+    "description": "Card terminal settings."
+  },
+  "trustedCardTerminalLabelFieldLabel": "اسم الماكينة (اختياري)",
+  "@trustedCardTerminalLabelFieldLabel": {
+    "description": "Card terminal settings."
+  },
+  "trustedCardTerminalLabelFieldHint": "مثال: ماكينة الجمهورية",
+  "@trustedCardTerminalLabelFieldHint": {
+    "description": "Card terminal settings."
+  },
+  "trustedCardTerminalNoBankAccounts": "أنشئ حسابًا بنكيًا في شاشة الخزينة لتربط كل ماكينة بمصرفها، فتُرحَّل مبالغها تلقائيًا.",
+  "@trustedCardTerminalNoBankAccounts": {
+    "description": "Card terminal settings."
+  },
+  "trustedCardTerminalUnmappedWarning": "ماكينة بلا مصرف: تُرحَّل مبالغها إلى الحساب الافتراضي.",
+  "@trustedCardTerminalUnmappedWarning": {
+    "description": "Card terminal settings."
+  },
+  "trustedCardTerminalRemoveTooltip": "حذف الماكينة",
+  "@trustedCardTerminalRemoveTooltip": {
+    "description": "Card terminal settings."
+  },
+  "paymentDepositedIntoLabel": "أُودع في",
+  "@paymentDepositedIntoLabel": {
+    "description": "Invoice / purchase order details: the bank a payment landed in."
+  },
+  "paymentPaidFromLabel": "دُفع من",
+  "@paymentPaidFromLabel": {
+    "description": "Purchase order details: the bank a payment left."
+  },
+  "migrationEntityListTitle": "البنود المشمولة",
+  "@migrationEntityListTitle": {
+    "description": "Data migration screen: heading over the per-entity chips, under the scope question."
+  },
+  "bankAccountNumberMissingHint": "لم يُسجَّل رقم الحساب لهذا الحساب. أضِفه من تعديل الحساب ليُعرض كرمز أيضًا.",
+  "@bankAccountNumberMissingHint": {
+    "description": "Bank account details sheet: the other identifier has not been entered."
+  },
+  "bankAccountIbanMissingHint": "لم يُسجَّل الآيبان لهذا الحساب. أضِفه من تعديل الحساب ليُعرض كرمز أيضًا.",
+  "@bankAccountIbanMissingHint": {
+    "description": "Bank account details sheet: the other identifier has not been entered."
+  },
+  "dangerZoneTitle": "منطقة الخطر",
+  "@dangerZoneTitle": {
+    "description": "Title of the shop-settings sub-page holding irreversible actions."
+  },
+  "dangerZoneSubtitle": "إفراغ المتجر والبدء من جديد",
+  "@dangerZoneSubtitle": {
+    "description": "Settings list subtitle under the danger zone entry."
+  },
+  "dangerZoneLoadError": "تعذّر حساب ما سيُحذف",
+  "@dangerZoneLoadError": {
+    "description": "Shown when the danger zone cannot load the counts of what a reset would remove."
+  },
+  "factoryResetCalloutTitle": "هذا الإجراء لا يمكن التراجع عنه",
+  "@factoryResetCalloutTitle": {
+    "description": "Danger callout heading at the top of the danger zone."
+  },
+  "factoryResetCalloutMessage": "سيُفرَغ المتجر بالكامل: كل الأصناف والمبيعات والمشتريات والعملاء والمخزون والحسابات وكل ما استُورد من النظام القديم. لا توجد طريقة للاسترجاع إلا من نسخة احتياطية أُخذت قبل التنفيذ.",
+  "@factoryResetCalloutMessage": {
+    "description": "Danger callout body: says plainly that the shop is emptied and that only a prior backup can bring it back."
+  },
+  "factoryResetWhatGoesTitle": "ما الذي سيُحذف",
+  "@factoryResetWhatGoesTitle": {
+    "description": "Section heading over the counted list of what a factory reset removes."
+  },
+  "factoryResetWhatGoesDescription": "هذه أعداد ما هو مسجّل في المتجر الآن. سيُحذف كل ما في القائمة وما يتفرّع عنه.",
+  "@factoryResetWhatGoesDescription": {
+    "description": "Explains that the numbers below are live counts of the shop's own records."
+  },
+  "factoryResetNothingToRemove": "لا توجد بيانات لحذفها. المتجر فارغ أصلا.",
+  "@factoryResetNothingToRemove": {
+    "description": "Shown in place of the counts when the shop has no data at all."
+  },
+  "factoryResetCountProducts": "الأصناف",
+  "@factoryResetCountProducts": {
+    "description": "Danger zone count row: products."
+  },
+  "factoryResetCountCategories": "المجموعات",
+  "@factoryResetCountCategories": {
+    "description": "Danger zone count row: product categories."
+  },
+  "factoryResetCountCustomers": "العملاء",
+  "@factoryResetCountCustomers": {
+    "description": "Danger zone count row: customers."
+  },
+  "factoryResetCountSuppliers": "الموردون",
+  "@factoryResetCountSuppliers": {
+    "description": "Danger zone count row: suppliers."
+  },
+  "factoryResetCountOrders": "الفواتير",
+  "@factoryResetCountOrders": {
+    "description": "Danger zone count row: sales orders/invoices."
+  },
+  "factoryResetCountPurchaseOrders": "أوامر الشراء",
+  "@factoryResetCountPurchaseOrders": {
+    "description": "Danger zone count row: purchase orders."
+  },
+  "factoryResetCountPayments": "الدفعات",
+  "@factoryResetCountPayments": {
+    "description": "Danger zone count row: payments."
+  },
+  "factoryResetCountStockMovements": "حركات المخزون",
+  "@factoryResetCountStockMovements": {
+    "description": "Danger zone count row: stock movements."
+  },
+  "factoryResetCountExpenses": "المصروفات",
+  "@factoryResetCountExpenses": {
+    "description": "Danger zone count row: expenses."
+  },
+  "factoryResetCountEmployees": "الموظفون",
+  "@factoryResetCountEmployees": {
+    "description": "Danger zone count row: employee records."
+  },
+  "factoryResetCountJobs": "أوامر العمل",
+  "@factoryResetCountJobs": {
+    "description": "Danger zone count row: operations jobs."
+  },
+  "factoryResetCountImports": "عمليات الاستيراد",
+  "@factoryResetCountImports": {
+    "description": "Danger zone count row: data-migration runs imported from an old system."
+  },
+  "factoryResetCountUsers": "حسابات المستخدمين",
+  "@factoryResetCountUsers": {
+    "description": "Danger zone count row: user accounts that will be deleted."
+  },
+  "factoryResetWhatStaysTitle": "ما الذي سيبقى",
+  "@factoryResetWhatStaysTitle": {
+    "description": "Section heading over the list of what a factory reset does not touch."
+  },
+  "factoryResetKeepsSettings": "إعدادات المتجر: الاسم والعملة والخيارات والشعار",
+  "@factoryResetKeepsSettings": {
+    "description": "Danger zone: shop settings survive the reset."
+  },
+  "factoryResetKeepsDevices": "الطابعات والموازين والكاميرات وأجهزة عرض الأسعار وبيانات ربط المزوّدين",
+  "@factoryResetKeepsDevices": {
+    "description": "Danger zone: configured peripherals and integration credentials survive the reset."
+  },
+  "factoryResetKeepsLicense": "الترخيص وربط المتجر بالخدمة، والمخازن والحسابات المالية الأساسية",
+  "@factoryResetKeepsLicense": {
+    "description": "Danger zone: the licence/enrolment and the seeded warehouses and money accounts survive."
+  },
+  "factoryResetBackupMessage": "تأكد أن هذه النسخة تكفيك قبل المتابعة.",
+  "@factoryResetBackupMessage": {
+    "description": "Backup callout body when a verified backup exists."
+  },
+  "factoryResetNoBackupTitle": "لا توجد نسخة احتياطية موثّقة",
+  "@factoryResetNoBackupTitle": {
+    "description": "Backup callout heading when the shop has never completed a verified backup."
+  },
+  "factoryResetNoBackupMessage": "لم يكتمل أي نسخ احتياطي موثّق على هذا الخادم. إن نفّذت الإفراغ الآن فلن يكون هناك ما يُسترجع منه. خذ نسخة احتياطية أولا من إعدادات النسخ الاحتياطي.",
+  "@factoryResetNoBackupMessage": {
+    "description": "Backup callout body when there is no backup: says outright that there is nothing to restore from."
+  },
+  "factoryResetButton": "إفراغ المتجر والبدء من جديد",
+  "@factoryResetButton": {
+    "description": "The destructive button that opens the factory reset confirmation."
+  },
+  "factoryResetRunningButton": "جارٍ إفراغ المتجر...",
+  "@factoryResetRunningButton": {
+    "description": "Label on the reset button while the reset is running."
+  },
+  "factoryResetDialogTitle": "تأكيد إفراغ المتجر",
+  "@factoryResetDialogTitle": {
+    "description": "Title of the two-field confirmation dialog."
+  },
+  "factoryResetPasswordLabel": "كلمة مرور حسابك",
+  "@factoryResetPasswordLabel": {
+    "description": "Password field label in the factory reset dialog."
+  },
+  "factoryResetConfirmationLabel": "اسم المتجر",
+  "@factoryResetConfirmationLabel": {
+    "description": "Shop-name confirmation field label in the factory reset dialog."
+  },
+  "factoryResetDialogConfirm": "أفرِغ المتجر",
+  "@factoryResetDialogConfirm": {
+    "description": "Confirm button in the factory reset dialog."
+  },
+  "factoryResetDoneMessage": "أُفرِغ المتجر. سجّل الدخول من جديد للبدء.",
+  "@factoryResetDoneMessage": {
+    "description": "Snack bar shown after a successful reset, before the app returns to the login screen."
+  },
+  "factoryResetKeepsAdmin": "حسابك أنت ({username}) بكلمة المرور نفسها",
+  "@factoryResetKeepsAdmin": {
+    "description": "Danger zone: names the one account that survives.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "factoryResetBackupTitle": "آخر نسخة احتياطية موثّقة: {date}",
+  "@factoryResetBackupTitle": {
+    "description": "Backup callout heading naming when the last verified backup completed.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "factoryResetDialogMessage": "سيُحذف كل شيء نهائيا. أدخل كلمة مرورك، ثم اكتب اسم المتجر «{shopName}» للتأكيد.",
+  "@factoryResetDialogMessage": {
+    "description": "Body of the factory reset dialog: asks for the password and the typed shop name.",
+    "placeholders": {
+      "shopName": {
+        "type": "String"
+      }
+    }
+  },
+  "factoryResetConfirmationHelper": "اكتب: {shopName}",
+  "@factoryResetConfirmationHelper": {
+    "description": "Helper line under the confirmation field, showing the exact text to type.",
+    "placeholders": {
+      "shopName": {
+        "type": "String"
+      }
+    }
   }
 }

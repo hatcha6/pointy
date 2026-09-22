@@ -254,6 +254,7 @@ class SandboxShop {
     required List<SandboxPayment> payments,
     required String saleType,
     int? customerId,
+    double extraDiscountAmount = 0,
   }) {
     final orderLines = <SandboxOrderLine>[];
     for (final line in lines) {
@@ -282,6 +283,28 @@ class SandboxShop {
       );
     }
 
+    // The cashier's own discount goes onto the LINES, weighted by what each is
+    // worth — the practice shop models the real one, where a document-only
+    // discount would leave the return desk crediting a price nobody paid.
+    final gross = orderLines.fold<double>(
+      0,
+      (sum, line) => sum + line.subtotal,
+    );
+    final extra = extraDiscountAmount.clamp(0.0, gross);
+    if (extra > 0 && gross > 0) {
+      var spread = 0.0;
+      for (var index = 0; index < orderLines.length; index++) {
+        final line = orderLines[index];
+        // Last line takes the remainder, so the shares always sum to `extra`
+        // instead of drifting by a fraction of a dinar.
+        final share = index == orderLines.length - 1
+            ? extra - spread
+            : _round2(extra * line.subtotal / gross);
+        line.discountTotal = share;
+        spread += share;
+      }
+    }
+
     final customer = customerId == null ? null : contactById(customerId);
     final order = SandboxOrder(
       id: _nextOrderId++,
@@ -296,7 +319,7 @@ class SandboxShop {
       cashierName: cashierName,
       customerId: customer?.id,
       customerName: customer?.name ?? '',
-    );
+    )..extraDiscountAmount = extra;
     orders.add(order);
 
     final open = session;
@@ -356,7 +379,9 @@ class SandboxShop {
 
   SandboxProduct createProduct({
     required String name,
-    required List<({String name, String sku, String barcode, double price})>
+    required List<
+      ({String name, String sku, String barcode, double price, double opening})
+    >
     variants,
     String unit = 'piece',
     List<int> categoryIds = const [],
@@ -376,7 +401,10 @@ class SandboxShop {
           sku: variant.sku,
           barcode: variant.barcode,
           unitPrice: variant.price,
-          stock: 0,
+          // Opening stock, so a lesson that types "I already have forty of
+          // these" sees forty on the shelf rather than a zero that quietly
+          // contradicts what it just taught.
+          stock: variant.opening,
           isDefault: index == 0,
         ),
       );
@@ -607,3 +635,5 @@ class SandboxShop {
         .toDouble();
   }
 }
+
+double _round2(double value) => (value * 100).roundToDouble() / 100;

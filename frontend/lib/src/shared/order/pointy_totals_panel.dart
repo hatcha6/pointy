@@ -8,6 +8,8 @@ class PointyTotalLine {
     required this.value,
     this.isStrong = false,
     this.isMuted = false,
+    this.onTap,
+    this.actionIcon,
   });
 
   final String label;
@@ -17,6 +19,15 @@ class PointyTotalLine {
   /// Renders the line in a quieter tone — used for deductions (discounts) so
   /// the subtotal and grand total keep the visual hierarchy.
   final bool isMuted;
+
+  /// Makes the line itself the control for the figure it states — the till's
+  /// invoice discount is edited by tapping the line that shows it. Null on
+  /// every line that only reports, which is almost all of them.
+  final VoidCallback? onTap;
+
+  /// Drawn before the label when the line is tappable, so it reads as
+  /// something to press rather than another figure.
+  final IconData? actionIcon;
 }
 
 class PointyTotalsPanel extends StatelessWidget {
@@ -87,34 +98,65 @@ class _TotalLineView extends StatelessWidget {
       );
     }
 
-    return Padding(
-      padding: EdgeInsetsDirectional.symmetric(
-        vertical: line.isStrong ? (compact ? 3 : 5) : (compact ? 2 : 3),
-      ),
-      child: Row(
-        children: [
-          // The label takes all the slack so the value is pushed hard to the
-          // trailing edge (the far left in RTL) instead of floating mid-row.
-          Expanded(
-            child: Text(
-              line.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: labelStyle,
-            ),
+    final row = Row(
+      children: [
+        if (line.actionIcon != null) ...[
+          Icon(
+            line.actionIcon,
+            size: compact ? 15 : 17,
+            color: labelStyle?.color ?? colors.mutedInk,
           ),
-          const SizedBox(width: 12),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              line.value,
-              maxLines: 1,
-              style: valueStyle == null
-                  ? null
-                  : PointyTypography.numeric(valueStyle),
-            ),
-          ),
+          const SizedBox(width: 6),
         ],
+        // The label takes all the slack so the value is pushed hard to the
+        // trailing edge (the far left in RTL) instead of floating mid-row.
+        Expanded(
+          child: Text(
+            line.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: labelStyle,
+          ),
+        ),
+        const SizedBox(width: 12),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            line.value,
+            maxLines: 1,
+            style: valueStyle == null
+                ? null
+                : PointyTypography.numeric(valueStyle),
+          ),
+        ),
+      ],
+    );
+
+    final verticalPadding = line.isStrong
+        ? (compact ? 3.0 : 5.0)
+        : (compact ? 2.0 : 3.0);
+    if (line.onTap == null) {
+      return Padding(
+        padding: EdgeInsetsDirectional.symmetric(vertical: verticalPadding),
+        child: row,
+      );
+    }
+    // Tappable lines keep the same vertical rhythm but take their padding
+    // inside the ink, so the press target covers the whole row.
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: line.onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(
+            6,
+            verticalPadding,
+            6,
+            verticalPadding,
+          ),
+          child: row,
+        ),
       ),
     );
   }

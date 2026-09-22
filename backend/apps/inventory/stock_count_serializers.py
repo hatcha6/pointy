@@ -160,6 +160,15 @@ class StockCountLineInputSerializer(serializers.Serializer):
         decimal_places=3,
         min_value=0,
     )
+    #: The unit the counter counted **in**. Blank (the default, and what every
+    #: client sent before this existed) means the product's base unit.
+    #:
+    #: A shop whose goods come in cartons of 24 counts cartons; making it type
+    #: the answer in pieces is asking it to do arithmetic on a ladder, and the
+    #: mistakes go straight into the shelf. The stored quantity is still always
+    #: base units — the conversion happens once, here at the edge, exactly as
+    #: sales and purchasing do it.
+    unit = serializers.CharField(required=False, allow_blank=True, max_length=32)
     #: Which lot was counted, for a batch-tracked variant. §6.6: the counter is
     #: standing in one room counting the packs of **one lot** on one shelf, and
     #: a line that did not name the lot would be a variance against a total the

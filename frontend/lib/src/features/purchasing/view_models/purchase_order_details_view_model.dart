@@ -225,6 +225,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     required double amount,
     String reference = '',
     String notes = '',
+    int? moneyAccountId,
     bool printProof = false,
   }) async {
     if (_isRecordingPayment) {
@@ -249,6 +250,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
         method: method,
         reference: reference,
         notes: notes,
+        moneyAccountId: moneyAccountId,
       ),
       idempotencyKey: _idempotencyKeyFor(paymentSignature),
     );

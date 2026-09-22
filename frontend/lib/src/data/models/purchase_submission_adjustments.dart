@@ -381,6 +381,7 @@ class SupplierPaymentDraft {
     this.purchaseOrderId,
     this.reference = '',
     this.notes = '',
+    this.moneyAccountId,
   });
 
   final int? supplierId;
@@ -390,6 +391,10 @@ class SupplierPaymentDraft {
   final String reference;
   final String notes;
 
+  /// Which of the shop's bank accounts the money left. Omitted for cash, and
+  /// for a shop that has not created a second account.
+  final int? moneyAccountId;
+
   Map<String, Object?> toJson() {
     return {
       if (supplierId != null) 'supplier': supplierId,
@@ -398,6 +403,7 @@ class SupplierPaymentDraft {
       'method': method.apiValue,
       'reference': reference,
       'notes': notes,
+      if (moneyAccountId != null) 'money_account': moneyAccountId,
     };
   }
 }
@@ -417,6 +423,7 @@ class SupplierPayment {
     this.createdByUsername,
     this.createdAt,
     this.updatedAt,
+    this.bankAccount,
   });
 
   final int id;
@@ -433,6 +440,9 @@ class SupplierPayment {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  /// The bank this money left, when the shop named one.
+  final BankAccountRef? bankAccount;
+
   factory SupplierPayment.fromJson(Map<String, Object?> json) {
     return SupplierPayment(
       id: _intFromJson(json['id']),
@@ -448,6 +458,7 @@ class SupplierPayment {
       createdByUsername: json['created_by_username']?.toString(),
       createdAt: _dateTimeFromJson(json['created_at']),
       updatedAt: _dateTimeFromJson(json['updated_at']),
+      bankAccount: BankAccountRef.fromPaymentJson(json),
     );
   }
 }

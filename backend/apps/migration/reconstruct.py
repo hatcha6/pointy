@@ -74,9 +74,21 @@ from .loaders.base import (
 # ``products_without_quantities`` boolean → ``none``).
 STOCK_SOURCE_SNAPSHOT = "snapshot"  # copy the old system's stored quantities
 STOCK_SOURCE_RECONSTRUCT = "reconstruct"  # compute from purchases − sales
-STOCK_SOURCE_NONE = "none"  # import products with no quantities
+STOCK_SOURCE_NONE = "none"  # import products with no quantities and no cost
+# Carry what the goods cost, but none of the quantities: the shop counts its own
+# shelves on day one and trusts nothing it inherits, yet its first sale still
+# has to know what it paid. Dropping the stock entity whole (STOCK_SOURCE_NONE)
+# takes the cost with it, because the cost rides on the stock record — so every
+# product opens unvalued and the first sale books the entire selling price as
+# profit. Cost and quantity are two facts, and this is how you ask for one.
+STOCK_SOURCE_COST_ONLY = "cost_only"
 VALID_STOCK_SOURCES = frozenset(
-    {STOCK_SOURCE_SNAPSHOT, STOCK_SOURCE_RECONSTRUCT, STOCK_SOURCE_NONE}
+    {
+        STOCK_SOURCE_SNAPSHOT,
+        STOCK_SOURCE_RECONSTRUCT,
+        STOCK_SOURCE_NONE,
+        STOCK_SOURCE_COST_ONLY,
+    }
 )
 
 # A reconstructed quantity within this of the stored snapshot counts as a match

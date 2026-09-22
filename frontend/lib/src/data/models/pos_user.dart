@@ -63,6 +63,7 @@ class PosUser {
     required this.username,
     required this.role,
     required this.isActive,
+    this.isSuperuser = false,
     this.firstName = '',
     this.lastName = '',
     this.displayName = '',
@@ -87,6 +88,15 @@ class PosUser {
   final String email;
   final UserRole role;
   final bool isActive;
+
+  /// The owner account — the superuser the first-run wizard created.
+  ///
+  /// Not the same as being a manager, and the difference only matters in one
+  /// place: the factory reset deletes every other account, including the
+  /// managers who could otherwise have stopped it, so it is offered to this
+  /// account alone. Defaults to false, so a client talking to a backend that
+  /// does not send the field simply never offers it.
+  final bool isSuperuser;
 
   /// Effective permissions (role ∪ directly-granted), used to derive
   /// capabilities. May contain the `*` sentinel for managers.
@@ -148,6 +158,7 @@ class PosUser {
       isActive: json['is_active'] is bool
           ? json['is_active'] as bool
           : json['is_active']?.toString() != 'false',
+      isSuperuser: json['is_superuser'] == true,
       permissions: _permissionsFromJson(_permissionPayload(json)),
       rolePermissions: _permissionsFromJson(json['role_permissions']),
       extraPermissions: _permissionsFromJson(json['extra_permissions']),

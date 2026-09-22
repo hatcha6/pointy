@@ -34,6 +34,7 @@ from .position import (
     COMPONENT_TRANSFER_OUT,
     NON_CASH_SUPPLIER_METHODS,
     account_is_routed,
+    bank_account_filter,
 )
 
 # Same ceiling as the expense ledger: enough for a month of a busy shop, and
@@ -75,11 +76,15 @@ def _row(*, source, date, amount, description, reference="", related_id=None):
 def account_movements(account, *, start, end):
     """Every money event that moved through ``account`` between two local days."""
     rows = list(_transfer_rows(account, start=start, end=end))
-    if account_is_routed(account):
-        builder = (
-            _cash_rows if account.kind == MoneyAccount.Kind.CASH else _bank_rows
+    is_routed = account_is_routed(account)
+    if account.kind == MoneyAccount.Kind.BANK:
+        # Every bank account has rows of its own — the payments that named it —
+        # whether or not it is the one untagged money falls back to.
+        rows.extend(
+            _bank_rows(start=start, end=end, account=account, is_default=is_routed)
         )
-        rows.extend(builder(start=start, end=end))
+    elif is_routed and account.kind == MoneyAccount.Kind.CASH:
+        rows.extend(_cash_rows(start=start, end=end))
 
     rows.sort(key=lambda row: (row["date"], row["source"]), reverse=True)
     truncated = len(rows) > MOVEMENT_ROW_LIMIT
@@ -115,14 +120,11 @@ def _transfer_touches(account):
     return Q(from_account=account) | Q(to_account=account)
 
 
-def _payment_rows(methods, *, start, end, with_commission):
-    payments = _newest(
-        money_period(
-            Payment.objects.filter(method__in=methods).select_related("order"),
-            start,
-            end,
-        )
-    )
+def _payment_rows(methods, *, start, end, with_commission, account_filter=None):
+    queryset = Payment.objects.filter(method__in=methods)
+    if account_filter is not None:
+        queryset = queryset.filter(account_filter)
+    payments = _newest(money_period(queryset.select_related("order"), start, end))
     for payment in payments:
         order_number = getattr(payment.order, "invoice_number", "") or ""
         yield _row(
@@ -143,12 +145,13 @@ def _payment_rows(methods, *, start, end, with_commission):
             )
 
 
-def _expense_rows(methods, *, start, end):
+def _expense_rows(methods, *, start, end, account_filter=None):
+    queryset = Expense.objects.live()
+    if account_filter is not None:
+        queryset = queryset.filter(account_filter)
     expenses = _newest(
         money_period(
-            Expense.objects.live()
-            .filter(payment_method__in=methods)
-            .select_related("category"),
+            queryset.filter(payment_method__in=methods).select_related("category"),
             start,
             end,
         )
@@ -164,11 +167,13 @@ def _expense_rows(methods, *, start, end):
         )
 
 
-def _supplier_rows(methods, *, start, end):
+def _supplier_rows(methods, *, start, end, account_filter=None):
+    queryset = SupplierPayment.objects.live()
+    if account_filter is not None:
+        queryset = queryset.filter(account_filter)
     payments = _newest(
         money_period(
-            SupplierPayment.objects.live()
-            .filter(method__in=methods)
+            queryset.filter(method__in=methods)
             .exclude(method__in=NON_CASH_SUPPLIER_METHODS)
             .select_related("supplier", "purchase_order"),
             start,
@@ -235,14 +240,24 @@ def _payroll_rows(*, start, end):
         )
 
 
-def _bank_rows(*, start, end):
-    yield from _payment_rows(BANK_METHODS, start=start, end=end, with_commission=True)
+def _bank_rows(*, start, end, account, is_default):
+    owned = bank_account_filter(account, is_default=is_default)
+    yield from _payment_rows(
+        BANK_METHODS,
+        start=start,
+        end=end,
+        with_commission=True,
+        account_filter=owned,
+    )
+    yield from _supplier_rows(
+        BANK_METHODS, start=start, end=end, account_filter=owned
+    )
     yield from _expense_rows(
         [Expense.PaymentMethod.CARD, Expense.PaymentMethod.TRANSFER],
         start=start,
         end=end,
+        account_filter=owned,
     )
-    yield from _supplier_rows(BANK_METHODS, start=start, end=end)
 
 
 __all__ = ["MOVEMENT_ROW_LIMIT", "account_movements"]

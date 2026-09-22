@@ -14,6 +14,7 @@ class PurchaseOrder {
     required this.total,
     required this.lines,
     required this.adjustments,
+    this.payments = const [],
     required this.receipts,
     required this.subtotal,
     required this.canReturn,
@@ -93,6 +94,12 @@ class PurchaseOrder {
   final int lineCount;
   final List<PurchaseOrderLine> lines;
   final List<PurchaseOrderAdjustment> adjustments;
+
+  /// What was actually paid against this order, and out of which bank.
+  /// Detail-only: the list rows carry a paid TOTAL and no movements behind it
+  /// (see [lineCount]), so this is empty on a row and populated on a fetched
+  /// document — the list-row-is-not-a-document rule.
+  final List<SupplierPayment> payments;
   final List<PurchaseReceipt> receipts;
   final double subtotal;
   final double discountTotal;
@@ -225,6 +232,10 @@ class PurchaseOrder {
       adjustments: adjustments
           .whereType<Map<String, Object?>>()
           .map(PurchaseOrderAdjustment.fromJson)
+          .toList(growable: false),
+      payments: _listFromJson(json['payments'])
+          .whereType<Map<String, Object?>>()
+          .map(SupplierPayment.fromJson)
           .toList(growable: false),
       receipts: rawReceipts
           .whereType<Map<String, Object?>>()

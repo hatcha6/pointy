@@ -40,6 +40,18 @@ class ExpenseSerializer(serializers.ModelSerializer):
         required=False,
         default=False,
     )
+    # Which bank account the money left. Spelled out on read so the expenses
+    # list and its details can draw the bank's own mark without a lookup per
+    # row — the same shape a payment and a supplier settlement carry.
+    money_account_name = serializers.CharField(
+        source="money_account.name", read_only=True, default=""
+    )
+    money_account_bank_slug = serializers.CharField(
+        source="money_account.bank_slug", read_only=True, default=""
+    )
+    money_account_bank_name = serializers.CharField(
+        source="money_account.bank_name", read_only=True, default=""
+    )
 
     class Meta:
         model = Expense
@@ -54,6 +66,10 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "spent_at",
             "reference",
             "notes",
+            "money_account",
+            "money_account_name",
+            "money_account_bank_slug",
+            "money_account_bank_name",
             "pay_from_register",
             "paid_from_register",
             "register_session",
@@ -64,6 +80,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = (
+            "money_account_name",
+            "money_account_bank_slug",
+            "money_account_bank_name",
             "register_session",
             "cash_movement",
             "created_by",
@@ -107,6 +126,27 @@ class ExpenseSerializer(serializers.ModelSerializer):
         # till has been counted against its pay-out. Editing the amount or the
         # payment method then would leave the drawer disagreeing with the
         # expense (or silently rewrite a signed-off count), so both are frozen.
+        # Which bank an expense left is the same question the till and the
+        # purchasing screens answer, so it is the same rule and the same
+        # function: a bank account, active, and only for a method that can
+        # actually reach one. Cash left the drawer.
+        method = attrs.get(
+            "payment_method", getattr(self.instance, "payment_method", None)
+        )
+        if "money_account" in attrs:
+            from apps.payments.serializers import validate_bank_money_account
+
+            validate_bank_money_account(attrs["money_account"], method)
+        elif (
+            self.instance is not None
+            and self.instance.money_account_id
+            and method == Expense.PaymentMethod.CASH
+        ):
+            # Switching a card expense to cash leaves an account naming a bank
+            # the money never left. Clear it rather than refuse the edit: the
+            # correction the cashier is making is the right one.
+            attrs["money_account"] = None
+
         expense = self.instance
         if expense is not None and drawer_fields_locked(expense):
             locked = {

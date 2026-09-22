@@ -59,7 +59,7 @@ class SaleLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "unresolved_variant",
-                        f"Sale line references unknown product {line.variant_source_key!r}; skipped.",
+                        f"سطر بيع يشير إلى صنف غير معروف {line.variant_source_key!r} — تم تجاهل السطر.",
                         source_key=str(record.source_key),
                     )
                 )
@@ -77,7 +77,7 @@ class SaleLoader(BaseLoader):
                 )
             )
         if not line_specs:
-            raise LoaderError("Sale has no resolvable line items.", code="no_lines")
+            raise LoaderError("لا يوجد في الفاتورة أي سطر يمكن ربطه بصنف.", code="no_lines")
 
         customer_pk = resolver.resolve(CUSTOMER, record.customer_source_key)
 
@@ -138,8 +138,7 @@ class SaleLoader(BaseLoader):
                 Issue(
                     WARNING,
                     "receipt_number_taken",
-                    f"Receipt number {wanted!r} is already used; "
-                    "the sale was given a new one.",
+                    f"رقم الفاتورة {wanted!r} مستخدم من قبل — أُعطيت الفاتورة رقمًا جديدًا.",
                     source_key=str(record.source_key),
                 )
             )
@@ -153,7 +152,7 @@ class SaleLoader(BaseLoader):
         if credit and customer_pk is None:
             # An آجل invoice is a debt, and a debt needs somebody who owes it.
             raise LoaderError(
-                "Credit invoice has no customer to owe it.",
+                "فاتورة آجلة بلا عميل يتحمّل الدين.",
                 code="credit_without_customer",
             )
         self._carry_receipt_number(order, record, issues)
@@ -245,7 +244,7 @@ class PaymentLoader(BaseLoader):
     def load(self, record, resolver, *, dry_run):
         amount = to_decimal(record.amount)
         if amount <= 0:
-            raise LoaderError("Payment amount must be greater than zero.", code="invalid_amount")
+            raise LoaderError("مبلغ الدفعة يجب أن يكون أكبر من صفر.", code="invalid_amount")
         method = record.method if record.method in _PAYMENT_METHODS else "cash"
         reference = (record.reference or f"migration:{record.source_key}")[:128]
 
@@ -264,7 +263,7 @@ class PaymentLoader(BaseLoader):
         order_pk = resolver.resolve(SALE, record.sale_source_key)
         if order_pk is None:
             raise LoaderError(
-                f"Payment references unknown sale {record.sale_source_key!r}.",
+                f"دفعة تشير إلى فاتورة غير معروفة {record.sale_source_key!r}.",
                 code="unresolved_sale",
             )
         payment = self._pay(order_pk, amount, method, reference, record.occurred_at)
@@ -276,7 +275,7 @@ class PaymentLoader(BaseLoader):
         customer_pk = resolver.resolve(CUSTOMER, record.customer_source_key)
         if customer_pk is None:
             raise LoaderError(
-                f"Receipt references unknown customer {record.customer_source_key!r}.",
+                f"سند قبض يشير إلى عميل غير معروف {record.customer_source_key!r}.",
                 code="unresolved_customer",
             )
         orders = (
@@ -365,9 +364,8 @@ class SaleReturnLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "return_without_sale",
-                        "This return names no invoice we could find — the sale "
-                        "it came off is probably older than this file. Nothing "
-                        "was written for it.",
+                        "هذا المرتجع لا يشير إلى فاتورة موجودة — غالبًا أن الفاتورة التي "
+                        "خرجت منها البضاعة أقدم من هذا الملف. لم يُسجَّل شيء.",
                         source_key=str(record.source_key),
                         detail={
                             "amount": str(
@@ -387,13 +385,13 @@ class SaleReturnLoader(BaseLoader):
         order_pk = resolver.resolve(SALE, record.sale_source_key)
         if order_pk is None:
             raise LoaderError(
-                f"Return references unknown sale {record.sale_source_key!r}.",
+                f"مرتجع يشير إلى فاتورة غير معروفة {record.sale_source_key!r}.",
                 code="unresolved_sale",
             )
         order = Order.objects.filter(pk=order_pk).first()
         if order is None:
             raise LoaderError(
-                f"Return references unknown sale {record.sale_source_key!r}.",
+                f"مرتجع يشير إلى فاتورة غير معروفة {record.sale_source_key!r}.",
                 code="unresolved_sale",
             )
 
@@ -411,8 +409,8 @@ class SaleReturnLoader(BaseLoader):
                     Issue(
                         WARNING,
                         "return_line_unmatched",
-                        f"Returned product {line.variant_source_key!r} is not on "
-                        f"invoice {order.receipt_number}; line skipped.",
+                        f"الصنف المرتجع {line.variant_source_key!r} غير موجود في الفاتورة "
+                        f"{order.receipt_number} — تم تجاهل السطر.",
                         source_key=str(record.source_key),
                     )
                 )
@@ -446,7 +444,7 @@ class SaleReturnLoader(BaseLoader):
             price = to_decimal(line.unit_price) or to_decimal(order_line.unit_price)
             specs.append((order_line, quantity, price))
         if not specs:
-            raise LoaderError("Return has no matching invoice lines.", code="no_lines")
+            raise LoaderError("لا يوجد في المرتجع أي سطر يطابق الفاتورة.", code="no_lines")
 
         existing = resolver.existing(OrderAdjustment, self.entity_type, record.source_key)
         action = UPDATED if existing is not None else CREATED

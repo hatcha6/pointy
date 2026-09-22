@@ -223,9 +223,11 @@ Map<String, Object?> _sourceJson(String screen) {
       'variant',
       'customer',
       'supplier',
+      'party_balance',
       'purchase_order',
       'sale',
     ],
+    'supports_stock_filter': true,
   };
 
   switch (screen) {
@@ -584,6 +586,7 @@ class _FakeMigrationRepository implements MigrationRepository {
             'supported_entities': ['product', 'sale'],
             'versions': ['fahd-mdb-recon-1'],
             'implemented': true,
+            'supports_stock_filter': true,
           },
           {
             'system_key': 'aboghris',
@@ -591,24 +594,118 @@ class _FakeMigrationRepository implements MigrationRepository {
             'supported_entities': ['product', 'sale'],
             'versions': ['aboghris-v30-2025'],
             'implemented': true,
+            'supports_stock_filter': false,
           },
         ],
+        // Labels are the server's own English on purpose. The API sends the
+        // developer wording and the screen renders Arabic keyed on
+        // `entity_type`; a harness that pre-translated them was why the import
+        // page could ship in English without anyone seeing it here.
         'entities': [
           {
             'entity_type': 'category',
-            'label': 'التصنيفات',
+            'label': 'Categories',
             'implemented': true,
+            'dependencies': <String>[],
           },
-          {'entity_type': 'product', 'label': 'الأصناف', 'implemented': true},
-          {'entity_type': 'variant', 'label': 'المتغيرات', 'implemented': true},
-          {'entity_type': 'customer', 'label': 'الزبائن', 'implemented': true},
-          {'entity_type': 'supplier', 'label': 'الموردون', 'implemented': true},
+          {
+            'entity_type': 'product',
+            'label': 'Products',
+            'implemented': true,
+            'dependencies': ['category'],
+          },
+          {
+            'entity_type': 'variant',
+            'label': 'Product variants',
+            'implemented': true,
+            'dependencies': ['product'],
+          },
+          {
+            'entity_type': 'customer',
+            'label': 'Customers',
+            'implemented': true,
+            'dependencies': <String>[],
+          },
+          {
+            'entity_type': 'supplier',
+            'label': 'Suppliers',
+            'implemented': true,
+            'dependencies': <String>[],
+          },
+          {
+            'entity_type': 'party_balance',
+            'label': 'Customer & supplier balances',
+            'implemented': true,
+            'dependencies': ['customer', 'supplier'],
+          },
           {
             'entity_type': 'purchase_order',
-            'label': 'فواتير الشراء',
+            'label': 'Purchase orders',
             'implemented': true,
+            'dependencies': ['supplier', 'variant'],
           },
-          {'entity_type': 'sale', 'label': 'المبيعات', 'implemented': true},
+          {
+            'entity_type': 'sale',
+            'label': 'Sales',
+            'implemented': true,
+            'dependencies': ['customer', 'variant'],
+          },
+        ],
+        'scopes': [
+          {
+            'key': 'everything',
+            'label': 'كل شيء',
+            'description': '',
+            'entities': [
+              'category',
+              'product',
+              'variant',
+              'customer',
+              'supplier',
+              'party_balance',
+              'purchase_order',
+              'sale',
+            ],
+            'options': {
+              'stock_source': 'snapshot',
+              'party_balance_basis': 'auto',
+            },
+            'is_preset': true,
+          },
+          {
+            'key': 'opening_position',
+            'label': 'نبدأ من الوضع الحالي',
+            'description': '',
+            'entities': [
+              'category',
+              'product',
+              'variant',
+              'customer',
+              'supplier',
+              'party_balance',
+            ],
+            'options': {
+              'stock_source': 'cost_only',
+              'party_balance_basis': 'current',
+            },
+            'is_preset': true,
+          },
+          {
+            'key': 'catalogue_only',
+            'label': 'الأصناف فقط',
+            'description': '',
+            'entities': ['category', 'product', 'variant'],
+            'options': {'stock_source': 'none', 'party_balance_basis': 'auto'},
+            'is_preset': true,
+          },
+          {
+            'key': 'custom',
+            'label': 'تحديد يدوي',
+            'description': '',
+            'entities': null,
+            'options': <String, Object?>{},
+            'is_preset': false,
+          },
         ],
         'upload': {
           'chunk_size': 16777216,
@@ -646,6 +743,7 @@ class _FakeMigrationRepository implements MigrationRepository {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    String? scope,
     Map<String, Object?> options = const {},
   }) async {
     return Ok(MigrationRun.fromJson(_runJson('importing')!));

@@ -106,6 +106,7 @@ from apps.core.backup_views import (
     RestoreUploadView,
 )
 from apps.core.dashboard import DashboardView
+from apps.core.factory_reset_views import FactoryResetView
 from apps.core.state_views import state_view
 from apps.clients.views import (
     ClientFileView,
@@ -149,7 +150,7 @@ from apps.messaging.views import (
     MessagingGatewayViewSet,
 )
 from apps.notifications.views import BusinessNotificationViewSet
-from apps.payments.views import PaymentViewSet
+from apps.payments.views import CardTerminalViewSet, PaymentViewSet
 from apps.printing.views import (
     PrepStationViewSet,
     PrinterProfileViewSet,
@@ -252,6 +253,7 @@ router.register(
 )
 router.register("boms", BillOfMaterialsViewSet, basename="bom")
 router.register("payments", PaymentViewSet)
+router.register("card-terminals", CardTerminalViewSet)
 router.register("print-templates", PrintTemplateViewSet)
 router.register("print-template-versions", PrintTemplateVersionViewSet)
 router.register("printer-profiles", PrinterProfileViewSet)
@@ -459,6 +461,11 @@ urlpatterns = [
     ),
     path("api/shop-settings/", ShopSettingsView.as_view(), name="shop-settings"),
     path("api/shop-settings/setup/", ShopSetupView.as_view(), name="shop-setup"),
+    path(
+        "api/shop-settings/factory-reset/",
+        FactoryResetView.as_view(),
+        name="shop-factory-reset",
+    ),
     path(
         "api/shop-settings/logo/",
         ShopSettingsLogoView.as_view(),

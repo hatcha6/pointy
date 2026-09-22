@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/card_terminal.dart';
 import '../models/money_position.dart';
 import '../services/pos_api_service.dart';
 
@@ -65,5 +66,24 @@ class TreasuryRepository {
     Map<String, Object?> changes,
   ) {
     return Result.guard(() => _service.updateMoneyAccount(accountId, changes));
+  }
+
+  Future<Result<List<CardTerminal>>> loadCardTerminals() {
+    return Result.guard(() => _service.fetchCardTerminals());
+  }
+
+  Future<Result<CardTerminal>> createCardTerminal(CardTerminal terminal) {
+    return Result.guard(() => _service.createCardTerminal(terminal));
+  }
+
+  Future<Result<CardTerminal>> updateCardTerminal(
+    int terminalId,
+    Map<String, Object?> changes,
+  ) {
+    return Result.guard(() => _service.updateCardTerminal(terminalId, changes));
+  }
+
+  Future<Result<void>> deleteCardTerminal(int terminalId) {
+    return Result.guard(() => _service.deleteCardTerminal(terminalId));
   }
 }

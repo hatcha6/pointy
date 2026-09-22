@@ -17,6 +17,10 @@ extension PosCheckoutActions on PosViewModel {
       session.discountPreview = null;
       session.hasDiscountPreviewError = false;
       session.isLoadingDiscountPreview = false;
+      // An emptied basket takes its haggle with it, however it was emptied —
+      // cleared in one go, or the last line removed. A discount that outlived
+      // the goods it was agreed on would come off the next customer's sale.
+      session.extraDiscountAmount = 0;
       _notifyChanged();
       return;
     }
@@ -42,6 +46,7 @@ extension PosCheckoutActions on PosViewModel {
         cart: List<CartLine>.of(session.cart),
         customerId: session.selectedCustomer?.id,
         couponCode: session.couponCode,
+        extraDiscountAmount: session.extraDiscountAmount,
       ),
     );
     if (requestVersion != session.discountPreviewRequestVersion) {
@@ -82,10 +87,17 @@ extension PosCheckoutActions on PosViewModel {
       0,
       (sum, line) => sum + line.total,
     );
+    // No rules does not mean no discount: the cashier's own is pure arithmetic
+    // the client can do, and must, or a shop that runs no promotions would read
+    // an undiscounted total on the one code path that never asks the server.
+    // Clamped to the cart here for the same reason the server clamps it there.
+    final extra = session.extraDiscountAmount.clamp(0.0, subtotal);
     return SaleDiscountPreview(
       subtotal: subtotal,
-      discountTotal: 0,
-      total: subtotal,
+      discountTotal: extra,
+      total: subtotal - extra,
+      extraDiscountAmount: extra,
+      maxExtraDiscountAmount: subtotal,
       rulesActive: false,
       rulesVersion: _noActiveDiscountRulesVersion ?? '',
     );
@@ -164,6 +176,9 @@ extension PosCheckoutActions on PosViewModel {
     final cartSnapshot = List<CartLine>.of(_cart);
     final customerSnapshot = _selectedCustomer;
     final couponCodeSnapshot = _couponCode.trim();
+    // Snapshotted with the cart: a retry must tender the same discount the
+    // first attempt did, not whatever the box says by the time it fires.
+    final extraDiscountAmountSnapshot = _extraDiscountAmount;
     unawaited(
       _analyticsEngine?.trackUsage(
             AnalyticsEventName.posCheckoutStarted,
@@ -224,6 +239,7 @@ extension PosCheckoutActions on PosViewModel {
         invoicePrinterConfig: printerConfig,
         customerId: _selectedCustomer?.id,
         couponCode: _couponCode,
+        extraDiscountAmount: extraDiscountAmountSnapshot,
         saleType: saleType,
         validUntil: validUntil,
         dueDate: dueDate,

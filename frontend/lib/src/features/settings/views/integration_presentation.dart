@@ -58,6 +58,31 @@ String integrationProviderTagline(
   };
 }
 
+/// Arabic for one of the ways a portal can be searched.
+///
+/// Stable codes in, Arabic out, like every other string on this screen. The
+/// picker these label sits in front of the search box and is the difference
+/// between one round trip to the provider and three.
+({String label, IconData icon}) integrationSearchModeLabel(
+  IntegrationSearchMode mode,
+  AppLocalizations l10n,
+) {
+  return switch (mode) {
+    IntegrationSearchMode.phone => (
+      label: l10n.rechargeSearchByPhone,
+      icon: Icons.phone_iphone_outlined,
+    ),
+    IntegrationSearchMode.username => (
+      label: l10n.rechargeSearchByUsername,
+      icon: Icons.person_outline,
+    ),
+    IntegrationSearchMode.contract => (
+      label: l10n.rechargeSearchByContract,
+      icon: Icons.description_outlined,
+    ),
+  };
+}
+
 /// Arabic wording for a declared provider setting.
 ///
 /// Keyed on the stable code like every other provider string, so a new setting

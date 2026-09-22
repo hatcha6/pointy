@@ -35,11 +35,13 @@ class IntegrationsRepository {
   Future<Result<IntegrationCardSnapshot>> lookupCard({
     required String providerKey,
     required String cardNo,
+    String searchBy = '',
   }) {
     return Result.guard(
       () => _service.fetchIntegrationCard(
         providerKey: providerKey,
         cardNo: cardNo,
+        searchBy: searchBy,
       ),
     );
   }

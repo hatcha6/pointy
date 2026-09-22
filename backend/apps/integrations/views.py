@@ -19,7 +19,12 @@ from . import catalog
 from . import recharge
 from .models import IntegrationAccount, IntegrationFulfillment
 from .providers import provider_for
-from .providers.base import ERROR_NOT_CONFIGURED, ERROR_NOT_FOUND, ERROR_UNAVAILABLE
+from .providers.base import (
+    ERROR_NOT_CONFIGURED,
+    ERROR_NOT_FOUND,
+    ERROR_UNAVAILABLE,
+    in_parallel,
+)
 from . import float_ledger
 from .provisioning import service_variant_for
 from .serializers import (
@@ -219,7 +224,10 @@ class IntegrationLookupView(APIView):
         if not spec.is_available:
             return Response({"ok": False, "error_code": ERROR_UNAVAILABLE})
 
-        result = provider_for(account).lookup(request.query_params.get("card_no", ""))
+        result = provider_for(account).lookup(
+            request.query_params.get("card_no", ""),
+            search_by=request.query_params.get("search_by", ""),
+        )
         return Response(
             {
                 "ok": result.ok,
@@ -297,7 +305,13 @@ class IntegrationCardView(APIView):
             return Response({"ok": False, "error_code": ERROR_NOT_FOUND})
 
         driver = provider_for(account)
-        lookup = driver.lookup(card_no)
+        # What the till says this number IS. A phone number and a contract
+        # number are both digits, so the portal has to be asked the right way
+        # or asked twice; the picker beside the search box is what turns the
+        # ordinary lookup into a single round trip.
+        lookup = driver.lookup(
+            card_no, search_by=request.query_params.get("search_by", "")
+        )
         if not lookup.ok:
             return Response(
                 {
@@ -338,14 +352,33 @@ class IntegrationCardView(APIView):
         # request already found.
         resolved_card_no = lookup.card.card_no
 
-        # Prices are quoted live and never cached — see RechargeOption.
-        offers = driver.offers(resolved_card_no, resolved=lookup.card)
+        # Prices are quoted live and never cached — see RechargeOption. The
+        # offer ladder and the subscriber's detail page are two different
+        # pages about the same line, and NEITHER needs the other's answer:
+        # read one after the other they cost a cashier both waits, read
+        # together they cost the slower one. Each arm builds its own driver
+        # because a session cannot be shared across threads — see
+        # ``in_parallel``; the session cache means the second instance still
+        # logs in nowhere.
+        offers, profile = in_parallel(
+            [
+                # On the driver that just did the lookup, so this rides the
+                # connection that is already open and warm rather than paying
+                # another TLS handshake for the same host.
+                lambda: driver.offers(resolved_card_no, resolved=lookup.card),
+                # The detail modal carries what the list row does not — the
+                # device, the monthly price, and this subscriber's lifetime
+                # with the provider. Its own driver, because the one above is
+                # busy on the same socket.
+                lambda: provider_for(account).subscriber_profile(
+                    resolved_card_no, resolved=lookup.card
+                ),
+            ]
+        )
         # Teach Shop Settings what there is to price. The ladder is per-card,
-        # so a real lookup is the only place this catalog can come from.
+        # so a real lookup is the only place this catalog can come from. Back
+        # on the request's own thread: the workers above touch no database.
         record_seen_offers(account, offers.options)
-        # The detail modal carries what the list row does not — the device,
-        # the monthly price, and this subscriber's lifetime with the provider.
-        profile = driver.subscriber_profile(resolved_card_no, resolved=lookup.card)
         subscriber = record_subscriber(
             account, profile.profile if profile.ok else None, card=lookup.card
         )

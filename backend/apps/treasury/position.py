@@ -70,8 +70,9 @@ COMPONENT_CONSIGNOR_PAYOUT = "consignor_payout"
 # float_ledger holds the definition; this module only places it).
 COMPONENT_INTEGRATION_DRAW = "integration_draw"
 
-# Which payment methods land in which kind of account. Every derived flow is
-# routed by method, because no money row carries an account of its own yet.
+# Which payment methods land in which kind of account. Method decides the
+# *kind* of account; ``money_account`` — when a row carries one — decides WHICH
+# account of that kind. See ``bank_account_filter``.
 CASH_METHODS = ("cash",)
 BANK_METHODS = ("card", "transfer", "bank_transfer")
 
@@ -160,21 +161,61 @@ def _cash_components(*, start, end):
     ]
 
 
-def _bank_components(*, start, end):
-    """The money that moves through a bank account."""
+def bank_account_filter(account, *, is_default, field="money_account"):
+    """Which of a table's rows belong to one bank account.
+
+    Two clauses, and the second is the whole compatibility story:
+
+    * a row **tagged** with this account is this account's, always;
+    * an **untagged** row is the default account's — because that is precisely
+      where it went before rows could be tagged at all. A shop with one bank
+      account tags nothing, its one account is the default, and every figure on
+      the screen is the number it was yesterday.
+
+    Shared by the balance (``position``) and the drill-down (``movements``) so
+    a total and the rows behind it can never disagree about ownership.
+    """
+    owned = Q(**{field: account.pk})
+    if is_default:
+        owned |= Q(**{f"{field}__isnull": True})
+    return owned
+
+
+def _bank_components(*, start, end, account, is_default):
+    """The money that moves through one bank account.
+
+    Sales, supplier payments and expenses are attributed per account. Consignor
+    payouts and the processor's commission are not: those rows carry no account
+    of their own, so they stay with the default — visibly, as their own named
+    components, which is the same way payroll's cash assumption is shown rather
+    than hidden.
+    """
     start_dt, end_dt = day_range_start(start), day_range_end(end)
+    owned = bank_account_filter(account, is_default=is_default)
 
     card_and_transfer = Payment.objects.filter(
+        owned,
         method__in=[Payment.Method.CARD, Payment.Method.TRANSFER],
         paid_at__gte=start_dt,
         paid_at__lt=end_dt,
     )
-    sales = _sum(card_and_transfer)
-    # The processor keeps its fee, so the shop banks the payment net of it.
-    # Refund rows carry a negative commission, so this nets too.
-    commission = _sum(card_and_transfer, "commission_amount")
+    # One pass for both figures: the processor keeps its fee, so the shop banks
+    # the payment net of it. Refund rows carry a negative commission, so this
+    # nets too.
+    totals = card_and_transfer.aggregate(
+        sales=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY_FIELD),
+        commission=Coalesce(
+            Sum("commission_amount"), Value(ZERO), output_field=MONEY_FIELD
+        ),
+    )
+    sales = totals["sales"] or ZERO
+    commission = totals["commission"] or ZERO
+    suppliers = _supplier_outflow(
+        BANK_METHODS, start_dt, end_dt, account_filter=owned
+    )
     expenses = _sum(
         Expense.objects.live().filter(
+            owned,
             payment_method__in=[
                 Expense.PaymentMethod.CARD,
                 Expense.PaymentMethod.TRANSFER,
@@ -183,16 +224,22 @@ def _bank_components(*, start, end):
             spent_at__lte=end,
         )
     )
-    suppliers = _supplier_outflow(BANK_METHODS, start_dt, end_dt)
-    consignors = _consignor_outflow("bank", start_dt, end_dt)
 
-    return [
+    components = [
         _component(COMPONENT_SALES, sales, direction="in"),
         _component(COMPONENT_COMMISSION, -commission, direction="out"),
-        _component(COMPONENT_EXPENSES, -expenses, direction="out"),
         _component(COMPONENT_SUPPLIERS, -suppliers, direction="out"),
-        _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out"),
+        _component(COMPONENT_EXPENSES, -expenses, direction="out"),
     ]
+    if is_default:
+        # Still untagged by nature: a consignor payout names the owner of the
+        # goods, not a bank, so it stays with the account untagged money falls
+        # back to.
+        consignors = _consignor_outflow("bank", start_dt, end_dt)
+        components.append(
+            _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out")
+        )
+    return components
 
 
 def _consignor_outflow(method, start_dt, end_dt):
@@ -208,16 +255,21 @@ def _consignor_outflow(method, start_dt, end_dt):
     )
 
 
-def _supplier_outflow(methods, start_dt, end_dt):
-    """Money paid to suppliers by the given methods."""
+def _supplier_outflow(methods, start_dt, end_dt, *, account_filter=None):
+    """Money paid to suppliers by the given methods.
+
+    ``account_filter`` narrows to one bank account's share; cash callers pass
+    nothing, because a cash pay-out's account is the drawer.
+    """
+    queryset = SupplierPayment.objects.live()
+    if account_filter is not None:
+        queryset = queryset.filter(account_filter)
     return _sum(
-        SupplierPayment.objects.live()
-        .filter(
+        queryset.filter(
             method__in=methods,
             paid_at__gte=start_dt,
             paid_at__lt=end_dt,
-        )
-        .exclude(method__in=NON_CASH_SUPPLIER_METHODS)
+        ).exclude(method__in=NON_CASH_SUPPLIER_METHODS)
     )
 
 
@@ -364,10 +416,16 @@ def account_position(
 def treasury_position(*, as_of=None):
     """Every active account's expected balance, plus the shop-wide totals.
 
-    Flat in the number of accounts: derived flows are computed once per *kind*
-    and attributed to that kind's default account (which also stops the same
-    payment being counted into two accounts), and transfers and last counts are
-    batched across every account. Adding a bank account costs nothing.
+    Cash and the shop-wide lookups are flat: the cash flows are computed once
+    for the one cash box that receives them, and transfers and last counts are
+    batched across every account in two grouped queries and one ordered pass.
+
+    Bank accounts cost two aggregates each, because each one asks its own
+    question over its own window — a second bank account opened last month must
+    not be credited with the first one's takings since its own opening date.
+    That is a handful of indexed range scans for the two or three accounts a
+    shop actually has, and the alternative (one GROUP BY for all of them) can
+    only be written by pretending they share an opening date.
     """
     as_of = as_of or timezone.localdate()
     accounts = list(MoneyAccount.objects.filter(is_active=True))
@@ -376,18 +434,27 @@ def treasury_position(*, as_of=None):
 
     defaults = _default_account_ids(accounts)
     derived = {}
-    for kind, account in defaults.items():
-        if kind == MoneyAccount.Kind.PROVIDER:
-            # A float has no untagged flows to attribute — every movement
-            # names its provider — so it is built per account, below.
-            continue
-        builder = (
-            _cash_components if kind == MoneyAccount.Kind.CASH else _bank_components
+    cash_default = defaults.get(MoneyAccount.Kind.CASH)
+    if cash_default is not None:
+        # One cash box takes every untagged cash event: a drawer is attributed
+        # by register session, not by naming an account at the till.
+        derived[cash_default.pk] = _cash_components(
+            start=cash_default.opening_at, end=as_of
         )
-        derived[account.pk] = builder(start=account.opening_at, end=as_of)
+    bank_default = defaults.get(MoneyAccount.Kind.BANK)
     for account in accounts:
         if account.kind == MoneyAccount.Kind.PROVIDER:
+            # A float has no untagged flows to attribute — every movement names
+            # its provider.
             derived[account.pk] = _provider_components(account, end=as_of)
+        elif account.kind == MoneyAccount.Kind.BANK:
+            derived[account.pk] = _bank_components(
+                start=account.opening_at,
+                end=as_of,
+                account=account,
+                is_default=bank_default is not None
+                and bank_default.pk == account.pk,
+            )
 
     # Two grouped queries and one ordered pass, whatever the account count.
     transfers = _transfer_totals(end=as_of)
@@ -453,9 +520,9 @@ def treasury_statement(*, start, end):
     closing figure is the same number ``treasury_position`` would give for the
     same day rather than a second derivation of it.
 
-    Costs one position pass for the opening balances plus one grouped pass per
-    account *kind* for the movements — flat in the number of accounts, like the
-    position it is built from.
+    Costs one position pass for the opening balances plus the same per-account
+    passes ``treasury_position`` makes: one for the cash box, two aggregates
+    per bank account.
     """
     accounts = list(MoneyAccount.objects.filter(is_active=True))
     if not accounts:
@@ -467,11 +534,19 @@ def treasury_statement(*, start, end):
     }
     defaults = _default_account_ids(accounts)
     movements = {}
-    for kind, account in defaults.items():
-        builder = (
-            _cash_components if kind == MoneyAccount.Kind.CASH else _bank_components
+    cash_default = defaults.get(MoneyAccount.Kind.CASH)
+    if cash_default is not None:
+        movements[cash_default.pk] = _cash_components(start=start, end=end)
+    bank_default = defaults.get(MoneyAccount.Kind.BANK)
+    for account in accounts:
+        if account.kind != MoneyAccount.Kind.BANK:
+            continue
+        movements[account.pk] = _bank_components(
+            start=start,
+            end=end,
+            account=account,
+            is_default=bank_default is not None and bank_default.pk == account.pk,
         )
-        movements[account.pk] = builder(start=start, end=end)
 
     incoming, outgoing = _transfer_totals(start=start, end=end)
     last_counts = _last_counts(accounts)
@@ -565,16 +640,22 @@ def expected_balance_for(account, *, as_of=None):
     as_of = as_of or timezone.localdate()
     accounts = list(MoneyAccount.objects.filter(is_active=True))
     defaults = _default_account_ids(accounts)
+    default = defaults.get(account.kind)
+    is_default = bool(default and default.pk == account.pk)
     components = None
     if account.kind == MoneyAccount.Kind.PROVIDER:
         components = _provider_components(account, end=as_of)
-    elif defaults.get(account.kind) and defaults[account.kind].pk == account.pk:
-        builder = (
-            _cash_components
-            if account.kind == MoneyAccount.Kind.CASH
-            else _bank_components
+    elif account.kind == MoneyAccount.Kind.BANK:
+        # Every bank account has derived flows now, not just the default one:
+        # the payments tagged to it are its own.
+        components = _bank_components(
+            start=account.opening_at,
+            end=as_of,
+            account=account,
+            is_default=is_default,
         )
-        components = builder(start=account.opening_at, end=as_of)
+    elif is_default:
+        components = _cash_components(start=account.opening_at, end=as_of)
     return account_position(account, as_of=as_of, components=components)[
         "expected_balance"
     ]
@@ -594,7 +675,12 @@ def record_count(*, account, counted_amount, note="", created_by=None):
 
 
 def account_is_routed(account):
-    """True when this account receives the derived flows for its kind."""
+    """True when this account receives the money events nothing has tagged.
+
+    A second bank account is not "routed" and still shows its own balance: it
+    holds the payments that named it. What this answers is narrower — where an
+    untagged card payment, a bank expense, or a consignor payout lands.
+    """
     accounts = list(MoneyAccount.objects.filter(is_active=True))
     default = _default_account_ids(accounts).get(account.kind)
     return bool(default and default.pk == account.pk)
@@ -602,6 +688,7 @@ def account_is_routed(account):
 
 __all__ = [
     "account_is_routed",
+    "bank_account_filter",
     "account_position",
     "expected_balance_for",
     "record_count",
