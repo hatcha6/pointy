@@ -324,14 +324,28 @@ class IntegrationCardView(APIView):
                 }
             )
 
+        # The identifier the customer typed and the one the line is actually
+        # KNOWN by are not always the same string — a cashier searches LNET by
+        # phone number, and the line's own identifier is a username the search
+        # merely found. From here on, use what lookup() actually resolved
+        # rather than what was typed: for HD Box the two already coincide, but
+        # for LNET, offers()/subscriber_profile() require an EXACT match on
+        # whatever they are given, and matching a phone number against a
+        # username always fails — silently emptying the offer list for
+        # exactly the search a till does most, a phone lookup, and leaving
+        # nothing there for the cashier to sell. Passing the resolved card
+        # also lets both calls skip searching all over again for a line this
+        # request already found.
+        resolved_card_no = lookup.card.card_no
+
         # Prices are quoted live and never cached — see RechargeOption.
-        offers = driver.offers(card_no)
+        offers = driver.offers(resolved_card_no, resolved=lookup.card)
         # Teach Shop Settings what there is to price. The ladder is per-card,
         # so a real lookup is the only place this catalog can come from.
         record_seen_offers(account, offers.options)
         # The detail modal carries what the list row does not — the device,
         # the monthly price, and this subscriber's lifetime with the provider.
-        profile = driver.subscriber_profile(card_no)
+        profile = driver.subscriber_profile(resolved_card_no, resolved=lookup.card)
         subscriber = record_subscriber(
             account, profile.profile if profile.ok else None, card=lookup.card
         )

@@ -9,7 +9,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
 from django.db import transaction
-from django.test import TestCase, TransactionTestCase
+from django.core.cache import cache
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from rest_framework import serializers
@@ -95,8 +96,14 @@ class _FakeSession:
         self._login_response = login_response
         self._get_responses = list(get_responses)
         self.get_calls = []
+        self.post_calls = []
+        # A real Session always has one; _login reads it on a successful
+        # login to feed the session cache (a no-op under TESTING, but the
+        # read itself must not blow up on a fake that has none).
+        self.cookies = {}
 
     def post(self, url, **kwargs):
+        self.post_calls.append((url, kwargs))
         return self._login_response
 
     def get(self, url, **kwargs):
@@ -493,6 +500,136 @@ STATUS_LOG = (
 )
 
 
+CACHED_PROVIDER_SESSIONS = override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "integrations-provider-session-reuse-tests",
+        },
+    },
+    POINTY_INTEGRATION_SESSION_CACHE_TTL=600,
+)
+
+
+@CACHED_PROVIDER_SESSIONS
+class HdBoxSessionReuseTests(TestCase):
+    """Three capability calls for one card used to mean three logins.
+
+    HD Box's own docstring names the login as the expensive step — a servlet
+    session cookie with nothing to refresh — and the field measured it at
+    2-9 seconds. ``IntegrationCardView`` calls ``lookup``, ``offers`` and
+    ``subscriber_profile`` on ONE driver instance for exactly this reason
+    (its own docstring: "three sequential provider logins is a wait a
+    cashier can feel"), but each of those methods called ``_login()`` on its
+    own with no memory of the others. These prove the fix: with the cache
+    warm, that whole chain spends the network-login POST once.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def test_one_login_serves_lookup_offers_and_profile(self):
+        card_json = (
+            '{"status":"success","total":1,"rows":[{"cardNo":"210906803499",'
+            '"status":"Active","statusId":3}]}'
+        )
+        session = _FakeSession(
+            _FakeResponse(AUTHED_PAGE),
+            [
+                _FakeResponse(card_json),   # lookup
+                _FakeResponse(RENEW_FORM),  # offers
+                _FakeResponse(DETAIL_FORM),  # subscriber_profile
+            ],
+        )
+        with patch_session(session):
+            driver = HdBoxProvider(make_account())
+            lookup = driver.lookup("210906803499")
+            self.assertTrue(lookup.ok, lookup.error_detail)
+            offers = driver.offers("210906803499")
+            self.assertTrue(offers.ok, offers.error_detail)
+            profile = driver.subscriber_profile("210906803499")
+            self.assertTrue(profile.ok, profile.error_detail)
+
+        # post() is only ever used to submit the login form — one for the
+        # whole chain, not one per capability call.
+        self.assertEqual(len(session.post_calls), 1)
+        self.assertEqual(len(session.get_calls), 3)
+
+    def test_a_second_driver_instance_reuses_the_warm_cache_too(self):
+        """Not just within one request — the next search in the shift too."""
+        session = _FakeSession(
+            _FakeResponse(AUTHED_PAGE),
+            [_FakeResponse(AUTHED_PAGE), _FakeResponse(AUTHED_PAGE)],
+        )
+        account = make_account()
+        with patch_session(session):
+            self.assertTrue(HdBoxProvider(account).probe().ok)
+            self.assertTrue(HdBoxProvider(account).probe().ok)
+        self.assertEqual(len(session.post_calls), 1)
+
+    def test_a_stale_cached_session_is_retried_once_not_reported_as_a_failure(self):
+        """The cached session died on the portal's side between two calls.
+
+        The first authenticated request after the cache hit comes back as the
+        login form — HD Box's own signature for "your session is gone" — and
+        the driver must recover by logging in for real, not hand the cashier
+        an "unauthorized" for a card that was working a minute ago.
+        """
+        account = make_account()
+        # Warm the cache with a real login.
+        warm_up = _FakeSession(_FakeResponse(AUTHED_PAGE), [_FakeResponse(AUTHED_PAGE)])
+        with patch_session(warm_up):
+            self.assertTrue(HdBoxProvider(account).probe().ok)
+
+        # The next driver picks up the cached cookie, tries it, finds it is
+        # dead (login form), and must fall back to a real login + retry.
+        card_json = (
+            '{"status":"success","total":1,"rows":[{"cardNo":"7","status":"Active"}]}'
+        )
+        stale_then_fresh = _FakeSession(
+            _FakeResponse(AUTHED_PAGE),
+            [_FakeResponse(LOGIN_PAGE), _FakeResponse(card_json)],
+        )
+        with patch_session(stale_then_fresh):
+            result = HdBoxProvider(account).lookup("7")
+
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertEqual(result.card.card_no, "7")
+        # One fresh login, spent on the retry.
+        self.assertEqual(len(stale_then_fresh.post_calls), 1)
+
+    def test_a_session_that_was_never_cached_gets_no_retry_on_expiry(self):
+        """The honest failure this app has always given, still given.
+
+        Without a cache hit there is nothing "stale" about this session — it
+        was logged in moments ago in this very call — so a login-form reply
+        here is reported exactly as it always was, with no silent extra
+        network round trip.
+        """
+        session = _FakeSession(_FakeResponse(AUTHED_PAGE), [_FakeResponse(LOGIN_PAGE)])
+        with patch_session(session):
+            result = HdBoxProvider(make_account()).probe()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNAUTHORIZED)
+        self.assertEqual(len(session.post_calls), 1)
+
+    def test_a_password_edit_is_not_served_a_replay_of_the_old_login(self):
+        """probe() exists to check a NEW password; a cache hit must not skip it."""
+        account = make_account()
+        first_login = _FakeSession(_FakeResponse(AUTHED_PAGE), [_FakeResponse(AUTHED_PAGE)])
+        with patch_session(first_login):
+            self.assertTrue(HdBoxProvider(account).probe().ok)
+
+        account.set_secret(catalog.FIELD_PASSWORD, "a-new-password")
+        account.save()
+
+        second_login = _FakeSession(_FakeResponse(AUTHED_PAGE), [_FakeResponse(AUTHED_PAGE)])
+        with patch_session(second_login):
+            self.assertTrue(HdBoxProvider(account).probe().ok)
+        # A real login, not a cache hit — proven by a real POST having gone out.
+        self.assertEqual(len(second_login.post_calls), 1)
+
+
 class HdBoxOffersTests(TestCase):
     def test_reads_the_duration_ladder_off_the_renew_form(self):
         session = _FakeSession(_FakeResponse(AUTHED_PAGE), [_FakeResponse(RENEW_FORM)])
@@ -689,6 +826,57 @@ class TillApiTests(TestCase):
             )
         self.assertEqual(resp.data["limit"], 10)
         self.assertEqual(resp.data["offset"], 0)
+
+
+class LnetCardViewTests(TestCase):
+    """The till's actual round trip: search, then price what was found.
+
+    This is what a cashier does hundreds of times a shift, and — before the
+    resolved-card fix — searching by phone number (the driver's own docstring:
+    what a till does "almost always") landed here with an empty offer list and
+    no way to sell anything, even though the line the search found was real.
+    Nothing in this file exercised the ``/card/`` endpoint for LNET at all
+    until this class, which is exactly how that shipped unnoticed.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.cashier = User.objects.create_user(username="csh-lnet", password="x")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.cashier)
+        lnet_account()
+
+    def test_a_phone_search_prices_the_line_it_found(self):
+        with patch_lnet(lnet_session()):
+            resp = self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854"
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["ok"], resp.data)
+        # The line the search found — a username, not the phone typed.
+        self.assertEqual(resp.data["card"]["card_no"], "alhussainbasheir")
+        # The whole bug: this used to come back empty for exactly this search.
+        self.assertTrue(resp.data["offers"])
+        self.assertEqual(resp.data["offers_error_code"], "")
+        self.assertTrue(resp.data["subscriber"]["subscriber_ref"])
+
+    def test_searching_by_the_exact_username_still_works(self):
+        with patch_lnet(lnet_session()):
+            resp = self.client.get(
+                "/api/integrations/lnet/card/?card_no=alhussainbasheir"
+            )
+        self.assertTrue(resp.data["ok"])
+        self.assertTrue(resp.data["offers"])
+
+    def test_several_lines_are_still_offered_as_a_choice_not_priced(self):
+        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+            resp = self.client.get("/api/integrations/lnet/card/?card_no=basheir")
+        self.assertTrue(resp.data["ok"])
+        self.assertTrue(resp.data["needs_selection"])
+        self.assertEqual(len(resp.data["candidates"]), 3)
 
 
 class SellingPriceTests(TestCase):
@@ -2612,6 +2800,8 @@ class _LnetFakeSession:
         self.raise_on = raise_on or {}
         self.get_calls = []
         self.post_calls = []
+        # See _FakeSession.cookies.
+        self.cookies = {}
 
     def _match(self, table, url):
         for fragment, value in table.items():
@@ -2726,6 +2916,115 @@ class LnetAuthTests(TestCase):
         self.assertEqual(kwargs["data"]["login"], "lnet_r67")
 
 
+class _StaleThenFreshLnetSession(_LnetFakeSession):
+    """One path answers dead-then-alive; every other path is scripted as usual.
+
+    ``_LnetFakeSession`` maps a URL fragment to a single, fixed response,
+    which cannot express "the first call to this path finds a dead session,
+    the retry after a relogin finds a live one" — exactly the sequence the
+    one-shot retry in ``_get`` exists to survive. This layers a small queue
+    over ONE path for that, and falls back to the normal fixture for
+    everything else, including the forced relogin itself.
+    """
+
+    def __init__(self, *, stale_path, stale_response, fresh_response, **kwargs):
+        super().__init__(**kwargs)
+        self._stale_path = stale_path
+        self._queue = [stale_response, fresh_response]
+
+    def get(self, url, **kwargs):
+        if self._stale_path in url and self._queue:
+            self.get_calls.append((url, kwargs))
+            return self._queue.pop(0)
+        return super().get(url, **kwargs)
+
+
+@CACHED_PROVIDER_SESSIONS
+class LnetSessionReuseTests(TestCase):
+    """LNET's login is the more expensive of the two apps drive: a GET for a
+    CSRF token, then a POST — twice the round trips HD Box's login costs, on
+    top of a search that can itself take up to three tries (see
+    ``LnetResolvedCardTests``). These prove the login half of that is spent
+    once, not once per capability call and not once per search in a shift.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def test_one_login_serves_lookup_offers_and_profile(self):
+        session = lnet_session()
+        with patch_lnet(session):
+            driver = LnetProvider(lnet_account())
+            lookup = driver.lookup("alhussainbasheir")
+            self.assertTrue(lookup.ok, lookup.error_detail)
+            offers = driver.offers("alhussainbasheir")
+            self.assertTrue(offers.ok, offers.error_detail)
+            profile = driver.subscriber_profile("alhussainbasheir")
+            self.assertTrue(profile.ok, profile.error_detail)
+
+        login_gets = [u for u, _k in session.get_calls if u.endswith("/login")]
+        login_posts = [u for u, _k in session.post_calls if u.endswith("/login")]
+        self.assertEqual(len(login_gets), 1)
+        self.assertEqual(len(login_posts), 1)
+
+    def test_a_second_driver_instance_reuses_the_warm_cache_too(self):
+        account = lnet_account()
+        with patch_lnet(lnet_session()):
+            self.assertTrue(LnetProvider(account).probe().ok)
+
+        second = lnet_session()
+        with patch_lnet(second):
+            self.assertTrue(LnetProvider(account).probe().ok)
+        # No login page GET and no login POST at all — the cached cookie was
+        # used straight away.
+        self.assertEqual([u for u, _k in second.get_calls if u.endswith("/login")], [])
+        self.assertEqual(second.post_calls, [])
+
+    def test_a_stale_cached_session_is_retried_once_not_reported_as_a_failure(self):
+        account = lnet_account()
+        with patch_lnet(lnet_session()):
+            self.assertTrue(LnetProvider(account).probe().ok)
+
+        session = _StaleThenFreshLnetSession(
+            stale_path="/admin/reports/payments",
+            stale_response=_LnetResponse(
+                LNET_LOGIN_PAGE, url="https://b/lnet-billing/public/login"
+            ),
+            fresh_response=_LnetResponse(lnet_payments_report()),
+            pages={"/login": _LnetResponse(LNET_LOGIN_PAGE)},
+            posts={"/login": _LnetResponse(LNET_HOME_PAGE)},
+        )
+        with patch_lnet(session):
+            result = LnetProvider(account).probe()
+
+        self.assertTrue(result.ok, result.error_detail)
+        login_posts = [u for u, _k in session.post_calls if u.endswith("/login")]
+        self.assertEqual(len(login_posts), 1)
+
+    def test_a_session_that_was_never_cached_gets_no_retry_on_expiry(self):
+        session = lnet_session(posts={"/login": _LnetResponse(LNET_LOGIN_PAGE)})
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).probe()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNAUTHORIZED)
+        login_posts = [u for u, _k in session.post_calls if u.endswith("/login")]
+        self.assertEqual(len(login_posts), 1)
+
+    def test_a_password_edit_is_not_served_a_replay_of_the_old_login(self):
+        account = lnet_account()
+        with patch_lnet(lnet_session()):
+            self.assertTrue(LnetProvider(account).probe().ok)
+
+        account.set_secret(catalog.FIELD_PASSWORD, "a-new-password")
+        account.save()
+
+        second = lnet_session()
+        with patch_lnet(second):
+            self.assertTrue(LnetProvider(account).probe().ok)
+        login_posts = [u for u, _k in second.post_calls if u.endswith("/login")]
+        self.assertEqual(len(login_posts), 1)
+
+
 class LnetLookupTests(TestCase):
     def test_one_match_sets_card_and_reads_every_column(self):
         with patch_lnet(lnet_session()):
@@ -2788,6 +3087,96 @@ class LnetLookupTests(TestCase):
         modes = [k["params"]["search_by"] for _u, k in session.get_calls if "params" in k]
         self.assertNotIn("mobile", modes)
         self.assertEqual(modes[0], "username")
+
+
+class LnetResolvedCardTests(TestCase):
+    """The bug behind Annaseem's "offers never show up": a search that FOUND
+    the line still failed to price it, whenever the search term was not
+    itself the exact username.
+
+    Every existing ``LnetOfferTests``/``LnetLookupTests`` fixture searches
+    for ``"alhussainbasheir"`` — the username itself — so none of them could
+    have caught this: ``offers()`` and ``subscriber_profile()`` re-search for
+    whatever they are handed and keep only an EXACT match against it, which
+    is correct when the caller already has the username and silently empty
+    whenever it does not. A till searches by phone number "almost always"
+    (the driver's own docstring), so this was not an edge case — it was
+    close to the ordinary path.
+    """
+
+    def test_offers_by_the_raw_search_term_alone_finds_nothing(self):
+        # The reproduction: a phone-shaped term finds the line (lookup works —
+        # "mobile" is tried and LNET_ONE_LINE answers, whatever the term was),
+        # but the line's real identifier is a username, not that phone number,
+        # so asking offers() for the SAME raw term fails the exact match.
+        with patch_lnet(lnet_session()):
+            driver = LnetProvider(lnet_account())
+            found = driver.lookup("0910682854")
+            self.assertTrue(found.ok)
+            self.assertEqual(found.card.card_no, "alhussainbasheir")
+
+            offers = driver.offers("0910682854")
+        self.assertFalse(offers.ok)
+        self.assertEqual(offers.error_code, ERROR_NOT_FOUND)
+        self.assertIn("0910682854", offers.error_detail)
+
+    def test_passing_the_resolved_card_finds_it(self):
+        with patch_lnet(lnet_session()):
+            driver = LnetProvider(lnet_account())
+            found = driver.lookup("0910682854")
+            offers = driver.offers("0910682854", resolved=found.card)
+        self.assertTrue(offers.ok, offers.error_detail)
+        self.assertTrue(offers.options)
+
+    def test_subscriber_profile_has_the_identical_gap_and_the_identical_fix(self):
+        with patch_lnet(lnet_session()):
+            driver = LnetProvider(lnet_account())
+            found = driver.lookup("0910682854")
+
+            broken = driver.subscriber_profile("0910682854")
+            self.assertFalse(broken.ok)
+
+            fixed = driver.subscriber_profile("0910682854", resolved=found.card)
+        self.assertTrue(fixed.ok, fixed.error_detail)
+        self.assertEqual(fixed.profile.subscriber_ref, "alhussainbasheir")
+
+    def test_the_resolved_card_skips_searching_again_entirely(self):
+        """Not just correct — the whole point is one search, not two more."""
+        session = lnet_session()
+        with patch_lnet(session):
+            driver = LnetProvider(lnet_account())
+            found = driver.lookup("0910682854")
+            searches_after_lookup = len(session.get_calls)
+            offers = driver.offers("0910682854", resolved=found.card)
+        self.assertTrue(offers.ok)
+        # offers() logs in again on its own (session reuse across calls is
+        # LnetSessionReuseTests' job, not this one) — what this proves is
+        # narrower: of the calls that follow the lookup, none is a SEARCH
+        # (the exact-match users page), only the login and the recharge form.
+        new_calls = [
+            url for url, _kwargs in session.get_calls[searches_after_lookup:]
+        ]
+        search_calls = [
+            url for url in new_calls if url.rstrip("/").endswith("/settings/users")
+        ]
+        self.assertEqual(search_calls, [])
+        self.assertTrue(
+            any("/admin/settings/users/recharge/" in url for url in new_calls),
+            new_calls,
+        )
+
+    def test_recharge_is_unaffected_it_never_receives_a_resolved_card(self):
+        """The write path keeps verifying its own exact match, always.
+
+        recharge() is reached from checkout with the card_no the customer's
+        line was ADDED TO CART under — already the resolved username, from
+        card_payload() — never from a raw search term, and it has no
+        ``resolved`` parameter to accept one. This is deliberate: unlike a
+        read, a stale or mismatched resolution here would mean spending the
+        float against the wrong line, so the write keeps doing its own
+        search-and-verify rather than trusting anything a caller hands it.
+        """
+        self.assertNotIn("resolved", lnet_module.LnetProvider.recharge.__code__.co_varnames)
 
 
 class LnetOfferTests(TestCase):

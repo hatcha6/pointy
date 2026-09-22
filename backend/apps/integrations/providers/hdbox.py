@@ -41,6 +41,7 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
+from .. import session_cache
 from ..telemetry import (
     STEP_FORM,
     STEP_LOGIN,
@@ -119,7 +120,18 @@ _ERROR_PAGE_RE = re.compile(r"We made a mistake|<title>\s*ERROR\s*</title>", re.
 class HdBoxProvider(IntegrationProvider):
     def __init__(self, account):
         super().__init__(account)
+        #: The live session every ``_authenticated_get``/``recharge`` write
+        #: uses. Set by ``_login`` — from a cached login or a real one — and
+        #: never touched anywhere else, so a mid-call relogin (see
+        #: ``_authenticated_get``) is picked up by every call that follows it
+        #: with no bookkeeping at the caller.
         self._session: requests.Session | None = None
+        #: True when ``self._session`` came from ``session_cache`` rather than
+        #: a network login just now. The one thing this flags: whether
+        #: ``_authenticated_get`` is allowed to spend a retry re-logging in if
+        #: this session turns out to be dead — a session we just verified by
+        #: using it to log in has nothing to retry.
+        self._session_from_cache = False
 
     # --- plumbing ----------------------------------------------------------
     @property
@@ -134,8 +146,26 @@ class HdBoxProvider(IntegrationProvider):
     def _url(self, path: str) -> str:
         return f"{self.account.resolved_base_url()}{path}"
 
-    def _login(self) -> tuple[requests.Session | None, str, str]:
-        """Return ``(session, error_code, error_detail)``."""
+    def _login(self, *, force: bool = False) -> tuple[requests.Session | None, str, str]:
+        """Return ``(session, error_code, error_detail)``.
+
+        Tries ``session_cache`` first unless ``force`` — a cache hit costs no
+        network call at all, which is the entire point: three capability
+        calls for one card (lookup, offers, profile) used to mean three of
+        these round trips, and now mean at most one. ``force=True`` is the
+        one-shot retry in ``_authenticated_get``, after a cached session has
+        already proven to be dead; it always logs in for real.
+        """
+        if not force:
+            cached = session_cache.load("hdbox", self.account)
+            if cached is not None:
+                session = requests.Session()
+                session.cookies.update(cached.get("cookies") or {})
+                self._session = session
+                self._session_from_cache = True
+                return session, "", ""
+
+        self._session_from_cache = False
         session = requests.Session()
         self._note(STEP_LOGIN)
         try:
@@ -155,10 +185,22 @@ class HdBoxProvider(IntegrationProvider):
         # code is 200 either way.
         if _LOGIN_FORM_RE.search(response.text or ""):
             return None, ERROR_UNAUTHORIZED, "login rejected"
+        self._session = session
+        session_cache.save("hdbox", self.account, {"cookies": dict(session.cookies)})
         return session, "", ""
 
-    def _authenticated_get(self, session: requests.Session, path: str, **kwargs):
-        """GET with the session, mapping HD Box's 200-shaped failures to codes."""
+    def _authenticated_get(self, path: str, **kwargs):
+        """GET with the current session, mapping HD Box's 200-shaped failures.
+
+        Always uses ``self._session`` — never a value a caller is holding
+        onto — so a relogin triggered by this very call is what every later
+        call in the same capability method sees too. On a cached session that
+        turns out to be dead, this spends exactly one retry: invalidate,
+        log in for real, replay this one request. A session that was already
+        a real login (``_session_from_cache`` false) gets no retry — its
+        failure is the honest answer, same as before this cache existed.
+        """
+        session = self._session
         try:
             response = session.get(self._url(path), timeout=self._timeout, **kwargs)
         except requests.RequestException as exc:
@@ -166,6 +208,12 @@ class HdBoxProvider(IntegrationProvider):
         self._observe(http_status=response.status_code)
         body = response.text or ""
         if _LOGIN_FORM_RE.search(body):
+            if self._session_from_cache:
+                session_cache.invalidate("hdbox", self.account)
+                fresh, code, detail = self._login(force=True)
+                if fresh is not None:
+                    return self._authenticated_get(path, **kwargs)
+                return None, code, detail
             return None, ERROR_UNAUTHORIZED, "session expired"
         if _ERROR_PAGE_RE.search(body):
             return None, ERROR_NOT_FOUND, "provider returned its error page"
@@ -177,7 +225,7 @@ class HdBoxProvider(IntegrationProvider):
         if session is None:
             return ProbeResult(ok=False, error_code=code, error_detail=detail)
 
-        response, code, detail = self._authenticated_get(session, HOME_PATH)
+        response, code, detail = self._authenticated_get(HOME_PATH)
         if response is None:
             return ProbeResult(ok=False, error_code=code, error_detail=detail)
 
@@ -204,7 +252,7 @@ class HdBoxProvider(IntegrationProvider):
 
         self._note(STEP_SEARCH)
         response, code, detail = self._authenticated_get(
-            session, LIST_PATH, params={"limit": 10, "offset": 0, "cardNo": card_no}
+            LIST_PATH, params={"limit": 10, "offset": 0, "cardNo": card_no}
         )
         if response is None:
             return LookupResult(ok=False, error_code=code, error_detail=detail)
@@ -277,12 +325,16 @@ class HdBoxProvider(IntegrationProvider):
             ),
         )
 
-    def offers(self, card_no: str) -> OfferResult:
+    def offers(self, card_no: str, *, resolved: CardInfo | None = None) -> OfferResult:
         """Read the renew form and quote what it is offering *right now*.
 
         This is a GET that renders a modal; it commits nothing. The prices come
         out of the form rather than a price list because the form is the only
         place the provider states them, and they move.
+
+        ``resolved`` is accepted and unused: a card number is the same string
+        whether it came from a search or from a prior lookup's own answer, so
+        there is nothing this could skip that ``card_no`` does not already say.
         """
         card_no = (card_no or "").strip()
         if not card_no.isdigit():
@@ -293,7 +345,7 @@ class HdBoxProvider(IntegrationProvider):
             return OfferResult(ok=False, error_code=code, error_detail=detail)
         self._note(STEP_FORM)
         response, code, detail = self._authenticated_get(
-            session, f"{RENEW_VIEW_PATH}{card_no}"
+            f"{RENEW_VIEW_PATH}{card_no}"
         )
         if response is None:
             return OfferResult(ok=False, error_code=code, error_detail=detail)
@@ -354,7 +406,7 @@ class HdBoxProvider(IntegrationProvider):
         if session is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
         response, code, detail = self._authenticated_get(
-            session, f"{RENEW_VIEW_PATH}{card_no}"
+            f"{RENEW_VIEW_PATH}{card_no}"
         )
         if response is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
@@ -385,8 +437,12 @@ class HdBoxProvider(IntegrationProvider):
         # step is recorded BEFORE the request: a process that dies mid-call
         # still leaves a row saying the money may have moved.
         self._note(STEP_SUBMIT)
+        # Re-read rather than trust the local ``session`` above: the form GET
+        # just above this may have silently relogged in on a dead cached
+        # session, and the money POST has to go out on whichever session is
+        # actually still alive.
         try:
-            reply = session.post(
+            reply = self._session.post(
                 self._url(RENEW_PATH),
                 data=form,
                 timeout=self._timeout,
@@ -409,7 +465,7 @@ class HdBoxProvider(IntegrationProvider):
         receipt = dict(result.receipt)
         try:
             printed, _code, _detail = self._authenticated_get(
-                session, f"{RECEIPT_VIEW_PATH}{result.reference}"
+                f"{RECEIPT_VIEW_PATH}{result.reference}"
             )
             if printed is not None:
                 receipt["printed"] = _parse_receipt(printed.text or "")
@@ -417,13 +473,17 @@ class HdBoxProvider(IntegrationProvider):
             pass
         return replace(result, receipt=receipt)
 
-    def subscriber_profile(self, card_no: str) -> ProfileResult:
+    def subscriber_profile(
+        self, card_no: str, *, resolved: CardInfo | None = None
+    ) -> ProfileResult:
         """Read the card-detail modal — richer than the list row.
 
         It carries what the list does not: the device, the monthly price, the
         activation date, and the subscriber's lifetime with the provider
         (``Buy times`` and ``Total pay``). ``Subscriber`` and ``Phone`` come
         back masked for an agency login, so identity stays Pointy's job.
+
+        ``resolved`` is accepted and unused — see ``offers``.
         """
         card_no = (card_no or "").strip()
         if not card_no.isdigit():
@@ -433,7 +493,7 @@ class HdBoxProvider(IntegrationProvider):
         if session is None:
             return ProfileResult(ok=False, error_code=code, error_detail=detail)
         response, code, detail = self._authenticated_get(
-            session, f"{DETAIL_VIEW_PATH}{card_no}"
+            f"{DETAIL_VIEW_PATH}{card_no}"
         )
         if response is None:
             return ProfileResult(ok=False, error_code=code, error_detail=detail)
@@ -474,7 +534,7 @@ class HdBoxProvider(IntegrationProvider):
         if session is None:
             return None, code, detail
         response, code, detail = self._authenticated_get(
-            session, f"{path}{card_no}", params=params
+            f"{path}{card_no}", params=params
         )
         if response is None:
             return None, code, detail

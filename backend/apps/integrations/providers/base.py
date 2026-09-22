@@ -391,12 +391,28 @@ class IntegrationProvider:
         """A page of state changes, newest first. Must never raise."""
         return HistoryResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
-    def offers(self, card_no: str) -> OfferResult:
-        """What can be bought for this card, priced as of now. Must never raise."""
+    def offers(self, card_no: str, *, resolved: "CardInfo | None" = None) -> OfferResult:
+        """What can be bought for this card, priced as of now. Must never raise.
+
+        ``resolved`` is the ``CardInfo`` a caller already holds from its own
+        ``lookup(card_no)`` a moment ago — for a provider whose search term
+        and stable identifier are the same thing (HD Box's card number),
+        there is nothing here to save. For one where they are not (LNET's
+        phone number vs. its username), passing it is what lets this skip
+        searching all over again for a line the caller already found, and
+        matters more than that: without it, a driver that insists on an
+        *exact* match against ``card_no`` finds nothing whenever the caller
+        searched by anything other than the exact identifier — which, for a
+        till, is most of the time.
+        """
         return OfferResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
-    def subscriber_profile(self, card_no: str):
-        """Everything the provider knows about this subscriber. Never raises."""
+    def subscriber_profile(self, card_no: str, *, resolved: "CardInfo | None" = None):
+        """Everything the provider knows about this subscriber. Never raises.
+
+        See ``offers`` for what ``resolved`` is and why a caller that already
+        resolved the line should always pass it.
+        """
         return ProfileResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
     def recharge(self, card_no: str, option_code: str, *, expected_cost=None):

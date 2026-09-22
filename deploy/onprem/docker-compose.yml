@@ -45,6 +45,12 @@ x-backend-environment: &backend-environment
   POINTY_SHOP_SETTINGS_CACHE_TTL: "${POINTY_SHOP_SETTINGS_CACHE_TTL:-60}"
   POINTY_PERMISSION_CACHE_TTL: "${POINTY_PERMISSION_CACHE_TTL:-300}"
   POINTY_DISCOUNT_PREVIEW_CACHE_TTL: "${POINTY_DISCOUNT_PREVIEW_CACHE_TTL:-15}"
+  # How long a HD Box/LNET login is trusted before the driver logs in again
+  # unprompted — the driver itself drops a session the instant it proves
+  # dead server-side, so this only bounds ordinary portal-side expiry, never
+  # correctness. 0 disables (every capability call logs in for real, as
+  # before this cache existed).
+  POINTY_INTEGRATION_SESSION_CACHE_TTL: "${POINTY_INTEGRATION_SESSION_CACHE_TTL:-600}"
   POINTY_CATALOG_CACHE_ENABLED: "${POINTY_CATALOG_CACHE_ENABLED:-true}"
   POINTY_PRICE_LOOKUP_CACHE_TTL: "${POINTY_PRICE_LOOKUP_CACHE_TTL:-30}"
   # The "what changed" counters every client revalidates on: an admin's edit

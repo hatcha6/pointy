@@ -66,6 +66,7 @@ import requests
 
 from apps.core.timeutils import business_timezone
 
+from .. import session_cache
 from ..catalog import SETTING_COMMISSION_PERCENT, SETTING_DENOMINATIONS
 
 from ..telemetry import (
@@ -190,6 +191,16 @@ class LnetProvider(IntegrationProvider):
 
     def __init__(self, account):
         super().__init__(account)
+        #: The live session every ``_get``/write uses. Set by ``_login`` —
+        #: from a cached login or a real one — and never touched anywhere
+        #: else, so a mid-call relogin (see ``_get``) is picked up by every
+        #: call that follows it with no bookkeeping at the caller.
+        self._session: requests.Session | None = None
+        #: True when ``self._session`` came from ``session_cache`` rather
+        #: than the two-round-trip login page + POST just now. The one thing
+        #: this flags: whether ``_get`` is allowed to spend a retry
+        #: re-logging in if this session turns out to be dead.
+        self._session_from_cache = False
 
     # --- configuration -----------------------------------------------------
     @property
@@ -252,8 +263,33 @@ class LnetProvider(IntegrationProvider):
         )
 
     # --- plumbing ----------------------------------------------------------
-    def _login(self) -> tuple[requests.Session | None, str, str, str]:
-        """Return ``(session, csrf_token, error_code, error_detail)``."""
+    def _login(self, *, force: bool = False) -> tuple[requests.Session | None, str, str, str]:
+        """Return ``(session, csrf_token, error_code, error_detail)``.
+
+        Tries ``session_cache`` first unless ``force`` — a cache hit skips
+        BOTH network calls this login otherwise costs (the login page for a
+        token, then the POST), which is the more expensive of the two logins
+        this app drives. A card lookup used to mean a login plus up to three
+        searches tried again for offers, then again for the profile; now the
+        login happens at most once. ``force=True`` is the one-shot retry in
+        ``_get``, after a cached session has already proven to be dead.
+
+        The returned token is a fallback only. Every write re-reads its own
+        page's token before using it (see ``recharge``) — a cache hit simply
+        has none of its own to offer, which is exactly as safe as the login
+        page's token already was, since neither is ever the one a write
+        actually sends.
+        """
+        if not force:
+            cached = session_cache.load("lnet", self.account)
+            if cached is not None:
+                session = requests.Session()
+                session.cookies.update(cached.get("cookies") or {})
+                self._session = session
+                self._session_from_cache = True
+                return session, cached.get("token") or "", "", ""
+
+        self._session_from_cache = False
         session = requests.Session()
         self._note(STEP_LOGIN_PAGE)
         try:
@@ -297,10 +333,26 @@ class LnetProvider(IntegrationProvider):
         if _LOGIN_FORM_RE.search(body) or reply.url.rstrip("/").endswith("/login"):
             return None, "", ERROR_UNAUTHORIZED, "login rejected"
         # Prefer a token from the page we actually landed on.
-        return session, _csrf_token(body) or token, "", ""
+        landed_token = _csrf_token(body) or token
+        self._session = session
+        session_cache.save(
+            "lnet", self.account, {"cookies": dict(session.cookies), "token": landed_token}
+        )
+        return session, landed_token, "", ""
 
-    def _get(self, session: requests.Session, path: str, **kwargs):
-        """GET with the session, mapping the portal's failure shapes to codes."""
+    def _get(self, path: str, **kwargs):
+        """GET with the current session, mapping the portal's failure shapes.
+
+        Always uses ``self._session`` — never a value a caller is holding
+        onto — so a relogin triggered by this very call is what every later
+        call in the same capability method sees too, including the recursive
+        searches inside ``_find_lines``. On a cached session that turns out
+        to be dead, this spends exactly one retry: invalidate, log in for
+        real, replay this one request. The WAF's 403 is a different problem
+        (a blocked network, not a dead session) and is never retried — a
+        fresh login from the same blocked network would just 403 again.
+        """
+        session = self._session
         try:
             response = session.get(self._url(path), timeout=self._timeout, **kwargs)
         except requests.RequestException as exc:
@@ -313,14 +365,19 @@ class LnetProvider(IntegrationProvider):
         body = response.text or ""
         # Being bounced to the login form means the session died mid-flight.
         if _LOGIN_FORM_RE.search(body) and _is_login_url(response.url):
+            if self._session_from_cache:
+                session_cache.invalidate("lnet", self.account)
+                fresh, _token, code, detail = self._login(force=True)
+                if fresh is not None:
+                    return self._get(path, **kwargs)
+                return None, code, detail
             return None, ERROR_UNAUTHORIZED, "session expired"
         return response, "", ""
 
-    def _search(self, session, token: str, term: str, mode: str):
+    def _search(self, token: str, term: str, mode: str):
         """One search, as the portal's own filter form issues it."""
         self._note(STEP_SEARCH)
         response, code, detail = self._get(
-            session,
             USERS_PATH,
             params={
                 "search_by": mode,
@@ -338,7 +395,7 @@ class LnetProvider(IntegrationProvider):
         self._observe(shape_ok=_has_user_table(body))
         return _parse_user_rows(body), "", ""
 
-    def _find_lines(self, session, token: str, term: str):
+    def _find_lines(self, token: str, term: str):
         """Every line matching ``term``, trying each way the portal can search.
 
         Stops at the first mode that matches anything rather than merging: a
@@ -350,20 +407,20 @@ class LnetProvider(IntegrationProvider):
         if not term:
             return [], ERROR_NOT_FOUND, "no search term"
         for mode in _search_modes_for(term):
-            rows, code, detail = self._search(session, token, term, mode)
+            rows, code, detail = self._search(token, term, mode)
             if rows is None:
                 return None, code, detail
             if rows:
                 return rows, "", ""
         return [], ERROR_NOT_FOUND, "no line matched"
 
-    def _resolve(self, session, token: str, username: str):
+    def _resolve(self, token: str, username: str):
         """The one line called ``username``, as an exact match.
 
         Search is a substring match, so ``ali`` finds ``ali.hassan`` too. A
         write path must never act on a near miss.
         """
-        rows, code, detail = self._find_lines(session, token, username)
+        rows, code, detail = self._find_lines(token, username)
         if rows is None:
             return None, code, detail
         wanted = (username or "").strip().casefold()
@@ -373,6 +430,22 @@ class LnetProvider(IntegrationProvider):
         if len(exact) > 1:  # pragma: no cover - usernames are the login
             return None, ERROR_UNEXPECTED, f"{len(exact)} lines called {username!r}"
         return exact[0], "", ""
+
+    def _resolve_or_use(self, token: str, card_no: str, resolved: "CardInfo | None"):
+        """``resolved`` if the caller already has it; otherwise a real search.
+
+        The fast path a caller earns by passing the ``CardInfo`` its own
+        ``lookup()`` already returned: no search at all, so ``offers()`` and
+        ``subscriber_profile()`` called right after a ``lookup()`` cost one
+        login and one search between the two of them, not a login and a
+        search EACH. Falls back to ``_resolve`` — the exact-match search —
+        for any caller that has only a bare identifier, which is what keeps
+        calling these methods standalone (as every existing test does)
+        working exactly as it always has.
+        """
+        if resolved is not None:
+            return resolved, "", ""
+        return self._resolve(token, card_no)
 
     # --- capabilities ------------------------------------------------------
     def probe(self) -> ProbeResult:
@@ -389,7 +462,7 @@ class LnetProvider(IntegrationProvider):
         if session is None:
             return ProbeResult(ok=False, error_code=code, error_detail=detail)
 
-        response, code, detail = self._get(session, PAYMENTS_PATH)
+        response, code, detail = self._get(PAYMENTS_PATH)
         if response is None:
             # Credentials are good — we got past the login — so a report we
             # could not read is a missing balance, not a failed probe.
@@ -414,7 +487,7 @@ class LnetProvider(IntegrationProvider):
         if session is None:
             return LookupResult(ok=False, error_code=code, error_detail=detail)
 
-        rows, code, detail = self._find_lines(session, token, card_no)
+        rows, code, detail = self._find_lines(token, card_no)
         if rows is None:
             return LookupResult(ok=False, error_code=code, error_detail=detail)
         if not rows:
@@ -427,18 +500,23 @@ class LnetProvider(IntegrationProvider):
             candidates=tuple(rows),
         )
 
-    def subscriber_profile(self, card_no: str) -> ProfileResult:
+    def subscriber_profile(
+        self, card_no: str, *, resolved: CardInfo | None = None
+    ) -> ProfileResult:
         """What the list row says about one line.
 
         LNET does not mask the way HD Box does, but it also does not offer a
         detail view an agency can read, so the row *is* the profile: package,
         status, the service window and the money already sitting on the line.
+
+        ``resolved`` is the line a caller already found — see ``offers`` for
+        why passing it is not just an optimisation.
         """
         session, token, code, detail = self._login()
         if session is None:
             return ProfileResult(ok=False, error_code=code, error_detail=detail)
 
-        row, code, detail = self._resolve(session, token, card_no)
+        row, code, detail = self._resolve_or_use(token, card_no, resolved)
         if row is None:
             return ProfileResult(ok=False, error_code=code, error_detail=detail)
 
@@ -455,19 +533,29 @@ class LnetProvider(IntegrationProvider):
             ),
         )
 
-    def offers(self, card_no: str) -> OfferResult:
+    def offers(self, card_no: str, *, resolved: CardInfo | None = None) -> OfferResult:
         """What this line can be sold, priced as of now.
 
         The options are **shortcuts, not a menu**: LNET takes any amount, so
         ``open_amount`` is the real contract and the denominations exist so a
         cashier can tap 45 instead of typing it. Each carries its face value as
         the retail floor, because stored value sold below face loses money.
+
+        ``resolved`` is the line a caller already found — typically the very
+        ``CardInfo`` its own ``lookup(card_no)`` just answered with, a moment
+        earlier in the same request. Passing it is not merely faster, it is
+        what makes this find anything at all when the till searched by a
+        phone number or a contract number rather than the exact username:
+        without it, this re-searches for ``card_no`` and keeps only an EXACT
+        match against it — correct when ``card_no`` already is the username,
+        wrong whenever it is the phone number that found it, which is most
+        every search a cashier actually types.
         """
         session, token, code, detail = self._login()
         if session is None:
             return OfferResult(ok=False, error_code=code, error_detail=detail)
 
-        row, code, detail = self._resolve(session, token, card_no)
+        row, code, detail = self._resolve_or_use(token, card_no, resolved)
         if row is None:
             return OfferResult(ok=False, error_code=code, error_detail=detail)
 
@@ -475,9 +563,7 @@ class LnetProvider(IntegrationProvider):
         # topped up at all". Reading it here means a cashier learns that before
         # the customer has paid, rather than at the write.
         self._note(STEP_FORM)
-        response, code, detail = self._get(
-            session, f"{RECHARGE_VIEW_PATH}{row.provider_id}"
-        )
+        response, code, detail = self._get(f"{RECHARGE_VIEW_PATH}{row.provider_id}")
         if response is None:
             return OfferResult(ok=False, error_code=code, error_detail=detail)
         if not _recharge_form_user_id(response.text or ""):
@@ -522,7 +608,7 @@ class LnetProvider(IntegrationProvider):
         if session is None:
             return HistoryResult(ok=False, error_code=code, error_detail=detail)
 
-        response, code, detail = self._get(session, PAYMENTS_PATH)
+        response, code, detail = self._get(PAYMENTS_PATH)
         if response is None:
             return HistoryResult(ok=False, error_code=code, error_detail=detail)
 
@@ -594,16 +680,14 @@ class LnetProvider(IntegrationProvider):
         if session is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
 
-        row, code, detail = self._resolve(session, token, card_no)
+        row, code, detail = self._resolve(token, card_no)
         if row is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
 
         # Take the token from the recharge form itself rather than the login
         # page: it is the page whose POST we are about to imitate.
         self._note(STEP_FORM)
-        response, code, detail = self._get(
-            session, f"{RECHARGE_VIEW_PATH}{row.provider_id}"
-        )
+        response, code, detail = self._get(f"{RECHARGE_VIEW_PATH}{row.provider_id}")
         if response is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
         form_body = response.text or ""
@@ -617,6 +701,12 @@ class LnetProvider(IntegrationProvider):
             )
         token = _csrf_token(form_body) or token
         referer = self._url(f"{RECHARGE_VIEW_PATH}{user_id}")
+        # Re-read rather than trust the local ``session`` from ``_login()``
+        # above: the search and the form fetch that got us here may have
+        # silently relogged in on a dead cached session (see ``_get``), and
+        # both writes below have to go out on whichever session is actually
+        # still alive.
+        session = self._session
 
         # --- step one: create the payment ---------------------------------
         # Past this line the customer may already have been credited, whatever

@@ -1094,6 +1094,18 @@ POINTY_MARKUP_CACHE_TTL = (
 POINTY_ACTIVE_PRODUCT_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_ACTIVE_PRODUCT_CACHE_TTL", default=60)
 )
+# One HD Box/LNET login, cached per provider account (apps.integrations.
+# session_cache) so a card lookup, its offers and its profile share ONE
+# login instead of three, and a shift's later searches need none at all — a
+# provider login is a 2-9s round trip in the field, not a query. The driver
+# itself invalidates a cached session the instant it turns out to be dead
+# server-side, so this TTL only bounds ordinary portal-side expiry, never
+# correctness. 0 disables; forced off under tests, which build a fresh
+# IntegrationAccount (and a fresh fake session) per test and would otherwise
+# leak one test's cached cookies into the next.
+POINTY_INTEGRATION_SESSION_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_INTEGRATION_SESSION_CACHE_TTL", default=600)
+)
 # Catalog version stamp (apps.catalog.cache): drives the list-endpoint ETags
 # (304 on unchanged polls) and invalidates the price-checker lookup cache.
 POINTY_CATALOG_CACHE_ENABLED = (
