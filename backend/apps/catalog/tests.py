@@ -52,7 +52,7 @@ class ProductVariantModelTests(TestCase):
 
         variant = product.ensure_default_variant()
         self.assertEqual(product.variants.count(), 1)
-        self.assertEqual(variant.sku, f"P{product.pk:06d}")
+        self.assertEqual(variant.sku, "1000")
         self.assertEqual(variant.unit_price, Decimal("0.00"))
 
     def test_variant_display_names_fallback_to_product_name(self):

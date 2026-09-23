@@ -390,6 +390,21 @@ class CatalogApiClient {
     );
   }
 
+  /// The SKU the server will give the next new variant — the number the
+  /// product and variant forms fill in, so what the owner sees is what gets
+  /// saved. Nothing is reserved by asking; every number after it is free too,
+  /// so a form numbering several new variants counts up from this one.
+  Future<String> fetchNextVariantSku() async {
+    final response = await _session.get('product-variants/next-sku/');
+    _session.ensureSuccess(response, 'Next SKU request failed with status');
+    final body = _session.decodedBody(response);
+    final sku = body is Map ? body['sku'] : null;
+    if (sku is! String || sku.isEmpty) {
+      throw const FormatException('Next SKU response carried no sku');
+    }
+    return sku;
+  }
+
   Future<ProductVariantPage> fetchVariantsForProduct(
     int productId, {
     int page = 1,

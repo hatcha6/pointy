@@ -20,6 +20,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/variant_generation.dart';
+import 'auto_sku_filler.dart';
 import 'pricing_currency_field.dart';
 import 'product_form_fields.dart';
 import 'modifier_group_selector.dart';
@@ -49,9 +50,9 @@ class ProductForm extends StatefulWidget {
   /// product's default variant to the current purchase order.
   final void Function(Product product)? onCreated;
 
-  /// Prefills the default variant's barcode and SKU — used when the form is
-  /// opened for a scanned code that matched no existing product, so the created
-  /// product resolves on the next scan.
+  /// Prefills the default variant's barcode — used when the form is opened for
+  /// a scanned code that matched no existing product, so the created product
+  /// resolves on the next scan. The SKU is numbered like any new product's.
   final String? initialBarcode;
 
   /// Whether to offer an opening quantity and cost for stock the shop already
@@ -76,6 +77,10 @@ class _ProductFormState extends State<ProductForm> {
   final _descriptionController = TextEditingController();
   final _variantNameController = TextEditingController();
   final _skuController = TextEditingController();
+  // Its own controller, not the SKU's: a prefix is a scheme the shop types
+  // (SHIRT → SHIRT-RED), and the number filled into the single SKU field is
+  // not one — carried over, it would code every variant "1042-RED".
+  final _skuPrefixController = TextEditingController();
   final _barcodeController = TextEditingController();
   final _priceController = TextEditingController();
   final _openingQuantityController = TextEditingController();
@@ -120,9 +125,9 @@ class _ProductFormState extends State<ProductForm> {
   var _variantOptionsLoadFailed = false;
   var _step = 0;
   String? _generationErrorKey;
-  var _lastSkuPrefix = '';
   var _lastBasePrice = '';
   late final VariantIdentityWatcher _identity;
+  late final AutoSkuFiller _autoSku;
 
   /// Per-generated-row identity errors, keyed by combination signature then
   /// field. Generated rows are not watched live (one product can generate
@@ -173,12 +178,10 @@ class _ProductFormState extends State<ProductForm> {
     final initialBarcode = widget.initialBarcode?.trim() ?? '';
     if (initialBarcode.isNotEmpty) {
       _barcodeController.text = initialBarcode;
-      _skuController.text = initialBarcode;
     }
-    _lastSkuPrefix = _skuController.text;
     _lastBasePrice = _priceController.text;
     _nameController.addListener(_refreshImageSearchSeed);
-    _skuController.addListener(_syncGeneratedSkusFromPrefix);
+    _skuPrefixController.addListener(_fillGeneratedSkus);
     _priceController.addListener(_syncGeneratedPricesFromBase);
     // Redraws the conversion preview as the price is typed.
     _priceController.addListener(_refreshPricePreview);
@@ -193,6 +196,8 @@ class _ProductFormState extends State<ProductForm> {
       skuController: _skuController,
       barcodeController: _barcodeController,
     );
+    _autoSku = AutoSkuFiller(widget.viewModel.catalogRepository);
+    unawaited(_refreshAutoSkus());
     _loadVariantOptions();
     _loadModifierGroups();
     _loadUnits();
@@ -228,8 +233,9 @@ class _ProductFormState extends State<ProductForm> {
     _nameController.dispose();
     _descriptionController.dispose();
     _variantNameController.dispose();
-    _skuController.removeListener(_syncGeneratedSkusFromPrefix);
     _skuController.dispose();
+    _skuPrefixController.removeListener(_fillGeneratedSkus);
+    _skuPrefixController.dispose();
     _barcodeController.dispose();
     _priceController.removeListener(_syncGeneratedPricesFromBase);
     _priceController.removeListener(_refreshPricePreview);
@@ -269,7 +275,10 @@ class _ProductFormState extends State<ProductForm> {
       _nameController.text.trim().isNotEmpty ||
       _descriptionController.text.trim().isNotEmpty ||
       _variantNameController.text.trim().isNotEmpty ||
-      _skuController.text.trim().isNotEmpty ||
+      // The number the form filled in is not the user's work.
+      (_skuController.text.trim().isNotEmpty &&
+          !_autoSku.holdsFilledValue(_skuController)) ||
+      _skuPrefixController.text.trim().isNotEmpty ||
       _barcodeController.text.trim().isNotEmpty ||
       _priceController.text.trim().isNotEmpty ||
       _selectedImage != null ||
@@ -451,7 +460,7 @@ class _ProductFormState extends State<ProductForm> {
                                       children: [
                                         if (_usesGeneratedVariants)
                                           _GeneratedVariantFormStep(
-                                            skuController: _skuController,
+                                            skuController: _skuPrefixController,
                                             priceController: _priceController,
                                             selectedOptions:
                                                 _selectedVariantOptions,
@@ -565,6 +574,10 @@ class _ProductFormState extends State<ProductForm> {
                                             skuState: _identity.skuState,
                                             barcodeState:
                                                 _identity.barcodeState,
+                                            skuIsAutomatic: _autoSku
+                                                .holdsFilledValue(
+                                                  _skuController,
+                                                ),
                                             skuFieldKey: _skuFieldKey,
                                             barcodeFieldKey: _barcodeFieldKey,
                                           ),
@@ -695,6 +708,12 @@ class _ProductFormState extends State<ProductForm> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
+    // The number filled in when the form opened may have gone to another till
+    // since; an untouched field moves to the next free one before it is sent.
+    await _refreshAutoSkus();
+    if (!mounted) {
+      return;
+    }
     // Settle a code typed in the last few hundred milliseconds before the form
     // decides whether it is valid.
     await _identity.refresh();
@@ -995,6 +1014,7 @@ class _ProductFormState extends State<ProductForm> {
     }
     for (final entry in [..._generatedSkuControllers.entries]) {
       if (!signatures.contains(entry.key)) {
+        _autoSku.forget(entry.value);
         entry.value.dispose();
         _generatedSkuControllers.remove(entry.key);
       }
@@ -1039,7 +1059,6 @@ class _ProductFormState extends State<ProductForm> {
         () => _watchedGeneratedController(
           combination.signature,
           CatalogIdentityField.sku,
-          text: combination.skuFromBase(_skuController.text),
         ),
       );
       _generatedBarcodeControllers.putIfAbsent(
@@ -1075,26 +1094,42 @@ class _ProductFormState extends State<ProductForm> {
     } else if (!signatures.contains(_defaultGeneratedSignature)) {
       _defaultGeneratedSignature = combinations.first.signature;
     }
+    _fillGeneratedSkus();
   }
 
-  void _syncGeneratedSkusFromPrefix() {
-    final nextPrefix = _skuController.text;
-    final previousPrefix = _lastSkuPrefix;
-    if (nextPrefix == previousPrefix) {
+  /// Asks which number the next new variant gets, and writes it into every SKU
+  /// field the user has not typed in.
+  Future<void> _refreshAutoSkus() async {
+    await _autoSku.refresh();
+    if (!mounted) {
       return;
     }
-    for (final combination in _generatedCombinations) {
+    _autoSku.fill(
+      _skuController,
+      _autoSku.numberAt(0),
+      barcode: _barcodeController,
+    );
+    _fillGeneratedSkus();
+  }
+
+  /// Codes every generated row the user has not typed a SKU into: from the
+  /// prefix when the shop keeps a scheme (SHIRT-RED), otherwise with a number
+  /// of its own, counting up from the next one.
+  void _fillGeneratedSkus() {
+    final prefix = _skuPrefixController.text;
+    for (final (index, combination) in _generatedCombinations.indexed) {
       final controller = _generatedSkuControllers[combination.signature];
       if (controller == null) {
         continue;
       }
-      final previousAutoSku = combination.skuFromBase(previousPrefix);
-      if (controller.text.trim().isEmpty ||
-          controller.text == previousAutoSku) {
-        controller.text = combination.skuFromBase(nextPrefix);
-      }
+      _autoSku.fill(
+        controller,
+        prefix.trim().isEmpty
+            ? _autoSku.numberAt(index)
+            : combination.skuFromBase(prefix),
+        barcode: _generatedBarcodeControllers[combination.signature],
+      );
     }
-    _lastSkuPrefix = nextPrefix;
   }
 
   void _syncGeneratedPricesFromBase() {

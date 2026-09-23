@@ -62,10 +62,16 @@ pooler and migrations are not:
     wsl -d Pointy -u root --cd /opt/pointy -- grep -E '^POINTY_DATABASE(_DIRECT)?_URL=' .env
 
 **7. The LAN bridge BINDS.** `netsh` lying about this is the classic silent
-failure, so check the listener, not the rule:
+failure, so check the listener, not the rule. The bootstrap checks it too: its
+last line in the log must say the bridge is *answering*, and anything else names
+the hop that failed.
 
     netsh interface portproxy show v4tov4
     Get-NetTCPConnection -LocalPort 8000 -State Listen
+    Get-Content $env:ProgramData\Pointy\logs\bootstrap.log -Tail 20
+
+`wslrelay` must NOT appear as a listener on 8000 or 80. If it does, WSL's
+localhost forwarding still holds the port, so restart Windows once.
 
 **8. A till can actually reach it.** From a DIFFERENT machine on the same LAN —
 not the server, whose loopback would pass regardless:
@@ -87,6 +93,8 @@ the watchdog — the difference between an install and a demo.
 |---|---|
 | PowerShell will not parse the script | confirm it still has a BOM: `Format-Hex .\wsl\bootstrap-wsl.ps1 \| Select -First 1` — first bytes `EF BB BF` |
 | WSL install "fails" instantly | re-run it; if it now passes, the retry window was too short — raise `$attempts` |
-| stack up, till cannot connect | step 7, then the firewall rule, then `-Boot` to re-point the bridge |
+| stack up, till cannot connect | read `bootstrap.log`: it names the failed hop and who holds the port. Then step 7, the firewall rule, then `-Boot` to re-point the bridge |
+| the server's own till works, no other device finds the server | WSL's localhost forwarding took the ports before the LAN forward. Restart Windows once (or re-run the installer), then check step 7 again |
+| the companion QR points at `127.0.0.1` | the till predates the fix that swaps loopback for the PC's LAN address; update the till app |
 | backend cannot reach the database | put it back on direct Postgres: `sed -i 's\|@pgbouncer:5432\|@postgres:5432\|' .env && docker compose --env-file .env -f docker-compose.yml up -d backend` |
 | backend dies at a fixed interval | already fixed at install; confirm with `grep ASGI_MAX_REQUESTS .env` (must be 0) |

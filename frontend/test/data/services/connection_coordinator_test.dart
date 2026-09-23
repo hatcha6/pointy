@@ -585,6 +585,47 @@ void main() {
     },
   );
 
+  test(
+    'connectManually waits for a server the discovery race would give up on',
+    () async {
+      // A typed address races nothing: the operator is waiting on this one
+      // answer. On Windows the server answers from behind a port forward and a
+      // VM, and a slow first answer used to read as "no server here".
+      final storage = MemoryConnectionProfileStorage();
+      final client = MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        if (request.url.toString() ==
+            'http://192.168.1.50:8000/api/discovery/service/') {
+          return _jsonResponse(
+            _backendPayload(
+              installationId: 'installation-9',
+              apiBaseUrl: 'http://192.168.1.50:8000/api',
+            ),
+          );
+        }
+        return http.Response('', 404);
+      });
+      final service = PosApiService(
+        client: client,
+        baseUrl: 'http://127.0.0.1:8000/api',
+      );
+      final coordinator = ConnectionCoordinator(
+        service: service,
+        discovery: BackendDiscoveryService(
+          client: client,
+          defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
+          udpDiscovery: _noUdp,
+          probeTimeout: const Duration(milliseconds: 50),
+        ),
+        storage: storage,
+      );
+
+      expect(await coordinator.connectManually('192.168.1.50'), isTrue);
+      expect(service.baseUrl, 'http://192.168.1.50:8000/api');
+      coordinator.dispose();
+    },
+  );
+
   test('rediscover is single-flight', () async {
     final storage = MemoryConnectionProfileStorage();
     final client = MockClient((request) async {

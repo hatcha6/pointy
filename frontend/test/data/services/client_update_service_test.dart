@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io' show InternetAddress;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -142,7 +141,8 @@ void main() {
         readRunningVersion: () async => '1.0.0',
         platform: () => ClientPlatform.android,
         localAddresses: () async => [
-          for (final address in localAddresses) InternetAddress(address),
+          for (final address in localAddresses)
+            (interfaceName: 'Ethernet', address: address),
         ],
       );
     }

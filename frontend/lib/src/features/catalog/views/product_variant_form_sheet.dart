@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -10,6 +12,7 @@ import '../../../data/models/variant_option.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/product_details_view_model.dart';
+import 'auto_sku_filler.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'variant_option_creation_dialogs.dart';
@@ -42,6 +45,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
   late final TextEditingController _barcodeController;
   late final TextEditingController _priceController;
   late final VariantIdentityWatcher _identity;
+  late final AutoSkuFiller _autoSku;
   late Map<int, Set<int>> _selectedValueIdsByOption;
   late List<VariantOption> _variantOptions;
   Set<int> _valueErrorOptionIds = {};
@@ -68,6 +72,13 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       barcodeController: _barcodeController,
       excludeVariantId: variant?.id,
     );
+    _autoSku = AutoSkuFiller(widget.viewModel.catalogRepository);
+    // Only a new variant is numbered. An existing one keeps the code it was
+    // saved with unless somebody edits it by hand — the shop may have been
+    // printing it on labels.
+    if (variant == null) {
+      unawaited(_refreshAutoSku());
+    }
     _selectedValueIdsByOption = _initialValueIdsByOption(variant);
     _variantOptions = widget.viewModel.product.variantOptions;
     _isActive = variant?.isActive ?? true;
@@ -90,7 +101,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     final variant = widget.variant;
     if (variant == null) {
       return _variantNameController.text.trim().isNotEmpty ||
-          _skuController.text.trim().isNotEmpty ||
+          // The number the sheet filled in is not the user's work.
+          (_skuController.text.trim().isNotEmpty &&
+              !_autoSku.holdsFilledValue(_skuController)) ||
           _barcodeController.text.trim().isNotEmpty ||
           _priceController.text.trim().isNotEmpty ||
           _selectedOptionValueIds.isNotEmpty;
@@ -157,6 +170,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                         showOptionValues: false,
                         skuState: _identity.skuState,
                         barcodeState: _identity.barcodeState,
+                        skuIsAutomatic: _autoSku.holdsFilledValue(
+                          _skuController,
+                        ),
                         skuFieldKey: _skuFieldKey,
                         barcodeFieldKey: _barcodeFieldKey,
                       ),
@@ -247,8 +263,30 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     return parseDecimal(value);
   }
 
+  /// Fills the SKU of a new variant with the number it will be saved as,
+  /// unless the user has typed their own.
+  Future<void> _refreshAutoSku() async {
+    await _autoSku.refresh();
+    if (!mounted) {
+      return;
+    }
+    _autoSku.fill(
+      _skuController,
+      _autoSku.numberAt(0),
+      barcode: _barcodeController,
+    );
+  }
+
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
+    // The number filled in when the sheet opened may have gone to another
+    // till since; an untouched field moves to the next free one first.
+    if (!_isEditing) {
+      await _refreshAutoSku();
+      if (!mounted) {
+        return;
+      }
+    }
     // A code typed in the last few hundred milliseconds may still be
     // un-checked; settle it before the form decides it is valid.
     await _identity.refresh();

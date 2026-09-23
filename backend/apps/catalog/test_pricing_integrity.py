@@ -284,7 +284,7 @@ class DefaultVariantRulesTests(TestCase):
         self.assertIsNotNone(variant)
         self.assertTrue(variant.is_default)
         self.assertEqual(variant.unit_price, Decimal("3.00"))
-        self.assertEqual(variant.sku, f"P{product.pk:06d}")
+        self.assertEqual(variant.sku, "1000")
         self.assertEqual(product.variants.count(), 1)
 
     def test_unique_default_constraint_blocks_second_default(self):

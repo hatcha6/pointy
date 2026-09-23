@@ -959,6 +959,10 @@ class PosApiService {
     );
   }
 
+  Future<String> fetchNextVariantSku() {
+    return _catalog.fetchNextVariantSku();
+  }
+
   Future<ProductVariant> createProductVariant(ProductVariantDraft draft) {
     return _catalog.createProductVariant(draft);
   }

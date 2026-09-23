@@ -141,6 +141,10 @@ SandboxReply handleCatalog(SandboxShop shop, SandboxRequest request) {
     );
   }
 
+  if (request.on('GET', 'product-variants/next-sku/') != null) {
+    return (200, {'sku': shop.nextSku()});
+  }
+
   if (request.on('GET', 'product-categories/') != null) {
     return (
       200,

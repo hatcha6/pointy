@@ -55,6 +55,99 @@ void main() {
     });
   });
 
+  group('isLoopbackHost', () {
+    test('names this machine in every spelling', () {
+      expect(isLoopbackHost('127.0.0.1'), isTrue);
+      expect(isLoopbackHost('127.1.2.3'), isTrue);
+      expect(isLoopbackHost('localhost'), isTrue);
+      expect(isLoopbackHost('LOCALHOST'), isTrue);
+      expect(isLoopbackHost('::1'), isTrue);
+    });
+
+    test('a LAN address or a name is not loopback', () {
+      expect(isLoopbackHost('192.168.1.10'), isFalse);
+      expect(isLoopbackHost('pointy.local'), isFalse);
+      expect(isLoopbackHost(''), isFalse);
+    });
+  });
+
+  group('isVirtualAdapterName', () {
+    test('knows the Windows adapters WSL, Hyper-V and VM hosts add', () {
+      expect(isVirtualAdapterName('vEthernet (WSL)'), isTrue);
+      expect(
+        isVirtualAdapterName('vEthernet (WSL (Hyper-V firewall))'),
+        isTrue,
+      );
+      expect(isVirtualAdapterName('vEthernet (Default Switch)'), isTrue);
+      expect(isVirtualAdapterName('VirtualBox Host-Only Network'), isTrue);
+      expect(isVirtualAdapterName('VMware Network Adapter VMnet8'), isTrue);
+    });
+
+    test('knows Linux container bridges and tunnels', () {
+      expect(isVirtualAdapterName('docker0'), isTrue);
+      expect(isVirtualAdapterName('br-3f2a9c1d'), isTrue);
+      expect(isVirtualAdapterName('veth12ab'), isTrue);
+      expect(isVirtualAdapterName('tun0'), isTrue);
+      expect(isVirtualAdapterName('wg0'), isTrue);
+    });
+
+    test('leaves real adapters alone', () {
+      expect(isVirtualAdapterName('Ethernet'), isFalse);
+      expect(isVirtualAdapterName('Wi-Fi'), isFalse);
+      expect(isVirtualAdapterName('Local Area Connection'), isFalse);
+      expect(isVirtualAdapterName('eth0'), isFalse);
+      expect(isVirtualAdapterName('wlan0'), isFalse);
+      expect(isVirtualAdapterName('enp3s0'), isFalse);
+    });
+  });
+
+  group('bestLanIpv4', () {
+    test("a real adapter beats WSL's, even inside the same range", () {
+      // WSL's NAT adapter often lands in 192.168.x, the same range the shop
+      // router hands out, so the address range alone would be a coin toss —
+      // and the phone given WSL's address can never reach it.
+      expect(
+        bestLanIpv4([
+          (interfaceName: 'vEthernet (WSL)', address: '192.168.176.1'),
+          (interfaceName: 'Ethernet', address: '192.168.1.20'),
+        ]),
+        '192.168.1.20',
+      );
+    });
+
+    test('ranks the shop-router ranges among real adapters', () {
+      expect(
+        bestLanIpv4([
+          (interfaceName: 'Ethernet 2', address: '172.16.4.9'),
+          (interfaceName: 'Ethernet', address: '10.0.0.7'),
+          (interfaceName: 'Wi-Fi', address: '192.168.0.5'),
+        ]),
+        '192.168.0.5',
+      );
+    });
+
+    test('still uses a virtual adapter when it holds the only LAN address', () {
+      // A Hyper-V external switch moves the real LAN address onto a vEthernet.
+      expect(
+        bestLanIpv4([
+          (interfaceName: 'vEthernet (External)', address: '192.168.1.30'),
+        ]),
+        '192.168.1.30',
+      );
+    });
+
+    test('nothing usable is null', () {
+      expect(
+        bestLanIpv4([
+          (interfaceName: 'Loopback', address: '127.0.0.1'),
+          (interfaceName: 'Wi-Fi', address: '169.254.3.4'),
+          (interfaceName: 'Ethernet', address: '203.0.113.9'),
+        ]),
+        isNull,
+      );
+    });
+  });
+
   group('preferredLanIpv4Octets', () {
     test('filters junk and orders real LAN before VPN', () {
       final ranked = preferredLanIpv4Octets([

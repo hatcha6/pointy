@@ -10855,10 +10855,16 @@ abstract class AppLocalizations {
   /// **'اختياري — يُنشأ رمز تلقائيًا إذا تُرك فارغًا'**
   String get skuOptionalHelper;
 
+  /// No description provided for @skuAutomaticHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم تلقائي — يمكنك تغييره'**
+  String get skuAutomaticHelper;
+
   /// No description provided for @skuHint.
   ///
   /// In ar, this message translates to:
-  /// **'مثال: COF-100'**
+  /// **'مثال: 1000'**
   String get skuHint;
 
   /// No description provided for @barcodeLabel.
@@ -10872,6 +10878,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اختياري'**
   String get barcodeHint;
+
+  /// No description provided for @useSkuAsBarcodeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام رمز المنتج كباركود'**
+  String get useSkuAsBarcodeTooltip;
 
   /// No description provided for @descriptionLabel.
   ///

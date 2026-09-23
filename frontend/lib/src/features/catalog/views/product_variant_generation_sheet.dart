@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -11,6 +13,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/variant_generation.dart';
+import 'auto_sku_filler.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 import '../../../shared/components/pointy_progress.dart';
@@ -49,8 +52,8 @@ class _ProductVariantGenerationSheetState
   final _isVariantActive = true;
   String? _defaultSignature;
   String? _generationErrorKey;
-  var _lastSkuPrefix = '';
   var _lastBasePrice = '';
+  late final AutoSkuFiller _autoSku;
 
   List<VariantOption> get _selectedOptions {
     return [
@@ -115,13 +118,13 @@ class _ProductVariantGenerationSheetState
   void initState() {
     super.initState();
     final product = widget.viewModel.product;
-    _skuPrefixController.text = product.effectiveSku.isEmpty
-        ? 'P${product.id}'
-        : product.effectiveSku;
+    // The prefix starts blank, so each new variant takes the shop's next
+    // number like any new product. A shop that keeps a scheme types its
+    // prefix (SHIRT → SHIRT-RED).
     _priceController.text = product.effectiveUnitPrice.toStringAsFixed(2);
-    _lastSkuPrefix = _skuPrefixController.text;
     _lastBasePrice = _priceController.text;
-    _skuPrefixController.addListener(_syncSkusFromPrefix);
+    _autoSku = AutoSkuFiller(widget.viewModel.catalogRepository);
+    _skuPrefixController.addListener(_fillSkus);
     _priceController.addListener(_syncPricesFromBase);
     _selectedOptionIds = {
       for (final option in product.variantOptions) option.id,
@@ -142,11 +145,12 @@ class _ProductVariantGenerationSheetState
     };
     _loadVariantOptions();
     _syncControllers();
+    unawaited(_refreshAutoSkus());
   }
 
   @override
   void dispose() {
-    _skuPrefixController.removeListener(_syncSkusFromPrefix);
+    _skuPrefixController.removeListener(_fillSkus);
     _skuPrefixController.dispose();
     _priceController.removeListener(_syncPricesFromBase);
     _priceController.dispose();
@@ -377,6 +381,7 @@ class _ProductVariantGenerationSheetState
     }
     for (final entry in [..._skuControllers.entries]) {
       if (!signatures.contains(entry.key)) {
+        _autoSku.forget(entry.value);
         entry.value.dispose();
         _skuControllers.remove(entry.key);
       }
@@ -409,11 +414,7 @@ class _ProductVariantGenerationSheetState
       );
       _skuControllers.putIfAbsent(
         combination.signature,
-        () => TextEditingController(
-          text:
-              reusableVariant?.sku ??
-              combination.skuFromBase(_skuPrefixController.text),
-        ),
+        () => TextEditingController(text: reusableVariant?.sku ?? ''),
       );
       _barcodeControllers.putIfAbsent(
         combination.signature,
@@ -444,27 +445,43 @@ class _ProductVariantGenerationSheetState
     if (!currentDefaultExists) {
       _defaultSignature = defaultCandidate?.combination.signature;
     }
+    _fillSkus();
   }
 
-  void _syncSkusFromPrefix() {
-    final nextPrefix = _skuPrefixController.text;
-    final previousPrefix = _lastSkuPrefix;
-    if (nextPrefix == previousPrefix) {
+  /// Asks which number the next new variant gets, and writes it into every
+  /// new row the user has not typed a SKU into.
+  Future<void> _refreshAutoSkus() async {
+    await _autoSku.refresh();
+    if (!mounted) {
       return;
     }
+    _fillSkus();
+  }
+
+  /// Codes the rows that become new variants: from the prefix when the shop
+  /// keeps a scheme, otherwise with a number each, counting up from the next
+  /// one. A row that reuses an existing variant keeps the code it was saved
+  /// with — the shop may have been printing it on labels.
+  void _fillSkus() {
+    final prefix = _skuPrefixController.text;
+    var offset = 0;
     for (final candidate in _candidates) {
+      if (candidate.reusableVariant != null) {
+        continue;
+      }
       final combination = candidate.combination;
       final controller = _skuControllers[combination.signature];
       if (controller == null) {
         continue;
       }
-      final previousAutoSku = combination.skuFromBase(previousPrefix);
-      if (controller.text.trim().isEmpty ||
-          controller.text == previousAutoSku) {
-        controller.text = combination.skuFromBase(nextPrefix);
-      }
+      _autoSku.fill(
+        controller,
+        prefix.trim().isEmpty
+            ? _autoSku.numberAt(offset++)
+            : combination.skuFromBase(prefix),
+        barcode: _barcodeControllers[combination.signature],
+      );
     }
-    _lastSkuPrefix = nextPrefix;
   }
 
   void _syncPricesFromBase() {
@@ -487,6 +504,12 @@ class _ProductVariantGenerationSheetState
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
+    // A number filled in when the sheet opened may have gone to another till
+    // since; untouched rows move to the next free ones before they are sent.
+    await _refreshAutoSkus();
+    if (!mounted) {
+      return;
+    }
     final isValid = _formKey.currentState?.validate() ?? false;
     _syncControllers();
     if (!isValid || !_validateGeneration()) {

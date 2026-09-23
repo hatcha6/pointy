@@ -45,6 +45,7 @@ from apps.catalog.models import (
     VariantOptionValue,
     normalize_barcode,
 )
+from apps.catalog.sku_series import allocate_variant_sku
 from apps.inventory import tracking
 from apps.inventory.identity import normalize_identifier
 from apps.inventory.integrity import tracking_invariant_violations
@@ -216,7 +217,7 @@ class CollapseSession:
         identity_key = _variant_identity(candidate.stem_key, signature)
         variant = resolver.existing(ProductVariant, COLLAPSE_VARIANT, identity_key)
         if variant is None:
-            variant = ProductVariant(product=product, sku=_free_sku(product))
+            variant = ProductVariant(product=product, sku=allocate_variant_sku())
         variant.product = product
         variant.name = _variant_name(candidate.options)
         variant.unit_price = _variant_price(candidate)
@@ -722,16 +723,6 @@ def _has_default(product, variant) -> bool:
         .exclude(pk=variant.pk)
         .exists()
     )
-
-
-def _free_sku(product) -> str:
-    base = f"P{product.pk:06d}"
-    candidate = base
-    suffix = 2
-    while ProductVariant.objects.filter(sku=candidate).exists():
-        candidate = f"{base}-{suffix}"
-        suffix += 1
-    return candidate
 
 
 def _secondary_code(candidate) -> str:

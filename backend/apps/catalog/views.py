@@ -88,6 +88,7 @@ from .serializers import (
 )
 from .pricing import set_base_price
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
+from .sku_series import next_variant_sku
 from .system_products import refuse_system_product, refuse_system_products
 from .services import (
     category_detail_prefetch,
@@ -1125,6 +1126,8 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "destroy": ("catalog.delete_productvariant",),
         # Read-only "is this code taken" probe behind the same view permission.
         "identity_check": ("catalog.view_productvariant",),
+        # Read-only too: it reserves nothing, it only says what comes next.
+        "next_sku": ("catalog.view_productvariant",),
     }
     # The prefetch shape lives with the serializer (catalog.services) because the
     # stock-count reconciliation screen embeds the same serializer.
@@ -1182,6 +1185,18 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
                 ),
             }
         )
+
+    @action(detail=False, methods=["get"], url_path="next-sku")
+    def next_sku(self, request):
+        """The SKU the next new variant will be given.
+
+        The product and variant forms fill it in, so the owner sees the code a
+        product is going to carry — and can copy it into the barcode — before
+        saving. Nothing is reserved: a form opened and closed again costs the
+        series nothing, and a form that sends a number somebody else took in
+        the meantime gets the ordinary SKU conflict.
+        """
+        return Response({SKU_FIELD: next_variant_sku()})
 
     def perform_create(self, serializer):
         variant = serializer.save()

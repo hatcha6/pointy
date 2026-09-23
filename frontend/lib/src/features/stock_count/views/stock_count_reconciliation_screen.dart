@@ -99,9 +99,6 @@ class _StockCountReconciliationScreenState
         ..showSnackBar(
           SnackBar(
             content: Text(reason.isEmpty ? l10n.stockCountApplyError : reason),
-            duration: reason.isEmpty
-                ? const Duration(seconds: 4)
-                : const Duration(seconds: 10),
           ),
         );
       _viewModel.acknowledgeApplyError();

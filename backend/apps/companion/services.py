@@ -122,6 +122,12 @@ def companion_page_url(request, code: str) -> str:
     an address that is *proven* reachable at the moment it is drawn — not a
     guess from configuration that may be stale after a DHCP lease change.
 
+    Proven reachable *from the till*: a till on the server PC reaches us over
+    loopback, and a QR saying ``127.0.0.1`` sends the phone to itself. The till
+    swaps that for its own LAN address (``lanReachableUrl`` in the frontend).
+    It cannot be done here: inside Docker, and inside WSL on Windows, this
+    process never sees the shop's network, only its own private ones.
+
     The code rides in the fragment: fragments are never sent in a request line,
     so the live credential stays out of the access log, the ``Referer`` header,
     and any proxy in between.

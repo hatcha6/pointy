@@ -7,6 +7,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
 import 'opening_stock_fields.dart';
+import 'product_form_fields.dart';
 import 'variant_identity_watcher.dart';
 import '../../../shared/components/pointy_progress.dart';
 import '../../../shared/components/pointy_searchable_picker.dart';
@@ -579,6 +580,10 @@ class _GeneratedVariantTile extends StatelessWidget {
                 labelText: l10n.barcodeLabel,
                 hintText: l10n.barcodeHint,
                 prefixIcon: const Icon(Icons.document_scanner_outlined),
+                suffixIcon: UseSkuAsBarcodeButton(
+                  sku: skuController,
+                  barcode: barcodeController,
+                ),
                 errorText: barcodeError,
               ),
               validator: (_) => barcodeError,

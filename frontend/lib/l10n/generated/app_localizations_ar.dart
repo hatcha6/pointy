@@ -6185,13 +6185,19 @@ class AppLocalizationsAr extends AppLocalizations {
       'اختياري — يُنشأ رمز تلقائيًا إذا تُرك فارغًا';
 
   @override
-  String get skuHint => 'مثال: COF-100';
+  String get skuAutomaticHelper => 'رقم تلقائي — يمكنك تغييره';
+
+  @override
+  String get skuHint => 'مثال: 1000';
 
   @override
   String get barcodeLabel => 'الباركود';
 
   @override
   String get barcodeHint => 'اختياري';
+
+  @override
+  String get useSkuAsBarcodeTooltip => 'استخدام رمز المنتج كباركود';
 
   @override
   String get descriptionLabel => 'الوصف';

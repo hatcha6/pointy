@@ -414,6 +414,29 @@ class SandboxShop {
     return product;
   }
 
+  /// The SKU the server would give the next new variant: one past the
+  /// highest plain number of up to seven digits used as a SKU or a barcode,
+  /// or 1000 in a shop with none — so a lesson's product form fills in the
+  /// same kind of code the real one does.
+  String nextSku() {
+    final serial = RegExp(r'^[0-9]{1,7}$');
+    int? highest;
+    for (final product in products) {
+      for (final variant in product.variants) {
+        for (final code in [variant.sku, ...variant.allBarcodes]) {
+          if (!serial.hasMatch(code)) {
+            continue;
+          }
+          final number = int.parse(code);
+          if (highest == null || number > highest) {
+            highest = number;
+          }
+        }
+      }
+    }
+    return '${highest == null ? 1000 : highest + 1}';
+  }
+
   SandboxVariant? addVariant({
     required int productId,
     required String name,

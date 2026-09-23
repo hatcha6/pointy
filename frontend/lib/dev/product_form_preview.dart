@@ -12,6 +12,8 @@
 //   barcode "6210000000555" belongs to an archived product
 // Type one of those into a SKU/barcode field to see the live inline error, or
 // use `?fail=1` to make every save come back rejected with a server conflict.
+// The next automatic SKU is always 1042; `?screen=variant` opens straight on
+// the new-variant sheet instead of the product form.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -115,7 +117,7 @@ class _HomeState extends State<_Home> {
     rejectSaves: widget.rejectSaves,
   );
   late final CatalogViewModel _catalogViewModel = CatalogViewModel(_catalog);
-  var _showVariantSheet = false;
+  var _showVariantSheet = Uri.base.queryParameters['screen'] == 'variant';
 
   @override
   void dispose() {
@@ -176,6 +178,9 @@ class _FakeCatalogRepository extends CatalogRepository {
 
   /// Simulates the server finding a clash the live probe missed.
   final bool rejectSaves;
+
+  @override
+  Future<Result<String>> nextVariantSku() async => const Ok('1042');
 
   @override
   Future<Result<CatalogIdentityCheck>> checkVariantIdentity({

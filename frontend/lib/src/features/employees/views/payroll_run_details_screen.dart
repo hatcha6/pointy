@@ -214,7 +214,6 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
             widget.attendanceViewModel.lastApplyFailure ??
                 l10n.attendanceApplyFailed,
           ),
-          duration: const Duration(seconds: 8),
         ),
       );
       return;
@@ -227,7 +226,6 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
               ? l10n.attendanceApplySuccess
               : l10n.attendanceApplyMissingWarning(missing.length),
         ),
-        duration: Duration(seconds: missing.isEmpty ? 4 : 10),
       ),
     );
   }

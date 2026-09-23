@@ -167,6 +167,7 @@ class ProductVariantFormFields extends StatelessWidget {
     this.showOptionValues = true,
     this.skuState = const IdentityFieldState(),
     this.barcodeState = const IdentityFieldState(),
+    this.skuIsAutomatic = false,
     this.skuFieldKey,
     this.barcodeFieldKey,
   });
@@ -190,6 +191,11 @@ class ProductVariantFormFields extends StatelessWidget {
   /// inline error, the availability hint and the trailing status icon.
   final IdentityFieldState skuState;
   final IdentityFieldState barcodeState;
+
+  /// The SKU field still holds the number the form filled in — said under the
+  /// field, so the owner knows the code is the shop's next one and theirs to
+  /// change.
+  final bool skuIsAutomatic;
 
   /// Keys the parent uses to scroll a rejected field into view.
   final Key? skuFieldKey;
@@ -226,9 +232,10 @@ class ProductVariantFormFields extends StatelessWidget {
             // Optional, like the barcode beside it: a shop that keeps no SKUs
             // should not have to invent one, and the server codes a blank row
             // itself. Says so while there is no live status to report.
-            helperText:
-                identityHelperText(l10n, skuState, isBarcode: false) ??
-                l10n.skuOptionalHelper,
+            helperText: skuIsAutomatic
+                ? l10n.skuAutomaticHelper
+                : identityHelperText(l10n, skuState, isBarcode: false) ??
+                      l10n.skuOptionalHelper,
             // The server error stays visible until the value changes.
             errorText: skuError,
           ),
@@ -246,6 +253,7 @@ class ProductVariantFormFields extends StatelessWidget {
           hint: l10n.barcodeHint,
           state: barcodeState,
           errorText: barcodeError,
+          skuController: skuController,
         ),
       ),
       TutorTarget(
@@ -307,6 +315,7 @@ class BarcodeInputRow extends StatelessWidget {
     this.fieldKey,
     this.state = const IdentityFieldState(),
     this.errorText,
+    this.skuController,
   });
 
   final TextEditingController controller;
@@ -316,9 +325,15 @@ class BarcodeInputRow extends StatelessWidget {
   final IdentityFieldState state;
   final String? errorText;
 
+  /// The SKU beside this barcode. When given, the field offers a one-click
+  /// "barcode = SKU" — see [UseSkuAsBarcodeButton].
+  final TextEditingController? skuController;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final status = IdentityStatusIcon(state: state, isBarcode: true);
+    final sku = skuController;
     return TextFormField(
       key: fieldKey,
       controller: controller,
@@ -327,13 +342,66 @@ class BarcodeInputRow extends StatelessWidget {
         labelText: label,
         hintText: hint,
         prefixIcon: const Icon(Icons.document_scanner_outlined),
-        suffixIcon: IdentityStatusIcon(state: state, isBarcode: true),
+        suffixIcon: sku == null
+            ? status
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  status,
+                  UseSkuAsBarcodeButton(sku: sku, barcode: controller),
+                ],
+              ),
         helperText: identityHelperText(l10n, state, isBarcode: true),
         errorText: errorText,
       ),
       // A barcode is optional, so the only thing that can fail it is a clash —
       // surfaced through the same validator so Form.validate() blocks the save.
       validator: (_) => errorText,
+    );
+  }
+}
+
+/// One click to make a barcode the same code as its SKU.
+///
+/// A shop printing its own labels for goods that arrived without a barcode
+/// wants the label to scan as the number the product is filed under, and
+/// retyping it is where the two drift apart. Copies the SKU as it will be
+/// saved — upper-cased, the way the server stores it — and is disabled while
+/// there is nothing to copy or the two already match.
+class UseSkuAsBarcodeButton extends StatelessWidget {
+  const UseSkuAsBarcodeButton({
+    super.key,
+    required this.sku,
+    required this.barcode,
+  });
+
+  final TextEditingController sku;
+  final TextEditingController barcode;
+
+  String get _code => sku.text.trim().toUpperCase();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    // Out of the Tab/Enter order. A scanner ends a barcode with Enter, and
+    // focus landing here would put the next keystroke on this button — which
+    // replaces the code just scanned with the SKU.
+    return ExcludeFocusTraversal(
+      child: ListenableBuilder(
+        listenable: Listenable.merge([sku, barcode]),
+        builder: (context, _) {
+          final code = _code;
+          return IconButton(
+            tooltip: l10n.useSkuAsBarcodeTooltip,
+            icon: const Icon(Icons.content_copy_outlined),
+            // Read again on the click: a code typed since the last frame is
+            // the one the user means.
+            onPressed: code.isEmpty || barcode.text.trim() == code
+                ? null
+                : () => barcode.text = _code,
+          );
+        },
+      ),
     );
   }
 }

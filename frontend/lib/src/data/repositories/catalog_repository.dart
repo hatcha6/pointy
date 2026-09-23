@@ -571,6 +571,13 @@ class CatalogRepository {
     );
   }
 
+  /// The SKU the server will give the next new variant, for the forms to
+  /// fill in. A failure leaves the field blank — the server still numbers a
+  /// blank SKU itself, so the form never waits on this.
+  Future<Result<String>> nextVariantSku() {
+    return Result.guard(_service.fetchNextVariantSku);
+  }
+
   /// The shop's scale label layouts, ordered as the till must try them.
   ///
   /// Fails soft: a till that cannot reach the rules endpoint still rings every

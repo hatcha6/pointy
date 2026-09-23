@@ -78,6 +78,170 @@ check "a brand new forward is added without a pointless delete" {
     $r = Set-PortProxy -Port 9999 -Target "172.28.144.3"
     $r -and (called "portproxy add") -and -not (called "portproxy delete")
 }
+check "-Force re-creates a forward whose rule already looks right" {
+    # The rule is only configuration. A listener that never bound behind a
+    # correct rule is invisible to the comparison above, forever.
+    $script:NativeLog.Clear()
+    $r = Set-PortProxy -Port 8000 -Target "172.28.144.3" -Force
+    $r -and (called "portproxy delete") -and (called "portproxy add")
+}
+
+# --- the addresses a till dials ---------------------------------------------
+
+function Get-NetIPAddress { param($AddressFamily, $ErrorAction)
+    function row([string]$Alias, [string]$Ip, [string]$State = "Preferred") {
+        [pscustomobject]@{ InterfaceAlias = $Alias; IPAddress = $Ip; AddressState = $State } }
+    row "Ethernet" "192.168.1.10"
+    # WSL's own adapter often sits in 192.168.x. Offering it to a till is
+    # offering an address no other device can route to.
+    row "vEthernet (WSL (Hyper-V firewall))" "192.168.176.1"
+    row "vEthernet (Default Switch)" "172.20.0.1"
+    row "VirtualBox Host-Only Network" "192.168.56.1"
+    row "Wi-Fi" "169.254.3.4"
+    row "Loopback Pseudo-Interface 1" "127.0.0.1"
+    row "Ethernet 2" "10.0.0.5" "Tentative"
+    # A Hyper-V EXTERNAL switch is where a real LAN address lives on a machine
+    # that has one; filtering every vEthernet would lose it.
+    row "vEthernet (External LAN)" "192.168.1.20"
+}
+check "LAN addresses are the real adapters only" {
+    $lan = @(Get-LanIPv4)
+    ($lan -join ",") -eq "192.168.1.10,192.168.1.20"
+}
+
+# --- walking the path a till takes ----------------------------------------
+
+# Which addresses answer on the front door's health path. A re-created forward
+# switches to $AnswersAfter, which is how a listener that finally binds looks.
+$script:GuestUp = $true
+$script:Answers = @()
+$script:AnswersAfter = $null
+$script:Lan = @("192.168.1.10")
+$script:Listeners = @()
+function Invoke-Guest { param([string]$Command)
+    if ($Command -like "curl *") {
+        return [pscustomobject]@{ ExitCode = $(if ($script:GuestUp) { 0 } else { 7 }); Output = "" } }
+    return [pscustomobject]@{ ExitCode = 0; Output = "" } }
+function Test-PointyHttp { param([string]$Url, [int]$TimeoutMs = 4000)
+    return ($script:Answers -contains ([uri]$Url).Host) }
+function Get-LanIPv4 { return $script:Lan }
+function Get-PortListeners { param([int]$Port) return $script:Listeners }
+function Invoke-Native { param([string]$File, [string[]]$Arguments)
+    [void]$script:NativeLog.Add("$File $($Arguments -join ' ')")
+    if (($Arguments -join ' ') -like "*portproxy add*" -and $null -ne $script:AnswersAfter) {
+        $script:Answers = $script:AnswersAfter }
+    return [pscustomobject]@{ ExitCode = 0; Output = $script:NetshOut } }
+function bridgeCase([bool]$GuestUp, [string[]]$Answers, [string[]]$AnswersAfter = $null,
+                    [string[]]$Lan = @("192.168.1.10"), $Listeners = @()) {
+    $script:GuestUp = $GuestUp; $script:Answers = $Answers; $script:AnswersAfter = $AnswersAfter
+    $script:Lan = $Lan; $script:Listeners = $Listeners
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    return (Confirm-LanBridge -WslIp "172.28.144.3" -Port 8000 -HealthPath "/healthz-edge")
+}
+
+check "a stack still starting is not judged, and the forward is left alone" {
+    $r = bridgeCase -GuestUp $false -Answers @()
+    ($null -eq $r) -and (logged "not answering inside WSL") -and -not (called "portproxy")
+}
+check "a stack Windows cannot reach at the VM address points at the bind setting" {
+    $r = bridgeCase -GuestUp $true -Answers @("127.0.0.1", "192.168.1.10")
+    ($r -eq $false) -and (logged "POINTY_BACKEND_BIND") -and -not (called "portproxy add")
+}
+check "a healthy bridge is verified without touching the forward" {
+    $r = bridgeCase -GuestUp $true -Answers @("172.28.144.3", "127.0.0.1", "192.168.1.10")
+    ($r -eq $true) -and -not (called "portproxy add")
+}
+check "THE BUG: a forward that never bound is re-created, then proven" {
+    # The install-order race: the rule was right, netsh said it succeeded, the
+    # server's own till worked through WSL's relay - and the LAN got nothing.
+    $r = bridgeCase -GuestUp $true -Answers @("172.28.144.3", "127.0.0.1") `
+                    -AnswersAfter @("172.28.144.3", "127.0.0.1", "192.168.1.10")
+    ($r -eq $true) -and (called "portproxy delete") -and (called "portproxy add") -and
+        (logged "re-created forward answers") -and -not (logged "ERROR:")
+}
+check "a forward held off by WSL's relay names it and the one-time fix" {
+    $held = @([pscustomobject]@{ Address = "127.0.0.1"; ProcessId = 4242; Name = "wslrelay" })
+    $r = bridgeCase -GuestUp $true -Answers @("172.28.144.3", "127.0.0.1") -Listeners $held
+    ($r -eq $false) -and (logged "127.0.0.1:8000 is held by wslrelay") -and (logged "restart Windows once")
+}
+check "a forward nobody is listening for names the IP Helper" {
+    $r = bridgeCase -GuestUp $true -Answers @("172.28.144.3")
+    ($r -eq $false) -and (logged "IP Helper service has not opened")
+}
+check "a machine with no LAN address is not reported as reachable" {
+    $r = bridgeCase -GuestUp $true -Answers @("172.28.144.3", "127.0.0.1") -Lan @()
+    ($r -eq $false) -and (logged "no LAN address") -and -not (called "portproxy add")
+}
+
+# --- .wslconfig: the forward must be the only owner of its ports ------------
+
+$script:ProfileDir = Join-Path ([IO.Path]::GetTempPath()) ("pointy-profile-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $script:ProfileDir | Out-Null
+$env:USERPROFILE = $script:ProfileDir
+function Get-CimInstance { param($ClassName, $Namespace, $ErrorAction)
+    return [pscustomobject]@{ TotalPhysicalMemory = 16GB } }
+function Invoke-Wsl { param([string[]]$Arguments)
+    return [pscustomobject]@{ ExitCode = 0; Output = "WSL version: 2.3.26.0" } }
+$script:WslConfigPath = Join-Path $script:ProfileDir ".wslconfig"
+
+check "a fresh .wslconfig turns WSL's localhost relay off" {
+    Remove-Item $script:WslConfigPath -ErrorAction SilentlyContinue
+    $changed = Write-WslConfig
+    $text = Get-Content -Raw $script:WslConfigPath
+    $changed -and ($text -match '(?m)^localhostForwarding=false$') -and ($text -notmatch 'localhostForwarding=true')
+}
+check "rewriting an identical .wslconfig reports no change (no needless WSL restart)" {
+    -not (Write-WslConfig)
+}
+check "an installed shop's generated .wslconfig is converged at boot" {
+    $old = "$WslConfigMarker`n[wsl2]`nmemory=8GB`nlocalhostForwarding=true`n"
+    [IO.File]::WriteAllText($script:WslConfigPath, $old)
+    $script:Log.Clear()
+    Update-WslConfigForBridge
+    $text = Get-Content -Raw $script:WslConfigPath
+    ($text -match '(?m)^localhostForwarding=false$') -and (logged "next time Windows restarts")
+}
+check "an operator's own .wslconfig is never rewritten" {
+    $own = "[wsl2]`nmemory=12GB`nlocalhostForwarding=true`n"
+    [IO.File]::WriteAllText($script:WslConfigPath, $own)
+    Update-WslConfigForBridge
+    (Get-Content -Raw $script:WslConfigPath) -eq $own
+}
+Remove-Item -Recurse -Force $script:ProfileDir -ErrorAction SilentlyContinue
+
+# --- the whole -Boot reconcile, which every shop runs every 5 minutes -------
+
+$StateFile = Join-Path ([IO.Path]::GetTempPath()) ("pointy-bridge-" + [guid]::NewGuid().ToString("N") + ".json")
+function Test-DistroExists { return $true }
+function Enable-IpHelper { }
+function Add-FirewallRule { param([string]$Name, [int]$Port) }
+function Write-FirewallWarnings { }
+function Invoke-Guest { param([string]$Command)
+    if ($Command -like "ip -4 *") {
+        return [pscustomobject]@{ ExitCode = 0; Output = "2: eth0    inet 172.28.150.9/20 scope global eth0" } }
+    return [pscustomobject]@{ ExitCode = 0; Output = "" } }
+
+check "a reboot's reconcile re-points both ports, proves them, and records it" {
+    # netsh still points at the address the VM had before the reboot.
+    $script:NetshOut = "0.0.0.0         8000        172.28.144.3    8000`n0.0.0.0         80          172.28.144.3    80"
+    $script:Answers = @("172.28.150.9", "127.0.0.1", "192.168.1.10"); $script:AnswersAfter = $null
+    $script:Lan = @("192.168.1.10")
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    Invoke-BootReconcile
+    $state = Get-Content -Raw $StateFile | ConvertFrom-Json
+    (logged "LAN port 8000 -> 172.28.150.9:8000") -and (logged "LAN port 80 -> 172.28.150.9:80") -and
+        (logged "tills reach it at http://192.168.1.10:8000") -and
+        $state.verified -and ($state.wsl_ip -eq "172.28.150.9") -and (@($state.lan_ips) -join ",") -eq "192.168.1.10"
+}
+check "a reconcile that cannot prove the path says so instead of 'nothing to do'" {
+    $script:NetshOut = "0.0.0.0         8000        172.28.150.9    8000`n0.0.0.0         80          172.28.150.9    80"
+    $script:Answers = @("172.28.150.9", "127.0.0.1")   # the LAN address never answers
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    Invoke-BootReconcile
+    $state = Get-Content -Raw $StateFile | ConvertFrom-Json
+    (-not $state.verified) -and (logged "not every hop answered") -and -not (logged "nothing to do")
+}
+Remove-Item $StateFile -ErrorAction SilentlyContinue
 
 Write-Host ""
 if ($fail -gt 0) { Write-Host "# LAN bridge: $pass passed, $fail failed" -ForegroundColor Red; exit 1 }

@@ -1983,14 +1983,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     };
     messenger
       ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: result.isSaved && result.location != null
-              ? const Duration(seconds: 6)
-              : const Duration(seconds: 4),
-        ),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _submit() async {

@@ -460,7 +460,9 @@ class Product(TimeStampedModel):
             # An existing row keeps the code it already carries: "I left the
             # field empty" must never silently renumber a product the shop has
             # been printing labels for.
-            sku = (existing.sku if existing is not None else "") or generate_variant_sku(self)
+            from .sku_series import allocate_variant_sku
+
+            sku = (existing.sku if existing is not None else "") or allocate_variant_sku()
         unit_price = Decimal(data.get("unit_price", Decimal("0.00")))
         return {
             "name": str(data.get("name", "")).strip(),
@@ -1048,24 +1050,6 @@ class ProductVariant(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sku} - {self.full_name}"
-
-
-def generate_variant_sku(product):
-    """A code for a variant whose owner left the SKU blank.
-
-    ``sku`` is unique and non-blank, so every write path that accepts an empty
-    one has to put *something* in the column. Derived from the product id so it
-    is stable and searchable rather than random, and suffixed until it is free —
-    a product can hold several coded variants, and the rows created before this
-    one in the same transaction are already visible to the check.
-    """
-    base_sku = f"P{product.pk:06d}"
-    candidate = base_sku
-    suffix = 2
-    while ProductVariant.objects.filter(sku=candidate).exists():
-        candidate = f"{base_sku}-{suffix}"
-        suffix += 1
-    return candidate
 
 
 def validate_variant_option_values(product, option_values, *, variant=None):

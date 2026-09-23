@@ -23,6 +23,7 @@ from .identity import (
     find_conflicts,
     find_sku_conflict,
 )
+from .sku_series import allocate_variant_sku
 from .system_products import refuse_system_product
 from .models import (
     ModifierGroup,
@@ -37,7 +38,6 @@ from .models import (
     UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
-    generate_variant_sku,
     normalize_barcode,
     normalize_sku,
     variant_option_signature,
@@ -911,9 +911,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                 # The column is unique and non-blank: a variant created without
                 # a SKU is coded here rather than rejected at the form.
                 if not validated_data.get("sku"):
-                    validated_data["sku"] = generate_variant_sku(
-                        validated_data["product"]
-                    )
+                    validated_data["sku"] = allocate_variant_sku()
                 variant = ProductVariant.objects.create(**validated_data)
                 _derive_base_price(variant, foreign_amount)
                 if option_values:
@@ -943,9 +941,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                     # Clearing the field keeps the code the row already carries:
                     # emptying an input must not renumber a product the shop has
                     # been printing labels for.
-                    validated_data["sku"] = instance.sku or generate_variant_sku(
-                        validated_data.get("product", instance.product)
-                    )
+                    validated_data["sku"] = instance.sku or allocate_variant_sku()
                 for field, value in validated_data.items():
                     setattr(instance, field, value)
                 instance.save()
@@ -1656,7 +1652,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             # an existing row keeps its own code rather than being renumbered.
             data["sku"] = (
                 variant.sku if variant is not None else ""
-            ) or generate_variant_sku(product)
+            ) or allocate_variant_sku()
         if data.get("is_default") is True:
             queryset = ProductVariant.objects.filter(
                 product=product,

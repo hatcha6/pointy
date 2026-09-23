@@ -85,8 +85,10 @@ x-backend-environment: &backend-environment
   # photos a Windows till cannot take reach Pointy anyway. See apps.companion.
   #
   # The QR normally carries whatever address the till itself reached the backend
-  # on, which is the one address proven reachable at that moment. Set this only
-  # when the phone must use a different origin (a reverse proxy, a hostname).
+  # on, which is the one address proven reachable at that moment (a till on the
+  # server PC itself swaps its loopback address for the PC's LAN address). Set
+  # this only when the phone must use a different origin (a reverse proxy, a
+  # hostname).
   POINTY_COMPANION_PUBLIC_ORIGIN: "${POINTY_COMPANION_PUBLIC_ORIGIN:-}"
   # Short enough that a QR photographed off the till screen is stale before
   # anyone could act on it; long enough to walk over and scan it.

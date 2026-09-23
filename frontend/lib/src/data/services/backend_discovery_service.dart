@@ -86,6 +86,7 @@ class BackendDiscoveryService {
     required String defaultApiBaseUrl,
     this.udpTimeout = const Duration(seconds: 2),
     this.probeTimeout = const Duration(milliseconds: 900),
+    this.manualProbeTimeout = const Duration(seconds: 5),
     UdpDiscovery? udpDiscovery,
     SubnetSweep? subnetSweep,
   }) : _client = client,
@@ -102,6 +103,12 @@ class BackendDiscoveryService {
   /// Per-HTTP-probe timeout. Kept short so a dead stored IP can't stall the
   /// race — it loses to UDP/other candidates instead of gating discovery.
   final Duration probeTimeout;
+
+  /// Timeout for an address the operator typed. Nothing races it: the operator
+  /// is waiting on this one answer, so a server that is merely slow to answer
+  /// its first request (on Windows it sits behind a port forward and a VM) must
+  /// not be reported as not found.
+  final Duration manualProbeTimeout;
 
   final UdpDiscovery _udpDiscovery;
   final SubnetSweep _subnetSweep;
@@ -215,12 +222,15 @@ class BackendDiscoveryService {
     return actual == expected;
   }
 
-  /// Probes a single URL, whether given by the user or discovered. Exposed for
-  /// the manual-connection flow.
+  /// Probes a single address the user typed, with [manualProbeTimeout].
+  /// Exposed for the manual-connection flow.
   Future<PointyBackendEndpoint?> probe(String rawApiBaseUrl) =>
-      _probe(rawApiBaseUrl);
+      _probe(rawApiBaseUrl, timeout: manualProbeTimeout);
 
-  Future<PointyBackendEndpoint?> _probe(String rawApiBaseUrl) async {
+  Future<PointyBackendEndpoint?> _probe(
+    String rawApiBaseUrl, {
+    Duration? timeout,
+  }) async {
     final apiBaseUrl = _normalizeApiBaseUrl(rawApiBaseUrl);
     if (apiBaseUrl.isEmpty) {
       return null;
@@ -230,7 +240,7 @@ class BackendDiscoveryService {
       return null;
     }
     try {
-      final response = await _client.get(uri).timeout(probeTimeout);
+      final response = await _client.get(uri).timeout(timeout ?? probeTimeout);
       if (response.statusCode != 200) {
         return null;
       }

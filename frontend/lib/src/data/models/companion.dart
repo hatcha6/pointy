@@ -46,6 +46,13 @@ class CompanionPairing {
   final DateTime expiresAt;
 
   bool get isExpired => DateTime.now().isAfter(expiresAt);
+
+  CompanionPairing copyWith({String? url}) => CompanionPairing(
+    code: code,
+    url: url ?? this.url,
+    tillKey: tillKey,
+    expiresAt: expiresAt,
+  );
 }
 
 /// A phone currently lending its camera to this till.

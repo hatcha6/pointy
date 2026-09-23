@@ -47,7 +47,7 @@ class OptionalVariantSkuTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         variant = ProductVariant.objects.get(product__name="أرز")
-        self.assertEqual(variant.sku, f"P{variant.product_id:06d}")
+        self.assertEqual(variant.sku, "1000")
         self.assertEqual(variant.barcode, "")
 
     def test_two_blank_sku_products_do_not_collide(self):
@@ -64,8 +64,8 @@ class OptionalVariantSkuTests(TestCase):
                 response.status_code, status.HTTP_201_CREATED, response.data
             )
 
-        skus = set(ProductVariant.objects.values_list("sku", flat=True))
-        self.assertEqual(len(skus), 2)
+        skus = sorted(ProductVariant.objects.values_list("sku", flat=True))
+        self.assertEqual(skus, ["1000", "1001"])
 
     # ---- product update -------------------------------------------------
 
@@ -125,10 +125,7 @@ class OptionalVariantSkuTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         product = Product.objects.get(name="قميص")
         skus = sorted(product.variants.values_list("sku", flat=True))
-        self.assertEqual(len(skus), 2)
-        self.assertEqual(len(set(skus)), 2, "two blank SKUs must not collide")
-        for sku in skus:
-            self.assertTrue(sku.startswith(f"P{product.pk:06d}"), sku)
+        self.assertEqual(skus, ["1000", "1001"], "two blank SKUs must not collide")
 
     # ---- the standalone variant endpoint --------------------------------
 
@@ -147,8 +144,7 @@ class OptionalVariantSkuTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         created = product.variants.get(name="كيس كبير")
-        self.assertTrue(created.sku)
-        self.assertNotEqual(created.sku, "RICE-5")
+        self.assertEqual(created.sku, "1000")
 
     def test_clearing_a_variant_sku_keeps_its_code(self):
         product = create_product_with_default_variant(

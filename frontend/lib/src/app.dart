@@ -170,60 +170,65 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
       darkTheme: PointyTheme.dark(),
       themeMode: _dependencies.themeController.mode,
       navigatorObservers: [_routeObserver],
-      builder: (context, child) => ThemeControllerScope(
-        controller: _dependencies.themeController,
-        child: PriceCheckerModeScope(
-          controller: _dependencies.priceCheckerModeController,
-          child: AnalyticsScreenScope(
-            analyticsEngine: _dependencies.analyticsEngine,
-            routeObserver: _routeObserver,
-            child: AnalyticsInteractionTracker(
+      // Outermost, so the printer notifier below shows its snackbar through
+      // it too: every snackbar in the app runs on the same short timer.
+      builder: (context, child) => PointyScaffoldMessenger(
+        child: ThemeControllerScope(
+          controller: _dependencies.themeController,
+          child: PriceCheckerModeScope(
+            controller: _dependencies.priceCheckerModeController,
+            child: AnalyticsScreenScope(
               analyticsEngine: _dependencies.analyticsEngine,
-              child: _PrinterConnectionNotifier(
-                authViewModel: _dependencies.authViewModel,
-                printingSettingsViewModel:
-                    _dependencies.printingSettingsViewModel,
-                child: PointyNavigationRailScope(
-                  isActive: false,
-                  controller: _navigationRailController,
-                  navigationScrollStore: _navigationScrollStore,
-                  // Above the Navigator, not inside `home`: pushed routes are
-                  // siblings of the first route, so a scope installed there
-                  // would be invisible to every screen but the first.
-                  child: ValueListenableBuilder<CameraWedgeController?>(
-                    valueListenable: _dependencies.cameraWedgeListenable,
-                    builder: (context, wedge, companionChild) =>
-                        CameraWedgeScope(
-                          controller: wedge,
-                          child: companionChild ?? const SizedBox.shrink(),
-                        ),
-                    child: ValueListenableBuilder<CompanionBridge?>(
-                      valueListenable: _dependencies.companionBridgeListenable,
-                      builder: (context, bridge, railChild) => CompanionScope(
-                        bridge: bridge,
-                        repository: _dependencies.companionRepository,
-                        // Same reasoning, one level in: every screen that shows a
-                        // document can offer its history without a constructor
-                        // parameter for it.
-                        child: DocumentTrailScope(
-                          repository: _dependencies.documentTrailRepository,
-                          // And one more: the till, the record-payment dialog
-                          // and the settings screen all need to know which
-                          // bank account a card or transfer lands in.
-                          child: BankRoutingScope(
-                            routing: _dependencies.bankRouting,
-                            // Per device, like the theme: the product
-                            // searches on every route read whether this
-                            // machine offers the search-mode picker.
-                            child: ProductSearchModeScope(
-                              controller:
-                                  _dependencies.productSearchModeController,
-                              child: railChild ?? const SizedBox.shrink(),
+              routeObserver: _routeObserver,
+              child: AnalyticsInteractionTracker(
+                analyticsEngine: _dependencies.analyticsEngine,
+                child: _PrinterConnectionNotifier(
+                  authViewModel: _dependencies.authViewModel,
+                  printingSettingsViewModel:
+                      _dependencies.printingSettingsViewModel,
+                  child: PointyNavigationRailScope(
+                    isActive: false,
+                    controller: _navigationRailController,
+                    navigationScrollStore: _navigationScrollStore,
+                    // Above the Navigator, not inside `home`: pushed routes are
+                    // siblings of the first route, so a scope installed there
+                    // would be invisible to every screen but the first.
+                    child: ValueListenableBuilder<CameraWedgeController?>(
+                      valueListenable: _dependencies.cameraWedgeListenable,
+                      builder: (context, wedge, companionChild) =>
+                          CameraWedgeScope(
+                            controller: wedge,
+                            child: companionChild ?? const SizedBox.shrink(),
+                          ),
+                      child: ValueListenableBuilder<CompanionBridge?>(
+                        valueListenable:
+                            _dependencies.companionBridgeListenable,
+                        builder: (context, bridge, railChild) => CompanionScope(
+                          bridge: bridge,
+                          repository: _dependencies.companionRepository,
+                          // Same reasoning, one level in: every screen that shows a
+                          // document can offer its history without a constructor
+                          // parameter for it.
+                          child: DocumentTrailScope(
+                            repository: _dependencies.documentTrailRepository,
+                            // And one more: the till, the record-payment dialog
+                            // and the settings screen all need to know which
+                            // bank account a card or transfer lands in.
+                            child: BankRoutingScope(
+                              routing: _dependencies.bankRouting,
+                              // Per device, like the theme: the product
+                              // searches on every route read whether this
+                              // machine offers the search-mode picker.
+                              child: ProductSearchModeScope(
+                                controller:
+                                    _dependencies.productSearchModeController,
+                                child: railChild ?? const SizedBox.shrink(),
+                              ),
                             ),
                           ),
                         ),
+                        child: child ?? const SizedBox.shrink(),
                       ),
-                      child: child ?? const SizedBox.shrink(),
                     ),
                   ),
                 ),

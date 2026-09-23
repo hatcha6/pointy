@@ -174,7 +174,6 @@ class PosScreen extends StatelessWidget {
     messenger.showSnackBar(
       SnackBar(
         content: Text(l10n.sessionClosedPrintZReportPrompt),
-        duration: const Duration(seconds: 8),
         action: SnackBarAction(
           label: l10n.sessionPrintZReportThermal,
           onPressed: () =>

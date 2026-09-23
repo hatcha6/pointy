@@ -248,11 +248,29 @@ reach the logon screen with nobody there, and still bring the tills back.
 
 #### Windows: how the tills reach the stack
 
-A WSL2 VM sits behind a NAT with a **new IP every time it starts**, and WSL's
-`localhostForwarding` only covers the Windows loopback — not the LAN. So
+A WSL2 VM sits behind a NAT with a **new IP every time it starts**. So
 `bootstrap-wsl.ps1 -Boot` forwards TCP 8000 and 80 from the host into the VM
 with `netsh interface portproxy`, and re-points them whenever the VM's IP
 changes. That is why the task repeats every 5 minutes.
+
+That forward listens on `0.0.0.0`, so it also serves a till running on the
+server PC itself (`127.0.0.1`), and it must be the **only** thing holding those
+ports on Windows. WSL's own `localhostForwarding` would bind `127.0.0.1` on the
+same ports, and whichever of the two gets there first can stop the other from
+binding at all. `netsh` still reports success, so the result looks healthy: the
+server's own till works and no other device can find the server. The bootstrap
+therefore writes `localhostForwarding=false` to `.wslconfig`. Shops installed
+before that change get the setting on their next `-Boot` run. It takes effect
+at the next Windows restart; re-running the installer applies it immediately.
+
+Every `-Boot` run then **proves** the path a till takes instead of trusting
+`netsh`: the stack from inside the VM, Windows to the VM, then `127.0.0.1` and
+each of the PC's LAN addresses. A forward whose rule looks right but whose
+listener never bound is re-created. Whatever still fails is named in
+`%ProgramData%\Pointy\logs\bootstrap.log`, down to the process holding the port.
+The one hop it cannot test is the firewall, because the PC's requests to its own
+address never pass it. It warns instead when Group Policy overrides local
+firewall rules or a third-party firewall is installed.
 
 Two consequences worth knowing:
 
