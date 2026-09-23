@@ -22,7 +22,7 @@ from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductAlias, ProductVariant
+from apps.catalog.models import Product, ProductAlias
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.printing.services import build_receipt_payload
 from apps.sales.models import Order, RegisterSession
@@ -45,6 +45,7 @@ from .providers.base import (
     ERROR_OUT_OF_STOCK,
     ERROR_PIN_REQUIRED,
     ERROR_PROFILE_MISMATCH,
+    ERROR_UNEXPECTED,
     ERROR_UNREACHABLE,
     ERROR_VERIFICATION_REJECTED,
     VoucherBrand,
@@ -625,7 +626,12 @@ class QareebVerificationTests(TestCase):
         fake.on("POST", qareeb_driver.SEND_CODE_PATH, _Resp(200, {
             "status": True, "results": {"phone": "0912345678", "uuid": "otp-session", "expires_in": 5},
         }))
-        fake.on("POST", qareeb_driver.VERIFY_CODE_PATH, _Resp(200, {"access": token, "refresh": "r"}))
+        # verify_otp proves the phone and answers a one-time temp_token — no
+        # session yet; the driver must spend it at login_with_otp for tokens.
+        fake.on("POST", qareeb_driver.VERIFY_CODE_PATH, _Resp(200, {
+            "status": True, "detail": "OTP verified successfully.", "temp_token": "tmp-1234",
+        }))
+        fake.on("POST", qareeb_driver.LOGIN_WITH_OTP_PATH, _Resp(200, {"access": token, "refresh": "r"}))
         with patch_qareeb(fake):
             driver = provider_for(account)
             challenge = driver.start_verification()
@@ -641,6 +647,9 @@ class QareebVerificationTests(TestCase):
         )
         verify = [c for c in fake.calls if c["path"] == qareeb_driver.VERIFY_CODE_PATH][0]
         self.assertEqual(verify["json"]["uuid"], "otp-session")
+        # The temp_token from verify_otp is spent, by phone, at login_with_otp.
+        exchange = [c for c in fake.calls if c["path"] == qareeb_driver.LOGIN_WITH_OTP_PATH][0]
+        self.assertEqual(exchange["json"], {"username": "0912345678", "temp_token": "tmp-1234"})
         account.refresh_from_db()
         self.assertEqual(account.get_secret(qareeb_driver.SECRET_ACCESS), token)
         self.assertEqual(account.get_secret(qareeb_driver.SECRET_VERIFICATION), "")
@@ -656,18 +665,50 @@ class QareebVerificationTests(TestCase):
             result = provider_for(account).confirm_verification("0000")
         self.assertEqual(result.error_code, ERROR_VERIFICATION_REJECTED)
 
-    def test_a_confirmation_without_a_token_logs_in_with_the_password(self):
+    def test_a_temp_token_is_spent_for_real_tokens(self):
         account = qareeb_account()
         account.set_secret(qareeb_driver.SECRET_VERIFICATION, "otp-session")
         account.save()
         token = _jwt()
         fake = _FakeQareeb()
-        fake.on("POST", qareeb_driver.VERIFY_CODE_PATH, _Resp(200, {"status": True}))
-        fake.on("POST", qareeb_driver.LOGIN_PATH, _Resp(200, {"access": token, "refresh": "r"}))
+        fake.on("POST", qareeb_driver.VERIFY_CODE_PATH, _Resp(200, {
+            "status": True, "detail": "OTP verified successfully.", "temp_token": "tmp-9",
+        }))
+        fake.on("POST", qareeb_driver.LOGIN_WITH_OTP_PATH, _Resp(200, {"access": token, "refresh": "r2"}))
         with patch_qareeb(fake):
             self.assertTrue(provider_for(account).confirm_verification("1234").ok)
         account.refresh_from_db()
         self.assertEqual(account.get_secret(qareeb_driver.SECRET_ACCESS), token)
+        self.assertEqual(account.get_secret(qareeb_driver.SECRET_REFRESH), "r2")
+        self.assertEqual(account.get_secret(qareeb_driver.SECRET_VERIFICATION), "")
+
+    def test_a_rejected_temp_token_exchange_is_reported(self):
+        account = qareeb_account()
+        account.set_secret(qareeb_driver.SECRET_VERIFICATION, "otp-session")
+        account.save()
+        fake = _FakeQareeb()
+        fake.on("POST", qareeb_driver.VERIFY_CODE_PATH, _Resp(200, {
+            "status": True, "detail": "OTP verified successfully.", "temp_token": "tmp-9",
+        }))
+        fake.on("POST", qareeb_driver.LOGIN_WITH_OTP_PATH, _Resp(400, {"error": "expired"}))
+        with patch_qareeb(fake):
+            result = provider_for(account).confirm_verification("1234")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_VERIFICATION_REJECTED)
+
+    def test_a_confirmation_with_neither_token_nor_handle_is_unexpected(self):
+        # A success body with no token and no temp_token cannot enrol the
+        # device; the driver must not loop back into a "new device" login.
+        account = qareeb_account()
+        account.set_secret(qareeb_driver.SECRET_VERIFICATION, "otp-session")
+        account.save()
+        fake = _FakeQareeb()
+        fake.on("POST", qareeb_driver.VERIFY_CODE_PATH, _Resp(200, {"status": True}))
+        with patch_qareeb(fake):
+            result = provider_for(account).confirm_verification("1234")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNEXPECTED)
+        self.assertEqual(fake.paths("POST").count(qareeb_driver.LOGIN_PATH), 0)
 
 
 class QareebHistoryTests(TestCase):

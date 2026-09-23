@@ -54,11 +54,27 @@ POST /api/login/
 4) POST /api/verify_otp/
      → {"phone": "<phone>", "otp": "<code>", "uuid": "<from step 3>"}
      ← 400 {"error": "رمز التحقق غير صحيح"}      # wrong code (captured)
-     ← 200 (success): tokens as /api/login/       # INFERRED, not captured
+     ← 200 {"status": true, "detail": "OTP verified successfully.",
+            "temp_token": "<36-char single-use handle>"}   # (driven live 2026-09-23)
+5) POST /api/login_with_otp/                     # spend the handle for a session
+     → {"username": "<phone>", "temp_token": "<from step 4>"}
+     ← 200 tokens as /api/login/  (access/refresh + profile; role, is_first_time…)
 ```
+**verify_otp does NOT log you in.** It only proves the phone and hands back a
+short-lived, single-use `temp_token`; the device stays *untrusted* and there is
+no session in that body. Step 5 (`/api/login_with_otp/` with `{username,
+temp_token}`) is what enrols the device and returns `access`/`refresh` — and
+only after it does the plain password login start working. This was the bug in
+the first driver: the first capture only ever recorded a *wrong* code, so
+step 5 was invisible and the success body was mis-inferred as the login's.
+The `temp_token` is **not** a JWT (a 36-char handle) — it is rejected as a
+bearer and at `/api/token/refresh/`; it is only valid as the `temp_token` body
+field at `/api/login_with_otp/`.
+
 **Consequence for a driver:** the OTP path needs a human to read the captcha
 image, so connecting a *new device* can't be fully headless. A known device
-uses the plain password login above. (Token-refresh endpoint not captured.)
+uses the plain password login above. (`/api/token/refresh/` exists — SimpleJWT
+shape — but the driver re-logs-in by password on a 401 instead.)
 
 ### Logout
 ```
@@ -226,11 +242,12 @@ GET /api/v2/otp/step1
                "help_text": "<Arabic>"}}
 ```
 The driver fetches the image and passes it to the owner as a `data:` URL. It
-sends the answer to `/api/v2/otp/` and the texted code to `/api/verify_otp/`.
+sends the answer to `/api/v2/otp/`, the texted code to `/api/verify_otp/`, and
+the returned `temp_token` to `/api/login_with_otp/` (steps 4–5 above).
 
 ## Deliberately NOT captured
-- `verify_otp` **success** body — inferred from `/api/login/`.
-- Any **token-refresh** endpoint — not exercised.
+- Any **token-refresh** endpoint — `/api/token/refresh/` exists (SimpleJWT
+  shape) but is unused; the driver re-logs-in by password on a 401.
 
 ## Product image 404s are normal
 `GET /media/products/<n>.png|jpeg` frequently returns **404** (tiny HTML body) —

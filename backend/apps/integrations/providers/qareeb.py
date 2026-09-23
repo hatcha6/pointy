@@ -19,6 +19,16 @@ established, and what this driver therefore must not assume:
   knows. The device is recognised by the identity headers the app sends —
   ``x-device-uuid`` and ``identifier`` — which this driver mints once per
   account and never changes.
+* **The one-time code is a two-step exchange, not a login.**
+  ``POST /api/verify_otp/`` only proves the phone: it answers ``{status,
+  detail, temp_token}`` — a short-lived, single-use handle — and neither trusts
+  the device nor returns a session. The device is enrolled by *spending* that
+  handle at ``POST /api/login_with_otp/`` ``{username, temp_token}``, which is
+  what hands back ``access``/``refresh``; only then does the plain password
+  login work. This was learned by driving the flow live (2026-09-23): the first
+  capture only ever recorded a *wrong* code, so the success path — and this
+  second call — was invisible, and the driver had guessed ``verify_otp``
+  returned the login body. It does not. See :meth:`_exchange_temp_token`.
 * **Firebase App Check guards the app, not the API — today.** The app refuses
   to log in when its own attestation fails, but not one request to
   ``api.qareb.ly`` in the capture carried an App Check token: no
@@ -111,6 +121,14 @@ LOGIN_PATH = "/api/login/"
 CAPTCHA_PATH = "/api/v2/otp/step1"
 SEND_CODE_PATH = "/api/v2/otp/"
 VERIFY_CODE_PATH = "/api/verify_otp/"
+#: Spending the one-time code's ``temp_token`` for real tokens. ``verify_otp``
+#: only proves the phone; it answers ``{status, detail, temp_token}`` and does
+#: *not* trust the device or hand back a session. That second call is what
+#: enrols the device — until it is made, an ordinary password login keeps
+#: answering "new device". (Captured live 2026-09-23; the first capture only
+#: ever saw a *wrong* code, so this step was invisible and the driver guessed
+#: verify_otp returned the login body. It does not.)
+LOGIN_WITH_OTP_PATH = "/api/login_with_otp/"
 ACCOUNT_PATH = "/api/store/v1/account_info/"
 CATALOG_PATH = "/api/store/v2/product_list_detailed/in_stock/"
 BRAND_PATH = "/api/store/v1/get_product_price/{code}/"
@@ -1000,24 +1018,79 @@ class QareebProvider(IntegrationProvider):
                 ),
                 error_detail=_message(payload) or f"code check answered {response.status_code}",
             )
-        # The success body was never captured; the capture's best guess is
-        # that it is the login's. Take a token when there is one, and when
-        # there is not, the device is trusted now — so the password logs in.
-        access = _plain_str((payload or {}).get("access")) if isinstance(payload, dict) else ""
+        # ``verify_otp`` answers ``{status, detail, temp_token}`` — the phone is
+        # proven, but the device is not yet trusted and there is no session in
+        # this body. The ``temp_token`` is a short-lived, single-use handle that
+        # must be spent at once for the real tokens (see LOGIN_WITH_OTP_PATH).
+        # A defensive branch still takes an ``access`` if a future server ever
+        # returns one here directly.
+        data = payload if isinstance(payload, dict) else {}
+        access = _plain_str(data.get("access"))
         if access:
             self._store_secrets(
                 **{
                     SECRET_ACCESS: access,
-                    SECRET_REFRESH: _plain_str(payload.get("refresh")),
+                    SECRET_REFRESH: _plain_str(data.get("refresh")),
                     SECRET_VERIFICATION: "",
                 }
             )
             return VerificationResult(ok=True)
+        temp_token = _plain_str(data.get("temp_token"))
+        if temp_token:
+            token, error, detail = self._exchange_temp_token(temp_token)
+            if not token:
+                return VerificationResult(ok=False, error_code=error, error_detail=detail)
+            return VerificationResult(ok=True)
+        # No token and no temp_token: nothing to spend and the device is not
+        # enrolled, so a password login would only answer "new device" again.
+        # Say so plainly rather than looping back through a login that fails.
         self._store_secrets(**{SECRET_VERIFICATION: ""})
-        token, error, detail = self._login()
-        if not token:
-            return VerificationResult(ok=False, error_code=error, error_detail=detail)
-        return VerificationResult(ok=True)
+        return VerificationResult(
+            ok=False,
+            error_code=ERROR_UNEXPECTED,
+            error_detail=_message(payload) or "code accepted but no token was issued",
+        )
+
+    def _exchange_temp_token(self, temp_token: str) -> tuple[str, str, str]:
+        """``(access_token, error_code, detail)`` — spend a verify_otp handle.
+
+        Trades the ``temp_token`` from :data:`VERIFY_CODE_PATH` for a real
+        session at :data:`LOGIN_WITH_OTP_PATH`. This is the call that actually
+        enrols the device; on success the password login works ever after.
+        """
+        self._note(STEP_LOGIN)
+        try:
+            response = self._http().post(
+                self._url(LOGIN_WITH_OTP_PATH),
+                json={"username": self.account.username, "temp_token": temp_token},
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+        except requests.RequestException as exc:
+            return "", ERROR_UNREACHABLE, str(exc)
+        self._observe(http_status=response.status_code)
+        payload = _json(response)
+        if _demands_attestation(response, payload):
+            return "", ERROR_ATTESTATION_REQUIRED, _message(payload)
+        if response.status_code >= 500:
+            return "", ERROR_PROVIDER_ERROR, f"code exchange answered {response.status_code}"
+        if not isinstance(payload, dict):
+            self._observe(shape_ok=False)
+            return "", ERROR_UNEXPECTED, "code exchange did not answer JSON"
+        if response.status_code >= 400:
+            return "", ERROR_VERIFICATION_REJECTED, _message(payload) or "code exchange rejected"
+        access = _plain_str(payload.get("access"))
+        if not access:
+            self._observe(shape_ok=False)
+            return "", ERROR_UNEXPECTED, "code exchange answered without a token"
+        self._store_secrets(
+            **{
+                SECRET_ACCESS: access,
+                SECRET_REFRESH: _plain_str(payload.get("refresh")),
+                SECRET_VERIFICATION: "",
+            }
+        )
+        return access, "", ""
 
 
 # --- the shared basket --------------------------------------------------------
