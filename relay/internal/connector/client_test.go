@@ -514,3 +514,204 @@ func TestServeSessionDoesNotInjectConnectorTokenForNormalPath(t *testing.T) {
 		t.Fatalf("connector token must not be injected on normal paths, got %q", gotToken)
 	}
 }
+
+// endlessBackend answers with a body that never ends — a camera's MJPEG
+// stream — and reports when the connector cancels the request.
+func endlessBackend(cancelled chan<- struct{}) *http.Client {
+	return &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			reader, writer := io.Pipe()
+			go func() {
+				frame := []byte(strings.Repeat("f", 4096))
+				for {
+					select {
+					case <-request.Context().Done():
+						writer.CloseWithError(request.Context().Err())
+						close(cancelled)
+						return
+					default:
+					}
+					if _, err := writer.Write(frame); err != nil {
+						return
+					}
+					time.Sleep(5 * time.Millisecond)
+				}
+			}()
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          reader,
+				ContentLength: -1,
+				Header: http.Header{
+					"Content-Type": []string{"multipart/x-mixed-replace; boundary=frame"},
+				},
+				Request: request,
+			}, nil
+		}),
+	}
+}
+
+// A device watching a camera over the relay closes the view; the relay closes
+// the stream. The connector used to keep reading the backend's endless MJPEG
+// and pushing it into the tunnel for good — a backend thread, a camera
+// pipeline and a slice of the shop's uplink held for nobody.
+func TestServeSessionCancelsBackendWhenRelayClosesMidBody(t *testing.T) {
+	cancelled := make(chan struct{})
+	session := startClientSession(t, Client{
+		BackendURL:     parseBackendURL(t),
+		Logger:         testLogger(),
+		HTTPClient:     endlessBackend(cancelled),
+		RequestTimeout: 30 * time.Second,
+	})
+
+	stream := openRequestStream(t, session, "/api/surveillance/cameras/1/live/")
+	response := readStreamResponse(t, stream)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	if _, err := io.ReadFull(response.Body, make([]byte, 8192)); err != nil {
+		t.Fatalf("expected body bytes before hanging up: %v", err)
+	}
+	_ = stream.Close()
+
+	select {
+	case <-cancelled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("backend request kept running after the relay closed the stream")
+	}
+}
+
+// The relay gives up (its deadline passed, the device left) while the backend
+// is still working out the response. The backend work must stop then, not
+// run to completion and be pushed into a tunnel nobody reads.
+func TestServeSessionCancelsBackendWhenRelayClosesBeforeHeaders(t *testing.T) {
+	started := make(chan struct{})
+	cancelled := make(chan struct{})
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			close(started)
+			<-request.Context().Done()
+			close(cancelled)
+			return nil, request.Context().Err()
+		}),
+	}
+	session := startClientSession(t, Client{
+		BackendURL:     parseBackendURL(t),
+		Logger:         testLogger(),
+		HTTPClient:     backendClient,
+		RequestTimeout: 30 * time.Second,
+	})
+
+	stream := openRequestStream(t, session, "/api/relay/diagnostics/analytics-export/")
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("request never reached the backend")
+	}
+	_ = stream.Close()
+
+	select {
+	case <-cancelled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("backend request kept running after the relay closed the stream")
+	}
+}
+
+// A tunnel that dies without a reset — a NAT dropping the mapping, an uplink
+// blackholing — sends nothing more. The connector must notice and redial
+// rather than wait out TCP keepalive while the relay routes devices into it.
+func TestServeSessionClosesATunnelThatWentSilent(t *testing.T) {
+	relayRaw, connectorRaw := net.Pipe()
+	defer relayRaw.Close()
+	// The relay end is never served: no pong, no frame of any kind.
+	connectorSession := protocol.NewSession(protocol.NewConn(connectorRaw))
+	client := Client{
+		BackendURL:        parseBackendURL(t),
+		Logger:            testLogger(),
+		HTTPClient:        &http.Client{},
+		KeepaliveInterval: 20 * time.Millisecond,
+		DeadTunnelTimeout: 120 * time.Millisecond,
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- client.ServeSession(context.Background(), connectorSession) }()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		_ = connectorSession.Close()
+		t.Fatal("connector kept a silent tunnel open")
+	}
+}
+
+func TestServeSessionKeepsATunnelThatAnswersPings(t *testing.T) {
+	session := startClientSession(t, Client{
+		BackendURL: parseBackendURL(t),
+		Logger:     testLogger(),
+		HTTPClient: &http.Client{
+			Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				return textResponse(request, http.StatusOK, "still here"), nil
+			}),
+		},
+		KeepaliveInterval: 20 * time.Millisecond,
+		DeadTunnelTimeout: 120 * time.Millisecond,
+	})
+
+	// Several dead-tunnel windows with no traffic but the pings themselves.
+	time.Sleep(500 * time.Millisecond)
+
+	stream := openRequestStream(t, session, "/api/products/")
+	defer stream.Close()
+	response := readStreamResponse(t, stream)
+	if body := readResponseBody(t, response); body != "still here" {
+		t.Fatalf("an answering tunnel must stay up, got %q", body)
+	}
+}
+
+func TestRunRedialsPromptlyAfterAHealthySession(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var waits []time.Duration
+	calls := 0
+	client := Client{
+		Logger:           testLogger(),
+		ReconnectMinWait: time.Second,
+		ReconnectMaxWait: time.Hour,
+		healthySession:   20 * time.Millisecond,
+	}
+	err := client.run(
+		ctx,
+		func(context.Context) error {
+			calls++
+			if calls == 3 {
+				// This one connected and served for a while before dropping.
+				time.Sleep(40 * time.Millisecond)
+			}
+			return errors.New("session ended")
+		},
+		func(ctx context.Context, wait time.Duration) error {
+			waits = append(waits, wait)
+			if len(waits) == 3 {
+				cancel()
+				return ctx.Err()
+			}
+			return nil
+		},
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation, got %v", err)
+	}
+	want := []time.Duration{time.Second, 2 * time.Second, time.Second}
+	if len(waits) != len(want) {
+		t.Fatalf("expected waits %v, got %v", want, waits)
+	}
+	for i := range want {
+		if waits[i] != want[i] {
+			t.Fatalf("expected waits %v, got %v", want, waits)
+		}
+	}
+}

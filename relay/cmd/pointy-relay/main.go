@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -2247,9 +2248,22 @@ func (a *adminControlFlags) pullDiagnosticsToFile(
 	return header, n, nil
 }
 
+// Bounds for streaming a download (a diagnostics export) down through the
+// relay. How long a download takes is the export's size divided by the SHOP's
+// uplink, so the admin client's total deadline — the 10s every JSON call uses —
+// failed every real pull with "Client.Timeout exceeded", and each abandoned
+// pull left the export running on the shop's server. These bound the two
+// things that do mean "stuck" instead: the wait for the relay to start
+// answering (it gives up on a silent connector itself at 60s), and a body that
+// stops moving.
+var (
+	downloadHeaderTimeout = 90 * time.Second
+	downloadIdleTimeout   = 2 * time.Minute
+)
+
 // requestBinary performs an authenticated admin API call and streams the
 // response body into dst. Unlike requestJSON it neither caps nor buffers the
-// body, so it suits large export downloads.
+// body, and it has no total deadline, so it suits large export downloads.
 func (a *adminControlFlags) requestBinary(
 	method, path string,
 	query url.Values,
@@ -2276,14 +2290,33 @@ func (a *adminControlFlags) requestBinary(
 	if err != nil {
 		return nil, 0, err
 	}
-	request, err := http.NewRequest(method, endpoint.String(), nil)
+	// A copy, so the JSON client's total deadline never applies to a body
+	// whose length is set by a shop's uplink. The watchdogs below replace it.
+	download := *client
+	download.Timeout = 0
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var headerExpired, bodyStalled atomic.Bool
+	headerWatchdog := time.AfterFunc(downloadHeaderTimeout, func() {
+		headerExpired.Store(true)
+		cancel()
+	})
+	request, err := http.NewRequestWithContext(ctx, method, endpoint.String(), nil)
 	if err != nil {
+		headerWatchdog.Stop()
 		return nil, 0, err
 	}
 	request.Header.Set("Accept", "application/zip")
 	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(*a.adminToken))
-	response, err := client.Do(request)
+	response, err := download.Do(request)
+	headerWatchdog.Stop()
 	if err != nil {
+		if headerExpired.Load() {
+			return nil, 0, fmt.Errorf(
+				"relay admin %s %s: no response within %s (the shop's server or its connector did not answer)",
+				method, path, downloadHeaderTimeout,
+			)
+		}
 		return nil, 0, err
 	}
 	defer response.Body.Close()
@@ -2294,11 +2327,42 @@ func (a *adminControlFlags) requestBinary(
 			method, path, response.StatusCode, strings.TrimSpace(string(payload)),
 		)
 	}
-	n, err := io.Copy(dst, response.Body)
+	idleWatchdog := time.AfterFunc(downloadIdleTimeout, func() {
+		bodyStalled.Store(true)
+		cancel()
+	})
+	defer idleWatchdog.Stop()
+	n, err := io.Copy(dst, idleResettingReader{
+		reader: response.Body,
+		timer:  idleWatchdog,
+		window: downloadIdleTimeout,
+	})
 	if err != nil {
+		if bodyStalled.Load() {
+			return response.Header, n, fmt.Errorf(
+				"relay admin %s %s: download stalled — no data for %s after %s",
+				method, path, downloadIdleTimeout, humanBytes(n),
+			)
+		}
 		return response.Header, n, err
 	}
 	return response.Header, n, nil
+}
+
+// idleResettingReader pushes an idle watchdog out every time bytes arrive, so
+// only a body that stops moving trips it.
+type idleResettingReader struct {
+	reader io.Reader
+	timer  *time.Timer
+	window time.Duration
+}
+
+func (r idleResettingReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 {
+		r.timer.Reset(r.window)
+	}
+	return n, err
 }
 
 func diagnosticsResultFromHeader(id, outPath string, n int64, header http.Header) diagnosticsResult {

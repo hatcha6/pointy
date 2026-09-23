@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 var (
@@ -22,16 +23,38 @@ type Session struct {
 	mu           sync.RWMutex
 	streams      map[uint64]*Stream
 	closeOnce    sync.Once
+
+	// lastFrameAt is when the peer last sent anything (unix nanoseconds).
+	lastFrameAt atomic.Int64
 }
 
 func NewSession(conn *Conn) *Session {
-	return &Session{
+	session := &Session{
 		conn:         conn,
 		incoming:     make(chan *Stream, 256),
 		closed:       make(chan struct{}),
 		nextStreamID: 1,
 		streams:      map[uint64]*Stream{},
 	}
+	session.lastFrameAt.Store(time.Now().UnixNano())
+	return session
+}
+
+// Ping asks the peer for a pong. Any frame the peer sends back — the pong or
+// ordinary traffic — refreshes SinceLastFrame, which is what a liveness check
+// reads.
+func (s *Session) Ping() error {
+	return s.writeFrame(Frame{Type: FramePing})
+}
+
+// SinceLastFrame is how long ago the peer last sent a frame of any kind.
+func (s *Session) SinceLastFrame() time.Duration {
+	return time.Since(time.Unix(0, s.lastFrameAt.Load()))
+}
+
+// Done is closed once the session has ended.
+func (s *Session) Done() <-chan struct{} {
+	return s.closed
 }
 
 func (s *Session) Run() error {
@@ -44,6 +67,7 @@ func (s *Session) Run() error {
 			}
 			return err
 		}
+		s.lastFrameAt.Store(time.Now().UnixNano())
 		switch frame.Type {
 		case FrameOpen:
 			stream := newStream(frame.StreamID, s)
@@ -182,6 +206,13 @@ func (s *Stream) ID() uint64 {
 	return s.id
 }
 
+// Done is closed once the stream is finished: the peer closed or reset it, it
+// was closed locally, or the session ended. Whoever serves a stream can watch
+// it to abandon work the other end no longer wants.
+func (s *Stream) Done() <-chan struct{} {
+	return s.readDone
+}
+
 func (s *Stream) Read(p []byte) (int, error) {
 	s.readMu.Lock()
 	defer s.readMu.Unlock()
@@ -220,9 +251,25 @@ func (s *Stream) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+// Write sends p to the peer. It fails with ErrStreamClosed once the stream has
+// been closed from EITHER end — the peer's FrameClose/FrameError, a local
+// Close, or the session going down — and it checks before every chunk, so a
+// long write stops mid-body.
+//
+// Without that check a writer never learned the reader had gone. The relay
+// closes a stream when the device that asked hangs up, a request times out, or
+// an operator's download is cut short; the connector went on reading the
+// backend's response and pushing it up the shop's uplink to a relay that drops
+// frames for unknown streams. For a response with an end — a diagnostics
+// export — that ran the whole export on the shop's server for nobody; for one
+// with no end — a camera's MJPEG stream, an AI turn — it never stopped, and
+// every one of them held a backend thread and a share of the uplink.
 func (s *Stream) Write(p []byte) (int, error) {
 	written := 0
 	for len(p) > 0 {
+		if s.closed() {
+			return written, ErrStreamClosed
+		}
 		chunkSize := len(p)
 		if chunkSize > DataChunkSize {
 			chunkSize = DataChunkSize
@@ -273,4 +320,19 @@ func (s *Stream) closeRead() {
 	s.readOnce.Do(func() {
 		close(s.readDone)
 	})
+}
+
+// closed reports whether the stream is finished in both directions. The
+// protocol has no half-close: readDone is closed by the peer's FrameClose or
+// FrameError, by a local Close, and for every stream when the session ends, so
+// it is the one signal that nothing more should be written either.
+func (s *Stream) closed() bool {
+	select {
+	case <-s.readDone:
+		return true
+	case <-s.session.closed:
+		return true
+	default:
+		return false
+	}
 }

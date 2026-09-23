@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"pointy/relay/internal/limit"
@@ -32,7 +34,22 @@ type Client struct {
 	HTTPClient            *http.Client
 	UseTLS                bool
 	TLSConfig             *tls.Config
+	// KeepaliveInterval is how often the connector pings the relay, and
+	// DeadTunnelTimeout how long the relay may stay silent before the tunnel
+	// is declared dead and redialled. Zero means the defaults below.
+	KeepaliveInterval time.Duration
+	DeadTunnelTimeout time.Duration
+
+	// healthySession is how long a session must have lasted for its loss to
+	// count as a dropped connection rather than a failed attempt (tests).
+	healthySession time.Duration
 }
+
+const (
+	defaultKeepaliveInterval = 20 * time.Second
+	defaultDeadTunnelTimeout = 60 * time.Second
+	defaultHealthySession    = time.Minute
+)
 
 func (c Client) Run(ctx context.Context) error {
 	return c.run(ctx, c.RunOnce, sleepContext)
@@ -52,17 +69,31 @@ func (c Client) run(ctx context.Context, runOnce runOnceFunc, wait reconnectWait
 		maxWait = 30 * time.Second
 	}
 
+	healthy := c.healthySession
+	if healthy == 0 {
+		healthy = defaultHealthySession
+	}
+
 	attempt := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		startedAt := time.Now()
 		err := runOnce(ctx)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		c.logger().Warn("relay connector session ended", "error", err)
 
+		// A session that held for a while was a working tunnel that dropped,
+		// not a relay refusing us: redial promptly. The count never reset
+		// before, so after a handful of drops over a day every reconnect sat
+		// out the full maximum wait while the relay told the shop's remote
+		// devices it was offline.
+		if time.Since(startedAt) >= healthy {
+			attempt = 0
+		}
 		reconnectWait := backoff(attempt, minWait, maxWait)
 		attempt++
 		if err := wait(ctx, reconnectWait); err != nil {
@@ -144,6 +175,8 @@ func (c Client) ServeSession(ctx context.Context, session *protocol.Session) err
 	}()
 
 	c.logger().Info("relay connector session established")
+	stopKeepalive := c.keepTunnelAlive(session)
+	defer stopKeepalive()
 	requestLimiter := limit.New(c.MaxConcurrentRequests)
 	for {
 		acceptCtx, cancel := context.WithCancel(ctx)
@@ -169,6 +202,60 @@ func (c Client) ServeSession(ctx context.Context, session *protocol.Session) err
 			c.handleStream(ctx, stream)
 		}()
 	}
+}
+
+// keepTunnelAlive pings the relay on a fixed cadence and closes the session
+// once the relay has gone silent for longer than DeadTunnelTimeout, so Run
+// redials.
+//
+// Nothing else notices a tunnel that died without a reset — a NAT that dropped
+// the mapping, an uplink that blackholed. Both ends kept believing in it until
+// TCP keepalive gave up, around five minutes, and all that time the relay went
+// on routing the shop's remote devices into it, each request hanging for the
+// full relay deadline before it failed.
+func (c Client) keepTunnelAlive(session *protocol.Session) (stop func()) {
+	interval := c.KeepaliveInterval
+	if interval <= 0 {
+		interval = defaultKeepaliveInterval
+	}
+	deadAfter := c.DeadTunnelTimeout
+	if deadAfter <= 0 {
+		deadAfter = defaultDeadTunnelTimeout
+	}
+	done := make(chan struct{})
+	var pinging atomic.Bool
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-session.Done():
+				return
+			case <-ticker.C:
+			}
+			if silent := session.SinceLastFrame(); silent > deadAfter {
+				c.logger().Warn(
+					"relay tunnel went silent; reconnecting",
+					"silent_for", silent.Round(time.Second).String(),
+				)
+				_ = session.Close()
+				return
+			}
+			// A write into a dead connection blocks once the socket buffer is
+			// full. Ping from a goroutine so that can never stall the silence
+			// check above, and never stack pings behind one another.
+			if pinging.CompareAndSwap(false, true) {
+				go func() {
+					defer pinging.Store(false)
+					_ = session.Ping()
+				}()
+			}
+		}
+	}()
+	var once sync.Once
+	return func() { once.Do(func() { close(done) }) }
 }
 
 func rejectStream(stream *protocol.Stream, statusCode int, message string) {
@@ -205,8 +292,23 @@ func (c Client) handleStream(ctx context.Context, stream *protocol.Stream) {
 
 	outbound, cancel, headersReceived := c.backendRequest(ctx, request)
 	defer cancel()
+	// The relay closes the stream when whoever asked is gone — a device that
+	// hung up, a request past the relay's deadline, an operator's download cut
+	// short. Stop the backend work at that moment, whether it is still
+	// computing the response or already streaming it: nothing will read it.
+	go func() {
+		select {
+		case <-stream.Done():
+			cancel()
+		case <-outbound.Context().Done():
+		}
+	}()
 	response, err := c.httpClient().Do(outbound)
 	if err != nil {
+		if abandoned(stream) {
+			c.logger().Info("relay abandoned request before the backend answered", "path", request.URL.Path)
+			return
+		}
 		c.logger().Warn("relay connector backend request failed", "error", err)
 		_ = writeHTTPError(stream, http.StatusBadGateway, "on-prem backend request failed")
 		return
@@ -220,9 +322,23 @@ func (c Client) handleStream(ctx context.Context, stream *protocol.Stream) {
 	// RequestTimeout mid-body, while an idle clock only cuts a stalled one.
 	idleGuard := headersReceived(response)
 	if err := response.Write(stream); err != nil && !errors.Is(err, io.ErrClosedPipe) {
-		c.logger().Warn("relay connector response write failed", "error", err)
+		if abandoned(stream) {
+			c.logger().Info("relay abandoned response; backend request cancelled", "path", request.URL.Path)
+		} else {
+			c.logger().Warn("relay connector response write failed", "error", err)
+		}
 	}
 	idleGuard.Stop()
+}
+
+// abandoned reports whether the relay end has already closed the stream.
+func abandoned(stream *protocol.Stream) bool {
+	select {
+	case <-stream.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 // backendRequest builds the outbound backend request. RequestTimeout is
@@ -236,12 +352,12 @@ func (c Client) backendRequest(
 	ctx context.Context,
 	request *http.Request,
 ) (*http.Request, context.CancelFunc, func(*http.Response) *bodyIdleGuard) {
-	requestContext := ctx
-	cancel := context.CancelFunc(func() {})
+	// Always cancellable, deadline or not: the caller cancels it the moment
+	// the relay abandons the stream.
+	requestContext, cancelRequest := context.WithCancel(ctx)
+	cancel := cancelRequest
 	headersReceived := func(*http.Response) *bodyIdleGuard { return &bodyIdleGuard{} }
 	if c.RequestTimeout > 0 {
-		cancelCtx, cancelRequest := context.WithCancel(ctx)
-		requestContext = cancelCtx
 		// Phase one: cancel outright if headers do not arrive in time.
 		headerTimer := time.AfterFunc(c.RequestTimeout, cancelRequest)
 		cancel = func() {
