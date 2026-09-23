@@ -219,20 +219,42 @@ class Product(TimeStampedModel):
     # without stock of their own; the kitchen job consumes their recipe
     # ingredients instead.
     is_prepared = models.BooleanField(default=False)
-    # A product a *feature* created so its sales have something to hang on,
-    # not a thing the shop chose to stock. Today that is one service product
-    # per recharge provider (apps.integrations.provisioning): every order line
-    # must point at a real variant, so a top-up is rung up as one.
+    # A product a *feature* created and owns, not a thing the shop chose to
+    # stock. The feature is its only writer: no person edits, archives,
+    # reprices or restocks one, through any screen or the API — a hand edit
+    # would be overwritten by the next sync at best, and at worst would sell
+    # something the provider no longer honours. Two kinds, see ``SystemKind``.
     #
-    # It is priced per line from the provider's live quote, so its own price
-    # is zero and always will be — which is exactly why it must not be
-    # browsable. On a till it appeared in the catalog grid as «شحن اشتراك
-    # LNET — 0.00 د.ل», near the front because the default sort is most-bought
-    # and a busy agency sells hundreds of top-ups; tapping it added a free
-    # line that topped nobody up. Hidden from every surface that sells or
-    # quotes (the catalog list, the price checker), kept in the back office
-    # under ?system=all so an owner can still rename it and read its profit.
+    # The recharge service products (apps.integrations.provisioning) are why
+    # the hiding exists: priced per line from the provider's live quote, their
+    # own price is zero, and on a till one appeared in the grid as «شحن اشتراك
+    # LNET — 0.00 د.ل», near the front because the default sort is most-bought;
+    # tapping it added a free line that topped nobody up. So system products
+    # are hidden from every surface that sells or quotes (the catalog list,
+    # the price checker) unless a surface asks — the back office for all of
+    # them (?system=all), the till for the ones it sells (?system=sellable).
     is_system = models.BooleanField(default=False, db_index=True)
+
+    class SystemKind(models.TextChoices):
+        #: Rung up only through its own flow — a top-up screen that prices it
+        #: from a live quote. Never browsable.
+        SERVICE = "service", "Sold through its own flow"
+        #: A card off a provider's shelf (apps.integrations.vouchers). Sold
+        #: from the catalog like anything else — search it, tap it, choose the
+        #: denomination — so the till lists it; nobody may edit it.
+        VOUCHER = "voucher", "Provider card"
+
+    #: Which kind of system product this is. Blank for everything the shop owns.
+    #: ``db_default`` as well as ``default``: the previous release, still
+    #: serving for the minute a live update overlaps, creates products with an
+    #: INSERT that names no such column. See DOCUMENT_LIFECYCLE_PLAN.md §11.
+    system_kind = models.CharField(
+        max_length=16,
+        choices=SystemKind.choices,
+        blank=True,
+        default="",
+        db_default="",
+    )
     # Denormalized "most bought" score: the count of paid sale lines this product's
     # variants appear on within a rolling 90-day window, recomputed nightly by
     # ``catalog.recompute_product_popularity``. It is the catalog's default sort key
@@ -466,6 +488,9 @@ class ProductAlias(TimeStampedModel):
         # Recorded distinctly so machine-made aliases can be weighted lower —
         # or revoked in bulk — without touching what users confirmed themselves.
         AI_ADJUDICATED = "ai_adjudicated", "AI adjudicated"
+        # Written by the feature that owns a system product — a provider
+        # card's English name, so "libyana" finds «ليبيانا».
+        SYSTEM = "system", "Set by a feature"
 
     product = models.ForeignKey(
         Product,
@@ -509,6 +534,10 @@ class ProductAlias(TimeStampedModel):
         alias — so we never store a redundant or empty synonym."""
         from .search_terms import normalize_term
 
+        # A system product's names are its owning feature's to set; an invoice
+        # match or an AI guess must not teach the till a new name for a card.
+        if product.is_system and source != cls.Source.SYSTEM:
+            return None
         text = (text or "").strip()
         normalized = normalize_term(text)
         if not normalized or normalized == normalize_term(product.name):

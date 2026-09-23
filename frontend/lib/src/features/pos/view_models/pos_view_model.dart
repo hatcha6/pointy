@@ -23,6 +23,7 @@ import '../../../data/models/printer_config.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
+import '../../../data/models/voucher_availability.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/register_cash_movement.dart';
@@ -44,6 +45,7 @@ import '../../../data/services/api_error_detail.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/unit_options.dart';
+import '../../../shared/catalog/catalog_layout_controller.dart';
 import '../../../core/analytics_burst_coalescer.dart';
 
 part 'pos_cart_actions.dart';
@@ -255,6 +257,14 @@ class PosViewModel extends ChangeNotifier {
   final PosSearchResetController _searchResetController =
       PosSearchResetController();
 
+  /// Cards or a table: how this till lays out its catalog, remembered per
+  /// device. Held here rather than by the catalog pane, which is rebuilt from
+  /// scratch whenever the window crosses the two-pane breakpoint and would
+  /// otherwise open on cards again before the stored choice came back.
+  final CatalogLayoutController catalogLayout = CatalogLayoutController(
+    storageKey: 'pos_catalog_layout',
+  );
+
   // Local persistence of in-progress sale sessions (see pos_persistence.dart).
   String? _persistScope;
   // Set once the snapshot for [_persistScope] has actually been read back off
@@ -310,6 +320,11 @@ class PosViewModel extends ChangeNotifier {
   /// than one draws a menu. Read from shop settings the till already loads.
   List<String> get connectedIntegrations =>
       _checkoutSettings?.connectedIntegrations ?? const [];
+
+  /// The providers the till's top-up button offers — never a provider whose
+  /// cards are sold from the catalog instead.
+  List<String> get rechargeIntegrations =>
+      _checkoutSettings?.tillRechargeIntegrations ?? const [];
 
   Uint8List? _checkoutShopLogoBytes;
   bool _isLoading = false;
@@ -423,6 +438,9 @@ class PosViewModel extends ChangeNotifier {
     stock: ProductStockFilter.inStockOnly,
     // Cashiers browse "most bought" first so the fast-movers are one tap away.
     ordering: ProductOrdering.mostBought,
+    // A provider's cards (Qareeb) are sold from the catalog like anything
+    // else; the recharge service products stay hidden.
+    system: ProductSystemFilter.sellable,
   );
 
   _PosSaleSession get _activeSaleSession {
@@ -790,6 +808,7 @@ class PosViewModel extends ChangeNotifier {
     _persistDebounce?.cancel();
     _searchFocusController.dispose();
     _searchResetController.dispose();
+    catalogLayout.dispose();
     super.dispose();
   }
 

@@ -70,6 +70,7 @@ class ShopSettings {
     this.defaultPaymentTerms,
     this.enablePurchaseSuggestions = true,
     this.connectedIntegrations = const [],
+    this.lookupIntegrations,
     this.enableSurveillance = false,
     this.surveillancePreRollSeconds = 20,
     this.surveillancePostRollSeconds = 40,
@@ -168,6 +169,21 @@ class ShopSettings {
   /// single provider and a menu for several, and it should not need a second
   /// call to learn which.
   final List<String> connectedIntegrations;
+
+  /// The connected providers the till draws a top-up button for: the ones a
+  /// cashier looks a customer's line up on (HD Box, LNET). A provider that
+  /// sells cards off a shelf (Qareeb) is connected — its float is topped up
+  /// from Expenses like any other — but its cards are products in the
+  /// catalog, so it gets no top-up screen.
+  ///
+  /// Null from a backend that predates the field, which only ever listed
+  /// lookup providers anyway: [tillRechargeIntegrations] then falls back to
+  /// [connectedIntegrations].
+  final List<String>? lookupIntegrations;
+
+  /// What the till's top-up button offers.
+  List<String> get tillRechargeIntegrations =>
+      lookupIntegrations ?? connectedIntegrations;
 
   /// Whether the shop resells anything at all — what hides the till's top-up
   /// button in a shop that does not.
@@ -343,6 +359,11 @@ class ShopSettings {
           (json['connected_integrations'] as List<Object?>? ?? const [])
               .map((value) => value.toString())
               .toList(growable: false),
+      lookupIntegrations: json['lookup_integrations'] is List
+          ? (json['lookup_integrations'] as List<Object?>)
+                .map((value) => value.toString())
+                .toList(growable: false)
+          : null,
       enableSurveillance: _boolFromJson(json['enable_surveillance'], false),
       surveillancePreRollSeconds: _intFromJson(
         json['surveillance_pre_roll_seconds'],

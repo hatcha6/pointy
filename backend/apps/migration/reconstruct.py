@@ -101,15 +101,40 @@ _MAX_ISSUES_PER_KIND = 400
 
 
 def resolve_stock_source(options) -> str:
-    """The effective stock source for a run's options (back-compat aware)."""
+    """How on-hand quantities are established: snapshot, reconstruct or none.
+
+    ``cost_only`` is accepted on the wire and read as ``none`` — it was never a
+    quantity mode, it was "no quantities" and "keep the costs" squashed into
+    one radio button. The costs half now lives in :func:`resolve_carry_costs`.
+    """
     options = options or {}
     raw = options.get("stock_source")
+    if raw == STOCK_SOURCE_COST_ONLY:
+        return STOCK_SOURCE_NONE
     if raw in VALID_STOCK_SOURCES:
         return raw
     # Legacy boolean toggle, predating the three-way stock-source selector.
     if options.get("products_without_quantities"):
         return STOCK_SOURCE_NONE
     return STOCK_SOURCE_SNAPSHOT
+
+
+def resolve_carry_costs(options) -> bool:
+    """Whether each product's cost comes across with the catalogue.
+
+    Its own question, and **on unless someone turns it off**. It used to be a
+    side effect of the quantity choice: "no quantities" dropped the stock
+    record, the cost rode on that record, and a shop that said only "I will
+    count my own shelves" opened with no cost on anything — which is exactly
+    what happened in the field. Every product's first sale then booked its
+    whole price as profit. Nobody asking for fewer *quantities* was asking for
+    that, so the default no longer lets the one decide the other.
+    """
+    options = options or {}
+    if options.get("stock_source") == STOCK_SOURCE_COST_ONLY:
+        return True
+    value = options.get("carry_costs")
+    return True if value is None else bool(value)
 
 
 def _fmt(value: Decimal) -> str:

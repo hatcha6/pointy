@@ -19,6 +19,7 @@ class DeviceSettingsStorageService {
   static const _dashboardCameraIdsKey = 'dashboard_camera_ids';
   static const _cameraWedgeEnabledKey = 'camera_wedge_enabled';
   static const _cameraWedgeDeviceIdKey = 'camera_wedge_device_id';
+  static const _productSearchModePickerKey = 'product_search_mode_picker';
 
   Future<DeviceUsageMode?> loadDeviceUsageMode() async {
     final store = await AppKeyValueStore.instance();
@@ -79,6 +80,25 @@ class DeviceSettingsStorageService {
       return;
     }
     await store.setString(_cameraWedgeDeviceIdKey, deviceId);
+  }
+
+  /// Whether the product searches on this machine — the till, purchasing and
+  /// the catalog — offer a picker for searching by code or by name alone.
+  ///
+  /// Per device, because it follows whoever works at the machine: the counter
+  /// that looks items up by their printed code wants it, the till that only
+  /// ever scans does not. Off unless somebody turned it on.
+  Future<bool> loadProductSearchModePicker() async {
+    final store = await AppKeyValueStore.instance();
+    return await store.getString(_productSearchModePickerKey) == 'true';
+  }
+
+  Future<void> saveProductSearchModePicker(bool enabled) async {
+    final store = await AppKeyValueStore.instance();
+    await store.setString(
+      _productSearchModePickerKey,
+      enabled ? 'true' : 'false',
+    );
   }
 
   /// The light/dark/system preference for this device. `null` when the user has

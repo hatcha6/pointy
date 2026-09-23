@@ -128,6 +128,9 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         return queryset.filter(owner_filter)
 
     def perform_destroy(self, instance):
+        from .serializers import refuse_system_owner
+
+        refuse_system_owner(instance.owner)
         instance.soft_delete(deleted_by=self.request.user)
 
     @action(detail=True, methods=["get"], url_path="download")

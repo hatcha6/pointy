@@ -40,6 +40,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from .fulfillment import fulfillment_kind
 from .models import IntegrationAccount, IntegrationFulfillment
 from .providers import provider_for
 from .services import probe_account
@@ -63,6 +64,15 @@ DRIFT_TOLERANCE = Decimal("1.00")
 
 #: Buy-log rows to read per card. A card renewed yearly for a decade has ten.
 HISTORY_PAGE = 25
+
+#: A card off a shelf is bought within seconds of the checkout being sent, so
+#: an entry outside this window around the attempt is somebody else's purchase
+#: of the same card — the owner's phone buys from the same shelf. The wide
+#: CLOCK_SLACK above suits a portal a human types into; it would let a card
+#: bought an hour earlier on the phone "confirm" a sale it has nothing to do
+#: with, and hand that customer a PIN somebody else already has.
+VOUCHER_MATCH_BEFORE = timedelta(minutes=2)
+VOUCHER_MATCH_AFTER = timedelta(minutes=15)
 
 
 def reconcile_all(*, lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> dict:
@@ -96,13 +106,18 @@ def reconcile_account(
     probe_account(account)
     account.refresh_from_db()
 
-    pending = list(
-        IntegrationFulfillment.objects.filter(
+    pending = [
+        row
+        for row in IntegrationFulfillment.objects.filter(
             account=account,
             status=IntegrationFulfillment.Status.PENDING,
             created_at__gte=since,
         ).order_by("created_at")
-    )
+        # A card nobody ever sent for cannot have been bought for this sale:
+        # anything in the log that matches it is somebody else's card, and
+        # "confirming" on it would hand the customer a PIN already sold.
+        if fulfillment_kind(row) != "voucher"
+    ]
 
     driver = provider_for(account)
     confirmed = 0
@@ -226,7 +241,7 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
                 # back past it is a contradiction for a person to look at.
                 entry = by_reference.get(row.provider_reference)
             else:
-                entry = _best_match(row, ours, claimed)
+                entry = _best_match(row, ours, claimed, window=_voucher_window(row))
 
             if entry is not None:
                 _confirm(row, entry, now=now)
@@ -263,7 +278,7 @@ def _confirm(row, entry, *, now) -> None:
         row.confirmed_at = entry.at or now
         # The provider's own record, kept so the shop can print theirs beside
         # ours instead of a retyped version.
-        row.provider_receipt = {
+        receipt = {
             "reference": entry.reference,
             "cost": str(entry.cost) if entry.cost is not None else "",
             "months": entry.months,
@@ -271,6 +286,12 @@ def _confirm(row, entry, *, now) -> None:
             "operator_name": entry.operator_name,
             "at": entry.at.isoformat() if entry.at else "",
         }
+        # A card whose checkout reply was lost carries its PIN in the log: the
+        # customer can still be handed it, on a reprint of the same receipt.
+        printed = entry.printed or (row.provider_receipt or {}).get("printed")
+        if printed:
+            receipt["printed"] = printed
+        row.provider_receipt = receipt
         row.save(
             update_fields=[
                 "status",
@@ -324,11 +345,23 @@ def _match_card(rows, purchases, *, since, now) -> tuple[int, list]:
     return confirmed, off_book
 
 
-def _best_match(row, entries, claimed):
+def _voucher_window(row):
+    """The instants a voucher row's card can have been bought in, or ``None``."""
+    if fulfillment_kind(row) != "voucher" or row.submitted_at is None:
+        return None
+    return (
+        row.submitted_at - VOUCHER_MATCH_BEFORE,
+        row.submitted_at + VOUCHER_MATCH_AFTER,
+    )
+
+
+def _best_match(row, entries, claimed, *, window=None):
     """The earliest unclaimed provider entry that this sale could be.
 
     Cost must agree exactly — it is the figure the provider itself quoted us —
-    and the purchase cannot predate the sale by more than clock skew.
+    and the purchase cannot predate the sale by more than clock skew. A
+    ``window`` narrows that to the instants the attempt itself could have
+    produced (see ``VOUCHER_MATCH_BEFORE``).
     """
     floor = row.created_at - CLOCK_SLACK
     for entry in sorted(
@@ -338,6 +371,12 @@ def _best_match(row, entries, claimed):
         if entry.cost is None or Decimal(entry.cost) != Decimal(row.cost):
             continue
         if entry.at < floor:
+            continue
+        if window is not None and not (window[0] <= entry.at <= window[1]):
+            continue
+        # Where both sides name what was bought, they must agree: a 10-dinar
+        # Libyana card and a 10-dinar Almadar card cost the float the same.
+        if row.package_id and entry.package_id and row.package_id != entry.package_id:
             continue
         return entry
     return None

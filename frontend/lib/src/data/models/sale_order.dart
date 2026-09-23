@@ -948,6 +948,7 @@ class SaleLineIntegration {
   const SaleLineIntegration({
     required this.provider,
     required this.subscriberRef,
+    this.kind = 'recharge',
     this.subscriberLabel = '',
     this.customerId,
     this.optionLabel = '',
@@ -963,7 +964,11 @@ class SaleLineIntegration {
 
   final String provider;
 
-  /// The subscriber's card/line number at the provider.
+  /// `voucher` for a card off a provider's shelf (its PIN is in [receipt]),
+  /// `recharge` for a top-up of somebody's line.
+  final String kind;
+
+  /// The subscriber's card/line number at the provider. Blank for a card.
   final String subscriberRef;
 
   /// Who the shop says owns that card, if anybody has said.
@@ -995,6 +1000,7 @@ class SaleLineIntegration {
 
   bool get isConfirmed => status == 'confirmed';
   bool get isPending => status == 'pending';
+  bool get isVoucher => kind == 'voucher';
   bool get hasFailed => status == 'failed';
 
   /// A write went out and nobody knows what it did. The dangerous one: it must
@@ -1006,6 +1012,7 @@ class SaleLineIntegration {
   factory SaleLineIntegration.fromJson(Map<String, Object?> json) {
     return SaleLineIntegration(
       provider: json['provider']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? 'recharge',
       subscriberRef: json['subscriber_ref']?.toString() ?? '',
       subscriberLabel: json['subscriber_label']?.toString() ?? '',
       customerId: json['customer_id'] is int

@@ -10,9 +10,13 @@
 //
 // Pick a scenario from the bar across the top, or with `?screen=`:
 //
-//   HD Box: expired | active | expiring | empty-history | notfound | idle
+//   HD Box: expired | active | expiring | empty-history | notfound | idle |
+//           first-use
 //   LNET:   lnet-lines | lnet-single | lnet-expired | lnet-low-float |
 //           lnet-notfound | lnet-idle
+//
+// `idle` and `lnet-idle` open on the recent searches (30-odd rows, so the
+// list pages as it scrolls); `first-use` is a shop that has searched nothing.
 //
 // The fixtures are real shapes from the captured sessions — HD Box's 25/65/
 // 125/220 ladder, LNET's 5% agency commission and its 518.80 float — so the
@@ -26,6 +30,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
 import 'package:pointy_frontend/src/data/models/integration_provider.dart';
+import 'package:pointy_frontend/src/data/models/integration_recent_search.dart';
 import 'package:pointy_frontend/src/data/repositories/integrations_repository.dart';
 import 'package:pointy_frontend/src/data/services/integrations_api_client.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
@@ -88,6 +93,7 @@ const List<_Scenario> _kScenarios = [
     search: _hdBoxCard,
   ),
   _Scenario('idle', 'HD Box · البداية', IntegrationProviderKey.hdbox),
+  _Scenario('first-use', 'HD Box · أول استخدام', IntegrationProviderKey.hdbox),
   // --- LNET: stored value against a line ---------------------------------
   _Scenario(
     'lnet-lines',
@@ -277,6 +283,41 @@ class _FakeRepo extends IntegrationsRepository {
   bool get _isLnet => scenario.startsWith('lnet');
 
   @override
+  Future<Result<IntegrationRecentSearchPage>> loadRecentSearches({
+    required String providerKey,
+    String search = '',
+    String? cursor,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (scenario == 'first-use') {
+      return Ok(
+        const IntegrationRecentSearchPage(searches: [], hasMore: false),
+      );
+    }
+    final term = search.toLowerCase();
+    final matching = [
+      for (final entry in _isLnet ? _lnetRecent() : _hdBoxRecent())
+        if (term.isEmpty ||
+            entry.term.toLowerCase().contains(term) ||
+            entry.cardNo.toLowerCase().contains(term) ||
+            entry.subscriberLabel.contains(search))
+          entry,
+    ];
+    // Offset cursors, 20 a page — the server's are keyset, but the till only
+    // ever hands back the one it was given.
+    final start = cursor == null ? 0 : int.parse(cursor);
+    final end = (start + 20).clamp(0, matching.length);
+    final next = end < matching.length ? '$end' : null;
+    return Ok(
+      IntegrationRecentSearchPage(
+        searches: matching.sublist(start, end),
+        hasMore: next != null,
+        nextCursor: next,
+      ),
+    );
+  }
+
+  @override
   Future<Result<IntegrationCardSnapshot>> lookupCard({
     required String providerKey,
     required String cardNo,
@@ -352,6 +393,94 @@ class _FakeRepo extends IntegrationsRepository {
   }
 }
 
+// --- Recent searches -------------------------------------------------------
+// Relative to the real clock, not kToday: the rows say "today" and
+// "yesterday", and those are about when the preview is looked at.
+
+DateTime _ago({int days = 0, int hours = 0, int minutes = 0}) => DateTime.now()
+    .subtract(Duration(days: days, hours: hours, minutes: minutes));
+
+List<IntegrationRecentSearch> _hdBoxRecent() => [
+  IntegrationRecentSearch(
+    id: 1,
+    term: _hdBoxCard,
+    cardNo: _hdBoxCard,
+    subscriberLabel: 'أحمد الورفلي',
+    packageName: 'HDBOX Full package',
+    searchCount: 7,
+    lastSearchedAt: _ago(minutes: 12),
+  ),
+  IntegrationRecentSearch(
+    id: 2,
+    term: '210906811120',
+    cardNo: '210906811120',
+    packageName: 'HDBOX Full package',
+    lastSearchedAt: _ago(hours: 2),
+  ),
+  IntegrationRecentSearch(
+    id: 3,
+    term: '210907004518',
+    cardNo: '210907004518',
+    subscriberLabel: 'سالم المصراتي',
+    packageName: 'Gsport',
+    searchCount: 3,
+    lastSearchedAt: _ago(days: 1, hours: 3),
+  ),
+  for (var index = 0; index < 30; index++)
+    IntegrationRecentSearch(
+      id: 100 + index,
+      term: '2109${(520000 + index * 37).toString().padLeft(8, '0')}',
+      cardNo: '2109${(520000 + index * 37).toString().padLeft(8, '0')}',
+      packageName: index.isEven ? 'HDBOX Full package' : 'HDBOX Active',
+      lastSearchedAt: _ago(days: 2 + index),
+    ),
+];
+
+List<IntegrationRecentSearch> _lnetRecent() => [
+  IntegrationRecentSearch(
+    id: 1,
+    term: 'basheir.shop',
+    searchBy: 'username',
+    cardNo: 'basheir.shop',
+    packageName: 'Unlimited Home Basic Plus',
+    lastSearchedAt: _ago(minutes: 5),
+  ),
+  IntegrationRecentSearch(
+    id: 2,
+    term: _lnetPhone,
+    searchBy: 'mobile',
+    matchCount: 3,
+    searchCount: 4,
+    lastSearchedAt: _ago(minutes: 6),
+  ),
+  IntegrationRecentSearch(
+    id: 3,
+    term: '0925551234',
+    searchBy: 'mobile',
+    cardNo: 'alhussainbasheir',
+    subscriberLabel: 'الحسين بشير',
+    packageName: 'Unlimited Home Basic',
+    lastSearchedAt: _ago(hours: 4),
+  ),
+  IntegrationRecentSearch(
+    id: 4,
+    term: '771204',
+    searchBy: 'contract_number',
+    cardNo: 'nassim.office',
+    packageName: 'WIFI-Home Basic',
+    lastSearchedAt: _ago(days: 1, hours: 1),
+  ),
+  for (var index = 0; index < 28; index++)
+    IntegrationRecentSearch(
+      id: 100 + index,
+      term: '09${(21000000 + index * 4099).toString()}',
+      searchBy: 'mobile',
+      cardNo: 'line.${1000 + index}',
+      packageName: 'Unlimited Home Basic',
+      lastSearchedAt: _ago(days: 2 + index),
+    ),
+];
+
 // --- HD Box ----------------------------------------------------------------
 
 IntegrationCardSnapshot _hdBoxSnapshot(String scenario) {
@@ -372,6 +501,9 @@ IntegrationCardSnapshot _hdBoxSnapshot(String scenario) {
       startAt: DateTime(2022, 11, 27),
       expireAt: expiry,
       packageName: 'HDBOX Full package',
+      // What the captured card's detail page said. Filled in by the card
+      // view from that page; the card list HD Box searches carries none.
+      cardBalance: 0,
     ),
     offers: const [
       // HD Box's real ladder: cost 25/65/125/220, sold at its recommended
@@ -533,6 +665,7 @@ IntegrationCardSnapshot _lnetSnapshot(String scenario, String searched) {
           startAt: DateTime(2026, 1, 2),
           expireAt: DateTime(2026, 2, 2),
           packageName: 'Unlimited Home Basic Plus',
+          cardBalance: 0,
         ),
         IntegrationCardInfo(
           cardNo: 'basheir.old',
@@ -541,6 +674,7 @@ IntegrationCardSnapshot _lnetSnapshot(String scenario, String searched) {
           startAt: DateTime(2025, 1, 2),
           expireAt: DateTime(2025, 2, 2),
           packageName: 'WIFI-Home Basic',
+          cardBalance: 0,
         ),
       ],
     );

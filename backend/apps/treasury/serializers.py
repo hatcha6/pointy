@@ -6,6 +6,7 @@ never round-trips through a float on its way to the till.
 
 from decimal import Decimal
 
+from django.db import transaction
 from rest_framework import serializers
 
 from apps.core.period_lock import assert_period_open
@@ -43,6 +44,16 @@ class MoneyAccountSerializer(serializers.ModelSerializer):
             "display_order",
             "notes",
         )
+        # DRF reads the model's ``treasury_one_default_account_per_kind``
+        # constraint as "kind is unique" and drops its ``is_default`` condition,
+        # so every edit to a *second* cash box or bank answered 400 "money
+        # account with this kind already exists" — whatever was typed. That is
+        # how an imported "الخزينة الرئيسية" could not have its opening balance
+        # set to zero. The generated check lands on the ``kind`` field, so that
+        # is where it is switched off; the invariant is kept by
+        # ``_take_default`` below, which moves the flag rather than refusing the
+        # save, and the database constraint is still there behind it.
+        extra_kwargs = {"kind": {"validators": []}}
 
     def get_is_routed(self, account) -> bool:
         return account_is_routed(account)
@@ -64,26 +75,35 @@ class MoneyAccountSerializer(serializers.ModelSerializer):
         # shop copies an IBAN off a statement that prints it in groups of four.
         return "".join(str(value or "").split()).upper()
 
-    def _clear_other_defaults(self, instance):
-        MoneyAccount.objects.filter(kind=instance.kind, is_default=True).exclude(
-            pk=instance.pk
-        ).update(is_default=False)
+    @staticmethod
+    def _take_default(kind, *, exclude_pk=None):
+        """Take the default flag off every other account of ``kind``.
 
+        Runs *before* the save, not after: the one-default-per-kind constraint
+        is checked on write, so clearing the old default afterwards meant a
+        second account being made the default hit an IntegrityError first.
+        """
+        others = MoneyAccount.objects.filter(kind=kind, is_default=True)
+        if exclude_pk is not None:
+            others = others.exclude(pk=exclude_pk)
+        others.update(is_default=False)
+
+    @transaction.atomic
     def create(self, validated_data):
         # The first account of a kind is its default, so a shop that adds one
         # account and never opens the settings screen still sees its money.
         if not MoneyAccount.objects.filter(kind=validated_data["kind"]).exists():
             validated_data["is_default"] = True
-        instance = super().create(validated_data)
-        if instance.is_default:
-            self._clear_other_defaults(instance)
-        return instance
+        if validated_data.get("is_default"):
+            self._take_default(validated_data["kind"])
+        return super().create(validated_data)
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        instance = super().update(instance, validated_data)
-        if instance.is_default:
-            self._clear_other_defaults(instance)
-        return instance
+        kind = validated_data.get("kind", instance.kind)
+        if validated_data.get("is_default"):
+            self._take_default(kind, exclude_pk=instance.pk)
+        return super().update(instance, validated_data)
 
 
 class MoneyCountSerializer(serializers.ModelSerializer):

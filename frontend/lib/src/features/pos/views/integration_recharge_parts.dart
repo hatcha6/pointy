@@ -77,6 +77,16 @@ class RechargeCardHero extends StatelessWidget {
         cardHealthColor(health, colors).withValues(alpha: 0.72),
       ],
       pills: [
+        // The customer's own money with the provider — what they ask about
+        // first, so it leads. Only when the provider said: blank is "not
+        // told", and printing 0.00 for it would be telling them they have
+        // nothing.
+        if (card.cardBalance case final credit?)
+          PointyHeroPill(
+            label:
+                '${l10n.rechargeSubscriberBalanceLabel}: ${formatMoney(credit)}',
+            icon: Icons.savings_outlined,
+          ),
         if (card.expireAt != null)
           PointyHeroPill(
             label: l10n.rechargeExpiresOn(formatShortDate(card.expireAt!)),
@@ -94,6 +104,8 @@ class RechargeCardHero extends StatelessWidget {
             label: providerStatusLabel(card.status, l10n),
             icon: Icons.info_outline,
           ),
+        // The shop's float, not the customer's: last, and under its own name,
+        // so the two balances are never read as one.
         if (balance != null)
           PointyHeroPill(
             label: '${l10n.rechargeFloatLabel}: ${formatMoney(balance!)}',
@@ -166,6 +178,11 @@ class _LineRow extends StatelessWidget {
     final theme = Theme.of(context);
     final health = line.health(now: now);
     final tone = cardHealthColor(health, colors);
+    // Which line has money on it is often how a household tells them apart.
+    final credit = line.cardBalance;
+    final detailStyle = theme.textTheme.bodySmall?.copyWith(
+      color: colors.mutedInk,
+    );
 
     return Semantics(
       button: true,
@@ -201,14 +218,31 @@ class _LineRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall,
                     ),
-                    if (line.packageName.isNotEmpty)
-                      Text(
-                        line.packageName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.mutedInk,
-                        ),
+                    if (line.packageName.isNotEmpty || credit != null)
+                      Row(
+                        children: [
+                          // The plan name gives way first: on a narrow till
+                          // an ellipsised package is still recognisable, a
+                          // cut-off balance is a wrong number.
+                          if (line.packageName.isNotEmpty)
+                            Flexible(
+                              child: Text(
+                                line.packageName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: detailStyle,
+                              ),
+                            ),
+                          if (line.packageName.isNotEmpty && credit != null)
+                            Text(' · ', style: detailStyle),
+                          if (credit != null)
+                            Text(
+                              '${l10n.rechargeSubscriberBalanceLabel}: '
+                              '${formatMoney(credit)}',
+                              maxLines: 1,
+                              style: detailStyle,
+                            ),
+                        ],
                       ),
                   ],
                 ),

@@ -26,7 +26,7 @@ filter — it changes what the remaining numbers *mean*. Two cases, both silent:
   entity whole — and the unit cost rides on that entity, so the shop opened with
   no cost on anything and booked the entire selling price of its first sale as
   profit. Cost and quantity are two different facts and a scope has to be able
-  to ask for one without the other (see ``reconstruct.STOCK_SOURCE_COST_ONLY``).
+  to ask for one without the other (see ``reconstruct.resolve_carry_costs``).
 
 So a scope pins the options as well as the entities, and
 :func:`resolve_party_balance_basis` derives the basis from what is actually in
@@ -38,8 +38,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .entity_plan import (
+    STOCK,
+    Selection,
     CATEGORY,
     CUSTOMER,
+    EXPENSE,
+    MONEY_ACCOUNT,
     PARTY_BALANCE,
     PAYMENT,
     PRODUCT,
@@ -55,7 +59,6 @@ from .entity_plan import (
     resolve_selection,
 )
 from .reconstruct import (
-    STOCK_SOURCE_COST_ONLY,
     STOCK_SOURCE_NONE,
     STOCK_SOURCE_SNAPSHOT,
 )
@@ -97,6 +100,11 @@ CUSTOM = "custom"
 EVERYTHING = "everything"
 OPENING_POSITION = "opening_position"
 CATALOGUE_ONLY = "catalogue_only"
+COSTS_ONLY = "costs_only"
+
+#: Run option: attach to the catalogue a previous import created, by the
+#: items' own codes, instead of importing one. See :func:`attach_selection`.
+ATTACH_TO_CATALOGUE = "attach_to_catalogue"
 
 #: The catalogue, priced and costed. The spine of every partial scope.
 _CATALOGUE = (UNIT, CATEGORY, PRODUCT, VARIANT, PRODUCT_UNIT)
@@ -123,6 +131,8 @@ class ImportScope:
         what the source can actually produce."""
         if self.entities is None:
             return tuple(available)
+        if self.options.get(ATTACH_TO_CATALOGUE):
+            return attach_selection(available).entities
         return resolve_selection(self.entities, available=available).entities
 
     def as_dict(self, available=None) -> dict:
@@ -160,9 +170,15 @@ SCOPES: tuple[ImportScope, ...] = (
             "لهم اليوم — بدون نقل سجل الفواتير القديم."
         ),
         entities=_CATALOGUE + _PARTIES,
-        # Cost without quantity: the shop counts its own shelves on day one, but
-        # the first sale must still know what the goods cost.
-        options={"stock_source": STOCK_SOURCE_COST_ONLY, "party_balance_basis": BASIS_CURRENT},
+        # No quantities — the shop counts its own shelves on day one — but the
+        # costs, so the first sale still knows what the goods cost. And no
+        # money accounts: their figure is the balance at the start of the
+        # history this scope leaves behind (``money_account_conflict``).
+        options={
+            "stock_source": STOCK_SOURCE_NONE,
+            "carry_costs": True,
+            "party_balance_basis": BASIS_CURRENT,
+        },
     ),
     ImportScope(
         key=CATALOGUE_ONLY,
@@ -170,6 +186,25 @@ SCOPES: tuple[ImportScope, ...] = (
         description="قائمة الأصناف والتصنيفات والأسعار، بدون عملاء ولا أرصدة ولا فواتير.",
         entities=_CATALOGUE,
         options={"stock_source": STOCK_SOURCE_NONE, "party_balance_basis": BASIS_AUTO},
+    ),
+    ImportScope(
+        key=COSTS_ONLY,
+        label="تحديث التكلفة فقط",
+        description=(
+            "لمحل نُقلت أصنافه من قبل: تُضاف تكلفة كل صنف موجود في دفتر حسب "
+            "الباركود، دون تغيير الأسماء أو الأسعار أو الكميات أو الأرصدة."
+        ),
+        entities=(STOCK,),
+        # The shop is live by the time anyone asks for this: its quantities
+        # are counted, its prices edited, its customers paying. So this touches
+        # the cost and nothing else, and finds each product by its barcode —
+        # a second upload is a new source, and its empty identity map would
+        # otherwise import the catalogue a second time.
+        options={
+            "stock_source": STOCK_SOURCE_NONE,
+            "carry_costs": True,
+            ATTACH_TO_CATALOGUE: True,
+        },
     ),
     ImportScope(
         key=CUSTOM,
@@ -207,6 +242,43 @@ def stock_filter_conflict(options, entities) -> tuple[str, ...]:
         return ()
     conflicting = _PRODUCT_REFERENCING_ENTITIES & set(entities or [])
     return tuple(sorted(conflicting))
+
+
+#: The money events a cash box's balance is walked forward by. A money account
+#: is imported as its *opening* balance only — ``loaders.treasury`` explains
+#: why — so without at least one of these the figure it carries is what the box
+#: held on the first day of the file, years ago, standing as if it were today.
+_MONEY_MOVING_ENTITIES = frozenset({SALE, PAYMENT, EXPENSE, SUPPLIER_PAYMENT})
+
+
+def money_account_conflict(entities) -> bool:
+    """True when a run would import money accounts with none of their history.
+
+    Refused rather than imported at zero or at the stale figure. At zero it
+    silently reports the shop's cash as nothing; at the stale figure it reports
+    the balance from the day the old system was installed — which is what a
+    shop importing only its opening position found in its treasury, and could
+    not even edit away (``treasury.serializers`` had a bug of its own). A shop
+    starting from today's position enters today's cash itself.
+    """
+    selected = set(entities or [])
+    return MONEY_ACCOUNT in selected and not (selected & _MONEY_MOVING_ENTITIES)
+
+
+def attaches_to_catalogue(options) -> bool:
+    return bool((options or {}).get(ATTACH_TO_CATALOGUE))
+
+
+def attach_selection(available) -> Selection:
+    """The one entity a costs-only run walks — deliberately *not* closed.
+
+    Closing ``stock`` over its dependencies would bring the product pass back,
+    and on a second upload the product pass is exactly what duplicates the
+    catalogue. The products are already there; the stock records find them by
+    barcode (``loaders.inventory.StockLoader._by_code``).
+    """
+    entities = (STOCK,) if STOCK in set(available) else ()
+    return Selection(entities=entities, requested=entities, added=(), unknown=())
 
 
 def get_scope(key) -> ImportScope | None:

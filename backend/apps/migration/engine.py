@@ -19,6 +19,8 @@ counts.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.db import transaction
 
 from .collapse.apply import CollapseSession
@@ -39,13 +41,14 @@ from .loaders.base import ERROR, FAILED
 from .models import MigrationIssue, MigrationRun
 from .preparation.stages import Stage, StageTracker
 from .reconstruct import (
-    STOCK_SOURCE_COST_ONLY,
     STOCK_SOURCE_NONE,
     STOCK_SOURCE_RECONSTRUCT,
+    STOCK_SOURCE_SNAPSHOT,
     StockReconstructor,
+    resolve_carry_costs,
     resolve_stock_source,
 )
-from .scopes import resolve_party_balance_basis
+from .scopes import attach_selection, attaches_to_catalogue, resolve_party_balance_basis
 from .transports import build_transport
 
 #: Stage key for the collapse's unit phase — not an ENTITY_PLAN entity, because
@@ -68,25 +71,39 @@ def _friendly(exc: Exception) -> str:
     return message[:480]
 
 
-class _CostOnlyStock:
-    """Keep the source's cost, drop the source's quantity.
+class _ShapedStock:
+    """The stock loader, told which half of a stock record this run wants.
 
-    A shop that does not trust the old system's counts still needs to know what
-    its goods cost — otherwise the first sale of every product books the entire
-    selling price as profit. Zeroing the quantity here rather than in the loader
-    keeps one stock loader with one meaning, and means the valuation bin is
-    still opened, at the source's rate, holding nothing.
+    A stock record carries two facts: how many the shop holds, and what one of
+    them cost. They are asked for separately (``stock_source`` and
+    ``carry_costs``), so this wrapper drops whichever half was declined before
+    the one stock loader sees it — one loader, one meaning. It also keeps the
+    tally the review screen shows: how many products came across *with* a cost,
+    and how many the old system itself had no cost for.
     """
 
-    def __init__(self, inner):
+    def __init__(self, inner, *, keep_quantity: bool, keep_cost: bool):
         self._inner = inner
+        self._keep_quantity = keep_quantity
+        self._keep_cost = keep_cost
+        self.costed = 0
+        self.uncosted = 0
 
     @property
     def entity_type(self):
         return self._inner.entity_type
 
     def load(self, record, resolver, *, dry_run):
-        record.quantity_on_hand = 0
+        if not self._keep_quantity:
+            # None, not zero: "leave the quantity alone". Zero would wipe the
+            # counts of a live shop re-running the import for its costs.
+            record.quantity_on_hand = None
+        if not self._keep_cost:
+            record.unit_cost = None
+        elif record.unit_cost is not None and Decimal(str(record.unit_cost)) > 0:
+            self.costed += 1
+        else:
+            self.uncosted += 1
         return self._inner.load(record, resolver, dry_run=dry_run)
 
 
@@ -101,6 +118,9 @@ class MigrationEngine:
         # How stock on-hand is established: snapshot (import stored quantities),
         # none (no quantities), or reconstruct (compute from purchases − sales).
         self._stock_source = resolve_stock_source(run.options)
+        # Whether each product's cost comes across. Its own decision, not a
+        # side effect of the quantity one (see ``resolve_carry_costs``).
+        self._carry_costs = resolve_carry_costs(run.options)
         self._reconstructor: StockReconstructor | None = None
         # An approved §12 plan, when this run was launched with one. It
         # redirects the catalogue loaders and builds the units at the end.
@@ -223,10 +243,13 @@ class MigrationEngine:
         loader = get_loader(spec.entity_type)
         if loader is not None and self._collapse is not None:
             loader = self._collapse.wrap(loader, spec.entity_type)
-        if loader is not None and spec.entity_type == STOCK and (
-            self._stock_source == STOCK_SOURCE_COST_ONLY
-        ):
-            loader = _CostOnlyStock(loader)
+        shaped = None
+        if loader is not None and spec.entity_type == STOCK:
+            loader = shaped = _ShapedStock(
+                loader,
+                keep_quantity=self._stock_source == STOCK_SOURCE_SNAPSHOT,
+                keep_cost=self._carry_costs,
+            )
         if loader is None:
             self._add_issue(
                 spec.entity_type, "", ERROR, "no_loader", "لا يوجد مُحمِّل لهذا النوع من السجلات."
@@ -264,6 +287,9 @@ class MigrationEngine:
             if self._tracker is not None:
                 self._tracker.fail(spec.entity_type, _friendly(exc))
             return
+        if shaped is not None and self._carry_costs:
+            counts["costed"] = shaped.costed
+            counts["uncosted"] = shaped.uncosted
         if self._tracker is not None:
             self._tracker.done(
                 spec.entity_type,
@@ -362,6 +388,10 @@ class MigrationEngine:
             parts.append(f"{counts['created']:,} جديد")
         if counts.get("updated"):
             parts.append(f"{counts['updated']:,} تحديث")
+        if counts.get("costed"):
+            parts.append(f"{counts['costed']:,} بتكلفة")
+        if counts.get("uncosted"):
+            parts.append(f"{counts['uncosted']:,} بلا تكلفة")
         if counts.get("failed"):
             parts.append(f"{counts['failed']:,} فشل")
         return " · ".join(parts) or "لا توجد سجلات"
@@ -418,6 +448,7 @@ class MigrationEngine:
             self._selection.as_dict(),
             party_balance_basis=self._balance_basis,
             stock_source=self._stock_source,
+            carry_costs=self._carry_costs,
         )
         self.run.options = options
         self.run.save(update_fields=["options", "updated_at"])
@@ -432,17 +463,26 @@ class MigrationEngine:
         see ``scopes``).
         """
         supported = set(connector.supported_entities)
+        if attaches_to_catalogue(self.run.options):
+            self._selection = attach_selection(supported)
+            return [ENTITY_PLAN_BY_TYPE[entity] for entity in self._selection.entities]
         selected = set(self.run.selected_entities or []) or set(supported)
-        # The stock-source mode decides how (and whether) the stock entity runs:
-        #   snapshot    → import the source's stored quantities (the STOCK entity)
-        #   cost_only   → run STOCK for its costs, with the quantities zeroed
-        #   none        → products with no quantities and no costs (drop STOCK)
+        # The stock entity carries two facts — quantity and cost — and runs
+        # whenever this run wants either of them:
+        #   snapshot    → quantities (and costs, unless declined)
+        #   none        → no quantities; STOCK still runs for the costs when
+        #                 they are carried and there is a catalogue to cost
         #   reconstruct → drop STOCK and compute on-hand from the purchase + sale
         #                 history instead, which therefore must be part of the run
         #                 (auto-included here even if the operator didn't tick it).
+        #                 The costs arrive on those purchase lines.
         if self._stock_source in (STOCK_SOURCE_NONE, STOCK_SOURCE_RECONSTRUCT):
             selected.discard(STOCK)
-        if self._stock_source == STOCK_SOURCE_COST_ONLY:
+        if (
+            self._stock_source == STOCK_SOURCE_NONE
+            and self._carry_costs
+            and PRODUCT in selected
+        ):
             selected |= {STOCK} & supported
         if self._stock_source == STOCK_SOURCE_RECONSTRUCT:
             selected |= {SALE, PURCHASE_ORDER} & supported

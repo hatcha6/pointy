@@ -68,6 +68,17 @@ String integrationSearchModeToJson(IntegrationSearchMode mode) {
   };
 }
 
+/// The inverse of [integrationSearchModeToJson]; null for a code this app
+/// does not know, including the empty one a single-mode provider records.
+IntegrationSearchMode? integrationSearchModeFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'mobile' => IntegrationSearchMode.phone,
+    'username' => IntegrationSearchMode.username,
+    'contract_number' => IntegrationSearchMode.contract,
+    _ => null,
+  };
+}
+
 /// Which searches this provider offers, best first — empty where there is
 /// only one way to look and therefore no choice worth putting on screen.
 ///
@@ -101,6 +112,14 @@ abstract final class IntegrationCapability {
   static const balance = 'balance';
   static const lookup = 'lookup';
   static const recharge = 'recharge';
+
+  /// Sells cards off a shelf (Qareeb). Its cards are products in the till's
+  /// catalog, so it has no top-up screen and no price list to edit.
+  static const vouchers = 'vouchers';
+
+  /// One login, several identities (a person, the shops they work for),
+  /// each with its own wallet; the owner chooses which one Pointy buys as.
+  static const profiles = 'profiles';
 }
 
 /// Credential field keys. The form renders whatever the backend lists.
@@ -120,6 +139,9 @@ abstract final class IntegrationField {
   static const baseUrl = 'base_url';
   static const username = 'username';
   static const password = 'password';
+
+  /// An agency purchase PIN (Qareeb). Optional and secret.
+  static const pin = 'pin';
 }
 
 /// Why the last attempt failed. Stable codes; the page phrases them.
@@ -133,6 +155,24 @@ abstract final class IntegrationErrorCode {
   static const insufficientFloat = 'insufficient_float';
   static const indeterminate = 'indeterminate';
   static const unexpected = 'unexpected_response';
+
+  /// The provider will not let this device in until the owner confirms it
+  /// once with a code texted to the agency's phone.
+  static const deviceVerificationRequired = 'device_verification_required';
+
+  /// The provider demanded proof the request came from its own app.
+  static const attestationRequired = 'attestation_required';
+  static const outOfStock = 'out_of_stock';
+  static const pinRequired = 'pin_required';
+
+  /// The picture's text or the texted code was wrong or expired.
+  static const verificationRejected = 'verification_rejected';
+
+  /// Another sale was using the provider's basket; nothing was sent.
+  static const busy = 'busy';
+
+  /// The login is acting as a different profile (shop) than the chosen one.
+  static const profileMismatch = 'profile_mismatch';
 }
 
 double? _toDouble(Object? value) {
@@ -153,6 +193,9 @@ class IntegrationAccount {
     this.baseUrl = '',
     this.username = '',
     this.hasPassword = false,
+    this.storedSecrets = const [],
+    this.profileId = '',
+    this.profileName = '',
     this.isConfigured = false,
     this.isActive = true,
     this.balance,
@@ -171,6 +214,14 @@ class IntegrationAccount {
 
   /// A password is stored. Never the password itself.
   final bool hasPassword;
+
+  /// Which secret fields hold a value — never the values.
+  final List<String> storedSecrets;
+
+  /// The profile (shop) Pointy buys as, for a login that can act as several.
+  /// Blank: whichever one the login is currently acting as.
+  final String profileId;
+  final String profileName;
 
   /// Every required credential is present — not a claim that it still works.
   final bool isConfigured;
@@ -192,12 +243,25 @@ class IntegrationAccount {
 
   bool get hasFailed => lastErrorCode.isNotEmpty;
 
+  /// The provider is waiting for the owner to confirm this device.
+  bool get needsDeviceVerification =>
+      lastErrorCode == IntegrationErrorCode.deviceVerificationRequired;
+
+  bool hasSecret(String field) => field == IntegrationField.password
+      ? hasPassword
+      : storedSecrets.contains(field);
+
   factory IntegrationAccount.fromJson(Map<String, Object?> json) {
     return IntegrationAccount(
       provider: integrationProviderKeyFromJson(json['provider']),
       baseUrl: json['base_url']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
       hasPassword: json['has_password'] == true,
+      storedSecrets: (json['stored_secrets'] as List<Object?>? ?? const [])
+          .map((item) => item.toString())
+          .toList(growable: false),
+      profileId: json['profile_id']?.toString() ?? '',
+      profileName: json['profile_name']?.toString() ?? '',
       isConfigured: json['is_configured'] == true,
       isActive: json['is_active'] != false,
       balance: _toDouble(json['balance']),
@@ -276,6 +340,7 @@ class IntegrationProvider {
     this.capabilities = const [],
     this.fields = const [],
     this.secretFields = const [],
+    this.optionalFields = const [],
     this.settings = const [],
     this.currency = 'LYD',
     this.defaultBaseUrl = '',
@@ -294,6 +359,9 @@ class IntegrationProvider {
   /// Which of [fields] are write-only secrets.
   final List<String> secretFields;
 
+  /// Which of [fields] an account works without (Qareeb's purchase PIN).
+  final List<String> optionalFields;
+
   /// Knobs that are not credentials: the shop's own commercial terms, each
   /// with a working default. Rendered from this list rather than hand-written,
   /// so a provider's settings need no Flutter release — the same bargain
@@ -310,6 +378,13 @@ class IntegrationProvider {
   bool get isConnected =>
       account?.isConfigured == true && !(account?.hasFailed ?? true);
   bool get isConfigured => account?.isConfigured == true;
+
+  /// Sells cards from the till's catalog rather than topping up a line.
+  bool get sellsVouchers =>
+      capabilities.contains(IntegrationCapability.vouchers);
+
+  /// Its login can act as several profiles, one of which the owner picks.
+  bool get hasProfiles => capabilities.contains(IntegrationCapability.profiles);
 
   static List<String> _strings(Object? value) =>
       (value as List<Object?>? ?? const [])
@@ -329,6 +404,7 @@ class IntegrationProvider {
           .map(IntegrationSetting.fromJson)
           .toList(growable: false),
       secretFields: _strings(json['secret_fields']),
+      optionalFields: _strings(json['optional_fields']),
       currency: json['currency']?.toString() ?? 'LYD',
       defaultBaseUrl: json['default_base_url']?.toString() ?? '',
       isConfigurable: json['is_configurable'] == true,
@@ -346,6 +422,7 @@ class IntegrationCredentialsDraft {
     this.baseUrl,
     this.username,
     this.password,
+    this.pin,
     this.isActive,
     this.settings,
   });
@@ -353,6 +430,9 @@ class IntegrationCredentialsDraft {
   final String? baseUrl;
   final String? username;
   final String? password;
+
+  /// A new purchase PIN. Blank keeps the stored one, like [password].
+  final String? pin;
   final bool? isActive;
 
   /// Declared settings the owner changed. Absent keys keep what is stored, so
@@ -364,6 +444,7 @@ class IntegrationCredentialsDraft {
     if (baseUrl != null) 'base_url': baseUrl,
     if (username != null) 'username': username,
     if (password != null && password!.isNotEmpty) 'password': password,
+    if (pin != null && pin!.isNotEmpty) 'pin': pin,
     if (isActive != null) 'is_active': isActive,
   };
 }
@@ -392,6 +473,124 @@ class IntegrationProbeResult {
       provider: provider is Map<String, Object?>
           ? IntegrationProvider.fromJson(provider)
           : null,
+    );
+  }
+}
+
+/// The picture the provider wants read before it texts the owner a code.
+class IntegrationVerificationChallenge {
+  const IntegrationVerificationChallenge({
+    required this.ok,
+    this.challengeRef = '',
+    this.imageDataUrl = '',
+    this.helpText = '',
+    this.errorCode = '',
+  });
+
+  final bool ok;
+  final String challengeRef;
+
+  /// `data:image/png;base64,…`, inline so the till never talks to the
+  /// provider itself.
+  final String imageDataUrl;
+  final String helpText;
+  final String errorCode;
+
+  factory IntegrationVerificationChallenge.fromJson(Map<String, Object?> json) {
+    return IntegrationVerificationChallenge(
+      ok: json['ok'] == true,
+      challengeRef: json['challenge_ref']?.toString() ?? '',
+      imageDataUrl: json['image']?.toString() ?? '',
+      helpText: json['help_text']?.toString() ?? '',
+      errorCode: json['error_code']?.toString() ?? '',
+    );
+  }
+}
+
+/// How far a verification step got.
+class IntegrationVerificationStep {
+  const IntegrationVerificationStep({
+    required this.ok,
+    this.errorCode = '',
+    this.expiresInMinutes,
+    this.provider,
+  });
+
+  final bool ok;
+  final String errorCode;
+  final int? expiresInMinutes;
+
+  /// The refreshed provider, once the device is trusted.
+  final IntegrationProvider? provider;
+
+  factory IntegrationVerificationStep.fromJson(Map<String, Object?> json) {
+    final provider = json['provider'];
+    return IntegrationVerificationStep(
+      ok: json['ok'] == true,
+      errorCode: json['error_code']?.toString() ?? '',
+      expiresInMinutes: int.tryParse(json['expires_in']?.toString() ?? ''),
+      provider: provider is Map<String, Object?>
+          ? IntegrationProvider.fromJson(provider)
+          : null,
+    );
+  }
+}
+
+/// One identity a provider login can act as.
+class IntegrationProfile {
+  const IntegrationProfile({
+    required this.profileId,
+    this.name = '',
+    this.kind = '',
+    this.isCurrent = false,
+    this.isChosen = false,
+  });
+
+  final String profileId;
+  final String name;
+
+  /// The provider's own word ("individual", "store_employee").
+  final String kind;
+
+  /// The one the login is acting as right now.
+  final bool isCurrent;
+
+  /// The one the owner chose for Pointy.
+  final bool isChosen;
+
+  factory IntegrationProfile.fromJson(Map<String, Object?> json) {
+    return IntegrationProfile(
+      profileId: json['profile_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? '',
+      isCurrent: json['is_current'] == true,
+      isChosen: json['is_chosen'] == true,
+    );
+  }
+}
+
+class IntegrationProfileList {
+  const IntegrationProfileList({
+    required this.ok,
+    this.profiles = const [],
+    this.chosen = '',
+    this.errorCode = '',
+  });
+
+  final bool ok;
+  final List<IntegrationProfile> profiles;
+  final String chosen;
+  final String errorCode;
+
+  factory IntegrationProfileList.fromJson(Map<String, Object?> json) {
+    return IntegrationProfileList(
+      ok: json['ok'] == true,
+      chosen: json['chosen']?.toString() ?? '',
+      errorCode: json['error_code']?.toString() ?? '',
+      profiles: (json['profiles'] as List<Object?>? ?? const [])
+          .whereType<Map<String, Object?>>()
+          .map(IntegrationProfile.fromJson)
+          .toList(growable: false),
     );
   }
 }

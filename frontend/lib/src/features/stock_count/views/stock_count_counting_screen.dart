@@ -30,7 +30,6 @@ import 'stock_count_reconciliation_screen.dart';
 import 'stock_count_search_panel.dart';
 import 'stock_count_scan_shelf.dart';
 import 'stock_count_ui.dart';
-import 'stock_count_variance_prompt.dart';
 
 /// The focused scan -> count -> next loop. Returns `true` up the stack when the
 /// session was applied so the sessions list can refresh.
@@ -218,7 +217,6 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
     }
     await _viewModel.submit();
     await _handleReentry();
-    await _handleVariance();
     _reportActionErrorIfAny();
   }
 
@@ -239,26 +237,6 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
       return;
     }
     await _viewModel.resolveReentry(mode);
-  }
-
-  Future<void> _handleVariance() async {
-    final prompt = _viewModel.pendingVariance;
-    if (prompt == null) {
-      return;
-    }
-    final recount = await showStockCountVariancePrompt(
-      context,
-      expected: formatQuantity(prompt.expected),
-      counted: formatQuantity(prompt.counted),
-    );
-    if (!mounted) {
-      return;
-    }
-    if (recount == true) {
-      _viewModel.recountVariance();
-    } else {
-      _viewModel.confirmVariance();
-    }
   }
 
   void _reportActionErrorIfAny() {

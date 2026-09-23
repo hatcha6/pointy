@@ -18,6 +18,11 @@ enum ReportRunType {
   discountAudit,
   salesByStaff,
   monthEndPack,
+  balanceSheet,
+  unitAging,
+  unitMargin,
+  unitLedger,
+  consignmentLedger,
 }
 
 enum ReportOutputFormat { json, pdf, csv }
@@ -123,10 +128,24 @@ String reportRunTypeToJson(ReportRunType type) {
     ReportRunType.discountAudit => 'discount_audit',
     ReportRunType.salesByStaff => 'sales_by_staff',
     ReportRunType.monthEndPack => 'month_end_pack',
+    ReportRunType.balanceSheet => 'balance_sheet',
+    ReportRunType.unitAging => 'unit_aging',
+    ReportRunType.unitMargin => 'unit_margin',
+    ReportRunType.unitLedger => 'unit_ledger',
+    ReportRunType.consignmentLedger => 'consignment_ledger',
   };
 }
 
+/// The client's type for a stored run. Falls back to the sales summary so an
+/// old run of a report this build no longer knows still opens; the catalogue
+/// must never use this — see [reportRunTypeFromKey].
 ReportRunType reportRunTypeFromJson(String? value) {
+  return reportRunTypeFromKey(value) ?? ReportRunType.salesSummary;
+}
+
+/// The client's type for a server key, or null when this build cannot name,
+/// label or render that report.
+ReportRunType? reportRunTypeFromKey(String? value) {
   return switch (value) {
     'sales_summary' => ReportRunType.salesSummary,
     'payment_methods' => ReportRunType.paymentMethods,
@@ -147,7 +166,12 @@ ReportRunType reportRunTypeFromJson(String? value) {
     'discount_audit' => ReportRunType.discountAudit,
     'sales_by_staff' => ReportRunType.salesByStaff,
     'month_end_pack' => ReportRunType.monthEndPack,
-    _ => ReportRunType.salesSummary,
+    'balance_sheet' => ReportRunType.balanceSheet,
+    'unit_aging' => ReportRunType.unitAging,
+    'unit_margin' => ReportRunType.unitMargin,
+    'unit_ledger' => ReportRunType.unitLedger,
+    'consignment_ledger' => ReportRunType.consignmentLedger,
+    _ => null,
   };
 }
 

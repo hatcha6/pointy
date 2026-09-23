@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
+from apps.documents.statuses import DocumentStatus
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
 from apps.sales.models import Order, RegisterSession
@@ -321,6 +322,34 @@ class PayablesAgingTests(TestCase):
     def test_without_a_due_date_it_ages_from_the_order(self):
         self._order(days_ago=100, total="100.00")
         self.assertEqual(self._report()["summary"]["d90_plus"], "100.00")
+
+    def test_a_cancelled_payment_does_not_settle_the_order(self):
+        """A cancelled payment keeps its row and its amount. Counting it
+        cleared a debt the shop still owed — while the supplier's own screen,
+        which never counted it, showed the debt."""
+        order = self._order(days_ago=5, total="200.00", paid="200.00")
+        SupplierPayment.objects.filter(purchase_order=order).update(
+            doc_status=DocumentStatus.CANCELLED
+        )
+        self.assertEqual(self._report()["summary"]["payable_total"], "200.00")
+
+    def test_a_payment_on_account_settles_the_oldest_order_first(self):
+        """Paid to the supplier rather than to one order. Left out, the report
+        stated a debt the shop had already settled."""
+        self._order(days_ago=50, total="100.00")
+        self._order(days_ago=5, total="100.00")
+        SupplierPayment.objects.create(
+            supplier=self.supplier,
+            method=SupplierPayment.Method.CASH,
+            amount=Decimal("120.00"),
+            paid_at=timezone.now() - timedelta(days=1),
+        )
+        summary = self._report()["summary"]
+        self.assertEqual(summary["payable_total"], "80.00")
+        self.assertEqual(summary["d31_60"], "0.00")
+        self.assertEqual(summary["d0_30"], "80.00")
+        # And it is the debt the supplier's own screen states.
+        self.assertEqual(summary["payable_total"], str(self.supplier.payable_balance))
 
 
 class ReceivablesDueDateAgingTests(ReceivablesAgingTests):

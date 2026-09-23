@@ -26,11 +26,17 @@ from apps.core.dispatch import enqueue_or_raise
 
 from .connectors import get_connector
 from .engine import MigrationEngine
-from .entity_plan import ENTITY_PLAN_BY_TYPE, PRODUCT, resolve_selection
+from .entity_plan import ENTITY_PLAN_BY_TYPE, MONEY_ACCOUNT, PRODUCT, resolve_selection
 from .exceptions import CompatibilityError, MigrationError
 from .models import CollapseCandidate, CollapsePlan, MigrationRun, MigrationSource
 from .preparation import pipeline
-from .scopes import apply_scope, stock_filter_conflict
+from .scopes import (
+    apply_scope,
+    attach_selection,
+    attaches_to_catalogue,
+    money_account_conflict,
+    stock_filter_conflict,
+)
 
 
 def record_migration_event(*, name, user, entity_id, attributes=None, metrics=None, severity=None):
@@ -164,12 +170,28 @@ def queue_migration_run(
     # what someone happened to tick. A selection that is quietly incoherent is
     # worse than one that is refused — it produces an import that looks like it
     # worked.
-    selected = list(resolve_selection(requested or None, available=supported).entities)
+    if attaches_to_catalogue(options):
+        # Costs onto the catalogue an earlier import made: the stock pass and
+        # nothing else, never closed over its dependencies (``scopes``).
+        selected = list(attach_selection(supported).entities)
+    else:
+        selected = list(resolve_selection(requested or None, available=supported).entities)
 
     options = dict(options or {})
     if options.get("only_stocked_products") and not connector.supports_stock_filter:
         raise ValidationError(
             {"detail": "هذا النظام لا يسجّل كمية لكل صنف، فلا يمكن الاقتصار على الأصناف المتوفرة."}
+        )
+    if money_account_conflict(selected):
+        raise ValidationError(
+            {
+                "detail": (
+                    "لا يمكن نقل الخزائن بدون سجل المبيعات والمصروفات — رصيد "
+                    "الخزينة في الملف هو رصيد أول يوم في السجل، وبدون الحركات "
+                    "سيظهر رقمًا قديمًا وكأنه رصيد اليوم."
+                ),
+                "entities": [MONEY_ACCOUNT],
+            }
         )
     conflicting = stock_filter_conflict(options, selected)
     if conflicting:

@@ -149,10 +149,16 @@ WIPED_MODELS = (
     "expenses.expense",
     # fraud
     "fraud.fraudfinding",
-    # integrations — recharges sold and the subscriber lines they were sold
-    # against. The provider account and its price list are credentials/config.
+    # integrations — recharges sold, the subscriber lines they were sold
+    # against, and the till's record of who it looked up. The provider account
+    # and its price list are credentials/config.
     "integrations.integrationfulfillment",
+    "integrations.integrationsearch",
     "integrations.integrationsubscriber",
+    # A provider's shelf as last read, and the catalog products it made. The
+    # products go with the catalog; the next sweep reads the shelf again.
+    "integrations.integrationvoucher",
+    "integrations.integrationvoucherbrand",
     # inventory — all of it: quantities, ledgers, counts, transfers, batches,
     # serial units, consignment. The warehouses themselves are configuration.
     "inventory.consignmentagreement",

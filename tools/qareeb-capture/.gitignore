@@ -1,0 +1,13 @@
+# Raw captures hold live OTPs, bearer tokens, session cookies and the phone
+# number that logged in. They never belong in the repo, on a share, or in any
+# chat. Keep them here, read them locally, delete them when the contract is
+# written. Only a REDACTED analysis (produced by analyze_flows.py) is safe to
+# keep, and even that gets eyeballed first.
+captures/
+*.flows
+*.har
+*.pem
+*.key
+wireguard*.conf
+# The redacted report is opt-in to commit; ignore by default so it is a choice.
+contract-*.md

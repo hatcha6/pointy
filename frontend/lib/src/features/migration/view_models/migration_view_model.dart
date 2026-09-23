@@ -14,31 +14,28 @@ import 'collapse_view_model.dart';
 
 /// How stock on-hand is established when products are imported.
 ///
+/// Quantities only. What each product *cost* is a separate decision
+/// ([MigrationViewModel.carryCosts]) — it used to hang off this one, and "no
+/// quantities" quietly meant "no costs" too.
+///
 /// * [snapshot] — copy the old system's stored quantities as they are.
 /// * [reconstruct] — compute on-hand from the transaction history (purchases
 ///   minus sales); for shops whose stored balances drifted but whose invoices
 ///   are intact. Requires importing the purchase + sale history.
-/// * [costOnly] — carry what the goods cost but none of the quantities. Not the
-///   same as [none]: the unit cost rides on the stock record, so dropping that
-///   record leaves every product unvalued and the first sale of each one books
-///   the whole selling price as profit.
-/// * [none] — import products with no quantities and no costs.
+/// * [none] — every product starts at zero and the shop counts its shelves.
 enum MigrationStockSource {
   snapshot,
   reconstruct,
-  costOnly,
   none;
 
   /// The value sent in the run's ``options.stock_source``.
-  String get wireValue => switch (this) {
-    MigrationStockSource.costOnly => 'cost_only',
-    _ => name,
-  };
+  String get wireValue => name;
 
+  /// `cost_only` was "no quantities, keep the costs" in one word; it reads as
+  /// [none] now, with the costs half carried by `carry_costs`.
   static MigrationStockSource fromWire(Object? value) => switch (value) {
     'snapshot' => MigrationStockSource.snapshot,
     'reconstruct' => MigrationStockSource.reconstruct,
-    'cost_only' => MigrationStockSource.costOnly,
     _ => MigrationStockSource.none,
   };
 }
@@ -94,6 +91,7 @@ class MigrationViewModel extends ChangeNotifier {
   MigrationStockSource _stockSource = MigrationStockSource.none;
   String _scopeKey = '';
   bool _onlyStockedProducts = false;
+  bool _carryCosts = true;
   MigrationRun? _activeRun;
   MigrationRun? _lastRun;
   List<MigrationIssue> _issues = const [];
@@ -134,11 +132,28 @@ class MigrationViewModel extends ChangeNotifier {
   bool get onlyStockedProducts => _onlyStockedProducts && canFilterByStock;
   bool get canFilterByStock => _source?.supportsStockFilter ?? false;
 
+  /// The chosen preset attaches to a catalogue an earlier import made (the
+  /// costs-only update) rather than importing one. Nothing is closed over
+  /// dependencies then — that would bring back the product pass, and on a
+  /// second upload the product pass is what duplicates the catalogue.
+  bool get attachesToCatalogue {
+    final scope = scopes.where((item) => item.key == _scopeKey).firstOrNull;
+    return scope?.options['attach_to_catalogue'] == true;
+  }
+
+  /// Presets the detected file can actually run. A scope whose entities the
+  /// connector cannot produce resolves to nothing, and offering it would be
+  /// offering a button that imports nothing.
+  List<MigrationScope> get availableScopes => [
+    for (final scope in scopes)
+      if (!scope.isPreset || (scope.entities?.isNotEmpty ?? true)) scope,
+  ];
+
   /// Entities the selection did not ask for but cannot run without. Shown
   /// before the run, so nothing arrives in the summary unannounced.
   List<String> get impliedEntities {
     final catalog = _catalog;
-    if (catalog == null) return const [];
+    if (catalog == null || attachesToCatalogue) return const [];
     final available = supportedEntities.toSet();
     final implied =
         catalog
@@ -177,7 +192,35 @@ class MigrationViewModel extends ChangeNotifier {
     return running.intersection(referencing).toList()..sort();
   }
 
-  bool get canStartRun => stockFilterConflicts.isEmpty;
+  /// Whether each product's cost comes across. On unless the owner turns it
+  /// off, and independent of the quantity choice — that pairing is exactly how
+  /// a shop that only wanted to count its own shelves lost every cost.
+  bool get carryCosts => _carryCosts;
+
+  /// Costs travel on the stock record, so a source without one has none to
+  /// offer, and a run without products has nothing to cost.
+  bool get canCarryCosts =>
+      !attachesToCatalogue &&
+      supportedEntities.contains('stock') &&
+      _selectedEntities.contains('product');
+
+  /// Money accounts selected without any of the history that moves them. The
+  /// file's figure is the box's balance on the first day of that history, so
+  /// on its own it reads as years-old cash standing as today's. The server
+  /// refuses the combination; this says so before anyone presses a button.
+  bool get moneyAccountConflict {
+    if (!_selectedEntities.contains('money_account')) return false;
+    const movers = {'sale', 'payment', 'expense', 'supplier_payment'};
+    final running = {..._selectedEntities, ...impliedEntities};
+    return running.intersection(movers).isEmpty;
+  }
+
+  /// Whether "start from today's position" is on offer — the one-tap way out
+  /// of both conflicts above, which are how a hand-edited list goes wrong.
+  bool get offersOpeningPosition =>
+      scopes.any((scope) => scope.key == 'opening_position');
+
+  bool get canStartRun => stockFilterConflicts.isEmpty && !moneyAccountConflict;
   MigrationRun? get activeRun => _activeRun;
   MigrationRun? get lastRun => _lastRun;
   MigrationRun? get currentRun => _activeRun ?? _lastRun;
@@ -524,6 +567,8 @@ class MigrationViewModel extends ChangeNotifier {
       ..addAll(scope.entities!.where(available.contains));
     final stock = scope.options['stock_source'];
     if (stock != null) _stockSource = MigrationStockSource.fromWire(stock);
+    // Everything but an explicit "no" carries costs; `cost_only` said yes.
+    _carryCosts = scope.options['carry_costs'] != false;
     notifyListeners();
   }
 
@@ -550,6 +595,11 @@ class MigrationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCarryCosts(bool value) {
+    _carryCosts = value;
+    notifyListeners();
+  }
+
   // --- runs ------------------------------------------------------------
   Future<MigrationRun?> startRun({required bool dryRun}) async {
     final source = _source;
@@ -566,6 +616,7 @@ class MigrationViewModel extends ChangeNotifier {
       scope: isCustomScope ? null : _scopeKey,
       options: {
         'stock_source': _stockSource.wireValue,
+        'carry_costs': _carryCosts,
         if (onlyStockedProducts) 'only_stocked_products': true,
         // Only an approved plan travels. The server refuses anything else, and
         // sending an unapproved one would turn a dry run into a 400.

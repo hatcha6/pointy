@@ -123,12 +123,30 @@ class IntegrationAccount(SecretStorageMixin, TimeStampedModel):
         if spec is None:
             return False
         for field in spec.fields:
+            if field in spec.optional_fields:
+                continue
             if field in spec.secret_fields:
                 if not self.has_secret(field):
                     return False
             elif not (getattr(self, field, "") or "").strip():
                 return False
         return True
+
+    def forget_session(self) -> None:
+        """Drop every stored secret that is not a credential the owner typed.
+
+        A driver may keep a login of its own among the secrets — Qareeb's
+        bearer tokens live there, because they outlast any cache. A login
+        belongs to the credentials that made it: once the owner changes the
+        username or password, it is somebody else's session and must not be
+        replayed. The caller saves.
+        """
+        spec = self.spec
+        keep = set(spec.secret_fields) if spec else set()
+        data = self.secret_box.decrypt(self.secrets_encrypted)
+        kept = {key: value for key, value in data.items() if key in keep}
+        if kept != data:
+            self.secrets_encrypted = self.secret_box.encrypt(kept)
 
     def resolved_base_url(self) -> str:
         spec = self.spec
@@ -484,3 +502,174 @@ class IntegrationSubscriber(TimeStampedModel):
     @property
     def is_identified(self) -> bool:
         return bool(self.customer_id or self.display_name)
+
+
+class IntegrationSearch(TimeStampedModel):
+    """A search a till ran against a provider and got an answer to.
+
+    The recharge screen used to open on an empty box. Most of an agency's
+    trade is the same customers coming back every month, so it now opens on
+    the searches that worked — newest first, narrowed as the cashier types —
+    and a regular is one tap away rather than a number read out again.
+
+    One row per distinct search, not one per run: repeating a search moves
+    its row back to the top and counts it. What the row keeps about the
+    answer is a snapshot for recognising it in a list, never for selling —
+    tapping it runs the search again, live.
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="searches"
+    )
+    #: What was typed, trimmed. With ``search_by`` it is the identity of the
+    #: search: the same digits asked as a phone number and as a contract
+    #: number are two different questions to LNET.
+    term = models.CharField(max_length=64)
+    #: What the till said the term IS (LNET's picker). Blank for a provider
+    #: that searches one way only.
+    search_by = models.CharField(max_length=32, blank=True)
+    #: How many lines the last run matched. More than one is a household the
+    #: cashier had to choose between, and it has no single line to name.
+    match_count = models.PositiveIntegerField(default=1)
+    #: The line it found, when it found exactly one. Linked rather than
+    #: copied so that naming a card at the till names its searches too.
+    subscriber = models.ForeignKey(
+        IntegrationSubscriber,
+        on_delete=models.SET_NULL,
+        related_name="searches",
+        blank=True,
+        null=True,
+    )
+    card_no = models.CharField(max_length=64, blank=True)
+    holder_name = models.CharField(max_length=160, blank=True)
+    package_name = models.CharField(max_length=160, blank=True)
+    search_count = models.PositiveIntegerField(default=1)
+    last_searched_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-last_searched_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "search_by", "term"],
+                name="integrations_unique_search",
+            )
+        ]
+        # The only way this table is read: one provider's searches, newest
+        # first, a page at a time.
+        indexes = [
+            models.Index(
+                fields=["account", "-last_searched_at", "-id"],
+                name="integ_search_recent_idx",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account.provider}:{self.term}"
+
+
+class IntegrationVoucherBrand(TimeStampedModel):
+    """An operator whose cards a provider sells, mirrored as a catalog product.
+
+    Qareeb publishes a shelf — Libyana, Almadar, PSN, iTunes and a hundred
+    more — and the till sells from it the way it sells anything else: search
+    "ليبيانا", tap the product, choose the denomination. So each brand owns one
+    ``catalog.Product`` and each denomination one ``ProductVariant``, and the
+    sale, the receipt, the returns and the profit report need to know nothing
+    about vouchers. The product is a *system* product: this app writes it and
+    no person may (see ``Product.is_system``).
+
+    What the provider says is kept here; what the catalog shows is derived from
+    it by :mod:`apps.integrations.vouchers`. The split is what lets a brand
+    that leaves the provider's shelf vanish from the till without anything
+    about its past sales being touched.
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="voucher_brands"
+    )
+    #: The provider's own id for the operator ("30" is Libyana at Qareeb).
+    code = models.CharField(max_length=32)
+    name = models.CharField(max_length=160)
+    name_en = models.CharField(max_length=160, blank=True)
+    category = models.CharField(max_length=160, blank=True)
+    #: What the cards' face is written in. A label, never arithmetic: the
+    #: provider prices every card in dinar whatever is printed on it.
+    currency = models.CharField(max_length=8, default="LYD")
+    logo_path = models.CharField(max_length=255, blank=True)
+    product = models.OneToOneField(
+        "catalog.Product",
+        on_delete=models.SET_NULL,
+        related_name="voucher_brand",
+        blank=True,
+        null=True,
+    )
+    #: On the provider's in-stock listing as of the last read. A brand that
+    #: drops off it is sold out of everything and leaves the till.
+    is_listed = models.BooleanField(default=True)
+    #: The listing spells this brand's items out inline. Qareeb does that for
+    #: one category only; every other brand's items are one call away, which
+    #: is also how a till's "is it still in stock?" has to ask about it.
+    items_inline = models.BooleanField(default=False)
+    #: When this brand's item list was last read. How the sweep decides which
+    #: collapsed brands to spend its per-brand reads on, stalest first.
+    items_synced_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "code"], name="integrations_unique_voucher_brand"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account.provider}:{self.code} {self.name}"
+
+
+class IntegrationVoucher(TimeStampedModel):
+    """One card a provider sells — "10 دينار" of Libyana — and its variant.
+
+    ``code`` is the provider's id for it, which is all a purchase needs, and it
+    doubles as the fulfillment's ``option_code``. ``cost`` is what the float
+    pays and ``suggested_price`` what the provider says to charge; the variant's
+    price is derived from them (see ``vouchers.voucher_price``) and is what the
+    checkout re-derives, so a till can never assert one.
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="vouchers"
+    )
+    brand = models.ForeignKey(
+        IntegrationVoucherBrand, on_delete=models.CASCADE, related_name="vouchers"
+    )
+    code = models.CharField(max_length=64)
+    label = models.CharField(max_length=160)
+    face_amount = models.DecimalField(
+        max_digits=12, decimal_places=3, blank=True, null=True
+    )
+    cost = models.DecimalField(max_digits=12, decimal_places=2)
+    suggested_price = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    #: In the provider's stock as of the last read of its brand. Only a read
+    #: that actually listed the brand's items may set this False — a brand
+    #: whose items were simply not asked about keeps what it last knew.
+    is_available = models.BooleanField(default=True)
+    variant = models.OneToOneField(
+        "catalog.ProductVariant",
+        on_delete=models.SET_NULL,
+        related_name="voucher",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["brand__name", "face_amount", "label"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "code"], name="integrations_unique_voucher"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.brand.name} {self.label}"

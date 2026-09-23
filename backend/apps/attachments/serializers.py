@@ -174,6 +174,7 @@ class AttachmentSerializer(AttachmentSummarySerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         if self.instance is not None:
+            refuse_system_owner(self.instance.owner)
             attrs.pop("file", None)
             attrs.pop("owner_type", None)
             attrs.pop("owner_id", None)
@@ -194,6 +195,7 @@ class AttachmentSerializer(AttachmentSummarySerializer):
                 owner = resolve_attachment_owner(owner_type, owner_id)
             except DjangoValidationError as exc:
                 raise serializers.ValidationError(exc.message_dict) from exc
+        refuse_system_owner(owner)
         attrs["owner"] = owner
         return attrs
 
@@ -232,3 +234,18 @@ class AttachmentSerializer(AttachmentSummarySerializer):
                 is_primary=True,
             ).exclude(pk=instance.pk).update(is_primary=False)
         return super().update(instance, validated_data)
+
+
+def refuse_system_owner(owner) -> None:
+    """A system product's pictures are the feature's, like the rest of it.
+
+    See ``apps.catalog.system_products``. Imported where it is used, so this
+    module keeps no import-time dependency on the catalog app.
+    """
+    from apps.catalog.models import Product, ProductVariant
+    from apps.catalog.system_products import refuse_system_product
+
+    if isinstance(owner, ProductVariant):
+        refuse_system_product(owner.product)
+    elif isinstance(owner, Product):
+        refuse_system_product(owner)

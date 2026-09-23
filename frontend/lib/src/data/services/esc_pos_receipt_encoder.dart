@@ -8,6 +8,7 @@ import '../../shared/branding.dart';
 import '../../shared/branding_assets.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
+import 'receipt_integration_rows.dart';
 
 /// Sendable bundle for the ESC/POS isolate: payload + endpoint are plain data,
 /// the capability profile is loaded on the caller isolate and passed across, and
@@ -295,6 +296,16 @@ class EscPosReceiptEncoder {
           : null;
       if (compactRow != null) {
         bytes.addAll(_text(generator, compactRow, styles: itemStyles));
+        // Even on a compact slip: a card's PIN is the thing that was sold.
+        bytes.addAll(
+          _integrationRows(
+            generator,
+            line,
+            itemWidth,
+            itemStyles,
+            dense: dense,
+          ),
+        );
         continue;
       }
 
@@ -313,6 +324,12 @@ class EscPosReceiptEncoder {
           bytes.addAll(_text(generator, wrapped, styles: itemStyles));
         }
       }
+      // What a provider did for this line — a card's PIN, a subscriber's new
+      // term — printed beneath it. The receipt of such a sale is printed only
+      // once the provider has answered, so this is the answer.
+      bytes.addAll(
+        _integrationRows(generator, line, itemWidth, itemStyles, dense: dense),
+      );
     }
 
     bytes.addAll(generator.hr());
@@ -1003,6 +1020,36 @@ class EscPosReceiptEncoder {
       return const [];
     }
     return generator.rawBytes([0x1b, 0x33, 26]);
+  }
+
+  List<int> _integrationRows(
+    Generator generator,
+    Map<String, Object?> line,
+    int width,
+    PosStyles itemStyles, {
+    required bool dense,
+  }) {
+    final rows = receiptIntegrationRowsFromPayload(line['integration']);
+    if (rows.isEmpty) {
+      return const [];
+    }
+    final bytes = <int>[];
+    for (final row in rows) {
+      final styles = row.emphasized
+          // The PIN: bold and tall, in Font A even on a compact slip, so it
+          // can be read at arm's length and typed without a second look.
+          ? itemStyles.copyWith(
+              bold: true,
+              height: PosTextSize.size2,
+              fontType: PosFontType.fontA,
+              align: PosAlign.center,
+            )
+          : itemStyles;
+      for (final wrapped in _wrap(row.text, width)) {
+        bytes.addAll(_text(generator, wrapped, styles: styles));
+      }
+    }
+    return bytes;
   }
 
   /// Enlarged-text height for headings/totals: double height normally, single

@@ -917,14 +917,18 @@ class CatalogRepository {
 
     final search = query.search.trim().toLowerCase();
     final barcode = query.barcode.trim();
+    final readsNames = query.searchMode != ProductSearchMode.code;
+    final readsCodes = query.searchMode != ProductSearchMode.name;
     final filtered = variants
         .where((variant) {
           final matchesSearch =
               search.isEmpty ||
-              variant.displayLabel.toLowerCase().contains(search) ||
-              variant.productName.toLowerCase().contains(search) ||
-              variant.sku.toLowerCase().contains(search) ||
-              variant.barcode.toLowerCase().contains(search);
+              (readsNames &&
+                  (variant.displayLabel.toLowerCase().contains(search) ||
+                      variant.productName.toLowerCase().contains(search))) ||
+              (readsCodes &&
+                  (variant.sku.toLowerCase().contains(search) ||
+                      variant.barcode.toLowerCase().contains(search)));
           final matchesBarcode = barcode.isEmpty || variant.barcode == barcode;
           return matchesSearch && matchesBarcode;
         })

@@ -783,6 +783,16 @@
   "reportSalesByStaffSubtitle": "من باع ماذا، ومتى يكون المتجر مزدحمًا.",
   "reportMonthEndPackTitle": "حزمة إقفال الشهر",
   "reportMonthEndPackSubtitle": "كل قوائم الإقفال في مستند واحد.",
+  "reportBalanceSheetTitle": "الميزانية العمومية",
+  "reportBalanceSheetSubtitle": "ما لنا وما علينا في أول المدة وآخرها، والصافي، مع حساب الزكاة.",
+  "reportUnitAgingTitle": "أعمار الأجهزة",
+  "reportUnitAgingSubtitle": "منذ متى بقي كل جهاز على الرف، وكم من رأس المال مجمّد في كل مدة.",
+  "reportUnitMarginTitle": "ربح كل جهاز",
+  "reportUnitMarginSubtitle": "الربح الفعلي لكل جهاز بيع خلال الفترة، بتكلفته وما أُنفق على إصلاحه.",
+  "reportUnitLedgerTitle": "سجل جهاز",
+  "reportUnitLedgerSubtitle": "كل ما مرّ به جهاز واحد بمعرّفه، من دخوله المخزون حتى خروجه.",
+  "reportConsignmentLedgerTitle": "دفتر الأمانات",
+  "reportConsignmentLedgerSubtitle": "ما في العهدة، وما بيع، وما يُستحق لأصحابها، وعمولة المحل.",
   "reportPeriodLastMonth": "الشهر الماضي",
   "reportPeriodQuarter": "الربع الحالي",
   "reportPeriodLastQuarter": "الربع الماضي",
@@ -818,6 +828,9 @@
   "reportSelectCustomerLabel": "اختر العميل",
   "reportSelectSupplierLabel": "اختر المورد",
   "reportPartyRequiredMessage": "اختر الجهة أولًا لعرض الكشف.",
+  "reportUnitCodeLabel": "معرّف الجهاز",
+  "reportUnitCodeHint": "امسح أو اكتب الرقم التسلسلي / IMEI",
+  "reportUnitCodeRequiredMessage": "أدخل معرّف الجهاز أولًا لعرض سجله.",
   "reportResultStaleMessage": "الإعدادات تغيّرت منذ إنشاء هذه النتيجة — أعد التشغيل قبل الطباعة.",
   "reportSectionEmpty": "لا توجد بيانات في هذا القسم.",
   "reportPeriodOpenChip": "فترة مفتوحة",
@@ -3649,6 +3662,18 @@
   "productTablePriceColumn": "السعر",
   "productTableBarcodeColumn": "الباركود",
   "productTableEditColumn": "تعديل",
+  "catalogLayoutToggleLabel": "طريقة عرض المنتجات",
+  "@catalogLayoutToggleLabel": {
+    "description": "Accessibility label for the icon toggle beside the till's catalog title that switches between picture cards and a table."
+  },
+  "catalogLayoutGridTooltip": "عرض شبكي",
+  "@catalogLayoutGridTooltip": {
+    "description": "Tooltip on the grid icon of the catalog layout toggle: show products as picture cards in a grid."
+  },
+  "catalogLayoutListTooltip": "عرض قائمة",
+  "@catalogLayoutListTooltip": {
+    "description": "Tooltip on the list icon of the catalog layout toggle: show products as a table, one product per row."
+  },
   "openProductDetailsTooltip": "فتح تفاصيل المنتج",
   "stockStatusAvailable": "متوفر",
   "stockStatusLow": "منخفض",
@@ -9706,7 +9731,7 @@
   "migrationStockSourceReconstructLabel": "احتساب الكميات من الفواتير",
   "migrationStockSourceReconstructSubtitle": "تُحتسب كمية كل صنف من فواتير الشراء ناقص فواتير البيع. مناسب عندما تكون كميات النظام القديم غير موثوقة لكن فواتيره سليمة. يتطلّب نقل فواتير الشراء والبيع، وسيُنبّهك إن بِيع صنف بكمية أكبر مما اشتُري.",
   "migrationStockSourceNoneLabel": "بدون كميات",
-  "migrationStockSourceNoneSubtitle": "تُنقل المنتجات دون أي كميات، ويُبدأ الجرد من جديد في دفتر.",
+  "migrationStockSourceNoneSubtitle": "تُنقل الأصناف بكمية صفر، وتجرد رفوفك بنفسك في دفتر. التكلفة تُقرَّر أدناه.",
   "migrationEntityUnit": "وحدات القياس",
   "migrationEntityCategory": "الفئات",
   "migrationEntityProduct": "المنتجات",
@@ -13177,6 +13202,66 @@
   "@rechargeFloatLabel": {
     "description": ""
   },
+  "rechargeSubscriberBalanceLabel": "رصيد المشترك",
+  "@rechargeSubscriberBalanceLabel": {
+    "description": "The subscriber's own credit with the provider (money on their line or card), as opposed to the agency float."
+  },
+  "rechargeRecentTitle": "عمليات البحث السابقة",
+  "@rechargeRecentTitle": {
+    "description": "Heading of the list of past successful searches the top-up screen opens on."
+  },
+  "rechargeRecentEmptyMessage": "كل بحث ينجح يظهر هنا، لتعود إليه بلمسة في المرة القادمة.",
+  "@rechargeRecentEmptyMessage": {
+    "description": "Shown under the search prompt while no search has succeeded yet."
+  },
+  "rechargeRecentNoMatch": "لا يوجد بحث سابق يطابق {query}",
+  "@rechargeRecentNoMatch": {
+    "description": "What the cashier typed matches no past search.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "rechargeRecentNoMatchMessage": "ابحث عنه لدى المزوّد، وإن وُجد فسيظهر هنا في المرة القادمة.",
+  "@rechargeRecentNoMatchMessage": {
+    "description": ""
+  },
+  "rechargeRecentLookUp": "ابحث لدى المزوّد",
+  "@rechargeRecentLookUp": {
+    "description": "Button: run what was typed as a real provider search."
+  },
+  "rechargeRecentLoadError": "تعذّر تحميل عمليات البحث السابقة",
+  "@rechargeRecentLoadError": {
+    "description": ""
+  },
+  "rechargeRecentLines": "{count, plural, one{خط واحد} two{خطّان} few{{count} خطوط} other{{count} خطاً}}",
+  "@rechargeRecentLines": {
+    "description": "How many lines a past search matched.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rechargeRecentToday": "اليوم {time}",
+  "@rechargeRecentToday": {
+    "description": "",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "rechargeRecentYesterday": "أمس {time}",
+  "@rechargeRecentYesterday": {
+    "description": "",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeFloatShort": "رصيد الوكالة {balance} لا يغطّي {cost}. سجّل البيع الآن وارصد الرصيد لاحقاً.",
   "@rechargeFloatShort": {
     "description": "",
@@ -13735,6 +13820,67 @@
   "@cameraWedgeNoCameras": {
     "description": "Shown when no cameras are found"
   },
+  "productSearchSectionTitle": "البحث عن المنتجات",
+  "@productSearchSectionTitle": {
+    "description": "Device settings section for how product searches behave on this device"
+  },
+  "productSearchModePickerToggleTitle": "إظهار اختيار طريقة البحث",
+  "@productSearchModePickerToggleTitle": {
+    "description": "Switch that adds the search-mode picker to product searches on this device"
+  },
+  "productSearchModePickerToggleDescription": "يضيف إلى خانة البحث في نقطة البيع وإنشاء المشتريات وقائمة المنتجات قائمة تختار منها: البحث بالرمز أو الباركود فقط، أو بالاسم فقط، أو البحث الشامل المعتاد.",
+  "@productSearchModePickerToggleDescription": {
+    "description": "Explains the search-mode picker switch"
+  },
+  "productSearchModeTooltip": "طريقة البحث: {mode}",
+  "@productSearchModeTooltip": {
+    "description": "Tooltip on the search-mode picker inside a product search field, naming the current mode",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "productSearchModeAll": "الكل",
+  "@productSearchModeAll": {
+    "description": "Search-mode picker: the ordinary search over names, codes and barcodes"
+  },
+  "productSearchModeAllDescription": "الاسم والرمز والباركود معًا",
+  "@productSearchModeAllDescription": {
+    "description": "Search-mode picker: what the ordinary search reads"
+  },
+  "productSearchModeCode": "الرمز",
+  "@productSearchModeCode": {
+    "description": "Search-mode picker: search by code (barcode or SKU) only"
+  },
+  "productSearchModeCodeDescription": "الباركود أو رمز المنتج فقط",
+  "@productSearchModeCodeDescription": {
+    "description": "Search-mode picker: what the code search reads"
+  },
+  "productSearchModeName": "الاسم",
+  "@productSearchModeName": {
+    "description": "Search-mode picker: search by product name only"
+  },
+  "productSearchModeNameDescription": "اسم المنتج فقط",
+  "@productSearchModeNameDescription": {
+    "description": "Search-mode picker: what the name search reads"
+  },
+  "productSearchCodeHint": "ابحث بالباركود أو رمز المنتج",
+  "@productSearchCodeHint": {
+    "description": "Product search hint while the picker is set to code"
+  },
+  "productSearchNameHint": "ابحث باسم المنتج",
+  "@productSearchNameHint": {
+    "description": "Product search hint while the picker is set to name"
+  },
+  "catalogNoResultsCodeModeMessage": "البحث الآن في الباركود ورمز المنتج فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الأسماء.",
+  "@catalogNoResultsCodeModeMessage": {
+    "description": "Empty catalog search while the search-mode picker is set to code"
+  },
+  "catalogNoResultsNameModeMessage": "البحث الآن في أسماء المنتجات فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الرموز والباركود.",
+  "@catalogNoResultsNameModeMessage": {
+    "description": "Empty catalog search while the search-mode picker is set to name"
+  },
   "posShortcutToggleCost": "إظهار/إخفاء تكلفة الأصناف",
   "@posShortcutToggleCost": {
     "description": "F9 toggles cost visibility at the till"
@@ -13989,14 +14135,6 @@
   },
   "migrationOnlyStockedConflict": "لا يمكن جمع «الأصناف المتوفرة فقط» مع نقل سجل الفواتير: الفواتير القديمة تشير إلى أصناف لن تُنقل.",
   "@migrationOnlyStockedConflict": {
-    "description": "Data migration screen."
-  },
-  "migrationStockSourceCostOnlyLabel": "التكلفة فقط، بدون كميات",
-  "@migrationStockSourceCostOnlyLabel": {
-    "description": "Data migration screen."
-  },
-  "migrationStockSourceCostOnlySubtitle": "ننقل تكلفة كل صنف حتى يُحسب الربح صحيحًا من أول عملية بيع، وتبدأ الكميات من الصفر لتجردها بنفسك.",
-  "@migrationStockSourceCostOnlySubtitle": {
     "description": "Data migration screen."
   },
   "bankAccountIbanLabel": "رقم الآيبان (IBAN)",
@@ -14427,5 +14565,303 @@
         "type": "String"
       }
     }
+  },
+  "treasuryAccountOpeningBalanceInvalid": "أدخل رقمًا صحيحًا، مثل 0 أو 1250.50.",
+  "@treasuryAccountOpeningBalanceInvalid": {
+    "description": "Money account editor: the opening balance field holds something that is not a number."
+  },
+  "migrationCostSectionTitle": "تكلفة الأصناف",
+  "@migrationCostSectionTitle": {
+    "description": "Data migration review step."
+  },
+  "migrationCarryCostsLabel": "نقل تكلفة كل صنف",
+  "@migrationCarryCostsLabel": {
+    "description": "Data migration review step."
+  },
+  "migrationCarryCostsSubtitle": "تُسجَّل تكلفة الصنف من النظام السابق حتى يُحسب الربح صحيحًا من أول عملية بيع، وتظهر في شاشة الصنف وعند الكاشير — سواء نقلت الكميات أم لا.",
+  "@migrationCarryCostsSubtitle": {
+    "description": "Data migration review step."
+  },
+  "migrationCarryCostsOffWarning": "بدون التكلفة سيُحسب ربح أول بيع لكل صنف وكأنه سعر البيع كاملًا، إلى أن تُسجِّل له فاتورة شراء.",
+  "@migrationCarryCostsOffWarning": {
+    "description": "Data migration review step."
+  },
+  "migrationCostsFromPurchasesNote": "عند احتساب الكميات من الفواتير تأتي التكلفة من فواتير الشراء المنقولة نفسها.",
+  "@migrationCostsFromPurchasesNote": {
+    "description": "Data migration review step."
+  },
+  "migrationCostTally": "التكلفة: {costed} صنف بتكلفة",
+  "@migrationCostTally": {
+    "description": "Data migration review step.",
+    "placeholders": {
+      "costed": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationCostTallyWithMissing": "التكلفة: {costed} صنف بتكلفة · {uncosted} صنف بلا تكلفة في النظام السابق",
+  "@migrationCostTallyWithMissing": {
+    "description": "Data migration review step.",
+    "placeholders": {
+      "costed": {
+        "type": "String"
+      },
+      "uncosted": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationMoneyAccountConflict": "لا يمكن نقل الخزائن بدون سجل المبيعات والمصروفات: رصيد الخزينة في الملف هو رصيدها في أول يوم من السجل، وبدون الحركات سيظهر رقمًا قديمًا وكأنه رصيد اليوم.",
+  "@migrationMoneyAccountConflict": {
+    "description": "Data migration review step."
+  },
+  "migrationMoneyAccountConflictFix": "استبعاد الخزائن",
+  "@migrationMoneyAccountConflictFix": {
+    "description": "Data migration review step."
+  },
+  "migrationSwitchToOpeningPosition": "استخدم «نبدأ من الوضع الحالي»",
+  "@migrationSwitchToOpeningPosition": {
+    "description": "Data migration review step."
+  },
+  "migrationScopeCostsOnlyLabel": "تحديث التكلفة فقط",
+  "@migrationScopeCostsOnlyLabel": {
+    "description": "Data migration review step: the costs-only scope."
+  },
+  "migrationScopeCostsOnlySubtitle": "لمحل نُقلت أصنافه من قبل: تُضاف تكلفة كل صنف موجود في دفتر حسب الباركود، دون تغيير الأسماء أو الأسعار أو الكميات أو الأرصدة.",
+  "@migrationScopeCostsOnlySubtitle": {
+    "description": "Data migration review step: the costs-only scope."
+  },
+  "migrationCostsOnlyNotice": "لن يُنشأ أي صنف جديد: كل تكلفة تُربط بالصنف الموجود في دفتر الذي يحمل نفس الباركود. الكميات والأسعار والأرصدة تبقى كما هي، والصنف الذي عليه مخزون مسجَّل في دفتر يحتفظ بتكلفته.",
+  "@migrationCostsOnlyNotice": {
+    "description": "Data migration review step: the costs-only scope."
+  },
+  "posVoucherChecking": "جارٍ التحقق من توفّر الكروت…",
+  "@posVoucherChecking": {
+    "description": "POS card picker: tooltip on the spinner while the provider is asked what is still in stock."
+  },
+  "posVoucherPickerHint": "اختر فئة الكرت",
+  "@posVoucherPickerHint": {
+    "description": "POS card picker: the line under the brand name."
+  },
+  "posVoucherSomeSoldOut": "نفدت بعض الفئات لدى المزوّد فأُخفيت.",
+  "@posVoucherSomeSoldOut": {
+    "description": "POS card picker: some denominations were withdrawn because the provider no longer has them."
+  },
+  "posVoucherNoneLeft": "لا توجد فئات متوفرة لهذا الكرت الآن.",
+  "@posVoucherNoneLeft": {
+    "description": "POS card picker: the provider has none of this brand's cards left."
+  },
+  "posVoucherFloat": "رصيد الوكالة: {amount}",
+  "@posVoucherFloat": {
+    "description": "POS card picker: the agency float as last read.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "posVoucherBeyondFloat": "يتجاوز رصيد الوكالة",
+  "@posVoucherBeyondFloat": {
+    "description": "POS card picker: this card costs more than the agency float as last read."
+  },
+  "voucherCodesTitle": "أرقام الكروت السرية",
+  "@voucherCodesTitle": {
+    "description": "Dialog after a sale of provider cards whose receipt did not print."
+  },
+  "voucherCodesBody": "لم تُطبع الفاتورة، فسلّم الزبون الرقم السري من هنا.",
+  "@voucherCodesBody": {
+    "description": "Dialog after a sale of provider cards whose receipt did not print: explanation."
+  },
+  "voucherSerial": "الرقم التسلسلي: {serial}",
+  "@voucherSerial": {
+    "description": "A provider card's serial number.",
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "voucherCodesDone": "تم التسليم",
+  "@voucherCodesDone": {
+    "description": "Dialog after a sale of provider cards: close button once the customer has the code."
+  },
+  "voucherCodeLabel": "الرقم السري",
+  "@voucherCodeLabel": {
+    "description": "Invoice details: the label before a provider card's PIN."
+  },
+  "integrationFieldPhone": "رقم الهاتف",
+  "@integrationFieldPhone": {
+    "description": "Integration credentials form: the login field for a provider whose login is a phone number."
+  },
+  "integrationFieldPhoneHint": "الرقم الذي تدخل به إلى تطبيق المزوّد",
+  "@integrationFieldPhoneHint": {
+    "description": "Integration credentials form: hint under the phone-number login."
+  },
+  "integrationPhoneRequired": "أدخل رقم الهاتف",
+  "@integrationPhoneRequired": {
+    "description": "Integration credentials form: validation for an empty phone-number login."
+  },
+  "integrationFieldPin": "رمز الشراء (PIN)",
+  "@integrationFieldPin": {
+    "description": "Integration credentials form: the optional purchase PIN field."
+  },
+  "integrationPinHint": "اختياري — فقط إن كان رمز الشراء مفعّلاً في حسابك لدى المزوّد.",
+  "@integrationPinHint": {
+    "description": "Integration credentials form: hint under the optional purchase PIN."
+  },
+  "integrationPinStoredHint": "محفوظ. اتركه فارغاً للإبقاء عليه.",
+  "@integrationPinStoredHint": {
+    "description": "Integration credentials form: a purchase PIN is already stored."
+  },
+  "integrationErrorDeviceVerification": "يحتاج المزوّد إلى تأكيد هذا الجهاز برمز يُرسل إلى هاتف الوكالة.",
+  "@integrationErrorDeviceVerification": {
+    "description": "Integration error: the provider refuses this device until it is confirmed with a one-time code."
+  },
+  "integrationErrorAttestation": "أصبح المزوّد يشترط تطبيقه الرسمي ويرفض الاتصال من خارجه. تواصل مع الدعم.",
+  "@integrationErrorAttestation": {
+    "description": "Integration error: the provider demands app attestation (e.g. Firebase App Check)."
+  },
+  "integrationErrorOutOfStock": "نفدت هذه الفئة لدى المزوّد.",
+  "@integrationErrorOutOfStock": {
+    "description": "Integration error: the provider has none of this card left."
+  },
+  "integrationErrorPinRequired": "الحساب يطلب رمز الشراء (PIN). أضفه من إعدادات التكامل.",
+  "@integrationErrorPinRequired": {
+    "description": "Integration error: the account needs its purchase PIN and none is stored."
+  },
+  "integrationErrorVerificationRejected": "الرمز غير صحيح أو انتهت صلاحيته. حاول مرة أخرى.",
+  "@integrationErrorVerificationRejected": {
+    "description": "Integration error: the captcha text or one-time code was wrong or expired."
+  },
+  "integrationErrorBusy": "عملية شراء أخرى جارية على الحساب نفسه. حاول بعد لحظة.",
+  "@integrationErrorBusy": {
+    "description": "Integration error: another sale was using the provider's shared basket."
+  },
+  "integrationErrorProfileMismatch": "حساب المزوّد يعمل الآن بملف غير الذي اخترته. اجعل ملفك النشط في تطبيق المزوّد أو اختر الملف النشط.",
+  "@integrationErrorProfileMismatch": {
+    "description": "Integration error: the login is acting as a different profile (shop) than the one chosen."
+  },
+  "integrationCapabilityVouchers": "كروت في الكتالوج",
+  "@integrationCapabilityVouchers": {
+    "description": "Integration capability chip: sells cards from the till's catalog."
+  },
+  "integrationCapabilityProfiles": "عدة ملفات",
+  "@integrationCapabilityProfiles": {
+    "description": "Integration capability chip: one login with several profiles."
+  },
+  "integrationProfileKindIndividual": "شخصي",
+  "@integrationProfileKindIndividual": {
+    "description": "Integration profile kind: the person's own profile."
+  },
+  "integrationProfileKindStoreEmployee": "موظف في متجر",
+  "@integrationProfileKindStoreEmployee": {
+    "description": "Integration profile kind: an employee of a shop."
+  },
+  "integrationProfileKindStore": "متجر",
+  "@integrationProfileKindStore": {
+    "description": "Integration profile kind: a shop."
+  },
+  "integrationVerifyTitle": "تأكيد الجهاز · {provider}",
+  "@integrationVerifyTitle": {
+    "description": "Device verification sheet title.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "integrationVerifyPictureIntro": "لا يسمح المزوّد بالدخول من جهاز جديد إلا برمز يُرسل إلى هاتف الوكالة. اكتب الحروف التي في الصورة ليُرسَل الرمز.",
+  "@integrationVerifyPictureIntro": {
+    "description": "Device verification sheet: first step, reading the captcha picture."
+  },
+  "integrationVerifyCodeIntro": "أُرسل رمز تحقق إلى هاتف الوكالة. اكتبه هنا لتأكيد هذا الجهاز مرة واحدة.",
+  "@integrationVerifyCodeIntro": {
+    "description": "Device verification sheet: second step, typing the one-time code."
+  },
+  "integrationVerifySendCode": "أرسل الرمز",
+  "@integrationVerifySendCode": {
+    "description": "Device verification sheet: send the captcha answer and ask for a code."
+  },
+  "integrationVerifyConfirm": "تأكيد",
+  "@integrationVerifyConfirm": {
+    "description": "Device verification sheet: confirm the one-time code."
+  },
+  "integrationVerifyNewPicture": "صورة أخرى",
+  "@integrationVerifyNewPicture": {
+    "description": "Device verification sheet: ask for a different captcha picture."
+  },
+  "integrationVerifyPictureLabel": "الحروف التي في الصورة",
+  "@integrationVerifyPictureLabel": {
+    "description": "Device verification sheet: the captcha answer field."
+  },
+  "integrationVerifyCodeLabel": "رمز التحقق",
+  "@integrationVerifyCodeLabel": {
+    "description": "Device verification sheet: the one-time code field."
+  },
+  "integrationVerifyCodeExpires": "صالح لمدة {minutes} دقائق",
+  "@integrationVerifyCodeExpires": {
+    "description": "Device verification sheet: how long the texted code stays valid.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationVerifyStartAgain": "اطلب رمزاً جديداً",
+  "@integrationVerifyStartAgain": {
+    "description": "Device verification sheet: start again with a new picture."
+  },
+  "integrationVerifyDone": "تم تأكيد الجهاز وأصبح الاتصال جاهزاً.",
+  "@integrationVerifyDone": {
+    "description": "Snack after a device was confirmed with the provider."
+  },
+  "integrationVerifyAction": "تأكيد الجهاز",
+  "@integrationVerifyAction": {
+    "description": "Integrations page: button to confirm this device with the provider."
+  },
+  "integrationProfileTitle": "الملف · {provider}",
+  "@integrationProfileTitle": {
+    "description": "Integration profile sheet title.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "integrationProfileIntro": "قد يعمل حساب المزوّد الواحد كشخص أو كموظف في أكثر من متجر، ولكل منها محفظته. اختر الملف الذي تُشترى منه الكروت.",
+  "@integrationProfileIntro": {
+    "description": "Integration profile sheet: explanation."
+  },
+  "integrationProfileNone": "لا توجد ملفات لهذا الحساب.",
+  "@integrationProfileNone": {
+    "description": "Integration profile sheet: the login has no profiles."
+  },
+  "integrationProfileActiveNow": "النشط الآن",
+  "@integrationProfileActiveNow": {
+    "description": "Integration profile sheet: the profile the login is currently acting as."
+  },
+  "integrationProfileNotActiveWarning": "هذا الملف ليس النشط الآن لدى المزوّد، ولن تُباع الكروت حتى تجعله النشط من تطبيق المزوّد.",
+  "@integrationProfileNotActiveWarning": {
+    "description": "Integration profile sheet: the chosen profile is not the one the login is acting as."
+  },
+  "integrationProfileSaved": "تم حفظ الملف.",
+  "@integrationProfileSaved": {
+    "description": "Snack after a provider profile was chosen."
+  },
+  "integrationProfileLabel": "الملف",
+  "@integrationProfileLabel": {
+    "description": "Integrations page: the chosen profile, in the account summary."
+  },
+  "integrationProfileAction": "الملف",
+  "@integrationProfileAction": {
+    "description": "Integrations page: button to choose the provider profile."
+  },
+  "systemProductNotice": "منتج نظام تديره إحدى الخدمات المتكاملة، ولا يمكن لأحد تعديله.",
+  "@systemProductNotice": {
+    "description": "Product details: notice on a system product."
+  },
+  "systemProductVoucherNotice": "كرت يُزامَن من المزوّد تلقائياً: الاسم والفئات والأسعار والتوفّر كلها من المزوّد، ولا يمكن لأحد تعديله.",
+  "@systemProductVoucherNotice": {
+    "description": "Product details: notice on a provider card product."
   }
 }

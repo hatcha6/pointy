@@ -9,6 +9,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/migration_view_model.dart';
 import 'collapse_review_page.dart';
+import 'migration_cost_section.dart';
 import 'migration_formatting.dart';
 import 'migration_labels.dart';
 
@@ -534,9 +535,18 @@ class _ReviewStep extends StatelessWidget {
         _ScopeSelection(viewModel: viewModel),
         SizedBox(height: spacing.md),
         _ScopeConsequences(viewModel: viewModel),
-        _EntitySelection(viewModel: viewModel),
-        SizedBox(height: spacing.md),
-        _StockSourceSelection(viewModel: viewModel),
+        // Updating costs onto an existing catalogue has exactly one thing to
+        // say, and the per-entity chips and quantity choices would each be a
+        // control that does nothing — so it says that one thing instead.
+        if (viewModel.attachesToCatalogue)
+          PointyInlineMessage(message: l10n.migrationCostsOnlyNotice)
+        else ...[
+          _EntitySelection(viewModel: viewModel),
+          SizedBox(height: spacing.md),
+          _StockSourceSelection(viewModel: viewModel),
+          SizedBox(height: spacing.md),
+          MigrationCostSection(viewModel: viewModel),
+        ],
         SizedBox(height: spacing.md),
         _StockFilterToggle(viewModel: viewModel),
         SizedBox(height: spacing.md),
@@ -696,7 +706,7 @@ class _ScopeSelection extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final spacing = AdaptiveSpacing.of(context);
-    final scopes = viewModel.scopes;
+    final scopes = viewModel.availableScopes;
     if (scopes.isEmpty) return const SizedBox.shrink();
 
     return _Card(
@@ -743,9 +753,32 @@ class _ScopeConsequences extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final implied = viewModel.impliedEntities;
     final conflicts = viewModel.stockFilterConflicts;
+    // Each refusal comes with the way out. Both are what a hand-edited list
+    // runs into, and "start from today's position" is the preset that asks
+    // for exactly what those lists were trying to express.
+    final toOpeningPosition = viewModel.offersOpeningPosition
+        ? _ConflictFix(
+            label: l10n.migrationSwitchToOpeningPosition,
+            onPressed: () => viewModel.applyScope('opening_position'),
+          )
+        : null;
     final notices = <Widget>[
       if (conflicts.isNotEmpty)
-        PointyInlineMessage.warning(message: l10n.migrationOnlyStockedConflict),
+        _ConflictNotice(
+          message: l10n.migrationOnlyStockedConflict,
+          fixes: [?toOpeningPosition],
+        ),
+      if (viewModel.moneyAccountConflict)
+        _ConflictNotice(
+          message: l10n.migrationMoneyAccountConflict,
+          fixes: [
+            _ConflictFix(
+              label: l10n.migrationMoneyAccountConflictFix,
+              onPressed: () => viewModel.toggleEntity('money_account', false),
+            ),
+            ?toOpeningPosition,
+          ],
+        ),
       if (implied.isNotEmpty)
         PointyInlineMessage(
           message: l10n.migrationImpliedEntitiesNotice(
@@ -764,6 +797,46 @@ class _ScopeConsequences extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final notice in notices) ...[notice, SizedBox(height: spacing.sm)],
+      ],
+    );
+  }
+}
+
+/// A refusal the owner can act on in one tap.
+class _ConflictFix {
+  const _ConflictFix({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+}
+
+class _ConflictNotice extends StatelessWidget {
+  const _ConflictNotice({required this.message, this.fixes = const []});
+
+  final String message;
+  final List<_ConflictFix> fixes;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PointyInlineMessage.warning(message: message),
+        if (fixes.isNotEmpty) ...[
+          SizedBox(height: spacing.xs),
+          Wrap(
+            spacing: spacing.xs,
+            runSpacing: spacing.xs,
+            children: [
+              for (final fix in fixes)
+                OutlinedButton(
+                  onPressed: fix.onPressed,
+                  child: Text(fix.label),
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -831,20 +904,17 @@ class _StockSourceSelection extends StatelessWidget {
         MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotLabel,
         MigrationStockSource.reconstruct =>
           l10n.migrationStockSourceReconstructLabel,
-        MigrationStockSource.costOnly => l10n.migrationStockSourceCostOnlyLabel,
         MigrationStockSource.none => l10n.migrationStockSourceNoneLabel,
       };
 
-  String _subtitle(
-    AppLocalizations l10n,
-    MigrationStockSource option,
-  ) => switch (option) {
-    MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotSubtitle,
-    MigrationStockSource.reconstruct =>
-      l10n.migrationStockSourceReconstructSubtitle,
-    MigrationStockSource.costOnly => l10n.migrationStockSourceCostOnlySubtitle,
-    MigrationStockSource.none => l10n.migrationStockSourceNoneSubtitle,
-  };
+  String _subtitle(AppLocalizations l10n, MigrationStockSource option) =>
+      switch (option) {
+        MigrationStockSource.snapshot =>
+          l10n.migrationStockSourceSnapshotSubtitle,
+        MigrationStockSource.reconstruct =>
+          l10n.migrationStockSourceReconstructSubtitle,
+        MigrationStockSource.none => l10n.migrationStockSourceNoneSubtitle,
+      };
 }
 
 /// One stock-source choice, as a tappable card.
@@ -1030,6 +1100,10 @@ class _DryRunVerdict extends StatelessWidget {
         ),
         SizedBox(height: spacing.sm),
         _RunSummary(viewModel: viewModel, run: run),
+        if (run.costTally != null) ...[
+          SizedBox(height: spacing.sm),
+          MigrationCostTally(run: run),
+        ],
         if (!clean) ...[
           SizedBox(height: spacing.sm),
           _IssueList(viewModel: viewModel),
@@ -1189,6 +1263,10 @@ class _DoneStep extends StatelessWidget {
         if (run != null) ...[
           SizedBox(height: spacing.md),
           _RunSummary(viewModel: viewModel, run: run),
+          if (run.costTally != null) ...[
+            SizedBox(height: spacing.sm),
+            MigrationCostTally(run: run),
+          ],
         ],
         SizedBox(height: spacing.lg),
         OutlinedButton.icon(

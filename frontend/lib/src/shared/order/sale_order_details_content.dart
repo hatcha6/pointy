@@ -913,7 +913,9 @@ class _RechargeDetails extends StatelessWidget {
     };
 
     final facts = <String>[
-      l10n.invoiceRechargeCard(ltrIsolated(recharge.subscriberRef)),
+      // A card off a shelf has no card number of its own; its PIN is below.
+      if (recharge.subscriberRef.isNotEmpty)
+        l10n.invoiceRechargeCard(ltrIsolated(recharge.subscriberRef)),
       if (recharge.subscriberLabel.isNotEmpty)
         l10n.invoiceRechargeFor(recharge.subscriberLabel),
       if (recharge.optionLabel.isNotEmpty) recharge.optionLabel,
@@ -975,6 +977,38 @@ class _RechargeDetails extends StatelessWidget {
                 color: colors.mutedInk,
               ),
             ),
+          ],
+          // A card's PIN, selectable, for the customer who comes back having
+          // lost the receipt it was printed on.
+          if (recharge.isVoucher &&
+              recharge.isConfirmed &&
+              (receipt['code'] ?? '').isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text(
+                  '${l10n.voucherCodeLabel}: ',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.mutedInk,
+                  ),
+                ),
+                SelectableText(
+                  receipt['code']!,
+                  textDirection: TextDirection.ltr,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+            if ((receipt['serial'] ?? '').isNotEmpty)
+              Text(
+                l10n.voucherSerial(receipt['serial']!),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.mutedInk,
+                ),
+              ),
           ],
         ],
       ),

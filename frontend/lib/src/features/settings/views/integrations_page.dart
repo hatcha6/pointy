@@ -13,6 +13,8 @@ import 'integration_credentials_sheet.dart';
 import 'integration_float_sheet.dart';
 import 'integration_prices_sheet.dart';
 import 'integration_presentation.dart';
+import 'integration_profile_sheet.dart';
+import 'integration_verification_sheet.dart';
 
 /// Shop Settings → Integrations.
 ///
@@ -93,9 +95,44 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
       provider: provider,
       viewModel: widget.viewModel,
     );
+    if (saved != true || !mounted) return;
+    _showSnack(AppLocalizations.of(context)!.integrationSaved, isError: false);
+    // A provider that needs this device confirmed says so on the first real
+    // login, so check at once rather than leaving the owner to find the Test
+    // button — and walk straight into the confirmation if it is needed.
+    if (!provider.sellsVouchers) return;
+    await widget.viewModel.probe(provider.key);
+    if (!mounted) return;
+    final refreshed = widget.viewModel.providerFor(provider.key);
+    if (refreshed?.account?.needsDeviceVerification ?? false) {
+      widget.viewModel.acknowledgeResult();
+      await _verify(refreshed!);
+    }
+  }
+
+  Future<void> _verify(IntegrationProvider provider) async {
+    final verified = await showIntegrationVerificationSheet(
+      context: context,
+      provider: provider,
+      viewModel: widget.viewModel,
+    );
+    if (verified == true && mounted) {
+      _showSnack(
+        AppLocalizations.of(context)!.integrationVerifyDone,
+        isError: false,
+      );
+    }
+  }
+
+  Future<void> _profile(IntegrationProvider provider) async {
+    final saved = await showIntegrationProfileSheet(
+      context: context,
+      provider: provider,
+      viewModel: widget.viewModel,
+    );
     if (saved == true && mounted) {
       _showSnack(
-        AppLocalizations.of(context)!.integrationSaved,
+        AppLocalizations.of(context)!.integrationProfileSaved,
         isError: false,
       );
     }
@@ -209,6 +246,8 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   onDisconnect: () => _disconnect(provider),
                   onPrices: () => _prices(provider),
                   onFloat: () => _float(provider),
+                  onVerify: () => _verify(provider),
+                  onProfile: () => _profile(provider),
                 ),
                 SizedBox(height: spacing.md),
               ],
@@ -233,6 +272,8 @@ class IntegrationProviderCard extends StatelessWidget {
     this.onDisconnect,
     this.onPrices,
     this.onFloat,
+    this.onVerify,
+    this.onProfile,
   });
 
   final IntegrationProvider provider;
@@ -250,6 +291,12 @@ class IntegrationProviderCard extends StatelessWidget {
   /// Opens the provider float — what the shop has paid in, what has been
   /// drawn, and recording another top-up.
   final VoidCallback? onFloat;
+
+  /// Confirms this device with a provider that refuses unknown devices.
+  final VoidCallback? onVerify;
+
+  /// Chooses which of the login's profiles (shops) Pointy buys as.
+  final VoidCallback? onProfile;
 
   bool get _isPlanned =>
       provider.availability == IntegrationAvailability.planned;
@@ -438,6 +485,11 @@ class IntegrationProviderCard extends StatelessWidget {
               label: l10n.integrationFieldUsername,
               value: account.accountLabel,
             ),
+          if (provider.hasProfiles && account.profileName.isNotEmpty)
+            PointySummaryRow(
+              label: l10n.integrationProfileLabel,
+              value: account.profileName,
+            ),
         ],
       ),
     );
@@ -487,12 +539,22 @@ class IntegrationProviderCard extends StatelessWidget {
       return const [];
     }
     final isConfigured = provider.isConfigured;
+    final needsVerification =
+        isConfigured && (provider.account?.needsDeviceVerification ?? false);
     return [
       SizedBox(height: spacing.md),
       Wrap(
         spacing: spacing.sm,
         runSpacing: spacing.sm,
         children: [
+          // The one thing standing between this shop and a working provider,
+          // so it leads the row while it is needed.
+          if (needsVerification)
+            FilledButton.icon(
+              onPressed: isBusy ? null : onVerify,
+              icon: const Icon(Icons.verified_user_outlined),
+              label: Text(l10n.integrationVerifyAction),
+            ),
           FilledButton.icon(
             onPressed: isBusy ? null : onEdit,
             icon: Icon(isConfigured ? Icons.edit_outlined : Icons.link),
@@ -517,7 +579,15 @@ class IntegrationProviderCard extends StatelessWidget {
               icon: const Icon(Icons.account_balance_wallet_outlined),
               label: Text(l10n.integrationFloatAction),
             ),
-          if (isConfigured)
+          if (isConfigured && provider.hasProfiles)
+            OutlinedButton.icon(
+              onPressed: isBusy ? null : onProfile,
+              icon: const Icon(Icons.storefront_outlined),
+              label: Text(l10n.integrationProfileAction),
+            ),
+          // A provider's cards are priced by the provider and sold from the
+          // catalog; there is no price list of the shop's own to edit.
+          if (isConfigured && !provider.sellsVouchers)
             OutlinedButton.icon(
               onPressed: isBusy ? null : onPrices,
               icon: const Icon(Icons.price_change_outlined),

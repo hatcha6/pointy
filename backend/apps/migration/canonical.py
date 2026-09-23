@@ -90,6 +90,12 @@ class CanonicalStock(CanonicalRecord):
     #: equal to the whole selling price. The quantity alone was never the whole
     #: of "this is what the shop has".
     unit_cost: Decimal | None = None
+    #: The item's own codes, so a cost can find a product that an *earlier*
+    #: import created. A second upload is a new source with an empty identity
+    #: map; without a natural key, "bring the costs I missed" would have to
+    #: re-import — and so duplicate — the whole catalogue.
+    barcode: str = ""
+    sku: str = ""
 
 
 @dataclass

@@ -27,8 +27,8 @@ class StockCountLine {
   final int variantId;
   final double countedQuantity;
 
-  /// On-hand snapshot captured when this line was counted. Shown only in the
-  /// variance prompt and reconciliation — never on the blind counting screen.
+  /// On-hand snapshot captured when this line was counted. Shown only on
+  /// reconciliation — never on the blind counting screen.
   final double expectedQuantity;
   final double variance;
   final bool needsReview;

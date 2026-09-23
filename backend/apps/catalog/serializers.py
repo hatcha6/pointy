@@ -23,6 +23,7 @@ from .identity import (
     find_conflicts,
     find_sku_conflict,
 )
+from .system_products import refuse_system_product
 from .models import (
     ModifierGroup,
     ModifierOption,
@@ -532,10 +533,13 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "tracks_expiry",
             "is_service",
             "is_prepared",
-            # A product a feature owns rather than the shop — today the
-            # recharge service product per provider. Read-only: a shop
-            # cannot declare one, and cannot un-declare these.
+            # A product a feature owns rather than the shop — a recharge
+            # service product, or a provider's card. Read-only: a shop cannot
+            # declare one, cannot un-declare these, and cannot edit them.
             "is_system",
+            # Which kind: ``service`` (sold only through its own flow) or
+            # ``voucher`` (a provider's card, sold from the till's catalog).
+            "system_kind",
             "unit",
             # The currency this product's price sheet is written in. NULL (the
             # default, and every existing product) means the shop's own.
@@ -553,7 +557,13 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at", "archived_at", "is_system")
+        read_only_fields = (
+            "created_at",
+            "updated_at",
+            "archived_at",
+            "is_system",
+            "system_kind",
+        )
 
     def get_primary_image(self, product):
         return primary_attachment_summary(
@@ -860,6 +870,11 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             product = scoped_product
         if product is None:
             raise serializers.ValidationError({"product": "Product is required."})
+        # Neither onto a system product nor off one: its variants are written
+        # by the feature that owns it (see catalog.system_products).
+        refuse_system_product(product)
+        if self.instance is not None:
+            refuse_system_product(self.instance.product)
         attrs["product"] = product
 
         if "option_values" in attrs:
@@ -1104,10 +1119,13 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "tracks_expiry",
             "is_service",
             "is_prepared",
-            # A product a feature owns rather than the shop — today the
-            # recharge service product per provider. Read-only: a shop
-            # cannot declare one, and cannot un-declare these.
+            # A product a feature owns rather than the shop — a recharge
+            # service product, or a provider's card. Read-only: a shop cannot
+            # declare one, cannot un-declare these, and cannot edit them.
             "is_system",
+            # Which kind: ``service`` (sold only through its own flow) or
+            # ``voucher`` (a provider's card, sold from the till's catalog).
+            "system_kind",
             # How closely this product's stock is identified. Defaults to
             # ``quantity`` and stays there for every product that never asks
             # for anything else; changing it re-labels history, so it is
@@ -1155,6 +1173,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "tracks_expiry",
             # Set by the feature that owns the product, never by a client.
             "is_system",
+            "system_kind",
         )
 
     def validate_unit(self, value):

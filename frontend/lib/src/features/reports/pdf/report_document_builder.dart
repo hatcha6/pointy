@@ -70,7 +70,10 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
     generatedBy: includePreparedBy ? currentUser.label : null,
     reference: _referenceFor(run),
     period: period,
-    shopSettingFields: _shopSettingFieldsForReport(run.reportType, shopSettings),
+    shopSettingFields: _shopSettingFieldsForReport(
+      run.reportType,
+      shopSettings,
+    ),
     metrics: _metricsFromSummary(summary, headline, payload),
     sections: sections,
     auditTrail: includeAuditTrail
@@ -105,12 +108,15 @@ BusinessReportType _businessReportType(ReportRunType type) {
   return switch (type) {
     ReportRunType.salesSummary ||
     ReportRunType.productMargin ||
-    ReportRunType.salesByStaff => BusinessReportType.salesSummary,
+    ReportRunType.salesByStaff ||
+    ReportRunType.unitMargin => BusinessReportType.salesSummary,
     ReportRunType.paymentMethods ||
     ReportRunType.cashPosition => BusinessReportType.paymentSummary,
     ReportRunType.registerClosure => BusinessReportType.registerSessionArchive,
-    ReportRunType.inventoryStatus => BusinessReportType.inventorySnapshot,
-    ReportRunType.stockMovements => BusinessReportType.stockMovementArchive,
+    ReportRunType.inventoryStatus ||
+    ReportRunType.unitAging => BusinessReportType.inventorySnapshot,
+    ReportRunType.stockMovements ||
+    ReportRunType.unitLedger => BusinessReportType.stockMovementArchive,
     ReportRunType.purchasingSummary ||
     ReportRunType.payablesAging => BusinessReportType.purchasingSummary,
     ReportRunType.reorderItems => BusinessReportType.reorderPlan,
@@ -122,6 +128,8 @@ BusinessReportType _businessReportType(ReportRunType type) {
     ReportRunType.customerStatement => BusinessReportType.customerStatement,
     ReportRunType.supplierStatement => BusinessReportType.supplierStatement,
     ReportRunType.discountAudit => BusinessReportType.discountAudit,
+    ReportRunType.balanceSheet => BusinessReportType.balanceSheet,
+    ReportRunType.consignmentLedger => BusinessReportType.consignmentLedger,
   };
 }
 
@@ -152,9 +160,7 @@ List<ReportPdfMetric> _metricsFromSummary(
       ReportPdfMetric(
         label: reportLabel(key),
         value: reportValue(key, summary[key]),
-        note: previous.isEmpty
-            ? null
-            : _comparisonNote(key, previous[key]),
+        note: previous.isEmpty ? null : _comparisonNote(key, previous[key]),
       ),
   ];
 }
@@ -290,10 +296,7 @@ List<ReportPdfSection>? _notesSection(
     return null;
   }
   return [
-    ReportPdfSection(
-      heading: l10n.reportNotesTitle,
-      paragraphs: sentences,
-    ),
+    ReportPdfSection(heading: l10n.reportNotesTitle, paragraphs: sentences),
   ];
 }
 
@@ -333,6 +336,14 @@ List<ReportPdfField> _shopSettingFieldsForReport(
   }
 
   return switch (type) {
+    // A loss-making article is only possible where the loss guard allows it,
+    // so a margin report says which way the shop has it set.
+    ReportRunType.unitMargin => [
+      ReportPdfField(
+        label: 'منع البيع بخسارة',
+        value: _boolLabel(settings.preventSellingAtLoss),
+      ),
+    ],
     ReportRunType.salesSummary ||
     ReportRunType.productMargin ||
     ReportRunType.discountAudit ||
@@ -424,8 +435,11 @@ List<ReportPdfField> _shopSettingFieldsForReport(
         ),
     ],
     // Money reports carry the valuation method, because it decides the cost of
-    // sales the profit figure is built on.
-    ReportRunType.profitCosts || ReportRunType.monthEndPack => [
+    // sales the profit figure is built on — and, on the balance sheet, what
+    // the goods on the shelf are stated at.
+    ReportRunType.profitCosts ||
+    ReportRunType.monthEndPack ||
+    ReportRunType.balanceSheet => [
       ReportPdfField(
         label: 'طريقة تقييم المخزون',
         value: _valuationMethodLabel(settings.inventoryValuationMethod),
@@ -435,7 +449,12 @@ List<ReportPdfField> _shopSettingFieldsForReport(
     ReportRunType.expenseBreakdown ||
     ReportRunType.receivablesAging ||
     ReportRunType.customerStatement ||
-    ReportRunType.supplierStatement => const [],
+    ReportRunType.supplierStatement ||
+    // Identified stock is valued article by article, whatever the shop's
+    // valuation method, so no stock setting changes these three.
+    ReportRunType.unitAging ||
+    ReportRunType.unitLedger ||
+    ReportRunType.consignmentLedger => const [],
   };
 }
 

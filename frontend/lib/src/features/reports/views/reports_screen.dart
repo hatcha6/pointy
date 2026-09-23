@@ -18,6 +18,7 @@ import '../../../shared/shell/shell.dart';
 import '../report_titles.dart';
 import '../view_models/reports_view_model.dart';
 import 'report_result_view.dart';
+import 'report_unit_code_field.dart';
 
 /// What a caller does with a finished run — preview it, print it, share it.
 ///
@@ -383,9 +384,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return;
     }
     _showMessage(
-      saved
-          ? l10n.reportFiscalYearSavedMessage
-          : widget.viewModel.errorMessage,
+      saved ? l10n.reportFiscalYearSavedMessage : widget.viewModel.errorMessage,
     );
   }
 
@@ -693,6 +692,11 @@ IconData _iconFor(ReportRunType type) {
     ReportRunType.discountAudit => Icons.gavel_outlined,
     ReportRunType.salesByStaff => Icons.groups_outlined,
     ReportRunType.monthEndPack => Icons.menu_book_outlined,
+    ReportRunType.balanceSheet => Icons.balance_outlined,
+    ReportRunType.unitAging => Icons.hourglass_bottom_outlined,
+    ReportRunType.unitMargin => Icons.sell_outlined,
+    ReportRunType.unitLedger => Icons.timeline_outlined,
+    ReportRunType.consignmentLedger => Icons.handshake_outlined,
   };
 }
 
@@ -846,6 +850,20 @@ class _ReportConfiguration extends StatelessWidget {
             onPickSupplier: onPickSupplier,
           ),
         ],
+        if (entry != null && entry.needsUnitCode) ...[
+          const SizedBox(height: 20),
+          _SettingsSection(
+            title: l10n.reportUnitCodeLabel,
+            child: ReportUnitCodeField(
+              viewModel: viewModel,
+              onSubmitted: () {
+                if (viewModel.canRun) {
+                  onRunAction(_ReportOutputAction.run);
+                }
+              },
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
         _DetailPanel(viewModel: viewModel),
         const SizedBox(height: 20),
@@ -860,7 +878,11 @@ class _ReportConfiguration extends StatelessWidget {
         ],
         if (entry != null && !viewModel.canRun && !viewModel.isRunning) ...[
           const SizedBox(height: 12),
-          PointyInlineMessage.warning(message: l10n.reportPartyRequiredMessage),
+          PointyInlineMessage.warning(
+            message: entry.needsUnitCode
+                ? l10n.reportUnitCodeRequiredMessage
+                : l10n.reportPartyRequiredMessage,
+          ),
         ],
       ],
     );
@@ -904,7 +926,10 @@ class _SelectedReportHeader extends StatelessWidget {
 }
 
 class _PeriodPanel extends StatelessWidget {
-  const _PeriodPanel({required this.viewModel, required this.onPickCustomRange});
+  const _PeriodPanel({
+    required this.viewModel,
+    required this.onPickCustomRange,
+  });
 
   final ReportsViewModel viewModel;
   final Future<void> Function() onPickCustomRange;
@@ -1231,9 +1256,7 @@ class _HistoryPanelState extends State<_HistoryPanel> {
                 unawaited(widget.viewModel.loadHistory());
               }
             },
-            icon: Icon(
-              _expanded ? Icons.expand_less : Icons.history_outlined,
-            ),
+            icon: Icon(_expanded ? Icons.expand_less : Icons.history_outlined),
             label: Text(l10n.reportHistoryTitle),
           ),
         ),

@@ -178,6 +178,8 @@ def build_receipt_payload(order):
             "lines__variant__product",
             "lines__variant__option_values__option",
             "lines__modifiers",
+            # A line a provider performs prints what it did beneath it.
+            "lines__integration_fulfillment",
         )
         .get(pk=order.pk)
     )
@@ -297,6 +299,38 @@ def receipt_line_payload(line, *, unit_labels=None):
         # has been reading this key all along. Empty, and free, for every line
         # of everything a shop counts rather than identifies.
         "identifiers": order_line_identifiers(line),
+        # What a provider did for this line — a card's PIN, a subscriber's
+        # new term — so the one receipt the customer takes carries all of it.
+        # None for every line no provider performs.
+        "integration": receipt_integration_payload(line),
+    }
+
+
+def receipt_integration_payload(line):
+    """What the receipt prints beneath a line a provider performed.
+
+    The receipt is printed after the provider has answered (the till performs
+    a sale's top-ups and cards first, then prints), so this is the provider's
+    own word: a voucher's PIN, serial and how to use it; a recharge's card or
+    line, term and serial. The client lays it out with its own Arabic labels
+    keyed on these stable names, and prints the status honestly when the
+    provider did not confirm — a slip that looks complete for a card nobody
+    bought would be worse than no slip.
+    """
+    from apps.integrations.fulfillment import fulfillment_kind
+
+    fulfillment = getattr(line, "integration_fulfillment", None)
+    if fulfillment is None:
+        return None
+    return {
+        "provider": fulfillment.provider,
+        "kind": fulfillment_kind(fulfillment),
+        "status": fulfillment.status,
+        "subscriber_ref": fulfillment.subscriber_ref,
+        "option_label": fulfillment.option_label,
+        "months": fulfillment.months,
+        "reference": fulfillment.provider_reference,
+        "printed": (fulfillment.provider_receipt or {}).get("printed") or {},
     }
 
 

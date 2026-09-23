@@ -165,6 +165,9 @@ class CatalogViewModel extends ChangeNotifier {
 
   void toggleSelection(int id) {
     if (!_selectedIds.remove(id)) {
+      // A system product is never part of a bulk change: the server refuses
+      // the whole request if one is in it, and nobody may edit one anyway.
+      if (_isSystem(id)) return;
       _selectedIds.add(id);
     }
     _selectionMode = true;
@@ -172,10 +175,13 @@ class CatalogViewModel extends ChangeNotifier {
   }
 
   void selectAllVisible() {
-    _selectedIds.addAll(_products.map((p) => p.id));
+    _selectedIds.addAll(_products.where((p) => !p.isSystem).map((p) => p.id));
     _selectionMode = true;
     notifyListeners();
   }
+
+  bool _isSystem(int id) =>
+      _products.any((product) => product.id == id && product.isSystem);
 
   void clearSelection() {
     if (_selectedIds.isNotEmpty) {

@@ -229,6 +229,9 @@ class MigrationRunCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"stock_source": f"Must be one of {sorted(VALID_STOCK_SOURCES)}."}
             )
+        carry = (value or {}).get("carry_costs")
+        if carry is not None and not isinstance(carry, bool):
+            raise serializers.ValidationError({"carry_costs": "Must be true or false."})
         stocked = (value or {}).get("only_stocked_products")
         if stocked is not None and not isinstance(stocked, bool):
             raise serializers.ValidationError(

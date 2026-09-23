@@ -9,9 +9,11 @@ import '../../../data/models/integration_provider.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/query_controls/debounced_search_field.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../settings/views/integration_presentation.dart';
 import '../view_models/integration_recharge_view_model.dart';
+import 'integration_recent_searches.dart';
 import 'integration_recharge_parts.dart';
 
 /// The till's top-up flow: find a subscriber, read their subscription, and put
@@ -74,12 +76,18 @@ class IntegrationRechargeScreen extends StatefulWidget {
 }
 
 class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
-  final _cardController = TextEditingController();
   final _cardFocus = FocusNode();
+
+  /// Empties the search box outright, including keystrokes its debounce has
+  /// not reported yet — which telling it "the text is now empty" cannot do
+  /// when the view model already believes it is.
+  final _clearBox = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
+    // The screen opens on what was searched before, not on an empty box.
+    widget.viewModel.recentSearches.load();
     // The card field is the resting focus: a cashier's first act here is
     // always to type or scan a number, and a scanner types into whatever has
     // focus. Same rule the POS catalog search follows.
@@ -90,19 +98,21 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
 
   @override
   void dispose() {
-    _cardController.dispose();
+    _clearBox.dispose();
     _cardFocus.dispose();
     super.dispose();
   }
 
-  void _search() {
-    final value = _cardController.text.trim();
-    if (value.isEmpty) return;
-    widget.viewModel.lookup(value);
+  /// Ask the provider. Keeps the text in the box, so the cashier can see
+  /// what was searched while the answer comes back.
+  bool _search(String value) {
+    final term = value.trim();
+    if (term.isNotEmpty) widget.viewModel.lookup(term);
+    return false;
   }
 
   void _changeCard() {
-    _cardController.clear();
+    _clearBox.value++;
     widget.viewModel.reset();
     _cardFocus.requestFocus();
   }
@@ -144,7 +154,10 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
       // that slot sizes to a fixed bar height, and this one grows when the
       // float warning appears.
       body: AnimatedBuilder(
-        animation: widget.viewModel,
+        animation: Listenable.merge([
+          widget.viewModel,
+          widget.viewModel.recentSearches,
+        ]),
         builder: (context, _) => Column(
           children: [
             Expanded(child: _buildBody(context, l10n)),
@@ -157,20 +170,52 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     final spacing = AdaptiveSpacing.of(context);
-    return ListView(
-      padding: spacing.pagePadding,
-      physics: const AlwaysScrollableScrollPhysics(),
+    final viewModel = widget.viewModel;
+    return Column(
       children: [
-        AdaptiveMaxWidth(
-          width: AppContentWidth.detail,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildSearchField(context, l10n),
-              SizedBox(height: spacing.md),
-              ..._buildState(context, l10n, spacing),
-            ],
+        // Pinned above whatever is below it, not scrolled with it. It is how
+        // every state on this screen is left, and it must not live inside the
+        // recent-searches list: that list's loading, empty and loaded states
+        // are different trees, and each would build the box from scratch —
+        // dropping the very text whose typing had changed the state.
+        Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(
+            spacing.pageHorizontal,
+            spacing.pageVertical,
+            spacing.pageHorizontal,
+            spacing.sm,
           ),
+          child: AdaptiveMaxWidth(
+            width: AppContentWidth.detail,
+            child: _buildSearchField(context, l10n),
+          ),
+        ),
+        Expanded(
+          child: viewModel.lookupState == RechargeLookupState.idle
+              ? RechargeRecentSearches(
+                  viewModel: viewModel.recentSearches,
+                  provider: viewModel.provider,
+                  onRun: viewModel.runRecentSearch,
+                  onLookUp: viewModel.lookup,
+                )
+              : ListView(
+                  padding: EdgeInsetsDirectional.fromSTEB(
+                    spacing.pageHorizontal,
+                    spacing.sm,
+                    spacing.pageHorizontal,
+                    spacing.pageVertical,
+                  ),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    AdaptiveMaxWidth(
+                      width: AppContentWidth.detail,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: _buildState(context, l10n, spacing),
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ],
     );
@@ -183,9 +228,16 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
     // username or contract" would be repeating it — and on a phone-width
     // till the two together leave the hint as an ellipsis.
     final hasPicker = viewModel.searchModes.length >= 2;
-    return TextField(
-      controller: _cardController,
+    // Debounced: typing narrows the recent searches below once the cashier
+    // pauses, and only the search key or the button asks the provider — a
+    // lookup costs seconds against somebody else's portal, a filter does not.
+    return DebouncedSearchField(
+      value: viewModel.searchText,
       focusNode: _cardFocus,
+      resetSignal: _clearBox,
+      onChanged: viewModel.setSearchText,
+      onSubmitted: _search,
+      clearTooltip: l10n.queryClearSearchButton,
       // A username has letters in it; a phone number and a contract number do
       // not, and a digits-only field is what stops a cashier mistyping one.
       // So the keyboard follows the picker rather than being fixed.
@@ -196,31 +248,27 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
           ? const []
           : [FilteringTextInputFormatter.digitsOnly],
       textDirection: TextDirection.ltr,
-      textInputAction: TextInputAction.search,
-      onSubmitted: (_) => _search(),
-      decoration: InputDecoration(
-        // The label says what the field holds; the picker says which kind
-        // this one is. Repeating the mode in both reads as a bug, and the
-        // hint repeating it a third time is what left it as an ellipsis.
-        labelText: prompt.label,
-        hintText: hasPicker ? null : prompt.hint,
-        prefixIcon: _buildSearchModePicker(context, l10n),
-        // The picker is a control, not an icon, so it needs room to be one —
-        // but only it does. A plain icon keeps the default box, or it ends up
-        // squashed against the border on every provider that has no picker.
-        prefixIconConstraints: hasPicker
-            ? const BoxConstraints(minWidth: 0, minHeight: 0)
-            : null,
-        suffixIcon: IconButton(
-          icon: viewModel.isSearching
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: PointySpinner(strokeWidth: 2),
-                )
-              : const Icon(Icons.search),
-          onPressed: viewModel.isSearching ? null : _search,
-          tooltip: l10n.rechargeSearchAction,
-        ),
+      // The label says what the field holds; the picker says which kind
+      // this one is. Repeating the mode in both reads as a bug, and the
+      // hint repeating it a third time is what left it as an ellipsis.
+      labelText: prompt.label,
+      hintText: hasPicker ? '' : prompt.hint,
+      prefix: _buildSearchModePicker(context, l10n),
+      // The picker is a control, not an icon, so it needs room to be one —
+      // but only it does. A plain icon keeps the default box, or it ends up
+      // squashed against the border on every provider that has no picker.
+      prefixConstraints: hasPicker
+          ? const BoxConstraints(minWidth: 0, minHeight: 0)
+          : null,
+      trailingBuilder: (context, submit) => IconButton(
+        icon: viewModel.isSearching
+            ? const SizedBox.square(
+                dimension: 18,
+                child: PointySpinner(strokeWidth: 2),
+              )
+            : const Icon(Icons.search),
+        onPressed: viewModel.isSearching ? null : submit,
+        tooltip: l10n.rechargeSearchAction,
       ),
     );
   }
@@ -256,7 +304,7 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
           // The field's formatter changes with the pick, and a contract
           // number left in the box when the cashier switches to "username"
           // is not what they are about to search for.
-          _cardController.clear();
+          _clearBox.value++;
           _cardFocus.requestFocus();
         },
         itemBuilder: (context) => [
@@ -302,15 +350,9 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
     final viewModel = widget.viewModel;
     switch (viewModel.lookupState) {
       case RechargeLookupState.idle:
-        return [
-          PointyEmptyState(
-            icon: Icons.sim_card_outlined,
-            title: integrationSubscriberPrompt(
-              widget.viewModel.provider,
-              l10n,
-            ).prompt,
-          ),
-        ];
+        // Never reached: while nothing is looked up the body is the recent
+        // searches, which carries the "type or scan" prompt when it is empty.
+        return const [];
       case RechargeLookupState.searching:
         return [
           Padding(
@@ -342,7 +384,7 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
             icon: Icons.cloud_off,
             title: errorMessageFor(viewModel.failure ?? Exception(''), l10n),
             action: FilledButton.icon(
-              onPressed: _search,
+              onPressed: viewModel.retry,
               icon: const Icon(Icons.sync),
               label: Text(l10n.rechargeSearchAction),
             ),

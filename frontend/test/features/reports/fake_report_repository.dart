@@ -17,6 +17,7 @@ class FakeReportRepository extends ReportRepository {
     this.createFailure,
     this.lockedThrough,
     this.historyRows = const [],
+    this.extraReports = const [],
   }) : super(PosApiService());
 
   /// When set, `createReportRun` fails with this as the server's own reason.
@@ -24,7 +25,12 @@ class FakeReportRepository extends ReportRepository {
   final DateTime? lockedThrough;
   final List<ReportRunSummary> historyRows;
 
+  /// More catalogue entries, after the three every test gets — including keys
+  /// this build has never heard of, which a newer server does send.
+  final List<Map<String, Object?>> extraReports;
+
   int createCalls = 0;
+  ReportRunDraft? lastDraft;
   int verifyCalls = 0;
   int csvCalls = 0;
   DateTime? savedLock;
@@ -58,6 +64,7 @@ class FakeReportRepository extends ReportRepository {
             'required_params': ['customer_id'],
             'point_in_time': false,
           },
+          ...extraReports,
         ],
         'presets': [
           'today',
@@ -83,6 +90,7 @@ class FakeReportRepository extends ReportRepository {
   @override
   Future<Result<ReportRun>> createReportRun(ReportRunDraft draft) async {
     createCalls++;
+    lastDraft = draft;
     final failure = createFailure;
     if (failure != null) {
       return Error(Exception('{"detail": "$failure"}'));

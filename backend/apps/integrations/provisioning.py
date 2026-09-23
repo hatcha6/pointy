@@ -18,12 +18,13 @@ from django.db import transaction
 
 from apps.catalog.models import Product, ProductVariant
 
-# Stable SKUs — a shop may rename the product, and the link must survive it.
+# Stable SKUs — the link is the code, never the name, so a product renamed
+# before system products were locked still resolves to itself.
 SKU_PREFIX = "INTEG"
 
 # Arabic names for the auto-created products. Unlike UI copy these are shop
-# *data*: they end up on receipts and in reports, so they are written once here
-# and the owner is free to rename them afterwards.
+# *data*: they end up on receipts and in reports, so they are written once here.
+# They are system products, so nobody renames them afterwards.
 _PRODUCT_NAMES = {
     "hdbox": "شحن اشتراك HD Box",
     "lnet": "شحن اشتراك LNET",
@@ -39,16 +40,17 @@ def service_sku(provider_key: str) -> str:
 def service_variant_for(provider_key: str) -> ProductVariant:
     """The variant a recharge from ``provider_key`` is rung up as.
 
-    Idempotent, and keyed on the SKU rather than the name so a shop that
-    renames the product to something it prefers keeps the same product.
+    Idempotent, and keyed on the SKU rather than the name, so a product a
+    shop renamed before system products were locked is still found.
     """
     sku = service_sku(provider_key)
     existing = (
         ProductVariant.objects.select_related("product").filter(sku=sku).first()
     )
     if existing is not None:
-        # A shop that archived it and then sells another top-up should get the
-        # product back rather than a confusing failure at the till.
+        # A shop that archived it (before system products were locked) and
+        # then sells another top-up should get the product back rather than a
+        # confusing failure at the till.
         product = existing.product
         fields = []
         if product.archived_at is not None or not product.is_active:
@@ -61,6 +63,9 @@ def service_variant_for(provider_key: str) -> ProductVariant:
         if not product.is_system:
             product.is_system = True
             fields.append("is_system")
+        if product.system_kind != Product.SystemKind.SERVICE:
+            product.system_kind = Product.SystemKind.SERVICE
+            fields.append("system_kind")
         if fields:
             product.save(update_fields=[*fields, "updated_at"])
         if not existing.is_active:
@@ -76,6 +81,7 @@ def service_variant_for(provider_key: str) -> ProductVariant:
         # and it is kept out of the catalog grid, the search and the price
         # checker (see Product.is_system).
         is_system=True,
+        system_kind=Product.SystemKind.SERVICE,
     )
     # Price 0: the real price is set per line from the provider's live quote
     # plus whatever the shop adds. A standing price here would be a number

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/error_messages.dart';
 import '../../../core/result.dart';
 import '../../../data/models/money_position.dart';
 import '../../../data/repositories/treasury_repository.dart';
@@ -153,6 +154,12 @@ class MoneyPositionViewModel extends ChangeNotifier {
   /// un-defaults another, and an opening balance re-derives every figure on the
   /// screen — both are the server's arithmetic, not a guess this client should
   /// make.
+  /// The server's own sentence for the last failed [saveAccount], when it gave
+  /// one. The editor shows it instead of a bare "could not save": an owner
+  /// told *why* can fix the form, one told only "no" tries again and gives up.
+  String? get accountSaveError => _accountSaveError;
+  String? _accountSaveError;
+
   Future<bool> saveAccount(
     MoneyAccount account, {
     int? accountId,
@@ -162,6 +169,7 @@ class MoneyPositionViewModel extends ChangeNotifier {
       return false;
     }
     _isSubmitting = true;
+    _accountSaveError = null;
     notifyListeners();
 
     final result = accountId == null
@@ -169,6 +177,9 @@ class MoneyPositionViewModel extends ChangeNotifier {
         : await _repository.updateAccount(accountId, account.toJson());
     _isSubmitting = false;
     if (result is! Ok<MoneyAccount>) {
+      if (result case Error<MoneyAccount>(:final exception)) {
+        _accountSaveError = backendDetailFor(exception);
+      }
       notifyListeners();
       return false;
     }

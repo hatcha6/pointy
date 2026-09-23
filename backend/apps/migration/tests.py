@@ -75,6 +75,14 @@ class MigrationTestBase(TestCase):
     def assertCreated(self, model, expected):
         self.assertEqual(model.objects.count() - self.baseline[model], expected)
 
+    def assert_no_quantities_since(self, stock_before):
+        """Every stock row made since ``stock_before`` (pks) holds nothing."""
+        self.assertFalse(
+            StockItem.objects.exclude(pk__in=stock_before)
+            .exclude(quantity_on_hand=0)
+            .exists()
+        )
+
     def make_source(self, **overrides):
         """A source whose preparation already succeeded, pointing at db_path.
 
@@ -678,28 +686,30 @@ class AboGhrisConnectorTests(MigrationTestBase):
     def test_products_without_quantities_option_skips_stock(self):
         build_aboghris_sample(self.db_path)
         source = self._aboghris_source()
-        stock_before = StockItem.objects.count()
+        stock_before = set(StockItem.objects.values_list("pk", flat=True))
 
         run = self.run_sync(source, IMPORT, options={"products_without_quantities": True})
 
         self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
-        # Products imported, but no stock rows were created.
+        # Products imported with no quantities. The costs still come across,
+        # on zero-unit stock rows: "no quantities" never meant "no costs"
+        # (test_scopes.CostIsItsOwnDecisionTests).
         self.assertCreated(Product, 4)
-        self.assertEqual(StockItem.objects.count(), stock_before)
-        self.assertNotIn("stock", run.summary)
+        self.assert_no_quantities_since(stock_before)
+        self.assertTrue(run.options["resolved"]["carry_costs"])
 
     def test_stock_source_none_skips_stock(self):
         """The explicit ``stock_source: none`` matches the legacy boolean."""
         build_aboghris_sample(self.db_path)
         source = self._aboghris_source()
-        stock_before = StockItem.objects.count()
+        stock_before = set(StockItem.objects.values_list("pk", flat=True))
 
         run = self.run_sync(source, IMPORT, options={"stock_source": "none"})
 
         self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
         self.assertCreated(Product, 4)
-        self.assertEqual(StockItem.objects.count(), stock_before)
-        self.assertNotIn("stock", run.summary)
+        self.assert_no_quantities_since(stock_before)
+        self.assertTrue(run.options["resolved"]["carry_costs"])
 
     def test_reconstruct_stock_from_transactions(self):
         build_aboghris_sample(self.db_path)
@@ -969,14 +979,14 @@ class FahdConnectorTests(MigrationTestBase):
     def test_products_without_quantities_option_skips_stock(self):
         self._fahd_fixture()
         source = self._fahd_source()
-        stock_before = StockItem.objects.count()
+        stock_before = set(StockItem.objects.values_list("pk", flat=True))
 
         run = self.run_sync(source, IMPORT, options={"products_without_quantities": True})
 
         self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
         self.assertCreated(Product, 2)
-        self.assertEqual(StockItem.objects.count(), stock_before)
-        self.assertNotIn("stock", run.summary)
+        self.assert_no_quantities_since(stock_before)
+        self.assertTrue(run.options["resolved"]["carry_costs"])
 
 
 def build_fahd_database(path):
@@ -1199,8 +1209,8 @@ class FahdSqliteTests(MigrationTestBase):
         ghost = ProductVariant.objects.get(barcode="9999")
         self.assertFalse(ghost.product.is_active)
 
-        # No stock was carried over.
-        self.assertCreated(StockItem, 0)
+        # No quantities were carried over (the costs were, on zero-unit rows).
+        self.assertFalse(StockItem.objects.exclude(quantity_on_hand=0).exists())
 
         # Sales: all four invoices, exact totals, original dates, cash walk-in.
         orders = {

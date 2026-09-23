@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -158,9 +159,14 @@ def opening_cost_entries(*, product=None, variant=None):
 
     Newest first, matching the purchase-line ordering it is merged with.
     """
+    # Stock opened at a cost, or a cost declared with nothing on the shelf: an
+    # import that brings a catalogue's costs but none of its quantities posts
+    # the second kind (``apps.migration.loaders.inventory``). Leaving those out
+    # showed every product of that import as "no cost" here while the till —
+    # which reads the valuation — showed the right number.
     entries = StockLedgerEntry.objects.filter(
+        Q(quantity_change__gt=0) | Q(quantity_change=0, valuation_rate__gt=0),
         voucher_type=StockLedgerEntry.VoucherType.OPENING,
-        quantity_change__gt=0,
     ).select_related("variant", "variant__product")
     if variant is not None:
         entries = entries.filter(variant=variant)

@@ -4,6 +4,8 @@ import '../core/analytics_interaction_tracker.dart';
 import '../data/models/product.dart';
 import '../data/models/product_variant.dart';
 import 'formatters.dart';
+import 'catalog/pointy_catalog_row.dart';
+import 'catalog/pointy_catalog_table.dart';
 import 'catalog/pointy_product_card.dart';
 import 'catalog/pointy_product_row.dart';
 import 'catalog/stock_status_label.dart';
@@ -47,6 +49,30 @@ class ProductTile extends StatelessWidget {
        _showStock = showStock,
        _product = null,
        _presentation = _ProductTilePresentation.card,
+       _tableLayout = false;
+
+  /// The default card as a row of a [PointyCatalogTable], for a catalog
+  /// browser switched to its table layout. It adds the stock the card leaves
+  /// out — a table has the room, and a column headed "stock" is what someone
+  /// reading down a price list asks next.
+  ProductTile.row({
+    super.key,
+    required Product product,
+    required this.onTap,
+    this.cartQuantity = 0,
+  }) : title = product.name,
+       sku = product.effectiveSku,
+       barcode = product.effectiveBarcode,
+       unitPrice = product.effectiveUnitPrice,
+       // The product's total, not its default variant's: a row stands for
+       // every size and colour the variant picker will offer.
+       quantityOnHand = product.quantityOnHand,
+       isActive = product.isActive,
+       imageUrl = product.primaryImage?.contentUrl,
+       showPrice = true,
+       _showStock = !product.isService && !product.isPrepared,
+       _product = product,
+       _presentation = _ProductTilePresentation.row,
        _tableLayout = false;
 
   ProductTile.catalogRow({
@@ -116,6 +142,33 @@ class ProductTile extends StatelessWidget {
         tableLayout: _tableLayout,
       );
     }
+    // The status pill is an exception flag, not decoration: an "available"
+    // tag on every card is noise (POS only lists active products, and the
+    // purchasing card already shows live stock). Surface it only when the
+    // product is inactive, which is the case the operator must notice.
+    final status = isActive
+        ? null
+        : ProductStatusPill(isActive: isActive, compact: true);
+
+    if (_presentation == _ProductTilePresentation.row) {
+      return PointyCatalogRow(
+        title: title,
+        sku: sku,
+        barcode: barcode,
+        priceLabel: _priceLabel(),
+        imageUrl: imageUrl,
+        stock: _showStock
+            ? StockStatusLabel.count(
+                quantity: quantityOnHand,
+                isActive: isActive,
+              )
+            : null,
+        status: status,
+        cartQuantity: cartQuantity,
+        enabled: onTap != null,
+        onTap: () => _handleTap(context),
+      );
+    }
 
     return PointyProductCard(
       title: title,
@@ -123,13 +176,7 @@ class ProductTile extends StatelessWidget {
       priceLabel: showPrice ? _priceLabel() : '',
       imageUrl: imageUrl,
       fallbackText: title,
-      // The status pill is an exception flag, not decoration: an "available"
-      // tag on every card is noise (POS only lists active products, and the
-      // purchasing card already shows live stock). Surface it only when the
-      // product is inactive, which is the case the operator must notice.
-      status: isActive
-          ? null
-          : ProductStatusPill(isActive: isActive, compact: true),
+      status: status,
       stockLabel: _showStock
           ? StockStatusLabel(
               quantity: quantityOnHand,
@@ -155,4 +202,4 @@ class ProductTile extends StatelessWidget {
   }
 }
 
-enum _ProductTilePresentation { card, catalogRow }
+enum _ProductTilePresentation { card, row, catalogRow }

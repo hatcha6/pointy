@@ -83,6 +83,45 @@ void main() {
     expect(find.text('أضف منتجًا'), findsOneWidget);
   });
 
+  // The search-mode picker is small, and a product that is only missing
+  // because the search was narrowed to the other half is the likeliest
+  // reason for a blank list once it is on.
+  for (final entry in <ProductSearchMode, String>{
+    ProductSearchMode.code:
+        'البحث الآن في الباركود ورمز المنتج فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الأسماء.',
+    ProductSearchMode.name:
+        'البحث الآن في أسماء المنتجات فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الرموز والباركود.',
+  }.entries) {
+    testWidgets('says a search narrowed to ${entry.key.name} was narrowed', (
+      tester,
+    ) async {
+      await _pumpEmptyState(
+        tester,
+        query: ProductQuery(search: 'شيبس', searchMode: entry.key),
+      );
+
+      expect(find.textContaining('شيبس'), findsOneWidget);
+      expect(find.text(entry.value), findsOneWidget);
+    });
+  }
+
+  testWidgets('a mode with nothing typed is no reason to mention it', (
+    tester,
+  ) async {
+    await _pumpEmptyState(
+      tester,
+      query: const ProductQuery(
+        categories: [ProductCategory(id: 1, name: 'مشروبات')],
+        searchMode: ProductSearchMode.name,
+      ),
+    );
+
+    expect(
+      find.text('تحقق من الكتابة أو امسح البحث والفلاتر لعرض كل المنتجات.'),
+      findsOneWidget,
+    );
+  });
+
   test('clearing keeps app-set narrowing and the chosen ordering', () {
     const query = ProductQuery(
       search: 'شيبس',
@@ -94,6 +133,7 @@ void main() {
       stock: ProductStockFilter.inStockOnly,
       preferredSupplierId: 3,
       ordering: ProductOrdering.priceDesc,
+      searchMode: ProductSearchMode.name,
     );
 
     final cleared = CatalogEmptyState.cleared(query);
@@ -104,6 +144,9 @@ void main() {
     expect(cleared.stock, ProductStockFilter.inStockOnly);
     expect(cleared.preferredSupplierId, 3);
     expect(cleared.ordering, ProductOrdering.priceDesc);
+    // How the cashier searches is a choice, not a filter: clearing the search
+    // leaves the picker where they put it.
+    expect(cleared.searchMode, ProductSearchMode.name);
   });
 }
 

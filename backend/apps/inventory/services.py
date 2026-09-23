@@ -425,7 +425,7 @@ def consume_expiring_stock_batches(*, variant, quantity, warehouse):
 
 
 def stock_count_needs_review(*, expected, counted, min_units, percent):
-    """Decide whether a counted line should surface the variance prompt.
+    """Decide whether a counted line is flagged ``needs_review``.
 
     Flags only when the gap is at least ``min_units`` AND at least ``percent``
     of the expected quantity, so neither tiny shops nor high-volume SKUs get

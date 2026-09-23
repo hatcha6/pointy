@@ -66,7 +66,7 @@ String reportValue(String key, Object? value, {String? columnType}) {
   }
   switch (columnType) {
     case ReportColumnType.label:
-      return reportLabel(value.toString());
+      return _labelValue(value.toString());
     case ReportColumnType.money:
       return _money(value);
     case ReportColumnType.percent:
@@ -86,7 +86,7 @@ String reportValue(String key, Object? value, {String? columnType}) {
   // since ``ColumnType.LABEL``; kept by name too so a payload from an older
   // backend does not print an English key at a customer.
   if (const {'metric', 'line', 'cost_item', 'component'}.contains(key)) {
-    return reportLabel(raw);
+    return _labelValue(raw);
   }
   final choice = _choice(raw);
   if (choice != null) {
@@ -99,6 +99,16 @@ String reportValue(String key, Object? value, {String? columnType}) {
     return _percent(value);
   }
   return _plain(value);
+}
+
+/// A payload key held as a cell value — a statement line, a stock movement, an
+/// age band.
+///
+/// A line's own name wins. After it, a value the payload also sends in choice
+/// columns reads exactly as it does there: a treasury component or a movement
+/// type used to reach only the header table, miss it, and print بيان.
+String _labelValue(String key) {
+  return _labels[key] ?? _valueLabels[key] ?? reportLabel(key);
 }
 
 /// Whether a column should be right-aligned and read as a figure.
@@ -289,6 +299,22 @@ const _moneyKeys = {
   'debit',
   'credit',
   'balance',
+  'net_position',
+  'total_assets',
+  'total_liabilities',
+  'zakat_due',
+  'zakat_base',
+  'opening_net_position',
+  'net_position_change',
+  'period_result',
+  'capital',
+  'capital_on_shelf',
+  'stale_capital',
+  'consignment_stock_value',
+  'consignor_payable',
+  'consignor_receivable',
+  'shop_commission',
+  'custody_declared_value',
 };
 
 const _percentKeys = {
@@ -355,6 +381,35 @@ const _valueLabels = {
   'issued_value': 'المنصرف',
   'closing_value': 'قيمة آخر المدة',
   'unexplained_difference': 'فرق غير مفسَّر',
+  'consignor_payout': 'مدفوعات أصحاب الأمانات',
+  'integration_draw': 'سحب مزوّد الخدمة',
+  // What moved one article: the ledger's voucher types.
+  'sale': 'بيع',
+  'sale_return': 'مرتجع بيع',
+  'purchase_receipt': 'استلام مشتريات',
+  'purchase_return': 'مرتجع مشتريات',
+  'production': 'تصنيع',
+  'stock_count': 'جرد',
+  'adjustment': 'تسوية يدوية',
+  'transfer_receipt': 'استلام تحويل مستودع',
+  'consignment_cost': 'تكلفة أمانة عند بيعها',
+  'consignment_intake': 'استلام أمانة',
+  'consignment_return': 'إرجاع أمانة لصاحبها',
+  'refurbishment': 'إصلاح أُضيف إلى التكلفة',
+  // How long an article has stood on the shelf. The bands include their lower
+  // bound and stop short of the upper one.
+  '0-30': 'أقل من ٣٠ يومًا',
+  '30-60': '٣٠ – ٥٩ يومًا',
+  '60-90': '٦٠ – ٨٩ يومًا',
+  '90-180': '٩٠ – ١٧٩ يومًا',
+  '180+': '١٨٠ يومًا فأكثر',
+  // Where one article stands, worded as the serialized-stock screen words it.
+  'in_stock': 'في المخزون',
+  'reserved': 'محجوزة',
+  'sold': 'مباعة',
+  'in_transit': 'قيد النقل',
+  'returned': 'أُرجعت للمورد',
+  'written_off': 'مشطوبة',
 };
 
 const _labels = {
@@ -550,7 +605,7 @@ const _labels = {
   'overdue_percent': 'نسبة المتأخر',
   'customer_count': 'عدد العملاء',
   'invoice_count': 'عدد الفواتير',
-  'oldest_days': 'أقدم دين (يوم)',
+  'oldest_days': 'أقدم عمر (يوم)',
   'entry_count': 'عدد الحركات',
   'received_total': 'المحصَّل',
   'not_yet_due': 'لم يحلّ أجلها',
@@ -599,6 +654,84 @@ const _labels = {
   'unreconciled_difference': 'فرق غير مطابق',
   'opening_value': 'قيمة أول المدة',
   'closing_value': 'قيمة آخر المدة',
+
+  // -- balance sheet and zakat --------------------------------------------
+  // Worded after the statement shops kept before Pointy — لنا, علينا,
+  // الصافي — because that is the page an owner already knows how to check.
+  'balance_assets': 'لنا — الأصول',
+  'balance_liabilities': 'علينا — الخصوم',
+  'balance_net': 'الصافي',
+  'net_position_movement': 'حركة الصافي خلال الفترة',
+  'zakat': 'حساب الزكاة',
+  'change': 'التغير',
+  'stock_at_cost': 'البضاعة بسعر التكلفة',
+  'stock_at_selling_price': 'البضاعة بسعر البيع',
+  'cash_and_bank': 'النقدية في الخزينة والمصارف',
+  'customer_receivables': 'ديون العملاء',
+  'employee_loans': 'ديون الموظفين (السلف)',
+  'provider_float': 'أرصدة لدى مزودي الخدمات',
+  'supplier_credits': 'إشعارات دائنة لدى الموردين',
+  'consignor_advances': 'مستحق على أصحاب الأمانات',
+  'supplier_payables': 'مستحقات الموردين',
+  'employee_payables': 'رواتب مستحقة للموظفين',
+  'consignor_payables': 'مستحقات أصحاب الأمانات',
+  'total_assets': 'إجمالي الأصول (لنا)',
+  'total_liabilities': 'إجمالي الخصوم (علينا)',
+  'net_position': 'الصافي',
+  'opening_net_position': 'الصافي أول المدة',
+  'closing_net_position': 'الصافي آخر المدة',
+  'net_position_change': 'التغير في الصافي',
+  'outside_money_added': 'أموال أُدخلت من الخارج (رأس مال أو قرض)',
+  'outside_money_withdrawn': 'مسحوبات المالك',
+  'period_result': 'نتيجة الفترة (ربح أو خسارة)',
+  'zakat_assets_total': 'إجمالي الأموال الزكوية',
+  'zakat_liabilities': 'يُخصم: الخصوم (علينا)',
+  'zakat_base': 'وعاء الزكاة',
+  'zakat_due': 'مقدار الزكاة (٢٫٥٪)',
+
+  // -- identified stock and consignments ----------------------------------
+  // The serialized-stock screens already call an article a جهاز and its code
+  // its معرّف; the reports use the same words so a figure can be found again.
+  'aging_buckets': 'الأجهزة حسب مدة بقائها',
+  'aging_units': 'الأجهزة على الرف',
+  'unit_margin': 'ربح كل جهاز',
+  'unit_ledger': 'سجل الجهاز',
+  'consignment_payables': 'مستحقات لم تُصرف لأصحابها',
+  'consignment_sales': 'أمانات بيعت خلال الفترة',
+  'bucket': 'المدة على الرف',
+  'unit_count': 'عدد الأجهزة',
+  'capital': 'رأس المال المجمَّد',
+  'consigned_count': 'منها أمانات',
+  'code': 'المعرّف',
+  'days_held': 'أيام في المخزون',
+  'asking_price': 'سعر العرض',
+  'is_consignment': 'أمانة',
+  'sold_at': 'تاريخ البيع',
+  'sold_price': 'سعر البيع',
+  'refurb_cost': 'تكلفة الإصلاح',
+  'posting_at': 'التاريخ',
+  'voucher_type': 'الحركة',
+  'warehouse': 'المستودع',
+  'batch': 'الدفعة',
+  'rate': 'التكلفة',
+  'consignor': 'صاحب الأمانة',
+  'payout_due': 'المستحق لصاحبها',
+  'days_waiting': 'أيام الانتظار',
+  'payout': 'حصة صاحبها',
+  'paid': 'صُرفت',
+  'capital_on_shelf': 'رأس المال على الرفوف',
+  'stale_unit_count': 'أجهزة راكدة (٩٠ يومًا فأكثر)',
+  'stale_capital': 'رأس مال راكد (٩٠ يومًا فأكثر)',
+  'units_sold': 'الأجهزة المباعة',
+  'loss_making_units': 'أجهزة بيعت بخسارة',
+  'spell_count': 'مرات دخوله المخزون',
+  'event_count': 'عدد الحركات',
+  'consignment_stock_value': 'قيمة الأمانات في مخزون المحل',
+  'consignor_payable': 'مستحقات لأصحاب الأمانات',
+  'consignor_receivable': 'مستحقات على أصحاب الأمانات',
+  'shop_commission': 'عمولة المحل',
+  'custody_unit_count': 'أمانات في العهدة',
+  'custody_declared_value': 'القيمة المقدّرة للأمانات',
 
   // -- pack ---------------------------------------------------------------
   'sections_included': 'أقسام مُدرجة',
@@ -780,6 +913,49 @@ const _notes = {
       'الكمية المقترحة تُعيد المخزون إلى ضعف حد الطلب.',
   'reorder_counts_incoming':
       'تُخصم الكميات الواردة في الطريق حتى لا يتكرر الطلب.',
+
+  // -- balance sheet and zakat ----------------------------------------------
+  'balance_positions':
+      'أول المدة هو الوضع في نهاية يوم {opening}، وآخر المدة هو الوضع في '
+      'نهاية يوم {closing}.',
+  'balance_stock_at_cost':
+      'في الميزانية تُقوَّم البضاعة بتكلفتها من سجل التقييم، ولا تُحتسب '
+      'البضاعة المودعة أمانةً لدى المحل.',
+  'balance_net_is_equity':
+      'لا يُسجَّل رأس المال على حدة، فالصافي هو حق المالك كاملًا: رأس المال '
+      'مع ما تراكم من أرباح.',
+  'period_result_basis':
+      'نتيجة الفترة = الصافي آخر المدة − الصافي أول المدة − ما أُدخل من '
+      'الخارج + مسحوبات المالك، وتشمل أي أرصدة افتتاحية سُجّلت خلال الفترة.',
+  'zakat_basis':
+      'في حساب الزكاة تُقوَّم البضاعة بسعر البيع الحالي، وتُضاف النقدية '
+      'والديون المستحقة للمحل ويُخصم ما عليه، والزكاة ٢٫٥٪ من الوعاء إن كان '
+      'موجبًا.',
+  'zakat_prices_today':
+      'كميات البضاعة كما كانت في {date}، لكنها مُقوَّمة بأسعار البيع الحالية '
+      'لأن النظام لا يحفظ أسعار ذلك اليوم.',
+  'zakat_conditions':
+      'هذا حساب مساعد: تجب الزكاة إذا بلغ الوعاء النصاب وحال عليه الحول، '
+      'ويُستبعد من الديون ما يُشك في تحصيله.',
+
+  // -- identified stock and consignments -------------------------------------
+  'aging_counts_consignment':
+      'يشمل العدد الأمانات الموجودة على الرف، لأنها تشغل المكان نفسه وتتقادم '
+      'مثل غيرها.',
+  'aging_capital_excludes_consignment':
+      'رأس المال لا يشمل الأمانات، فهي ليست من مال المحل.',
+  'unit_margin_cost_includes_refurb':
+      'تكلفة الجهاز تشمل ما أُنفق على إصلاحه، وتكلفة الأمانة هي ما استُحق '
+      'لصاحبها عند بيعها.',
+  'unit_ledger_is_one_article':
+      'يعرض السجل كل ما مرّ به هذا المعرّف منذ دخوله المخزون، ولو دخله أكثر '
+      'من مرة، بغض النظر عن الفترة المختارة.',
+  'consignment_stock_value_is_zero':
+      'الأمانات ليست من مخزون المحل، فقيمتها فيه صفر مهما كانت قيمتها '
+      'لأصحابها.',
+  'consignment_payable_counts_credit_sales':
+      'يُستحق لصاحب الأمانة نصيبه عند البيع، ولو كان البيع آجلًا لم يُحصَّل '
+      'بعد.',
 
   // -- the period itself ----------------------------------------------------
   'period_open':

@@ -2600,6 +2600,66 @@ abstract class AppLocalizations {
   /// **'كل قوائم الإقفال في مستند واحد.'**
   String get reportMonthEndPackSubtitle;
 
+  /// No description provided for @reportBalanceSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الميزانية العمومية'**
+  String get reportBalanceSheetTitle;
+
+  /// No description provided for @reportBalanceSheetSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما لنا وما علينا في أول المدة وآخرها، والصافي، مع حساب الزكاة.'**
+  String get reportBalanceSheetSubtitle;
+
+  /// No description provided for @reportUnitAgingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعمار الأجهزة'**
+  String get reportUnitAgingTitle;
+
+  /// No description provided for @reportUnitAgingSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'منذ متى بقي كل جهاز على الرف، وكم من رأس المال مجمّد في كل مدة.'**
+  String get reportUnitAgingSubtitle;
+
+  /// No description provided for @reportUnitMarginTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربح كل جهاز'**
+  String get reportUnitMarginTitle;
+
+  /// No description provided for @reportUnitMarginSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح الفعلي لكل جهاز بيع خلال الفترة، بتكلفته وما أُنفق على إصلاحه.'**
+  String get reportUnitMarginSubtitle;
+
+  /// No description provided for @reportUnitLedgerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل جهاز'**
+  String get reportUnitLedgerTitle;
+
+  /// No description provided for @reportUnitLedgerSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل ما مرّ به جهاز واحد بمعرّفه، من دخوله المخزون حتى خروجه.'**
+  String get reportUnitLedgerSubtitle;
+
+  /// No description provided for @reportConsignmentLedgerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفتر الأمانات'**
+  String get reportConsignmentLedgerTitle;
+
+  /// No description provided for @reportConsignmentLedgerSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما في العهدة، وما بيع، وما يُستحق لأصحابها، وعمولة المحل.'**
+  String get reportConsignmentLedgerSubtitle;
+
   /// No description provided for @reportPeriodLastMonth.
   ///
   /// In ar, this message translates to:
@@ -2809,6 +2869,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اختر الجهة أولًا لعرض الكشف.'**
   String get reportPartyRequiredMessage;
+
+  /// No description provided for @reportUnitCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف الجهاز'**
+  String get reportUnitCodeLabel;
+
+  /// No description provided for @reportUnitCodeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب الرقم التسلسلي / IMEI'**
+  String get reportUnitCodeHint;
+
+  /// No description provided for @reportUnitCodeRequiredMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل معرّف الجهاز أولًا لعرض سجله.'**
+  String get reportUnitCodeRequiredMessage;
 
   /// No description provided for @reportResultStaleMessage.
   ///
@@ -10704,6 +10782,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعديل'**
   String get productTableEditColumn;
+
+  /// Accessibility label for the icon toggle beside the till's catalog title that switches between picture cards and a table.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة عرض المنتجات'**
+  String get catalogLayoutToggleLabel;
+
+  /// Tooltip on the grid icon of the catalog layout toggle: show products as picture cards in a grid.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض شبكي'**
+  String get catalogLayoutGridTooltip;
+
+  /// Tooltip on the list icon of the catalog layout toggle: show products as a table, one product per row.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض قائمة'**
+  String get catalogLayoutListTooltip;
 
   /// No description provided for @openProductDetailsTooltip.
   ///
@@ -26571,7 +26667,7 @@ abstract class AppLocalizations {
   /// No description provided for @migrationStockSourceNoneSubtitle.
   ///
   /// In ar, this message translates to:
-  /// **'تُنقل المنتجات دون أي كميات، ويُبدأ الجرد من جديد في دفتر.'**
+  /// **'تُنقل الأصناف بكمية صفر، وتجرد رفوفك بنفسك في دفتر. التكلفة تُقرَّر أدناه.'**
   String get migrationStockSourceNoneSubtitle;
 
   /// No description provided for @migrationEntityUnit.
@@ -33204,6 +33300,66 @@ abstract class AppLocalizations {
   /// **'رصيد الوكالة'**
   String get rechargeFloatLabel;
 
+  /// The subscriber's own credit with the provider (money on their line or card), as opposed to the agency float.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المشترك'**
+  String get rechargeSubscriberBalanceLabel;
+
+  /// Heading of the list of past successful searches the top-up screen opens on.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات البحث السابقة'**
+  String get rechargeRecentTitle;
+
+  /// Shown under the search prompt while no search has succeeded yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل بحث ينجح يظهر هنا، لتعود إليه بلمسة في المرة القادمة.'**
+  String get rechargeRecentEmptyMessage;
+
+  /// What the cashier typed matches no past search.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد بحث سابق يطابق {query}'**
+  String rechargeRecentNoMatch(String query);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عنه لدى المزوّد، وإن وُجد فسيظهر هنا في المرة القادمة.'**
+  String get rechargeRecentNoMatchMessage;
+
+  /// Button: run what was typed as a real provider search.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث لدى المزوّد'**
+  String get rechargeRecentLookUp;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل عمليات البحث السابقة'**
+  String get rechargeRecentLoadError;
+
+  /// How many lines a past search matched.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{خط واحد} two{خطّان} few{{count} خطوط} other{{count} خطاً}}'**
+  String rechargeRecentLines(int count);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'اليوم {time}'**
+  String rechargeRecentToday(String time);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أمس {time}'**
+  String rechargeRecentYesterday(String time);
+
   ///
   ///
   /// In ar, this message translates to:
@@ -33864,6 +34020,90 @@ abstract class AppLocalizations {
   /// **'لم يتم العثور على كاميرا على هذا الجهاز.'**
   String get cameraWedgeNoCameras;
 
+  /// Device settings section for how product searches behave on this device
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث عن المنتجات'**
+  String get productSearchSectionTitle;
+
+  /// Switch that adds the search-mode picker to product searches on this device
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار اختيار طريقة البحث'**
+  String get productSearchModePickerToggleTitle;
+
+  /// Explains the search-mode picker switch
+  ///
+  /// In ar, this message translates to:
+  /// **'يضيف إلى خانة البحث في نقطة البيع وإنشاء المشتريات وقائمة المنتجات قائمة تختار منها: البحث بالرمز أو الباركود فقط، أو بالاسم فقط، أو البحث الشامل المعتاد.'**
+  String get productSearchModePickerToggleDescription;
+
+  /// Tooltip on the search-mode picker inside a product search field, naming the current mode
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة البحث: {mode}'**
+  String productSearchModeTooltip(String mode);
+
+  /// Search-mode picker: the ordinary search over names, codes and barcodes
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get productSearchModeAll;
+
+  /// Search-mode picker: what the ordinary search reads
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم والرمز والباركود معًا'**
+  String get productSearchModeAllDescription;
+
+  /// Search-mode picker: search by code (barcode or SKU) only
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمز'**
+  String get productSearchModeCode;
+
+  /// Search-mode picker: what the code search reads
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود أو رمز المنتج فقط'**
+  String get productSearchModeCodeDescription;
+
+  /// Search-mode picker: search by product name only
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get productSearchModeName;
+
+  /// Search-mode picker: what the name search reads
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المنتج فقط'**
+  String get productSearchModeNameDescription;
+
+  /// Product search hint while the picker is set to code
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالباركود أو رمز المنتج'**
+  String get productSearchCodeHint;
+
+  /// Product search hint while the picker is set to name
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم المنتج'**
+  String get productSearchNameHint;
+
+  /// Empty catalog search while the search-mode picker is set to code
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث الآن في الباركود ورمز المنتج فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الأسماء.'**
+  String get catalogNoResultsCodeModeMessage;
+
+  /// Empty catalog search while the search-mode picker is set to name
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث الآن في أسماء المنتجات فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الرموز والباركود.'**
+  String get catalogNoResultsNameModeMessage;
+
   /// F9 toggles cost visibility at the till
   ///
   /// In ar, this message translates to:
@@ -34187,18 +34427,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا يمكن جمع «الأصناف المتوفرة فقط» مع نقل سجل الفواتير: الفواتير القديمة تشير إلى أصناف لن تُنقل.'**
   String get migrationOnlyStockedConflict;
-
-  /// Data migration screen.
-  ///
-  /// In ar, this message translates to:
-  /// **'التكلفة فقط، بدون كميات'**
-  String get migrationStockSourceCostOnlyLabel;
-
-  /// Data migration screen.
-  ///
-  /// In ar, this message translates to:
-  /// **'ننقل تكلفة كل صنف حتى يُحسب الربح صحيحًا من أول عملية بيع، وتبدأ الكميات من الصفر لتجردها بنفسك.'**
-  String get migrationStockSourceCostOnlySubtitle;
 
   /// Bank account details sheet.
   ///
@@ -34805,6 +35033,396 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اكتب: {shopName}'**
   String factoryResetConfirmationHelper(String shopName);
+
+  /// Money account editor: the opening balance field holds something that is not a number.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقمًا صحيحًا، مثل 0 أو 1250.50.'**
+  String get treasuryAccountOpeningBalanceInvalid;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الأصناف'**
+  String get migrationCostSectionTitle;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل تكلفة كل صنف'**
+  String get migrationCarryCostsLabel;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل تكلفة الصنف من النظام السابق حتى يُحسب الربح صحيحًا من أول عملية بيع، وتظهر في شاشة الصنف وعند الكاشير — سواء نقلت الكميات أم لا.'**
+  String get migrationCarryCostsSubtitle;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون التكلفة سيُحسب ربح أول بيع لكل صنف وكأنه سعر البيع كاملًا، إلى أن تُسجِّل له فاتورة شراء.'**
+  String get migrationCarryCostsOffWarning;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند احتساب الكميات من الفواتير تأتي التكلفة من فواتير الشراء المنقولة نفسها.'**
+  String get migrationCostsFromPurchasesNote;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة: {costed} صنف بتكلفة'**
+  String migrationCostTally(String costed);
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة: {costed} صنف بتكلفة · {uncosted} صنف بلا تكلفة في النظام السابق'**
+  String migrationCostTallyWithMissing(String costed, String uncosted);
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن نقل الخزائن بدون سجل المبيعات والمصروفات: رصيد الخزينة في الملف هو رصيدها في أول يوم من السجل، وبدون الحركات سيظهر رقمًا قديمًا وكأنه رصيد اليوم.'**
+  String get migrationMoneyAccountConflict;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبعاد الخزائن'**
+  String get migrationMoneyAccountConflictFix;
+
+  /// Data migration review step.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدم «نبدأ من الوضع الحالي»'**
+  String get migrationSwitchToOpeningPosition;
+
+  /// Data migration review step: the costs-only scope.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث التكلفة فقط'**
+  String get migrationScopeCostsOnlyLabel;
+
+  /// Data migration review step: the costs-only scope.
+  ///
+  /// In ar, this message translates to:
+  /// **'لمحل نُقلت أصنافه من قبل: تُضاف تكلفة كل صنف موجود في دفتر حسب الباركود، دون تغيير الأسماء أو الأسعار أو الكميات أو الأرصدة.'**
+  String get migrationScopeCostsOnlySubtitle;
+
+  /// Data migration review step: the costs-only scope.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يُنشأ أي صنف جديد: كل تكلفة تُربط بالصنف الموجود في دفتر الذي يحمل نفس الباركود. الكميات والأسعار والأرصدة تبقى كما هي، والصنف الذي عليه مخزون مسجَّل في دفتر يحتفظ بتكلفته.'**
+  String get migrationCostsOnlyNotice;
+
+  /// POS card picker: tooltip on the spinner while the provider is asked what is still in stock.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التحقق من توفّر الكروت…'**
+  String get posVoucherChecking;
+
+  /// POS card picker: the line under the brand name.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر فئة الكرت'**
+  String get posVoucherPickerHint;
+
+  /// POS card picker: some denominations were withdrawn because the provider no longer has them.
+  ///
+  /// In ar, this message translates to:
+  /// **'نفدت بعض الفئات لدى المزوّد فأُخفيت.'**
+  String get posVoucherSomeSoldOut;
+
+  /// POS card picker: the provider has none of this brand's cards left.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فئات متوفرة لهذا الكرت الآن.'**
+  String get posVoucherNoneLeft;
+
+  /// POS card picker: the agency float as last read.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة: {amount}'**
+  String posVoucherFloat(String amount);
+
+  /// POS card picker: this card costs more than the agency float as last read.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتجاوز رصيد الوكالة'**
+  String get posVoucherBeyondFloat;
+
+  /// Dialog after a sale of provider cards whose receipt did not print.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرقام الكروت السرية'**
+  String get voucherCodesTitle;
+
+  /// Dialog after a sale of provider cards whose receipt did not print: explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُطبع الفاتورة، فسلّم الزبون الرقم السري من هنا.'**
+  String get voucherCodesBody;
+
+  /// A provider card's serial number.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم التسلسلي: {serial}'**
+  String voucherSerial(String serial);
+
+  /// Dialog after a sale of provider cards: close button once the customer has the code.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التسليم'**
+  String get voucherCodesDone;
+
+  /// Invoice details: the label before a provider card's PIN.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم السري'**
+  String get voucherCodeLabel;
+
+  /// Integration credentials form: the login field for a provider whose login is a phone number.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف'**
+  String get integrationFieldPhone;
+
+  /// Integration credentials form: hint under the phone-number login.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم الذي تدخل به إلى تطبيق المزوّد'**
+  String get integrationFieldPhoneHint;
+
+  /// Integration credentials form: validation for an empty phone-number login.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم الهاتف'**
+  String get integrationPhoneRequired;
+
+  /// Integration credentials form: the optional purchase PIN field.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز الشراء (PIN)'**
+  String get integrationFieldPin;
+
+  /// Integration credentials form: hint under the optional purchase PIN.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري — فقط إن كان رمز الشراء مفعّلاً في حسابك لدى المزوّد.'**
+  String get integrationPinHint;
+
+  /// Integration credentials form: a purchase PIN is already stored.
+  ///
+  /// In ar, this message translates to:
+  /// **'محفوظ. اتركه فارغاً للإبقاء عليه.'**
+  String get integrationPinStoredHint;
+
+  /// Integration error: the provider refuses this device until it is confirmed with a one-time code.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج المزوّد إلى تأكيد هذا الجهاز برمز يُرسل إلى هاتف الوكالة.'**
+  String get integrationErrorDeviceVerification;
+
+  /// Integration error: the provider demands app attestation (e.g. Firebase App Check).
+  ///
+  /// In ar, this message translates to:
+  /// **'أصبح المزوّد يشترط تطبيقه الرسمي ويرفض الاتصال من خارجه. تواصل مع الدعم.'**
+  String get integrationErrorAttestation;
+
+  /// Integration error: the provider has none of this card left.
+  ///
+  /// In ar, this message translates to:
+  /// **'نفدت هذه الفئة لدى المزوّد.'**
+  String get integrationErrorOutOfStock;
+
+  /// Integration error: the account needs its purchase PIN and none is stored.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب يطلب رمز الشراء (PIN). أضفه من إعدادات التكامل.'**
+  String get integrationErrorPinRequired;
+
+  /// Integration error: the captcha text or one-time code was wrong or expired.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمز غير صحيح أو انتهت صلاحيته. حاول مرة أخرى.'**
+  String get integrationErrorVerificationRejected;
+
+  /// Integration error: another sale was using the provider's shared basket.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملية شراء أخرى جارية على الحساب نفسه. حاول بعد لحظة.'**
+  String get integrationErrorBusy;
+
+  /// Integration error: the login is acting as a different profile (shop) than the one chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب المزوّد يعمل الآن بملف غير الذي اخترته. اجعل ملفك النشط في تطبيق المزوّد أو اختر الملف النشط.'**
+  String get integrationErrorProfileMismatch;
+
+  /// Integration capability chip: sells cards from the till's catalog.
+  ///
+  /// In ar, this message translates to:
+  /// **'كروت في الكتالوج'**
+  String get integrationCapabilityVouchers;
+
+  /// Integration capability chip: one login with several profiles.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدة ملفات'**
+  String get integrationCapabilityProfiles;
+
+  /// Integration profile kind: the person's own profile.
+  ///
+  /// In ar, this message translates to:
+  /// **'شخصي'**
+  String get integrationProfileKindIndividual;
+
+  /// Integration profile kind: an employee of a shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'موظف في متجر'**
+  String get integrationProfileKindStoreEmployee;
+
+  /// Integration profile kind: a shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'متجر'**
+  String get integrationProfileKindStore;
+
+  /// Device verification sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الجهاز · {provider}'**
+  String integrationVerifyTitle(String provider);
+
+  /// Device verification sheet: first step, reading the captcha picture.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يسمح المزوّد بالدخول من جهاز جديد إلا برمز يُرسل إلى هاتف الوكالة. اكتب الحروف التي في الصورة ليُرسَل الرمز.'**
+  String get integrationVerifyPictureIntro;
+
+  /// Device verification sheet: second step, typing the one-time code.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل رمز تحقق إلى هاتف الوكالة. اكتبه هنا لتأكيد هذا الجهاز مرة واحدة.'**
+  String get integrationVerifyCodeIntro;
+
+  /// Device verification sheet: send the captcha answer and ask for a code.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل الرمز'**
+  String get integrationVerifySendCode;
+
+  /// Device verification sheet: confirm the one-time code.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد'**
+  String get integrationVerifyConfirm;
+
+  /// Device verification sheet: ask for a different captcha picture.
+  ///
+  /// In ar, this message translates to:
+  /// **'صورة أخرى'**
+  String get integrationVerifyNewPicture;
+
+  /// Device verification sheet: the captcha answer field.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحروف التي في الصورة'**
+  String get integrationVerifyPictureLabel;
+
+  /// Device verification sheet: the one-time code field.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز التحقق'**
+  String get integrationVerifyCodeLabel;
+
+  /// Device verification sheet: how long the texted code stays valid.
+  ///
+  /// In ar, this message translates to:
+  /// **'صالح لمدة {minutes} دقائق'**
+  String integrationVerifyCodeExpires(int minutes);
+
+  /// Device verification sheet: start again with a new picture.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطلب رمزاً جديداً'**
+  String get integrationVerifyStartAgain;
+
+  /// Snack after a device was confirmed with the provider.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تأكيد الجهاز وأصبح الاتصال جاهزاً.'**
+  String get integrationVerifyDone;
+
+  /// Integrations page: button to confirm this device with the provider.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الجهاز'**
+  String get integrationVerifyAction;
+
+  /// Integration profile sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملف · {provider}'**
+  String integrationProfileTitle(String provider);
+
+  /// Integration profile sheet: explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد يعمل حساب المزوّد الواحد كشخص أو كموظف في أكثر من متجر، ولكل منها محفظته. اختر الملف الذي تُشترى منه الكروت.'**
+  String get integrationProfileIntro;
+
+  /// Integration profile sheet: the login has no profiles.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد ملفات لهذا الحساب.'**
+  String get integrationProfileNone;
+
+  /// Integration profile sheet: the profile the login is currently acting as.
+  ///
+  /// In ar, this message translates to:
+  /// **'النشط الآن'**
+  String get integrationProfileActiveNow;
+
+  /// Integration profile sheet: the chosen profile is not the one the login is acting as.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الملف ليس النشط الآن لدى المزوّد، ولن تُباع الكروت حتى تجعله النشط من تطبيق المزوّد.'**
+  String get integrationProfileNotActiveWarning;
+
+  /// Snack after a provider profile was chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الملف.'**
+  String get integrationProfileSaved;
+
+  /// Integrations page: the chosen profile, in the account summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملف'**
+  String get integrationProfileLabel;
+
+  /// Integrations page: button to choose the provider profile.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملف'**
+  String get integrationProfileAction;
+
+  /// Product details: notice on a system product.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج نظام تديره إحدى الخدمات المتكاملة، ولا يمكن لأحد تعديله.'**
+  String get systemProductNotice;
+
+  /// Product details: notice on a provider card product.
+  ///
+  /// In ar, this message translates to:
+  /// **'كرت يُزامَن من المزوّد تلقائياً: الاسم والفئات والأسعار والتوفّر كلها من المزوّد، ولا يمكن لأحد تعديله.'**
+  String get systemProductVoucherNotice;
 }
 
 class _AppLocalizationsDelegate

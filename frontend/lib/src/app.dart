@@ -28,6 +28,7 @@ import 'features/price_checker/views/price_checker_kiosk_screen.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'shared/design/design.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
+import 'shared/product_search/product_search_mode_controller.dart';
 import 'shared/shell/shell.dart';
 import 'shared/theme/theme_controller.dart';
 import 'core/analytics_screen_tracker.dart';
@@ -211,7 +212,14 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                           // bank account a card or transfer lands in.
                           child: BankRoutingScope(
                             routing: _dependencies.bankRouting,
-                            child: railChild ?? const SizedBox.shrink(),
+                            // Per device, like the theme: the product
+                            // searches on every route read whether this
+                            // machine offers the search-mode picker.
+                            child: ProductSearchModeScope(
+                              controller:
+                                  _dependencies.productSearchModeController,
+                              child: railChild ?? const SizedBox.shrink(),
+                            ),
                           ),
                         ),
                       ),

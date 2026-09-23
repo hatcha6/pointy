@@ -1048,6 +1048,71 @@ def validate_integration_lines_carry_their_top_up(lines_data):
                 "variants": blocked,
             }
         )
+    validate_voucher_lines(lines_data)
+
+
+def validate_quotation_sells_no_provider_work(lines_data):
+    """A quotation cannot carry a top-up or a provider card.
+
+    The till performs a sale's provider work the moment the sale is recorded,
+    and a quotation is recorded too — so a card on a quote would be bought,
+    and a card's PIN printed, for a customer who has only asked the price.
+    """
+    if any(line_data.get("integration") for line_data in lines_data):
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    "A quotation cannot include a top-up or a provider card; "
+                    "sell it instead."
+                ),
+                "code": "quotation_provider_line",
+            }
+        )
+
+
+def validate_voucher_lines(lines_data):
+    """A provider card is sold one to a line, and only while the provider has it.
+
+    One to a line because one line is one purchase from the provider, with one
+    PIN on the receipt beneath it and one at-most-once guard around it. Only
+    while listed because a card the provider no longer has would be paid for
+    here and fail behind the customer's back; the till hides it within
+    minutes, and this catches the sale rung up in those minutes.
+    """
+    problems = []
+    for line_data in lines_data:
+        resolved = line_data.get("integration") or {}
+        voucher = resolved.get("voucher")
+        if voucher is None:
+            continue
+        variant = line_data["variant"]
+        if Decimal(line_data.get("quantity") or 0) != 1:
+            problems.append(
+                {
+                    "variant_id": variant.pk,
+                    "product_name": variant.product.name,
+                    "code": "voucher_quantity",
+                }
+            )
+        elif not (voucher.is_available and voucher.brand.is_listed):
+            problems.append(
+                {
+                    "variant_id": variant.pk,
+                    "product_name": variant.product.name,
+                    "code": "voucher_unavailable",
+                }
+            )
+    if problems:
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    "A provider card is sold one to a line, and only while "
+                    "the provider has it in stock."
+                ),
+                "code": problems[0]["code"],
+                "variants": problems,
+            }
+        )
 
 
 @transaction.atomic
@@ -1093,6 +1158,8 @@ def checkout_order(
     prepare_discount_lines(lines_data)
     validate_sale_variants_sellable(lines_data)
     validate_integration_lines_carry_their_top_up(lines_data)
+    if is_quotation:
+        validate_quotation_sells_no_provider_work(lines_data)
     validate_checkout_loss_sales_allowed(
         settings=settings,
         lines_data=lines_data,

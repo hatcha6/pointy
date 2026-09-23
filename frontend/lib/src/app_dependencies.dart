@@ -91,6 +91,7 @@ import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
 import 'features/user_settings/view_models/user_settings_view_model.dart';
 import 'shared/barcode/scan_feedback_sounds.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
+import 'shared/product_search/product_search_mode_controller.dart';
 import 'shared/theme/theme_controller.dart';
 import 'core/authorization.dart';
 
@@ -144,6 +145,7 @@ class PointyAppDependencies {
     dashboardRepository = DashboardRepository(service);
     deviceSettingsRepository = const DeviceSettingsRepository();
     themeController = ThemeController();
+    productSearchModeController = ProductSearchModeController();
     priceCheckerModeController = PriceCheckerModeController();
     companionRepository = CompanionRepository(service);
     businessAlertRepository = BusinessAlertRepository(service);
@@ -357,6 +359,9 @@ class PointyAppDependencies {
   late final DashboardRepository dashboardRepository;
   late final DeviceSettingsRepository deviceSettingsRepository;
   late final ThemeController themeController;
+
+  /// Whether this machine's product searches offer the search-mode picker.
+  late final ProductSearchModeController productSearchModeController;
   late final PriceCheckerModeController priceCheckerModeController;
   late final CompanionRepository companionRepository;
 
@@ -462,6 +467,9 @@ class PointyAppDependencies {
     // Resolve the saved theme first so the app paints in the right mode without
     // a flash from the default.
     await themeController.load();
+    // Before the first frame too, so a machine with the search-mode picker on
+    // opens with it in place rather than growing one a moment later.
+    await productSearchModeController.load();
     // Resolve kiosk mode before the first frame so a price-checker device boots
     // straight into the kiosk instead of flashing the login screen.
     await priceCheckerModeController.load();
@@ -832,6 +840,7 @@ class PointyAppDependencies {
     connectionCoordinator.dispose();
     analyticsEngine.dispose();
     themeController.dispose();
+    productSearchModeController.dispose();
     _stopCompanionBridge();
     companionBridgeListenable.dispose();
     priceCheckerModeController.removeListener(_handlePriceCheckerModeChanged);

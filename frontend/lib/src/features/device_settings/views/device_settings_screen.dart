@@ -17,6 +17,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/price_checker/price_checker_mode_controller.dart';
+import '../../../shared/product_search/product_search_mode_controller.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/theme/theme_mode_controls.dart';
@@ -151,6 +152,7 @@ class _DeviceSettingsBody extends StatelessWidget {
         printingSettingsViewModel.isLoadingConfig) {
       return const PointyLoadingArea();
     }
+    final productSearchModes = ProductSearchModeScope.maybeOf(context);
 
     return ListView(
       padding: spacing.pagePadding,
@@ -178,6 +180,17 @@ class _DeviceSettingsBody extends StatelessWidget {
             ),
           ),
         ),
+        if (productSearchModes != null) ...[
+          SizedBox(height: spacing.lg),
+          AdaptiveMaxWidth(
+            width: AppContentWidth.form,
+            child: PointyDetailSection(
+              icon: Icons.manage_search,
+              title: l10n.productSearchSectionTitle,
+              child: _ProductSearchModePanel(controller: productSearchModes),
+            ),
+          ),
+        ],
         SizedBox(height: spacing.lg),
         AdaptiveMaxWidth(
           width: AppContentWidth.form,
@@ -282,6 +295,41 @@ class _DeviceSettingsBody extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Whether this machine's product searches can be narrowed to codes or to
+/// names. One switch: the picker it adds explains itself where it appears.
+class _ProductSearchModePanel extends StatelessWidget {
+  const _ProductSearchModePanel({required this.controller});
+
+  final ProductSearchModeController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    return SwitchListTile.adaptive(
+      key: const ValueKey('product_search_mode_picker_toggle'),
+      contentPadding: EdgeInsets.zero,
+      value: controller.pickerEnabled,
+      onChanged: (value) async {
+        final messenger = ScaffoldMessenger.of(context);
+        if (await controller.setPickerEnabled(value)) {
+          return;
+        }
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.deviceSettingsSaveError)));
+      },
+      title: Text(l10n.productSearchModePickerToggleTitle),
+      subtitle: Padding(
+        padding: EdgeInsetsDirectional.only(top: spacing.xs),
+        child: Text(l10n.productSearchModePickerToggleDescription),
+      ),
+      secondary: const Icon(Icons.manage_search),
     );
   }
 }

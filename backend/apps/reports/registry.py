@@ -132,6 +132,7 @@ def _load():
     if BUILDERS:
         return BUILDERS
     from .builders import (
+        balance_sheet,
         cash,
         identified,
         inventory,
@@ -169,6 +170,7 @@ def _load():
             Type.UNIT_MARGIN: identified.unit_margin,
             Type.UNIT_LEDGER: identified.unit_ledger,
             Type.CONSIGNMENT_LEDGER: identified.consignment_ledger,
+            Type.BALANCE_SHEET: balance_sheet.balance_sheet,
         }
     )
     return BUILDERS

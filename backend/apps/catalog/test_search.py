@@ -402,3 +402,211 @@ class VariantSearchRelevanceTests(_AuthedCatalogTest):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(any(row["sku"] == "ZC-1" for row in response.data["results"]))
+
+
+class ProductSearchScopeTests(_AuthedCatalogTest):
+    """``?search_in=`` — the per-device search-mode picker on the till, the
+    purchasing screen and the catalog. It narrows WHAT a search reads; how the
+    matches it keeps are ranked is the ordinary relevance order."""
+
+    def setUp(self):
+        super().setUp()
+        # One product per half of the search: "1004" is in this one's NAME...
+        self.named = create_product_with_default_variant(
+            name="Widget 1004", sku="WIDGET", unit_price="1"
+        )
+        # ...and in this one's CODE.
+        self.coded = create_product_with_default_variant(
+            name="Gadget", sku="1004", unit_price="1"
+        )
+
+    def test_code_scope_ignores_names(self):
+        response = self._list(search="1004", search_in="code")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(_result_ids(response), [self.coded.id])
+
+    def test_name_scope_ignores_codes(self):
+        # The reason a shop turns the picker on: a product whose NAME carries a
+        # number, looked up by that number, without every SKU containing it.
+        response = self._list(search="1004", search_in="name")
+
+        self.assertEqual(_result_ids(response), [self.named.id])
+
+    def test_code_scope_reads_barcodes_and_carton_barcodes(self):
+        from .models import ProductUnit, ProductUnitBarcode, UnitOfMeasure
+
+        scanned = create_product_with_default_variant(
+            name="Milk", sku="MLK", barcode="6210000000017", unit_price="1"
+        )
+        carton = UnitOfMeasure.objects.create(code="carton-milk", name="Carton")
+        unit = ProductUnit.objects.create(
+            product=scanned, unit=carton, factor_to_base=Decimal("12")
+        )
+        ProductUnitBarcode.objects.create(product_unit=unit, barcode="6219990001")
+
+        by_barcode = self._list(search="6210000000017", search_in="code")
+        by_carton = self._list(search="6219990001", search_in="code")
+
+        self.assertEqual(_result_ids(by_barcode), [scanned.id])
+        self.assertEqual(_result_ids(by_carton), [scanned.id])
+
+    def test_code_scope_ranks_exact_then_prefix_then_contains(self):
+        prefix = create_product_with_default_variant(
+            name="Cable red", sku="1004-RED", unit_price="1"
+        )
+        midstring = create_product_with_default_variant(
+            name="Cable blue", sku="X1004", unit_price="1"
+        )
+
+        response = self._list(search="1004", search_in="code")
+
+        self.assertEqual(
+            _result_ids(response), [self.coded.id, prefix.id, midstring.id]
+        )
+
+    def test_name_scope_reads_variant_names_and_aliases(self):
+        from .models import ProductAlias
+
+        variant_named = create_product_with_default_variant(
+            name="Shirt", sku="SH-1", variant_name="Crimson", unit_price="1"
+        )
+        aliased = create_product_with_default_variant(
+            name="Soda", sku="SD-1", unit_price="1"
+        )
+        ProductAlias.objects.create(
+            product=aliased, alias="Crimson fizz", normalized="crimson fizz"
+        )
+
+        response = self._list(search="crimson", search_in="name")
+
+        self.assertEqual(
+            sorted(_result_ids(response)), sorted([variant_named.id, aliased.id])
+        )
+        # Neither is a code, so a code search finds nothing at all.
+        self.assertEqual(_result_ids(self._list(search="crimson", search_in="code")), [])
+
+    def test_name_scope_ranks_exact_then_prefix_then_contains(self):
+        contains = create_product_with_default_variant(
+            name="Best Coffee", sku="C3", unit_price="1"
+        )
+        prefix = create_product_with_default_variant(
+            name="Coffee Beans", sku="C2", unit_price="1"
+        )
+        exact = create_product_with_default_variant(
+            name="Coffee", sku="COFFEE-1", unit_price="1"
+        )
+
+        response = self._list(search="coffee", search_in="name")
+
+        self.assertEqual(_result_ids(response), [exact.id, prefix.id, contains.id])
+
+    def test_unknown_scope_searches_everything(self):
+        # A newer till asking for a scope this server does not know still gets
+        # the ordinary search rather than an error or an empty list.
+        response = self._list(search="1004", search_in="colour")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(_result_ids(response), [self.coded.id, self.named.id])
+
+    def test_scope_without_a_search_does_not_filter(self):
+        response = self._list(search_in="code", ordering="name")
+
+        self.assertEqual(
+            sorted(_result_ids(response)), sorted([self.coded.id, self.named.id])
+        )
+
+    def test_scope_keeps_the_supplier_boost(self):
+        from apps.purchasing.models import PurchaseLine, PurchaseOrder, Supplier
+
+        supplier = Supplier.objects.create(name="Acme")
+        boosted = create_product_with_default_variant(
+            name="Widget 1004 deluxe", sku="WD-2", unit_price="1"
+        )
+        order = PurchaseOrder.objects.create(supplier=supplier)
+        PurchaseLine.objects.create(
+            purchase_order=order,
+            variant=boosted.default_variant,
+            quantity=Decimal("1"),
+            unit_cost=Decimal("1.00"),
+        )
+
+        response = self._list(
+            search="widget", search_in="name", preferred_supplier=str(supplier.id)
+        )
+
+        self.assertEqual(_result_ids(response), [boosted.id, self.named.id])
+
+    def test_scoped_search_does_not_rank_the_half_it_skips(self):
+        # Every Exists() tier is costed against the whole catalogue, so a scoped
+        # search must not carry the other half's subqueries along unused.
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        from .models import Product
+        from .search_filters import CatalogRelevanceFilter
+
+        def sql(**params):
+            request = Request(APIRequestFactory().get("/", params))
+            queryset = CatalogRelevanceFilter().filter_queryset(
+                request, Product.objects.all(), view=None
+            )
+            return str(queryset.query)
+
+        by_name = sql(search="1004", search_in="name")
+        by_code = sql(search="1004", search_in="code")
+
+        self.assertNotIn("catalog_productunitbarcode", by_name)
+        self.assertNotIn('"sku"', by_name)
+        self.assertNotIn("catalog_productalias", by_code)
+
+
+class VariantSearchScopeTests(_AuthedCatalogTest):
+    """The purchasing catalog lists variants; ``?search_in=`` scopes it the same
+    way it scopes the product list."""
+
+    def setUp(self):
+        super().setUp()
+        create_product_with_default_variant(
+            name="Thing 5005", sku="THING", unit_price="1"
+        )
+        create_product_with_default_variant(name="Other", sku="5005", unit_price="1")
+
+    def _skus(self, **params):
+        response = self.client.get(reverse("product-variant-list"), params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [row["sku"] for row in response.data["results"]]
+
+    def test_code_scope_ignores_names(self):
+        self.assertEqual(self._skus(search="5005", search_in="code"), ["5005"])
+
+    def test_name_scope_ignores_codes(self):
+        self.assertEqual(self._skus(search="5005", search_in="name"), ["THING"])
+
+    def test_name_scope_reads_the_parent_product_name(self):
+        create_product_with_default_variant(
+            name="Zebra Cheese", sku="ZC-1", unit_price="1"
+        )
+
+        self.assertEqual(self._skus(search="zebra", search_in="name"), ["ZC-1"])
+        self.assertEqual(self._skus(search="zebra", search_in="code"), [])
+
+    def test_code_scope_reads_carton_barcodes(self):
+        from .models import ProductUnit, ProductUnitBarcode, UnitOfMeasure
+
+        product = create_product_with_default_variant(
+            name="Eggs tray", sku="EGG", unit_price="1"
+        )
+        carton = UnitOfMeasure.objects.create(code="carton-egg", name="Carton")
+        unit = ProductUnit.objects.create(
+            product=product, unit=carton, factor_to_base=Decimal("30")
+        )
+        ProductUnitBarcode.objects.create(product_unit=unit, barcode="9990001")
+
+        self.assertEqual(self._skus(search="9990001", search_in="code"), ["EGG"])
+        self.assertEqual(self._skus(search="9990001", search_in="name"), [])
+
+    def test_unknown_scope_searches_everything(self):
+        self.assertEqual(
+            self._skus(search="5005", search_in="colour"), ["5005", "THING"]
+        )

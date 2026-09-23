@@ -162,6 +162,11 @@ class StockMovementSerializer(serializers.ModelSerializer):
         variant = attrs.get("variant")
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
+        # A system product holds no stock a person may move — a provider's
+        # card is on the provider's shelf, not in a bin.
+        from apps.catalog.system_products import refuse_system_variant
+
+        refuse_system_variant(variant)
         attrs["variant"] = variant
         return attrs
 

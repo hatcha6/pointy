@@ -6,6 +6,7 @@ import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/cart_line.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
 import 'package:pointy_frontend/src/data/models/integration_provider.dart';
+import 'package:pointy_frontend/src/data/models/integration_recent_search.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/repositories/integrations_repository.dart';
 import 'package:pointy_frontend/src/data/services/integrations_api_client.dart';
@@ -401,6 +402,71 @@ void main() {
       expect(find.text('لم يُعثر على البطاقة المطلوبة'), findsOneWidget);
     });
   });
+
+  group("the subscriber's own balance", () {
+    // Two balances sit on this screen and they belong to different people:
+    // the customer's credit with the provider, and the shop's agency float.
+    // Reading one as the other tells a customer they have money they do not.
+
+    test('is read as the API sends it, and blank is not zero', () {
+      final snapshot = IntegrationCardSnapshot.fromJson({
+        'card': {'card_no': '210906803499', 'card_balance': '15.00'},
+        'candidates': [
+          {'card_no': 'basheir.home', 'card_balance': '0.00'},
+          {'card_no': 'basheir.old', 'card_balance': null},
+        ],
+      });
+
+      expect(snapshot.card.cardBalance, 15.0);
+      expect(snapshot.candidates[0].cardBalance, 0);
+      expect(snapshot.candidates[1].cardBalance, isNull);
+    });
+
+    testWidgets('sits beside the agency float, under its own name', (
+      tester,
+    ) async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo(credit: 12.5));
+      await tester.pumpWidget(_harness(viewModel));
+      await viewModel.lookup('alhussainbasheir');
+      await tester.pumpAndSettle();
+
+      expect(find.text('رصيد المشترك: 12.50 د.ل'), findsOneWidget);
+      expect(find.text('رصيد الوكالة: 518.80 د.ل'), findsOneWidget);
+    });
+
+    testWidgets('is left out when the provider did not say', (tester) async {
+      // The HD Box fake's card carries no balance: "not told" must not be
+      // printed as "has nothing".
+      final viewModel = _viewModel(_FakeRepo());
+      await tester.pumpWidget(_harness(viewModel));
+      await viewModel.lookup('12345');
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('رصيد المشترك'), findsNothing);
+      expect(find.text('رصيد الوكالة: 25.00 د.ل'), findsOneWidget);
+    });
+
+    testWidgets('a line with nothing on it says zero', (tester) async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo(credit: 0));
+      await tester.pumpWidget(_harness(viewModel));
+      await viewModel.lookup('alhussainbasheir');
+      await tester.pumpAndSettle();
+
+      expect(find.text('رصيد المشترك: 0.00 د.ل'), findsOneWidget);
+    });
+
+    testWidgets('each line in the picker shows what is on it', (tester) async {
+      final viewModel = _lnetViewModel(_FakeLnetRepo(manyLines: true));
+      await tester.pumpWidget(_harness(viewModel));
+      await viewModel.lookup('0910682854');
+      await tester.pumpAndSettle();
+
+      expect(find.text('رصيد المشترك: 12.50 د.ل'), findsOneWidget);
+      expect(find.text('رصيد المشترك: 0.00 د.ل'), findsOneWidget);
+      // Three lines, two balances: the third line's portal row said nothing.
+      expect(find.textContaining('رصيد المشترك'), findsNWidgets(2));
+    });
+  });
   group('what the cashier says the number is', () {
     // A phone number and a contract number are both digits, so the server
     // cannot tell them apart: it asks the portal every way in turn, three
@@ -560,6 +626,7 @@ IntegrationCardInfo _lnetLine(
   required String status,
   DateTime? expireAt,
   String package = 'Unlimited Home Basic',
+  double? credit,
 }) {
   return IntegrationCardInfo(
     cardNo: username,
@@ -567,6 +634,7 @@ IntegrationCardInfo _lnetLine(
     expireAt: expireAt,
     packageName: package,
     providerId: '214737',
+    cardBalance: credit,
   );
 }
 
@@ -575,10 +643,14 @@ class _FakeLnetRepo extends IntegrationsRepository {
     this.manyLines = false,
     this.noQuickPicks = false,
     this.resolvesTo,
+    this.credit,
   }) : super(PosApiService());
 
   /// When true the first lookup matches three lines, as one phone number can.
   final bool manyLines;
+
+  /// The money on the single line a lookup resolves to, when the portal says.
+  final double? credit;
 
   /// When true the shop has cleared its quick-pick amounts.
   final bool noQuickPicks;
@@ -591,6 +663,15 @@ class _FakeLnetRepo extends IntegrationsRepository {
 
   /// What the till said the typed number IS. Empty when it said nothing.
   String lastSearchBy = '';
+
+  /// Nothing searched before: these tests are about the lookup, not the list.
+  @override
+  Future<Result<IntegrationRecentSearchPage>> loadRecentSearches({
+    required String providerKey,
+    String search = '',
+    String? cursor,
+  }) async =>
+      Ok(const IntegrationRecentSearchPage(searches: [], hasMore: false));
 
   @override
   Future<Result<IntegrationCardSnapshot>> lookupCard({
@@ -614,12 +695,15 @@ class _FakeLnetRepo extends IntegrationsRepository {
               'basheir.home',
               status: 'Active',
               expireAt: DateTime(2026, 12, 1),
+              credit: 12.5,
             ),
             _lnetLine(
               'basheir.shop',
               status: 'Expired',
               expireAt: DateTime(2026, 2, 2),
+              credit: 0,
             ),
+            // The portal said nothing about this one's money.
             _lnetLine('basheir.old', status: 'Suspended'),
           ],
           balance: 518.8,
@@ -632,6 +716,7 @@ class _FakeLnetRepo extends IntegrationsRepository {
           resolvesTo ?? cardNo,
           status: 'Active',
           expireAt: DateTime(2026, 12, 1),
+          credit: credit,
         ),
         offers: noQuickPicks
             ? const []
@@ -690,6 +775,15 @@ class _FakeRepo extends IntegrationsRepository {
 
   /// What the till said the typed number IS. Empty when it said nothing.
   String lastSearchBy = '';
+
+  /// Nothing searched before: these tests are about the lookup, not the list.
+  @override
+  Future<Result<IntegrationRecentSearchPage>> loadRecentSearches({
+    required String providerKey,
+    String search = '',
+    String? cursor,
+  }) async =>
+      Ok(const IntegrationRecentSearchPage(searches: [], hasMore: false));
 
   @override
   Future<Result<IntegrationCardSnapshot>> lookupCard({

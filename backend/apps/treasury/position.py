@@ -582,6 +582,28 @@ def treasury_statement(*, start, end):
     }
 
 
+def outside_money_totals(*, start, end):
+    """Money that came into the shop from outside, and left it, over a window.
+
+    The two transfer shapes that are not the shop moving its own money between
+    its own accounts: a deposit (capital from the owner, a loan) and a
+    withdrawal (the owner's draw). Neither is trading, so a comparison of two
+    balance sheets has to take both out before the difference can be read as
+    what the shop's business did. Only active accounts count, the same set a
+    balance is stated for — otherwise money moved into a closed account would
+    be explained here and missing there.
+    """
+    window = MoneyTransfer.objects.filter(moved_at__gte=start, moved_at__lte=end)
+    added = _sum(window.filter(from_account__isnull=True, to_account__is_active=True))
+    withdrawn = _sum(
+        window.filter(to_account__isnull=True, from_account__is_active=True)
+    )
+    return {
+        "added": Decimal(added).quantize(MONEY_PLACES),
+        "withdrawn": Decimal(withdrawn).quantize(MONEY_PLACES),
+    }
+
+
 def _statement_totals(rows):
     def total(key):
         return sum((row[key] for row in rows), ZERO).quantize(MONEY_PLACES)
@@ -691,6 +713,7 @@ __all__ = [
     "bank_account_filter",
     "account_position",
     "expected_balance_for",
+    "outside_money_totals",
     "record_count",
     "treasury_position",
     "treasury_statement",

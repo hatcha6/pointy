@@ -70,7 +70,15 @@ class CatalogEmptyState extends StatelessWidget {
       title: search.isEmpty
           ? l10n.catalogNoFilteredResultsTitle
           : l10n.catalogNoSearchResultsTitle(search),
-      message: l10n.catalogNoResultsMessage,
+      // A search narrowed to codes or to names says so: the product may well
+      // be there under the half the picker left out, and the picker is small.
+      message: switch (search.isEmpty
+          ? ProductSearchMode.all
+          : query.searchMode) {
+        ProductSearchMode.all => l10n.catalogNoResultsMessage,
+        ProductSearchMode.code => l10n.catalogNoResultsCodeModeMessage,
+        ProductSearchMode.name => l10n.catalogNoResultsNameModeMessage,
+      },
       action: FilledButton.tonalIcon(
         onPressed: onClear,
         icon: const Icon(Icons.filter_alt_off_outlined),

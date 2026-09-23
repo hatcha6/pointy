@@ -196,6 +196,25 @@ Screens are reviewed without a backend through dev-only preview harnesses under
 (`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
 repositories, so there is no server, no login, and no shop data involved.
 
+## Balance Sheet and Zakat
+
+`الميزانية العمومية` (report `balance_sheet`, under الإقفال) states what the shop
+owns and owes — لنا, علينا and الصافي — at the close of the day before the chosen
+period and at the close of its last day, so a fiscal-year run sets the year's
+opening beside today. Every line is read from the module that owns it: the stock
+ledger at cost, the money position, receivables and payables aging, payroll and
+staff loans, consignment obligations. The difference between the two columns is
+bridged: money added from outside or withdrawn by the owner through the treasury
+is set aside, and what remains is the period's result.
+
+Under it, zakat is reckoned at the period's end: goods at their current selling
+price (consigned goods excluded), plus cash and every debt owed to the shop, less
+what the shop owes, at 2.5% when the base is positive. Preview the reports screen
+with `make frontend-reports-preview` (`?screen=reports|result|board`, and
+`&report=` with any report key — `unit_aging`, `unit_margin`, `unit_ledger` and
+`consignment_ledger` are the serialized-stock reports; the unit ledger asks for a
+device's serial or IMEI before it runs).
+
 ## Learning Module
 
 `التعلّم` is an in-app library of short Arabic guides, one per operation the
@@ -466,8 +485,8 @@ always rendered whole, so an owner sees what is coming as well as what works:
 | Provider | State | Notes |
 | --- | --- | --- |
 | HD Box | available | DigiCrypt CAS. Session login, JSON endpoints behind the UI. |
-| LNET | planned | Their WAF 403s whole networks; needs a reseller API or a permitted origin. |
-| Qareeb | planned | Vouchers and airtime; awaiting agency access. |
+| LNET | available | Stored-value billing portal; two-step write, one phone can hold many lines. |
+| Qareeb | available | Prepaid cards (Libyana, Almadar, games, bills…) sold as system products on the till's shelf. |
 
 A provider declares which credentials it needs and the Flutter form renders
 them, so teaching Pointy a new service is a catalog entry plus a driver in
@@ -488,6 +507,26 @@ next to them.
 
 Preview the screen with `make frontend-integrations-preview`
 (`?screen=catalog|connected|failed|unconfigured|error|board`).
+
+### Capturing a provider's API to build its driver
+
+HD Box and LNET were reverse-engineered from a captured agency session. Qareeb's
+agency console is a **Flutter iPhone app**, and Flutter ignores the iOS system
+proxy — so a Charles/Proxyman-style Wi-Fi proxy captures nothing. `tools/qareeb-capture`
+intercepts below the app with **mitmproxy's WireGuard mode** (all device traffic
+tunnels through mitmproxy regardless of proxy-awareness) and turns the result
+into a redacted API contract.
+
+```
+make qareeb-capture-setup     # once: brew install mitmproxy
+make qareeb-capture           # capture the logged-in surface
+make qareeb-capture-auth      # capture the login / OTP flow
+make qareeb-analyze HOST=qareeb   # newest capture → redacted Markdown contract
+```
+
+Raw captures hold live OTPs, tokens and cookies — they are gitignored, kept
+local, and deleted once the contract is written. See `tools/qareeb-capture/README.md`
+for the iPhone setup and the certificate-pinning caveat.
 
 ### Selling a top-up at the till
 
@@ -520,16 +559,79 @@ and `price` per option so the cart cannot show a different number from the
 invoice, and `OrderLine.unit_cost` carries the provider's quote, which makes the
 margin on a top-up real rather than assumed.
 
-The fulfillment is written `pending` and stays there: there is no write path, by
-choice, because the provider's API is not idempotent. The till says so on every
-sale rather than letting a cashier tell a customer their box is already on.
+None of the providers' APIs is idempotent, so the charge is **at most once**
+(`apps/integrations/recharge.py`): the fulfillment is claimed `pending →
+submitted` in its own committed transaction, the provider is called outside any
+transaction, and the answer is recorded in a second one. A lost answer leaves
+the row `submitted` — "sent, outcome unknown" — and only reconciliation against
+the provider's own purchase log moves it on. Nothing retries a charge.
 
 The button appears only when the shop has actually connected a provider —
 `ShopSettings.has_integrations`, derived server-side and carried on the settings
 payload every till already loads, so gating it costs no extra call.
 
+The screen opens on the searches that worked before rather than an empty box:
+`IntegrationSearch` keeps one row per distinct search (a repeat moves it back to
+the top and counts it), served newest first and cursor-paged at
+`GET /api/integrations/<key>/searches/?search=`. Typing narrows the list after a
+pause; only the search key or button asks the provider, since a lookup costs
+seconds against somebody else's portal.
+
 Preview with `make frontend-recharge-preview`
-(`?screen=expired|active|expiring|empty-history|notfound|idle`).
+(`?screen=expired|active|expiring|empty-history|notfound|idle|first-use`, and for
+LNET `lnet-lines|lnet-single|lnet-expired|lnet-low-float|lnet-notfound|lnet-idle`).
+
+### Qareeb: cards on the till's shelf
+
+Qareeb sells prepaid cards, not top-ups against a subscriber, so it has **no
+top-up button**. Each brand is a **system product** in the POS catalog and each
+denomination a variant: search "ليبيانا", tap it, pick the card. The shelf is
+built and kept by `apps/integrations/vouchers.py`:
+
+- **Served locally, refreshed in the background.** The till reads the catalog
+  from Pointy's own database like any other product — no provider call on a tap.
+  Celery beat sweeps every 5 minutes (`integrations.sync-voucher-catalogs`),
+  writing only rows that changed, so an idle sweep never bumps the catalog
+  version or invalidates a till's cache.
+- **Availability comes from Qareeb.** A brand Qareeb stops listing is taken off
+  the shelf (`is_active=False`), and a sold-out card disappears. Opening a
+  brand's picker also asks Qareeb for that brand's live stock in the background
+  (single-flight, at most once per 40 s), so a card that sold out since the last
+  sweep vanishes while the cashier is still choosing; checkout re-checks it
+  before any money moves.
+- **Nobody edits a system product** — not a manager, not the owner. The
+  catalog, variant, stock, bulk and attachment endpoints refuse with code
+  `system_product` (`apps/catalog/system_products.py`). The price is the
+  provider's suggested retail (for a local card, its face value), or the
+  account's fallback markup on cost when it gives none; the cost is the
+  provider's.
+- **One card per line.** A card's quantity is fixed at 1 and identical cards are
+  separate lines, because each line is one purchase with its own PIN.
+
+The session: Qareeb's JWT lives 28 days (refresh 100), so a till almost never
+logs in. A login from a machine Qareeb has not seen is refused until the owner
+confirms it once with an SMS code behind an image captcha (Settings →
+Integrations → Qareeb → confirm this device). One login can act for several
+profiles (a person and the shops they work for); the owner chooses which one
+Pointy buys as, and the till refuses to buy while the login is acting as a
+different one rather than paying from the wrong wallet.
+
+Qareeb's cart is shared per agency account (their app and every till use the
+same one), so a purchase takes a Redis turn, clears anything foreign from the
+cart, and checks out against the cart's live hash. **Firebase App Check is not
+enforced on api.qareb.ly today** — no captured request carries a token — and the
+driver reports `attestation_required` if that ever changes, rather than an
+unexplained 401.
+
+### One receipt for the whole sale
+
+A sale with provider lines prints **once, after the providers have answered**,
+with each provider's result beneath its own line: a card's PIN (emphasized) and
+serial, an HD Box card's new term, an LNET line's serial. A line whose charge was
+not confirmed says so and prints no PIN. The same rows are drawn on the thermal
+slip (standard and compact), the A4 PDF and the roll-width PDF
+(`frontend/lib/src/data/services/receipt_integration_rows.dart`). If the printer
+fails, the till shows the PINs on screen.
 
 ### Screenshots without a browser
 

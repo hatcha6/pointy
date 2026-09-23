@@ -7,10 +7,18 @@ import '../data/models/product_query.dart';
 import '../data/repositories/catalog_repository.dart';
 import '../data/repositories/contact_repository.dart';
 import 'product_filter_sheet.dart';
+import 'product_search/product_search_mode_controller.dart';
+import 'product_search/product_search_mode_picker.dart';
 import 'query_controls/query_control_bar.dart';
 import 'responsive/responsive.dart';
 
-class ProductQueryControls extends StatelessWidget {
+/// The product search bar of the till, the purchasing screen and the catalog.
+///
+/// On a machine whose device settings turned on the search-mode picker (see
+/// [ProductSearchModeController]) the field ends in a dropdown choosing what
+/// the search reads — codes, names, or both — carried on the query as
+/// [ProductQuery.searchMode]. Everywhere else it is the plain search field.
+class ProductQueryControls extends StatefulWidget {
   const ProductQueryControls({
     super.key,
     required this.query,
@@ -47,32 +55,97 @@ class ProductQueryControls extends StatelessWidget {
   final Listenable? searchResetSignal;
 
   @override
+  State<ProductQueryControls> createState() => _ProductQueryControlsState();
+}
+
+class _ProductQueryControlsState extends State<ProductQueryControls> {
+  bool _pickerEnabled = false;
+  bool _resetScheduled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _pickerEnabled = ProductSearchModeScope.pickerEnabledOf(context);
+    _dropHiddenSearchMode();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProductQueryControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _dropHiddenSearchMode();
+  }
+
+  /// A search mode nobody can see must not go on narrowing the results.
+  ///
+  /// The screens keep their query while the cashier is elsewhere, so a search
+  /// left on "name" when the picker is switched off in device settings would
+  /// come back as a plain-looking field that quietly ignores every code. Put
+  /// it back to the ordinary search instead — after the frame, because that
+  /// reloads the list and this runs while the tree is being built.
+  void _dropHiddenSearchMode() {
+    if (_pickerEnabled ||
+        _resetScheduled ||
+        widget.query.searchMode == ProductSearchMode.all) {
+      return;
+    }
+    _resetScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resetScheduled = false;
+      final query = widget.query;
+      if (!mounted ||
+          _pickerEnabled ||
+          query.searchMode == ProductSearchMode.all) {
+        return;
+      }
+      widget.onQueryChanged(query.copyWith(searchMode: ProductSearchMode.all));
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final query = widget.query;
+    final searchMode = _pickerEnabled
+        ? query.searchMode
+        : ProductSearchMode.all;
 
     return QueryControlBar(
       searchValue: query.search,
-      searchHint: searchHint ?? l10n.searchProductsHint,
+      searchHint: switch (searchMode) {
+        ProductSearchMode.all => widget.searchHint ?? l10n.searchProductsHint,
+        ProductSearchMode.code => l10n.productSearchCodeHint,
+        ProductSearchMode.name => l10n.productSearchNameHint,
+      },
       clearSearchTooltip: l10n.clearSearchTooltip,
       filterLabel: l10n.filtersButtonLabel,
       openFiltersTooltip: l10n.openFiltersTooltip,
       activeFilterCount: _activeFilterCount,
-      onSearchChanged: onSearchChanged,
+      onSearchChanged: widget.onSearchChanged,
       onOpenFilters: () => _showFilters(context),
-      onSearchSubmitted: onSearchSubmitted,
-      onOpenCameraScanner: onOpenCameraScanner,
+      onSearchSubmitted: widget.onSearchSubmitted,
+      onOpenCameraScanner: widget.onOpenCameraScanner,
       openCameraScannerTooltip:
-          openCameraScannerTooltip ?? l10n.openCameraScannerTooltip,
-      enabled: enabled,
-      autofocus: autofocus,
-      searchFieldKey: searchFieldKey,
-      searchFocusNode: searchFocusNode,
-      searchResetSignal: searchResetSignal,
+          widget.openCameraScannerTooltip ?? l10n.openCameraScannerTooltip,
+      enabled: widget.enabled,
+      autofocus: widget.autofocus,
+      searchFieldKey: widget.searchFieldKey,
+      searchFocusNode: widget.searchFocusNode,
+      searchResetSignal: widget.searchResetSignal,
+      searchTrailing: _pickerEnabled
+          ? (context, compact) => ProductSearchModePicker(
+              mode: searchMode,
+              compact: compact,
+              enabled: widget.enabled,
+              onChanged: (mode) =>
+                  widget.onQueryChanged(query.copyWith(searchMode: mode)),
+            )
+          : null,
     );
   }
 
   int get _activeFilterCount {
-    return (allowAvailabilityFilter &&
+    final query = widget.query;
+    return (widget.allowAvailabilityFilter &&
                 query.availability != ProductAvailabilityFilter.all
             ? 1
             : 0) +
@@ -87,16 +160,16 @@ class ProductQueryControls extends StatelessWidget {
       size: AdaptiveModalSize.standard,
       builder: (context) {
         return ProductFilterSheet(
-          query: query,
-          catalogRepository: catalogRepository,
-          contactRepository: contactRepository,
-          allowAvailabilityFilter: allowAvailabilityFilter,
+          query: widget.query,
+          catalogRepository: widget.catalogRepository,
+          contactRepository: widget.contactRepository,
+          allowAvailabilityFilter: widget.allowAvailabilityFilter,
         );
       },
     );
 
     if (updatedQuery != null) {
-      onQueryChanged(updatedQuery);
+      widget.onQueryChanged(updatedQuery);
     }
   }
 }

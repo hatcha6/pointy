@@ -17,6 +17,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
 import 'package:pointy_frontend/src/data/models/integration_provider.dart';
+import 'package:pointy_frontend/src/data/models/integration_recent_search.dart';
 import 'package:pointy_frontend/src/data/repositories/integrations_repository.dart';
 import 'package:pointy_frontend/src/data/services/integrations_api_client.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
@@ -629,6 +630,16 @@ class _RechargeRepo extends IntegrationsRepository {
   _RechargeRepo({this.refusal}) : super(PosApiService());
 
   final String? refusal;
+
+  /// These captures are of a looked-up card; the screen asks for its recent
+  /// searches as it opens, and must not reach for a real backend to get them.
+  @override
+  Future<Result<IntegrationRecentSearchPage>> loadRecentSearches({
+    required String providerKey,
+    String search = '',
+    String? cursor,
+  }) async =>
+      Ok(const IntegrationRecentSearchPage(searches: [], hasMore: false));
 
   @override
   Future<Result<IntegrationCardSnapshot>> lookupCard({

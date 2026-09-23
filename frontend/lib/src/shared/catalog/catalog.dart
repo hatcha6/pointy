@@ -1,5 +1,9 @@
 export 'catalog_empty_state.dart';
+export 'catalog_layout_controller.dart';
+export 'catalog_layout_toggle.dart';
 export 'pointy_catalog_pane.dart';
+export 'pointy_catalog_row.dart';
+export 'pointy_catalog_table.dart';
 export 'pointy_category_strip.dart';
 export 'pointy_product_card.dart';
 export 'quick_access_category_strip.dart';

@@ -284,6 +284,20 @@ class PosCartPane extends StatelessWidget {
       await _showRechargeOutcomeDialog(context, outcome.recharges);
       if (!context.mounted) return;
     }
+    // A card's PIN is the thing that was sold. It is printed on the receipt;
+    // when the receipt did not print, it goes on screen instead, so the
+    // customer never leaves without it.
+    final unprintedCards = outcome.recharges
+        .where(
+          (row) => row.isVoucher && row.isCharged && row.voucherCode.isNotEmpty,
+        )
+        .toList(growable: false);
+    if (outcome.isSuccess &&
+        unprintedCards.isNotEmpty &&
+        outcome.printStatus != InvoicePrintStatus.printed) {
+      await _showVoucherCodesDialog(context, unprintedCards);
+      if (!context.mounted) return;
+    }
 
     final receiptNumber = outcome.order?.receiptNumber;
     var message = outcome.isSuccess
@@ -912,7 +926,7 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                           onEditPrice:
                               widget.isCartLocked ||
                                   !widget.capabilities.canOverrideLinePrice ||
-                                  line.isIntegrationRecharge
+                                  line.isProviderLine
                               ? null
                               : () => _editLinePrice(context, line),
                           unitCost: widget.capabilities.canViewTillCost
@@ -1382,7 +1396,10 @@ Future<void> _showRechargeOutcomeDialog(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${row.subscriberRef} · ${row.optionLabel}',
+                    [
+                      row.subscriberRef,
+                      row.optionLabel,
+                    ].where((part) => part.trim().isNotEmpty).join(' · '),
                     style: Theme.of(dialogContext).textTheme.titleSmall,
                   ),
                   Text(
@@ -1403,5 +1420,75 @@ Future<void> _showRechargeOutcomeDialog(
         ),
       ],
     ),
+  );
+}
+
+/// The PINs of the cards a sale just bought, for when the receipt that
+/// carries them did not print.
+Future<void> _showVoucherCodesDialog(
+  BuildContext context,
+  List<IntegrationChargeResult> cards,
+) {
+  final l10n = AppLocalizations.of(context)!;
+  final colors = context.pointyColors;
+  return showDialog<void>(
+    context: context,
+    // Not dismissable by tapping away: closing it before the customer has the
+    // code is losing what they paid for.
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      final textTheme = Theme.of(dialogContext).textTheme;
+      return AlertDialog(
+        icon: Icon(
+          Icons.confirmation_number_outlined,
+          color: colors.primaryStrong,
+        ),
+        title: Text(l10n.voucherCodesTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(l10n.voucherCodesBody, style: textTheme.bodySmall),
+              const SizedBox(height: 12),
+              for (final card in cards) ...[
+                Text(card.optionLabel, style: textTheme.titleSmall),
+                const SizedBox(height: 4),
+                SelectableText(
+                  card.voucherCode,
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.ltr,
+                  style: textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                  ),
+                ),
+                if ((card.receipt['serial'] ?? '').isNotEmpty)
+                  Text(
+                    l10n.voucherSerial(card.receipt['serial']!),
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.mutedInk,
+                    ),
+                  ),
+                if ((card.receipt['instructions'] ?? '').isNotEmpty)
+                  Text(
+                    card.receipt['instructions']!,
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodySmall,
+                  ),
+                const SizedBox(height: 12),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.voucherCodesDone),
+          ),
+        ],
+      );
+    },
   );
 }

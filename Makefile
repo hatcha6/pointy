@@ -133,7 +133,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-reports-preview \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean upgrade-rehearsal upgrade-check \
@@ -371,6 +371,9 @@ frontend-navigation-preview: frontend-install ## Run the navigation drawer/rail 
 
 frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
+
+frontend-reports-preview: frontend-install ## Run the reports screen UI preview harness (any report via ?report=) as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/reports_preview.dart
 
 frontend-document-trail-preview: frontend-install ## Run the document lifecycle (trail + retraction) UI preview harness.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/document_trail_preview.dart
@@ -727,3 +730,13 @@ frontend-perf-profile: frontend-install ## Profile-build frontend sweep on macOS
 .PHONY: camera-wedge-lab
 camera-wedge-lab: ## Serve the USB-camera-as-barcode-wedge measurement lab (http://localhost:8099).
 	cd tools/camera-wedge-lab && python3 serve.py 8099
+
+.PHONY: qareeb-capture-setup qareeb-capture qareeb-capture-auth qareeb-analyze
+qareeb-capture-setup: ## Install mitmproxy (needed once) for capturing the Qareeb iPhone app.
+	brew install mitmproxy
+qareeb-capture: ## Capture the LOGGED-IN Qareeb app surface (Flutter → WireGuard mode; see tools/qareeb-capture).
+	cd tools/qareeb-capture && ./run.sh session
+qareeb-capture-auth: ## Capture the Qareeb login / request-OTP / verify-OTP flow.
+	cd tools/qareeb-capture && ./run.sh auth
+qareeb-analyze: ## Turn the newest Qareeb .flows capture into a redacted Markdown contract. HOST=qareeb narrows it.
+	cd tools/qareeb-capture && python3 analyze_flows.py $$(ls -t captures/*.flows 2>/dev/null | head -1) $${HOST:+--host $(HOST)}

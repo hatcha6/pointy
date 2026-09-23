@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
+import 'package:pointy_frontend/src/data/models/report_run.dart';
 import 'package:pointy_frontend/src/features/reports/views/reports_screen.dart';
 
 import '../../../shared/fake_app_navigation.dart';
@@ -69,6 +70,132 @@ void main() {
     // because the catalogue — not a hard-coded list — decides what is offered.
     expect(find.text('الذمم المدينة'), findsOneWidget);
     expect(find.text('أعمار الذمم المدينة'), findsOneWidget);
+  });
+
+  testWidgets('a report the app does not know never poses as the sales one', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _ReportsTestApp(
+        repository: FakeReportRepository(
+          extraReports: [
+            for (final key in ['fixed_asset_register', 'budget_variance'])
+              {'key': key, 'category': 'assets'},
+            {'key': 'balance_sheet', 'category': 'close'},
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // One tile carries the selection mark — the sales summary's own — however
+    // far down the list is scrolled.
+    expect(
+      find.byIcon(Icons.check_circle, skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('assets', skipOffstage: false), findsNothing);
+    expect(
+      find.text('الميزانية العمومية', skipOffstage: false),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the identified-stock reports sit under المخزون by name', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _ReportsTestApp(
+        repository: FakeReportRepository(extraReports: _identifiedReports),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('المخزون', skipOffstage: false), findsOneWidget);
+    for (final title in [
+      'أعمار الأجهزة',
+      'ربح كل جهاز',
+      'سجل جهاز',
+      'دفتر الأمانات',
+    ]) {
+      expect(find.text(title, skipOffstage: false), findsOneWidget);
+    }
+    expect(
+      find.byIcon(Icons.check_circle, skipOffstage: false),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the unit ledger asks which article before it runs', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final repository = FakeReportRepository(extraReports: _identifiedReports);
+    await tester.pumpWidget(_ReportsTestApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    final tile = find.text('سجل جهاز', skipOffstage: false);
+    await tester.ensureVisible(tile);
+    await tester.pumpAndSettle();
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    final field = find.byKey(
+      const ValueKey('report_unit_code_field'),
+      skipOffstage: false,
+    );
+    expect(field, findsOneWidget);
+    expect(
+      find.text('أدخل معرّف الجهاز أولًا لعرض سجله.', skipOffstage: false),
+      findsOneWidget,
+    );
+
+    // Nothing to run yet: the build is refused here, not by the server.
+    final run = find.text('عرض التقرير', skipOffstage: false);
+    await tester.ensureVisible(run);
+    await tester.pumpAndSettle();
+    await tester.tap(run);
+    await tester.pumpAndSettle();
+    expect(repository.createCalls, 0);
+
+    // A scanner types the code and ends with Enter.
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    await tester.enterText(field, '351234567890116');
+    await tester.pump();
+    expect(
+      find.text('أدخل معرّف الجهاز أولًا لعرض سجله.', skipOffstage: false),
+      findsNothing,
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+    expect(repository.lastDraft?.reportType, ReportRunType.unitLedger);
+    expect(repository.lastDraft?.params['code'], '351234567890116');
   });
 
   testWidgets('offers the periods a close is built on', (tester) async {
@@ -254,9 +381,7 @@ void main() {
 
     await tester.pumpWidget(
       _ReportsTestApp(
-        repository: FakeReportRepository(
-          lockedThrough: DateTime(2026, 8, 31),
-        ),
+        repository: FakeReportRepository(lockedThrough: DateTime(2026, 8, 31)),
       ),
     );
     await tester.pumpAndSettle();
@@ -305,3 +430,16 @@ class _ReportsTestApp extends StatelessWidget {
     );
   }
 }
+
+/// The server's four identified-stock reports, as its catalogue lists them.
+const _identifiedReports = [
+  {'key': 'unit_aging', 'category': 'inventory', 'point_in_time': true},
+  {'key': 'unit_margin', 'category': 'inventory'},
+  {
+    'key': 'unit_ledger',
+    'category': 'inventory',
+    'required_params': ['code'],
+    'point_in_time': true,
+  },
+  {'key': 'consignment_ledger', 'category': 'inventory'},
+];

@@ -93,117 +93,143 @@ class _IntegrationFloatFormState extends State<IntegrationFloatForm> {
 
         return Form(
           key: _formKey,
+          // Same shape as the credentials form: the content scrolls, the
+          // actions stay pinned, and the keyboard pushes both up rather than
+          // hiding the amount field and Save beneath it.
           child: Padding(
-            padding: EdgeInsets.all(spacing.md),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (float != null) ...[
-                  if (float.hasDrift) ...[
-                    PointyInlineMessage.warning(
-                      message: float.isShort
-                          ? l10n.integrationFloatDriftShort(
-                              formatMoney(float.drift!.abs()),
-                            )
-                          : l10n.integrationFloatDriftOver(
-                              formatMoney(float.drift!.abs()),
-                            ),
-                      compact: true,
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      spacing.md,
+                      spacing.md,
+                      spacing.md,
+                      0,
                     ),
-                    SizedBox(height: spacing.sm),
-                  ],
-                  PointySummaryList(
-                    rows: [
-                      PointySummaryRow(
-                        label: l10n.integrationFloatExpected,
-                        value: formatMoney(float.expectedBalance),
-                        emphasized: true,
-                      ),
-                      if (float.reportedBalance != null)
-                        PointySummaryRow(
-                          label: l10n.integrationFloatReported,
-                          value: formatMoney(float.reportedBalance!),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (float != null) ...[
+                          if (float.hasDrift) ...[
+                            PointyInlineMessage.warning(
+                              message: float.isShort
+                                  ? l10n.integrationFloatDriftShort(
+                                      formatMoney(float.drift!.abs()),
+                                    )
+                                  : l10n.integrationFloatDriftOver(
+                                      formatMoney(float.drift!.abs()),
+                                    ),
+                              compact: true,
+                            ),
+                            SizedBox(height: spacing.sm),
+                          ],
+                          PointySummaryList(
+                            rows: [
+                              PointySummaryRow(
+                                label: l10n.integrationFloatExpected,
+                                value: formatMoney(float.expectedBalance),
+                                emphasized: true,
+                              ),
+                              if (float.reportedBalance != null)
+                                PointySummaryRow(
+                                  label: l10n.integrationFloatReported,
+                                  value: formatMoney(float.reportedBalance!),
+                                ),
+                              PointySummaryRow(
+                                label: l10n.integrationFloatToppedUp,
+                                value: formatMoney(float.toppedUp),
+                              ),
+                              PointySummaryRow(
+                                label: l10n.integrationFloatDrawn,
+                                value: formatMoney(float.drawn),
+                              ),
+                              if (float.committed > 0)
+                                PointySummaryRow(
+                                  label: l10n.integrationFloatCommitted,
+                                  value: formatMoney(float.committed),
+                                ),
+                            ],
+                          ),
+                          SizedBox(height: spacing.sm),
+                        ],
+                        Text(
+                          l10n.integrationFloatExplainer,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: context.pointyColors.mutedInk),
                         ),
-                      PointySummaryRow(
-                        label: l10n.integrationFloatToppedUp,
-                        value: formatMoney(float.toppedUp),
-                      ),
-                      PointySummaryRow(
-                        label: l10n.integrationFloatDrawn,
-                        value: formatMoney(float.drawn),
-                      ),
-                      if (float.committed > 0)
-                        PointySummaryRow(
-                          label: l10n.integrationFloatCommitted,
-                          value: formatMoney(float.committed),
+                        SizedBox(height: spacing.md),
+                        Text(
+                          l10n.integrationTopUpTitle,
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
+                        SizedBox(height: spacing.sm),
+                        TextFormField(
+                          controller: _amount,
+                          textDirection: TextDirection.ltr,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9.]'),
+                            ),
+                          ],
+                          decoration: InputDecoration(
+                            labelText: l10n.integrationTopUpAmount,
+                            prefixIcon: const Icon(Icons.payments_outlined),
+                          ),
+                          validator: (value) {
+                            final parsed = double.tryParse(
+                              (value ?? '').trim(),
+                            );
+                            return (parsed == null || parsed <= 0)
+                                ? l10n.integrationTopUpAmountRequired
+                                : null;
+                          },
+                        ),
+                        SizedBox(height: spacing.sm),
+                        TextFormField(
+                          controller: _reference,
+                          decoration: InputDecoration(
+                            labelText: l10n.integrationTopUpReference,
+                            prefixIcon: const Icon(Icons.receipt_long_outlined),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(spacing.md),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: viewModel.isSavingTopUp
+                            ? null
+                            : () => Navigator.of(context).pop(false),
+                        child: Text(l10n.integrationCancel),
+                      ),
+                      SizedBox(width: spacing.sm),
+                      FilledButton.icon(
+                        onPressed: viewModel.isSavingTopUp ? null : _save,
+                        icon: viewModel.isSavingTopUp
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: PointySpinner(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.add),
+                        label: Text(l10n.integrationTopUpSave),
+                      ),
                     ],
                   ),
-                  SizedBox(height: spacing.sm),
-                ],
-                Text(
-                  l10n.integrationFloatExplainer,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: context.pointyColors.mutedInk,
-                  ),
-                ),
-                SizedBox(height: spacing.md),
-                Text(
-                  l10n.integrationTopUpTitle,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                SizedBox(height: spacing.sm),
-                TextFormField(
-                  controller: _amount,
-                  textDirection: TextDirection.ltr,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  decoration: InputDecoration(
-                    labelText: l10n.integrationTopUpAmount,
-                    prefixIcon: const Icon(Icons.payments_outlined),
-                  ),
-                  validator: (value) {
-                    final parsed = double.tryParse((value ?? '').trim());
-                    return (parsed == null || parsed <= 0)
-                        ? l10n.integrationTopUpAmountRequired
-                        : null;
-                  },
-                ),
-                SizedBox(height: spacing.sm),
-                TextFormField(
-                  controller: _reference,
-                  decoration: InputDecoration(
-                    labelText: l10n.integrationTopUpReference,
-                    prefixIcon: const Icon(Icons.receipt_long_outlined),
-                  ),
-                ),
-                SizedBox(height: spacing.md),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: viewModel.isSavingTopUp
-                          ? null
-                          : () => Navigator.of(context).pop(false),
-                      child: Text(l10n.integrationCancel),
-                    ),
-                    SizedBox(width: spacing.sm),
-                    FilledButton.icon(
-                      onPressed: viewModel.isSavingTopUp ? null : _save,
-                      icon: viewModel.isSavingTopUp
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: PointySpinner(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.add),
-                      label: Text(l10n.integrationTopUpSave),
-                    ),
-                  ],
                 ),
               ],
             ),

@@ -74,6 +74,14 @@
       "port": 8080
     },
     {
+      "name": "reports-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-reports-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "discounts-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

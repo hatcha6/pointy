@@ -7,7 +7,7 @@
 //   flutter run -d web-server --web-port 8080 -t lib/dev/stock_count_preview.dart
 //
 // Screens: board | sessions | counting-empty | counting-item | recon
-//          | recon-empty | variance | reentry | search | start-form
+//          | recon-empty | reentry | search | start-form
 //
 // `?screen=board` is the "design board": every screen/state laid out at once in
 // fixed device frames, for a single overview screenshot (size the viewport large
@@ -42,7 +42,6 @@ import 'package:pointy_frontend/src/features/stock_count/views/stock_count_count
 import 'package:pointy_frontend/src/features/stock_count/views/stock_count_item_search_sheet.dart';
 import 'package:pointy_frontend/src/features/stock_count/views/stock_count_reconciliation_screen.dart';
 import 'package:pointy_frontend/src/features/stock_count/views/stock_count_sessions_screen.dart';
-import 'package:pointy_frontend/src/features/stock_count/views/stock_count_variance_prompt.dart';
 import 'package:pointy_frontend/src/shared/components/components.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
@@ -105,14 +104,6 @@ class _PreviewRouter extends StatelessWidget {
         return _reconciliation(_varianceLines);
       case 'recon-empty':
         return _reconciliation(const []);
-      case 'variance':
-        return _SheetHost(
-          open: (context) => showStockCountVariancePrompt(
-            context,
-            expected: '24',
-            counted: '19',
-          ),
-        );
       case 'reentry':
         return _SheetHost(
           open: (context) =>

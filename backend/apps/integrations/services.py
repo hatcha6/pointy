@@ -210,3 +210,53 @@ def record_subscriber(account, profile, *, card=None):
     except Exception:  # pragma: no cover - defensive
         logger.exception("could not record subscriber %s", ref)
         return None
+
+
+def record_search(account, *, term, search_by="", lookup, subscriber=None) -> None:
+    """Remember a search that found something, for the till's history list.
+
+    Only successful searches come here: a number the provider did not know is
+    not worth offering again. A repeat folds into the search's existing row —
+    moved back to the top and counted — so a regular who renews every month
+    is one row, not twelve.
+
+    Best-effort, like ``record_seen_offers``: a lookup that worked must never
+    fail in front of a customer because its bookkeeping did.
+    """
+    from django.db import IntegrityError, transaction
+    from django.db.models import F
+
+    from .models import IntegrationSearch
+
+    term = (term or "").strip()[:64]
+    if not term or not lookup.ok:
+        return
+    single = None if lookup.is_ambiguous else lookup.card
+    now = timezone.now()
+    key = {"account": account, "search_by": (search_by or "").strip()[:32], "term": term}
+    answer = {
+        "match_count": max(len(lookup.candidates), 1),
+        "subscriber": subscriber if single is not None else None,
+        "card_no": (single.card_no if single else "")[:64],
+        "holder_name": (single.holder_name if single else "")[:160],
+        "package_name": (single.package_name if single else "")[:160],
+        "last_searched_at": now,
+    }
+    try:
+        # Twice at most: two tills can record the same new search in the same
+        # instant, and the one that loses the insert folds into the winner's
+        # row on the second pass instead of failing.
+        for _attempt in range(2):
+            updated = IntegrationSearch.objects.filter(**key).update(
+                search_count=F("search_count") + 1, updated_at=now, **answer
+            )
+            if updated:
+                return
+            try:
+                with transaction.atomic():
+                    IntegrationSearch.objects.create(**key, **answer)
+                return
+            except IntegrityError:
+                continue
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("could not record search on %s", account.provider)

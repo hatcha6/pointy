@@ -207,11 +207,19 @@ extension PosCheckoutActions on PosViewModel {
     // Any +/- run still open belongs to the sale being rung up, not the next
     // one: emit it before the checkout event so the order reads correctly.
     _cartQuantityRuns.settleAll();
+    // A sale a provider has to perform — a top-up, a card — prints its receipt
+    // only once the provider has answered, because the answer is printed on
+    // it: the card's PIN, the subscriber's new term. One receipt, with
+    // everything, rather than a receipt now and a slip later.
+    final hasProviderLines = cartSnapshot.any((line) => line.isProviderLine);
     // Auto-print only carries a sale that clears the shop's floor; below it the
     // POS showed the print box instead, so a tick there is the whole answer.
+    // A card is the exception: its receipt IS the thing sold — the PIN is on
+    // it — so it prints whatever the floor says.
     final shouldPrintInvoice =
         cartWouldAutoPrintReceipt(saleType: saleType) ||
-        _printInvoiceAfterPayment;
+        _printInvoiceAfterPayment ||
+        cartSnapshot.any((line) => line.isVoucher);
     PrinterConfig? invoicePrinterConfig;
     if (shouldPrintInvoice) {
       final configResult = await _printingRepository.loadDefaultPrinterConfig();
@@ -222,8 +230,12 @@ extension PosCheckoutActions on PosViewModel {
           invoicePrinterConfig = null;
       }
     }
+    // Not for a sale with provider lines: a job minted at checkout would carry
+    // a receipt built before the provider answered. That sale's receipt is
+    // asked for after the answer instead (see [_printAfterProviders]).
     final backendInvoicePrinterConfig =
-        invoicePrinterConfig?.endpoint.usesThermalReceipt == true
+        !hasProviderLines &&
+            invoicePrinterConfig?.endpoint.usesThermalReceipt == true
         ? invoicePrinterConfig
         : null;
     // Only a raw-thermal printer goes through the backend's print queue; a
@@ -293,7 +305,7 @@ extension PosCheckoutActions on PosViewModel {
         // steps got its own full deadline, so two hung printers summed to ~2x
         // and froze the POS for ~40s (the checkout-hang tail seen in the field).
         final printDeadline = DateTime.now().add(_checkoutPrintDeadline);
-        final printStatus = shouldPrintInvoice
+        var printStatus = shouldPrintInvoice && !hasProviderLines
             ? await _guardedPrintValue(
                 () => _printPaidInvoice(result.value, invoicePrinterConfig),
                 fallback: InvoicePrintStatus.failed,
@@ -381,6 +393,12 @@ extension PosCheckoutActions on PosViewModel {
         // sale is therefore always recorded, even when the provider refuses —
         // which is the right way round, because the customer has paid.
         final recharges = await _performSoldRecharges(result.value);
+        if (hasProviderLines && shouldPrintInvoice) {
+          printStatus = await _printAfterProviders(
+            result.value,
+            invoicePrinterConfig,
+          );
+        }
         return SaleCheckoutOutcome.success(
           result.value,
           printStatus,
@@ -657,6 +675,35 @@ extension PosCheckoutActions on PosViewModel {
             },
           ) ??
           Future<void>.value(),
+    );
+  }
+
+  /// The receipt of a sale whose provider lines have just been performed.
+  ///
+  /// Re-read from the server first, so the document route prints the
+  /// provider's answers beneath their lines exactly as the thermal route
+  /// does (that one asks the server to build the receipt, and the server
+  /// reads the answers itself). Its own deadline, drawn after the provider
+  /// answered — the wait for a provider is not printer time. Never throws.
+  Future<InvoicePrintStatus> _printAfterProviders(
+    SaleOrder order,
+    PrinterConfig? config,
+  ) async {
+    var printable = order;
+    try {
+      final reloaded = await _saleRepository.loadOrder(order.id);
+      if (reloaded case Ok<SaleOrder>(:final value)) {
+        printable = value;
+      }
+    } on Object {
+      // Printing the sale as it was recorded still beats printing nothing.
+    }
+    return _guardedPrintValue(
+      () => _printPaidInvoice(printable, config),
+      fallback: InvoicePrintStatus.failed,
+      label: 'invoice',
+      order: printable,
+      deadline: DateTime.now().add(_checkoutPrintDeadline),
     );
   }
 

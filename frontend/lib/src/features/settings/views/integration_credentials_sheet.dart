@@ -59,6 +59,7 @@ class _IntegrationCredentialsFormState
   late final TextEditingController _baseUrl;
   late final TextEditingController _username;
   late final TextEditingController _password;
+  late final TextEditingController _pin;
   bool _isSaving = false;
 
   IntegrationAccount? get _account => widget.provider.account;
@@ -74,6 +75,7 @@ class _IntegrationCredentialsFormState
     );
     _username = TextEditingController(text: account?.username ?? '');
     _password = TextEditingController();
+    _pin = TextEditingController();
     for (final setting in widget.provider.settings) {
       _settings[setting.key] = TextEditingController(text: setting.asText);
     }
@@ -84,6 +86,7 @@ class _IntegrationCredentialsFormState
     _baseUrl.dispose();
     _username.dispose();
     _password.dispose();
+    _pin.dispose();
     for (final controller in _settings.values) {
       controller.dispose();
     }
@@ -165,7 +168,10 @@ class _IntegrationCredentialsFormState
   /// in the SAME delimited shape [_changedSettings] already knows how to
   /// read — so saving this field needs no code of its own beyond what
   /// every other setting already has.
-  Future<void> _manageAmountList(IntegrationSetting setting, String title) async {
+  Future<void> _manageAmountList(
+    IntegrationSetting setting,
+    String title,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
     final controller = _settings[setting.key];
     if (controller == null) return;
@@ -189,6 +195,7 @@ class _IntegrationCredentialsFormState
             ? _username.text.trim()
             : null,
         password: _shows(IntegrationField.password) ? _password.text : null,
+        pin: _shows(IntegrationField.pin) ? _pin.text.trim() : null,
         settings: _changedSettings(),
       ),
     );
@@ -207,142 +214,196 @@ class _IntegrationCredentialsFormState
 
     return Form(
       key: _formKey,
+      // The sheet leaves the keyboard to its content, and a form that ignored
+      // it had its lower fields and its Save button hidden under the keys.
       child: Padding(
-        padding: EdgeInsets.all(spacing.md),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              integrationProviderTagline(widget.provider.key, l10n),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: context.pointyColors.mutedInk,
+            // The fields scroll; the actions stay pinned beneath them. A tall
+            // provider (LNET's three credentials and three settings) used to
+            // overflow the sheet with nothing to scroll, cutting Save off.
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  spacing.md,
+                  spacing.md,
+                  spacing.md,
+                  0,
+                ),
+                child: _fields(context, l10n, spacing, account),
               ),
             ),
-            SizedBox(height: spacing.md),
-            if (_shows(IntegrationField.baseUrl)) ...[
-              TextFormField(
-                controller: _baseUrl,
-                textDirection: TextDirection.ltr,
-                keyboardType: TextInputType.url,
-                decoration: InputDecoration(
-                  labelText: l10n.integrationFieldBaseUrl,
-                  hintText: l10n.integrationFieldBaseUrlHint,
-                  prefixIcon: const Icon(Icons.dns_outlined),
-                ),
-              ),
-              SizedBox(height: spacing.sm),
-            ],
-            if (_shows(IntegrationField.username)) ...[
-              TextFormField(
-                controller: _username,
-                textDirection: TextDirection.ltr,
-                decoration: InputDecoration(
-                  labelText: l10n.integrationFieldUsername,
-                  prefixIcon: const Icon(Icons.person_outline),
-                ),
-                validator: (value) => (value ?? '').trim().isEmpty
-                    ? l10n.integrationUsernameRequired
-                    : null,
-              ),
-              SizedBox(height: spacing.sm),
-            ],
-            if (_shows(IntegrationField.password)) ...[
-              PointyPasswordField(
-                controller: _password,
-                labelText: l10n.integrationFieldPassword,
-                textDirection: TextDirection.ltr,
-                helperText: (account?.hasPassword ?? false)
-                    ? l10n.integrationPasswordStoredHint
-                    : null,
-                // Blank is legitimate on a re-save: the form never received the
-                // stored password, so it cannot resend one.
-                validator: (value) {
-                  if ((account?.hasPassword ?? false)) return null;
-                  return (value ?? '').isEmpty
-                      ? l10n.integrationPasswordRequired
-                      : null;
-                },
-              ),
-              SizedBox(height: spacing.sm),
-            ],
-            // The shop's own commercial terms, rendered from whatever the
-            // backend declares. Below the credentials because these always
-            // have a working default: a shop can connect without reading
-            // this section at all, and only opens it when its deal differs.
-            if (widget.provider.settings.isNotEmpty) ...[
-              SizedBox(height: spacing.sm),
-              Text(
-                l10n.integrationSettingsHeading,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              SizedBox(height: spacing.sm),
-              for (final setting in widget.provider.settings) ...[
-                Builder(
-                  builder: (context) {
-                    final copy = integrationSettingLabel(setting.key, l10n);
-                    if (setting.isAmountList) {
-                      // A list of amounts, added and removed one at a time —
-                      // never a text field asking the owner to type them
-                      // delimited by a comma and get the separator right.
-                      return IntegrationAmountListField(
-                        label: copy.label,
-                        helper: copy.hint,
-                        icon: copy.icon,
-                        amounts: _splitAmounts(
-                          _settings[setting.key]?.text ?? '',
-                        ),
-                        enabled: !_isSaving,
-                        onManage: () => unawaited(
-                          _manageAmountList(setting, copy.label),
-                        ),
-                      );
-                    }
-                    return TextFormField(
-                      controller: _settings[setting.key],
-                      textDirection: TextDirection.ltr,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: copy.label,
-                        helperText: copy.hint,
-                        helperMaxLines: 2,
-                        prefixIcon: Icon(copy.icon),
-                      ),
-                      validator: (value) => _validateSetting(setting, value),
-                    );
-                  },
-                ),
-                SizedBox(height: spacing.sm),
-              ],
-            ],
-            SizedBox(height: spacing.md),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _isSaving
-                      ? null
-                      : () => Navigator.of(context).pop(false),
-                  child: Text(l10n.integrationCancel),
-                ),
-                SizedBox(width: spacing.sm),
-                FilledButton.icon(
-                  onPressed: _isSaving ? null : _save,
-                  icon: _isSaving
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: PointySpinner(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(l10n.integrationSave),
-                ),
-              ],
+            Padding(
+              padding: EdgeInsets.all(spacing.md),
+              child: _actions(l10n, spacing),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _fields(
+    BuildContext context,
+    AppLocalizations l10n,
+    AdaptiveSpacing spacing,
+    IntegrationAccount? account,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          integrationProviderTagline(widget.provider.key, l10n),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: context.pointyColors.mutedInk),
+        ),
+        SizedBox(height: spacing.md),
+        if (_shows(IntegrationField.baseUrl)) ...[
+          TextFormField(
+            controller: _baseUrl,
+            textDirection: TextDirection.ltr,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              labelText: l10n.integrationFieldBaseUrl,
+              hintText: l10n.integrationFieldBaseUrlHint,
+              prefixIcon: const Icon(Icons.dns_outlined),
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+        ],
+        if (_shows(IntegrationField.username)) ...[
+          Builder(
+            builder: (context) {
+              final copy = integrationUsernameCopy(widget.provider.key, l10n);
+              return TextFormField(
+                controller: _username,
+                textDirection: TextDirection.ltr,
+                keyboardType: copy.isPhone
+                    ? TextInputType.phone
+                    : TextInputType.text,
+                decoration: InputDecoration(
+                  labelText: copy.label,
+                  hintText: copy.hint,
+                  prefixIcon: Icon(copy.icon),
+                ),
+                validator: (value) =>
+                    (value ?? '').trim().isEmpty ? copy.required : null,
+              );
+            },
+          ),
+          SizedBox(height: spacing.sm),
+        ],
+        if (_shows(IntegrationField.password)) ...[
+          PointyPasswordField(
+            controller: _password,
+            labelText: l10n.integrationFieldPassword,
+            textDirection: TextDirection.ltr,
+            helperText: (account?.hasPassword ?? false)
+                ? l10n.integrationPasswordStoredHint
+                : null,
+            // Blank is legitimate on a re-save: the form never received the
+            // stored password, so it cannot resend one.
+            validator: (value) {
+              if ((account?.hasPassword ?? false)) return null;
+              return (value ?? '').isEmpty
+                  ? l10n.integrationPasswordRequired
+                  : null;
+            },
+          ),
+          SizedBox(height: spacing.sm),
+        ],
+        if (_shows(IntegrationField.pin)) ...[
+          // Optional: some agency accounts ask for a PIN on every
+          // purchase and most do not. The provider says which, per sale.
+          PointyPasswordField(
+            controller: _pin,
+            labelText: l10n.integrationFieldPin,
+            textDirection: TextDirection.ltr,
+            helperText: (account?.hasSecret(IntegrationField.pin) ?? false)
+                ? l10n.integrationPinStoredHint
+                : l10n.integrationPinHint,
+          ),
+          SizedBox(height: spacing.sm),
+        ],
+        // The shop's own commercial terms, rendered from whatever the
+        // backend declares. Below the credentials because these always
+        // have a working default: a shop can connect without reading
+        // this section at all, and only opens it when its deal differs.
+        if (widget.provider.settings.isNotEmpty) ...[
+          SizedBox(height: spacing.sm),
+          Text(
+            l10n.integrationSettingsHeading,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          SizedBox(height: spacing.sm),
+          for (final setting in widget.provider.settings) ...[
+            Builder(
+              builder: (context) {
+                final copy = integrationSettingLabel(setting.key, l10n);
+                if (setting.isAmountList) {
+                  // A list of amounts, added and removed one at a time —
+                  // never a text field asking the owner to type them
+                  // delimited by a comma and get the separator right.
+                  return IntegrationAmountListField(
+                    label: copy.label,
+                    helper: copy.hint,
+                    icon: copy.icon,
+                    amounts: _splitAmounts(_settings[setting.key]?.text ?? ''),
+                    enabled: !_isSaving,
+                    onManage: () =>
+                        unawaited(_manageAmountList(setting, copy.label)),
+                  );
+                }
+                return TextFormField(
+                  controller: _settings[setting.key],
+                  textDirection: TextDirection.ltr,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: copy.label,
+                    helperText: copy.hint,
+                    helperMaxLines: 2,
+                    prefixIcon: Icon(copy.icon),
+                  ),
+                  validator: (value) => _validateSetting(setting, value),
+                );
+              },
+            ),
+            SizedBox(height: spacing.sm),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _actions(AppLocalizations l10n, AdaptiveSpacing spacing) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: Text(l10n.integrationCancel),
+        ),
+        SizedBox(width: spacing.sm),
+        FilledButton.icon(
+          onPressed: _isSaving ? null : _save,
+          icon: _isSaving
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: PointySpinner(strokeWidth: 2),
+                )
+              : const Icon(Icons.save_outlined),
+          label: Text(l10n.integrationSave),
+        ),
+      ],
     );
   }
 }

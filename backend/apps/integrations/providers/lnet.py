@@ -947,6 +947,19 @@ class LnetProvider(IntegrationProvider):
                 error_detail=f"customer credited, float debit unconfirmed: {message}",
             )
 
+        # What the customer's receipt prints beneath the line: whose line was
+        # topped up, by how much, and the serial LNET issued for it — the
+        # number LNET's own support asks for.
+        receipt["printed"] = {
+            key: value
+            for key, value in {
+                "username": row.card_no,
+                "amount": _plain(amount),
+                "serial": serial,
+                "package": row.package_name,
+            }.items()
+            if value
+        }
         return RechargeResult(
             ok=True,
             reference=serial,

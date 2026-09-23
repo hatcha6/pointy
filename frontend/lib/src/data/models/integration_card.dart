@@ -52,7 +52,9 @@ class IntegrationCardInfo {
   /// Who the line is registered to, where the provider will say.
   final String holderName;
 
-  /// Money already sitting on the line, for providers that sell stored value.
+  /// The subscriber's own credit with the provider — money already on the
+  /// line or card. Not the agency float, which is the shop's. Null when the
+  /// provider did not say, which is not the same as zero.
   final double? cardBalance;
 
   /// The provider's own wording ("On hold", "Active"). Shown verbatim next to
@@ -800,6 +802,8 @@ class IntegrationChargeResult {
   const IntegrationChargeResult({
     required this.fulfillment,
     required this.outcome,
+    this.provider = '',
+    this.kind = 'recharge',
     this.orderLine,
     this.subscriberRef = '',
     this.optionLabel = '',
@@ -814,6 +818,11 @@ class IntegrationChargeResult {
 
   final int? fulfillment;
   final int? orderLine;
+  final String provider;
+
+  /// `voucher` for a card off a provider's shelf — its PIN is in [receipt] —
+  /// else `recharge`.
+  final String kind;
   final String subscriberRef;
   final String optionLabel;
 
@@ -834,12 +843,18 @@ class IntegrationChargeResult {
   final Map<String, String> receipt;
 
   bool get isCharged => outcome == 'charged';
+  bool get isVoucher => kind == 'voucher';
+
+  /// A card's PIN, once it was bought. Empty for everything else.
+  String get voucherCode => receipt['code'] ?? '';
   bool get isRefused => outcome == 'refused';
   bool get isOutOfFloat => errorCode == 'insufficient_float';
 
   factory IntegrationChargeResult.fromJson(Map<String, Object?> json) {
     return IntegrationChargeResult(
       fulfillment: int.tryParse(json['fulfillment']?.toString() ?? ''),
+      provider: json['provider']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? 'recharge',
       orderLine: int.tryParse(json['order_line']?.toString() ?? ''),
       subscriberRef: json['subscriber_ref']?.toString() ?? '',
       optionLabel: json['option_label']?.toString() ?? '',

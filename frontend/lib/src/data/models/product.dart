@@ -21,6 +21,7 @@ class Product {
     this.isService = false,
     this.isPrepared = false,
     this.isSystem = false,
+    this.systemKind = '',
     this.unit = 'piece',
     this.pricingCurrency = '',
     this.defaultSaleUnit = '',
@@ -55,12 +56,20 @@ class Product {
   final bool isService;
   final bool isPrepared;
 
-  /// A product a *feature* created so its sales have a line to hang on —
-  /// today the one service product per recharge provider. It is priced per
-  /// line from the provider's quote, so its own price is zero; the till and
-  /// the price checker never see one, and the back office shows it so an
-  /// owner can rename it, not so anyone can sell it.
+  /// A product a *feature* created and owns: the service product a recharge
+  /// is rung up as, or a card off a provider's shelf. Nobody edits one — the
+  /// server refuses every write, managers included, and the back office shows
+  /// it read-only.
   final bool isSystem;
+
+  /// Which kind of system product: [ProductSystemKind.service] is sold only
+  /// through its own flow and never listed; [ProductSystemKind.voucher] is a
+  /// provider's card, listed on the till like anything else.
+  final String systemKind;
+
+  /// A card off a provider's shelf (Qareeb): one to a line, never merged, and
+  /// bought from the provider the moment the sale is recorded.
+  bool get isVoucher => isSystem && systemKind == ProductSystemKind.voucher;
 
   /// Base (stock) unit code. Stock, recipes, and totals are kept in this unit.
   final String unit;
@@ -151,6 +160,7 @@ class Product {
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
       isSystem: (json['is_system'] as bool?) ?? false,
+      systemKind: json['system_kind']?.toString() ?? '',
       unit: json['unit']?.toString() ?? 'piece',
       pricingCurrency: json['pricing_currency']?.toString() ?? '',
       defaultSaleUnit: json['default_sale_unit']?.toString() ?? '',
@@ -195,6 +205,7 @@ class Product {
       isService: isService,
       isPrepared: isPrepared,
       isSystem: isSystem,
+      systemKind: systemKind,
       unit: unit,
       pricingCurrency: pricingCurrency,
       defaultSaleUnit: defaultSaleUnit,
@@ -230,6 +241,10 @@ class Product {
       quantityOnHand: variant.quantityOnHand,
       description: detail?.description ?? '',
       isActive: variant.isSellable,
+      // Carried across, or a variant opened on its own would present a
+      // system product as an editable one.
+      isSystem: detail?.isSystem ?? false,
+      systemKind: detail?.systemKind ?? '',
       tracksExpiry: detail?.tracksExpiry ?? variant.tracksExpiry,
       trackingMode: detail?.trackingMode ?? variant.trackingMode,
       unit: variant.unit,
@@ -261,6 +276,7 @@ class Product {
       'is_service': isService,
       'is_prepared': isPrepared,
       'is_system': isSystem,
+      if (systemKind.isNotEmpty) 'system_kind': systemKind,
       'unit': unit,
       if (pricingCurrency.isNotEmpty) 'pricing_currency': pricingCurrency,
       'default_sale_unit': defaultSaleUnit,
@@ -297,6 +313,7 @@ class Product {
       isService: isService,
       isPrepared: isPrepared,
       isSystem: isSystem,
+      systemKind: systemKind,
       unit: unit,
       defaultSaleUnit: defaultSaleUnit,
       defaultPurchaseUnit: defaultPurchaseUnit,
@@ -444,4 +461,10 @@ DateTime? _dateTimeFromJson(Object? value) {
     return DateTime.tryParse(value);
   }
   return null;
+}
+
+/// The stable codes the server uses for [Product.systemKind].
+abstract final class ProductSystemKind {
+  static const service = 'service';
+  static const voucher = 'voucher';
 }

@@ -8,7 +8,9 @@ from apps.catalog.models import ModifierOption, ProductVariant
 from apps.catalog.services import MIN_LINES_TO_PRELOAD, load_line_variants
 from apps.integrations.fulfillment import (
     IntegrationLineSerializer,
+    fulfillment_kind,
     resolve_line_integration,
+    voucher_line_payload,
 )
 from apps.catalog.units import (
     UnitConversionError,
@@ -342,6 +344,9 @@ class OrderLineSerializer(serializers.ModelSerializer):
         subscriber = fulfillment.subscriber
         return {
             "provider": fulfillment.provider,
+            # ``voucher`` for a card off a provider's shelf — its PIN is in
+            # ``receipt`` — else ``recharge``.
+            "kind": fulfillment_kind(fulfillment),
             "subscriber_ref": fulfillment.subscriber_ref,
             "subscriber_label": subscriber.label if subscriber else "",
             "customer_id": subscriber.customer_id if subscriber else None,
@@ -1127,6 +1132,13 @@ class CheckoutLineSerializer(serializers.Serializer):
                 attrs["effective_unit_price"] = override
 
         integration = attrs.get("integration")
+        # A card off a provider's shelf carries its fulfillment whether or not
+        # the till sent one: which card, whose shelf and what it costs are the
+        # server's own record of this variant, so nothing a till sends — or
+        # leaves out — can change what is bought.
+        voucher = voucher_line_payload(variant)
+        if voucher is not None:
+            integration = voucher
         if integration:
             resolved_integration = resolve_line_integration(integration, variant)
             attrs["integration"] = resolved_integration

@@ -86,6 +86,10 @@ String migrationStageLabel(
       label: l10n.migrationScopeCatalogueOnlyLabel,
       subtitle: l10n.migrationScopeCatalogueOnlySubtitle,
     ),
+    'costs_only' => (
+      label: l10n.migrationScopeCostsOnlyLabel,
+      subtitle: l10n.migrationScopeCostsOnlySubtitle,
+    ),
     'custom' => (
       label: l10n.migrationScopeCustomLabel,
       subtitle: l10n.migrationScopeCustomSubtitle,

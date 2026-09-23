@@ -157,7 +157,7 @@ def reprice_preview(*, products=None, at=None, include_unchanged=False):
     base = base_currency_code()
     queryset = products if products is not None else Product.objects.all()
     queryset = queryset.filter(
-        pricing_currency__isnull=False, archived_at__isnull=True
+        pricing_currency__isnull=False, archived_at__isnull=True, is_system=False
     ).exclude(pricing_currency_id=base)
 
     proposals: list[PriceProposal] = []

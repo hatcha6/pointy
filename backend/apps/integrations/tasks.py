@@ -38,3 +38,49 @@ def refresh_float_balances_task(self):
     from .services import refresh_float_balances
 
     return refresh_float_balances()
+
+
+#: One sweep at a time. A sweep that overruns — a slow provider — must not
+#: have the next one start beside it and race it over the same rows.
+_SWEEP_LOCK = "pointy:integrations:vouchers:sweep"
+_SWEEP_LOCK_SECONDS = 240
+
+
+@shared_task(bind=True, name="integrations.sync_voucher_catalogs")
+def sync_voucher_catalogs_task(self):
+    """Every few minutes: the cards on the till are the cards the provider has.
+
+    Not retried: the next sweep is minutes away and reads the same shelf.
+    """
+    from django.core.cache import cache
+
+    from .vouchers import sync_all
+
+    try:
+        if not cache.add(_SWEEP_LOCK, 1, _SWEEP_LOCK_SECONDS):
+            return {"skipped": "a sweep is already running"}
+    except Exception:  # noqa: BLE001 - no Redis: run, overlap is only wasteful
+        pass
+    try:
+        return sync_all()
+    finally:
+        try:
+            cache.delete(_SWEEP_LOCK)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+@shared_task(bind=True, name="integrations.sync_voucher_catalog")
+def sync_voucher_catalog_task(self, account_id):
+    """A whole shelf, now — for an account that was just connected or verified.
+
+    Reads every collapsed brand instead of the sweep's stalest dozen, so a new
+    shop's till has its cards within seconds rather than over the next hour.
+    """
+    from .models import IntegrationAccount
+    from .vouchers import sells_vouchers, sync_account
+
+    account = IntegrationAccount.objects.filter(pk=account_id, is_active=True).first()
+    if account is None or not sells_vouchers(account) or not account.is_configured:
+        return {"skipped": True}
+    return sync_account(account, refresh_limit=1000).as_dict()

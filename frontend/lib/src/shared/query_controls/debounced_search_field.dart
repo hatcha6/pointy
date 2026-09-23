@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../design/design.dart';
 
@@ -18,6 +19,13 @@ class DebouncedSearchField extends StatefulWidget {
     this.fieldKey,
     this.focusNode,
     this.resetSignal,
+    this.labelText,
+    this.prefix,
+    this.prefixConstraints,
+    this.trailingBuilder,
+    this.keyboardType,
+    this.inputFormatters,
+    this.textDirection,
   });
 
   final String value;
@@ -42,6 +50,30 @@ class DebouncedSearchField extends StatefulWidget {
   /// debounced search) can't push the code back into the field. The owner
   /// disposes it; when null the field behaves as before.
   final Listenable? resetSignal;
+
+  /// A label that names what the field holds, for a field that is more than
+  /// a list filter — the till's top-up box, where it says "card number".
+  final String? labelText;
+
+  /// Replaces the search icon in front of the text. The top-up box puts a
+  /// control there (which kind of number this is) rather than an icon.
+  final Widget? prefix;
+
+  /// Box for [prefix]. Ignored without one: the default icon keeps its own.
+  final BoxConstraints? prefixConstraints;
+
+  /// An action after the clear button, handed a callback that submits what
+  /// is in the field right now — through the same path as the keyboard's
+  /// search key, so a tap cannot act on text the debounce has not reported.
+  final Widget Function(BuildContext context, VoidCallback submit)?
+  trailingBuilder;
+
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+
+  /// The direction of the text itself, e.g. left-to-right for a number
+  /// typed into an Arabic screen. The field's own layout follows the page.
+  final TextDirection? textDirection;
 
   @override
   State<DebouncedSearchField> createState() => _DebouncedSearchFieldState();
@@ -122,40 +154,55 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
           focusNode: widget.focusNode,
           enabled: widget.enabled,
           autofocus: widget.autofocus,
+          keyboardType: widget.keyboardType,
+          inputFormatters: widget.inputFormatters,
+          textDirection: widget.textDirection,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
+            labelText: widget.labelText,
             hintText: widget.hintText,
             filled: true,
             fillColor: Colors.transparent,
-            prefixIcon: Icon(Icons.search, color: colors.primaryStrong),
-            prefixIconConstraints: const BoxConstraints.tightFor(
-              width: 48,
-              height: 48,
-            ),
+            prefixIcon:
+                widget.prefix ??
+                Icon(Icons.search, color: colors.primaryStrong),
+            prefixIconConstraints: widget.prefix == null
+                ? const BoxConstraints.tightFor(width: 48, height: 48)
+                : widget.prefixConstraints,
             suffixIcon: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _controller,
               builder: (context, value, child) {
-                if (value.text.isEmpty) {
-                  return const SizedBox.shrink();
+                final clear = value.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: widget.clearTooltip,
+                        onPressed: widget.enabled
+                            ? () {
+                                _setControllerText('');
+                                _emitNow('');
+                              }
+                            : null,
+                        icon: child!,
+                      );
+                final trailing = widget.trailingBuilder?.call(
+                  context,
+                  _submitCurrent,
+                );
+                if (trailing == null) {
+                  return clear ?? const SizedBox.shrink();
                 }
-
-                return IconButton(
-                  tooltip: widget.clearTooltip,
-                  onPressed: widget.enabled
-                      ? () {
-                          _setControllerText('');
-                          _emitNow('');
-                        }
-                      : null,
-                  icon: child!,
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [?clear, trailing],
                 );
               },
               child: const Icon(Icons.close),
             ),
-            suffixIconConstraints: const BoxConstraints.tightFor(
-              width: 48,
-              height: 48,
-            ),
+            // A trailing action makes the slot one or two buttons wide
+            // depending on whether there is text to clear, so it may grow.
+            suffixIconConstraints: widget.trailingBuilder == null
+                ? const BoxConstraints.tightFor(width: 48, height: 48)
+                : const BoxConstraints(minWidth: 48, minHeight: 48),
             border: _fieldBorder(colors.line),
             enabledBorder: _fieldBorder(colors.line),
             focusedBorder: _fieldBorder(colors.primaryStrong, width: 1.4),
@@ -201,6 +248,8 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
     _debounce?.cancel();
     widget.onChanged(value.trim());
   }
+
+  void _submitCurrent() => _emitSubmitted(_controller.text);
 
   Future<void> _emitSubmitted(String value) async {
     final submittedValue = value.trim();

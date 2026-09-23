@@ -66,13 +66,20 @@ class ProductDetailsScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(l10n.productDetailsTitle),
         actions: [
-          ProductChangeGuard(
-            capabilities: capabilities,
-            child: IconButton(
-              tooltip: l10n.editProductButton,
-              onPressed: () =>
-                  showProductParentEditor(context, viewModel, onChanged),
-              icon: const Icon(Icons.edit_outlined),
+          // Rebuilt with the product: a system product arrives read-only, and
+          // the edit button must not be offered for one even for a moment.
+          ListenableBuilder(
+            listenable: viewModel,
+            builder: (context, _) => ProductChangeGuard(
+              capabilities: capabilities.forProduct(
+                isSystem: viewModel.product.isSystem,
+              ),
+              child: IconButton(
+                tooltip: l10n.editProductButton,
+                onPressed: () =>
+                    showProductParentEditor(context, viewModel, onChanged),
+                icon: const Icon(Icons.edit_outlined),
+              ),
             ),
           ),
         ],
@@ -131,11 +138,25 @@ class ProductDetailsView extends StatelessWidget {
       listenable: viewModel,
       builder: (context, _) {
         final product = viewModel.product;
+        // A system product is written by the feature that owns it and by
+        // nobody else: every change affordance below disappears for it.
+        final capabilities = this.capabilities.forProduct(
+          isSystem: product.isSystem,
+        );
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
             if (viewModel.isLoading) ...[
               const PointyProgressBar(),
+              const SizedBox(height: 12),
+            ],
+            if (product.isSystem) ...[
+              PointyInlineMessage(
+                message: product.isVoucher
+                    ? l10n.systemProductVoucherNotice
+                    : l10n.systemProductNotice,
+                icon: Icons.lock_outline,
+              ),
               const SizedBox(height: 12),
             ],
             if (viewModel.errorMessage == 'product_detail_load_error') ...[
@@ -328,7 +349,9 @@ class ProductDetailsView extends StatelessWidget {
             analyticsEngine: analyticsEngine,
           ),
           printingRepository: printingRepository,
-          capabilities: capabilities,
+          capabilities: capabilities.forProduct(
+            isSystem: viewModel.product.isSystem,
+          ),
           analyticsEngine: analyticsEngine,
         ),
       ),

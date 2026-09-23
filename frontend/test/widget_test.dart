@@ -52,6 +52,8 @@ import 'package:pointy_frontend/src/features/printing/view_models/printing_setti
 import 'package:pointy_frontend/src/features/pos/views/register_cash_movement_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
+import 'package:pointy_frontend/src/features/pos/views/pos_catalog_pane.dart';
+import 'package:pointy_frontend/src/features/purchasing/views/purchase_catalog_pane.dart';
 import 'package:pointy_frontend/src/features/users/view_models/user_management_view_model.dart';
 import 'package:pointy_frontend/src/features/users/views/user_management_screen.dart';
 import 'package:pointy_frontend/src/data/models/employee.dart';
@@ -1659,6 +1661,95 @@ void main() {
     expect(find.text('تفاصيل المنتج'), findsOneWidget);
     expect(find.text('قهوة البيت'), findsWidgets);
   });
+
+  testWidgets(
+    'device settings turns on the search-mode picker for the catalog',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = installMemoryKeyValueStore();
+      final productLists = <Uri>[];
+      const picker = ValueKey('product_search_mode_picker');
+
+      await tester.pumpWidget(
+        PointyApp(
+          apiService: _mockApiService(
+            onProductList: (request) => productLists.add(request.url),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      await _openNavigationDestination(tester, 'المنتجات');
+      expect(find.byKey(picker), findsNothing);
+
+      await _openNavigationDestination(tester, 'إعدادات الجهاز');
+      final toggle = find.byKey(
+        const ValueKey('product_search_mode_picker_toggle'),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(await store.getString('product_search_mode_picker'), 'true');
+
+      await _openNavigationDestination(tester, 'المنتجات');
+      expect(find.byKey(picker), findsOneWidget);
+
+      await tester.tap(find.byKey(picker));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('product_search_mode_name')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('catalog_product_lookup_field')),
+        'قهوة',
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      final searches = productLists.where(
+        (uri) => uri.queryParameters['search'] == 'قهوة',
+      );
+      expect(searches, isNotEmpty);
+      expect(searches.last.queryParameters['search_in'], 'name');
+    },
+  );
+
+  testWidgets(
+    'a device with the picker on offers it on the till and on purchasing',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      installMemoryKeyValueStore({'product_search_mode_picker': 'true'});
+      const picker = ValueKey('product_search_mode_picker');
+
+      await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      await _startRegisterSession(tester);
+      expect(
+        find.descendant(
+          of: find.byType(PosCatalogPane),
+          matching: find.byKey(picker),
+        ),
+        findsOneWidget,
+      );
+
+      await _openNavigationDestination(tester, 'المشتريات');
+      await tester.tap(find.text('أمر شراء جديد'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      expect(
+        find.descendant(
+          of: find.byType(PurchaseCatalogPane),
+          matching: find.byKey(picker),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'catalog captures scanner input when lookup field is not focused',
@@ -5060,6 +5151,7 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onAnalyticsExport,
   void Function(http.Request request)? onDiscountRuleCreate,
   void Function(http.Request request)? onProductCategoryRequest,
+  void Function(http.Request request)? onProductList,
   void Function(http.Request request)? onProductUpdate,
   void Function(http.Request request)? onProductVariantUpdate,
   void Function(http.Request request)? onBackupScheduleUpdate,
@@ -5489,6 +5581,7 @@ PosApiService _mockApiService({
             },
           });
         }
+        onProductList?.call(request);
         return _jsonResponse(
           _productPageJson(
             quantityOnHand: productQuantityOnHand,

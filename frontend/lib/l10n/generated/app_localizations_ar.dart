@@ -1370,6 +1370,41 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reportMonthEndPackSubtitle => 'كل قوائم الإقفال في مستند واحد.';
 
   @override
+  String get reportBalanceSheetTitle => 'الميزانية العمومية';
+
+  @override
+  String get reportBalanceSheetSubtitle =>
+      'ما لنا وما علينا في أول المدة وآخرها، والصافي، مع حساب الزكاة.';
+
+  @override
+  String get reportUnitAgingTitle => 'أعمار الأجهزة';
+
+  @override
+  String get reportUnitAgingSubtitle =>
+      'منذ متى بقي كل جهاز على الرف، وكم من رأس المال مجمّد في كل مدة.';
+
+  @override
+  String get reportUnitMarginTitle => 'ربح كل جهاز';
+
+  @override
+  String get reportUnitMarginSubtitle =>
+      'الربح الفعلي لكل جهاز بيع خلال الفترة، بتكلفته وما أُنفق على إصلاحه.';
+
+  @override
+  String get reportUnitLedgerTitle => 'سجل جهاز';
+
+  @override
+  String get reportUnitLedgerSubtitle =>
+      'كل ما مرّ به جهاز واحد بمعرّفه، من دخوله المخزون حتى خروجه.';
+
+  @override
+  String get reportConsignmentLedgerTitle => 'دفتر الأمانات';
+
+  @override
+  String get reportConsignmentLedgerSubtitle =>
+      'ما في العهدة، وما بيع، وما يُستحق لأصحابها، وعمولة المحل.';
+
+  @override
   String get reportPeriodLastMonth => 'الشهر الماضي';
 
   @override
@@ -1482,6 +1517,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get reportPartyRequiredMessage => 'اختر الجهة أولًا لعرض الكشف.';
+
+  @override
+  String get reportUnitCodeLabel => 'معرّف الجهاز';
+
+  @override
+  String get reportUnitCodeHint => 'امسح أو اكتب الرقم التسلسلي / IMEI';
+
+  @override
+  String get reportUnitCodeRequiredMessage =>
+      'أدخل معرّف الجهاز أولًا لعرض سجله.';
 
   @override
   String get reportResultStaleMessage =>
@@ -6101,6 +6146,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get productTableEditColumn => 'تعديل';
+
+  @override
+  String get catalogLayoutToggleLabel => 'طريقة عرض المنتجات';
+
+  @override
+  String get catalogLayoutGridTooltip => 'عرض شبكي';
+
+  @override
+  String get catalogLayoutListTooltip => 'عرض قائمة';
 
   @override
   String get openProductDetailsTooltip => 'فتح تفاصيل المنتج';
@@ -15416,7 +15470,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get migrationStockSourceNoneSubtitle =>
-      'تُنقل المنتجات دون أي كميات، ويُبدأ الجرد من جديد في دفتر.';
+      'تُنقل الأصناف بكمية صفر، وتجرد رفوفك بنفسك في دفتر. التكلفة تُقرَّر أدناه.';
 
   @override
   String get migrationEntityUnit => 'وحدات القياس';
@@ -19287,6 +19341,54 @@ class AppLocalizationsAr extends AppLocalizations {
   String get rechargeFloatLabel => 'رصيد الوكالة';
 
   @override
+  String get rechargeSubscriberBalanceLabel => 'رصيد المشترك';
+
+  @override
+  String get rechargeRecentTitle => 'عمليات البحث السابقة';
+
+  @override
+  String get rechargeRecentEmptyMessage =>
+      'كل بحث ينجح يظهر هنا، لتعود إليه بلمسة في المرة القادمة.';
+
+  @override
+  String rechargeRecentNoMatch(String query) {
+    return 'لا يوجد بحث سابق يطابق $query';
+  }
+
+  @override
+  String get rechargeRecentNoMatchMessage =>
+      'ابحث عنه لدى المزوّد، وإن وُجد فسيظهر هنا في المرة القادمة.';
+
+  @override
+  String get rechargeRecentLookUp => 'ابحث لدى المزوّد';
+
+  @override
+  String get rechargeRecentLoadError => 'تعذّر تحميل عمليات البحث السابقة';
+
+  @override
+  String rechargeRecentLines(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count خطاً',
+      few: '$count خطوط',
+      two: 'خطّان',
+      one: 'خط واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rechargeRecentToday(String time) {
+    return 'اليوم $time';
+  }
+
+  @override
+  String rechargeRecentYesterday(String time) {
+    return 'أمس $time';
+  }
+
+  @override
   String rechargeFloatShort(String balance, String cost) {
     return 'رصيد الوكالة $balance لا يغطّي $cost. سجّل البيع الآن وارصد الرصيد لاحقاً.';
   }
@@ -19680,6 +19782,53 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cameraWedgeNoCameras => 'لم يتم العثور على كاميرا على هذا الجهاز.';
 
   @override
+  String get productSearchSectionTitle => 'البحث عن المنتجات';
+
+  @override
+  String get productSearchModePickerToggleTitle => 'إظهار اختيار طريقة البحث';
+
+  @override
+  String get productSearchModePickerToggleDescription =>
+      'يضيف إلى خانة البحث في نقطة البيع وإنشاء المشتريات وقائمة المنتجات قائمة تختار منها: البحث بالرمز أو الباركود فقط، أو بالاسم فقط، أو البحث الشامل المعتاد.';
+
+  @override
+  String productSearchModeTooltip(String mode) {
+    return 'طريقة البحث: $mode';
+  }
+
+  @override
+  String get productSearchModeAll => 'الكل';
+
+  @override
+  String get productSearchModeAllDescription => 'الاسم والرمز والباركود معًا';
+
+  @override
+  String get productSearchModeCode => 'الرمز';
+
+  @override
+  String get productSearchModeCodeDescription => 'الباركود أو رمز المنتج فقط';
+
+  @override
+  String get productSearchModeName => 'الاسم';
+
+  @override
+  String get productSearchModeNameDescription => 'اسم المنتج فقط';
+
+  @override
+  String get productSearchCodeHint => 'ابحث بالباركود أو رمز المنتج';
+
+  @override
+  String get productSearchNameHint => 'ابحث باسم المنتج';
+
+  @override
+  String get catalogNoResultsCodeModeMessage =>
+      'البحث الآن في الباركود ورمز المنتج فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الأسماء.';
+
+  @override
+  String get catalogNoResultsNameModeMessage =>
+      'البحث الآن في أسماء المنتجات فقط. اختر «الكل» من قائمة طريقة البحث ليشمل الرموز والباركود.';
+
+  @override
   String get posShortcutToggleCost => 'إظهار/إخفاء تكلفة الأصناف';
 
   @override
@@ -19864,13 +20013,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get migrationOnlyStockedConflict =>
       'لا يمكن جمع «الأصناف المتوفرة فقط» مع نقل سجل الفواتير: الفواتير القديمة تشير إلى أصناف لن تُنقل.';
-
-  @override
-  String get migrationStockSourceCostOnlyLabel => 'التكلفة فقط، بدون كميات';
-
-  @override
-  String get migrationStockSourceCostOnlySubtitle =>
-      'ننقل تكلفة كل صنف حتى يُحسب الربح صحيحًا من أول عملية بيع، وتبدأ الكميات من الصفر لتجردها بنفسك.';
 
   @override
   String get bankAccountIbanLabel => 'رقم الآيبان (IBAN)';
@@ -20202,4 +20344,236 @@ class AppLocalizationsAr extends AppLocalizations {
   String factoryResetConfirmationHelper(String shopName) {
     return 'اكتب: $shopName';
   }
+
+  @override
+  String get treasuryAccountOpeningBalanceInvalid =>
+      'أدخل رقمًا صحيحًا، مثل 0 أو 1250.50.';
+
+  @override
+  String get migrationCostSectionTitle => 'تكلفة الأصناف';
+
+  @override
+  String get migrationCarryCostsLabel => 'نقل تكلفة كل صنف';
+
+  @override
+  String get migrationCarryCostsSubtitle =>
+      'تُسجَّل تكلفة الصنف من النظام السابق حتى يُحسب الربح صحيحًا من أول عملية بيع، وتظهر في شاشة الصنف وعند الكاشير — سواء نقلت الكميات أم لا.';
+
+  @override
+  String get migrationCarryCostsOffWarning =>
+      'بدون التكلفة سيُحسب ربح أول بيع لكل صنف وكأنه سعر البيع كاملًا، إلى أن تُسجِّل له فاتورة شراء.';
+
+  @override
+  String get migrationCostsFromPurchasesNote =>
+      'عند احتساب الكميات من الفواتير تأتي التكلفة من فواتير الشراء المنقولة نفسها.';
+
+  @override
+  String migrationCostTally(String costed) {
+    return 'التكلفة: $costed صنف بتكلفة';
+  }
+
+  @override
+  String migrationCostTallyWithMissing(String costed, String uncosted) {
+    return 'التكلفة: $costed صنف بتكلفة · $uncosted صنف بلا تكلفة في النظام السابق';
+  }
+
+  @override
+  String get migrationMoneyAccountConflict =>
+      'لا يمكن نقل الخزائن بدون سجل المبيعات والمصروفات: رصيد الخزينة في الملف هو رصيدها في أول يوم من السجل، وبدون الحركات سيظهر رقمًا قديمًا وكأنه رصيد اليوم.';
+
+  @override
+  String get migrationMoneyAccountConflictFix => 'استبعاد الخزائن';
+
+  @override
+  String get migrationSwitchToOpeningPosition =>
+      'استخدم «نبدأ من الوضع الحالي»';
+
+  @override
+  String get migrationScopeCostsOnlyLabel => 'تحديث التكلفة فقط';
+
+  @override
+  String get migrationScopeCostsOnlySubtitle =>
+      'لمحل نُقلت أصنافه من قبل: تُضاف تكلفة كل صنف موجود في دفتر حسب الباركود، دون تغيير الأسماء أو الأسعار أو الكميات أو الأرصدة.';
+
+  @override
+  String get migrationCostsOnlyNotice =>
+      'لن يُنشأ أي صنف جديد: كل تكلفة تُربط بالصنف الموجود في دفتر الذي يحمل نفس الباركود. الكميات والأسعار والأرصدة تبقى كما هي، والصنف الذي عليه مخزون مسجَّل في دفتر يحتفظ بتكلفته.';
+
+  @override
+  String get posVoucherChecking => 'جارٍ التحقق من توفّر الكروت…';
+
+  @override
+  String get posVoucherPickerHint => 'اختر فئة الكرت';
+
+  @override
+  String get posVoucherSomeSoldOut => 'نفدت بعض الفئات لدى المزوّد فأُخفيت.';
+
+  @override
+  String get posVoucherNoneLeft => 'لا توجد فئات متوفرة لهذا الكرت الآن.';
+
+  @override
+  String posVoucherFloat(String amount) {
+    return 'رصيد الوكالة: $amount';
+  }
+
+  @override
+  String get posVoucherBeyondFloat => 'يتجاوز رصيد الوكالة';
+
+  @override
+  String get voucherCodesTitle => 'أرقام الكروت السرية';
+
+  @override
+  String get voucherCodesBody =>
+      'لم تُطبع الفاتورة، فسلّم الزبون الرقم السري من هنا.';
+
+  @override
+  String voucherSerial(String serial) {
+    return 'الرقم التسلسلي: $serial';
+  }
+
+  @override
+  String get voucherCodesDone => 'تم التسليم';
+
+  @override
+  String get voucherCodeLabel => 'الرقم السري';
+
+  @override
+  String get integrationFieldPhone => 'رقم الهاتف';
+
+  @override
+  String get integrationFieldPhoneHint =>
+      'الرقم الذي تدخل به إلى تطبيق المزوّد';
+
+  @override
+  String get integrationPhoneRequired => 'أدخل رقم الهاتف';
+
+  @override
+  String get integrationFieldPin => 'رمز الشراء (PIN)';
+
+  @override
+  String get integrationPinHint =>
+      'اختياري — فقط إن كان رمز الشراء مفعّلاً في حسابك لدى المزوّد.';
+
+  @override
+  String get integrationPinStoredHint => 'محفوظ. اتركه فارغاً للإبقاء عليه.';
+
+  @override
+  String get integrationErrorDeviceVerification =>
+      'يحتاج المزوّد إلى تأكيد هذا الجهاز برمز يُرسل إلى هاتف الوكالة.';
+
+  @override
+  String get integrationErrorAttestation =>
+      'أصبح المزوّد يشترط تطبيقه الرسمي ويرفض الاتصال من خارجه. تواصل مع الدعم.';
+
+  @override
+  String get integrationErrorOutOfStock => 'نفدت هذه الفئة لدى المزوّد.';
+
+  @override
+  String get integrationErrorPinRequired =>
+      'الحساب يطلب رمز الشراء (PIN). أضفه من إعدادات التكامل.';
+
+  @override
+  String get integrationErrorVerificationRejected =>
+      'الرمز غير صحيح أو انتهت صلاحيته. حاول مرة أخرى.';
+
+  @override
+  String get integrationErrorBusy =>
+      'عملية شراء أخرى جارية على الحساب نفسه. حاول بعد لحظة.';
+
+  @override
+  String get integrationErrorProfileMismatch =>
+      'حساب المزوّد يعمل الآن بملف غير الذي اخترته. اجعل ملفك النشط في تطبيق المزوّد أو اختر الملف النشط.';
+
+  @override
+  String get integrationCapabilityVouchers => 'كروت في الكتالوج';
+
+  @override
+  String get integrationCapabilityProfiles => 'عدة ملفات';
+
+  @override
+  String get integrationProfileKindIndividual => 'شخصي';
+
+  @override
+  String get integrationProfileKindStoreEmployee => 'موظف في متجر';
+
+  @override
+  String get integrationProfileKindStore => 'متجر';
+
+  @override
+  String integrationVerifyTitle(String provider) {
+    return 'تأكيد الجهاز · $provider';
+  }
+
+  @override
+  String get integrationVerifyPictureIntro =>
+      'لا يسمح المزوّد بالدخول من جهاز جديد إلا برمز يُرسل إلى هاتف الوكالة. اكتب الحروف التي في الصورة ليُرسَل الرمز.';
+
+  @override
+  String get integrationVerifyCodeIntro =>
+      'أُرسل رمز تحقق إلى هاتف الوكالة. اكتبه هنا لتأكيد هذا الجهاز مرة واحدة.';
+
+  @override
+  String get integrationVerifySendCode => 'أرسل الرمز';
+
+  @override
+  String get integrationVerifyConfirm => 'تأكيد';
+
+  @override
+  String get integrationVerifyNewPicture => 'صورة أخرى';
+
+  @override
+  String get integrationVerifyPictureLabel => 'الحروف التي في الصورة';
+
+  @override
+  String get integrationVerifyCodeLabel => 'رمز التحقق';
+
+  @override
+  String integrationVerifyCodeExpires(int minutes) {
+    return 'صالح لمدة $minutes دقائق';
+  }
+
+  @override
+  String get integrationVerifyStartAgain => 'اطلب رمزاً جديداً';
+
+  @override
+  String get integrationVerifyDone => 'تم تأكيد الجهاز وأصبح الاتصال جاهزاً.';
+
+  @override
+  String get integrationVerifyAction => 'تأكيد الجهاز';
+
+  @override
+  String integrationProfileTitle(String provider) {
+    return 'الملف · $provider';
+  }
+
+  @override
+  String get integrationProfileIntro =>
+      'قد يعمل حساب المزوّد الواحد كشخص أو كموظف في أكثر من متجر، ولكل منها محفظته. اختر الملف الذي تُشترى منه الكروت.';
+
+  @override
+  String get integrationProfileNone => 'لا توجد ملفات لهذا الحساب.';
+
+  @override
+  String get integrationProfileActiveNow => 'النشط الآن';
+
+  @override
+  String get integrationProfileNotActiveWarning =>
+      'هذا الملف ليس النشط الآن لدى المزوّد، ولن تُباع الكروت حتى تجعله النشط من تطبيق المزوّد.';
+
+  @override
+  String get integrationProfileSaved => 'تم حفظ الملف.';
+
+  @override
+  String get integrationProfileLabel => 'الملف';
+
+  @override
+  String get integrationProfileAction => 'الملف';
+
+  @override
+  String get systemProductNotice =>
+      'منتج نظام تديره إحدى الخدمات المتكاملة، ولا يمكن لأحد تعديله.';
+
+  @override
+  String get systemProductVoucherNotice =>
+      'كرت يُزامَن من المزوّد تلقائياً: الاسم والفئات والأسعار والتوفّر كلها من المزوّد، ولا يمكن لأحد تعديله.';
 }

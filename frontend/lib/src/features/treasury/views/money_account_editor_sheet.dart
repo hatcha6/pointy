@@ -126,6 +126,11 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
       openingAt: _openingAt,
       isDefault: _isDefault,
       isActive: _isActive,
+      // Not on the form, but on the account. The whole form travels on every
+      // save, so leaving these to their defaults reset an imported account's
+      // notes and its place in the list each time anything was edited.
+      displayOrder: widget.account?.displayOrder ?? 0,
+      notes: widget.account?.notes ?? '',
     );
 
     final saved = await widget.viewModel.saveAccount(
@@ -139,7 +144,11 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
     setState(() => _submitting = false);
     if (!saved) {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.treasuryAccountSaveFailed)),
+        SnackBar(
+          content: Text(
+            widget.viewModel.accountSaveError ?? l10n.treasuryAccountSaveFailed,
+          ),
+        ),
       );
       return;
     }
@@ -256,6 +265,13 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
                 decoration: InputDecoration(
                   labelText: l10n.treasuryAccountOpeningBalanceLabel,
                 ),
+                // An unparseable entry used to be saved as zero without a word
+                // — the one number an owner correcting an import would never
+                // notice was wrong.
+                validator: (value) =>
+                    double.tryParse((value ?? '').trim()) == null
+                    ? l10n.treasuryAccountOpeningBalanceInvalid
+                    : null,
               ),
               SizedBox(height: spacing.sm),
               _OpeningDateField(

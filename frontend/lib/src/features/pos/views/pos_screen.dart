@@ -547,7 +547,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
   /// by default for cashiers, so the shop's own configuration is what keeps
   /// the button out of a grocer's till.
   List<String> get _rechargeProviders => widget.capabilities.canUseIntegrations
-      ? widget.viewModel.connectedIntegrations
+      ? widget.viewModel.rechargeIntegrations
       : const [];
 
   Future<void> _openRecharge(String providerKey) async {

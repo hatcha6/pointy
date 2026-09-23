@@ -42,11 +42,23 @@ BLOCKED_DRIVER_IN_PROGRESS = "driver_in_progress"
 CAPABILITY_BALANCE = "balance"      # report the agency's prepaid float
 CAPABILITY_LOOKUP = "lookup"        # look a customer's card/line up
 CAPABILITY_RECHARGE = "recharge"    # actually sell a top-up
+#: Sell cards off a shelf the provider publishes — a Libyana 10, a PSN 50 —
+#: rather than topping up a line somebody names. These appear in the till's
+#: catalog as ordinary products (see apps.integrations.vouchers), so a
+#: provider with this and without ``lookup`` has no top-up screen at all.
+CAPABILITY_VOUCHERS = "vouchers"
+#: One login, several identities: a person and the shops they work for, each
+#: with its own wallet. The owner picks which one Pointy buys as.
+CAPABILITY_PROFILES = "profiles"
 
 # --- credential field keys (stable codes) -----------------------------------
 FIELD_BASE_URL = "base_url"
 FIELD_USERNAME = "username"
 FIELD_PASSWORD = "password"
+#: A second secret some agency accounts set on purchases. Qareeb makes it a
+#: per-account toggle, so it is optional: stored when given, sent only when
+#: the provider says the account asks for it.
+FIELD_PIN = "pin"
 
 # --- owner-editable settings that are NOT credentials (stable codes) --------
 #: The agency's cut, as a percentage of face value. Owner-facing on purpose:
@@ -145,6 +157,9 @@ class ProviderSpec:
     capabilities: tuple[str, ...] = ()
     fields: tuple[str, ...] = ()
     secret_fields: frozenset[str] = frozenset()
+    #: Fields the form offers but an account works without. A missing one
+    #: never makes an account "not configured".
+    optional_fields: frozenset[str] = frozenset()
     default_base_url: str = ""
     blocked_reason: str = ""
     # What the PROVIDER recommends the shop charges, keyed by option code.
@@ -274,15 +289,26 @@ LNET = ProviderSpec(
 
 QAREEB = ProviderSpec(
     key="qareeb",
-    availability=AVAILABILITY_PLANNED,
-    capabilities=(CAPABILITY_BALANCE, CAPABILITY_RECHARGE),
-    fields=_CREDENTIALS,
-    secret_fields=_SECRETS,
-    blocked_reason=BLOCKED_AWAITING_ACCESS,
-    # Declared even though nothing can be configured yet, so the day a driver
-    # lands the float warning is already part of it rather than a thing
-    # somebody has to remember. ``test_every_provider_that_reports_a_balance_
-    # can_warn_on_it`` is what makes sure the next provider does not forget.
+    availability=AVAILABILITY_AVAILABLE,
+    # No ``lookup``: nothing is topped up for a named customer. Qareeb sells
+    # cards off a shelf, and a cashier finds them in the catalog like any
+    # other product — search "ليبيانا", tap it, pick the denomination.
+    capabilities=(
+        CAPABILITY_BALANCE,
+        CAPABILITY_VOUCHERS,
+        CAPABILITY_RECHARGE,
+        CAPABILITY_PROFILES,
+    ),
+    # The login is the agency's phone number; there is no address to type —
+    # the app talks to one host, and so does the driver.
+    fields=(FIELD_USERNAME, FIELD_PASSWORD, FIELD_PIN),
+    secret_fields=frozenset({FIELD_PASSWORD, FIELD_PIN}),
+    optional_fields=frozenset({FIELD_PIN}),
+    default_base_url="https://api.qareb.ly",
+    # 100 covers the dearest card a local shop sells most (a 100-dinar
+    # Libyana or Almadar card costs the float 97). A shop that sells gift
+    # cards at five hundred dinars a time will raise it, which is the point
+    # of it being a setting.
     settings=(_low_balance("100"),),
 )
 

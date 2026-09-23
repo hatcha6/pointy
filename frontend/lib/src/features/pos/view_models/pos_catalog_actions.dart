@@ -269,6 +269,7 @@ extension PosCatalogActions on PosViewModel {
       search: query.search.trim(),
       availability: ProductAvailabilityFilter.active,
       stock: _catalogStockFilter,
+      system: ProductSystemFilter.sellable,
     );
     if (activeQuery == _query) {
       return;
@@ -302,6 +303,13 @@ extension PosCatalogActions on PosViewModel {
         if (variants.isEmpty) {
           return const PosProductSelectionResult.unavailable();
         }
+        // A provider's card always goes through its picker, even when only one
+        // denomination is left: the picker is where the till asks the provider
+        // whether it still has it, and where the cashier sees the price of
+        // something that is bought the moment the sale is recorded.
+        if (product.isVoucher) {
+          return PosProductSelectionResult.chooseVariant(variants);
+        }
         if (variants.length == 1) {
           final variant = variants.single;
           // An identified article is not chosen by tapping a product — it is
@@ -334,6 +342,21 @@ extension PosCatalogActions on PosViewModel {
       case Error<List<ProductVariant>>():
         return const PosProductSelectionResult.error();
     }
+  }
+
+  /// A card product's cards as the provider has them now, for its picker.
+  /// Null when there is no provider to ask or it cannot be asked — the picker
+  /// then keeps showing what the catalog holds.
+  Future<VoucherAvailability?> loadVoucherAvailability(Product product) async {
+    final repository = _integrationsRepository;
+    if (repository == null || !product.isVoucher) {
+      return null;
+    }
+    final result = await repository.loadVoucherAvailability(product.id);
+    return switch (result) {
+      Ok<VoucherAvailability>(:final value) => value,
+      Error<VoucherAvailability>() => null,
+    };
   }
 
   Future<Result<List<ProductVariant>>> _activeVariantsForProduct(

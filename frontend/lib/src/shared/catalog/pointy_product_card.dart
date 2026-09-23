@@ -129,7 +129,7 @@ class PointyProductCard extends StatelessWidget {
                               PositionedDirectional(
                                 top: 8,
                                 end: 8,
-                                child: _CartQuantityBadge(
+                                child: PointyCartQuantityBadge(
                                   quantity: cartQuantity,
                                 ),
                               ),
@@ -184,7 +184,7 @@ class PointyProductCard extends StatelessWidget {
                         SizedBox(height: contentGap),
                         Align(
                           alignment: AlignmentDirectional.centerEnd,
-                          child: _ProductCardActionCue(enabled: enabled),
+                          child: PointyAddToOrderCue(enabled: enabled),
                         ),
                       ],
                     ],
@@ -214,7 +214,7 @@ class _CardFooterRow extends StatelessWidget {
       children: [
         Expanded(child: child),
         const SizedBox(width: 8),
-        _ProductCardActionCue(enabled: enabled),
+        PointyAddToOrderCue(enabled: enabled),
       ],
     );
   }
@@ -241,8 +241,9 @@ class _ProductCardBadge extends StatelessWidget {
 }
 
 /// Filled badge showing how many of this product are already in the order.
-class _CartQuantityBadge extends StatelessWidget {
-  const _CartQuantityBadge({required this.quantity});
+/// Shared with the catalog table's rows, so both layouts say it the same way.
+class PointyCartQuantityBadge extends StatelessWidget {
+  const PointyCartQuantityBadge({super.key, required this.quantity});
 
   final double quantity;
 
@@ -286,8 +287,10 @@ class _CartQuantityBadge extends StatelessWidget {
   }
 }
 
-class _ProductCardActionCue extends StatelessWidget {
-  const _ProductCardActionCue({required this.enabled});
+/// The small add-to-order mark a tappable product carries, on a card or a
+/// table row alike.
+class PointyAddToOrderCue extends StatelessWidget {
+  const PointyAddToOrderCue({super.key, required this.enabled});
 
   final bool enabled;
 

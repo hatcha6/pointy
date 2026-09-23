@@ -270,6 +270,54 @@ void main() {
     await _settle();
   });
 
+  test('a provider card is one card to a line, never a bigger number', () async {
+    // Each card is its own purchase from the provider with its own PIN, so a
+    // second tap is a second line — and neither line's quantity can move.
+    final apiService = _FakePosApiService(
+      catalogPages: const {
+        1: [_coffeeVariant],
+      },
+    );
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+
+    const libyana = Product(
+      id: 30,
+      name: 'ليبيانا',
+      quantityOnHand: 0,
+      isService: true,
+      isSystem: true,
+      systemKind: ProductSystemKind.voucher,
+    );
+    final card = const ProductVariant(
+      id: 3005,
+      productId: 30,
+      productName: 'ليبيانا',
+      displayName: '5 دينار',
+      fullName: 'ليبيانا - 5 دينار',
+      sku: 'QRB-2789F02F',
+      unitPrice: 5,
+      isService: true,
+    ).copyWith(productDetail: libyana);
+
+    viewModel.addVariant(card, source: 'variant_picker');
+    viewModel.addVariant(card, source: 'variant_picker');
+
+    expect(viewModel.cart, hasLength(2));
+    expect(viewModel.cart.every((line) => line.quantity == 1), isTrue);
+    expect(viewModel.cart.first.isVoucher, isTrue);
+    expect(viewModel.cart.first.allowsQuantityEdit, isFalse);
+
+    viewModel.incrementCartLine(viewModel.cart.first.lineKey);
+    viewModel.setCartLinePrice(viewModel.cart.first.lineKey, 1);
+    expect(viewModel.cart.first.quantity, 1);
+    expect(viewModel.cart.first.unitPrice, 5);
+    await _settle();
+  });
+
   test('checkout sends the selected modifiers on the line', () async {
     final apiService = _FakePosApiService(
       catalogPages: const {

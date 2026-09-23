@@ -44,6 +44,7 @@ class ReportsViewModel extends ChangeNotifier {
   String _customerName = '';
   int? _supplierId;
   String _supplierName = '';
+  String _unitCode = '';
 
   ReportRun? _run;
   bool _isRunning = false;
@@ -86,10 +87,12 @@ class ReportsViewModel extends ChangeNotifier {
   int? get supplierId => _supplierId;
   String get supplierName => _supplierName;
 
+  /// The serial or IMEI a unit ledger is about, as typed or scanned.
+  String get unitCode => _unitCode;
+
   /// The dates a custom window covers. A preset resolves server-side, so this
   /// is only meaningful — and only shown — when the preset is `custom`.
-  DateTimeRange get customRange =>
-      _customRange ?? _defaultRange();
+  DateTimeRange get customRange => _customRange ?? _defaultRange();
 
   bool get isCustomPeriod => _preset == ReportPeriodPresetOption.custom;
 
@@ -105,6 +108,9 @@ class ReportsViewModel extends ChangeNotifier {
       return false;
     }
     if (entry.needsSupplier && _supplierId == null) {
+      return false;
+    }
+    if (entry.needsUnitCode && _unitCode.isEmpty) {
       return false;
     }
     return !_isRunning;
@@ -216,6 +222,15 @@ class ReportsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectUnitCode(String code) {
+    final trimmed = code.trim();
+    if (trimmed == _unitCode) {
+      return;
+    }
+    _unitCode = trimmed;
+    notifyListeners();
+  }
+
   /// The request parameters for the current selection.
   ///
   /// A preset is sent as a preset and resolved on the server, so the run
@@ -233,6 +248,11 @@ class ReportsViewModel extends ChangeNotifier {
       'comparison': _comparison,
       if (_customerId != null) 'customer_id': _customerId,
       if (_supplierId != null) 'supplier_id': _supplierId,
+      // Only for the report that asks for it: a code is free text naming one
+      // article, and riding along on every other run it would be stored
+      // against reports it means nothing to.
+      if (_unitCode.isNotEmpty && (selectedEntry?.needsUnitCode ?? false))
+        'code': _unitCode,
     };
   }
 

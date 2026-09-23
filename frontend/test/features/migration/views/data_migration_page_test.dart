@@ -53,6 +53,8 @@ void main() {
       'customer',
       'party_balance',
       'sale',
+      'stock',
+      'money_account',
     ],
     'supports_stock_filter': true,
     'analysis': const {
@@ -380,6 +382,107 @@ void main() {
           .first,
     );
     expect(preview.onPressed, isNull);
+    viewModel.dispose();
+  });
+
+  testWidgets('the cost is its own question, and it starts on yes', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    viewModel.applyScope('opening_position');
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.migrationCostSectionTitle), findsOneWidget);
+    final toggle = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('migration_carry_costs_switch')),
+    );
+    expect(toggle.value, isTrue);
+    expect(find.text(l10n.migrationCarryCostsOffWarning), findsNothing);
+
+    viewModel.setCarryCosts(false);
+    await tester.pumpAndSettle();
+
+    // Declining is allowed, and it says what it costs the shop.
+    expect(find.text(l10n.migrationCarryCostsOffWarning), findsOneWidget);
+    viewModel.dispose();
+  });
+
+  testWidgets('a cash box without its history comes with the fix beside it', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+    viewModel.applyScope('opening_position');
+    viewModel.toggleEntity('money_account', true);
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.migrationMoneyAccountConflict), findsOneWidget);
+
+    await tester.ensureVisible(
+      find.text(l10n.migrationMoneyAccountConflictFix),
+    );
+    await tester.tap(find.text(l10n.migrationMoneyAccountConflictFix));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.migrationMoneyAccountConflict), findsNothing);
+    expect(viewModel.selectedEntities, isNot(contains('money_account')));
+    viewModel.dispose();
+  });
+
+  testWidgets('the preview says how many products came with a cost', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(
+        sources: [source()],
+        runs: const [
+          {
+            'id': 7,
+            'source': 1,
+            'mode': 'dry_run',
+            'status': 'succeeded',
+            'summary': {
+              'product': {'created': 4120, 'failed': 0},
+              'stock': {'created': 4157, 'costed': 4120, 'uncosted': 37},
+            },
+          },
+        ],
+      ),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    expect(
+      find.text(l10n.migrationCostTallyWithMissing('4,120', '37')),
+      findsOneWidget,
+    );
+    viewModel.dispose();
+  });
+
+  testWidgets('updating costs says what it will and will not touch', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(sources: [source()]),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    viewModel.applyScope('costs_only');
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.migrationCostsOnlyNotice), findsOneWidget);
+    // No chips, no quantity choice: nothing here would do anything.
+    expect(find.text(l10n.migrationEntityListTitle), findsNothing);
+    expect(find.text(l10n.migrationStockSourceSectionTitle), findsNothing);
     viewModel.dispose();
   });
 }

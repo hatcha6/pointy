@@ -17,7 +17,13 @@ from .views import (
     IntegrationLookupView,
     IntegrationPricesView,
     IntegrationProbeView,
+    IntegrationSearchesView,
+    IntegrationProfilesView,
     IntegrationSubscriberView,
+    IntegrationVerificationConfirmView,
+    IntegrationVerificationSendView,
+    IntegrationVerificationView,
+    IntegrationVoucherView,
 )
 
 urlpatterns = [
@@ -27,6 +33,14 @@ urlpatterns = [
         "fulfillments/charge/",
         IntegrationChargeView.as_view(),
         name="integrations-charge",
+    ),
+    # Till-facing: one card product's live availability, for its picker.
+    # Addressed by product — the till knows the product, and the product
+    # knows whose shelf it came off.
+    path(
+        "vouchers/<int:product_id>/",
+        IntegrationVoucherView.as_view(),
+        name="integrations-vouchers",
     ),
     path("<str:provider>/", IntegrationAccountView.as_view(), name="integrations-account"),
     path("<str:provider>/probe/", IntegrationProbeView.as_view(), name="integrations-probe"),
@@ -43,6 +57,12 @@ urlpatterns = [
     path("<str:provider>/lookup/", IntegrationLookupView.as_view(), name="integrations-lookup"),
     # Till-facing: one call for the card, its live prices and the cart variant.
     path("<str:provider>/card/", IntegrationCardView.as_view(), name="integrations-card"),
+    # Till-facing: the searches that found something, newest first.
+    path(
+        "<str:provider>/searches/",
+        IntegrationSearchesView.as_view(),
+        name="integrations-searches",
+    ),
     path(
         "<str:provider>/subscribers/<str:subscriber_ref>/",
         IntegrationSubscriberView.as_view(),
@@ -52,5 +72,27 @@ urlpatterns = [
         "<str:provider>/history/",
         IntegrationHistoryView.as_view(),
         name="integrations-history",
+    ),
+    # Shop Settings: trusting this Pointy as a device the provider knows.
+    path(
+        "<str:provider>/verification/",
+        IntegrationVerificationView.as_view(),
+        name="integrations-verification",
+    ),
+    path(
+        "<str:provider>/verification/send/",
+        IntegrationVerificationSendView.as_view(),
+        name="integrations-verification-send",
+    ),
+    path(
+        "<str:provider>/verification/confirm/",
+        IntegrationVerificationConfirmView.as_view(),
+        name="integrations-verification-confirm",
+    ),
+    # Shop Settings: which of the login's profiles (shops) Pointy buys as.
+    path(
+        "<str:provider>/profiles/",
+        IntegrationProfilesView.as_view(),
+        name="integrations-profiles",
     ),
 ]

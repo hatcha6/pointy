@@ -26,6 +26,7 @@ import '../view_models/pos_view_model.dart';
 import 'modifier_sheet.dart';
 import 'pos_unit_picker_sheet.dart';
 import 'pos_variant_picker_sheet.dart';
+import 'pos_voucher_picker_sheet.dart';
 import 'weight_entry_sheet.dart';
 
 class PosCatalogPane extends StatelessWidget {
@@ -49,7 +50,15 @@ class PosCatalogPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: viewModel.catalogLayout,
+      builder: (context, _) => _buildPane(context),
+    );
+  }
+
+  Widget _buildPane(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final layout = viewModel.catalogLayout.layout;
 
     return PointyCatalogPane(
       title: l10n.catalogTitle,
@@ -61,12 +70,27 @@ class PosCatalogPane extends StatelessWidget {
       notice: viewModel.errorMessage != null
           ? PointyInlineMessage.warning(message: l10n.sampleCatalogNotice)
           : null,
-      headerAction: (onRecharge == null || rechargeProviders.isEmpty)
-          ? null
-          : PosRechargeButton(
+      headerAction: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onRecharge != null && rechargeProviders.isNotEmpty) ...[
+            PosRechargeButton(
               providers: rechargeProviders,
               onSelected: onRecharge!,
             ),
+            SizedBox(width: AdaptiveSpacing.of(context).sm),
+          ],
+          CatalogLayoutToggle(
+            layout: layout,
+            onChanged: (next) {
+              viewModel.catalogLayout.setLayout(next);
+              // A layout switch is between sales, not inside one: hand the
+              // caret back to the search so the next scan lands there.
+              viewModel.requestSearchFocus();
+            },
+          ),
+        ],
+      ),
       search: _PosProductLookupControls(
         viewModel: viewModel,
         capabilities: capabilities,
@@ -87,9 +111,10 @@ class PosCatalogPane extends StatelessWidget {
       statusLine: viewModel.barcodeScanStatus != BarcodeScanStatus.idle
           ? _BarcodeScanStatusLine(viewModel: viewModel)
           : null,
-      grid: _PosCatalogGrid(
+      grid: _PosCatalogProducts(
         viewModel: viewModel,
         capabilities: capabilities,
+        layout: layout,
         emptyMessage: l10n.emptyCatalog,
         cartQuantities: _cartQuantitiesByProduct(viewModel.cart),
       ),
@@ -111,16 +136,20 @@ class PosCatalogPane extends StatelessWidget {
   }
 }
 
-class _PosCatalogGrid extends StatelessWidget {
-  const _PosCatalogGrid({
+/// The catalog's products as cards or as table rows — the one place both
+/// layouts are built, so a tap runs the same selection flow in either.
+class _PosCatalogProducts extends StatelessWidget {
+  const _PosCatalogProducts({
     required this.viewModel,
     required this.capabilities,
+    required this.layout,
     required this.emptyMessage,
     required this.cartQuantities,
   });
 
   final PosViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+  final CatalogLayout layout;
   final String emptyMessage;
   final Map<int, double> cartQuantities;
 
@@ -131,6 +160,53 @@ class _PosCatalogGrid extends StatelessWidget {
     return CheckoutCapabilityBuilder(
       capabilities: capabilities,
       builder: (context, canCheckout) {
+        Widget emptyState(BuildContext context) => CatalogEmptyState(
+          query: viewModel.query,
+          emptyMessage: emptyMessage,
+          onClear: () =>
+              viewModel.applyQuery(CatalogEmptyState.cleared(viewModel.query)),
+        );
+
+        Widget item(BuildContext context, Product product) {
+          final onTap = canCheckout
+              ? () => _selectProduct(context, product)
+              : null;
+          final cartQuantity = cartQuantities[product.id] ?? 0;
+          return TutorTarget(
+            anchor: TutorAnchor.posProductTile,
+            // The SKU, so a lesson can say "tap خبز" and have the
+            // spotlight land on خبز rather than on whichever tile
+            // mounted first.
+            id: product.defaultVariant?.sku,
+            child: layout == CatalogLayout.list
+                ? ProductTile.row(
+                    key: ValueKey(product.id),
+                    product: product,
+                    cartQuantity: cartQuantity,
+                    onTap: onTap,
+                  )
+                : ProductTile(
+                    key: ValueKey(product.id),
+                    product: product,
+                    cartQuantity: cartQuantity,
+                    onTap: onTap,
+                  ),
+          );
+        }
+
+        if (layout == CatalogLayout.list) {
+          return PointyCatalogTable<Product>(
+            items: products,
+            onLoadMore: viewModel.loadMoreCatalog,
+            hasMore: viewModel.hasMoreProducts,
+            isLoadingInitial: viewModel.isLoading,
+            isLoadingMore: viewModel.isLoadingMore,
+            loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
+            emptyBuilder: emptyState,
+            itemBuilder: item,
+          );
+        }
+
         return LayoutBuilder(
           builder: (context, constraints) {
             final spacing = AdaptiveSpacing.of(context);
@@ -144,34 +220,12 @@ class _PosCatalogGrid extends StatelessWidget {
               loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
               skeletonItemBuilder: (_) => const PointySkeletonCard(),
               skeletonItemCount: 12,
-              emptyBuilder: (context) => CatalogEmptyState(
-                query: viewModel.query,
-                emptyMessage: emptyMessage,
-                onClear: () => viewModel.applyQuery(
-                  CatalogEmptyState.cleared(viewModel.query),
-                ),
-              ),
+              emptyBuilder: emptyState,
               gridDelegate: PointyProductCardGrid.delegateFor(
                 width: constraints.maxWidth,
                 spacing: spacing.gutter,
               ),
-              itemBuilder: (context, product) {
-                return TutorTarget(
-                  anchor: TutorAnchor.posProductTile,
-                  // The SKU, so a lesson can say "tap خبز" and have the
-                  // spotlight land on خبز rather than on whichever tile
-                  // mounted first.
-                  id: product.defaultVariant?.sku,
-                  child: ProductTile(
-                    key: ValueKey(product.id),
-                    product: product,
-                    cartQuantity: cartQuantities[product.id] ?? 0,
-                    onTap: canCheckout
-                        ? () => _selectProduct(context, product)
-                        : null,
-                  ),
-                );
-              },
+              itemBuilder: item,
             );
           },
         );
@@ -298,6 +352,19 @@ class _PosCatalogGrid extends StatelessWidget {
           );
         }
       case PosProductSelectionStatus.chooseVariant:
+        if (product.isVoucher) {
+          final card = await showPosVoucherPickerSheet(
+            context,
+            product: product,
+            variants: result.variants,
+            checkAvailability: () => viewModel.loadVoucherAvailability(product),
+          );
+          if (card != null && context.mounted) {
+            // One card, one line: [addVariant] never merges a card.
+            viewModel.addVariant(card, source: 'variant_picker');
+          }
+          return;
+        }
         final variant = await showPosVariantPickerSheet(
           context,
           product: product,

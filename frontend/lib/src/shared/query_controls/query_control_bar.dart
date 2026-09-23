@@ -25,6 +25,7 @@ class QueryControlBar extends StatelessWidget {
     this.searchFieldKey,
     this.searchFocusNode,
     this.searchResetSignal,
+    this.searchTrailing,
   });
 
   final String searchValue;
@@ -44,6 +45,16 @@ class QueryControlBar extends StatelessWidget {
   final FocusNode? searchFocusNode;
   final Listenable? searchResetSignal;
 
+  /// A control at the end of the search field, after its clear button — the
+  /// product search's mode picker. Told when the bar is too narrow for it to
+  /// spell itself out, so it can shrink to an icon instead of squeezing the
+  /// text the cashier is typing.
+  final Widget Function(BuildContext context, bool compact)? searchTrailing;
+
+  /// Below this width a [searchTrailing] shrinks to its icon: the search icon,
+  /// the clear button and a labelled picker would leave the text a sliver.
+  static const double compactTrailingWidth = 520;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -52,6 +63,8 @@ class QueryControlBar extends StatelessWidget {
         final hasScanner = onOpenCameraScanner != null;
         final useCompactActions =
             constraints.maxWidth < (hasScanner ? 390 : 330);
+        final trailing = searchTrailing;
+        final compactTrailing = constraints.maxWidth < compactTrailingWidth;
         final searchField = DebouncedSearchField(
           value: searchValue,
           hintText: searchHint,
@@ -63,6 +76,9 @@ class QueryControlBar extends StatelessWidget {
           fieldKey: searchFieldKey,
           focusNode: searchFocusNode,
           resetSignal: searchResetSignal,
+          trailingBuilder: trailing == null
+              ? null
+              : (context, _) => trailing(context, compactTrailing),
         );
         final actions = _QueryActions(
           hasScanner: hasScanner,

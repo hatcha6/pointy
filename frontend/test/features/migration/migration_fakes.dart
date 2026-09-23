@@ -112,7 +112,19 @@ class FakeMigrationRepository implements MigrationRepository {
           'label': 'نبدأ من الوضع الحالي',
           'description': '',
           'entities': ['category', 'product', 'customer', 'party_balance'],
-          'options': {'stock_source': 'cost_only'},
+          'options': {'stock_source': 'none', 'carry_costs': true},
+          'is_preset': true,
+        },
+        {
+          'key': 'costs_only',
+          'label': 'تحديث التكلفة فقط',
+          'description': '',
+          'entities': ['stock'],
+          'options': {
+            'stock_source': 'none',
+            'carry_costs': true,
+            'attach_to_catalogue': true,
+          },
           'is_preset': true,
         },
         {

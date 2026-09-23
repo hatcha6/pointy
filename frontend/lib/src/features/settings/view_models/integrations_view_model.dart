@@ -168,6 +168,95 @@ class IntegrationsViewModel extends ChangeNotifier {
     ];
   }
 
+  // --- confirming this device with the provider ----------------------------
+  // One-shot calls the verification sheet drives step by step. Each answers
+  // null when the *request* failed ([actionException] says why); a provider
+  // saying no is a result with `ok == false`, rendered by the sheet.
+
+  Future<IntegrationVerificationChallenge?> startVerification(
+    IntegrationProviderKey key,
+  ) async {
+    final providerKey = integrationProviderKeyToJson(key);
+    if (providerKey.isEmpty) return null;
+    final result = await _repository.startVerification(providerKey);
+    return _valueOrRecord(result);
+  }
+
+  Future<IntegrationVerificationStep?> sendVerificationCode(
+    IntegrationProviderKey key, {
+    required String challengeRef,
+    required String answer,
+  }) async {
+    final providerKey = integrationProviderKeyToJson(key);
+    if (providerKey.isEmpty) return null;
+    final result = await _repository.sendVerificationCode(
+      providerKey,
+      challengeRef: challengeRef,
+      answer: answer,
+    );
+    return _valueOrRecord(result);
+  }
+
+  Future<IntegrationVerificationStep?> confirmVerification(
+    IntegrationProviderKey key, {
+    required String code,
+  }) async {
+    final providerKey = integrationProviderKeyToJson(key);
+    if (providerKey.isEmpty) return null;
+    final result = await _repository.confirmVerification(
+      providerKey,
+      code: code,
+    );
+    final step = _valueOrRecord(result);
+    final refreshed = step?.provider;
+    if (refreshed != null) {
+      _replaceProvider(refreshed);
+      notifyListeners();
+    }
+    return step;
+  }
+
+  // --- which profile (shop) the provider login buys as -----------------------
+  Future<IntegrationProfileList?> loadProfiles(
+    IntegrationProviderKey key,
+  ) async {
+    final providerKey = integrationProviderKeyToJson(key);
+    if (providerKey.isEmpty) return null;
+    return _valueOrRecord(await _repository.loadProfiles(providerKey));
+  }
+
+  Future<bool> chooseProfile(
+    IntegrationProviderKey key,
+    String profileId,
+  ) async {
+    final providerKey = integrationProviderKeyToJson(key);
+    if (providerKey.isEmpty) return false;
+    final result = await _repository.chooseProfile(providerKey, profileId);
+    switch (result) {
+      case Ok<IntegrationProvider?>(value: final provider):
+        if (provider != null) {
+          _replaceProvider(provider);
+          notifyListeners();
+        }
+        return true;
+      case Error<IntegrationProvider?>(exception: final exception):
+        _actionException = exception;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  T? _valueOrRecord<T>(Result<T> result) {
+    switch (result) {
+      case Ok<T>(value: final value):
+        return value;
+      case Error<T>(exception: final exception):
+        _actionException = exception;
+        notifyListeners();
+        return null;
+    }
+  }
+
   // --- the owner's retail price list --------------------------------------
   IntegrationPriceList? _priceList;
   bool _isLoadingPrices = false;

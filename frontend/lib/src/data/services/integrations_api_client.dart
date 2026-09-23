@@ -1,5 +1,7 @@
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
+import '../models/integration_recent_search.dart';
+import '../models/voucher_availability.dart';
 import 'api_session.dart';
 
 /// REST access to the resale-provider endpoints (apps.integrations):
@@ -97,6 +99,32 @@ class IntegrationsApiClient {
       );
     }
     return IntegrationCardSnapshot.fromJson(decoded);
+  }
+
+  /// The searches that found something at this provider, newest first.
+  ///
+  /// [search] narrows them by the number typed, the line found, or the name
+  /// the shop gave the card. Paged by [cursor] — the opaque value from the
+  /// previous page's [IntegrationRecentSearchPage.nextCursor].
+  Future<IntegrationRecentSearchPage> fetchRecentSearches({
+    required String providerKey,
+    String search = '',
+    String? cursor,
+  }) async {
+    final response = await _session.get(
+      'integrations/$providerKey/searches/',
+      query: {
+        if (search.isNotEmpty) 'search': search,
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+      },
+    );
+    _session.throwApiException(
+      response,
+      'Recent searches request failed with status',
+    );
+    return IntegrationRecentSearchPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   /// One page of a subscriber's history.
@@ -211,6 +239,84 @@ class IntegrationsApiClient {
         .whereType<Map<String, Object?>>()
         .map(IntegrationChargeResult.fromJson)
         .toList(growable: false);
+  }
+
+  // --- confirming this device with the provider ----------------------------
+  Future<IntegrationVerificationChallenge> startVerification(
+    String providerKey,
+  ) async {
+    final response = await _session.post(
+      'integrations/$providerKey/verification/',
+    );
+    _session.throwApiException(response, 'Starting verification failed');
+    return IntegrationVerificationChallenge.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<IntegrationVerificationStep> sendVerificationCode(
+    String providerKey, {
+    required String challengeRef,
+    required String answer,
+  }) async {
+    final response = await _session.post(
+      'integrations/$providerKey/verification/send/',
+      body: {'challenge_ref': challengeRef, 'answer': answer},
+    );
+    _session.throwApiException(response, 'Requesting a code failed');
+    return IntegrationVerificationStep.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<IntegrationVerificationStep> confirmVerification(
+    String providerKey, {
+    required String code,
+  }) async {
+    final response = await _session.post(
+      'integrations/$providerKey/verification/confirm/',
+      body: {'code': code},
+    );
+    _session.throwApiException(response, 'Confirming the code failed');
+    return IntegrationVerificationStep.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  // --- which profile (shop) the login buys as --------------------------------
+  Future<IntegrationProfileList> fetchProfiles(String providerKey) async {
+    final response = await _session.get('integrations/$providerKey/profiles/');
+    _session.throwApiException(response, 'Loading profiles failed');
+    return IntegrationProfileList.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<IntegrationProvider?> chooseProfile(
+    String providerKey,
+    String profileId,
+  ) async {
+    final response = await _session.put(
+      'integrations/$providerKey/profiles/',
+      body: {'profile_id': profileId},
+    );
+    _session.throwApiException(response, 'Choosing a profile failed');
+    final decoded = _session.decodedBody(response);
+    final provider = decoded is Map<String, Object?>
+        ? decoded['provider']
+        : null;
+    return provider is Map<String, Object?>
+        ? IntegrationProvider.fromJson(provider)
+        : null;
+  }
+
+  // --- a card product's live availability -------------------------------------
+  Future<VoucherAvailability> fetchVoucherAvailability(int productId) async {
+    final response = await _session.get('integrations/vouchers/$productId/');
+    _session.throwApiException(response, 'Checking card availability failed');
+    return VoucherAvailability.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   /// Name the person behind a card — the half the provider will not tell us.

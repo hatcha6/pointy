@@ -84,12 +84,13 @@ Future<_Harness> _pump(
   WidgetTester tester, {
   StockCount? session,
   List<ProductVariant>? variants,
+  double? systemQuantity,
   Size size = const Size(1100, 900),
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
-  final stockCounts = _FakeStockCountRepository();
+  final stockCounts = _FakeStockCountRepository(systemQuantity: systemQuantity);
   final catalog = _FakeCatalogRepository(variants ?? _variants);
   await tester.pumpWidget(
     MaterialApp(
@@ -198,6 +199,43 @@ void main() {
     expect(_searchField, findsOneWidget);
     expect(_quantityField, findsNothing);
     expect(harness.catalog.queries.last.search, '');
+  });
+
+  testWidgets('a count far off the system is saved without stopping the loop', (
+    tester,
+  ) async {
+    // The system says 240, the shelf holds 3. That gap is reconciliation's to
+    // review. Asking about it here put a sheet over the search after the save,
+    // and the counter's next keystrokes went nowhere.
+    final harness = await _pump(tester, systemQuantity: 240);
+
+    await tester.enterText(_searchField, 'CHP');
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    await tester.enterText(_quantityField, '3');
+    await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(harness.stockCounts.drafts.single.countedQuantity, 3);
+    // Nothing on top of the screen: no sheet, no dialog, nothing to dismiss.
+    expect(ModalRoute.of(tester.element(_searchField))!.isCurrent, isTrue);
+    // Blind: the system's number never reaches the counting screen.
+    expect(find.text('240'), findsNothing);
+    // The caret is already in the search, waiting for the next name.
+    final search = tester.widget<EditableText>(
+      find.descendant(of: _searchField, matching: find.byType(EditableText)),
+    );
+    expect(search.focusNode.hasFocus, isTrue);
+
+    await tester.enterText(_searchField, 'WTR');
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(_quantityField, findsOneWidget);
+    expect(find.text('مياه معدنية'), findsOneWidget);
   });
 
   testWidgets('the keypad and the keyboard write the same number', (
@@ -353,7 +391,11 @@ void main() {
 }
 
 class _FakeStockCountRepository extends StockCountRepository {
-  _FakeStockCountRepository() : super(PosApiService());
+  _FakeStockCountRepository({this.systemQuantity}) : super(PosApiService());
+
+  /// What the system believes is on the shelf. Null agrees with every count;
+  /// set, a count that differs comes back flagged, as the server flags it.
+  final double? systemQuantity;
 
   final List<StockCountLineDraft> drafts = [];
 
@@ -363,15 +405,16 @@ class _FakeStockCountRepository extends StockCountRepository {
     StockCountLineDraft draft,
   ) async {
     drafts.add(draft);
+    final expected = systemQuantity ?? draft.countedQuantity;
     return Ok(
       StockCountLine(
         id: drafts.length,
         stockCountId: countId,
         variantId: draft.variantId,
         countedQuantity: draft.countedQuantity,
-        expectedQuantity: draft.countedQuantity,
-        variance: 0,
-        needsReview: false,
+        expectedQuantity: expected,
+        variance: draft.countedQuantity - expected,
+        needsReview: draft.countedQuantity != expected,
         applied: false,
         staleAtApply: false,
       ),

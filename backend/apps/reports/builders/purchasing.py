@@ -21,6 +21,7 @@ from apps.core.money_dates import day_range_end
 from apps.purchasing.models import (
     PurchaseOrder,
     Supplier,
+    SupplierCredit,
     SupplierPayment,
     prime_supplier_balances,
 )
@@ -89,9 +90,9 @@ def purchasing_summary(context):
         for supplier in supplier_rows_values.rows
     ]
 
-    paid_in_period = in_period(SupplierPayment.objects.all(), context.period).aggregate(
-        total=money_sum("amount")
-    )["total"]
+    paid_in_period = in_period(
+        SupplierPayment.objects.live(), context.period
+    ).aggregate(total=money_sum("amount"))["total"]
     figures = {
         "purchase_total": money(purchase_total),
         "supplier_paid_total": money(paid_in_period),
@@ -197,6 +198,27 @@ def payables_total(context):
     return totals
 
 
+def supplier_credits_total(as_of):
+    """What suppliers owed the shop in credit notes at the close of ``as_of``.
+
+    A credit note is issued when goods already paid for go back, and is spent
+    by settling a later order with it. Rebuilt from the notes issued by then
+    less the credit spent by then, because ``remaining_amount`` is today's
+    figure — the same reason every other balance here is rebuilt rather than
+    read. A cancelled settlement gave its credit back, so it does not count.
+    """
+    cutoff = day_range_end(as_of)
+    issued = SupplierCredit.objects.filter(created_at__lt=cutoff).aggregate(
+        total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY)
+    )["total"]
+    spent = (
+        SupplierPayment.objects.live()
+        .filter(method=SupplierPayment.Method.SUPPLIER_CREDIT, paid_at__lt=cutoff)
+        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
+    )["total"]
+    return decimal_from(issued) - decimal_from(spent)
+
+
 def _supplier_balances(as_of, *, detail=True):
     """Outstanding purchase orders, aged and folded into per-supplier rows.
 
@@ -204,10 +226,21 @@ def _supplier_balances(as_of, *, detail=True):
     there is not — the due date is what a supplier will chase on, and falling
     back to the order date keeps an undated order visible rather than dropping
     it into a bucket it did not earn.
+
+    Two kinds of payment are read the way the supplier's own balance
+    (``Supplier.payable_balance``) reads them, so the report and the supplier
+    screen cannot state two different debts:
+
+    * **A cancelled payment never happened.** It stays in the table with its
+      amount, so counting it cleared a debt the shop still owes.
+    * **A payment on account** — made to the supplier, not to one order — pays
+      that supplier's orders oldest first. Leaving it out stated a debt the
+      shop had already settled.
     """
     cutoff = day_range_end(as_of)
     paid = (
-        SupplierPayment.objects.filter(purchase_order=OuterRef("pk"), paid_at__lt=cutoff)
+        SupplierPayment.objects.live()
+        .filter(purchase_order=OuterRef("pk"), paid_at__lt=cutoff)
         .order_by()
         .values("purchase_order")
         .annotate(total=Sum("amount"))
@@ -224,8 +257,20 @@ def _supplier_balances(as_of, *, detail=True):
         )
         .annotate(balance=F("total") - F("cancelled_total") - F("paid_amount"))
         .filter(balance__gt=0)
+        # Oldest first within each supplier: the order a payment on account
+        # settles them in.
+        .order_by("supplier_id", "reference_date", "created_at", "pk")
         .values("supplier_id", "supplier__name", "reference_date", "balance")
     )
+    on_account = {
+        row["supplier_id"]: decimal_from(row["total"])
+        for row in SupplierPayment.objects.live()
+        .filter(purchase_order__isnull=True, paid_at__lt=cutoff)
+        .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
+        .order_by()
+        .values("supplier_id")
+        .annotate(total=Sum("amount"))
+    }
     thresholds = {
         bucket: as_of - timedelta(days=days) for bucket, days in BUCKET_DAYS.items()
     }
@@ -236,6 +281,13 @@ def _supplier_balances(as_of, *, detail=True):
 
     for order in outstanding:
         balance = decimal_from(order["balance"])
+        unapplied = on_account.get(order["supplier_id"], ZERO)
+        if unapplied > 0:
+            applied = min(unapplied, balance)
+            on_account[order["supplier_id"]] = unapplied - applied
+            balance -= applied
+        if balance <= 0:
+            continue
         reference = order["reference_date"]
         bucket = _bucket_for(reference, thresholds)
         age = max((as_of - reference).days, 0) if reference else 0
@@ -371,9 +423,11 @@ def _supplier_balance_at(supplier, when):
             )
         )
     )["total"]
-    paid = SupplierPayment.objects.filter(
-        supplier=supplier, paid_at__lt=cutoff
-    ).aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))["total"]
+    paid = (
+        SupplierPayment.objects.live()
+        .filter(supplier=supplier, paid_at__lt=cutoff)
+        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
+    )["total"]
     return decimal_from(billed) - decimal_from(paid)
 
 
@@ -399,7 +453,7 @@ def _supplier_entries(supplier, period):
         )
 
     payments = in_period(
-        SupplierPayment.objects.filter(supplier=supplier), period
+        SupplierPayment.objects.live().filter(supplier=supplier), period
     ).values("purchase_order__order_number", "paid_at", "amount", "method")
     for payment in payments:
         entries.append(
@@ -420,5 +474,6 @@ __all__ = [
     "payables_aging",
     "payables_total",
     "purchasing_summary",
+    "supplier_credits_total",
     "supplier_statement",
 ]

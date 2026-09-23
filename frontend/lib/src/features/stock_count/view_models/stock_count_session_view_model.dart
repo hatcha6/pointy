@@ -16,21 +16,6 @@ import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import 'stock_count_item_search_view_model.dart';
 
-/// The one quiet variance question, surfaced once after an entry crosses the
-/// threshold. Holding [expected] here is the ONLY place the system quantity is
-/// exposed to the counting flow (see the blind invariant note below).
-class StockCountVariancePrompt {
-  const StockCountVariancePrompt({
-    required this.variant,
-    required this.expected,
-    required this.counted,
-  });
-
-  final ProductVariant variant;
-  final double expected;
-  final double counted;
-}
-
 /// Pending "add to your count of N, or replace it?" decision for a re-scanned
 /// item. Carries the just-entered quantity so the choice maps to the API mode.
 class StockCountReentryPrompt {
@@ -48,10 +33,12 @@ class StockCountReentryPrompt {
 /// State machine for the focused scan -> count -> next loop.
 ///
 /// Blind invariant: this view model NEVER exposes the system/expected quantity
-/// to the counting screen. [currentVariant.quantityOnHand] is deliberately
-/// ignored, and a line's expected quantity is only ever read into
-/// [pendingVariance] to build the single variance prompt. Reconciliation is a
-/// separate screen where showing expected is intended.
+/// to the counting screen — not [currentVariant.quantityOnHand], and not a
+/// saved line's expected quantity either. A variance is reviewed once, on the
+/// reconciliation screen, where showing expected is the point. It used to be
+/// asked here too, in a sheet raised after every save that crossed the
+/// threshold, and that sheet broke the type-Enter-type-Enter loop this screen
+/// is built around.
 class StockCountSessionViewModel extends ChangeNotifier {
   StockCountSessionViewModel(
     this._repository,
@@ -94,7 +81,6 @@ class StockCountSessionViewModel extends ChangeNotifier {
   bool _isSaving = false;
   bool _scanMiss = false;
   bool _actionError = false;
-  StockCountVariancePrompt? _pendingVariance;
   StockCountReentryPrompt? _pendingReentry;
 
   // -- scan-the-shelf (§6.6) ----------------------------------------------
@@ -137,7 +123,6 @@ class StockCountSessionViewModel extends ChangeNotifier {
   bool get isSaving => _isSaving;
   bool get scanMiss => _scanMiss;
   bool get actionError => _actionError;
-  StockCountVariancePrompt? get pendingVariance => _pendingVariance;
   StockCountReentryPrompt? get pendingReentry => _pendingReentry;
 
   /// Identifiers read in this session, newest first.
@@ -592,32 +577,8 @@ class StockCountSessionViewModel extends ChangeNotifier {
         // does NOT reset it — there the counter is still looking at the list
         // they just picked the wrong row from.)
         unawaited(itemSearch.reset());
-        if (line.needsReview) {
-          // Blind invariant: expected is read into the prompt only — never shown
-          // on the counting surface itself.
-          _pendingVariance = StockCountVariancePrompt(
-            variant: variant,
-            expected: line.expectedQuantity,
-            counted: line.countedQuantity,
-          );
-        }
       case Error<StockCountLine>():
         _actionError = true;
-    }
-    notifyListeners();
-  }
-
-  void confirmVariance() {
-    _pendingVariance = null;
-    notifyListeners();
-  }
-
-  void recountVariance() {
-    final prompt = _pendingVariance;
-    _pendingVariance = null;
-    if (prompt != null) {
-      _currentVariant = prompt.variant;
-      _input = '';
     }
     notifyListeners();
   }

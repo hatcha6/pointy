@@ -34,6 +34,41 @@ String integrationProviderTagline(
   };
 }
 
+/// What the credentials form asks for as the login, per provider.
+///
+/// Qareeb's login IS the agency's phone number, and calling it a username in
+/// front of an owner holding the app's own login screen in mind would make
+/// them guess. Everyone else logs in with a username.
+({String label, String hint, String required, IconData icon, bool isPhone})
+integrationUsernameCopy(IntegrationProviderKey key, AppLocalizations l10n) {
+  return switch (key) {
+    IntegrationProviderKey.qareeb => (
+      label: l10n.integrationFieldPhone,
+      hint: l10n.integrationFieldPhoneHint,
+      required: l10n.integrationPhoneRequired,
+      icon: Icons.phone_iphone_outlined,
+      isPhone: true,
+    ),
+    _ => (
+      label: l10n.integrationFieldUsername,
+      hint: '',
+      required: l10n.integrationUsernameRequired,
+      icon: Icons.person_outline,
+      isPhone: false,
+    ),
+  };
+}
+
+/// The provider's own word for a profile, in Arabic.
+String integrationProfileKindLabel(String kind, AppLocalizations l10n) {
+  return switch (kind) {
+    'individual' => l10n.integrationProfileKindIndividual,
+    'store_employee' => l10n.integrationProfileKindStoreEmployee,
+    'store' || 'store_owner' => l10n.integrationProfileKindStore,
+    _ => '',
+  };
+}
+
 /// What a cashier is being asked to type, per provider.
 ///
 /// HD Box identifies a subscriber by a card number on a physical card; LNET by
@@ -152,6 +187,17 @@ String integrationErrorText(String code, AppLocalizations l10n) {
       l10n.integrationErrorInsufficientFloat,
     // Not a failure at all: a write went out and nobody knows what it did.
     IntegrationErrorCode.indeterminate => l10n.integrationErrorIndeterminate,
+    IntegrationErrorCode.deviceVerificationRequired =>
+      l10n.integrationErrorDeviceVerification,
+    IntegrationErrorCode.attestationRequired =>
+      l10n.integrationErrorAttestation,
+    IntegrationErrorCode.outOfStock => l10n.integrationErrorOutOfStock,
+    IntegrationErrorCode.pinRequired => l10n.integrationErrorPinRequired,
+    IntegrationErrorCode.verificationRejected =>
+      l10n.integrationErrorVerificationRejected,
+    IntegrationErrorCode.busy => l10n.integrationErrorBusy,
+    IntegrationErrorCode.profileMismatch =>
+      l10n.integrationErrorProfileMismatch,
     _ => l10n.integrationErrorUnexpected,
   };
 }
@@ -161,6 +207,8 @@ String integrationCapabilityLabel(String code, AppLocalizations l10n) {
     IntegrationCapability.balance => l10n.integrationCapabilityBalance,
     IntegrationCapability.lookup => l10n.integrationCapabilityLookup,
     IntegrationCapability.recharge => l10n.integrationCapabilityRecharge,
+    IntegrationCapability.vouchers => l10n.integrationCapabilityVouchers,
+    IntegrationCapability.profiles => l10n.integrationCapabilityProfiles,
     _ => code,
   };
 }
@@ -170,6 +218,7 @@ String integrationFieldLabel(String field, AppLocalizations l10n) {
     IntegrationField.baseUrl => l10n.integrationFieldBaseUrl,
     IntegrationField.username => l10n.integrationFieldUsername,
     IntegrationField.password => l10n.integrationFieldPassword,
+    IntegrationField.pin => l10n.integrationFieldPin,
     _ => field,
   };
 }
@@ -227,6 +276,12 @@ class IntegrationProviderLogo extends StatelessWidget {
   /// as a hole punched in the surface.
   static const Color _chip = Color(0xFFFFFFFF);
 
+  /// Marks that are a whole app tile already — Qareeb's is its orange app
+  /// icon. Those fill the box: a white chip around a tile reads as a frame
+  /// around a picture of a frame.
+  static bool _isTile(IntegrationProviderKey key) =>
+      key == IntegrationProviderKey.qareeb;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
@@ -251,6 +306,9 @@ class IntegrationProviderLogo extends StatelessWidget {
             ),
           ),
           frameBuilder: (context, child, frame, wasSynchronous) {
+            if (_isTile(providerKey)) {
+              return child;
+            }
             // Only artwork gets the chip. Wrapping the fallback too would put
             // a white square behind a themed icon.
             return DecoratedBox(

@@ -930,6 +930,25 @@ class AuthorizationCapabilities {
 
   bool allows(AppCapability capability) => _capabilities.contains(capability);
 
+  /// What may be done to one particular product: these capabilities, less
+  /// every way of changing it when it is a *system* product — one a feature
+  /// owns and writes (a recharge service product, a provider's card). The
+  /// server refuses those writes for every role, managers included; this is
+  /// what keeps the buttons from being offered in the first place.
+  AuthorizationCapabilities forProduct({required bool isSystem}) {
+    if (!isSystem) {
+      return this;
+    }
+    return AuthorizationCapabilities._(
+      Set.of(_capabilities)..removeAll(const {
+        AppCapability.changeProduct,
+        AppCapability.createProductVariant,
+        AppCapability.changeProductVariant,
+        AppCapability.createStockMovement,
+      }),
+    );
+  }
+
   bool get canCollectCustomerDebt => allows(AppCapability.collectCustomerDebt);
 
   bool get canViewDashboard => allows(AppCapability.viewDashboard);

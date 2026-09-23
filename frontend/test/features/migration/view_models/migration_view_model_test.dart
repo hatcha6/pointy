@@ -33,6 +33,8 @@ void main() {
       'customer',
       'party_balance',
       'sale',
+      'stock',
+      'money_account',
     ],
     'supports_stock_filter': true,
     'analysis': const {
@@ -262,10 +264,10 @@ void main() {
           'customer',
           'party_balance',
         });
-        // Cost without quantity travels with the scope. Offered as a separate
-        // checkbox it would be the one nobody ticks, and the shop would open
-        // with no cost on anything.
-        expect(viewModel.stockSource, MigrationStockSource.costOnly);
+        // No quantities, but the costs: the two travel with the scope as two
+        // separate answers, because as one they were confused in the field.
+        expect(viewModel.stockSource, MigrationStockSource.none);
+        expect(viewModel.carryCosts, isTrue);
       },
     );
 
@@ -362,6 +364,101 @@ void main() {
       final options =
           repository.startedRuns.single['options']! as Map<String, Object?>;
       expect(options['only_stocked_products'], isTrue);
+    });
+  });
+
+  group('costs and cash boxes', () {
+    // The field report: products arrived without their costs, and a cash box
+    // arrived with a figure nobody wanted. Both came from a hand-edited list.
+
+    test('choosing no quantities does not switch the costs off', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+
+      viewModel.setStockSource(MigrationStockSource.none);
+
+      expect(viewModel.carryCosts, isTrue);
+      expect(viewModel.canCarryCosts, isTrue);
+    });
+
+    test('the run says whether to carry costs, every time', () async {
+      final repository = FakeMigrationRepository(sources: [sourceJson()]);
+      final viewModel = await loaded(repository);
+      viewModel.setStockSource(MigrationStockSource.none);
+      viewModel.setCarryCosts(false);
+
+      await viewModel.startRun(dryRun: true);
+
+      final options =
+          repository.startedRuns.single['options']! as Map<String, Object?>;
+      expect(options['stock_source'], 'none');
+      expect(options['carry_costs'], isFalse);
+    });
+
+    test('the old cost-only spelling reads as no quantities plus costs', () {
+      expect(
+        MigrationStockSource.fromWire('cost_only'),
+        MigrationStockSource.none,
+      );
+    });
+
+    test('a cash box without its history is refused, with a way out', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+      viewModel.applyScope('opening_position');
+
+      viewModel.toggleEntity('money_account', true);
+
+      expect(viewModel.moneyAccountConflict, isTrue);
+      expect(viewModel.canStartRun, isFalse);
+      expect(viewModel.offersOpeningPosition, isTrue);
+
+      viewModel.applyScope('opening_position');
+
+      expect(viewModel.moneyAccountConflict, isFalse);
+      expect(viewModel.selectedEntities, isNot(contains('money_account')));
+    });
+
+    test('a cash box alongside its history is fine', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+      viewModel.applyScope('everything');
+
+      viewModel.toggleEntity('money_account', true);
+
+      expect(viewModel.moneyAccountConflict, isFalse);
+    });
+  });
+
+  group('costs onto an existing catalogue', () {
+    // A shop that went live without its costs uploads the file again. The
+    // costs-only scope attaches to the products already there — so nothing
+    // may be closed over, implied or offered that would import a catalogue.
+
+    test('it walks the stock pass alone and implies nothing', () async {
+      final viewModel = await loaded(
+        FakeMigrationRepository(sources: [sourceJson()]),
+      );
+
+      viewModel.applyScope('costs_only');
+
+      expect(viewModel.attachesToCatalogue, isTrue);
+      expect(viewModel.selectedEntities, {'stock'});
+      expect(viewModel.impliedEntities, isEmpty);
+      expect(viewModel.canCarryCosts, isFalse);
+    });
+
+    test('it is sent as the scope, which is what the server keys on', () async {
+      final repository = FakeMigrationRepository(sources: [sourceJson()]);
+      final viewModel = await loaded(repository);
+      viewModel.applyScope('costs_only');
+
+      await viewModel.startRun(dryRun: true);
+
+      expect(repository.startedRuns.single['scope'], 'costs_only');
     });
   });
 }

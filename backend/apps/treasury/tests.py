@@ -398,3 +398,82 @@ class TreasuryApiTests(TreasuryTestCase):
             url, {"start": self.today.isoformat(), "end": "2020-01-01"}
         )
         self.assertEqual(response.status_code, 400)
+
+
+class MoneyAccountEditTests(TreasuryTestCase):
+    """Editing an account that is not its kind's default.
+
+    DRF turned the conditional "one default per kind" constraint into a plain
+    uniqueness check on ``kind``, so every edit to a second cash box or a second
+    bank came back 400 — whatever was typed. It surfaced on an imported
+    "الخزينة الرئيسية" whose opening balance the owner tried to set to zero.
+    """
+
+    def setUp(self):
+        super().setUp()
+        ensure_role_groups()
+        accountant = User.objects.create_user(username="acc", password="pw")
+        accountant.groups.add(Group.objects.get(name=ACCOUNTANT_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(accountant)
+        self.second = MoneyAccount.objects.create(
+            name="الخزينة الرئيسية",
+            kind=MoneyAccount.Kind.CASH,
+            opening_balance=Decimal("71751.50"),
+            opening_at=self.today - timedelta(days=400),
+        )
+
+    def _patch(self, account, **changes):
+        # The editor sends the whole form, not just what changed.
+        payload = {
+            "name": account.name,
+            "kind": account.kind,
+            "bank_name": "",
+            "bank_slug": "",
+            "account_number": "",
+            "iban": "",
+            "opening_balance": str(account.opening_balance),
+            "opening_at": account.opening_at.isoformat(),
+            "is_default": account.is_default,
+            "is_active": account.is_active,
+            "display_order": account.display_order,
+            "notes": account.notes,
+        }
+        payload.update(changes)
+        return self.client.patch(
+            reverse("money-account-detail", args=[account.pk]), payload, format="json"
+        )
+
+    def test_a_second_cash_box_can_have_its_opening_balance_zeroed(self):
+        response = self._patch(self.second, opening_balance="0.00")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.second.refresh_from_db()
+        self.assertEqual(self.second.opening_balance, Decimal("0.00"))
+        # The seeded box is still the default; nothing else moved.
+        self.cash.refresh_from_db()
+        self.assertTrue(self.cash.is_default)
+
+    def test_making_the_second_box_the_default_moves_the_flag(self):
+        """Not a 400 and not an IntegrityError: the flag changes hands."""
+        response = self._patch(self.second, is_default=True)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.second.refresh_from_db()
+        self.cash.refresh_from_db()
+        self.assertTrue(self.second.is_default)
+        self.assertFalse(self.cash.is_default)
+
+    def test_a_new_default_takes_the_flag_on_create(self):
+        response = self.client.post(
+            reverse("money-account-list"),
+            {"name": "مصرف الجمهورية", "kind": "bank", "is_default": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.bank.refresh_from_db()
+        self.assertFalse(self.bank.is_default)
+        self.assertEqual(
+            MoneyAccount.objects.filter(kind="bank", is_default=True).count(), 1
+        )

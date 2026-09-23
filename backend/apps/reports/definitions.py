@@ -184,6 +184,16 @@ REPORT_DEFINITIONS = {
             ReportType.REGISTER_CLOSURE,
         ),
     ),
+    ReportType.BALANCE_SHEET: ReportDefinition(
+        key=ReportType.BALANCE_SHEET,
+        category="close",
+        # What the whole shop is worth, on one page: stock, every till and
+        # bank, every debt in both directions and the staff's. Gated like the
+        # month-end pack, on the reporting permission itself, because it is a
+        # shop-wide close document rather than a view of any one of its lines.
+        permissions=("reports.view_reportrun",),
+        headline=("net_position", "total_assets", "total_liabilities", "zakat_due"),
+    ),
     ReportType.UNIT_AGING: ReportDefinition(
         key=ReportType.UNIT_AGING,
         category="inventory",

@@ -1279,6 +1279,9 @@ def _integration_notifications(now):
                 payload={
                     "provider": row.provider,
                     "card_no": row.subscriber_ref,
+                    # What was sold, for a card off a provider's shelf that has
+                    # no card number of its own: «ليبيانا 10 دينار».
+                    "item": row.option_label,
                     "amount": _money(row.cost),
                     "sold_at": row.created_at.isoformat(),
                     "order_id": row.order_line.order_id,
@@ -1312,6 +1315,7 @@ def _integration_notifications(now):
                 payload={
                     "provider": row.provider,
                     "card_no": row.subscriber_ref,
+                    "item": row.option_label,
                     "amount": _money(row.cost),
                     "sent_at": row.submitted_at.isoformat() if row.submitted_at else "",
                     "order_id": row.order_line.order_id,

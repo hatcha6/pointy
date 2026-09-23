@@ -32,6 +32,9 @@ class ReportRun(TimeStampedModel):
         UNIT_MARGIN = "unit_margin", "Margin per identified article"
         UNIT_LEDGER = "unit_ledger", "One article's life"
         CONSIGNMENT_LEDGER = "consignment_ledger", "Consignment ledger and payables"
+        # الميزانية العمومية: what the shop owns and owes at both ends of a
+        # period, with the zakat reckoned at its close.
+        BALANCE_SHEET = "balance_sheet", "Balance sheet and zakat"
 
     class OutputFormat(models.TextChoices):
         JSON = "json", "JSON"

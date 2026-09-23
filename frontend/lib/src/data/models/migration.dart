@@ -459,6 +459,8 @@ class MigrationEntitySummary {
     required this.updated,
     required this.skipped,
     required this.failed,
+    this.costed = 0,
+    this.uncosted = 0,
   });
 
   final String entityType;
@@ -466,6 +468,12 @@ class MigrationEntitySummary {
   final int updated;
   final int skipped;
   final int failed;
+
+  /// On the stock entity only: products that came across with a cost, and
+  /// ones the old system itself had no cost for. What the owner checks before
+  /// trusting the first day's profit.
+  final int costed;
+  final int uncosted;
 
   int get total => created + updated + skipped + failed;
 }
@@ -510,6 +518,13 @@ class MigrationRun {
   bool get partial => status == 'partial';
   bool get failed => status == 'failed';
 
+  /// The stock pass's cost tally, when this run carried costs.
+  MigrationEntitySummary? get costTally {
+    final stock = summary['stock'];
+    if (stock == null || stock.costed + stock.uncosted == 0) return null;
+    return stock;
+  }
+
   int get totalCreated => summary.values.fold(0, (sum, s) => sum + s.created);
   int get totalUpdated => summary.values.fold(0, (sum, s) => sum + s.updated);
   int get totalFailed => summary.values.fold(0, (sum, s) => sum + s.failed);
@@ -528,6 +543,8 @@ class MigrationRun {
             updated: _int(value['updated']),
             skipped: _int(value['skipped']),
             failed: _int(value['failed']),
+            costed: _int(value['costed']),
+            uncosted: _int(value['uncosted']),
           );
         }
       });

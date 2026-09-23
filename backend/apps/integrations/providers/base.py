@@ -33,6 +33,33 @@ ERROR_INSUFFICIENT_FLOAT = "insufficient_float"  # the agency float cannot cover
 #: failure: a charge may have left the float, so the only safe reaction is to
 #: stop and go looking, never to try again.
 ERROR_INDETERMINATE = "indeterminate"
+#: The provider knows the password is right and still will not let this
+#: machine in until the owner confirms it once with a one-time code. Qareeb
+#: answers a password login from a device it has not seen with exactly that.
+#: Not a wrong password, and not something a till can fix: it is a step in
+#: Shop Settings, done once.
+ERROR_DEVICE_VERIFICATION = "device_verification_required"
+#: The provider demanded proof that the request came from its OWN app —
+#: Firebase App Check, Play Integrity, App Attest. Nothing outside a phone can
+#: produce that, so a shop cannot fix it and neither can a retry. Kept apart
+#: from ``unauthorized`` so the day a provider closes its API this way it is
+#: reported as what it is, not as a password somebody mistyped.
+ERROR_ATTESTATION_REQUIRED = "attestation_required"
+#: The provider has none of this item right now. A definite refusal: nothing
+#: was bought, and the shelf it came from is out of date.
+ERROR_OUT_OF_STOCK = "out_of_stock"
+#: The provider wants the agency's purchase PIN and none is stored.
+ERROR_PIN_REQUIRED = "pin_required"
+#: The code the owner typed while verifying a device — the picture's text or
+#: the one-time code — was wrong or has expired.
+ERROR_VERIFICATION_REJECTED = "verification_rejected"
+#: Another sale is using the provider's single shared basket right now.
+#: Nothing was sent; the same line can be tried again in a moment.
+ERROR_BUSY = "busy"
+#: The login is acting as a different profile — a different shop's wallet —
+#: from the one the owner chose. Nothing was bought: paying from the wrong
+#: shop's float is worse than not paying at all.
+ERROR_PROFILE_MISMATCH = "profile_mismatch"
 
 
 @dataclass(frozen=True)
@@ -68,7 +95,10 @@ class CardInfo:
     #: Display sugar for a multi-line picker; never an identifier.
     label: str = ""
     holder_name: str = ""
-    #: Stored value already sitting on the line, for providers that sell it.
+    #: The subscriber's own credit with the provider — money already sitting
+    #: on the line or card, as distinct from the agency float. LNET prints it
+    #: on every search row; HD Box keeps it on the card-detail page, so its
+    #: lookups leave this blank and the card view fills it from the profile.
     card_balance: Decimal | None = None
 
 
@@ -115,6 +145,15 @@ class PurchaseEntry:
     package_name: str = ""
     operator_name: str = ""
     is_ours: bool = False        # operator_name matches this account
+    #: What was bought, in the provider's own code, when the log names it.
+    #: Two different things can cost the same — a 10-dinar Libyana card and a
+    #: 10-dinar Almadar card both draw 9.70 — so where both sides know it,
+    #: matching must agree on this too, or one sale confirms the other.
+    package_id: str = ""
+    #: What a receipt prints for this purchase, when the log carries it — a
+    #: voucher's PIN and serial. It is how a card whose checkout reply was
+    #: lost still reaches its customer once reconciliation finds it.
+    printed: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -323,6 +362,103 @@ class OptionQuote:
     face_value: Decimal | None = None
 
 
+@dataclass(frozen=True)
+class VoucherItem:
+    """One thing a provider sells off the shelf: a 10-dinar Libyana card.
+
+    ``code`` is the provider's own id for it and the only thing a purchase
+    needs. Money is in LYD whatever the card's face is written in — Qareeb
+    prices a 100-dollar PSN card at 977 dinars — so ``face_amount`` is a label
+    in ``VoucherBrand.currency`` and never arithmetic.
+    """
+
+    code: str
+    label: str
+    #: What the agency float pays for one.
+    cost: Decimal | None = None
+    #: What the provider recommends charging the customer.
+    suggested_price: Decimal | None = None
+    face_amount: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class VoucherBrand:
+    """An operator whose cards a provider sells — Libyana, PSN, iTunes."""
+
+    code: str
+    name: str
+    name_en: str = ""
+    #: The provider's own grouping ("الاتصالات", "الدولية"), as it labels it.
+    category: str = ""
+    currency: str = "LYD"
+    logo_path: str = ""
+    items: tuple[VoucherItem, ...] = ()
+    #: True when ``items`` IS the brand's in-stock list as of this read.
+    #:
+    #: False means this read did not say — Qareeb's listing names every brand
+    #: it has stock of, but only spells out the items of its first category;
+    #: the rest are behind one call per brand. An empty ``items`` with this
+    #: False is "not asked", never "sold out", and must not be read as either.
+    items_known: bool = False
+
+
+@dataclass(frozen=True)
+class VoucherCatalogResult:
+    ok: bool
+    brands: tuple[VoucherBrand, ...] = ()
+    error_code: str = ""
+    error_detail: str = ""
+
+
+@dataclass(frozen=True)
+class ProviderProfile:
+    """One identity a single login can act as — its own, or a shop it works for.
+
+    Qareeb lets one phone number be a person and an employee of several shops,
+    each with its own wallet. Which one a purchase is paid from is the whole
+    question, so the owner chooses it and the driver checks it.
+    """
+
+    profile_id: str
+    name: str = ""
+    #: The provider's own word for it ("individual", "store_employee").
+    kind: str = ""
+    #: The one the provider currently acts as for this login.
+    is_current: bool = False
+
+
+@dataclass(frozen=True)
+class ProfilesResult:
+    ok: bool
+    profiles: tuple[ProviderProfile, ...] = ()
+    error_code: str = ""
+    error_detail: str = ""
+
+
+@dataclass(frozen=True)
+class VerificationChallenge:
+    """The picture a human must read before the provider will send a code."""
+
+    ok: bool
+    challenge_ref: str = ""
+    image: bytes = b""
+    image_type: str = ""
+    help_text: str = ""
+    error_code: str = ""
+    error_detail: str = ""
+
+
+@dataclass(frozen=True)
+class VerificationResult:
+    """How far confirming a new device got."""
+
+    ok: bool
+    #: Minutes the one-time code stays valid, when the provider said.
+    expires_in: int | None = None
+    error_code: str = ""
+    error_detail: str = ""
+
+
 #: The two history feeds a provider may be able to answer.
 HISTORY_PURCHASES = "purchases"
 HISTORY_STATUSES = "statuses"
@@ -434,8 +570,41 @@ class IntegrationProvider:
         ``expected_cost`` is what the till quoted and the customer paid. A
         provider whose live price has moved since the quote must refuse rather
         than silently spend a different amount of the shop's money.
+
+        A voucher provider is handed an empty ``card_no``: a card sold off the
+        shelf belongs to nobody until the customer scratches it.
         """
         return RechargeResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    # --- vouchers ----------------------------------------------------------
+    def voucher_catalog(self) -> VoucherCatalogResult:
+        """Every brand the provider has stock of, as of now. Must never raise."""
+        return VoucherCatalogResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def voucher_brand(self, brand_code: str) -> VoucherCatalogResult:
+        """One brand with its items spelled out. Must never raise.
+
+        Answers with a single brand whose ``items_known`` is True, or not ok.
+        """
+        return VoucherCatalogResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    # --- which identity the login acts as -------------------------------------
+    def profiles(self) -> ProfilesResult:
+        """Every profile this login may act as. Must never raise."""
+        return ProfilesResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    # --- confirming a new device --------------------------------------------
+    def start_verification(self) -> VerificationChallenge:
+        """Ask the provider for the picture that gates a one-time code."""
+        return VerificationChallenge(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def send_verification_code(self, challenge_ref: str, answer: str):
+        """Answer the picture; the provider texts the owner a code."""
+        return VerificationResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def confirm_verification(self, code: str) -> VerificationResult:
+        """Hand the texted code back. On success this device is trusted."""
+        return VerificationResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
 
 class PlannedProvider(IntegrationProvider):

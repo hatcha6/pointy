@@ -57,6 +57,13 @@ OP_OFFERS = "offers"
 OP_PROFILE = "profile"
 OP_HISTORY = "history"
 OP_RECHARGE = "recharge"
+#: Reading a provider's shelf — the whole listing, or one brand of it.
+OP_VOUCHERS = "vouchers"
+OP_VOUCHER_BRAND = "voucher_brand"
+#: Confirming a new device: the picture, the texted code, the answer.
+OP_VERIFY = "verify"
+#: Reading which identities a login may act as.
+OP_PROFILES = "profiles"
 
 #: The methods worth a row. ``recharge`` is the money one and is treated apart.
 OPERATIONS = {
@@ -66,6 +73,12 @@ OPERATIONS = {
     "subscriber_profile": OP_PROFILE,
     "purchase_history": OP_HISTORY,
     "recharge": OP_RECHARGE,
+    "voucher_catalog": OP_VOUCHERS,
+    "voucher_brand": OP_VOUCHER_BRAND,
+    "profiles": OP_PROFILES,
+    "start_verification": OP_VERIFY,
+    "send_verification_code": OP_VERIFY,
+    "confirm_verification": OP_VERIFY,
 }
 
 WRITE_OPERATIONS = frozenset({OP_RECHARGE})
@@ -312,6 +325,12 @@ def _wrap(method, operation):
         # Drivers reach this through ``self._note``; it is deliberately a plain
         # attribute on a per-call driver instance rather than thread state,
         # because ``provider_for()`` builds a fresh driver for every call.
+        #
+        # Restored on the way out: a driver method may call another observed
+        # one (Qareeb checks which profile it is buying as mid-purchase), and
+        # the purchase's own steps after that must land on the purchase's row
+        # — "submit" is the step that says a charge may be out.
+        previous = getattr(self, "_call", None)
         self._call = report
         started = time.monotonic()
         try:
@@ -322,6 +341,8 @@ def _wrap(method, operation):
             report.detail = f"{type(exc).__name__}: {exc}"
             record(report)
             raise
+        finally:
+            self._call = previous
         report.duration_ms = int((time.monotonic() - started) * 1000)
         _read_outcome(report, result)
         record(report)

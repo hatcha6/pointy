@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from urllib.parse import parse_qs, urlparse
 
 import requests
 from datetime import timedelta
@@ -11,9 +12,10 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
 from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from rest_framework import serializers
@@ -53,6 +55,7 @@ from .reconciliation import reconcile_account
 from .models import (
     IntegrationAccount,
     IntegrationFulfillment,
+    IntegrationSearch,
     IntegrationSubscriber,
 )
 from .providers import is_implemented, provider_for
@@ -175,10 +178,15 @@ class CatalogTests(TestCase):
     def test_availability_matches_which_drivers_are_real(self):
         self.assertTrue(is_implemented("hdbox"))
         self.assertTrue(is_implemented("lnet"))
-        self.assertFalse(is_implemented("qareeb"))
+        self.assertTrue(is_implemented("qareeb"))
+        # A key with no driver answers through the planned-provider stub.
+        self.assertFalse(is_implemented("future"))
 
-    def test_planned_providers_say_why(self):
-        self.assertEqual(catalog.QAREEB.blocked_reason, catalog.BLOCKED_AWAITING_ACCESS)
+    def test_every_catalog_provider_is_backed_by_a_real_driver(self):
+        # Availability and registration are one statement: an available
+        # provider without a driver would take credentials and do nothing.
+        for spec in catalog.PROVIDERS:
+            self.assertEqual(spec.is_available, is_implemented(spec.key), spec.key)
 
     def test_an_available_provider_gives_no_blocked_reason(self):
         # The two fields are one statement. A provider that works while still
@@ -309,7 +317,9 @@ class HdBoxDriverTests(TestCase):
 
 class PlannedProviderTests(TestCase):
     def test_planned_provider_refuses_uniformly(self):
-        account = IntegrationAccount.objects.create(provider="qareeb")
+        # Every catalog provider has a driver today; a key without one is what
+        # a planned provider looks like to the registry.
+        account = IntegrationAccount(provider="future")
         driver = provider_for(account)
         self.assertEqual(driver.probe().error_code, ERROR_UNAVAILABLE)
         self.assertEqual(driver.lookup("1").error_code, ERROR_UNAVAILABLE)
@@ -375,8 +385,8 @@ class IntegrationApiTests(TestCase):
         by_key = {p["key"]: p for p in resp.data["providers"]}
         self.assertTrue(by_key["hdbox"]["is_configurable"])
         self.assertTrue(by_key["lnet"]["is_configurable"])
-        self.assertFalse(by_key["qareeb"]["is_configurable"])
-        self.assertEqual(by_key["qareeb"]["blocked_reason"], "awaiting_access")
+        self.assertTrue(by_key["qareeb"]["is_configurable"])
+        self.assertEqual(by_key["qareeb"]["blocked_reason"], "")
         self.assertIsNone(by_key["hdbox"]["account"])
 
     def test_cashier_cannot_read_integration_settings(self):
@@ -418,14 +428,22 @@ class IntegrationApiTests(TestCase):
         self.assertEqual(account.password, "pw")
 
     def test_planned_provider_cannot_be_configured(self):
-        self.client.force_authenticate(self.manager)
-        resp = self.client.put(
-            "/api/integrations/qareeb/",
-            {"username": "x", "password": "y"},
-            format="json",
+        planned = catalog.ProviderSpec(
+            key="future",
+            availability=catalog.AVAILABILITY_PLANNED,
+            fields=(catalog.FIELD_USERNAME, catalog.FIELD_PASSWORD),
+            secret_fields=frozenset({catalog.FIELD_PASSWORD}),
+            blocked_reason=catalog.BLOCKED_AWAITING_ACCESS,
         )
+        self.client.force_authenticate(self.manager)
+        with mock.patch.dict(catalog.PROVIDERS_BY_KEY, {"future": planned}):
+            resp = self.client.put(
+                "/api/integrations/future/",
+                {"username": "x", "password": "y"},
+                format="json",
+            )
         self.assertEqual(resp.status_code, 409)
-        self.assertFalse(IntegrationAccount.objects.filter(provider="qareeb").exists())
+        self.assertFalse(IntegrationAccount.objects.filter(provider="future").exists())
 
     def test_unknown_provider_is_404(self):
         self.client.force_authenticate(self.manager)
@@ -516,6 +534,29 @@ DETAIL_FORM = """
     <label>Total pay</label><input value="750.00" disabled/></div>
 </div>
 """
+
+HDBOX_CARD_JSON = (
+    '{"status":"success","total":1,"rows":[{"cardNo":210906803499,'
+    '"status":"On hold","statusId":6,"startDay":1669500000,'
+    '"expireDay":1785621599,"packageName":"HDBOX Full package"}]}'
+)
+
+
+def hdbox_card_session(detail=DETAIL_FORM, *, card_json=HDBOX_CARD_JSON):
+    """Everything the till's card call reads, for one HD Box card.
+
+    The card view reads the renew form and the card detail AT THE SAME TIME,
+    so these are routed by path rather than handed out in order.
+    """
+    return _FakeSession(
+        _FakeResponse(AUTHED_PAGE),
+        routes={
+            LIST_PATH: _FakeResponse(card_json),
+            RENEW_VIEW_PATH: _FakeResponse(RENEW_FORM),
+            DETAIL_VIEW_PATH: _FakeResponse(detail),
+        },
+    )
+
 
 BUY_LOG = (
     '{"message":"Success!","rows":['
@@ -805,22 +846,7 @@ class TillApiTests(TestCase):
         make_account()
 
     def test_card_call_returns_state_prices_and_the_cart_variant(self):
-        card_json = (
-            '{"status":"success","total":1,"rows":[{"cardNo":210906803499,'
-            '"status":"On hold","statusId":6,"startDay":1669500000,'
-            '"expireDay":1785621599,"packageName":"HDBOX Full package"}]}'
-        )
-        # The card view reads the renew form and the card detail AT THE SAME
-        # TIME, so these are routed by path rather than handed out in order.
-        session = _FakeSession(
-            _FakeResponse(AUTHED_PAGE),
-            routes={
-                LIST_PATH: _FakeResponse(card_json),
-                RENEW_VIEW_PATH: _FakeResponse(RENEW_FORM),
-                DETAIL_VIEW_PATH: _FakeResponse(DETAIL_FORM),
-            },
-        )
-        with patch_session(session):
+        with patch_session(hdbox_card_session()):
             resp = self.client.get("/api/integrations/hdbox/card/?card_no=210906803499")
 
         self.assertEqual(resp.status_code, 200)
@@ -847,6 +873,46 @@ class TillApiTests(TestCase):
         offer = resp.data["offers"][0]
         self.assertIn("cost", offer)
         self.assertIn("price", offer)
+
+    def test_the_card_carries_the_subscribers_own_balance(self):
+        """HD Box keeps a card's credit on the detail page, not the card list.
+
+        The list row the lookup reads has no balance at all, so a card view
+        that rendered only the row would show the till nothing — for a figure
+        it had already fetched, from the detail page read beside the offers.
+        """
+        detail = DETAIL_FORM.replace(
+            '<label>Balance</label><input value="0.00"',
+            '<label>Balance</label><input value="15.00"',
+        )
+        with patch_session(hdbox_card_session(detail)):
+            resp = self.client.get("/api/integrations/hdbox/card/?card_no=210906803499")
+
+        self.assertTrue(resp.data["ok"], resp.data)
+        self.assertEqual(resp.data["card"]["card_balance"], Decimal("15.00"))
+        # The subscriber's credit, not the agency float: that one is the
+        # account's, and this shop has never had it read.
+        self.assertIsNone(resp.data["balance"])
+
+    def test_an_unread_balance_is_blank_never_remembered(self):
+        """A failed detail page must not resurrect an older lookup's balance.
+
+        The subscriber row keeps a snapshot of the last balance it was told,
+        and showing that as the customer's credit today would be a number the
+        provider is no longer saying — worse than showing nothing.
+        """
+        IntegrationSubscriber.objects.create(
+            account=IntegrationAccount.objects.get(provider="hdbox"),
+            provider="hdbox",
+            subscriber_ref="210906803499",
+            card_balance=Decimal("40.00"),
+        )
+        error_page = "<html><title>ERROR</title>Sorry!We made a mistake.</html>"
+        with patch_session(hdbox_card_session(error_page)):
+            resp = self.client.get("/api/integrations/hdbox/card/?card_no=210906803499")
+
+        self.assertTrue(resp.data["ok"], resp.data)
+        self.assertIsNone(resp.data["card"]["card_balance"])
 
     def test_a_cashier_can_read_history_without_the_manage_right(self):
         session = _FakeSession(_FakeResponse(AUTHED_PAGE), [_FakeResponse(BUY_LOG)])
@@ -972,6 +1038,287 @@ class LnetCardViewTests(TestCase):
         self.assertTrue(resp.data["ok"])
         self.assertTrue(resp.data["needs_selection"])
         self.assertEqual(len(resp.data["candidates"]), 3)
+
+    def test_the_line_carries_the_money_already_on_it(self):
+        one_line = lnet_users_page(
+            _lnet_user_row(
+                "alhussainbasheir", "214737",
+                start="2026-08-24", finish="2026-09-23",
+                status="Active", plan="Unlimited Home Basic", money="12.50",
+            )
+        )
+        with patch_lnet(lnet_session(users=one_line)):
+            resp = self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854"
+            )
+
+        self.assertTrue(resp.data["ok"], resp.data)
+        self.assertEqual(resp.data["card"]["card_balance"], Decimal("12.50"))
+
+    def test_every_candidate_line_says_what_is_on_it(self):
+        """A household picking between lines sees each one's own credit."""
+        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+            resp = self.client.get("/api/integrations/lnet/card/?card_no=basheir")
+
+        self.assertEqual(
+            [line["card_balance"] for line in resp.data["candidates"]],
+            [Decimal("12.50"), Decimal("0"), Decimal("0")],
+        )
+
+
+class RecentSearchTests(TestCase):
+    """The recharge screen opens on the searches that worked, not a blank box."""
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.cashier = User.objects.create_user(username="csh-recent", password="x")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.cashier)
+        self.account = make_account()
+
+    def _look_up(self, card_no="210906803499", **session):
+        with patch_session(hdbox_card_session(**session)):
+            return self.client.get(f"/api/integrations/hdbox/card/?card_no={card_no}")
+
+    def _recent(self, provider="hdbox", **params):
+        return self.client.get(f"/api/integrations/{provider}/searches/", params)
+
+    def _seed(self, count, *, start=0):
+        """``count`` distinct searches, the last one newest."""
+        base = timezone.now() - timedelta(days=1)
+        return [
+            IntegrationSearch.objects.create(
+                account=self.account,
+                term=f"2109{index:08d}",
+                card_no=f"2109{index:08d}",
+                last_searched_at=base + timedelta(minutes=index),
+            )
+            for index in range(start, start + count)
+        ]
+
+    def test_a_search_that_found_a_card_is_remembered(self):
+        self.assertTrue(self._look_up().data["ok"])
+
+        resp = self._recent()
+        self.assertEqual(resp.status_code, 200)
+        [entry] = resp.data["results"]
+        self.assertEqual(entry["term"], "210906803499")
+        self.assertEqual(entry["card_no"], "210906803499")
+        self.assertEqual(entry["package_name"], "HDBOX Full package")
+        self.assertEqual(entry["match_count"], 1)
+        self.assertEqual(entry["search_count"], 1)
+        self.assertIsNone(resp.data["next"])
+
+    def test_a_search_that_found_nothing_is_not_offered_again(self):
+        resp = self._look_up(card_json='{"status":"success","total":0,"rows":[]}')
+        self.assertFalse(resp.data["ok"])
+        self.assertEqual(self._recent().data["results"], [])
+
+    def test_searching_again_moves_it_to_the_top_and_counts_it(self):
+        self._look_up("210906803499")
+        self._look_up("555500001111")
+        self._look_up("210906803499")
+
+        entries = self._recent().data["results"]
+        # One row per search, not one per run: a monthly regular is one row.
+        self.assertEqual(
+            [entry["term"] for entry in entries], ["210906803499", "555500001111"]
+        )
+        self.assertEqual(entries[0]["search_count"], 2)
+
+    def test_typing_part_of_a_number_narrows_the_list(self):
+        self._look_up("210906803499")
+        self._look_up("555500001111")
+
+        found = self._recent(search="5555").data["results"]
+        self.assertEqual([entry["term"] for entry in found], ["555500001111"])
+        self.assertEqual(self._recent(search="7777").data["results"], [])
+
+    def test_the_name_given_to_a_card_finds_its_search(self):
+        """Naming a card at the till names every search that found it."""
+        self._look_up()
+        self.client.put(
+            "/api/integrations/hdbox/subscribers/210906803499/",
+            {"display_name": "أحمد الورفلي"},
+            format="json",
+        )
+
+        [entry] = self._recent(search="الورفلي").data["results"]
+        self.assertEqual(entry["subscriber_label"], "أحمد الورفلي")
+
+    def test_a_linked_customers_name_finds_it_too(self):
+        self._look_up()
+        customer = Customer.objects.create(full_name="سالم المصراتي")
+        IntegrationSubscriber.objects.filter(subscriber_ref="210906803499").update(
+            customer=customer
+        )
+
+        [entry] = self._recent(search="المصراتي").data["results"]
+        self.assertEqual(entry["subscriber_label"], "سالم المصراتي")
+
+    def test_pages_follow_a_cursor_and_never_repeat_a_row(self):
+        """A search moving to the head mid-scroll must not come round twice.
+
+        This list is written to while it is read, which is why it pages by
+        cursor: with page numbers, the bump below would shift every row down
+        one place and hand the cashier page one's last row again on page two.
+        """
+        rows = self._seed(25)
+        first = self._recent()
+        self.assertEqual(len(first.data["results"]), 20)
+        self.assertIsNotNone(first.data["next"])
+
+        # Another till searches one of the rows not yet seen, and a new one.
+        bumped = rows[2]
+        bumped.last_searched_at = timezone.now()
+        bumped.save(update_fields=["last_searched_at"])
+        self._look_up("999900001111")
+
+        cursor = parse_qs(urlparse(first.data["next"]).query)["cursor"][0]
+        second = self._recent(cursor=cursor)
+        self.assertIsNone(second.data["next"])
+
+        seen_first = [entry["id"] for entry in first.data["results"]]
+        seen_second = [entry["id"] for entry in second.data["results"]]
+        self.assertFalse(set(seen_first) & set(seen_second))
+        # Everything that stood still was served exactly once.
+        still = {row.id for row in rows} - {bumped.id}
+        self.assertEqual(still - set(seen_first) - set(seen_second), set())
+
+    def test_each_provider_keeps_its_own(self):
+        self._look_up()
+        lnet_account()
+        self.assertEqual(self._recent("lnet").data["results"], [])
+
+    def test_an_unknown_provider_is_a_404(self):
+        self.assertEqual(self._recent("nosuch").status_code, 404)
+
+    def test_the_till_right_is_required(self):
+        stranger = get_user_model().objects.create_user(username="nobody", password="x")
+        self.client.force_authenticate(stranger)
+        self.assertEqual(self._recent().status_code, 403)
+
+    def test_two_tills_recording_the_same_new_search_fold_into_one_row(self):
+        """The insert race: the other till's row lands between our two steps.
+
+        Our update finds nothing, the other till inserts, our insert hits the
+        unique constraint. On Postgres that error aborts the transaction it
+        happens in, so it has to be confined to a savepoint — or the update
+        that folds this run into the winner's row fails too, and so does
+        every query after it in the request.
+        """
+        self._look_up()
+        real_filter = IntegrationSearch.objects.filter
+        raced = []
+
+        def filter_that_misses_once(*args, **kwargs):
+            queryset = real_filter(*args, **kwargs)
+            if not raced:
+                raced.append(True)
+                return queryset.none()
+            return queryset
+
+        with mock.patch.object(
+            IntegrationSearch.objects, "filter", side_effect=filter_that_misses_once
+        ):
+            resp = self._look_up()
+
+        self.assertTrue(resp.data["ok"], resp.data)
+        [entry] = self._recent().data["results"]
+        self.assertEqual(entry["search_count"], 2)
+
+    def test_bookkeeping_that_fails_never_fails_the_lookup(self):
+        with mock.patch.object(
+            IntegrationSearch.objects, "filter", side_effect=RuntimeError("db down")
+        ), self.assertLogs("apps.integrations.services", level="ERROR"):
+            resp = self._look_up()
+        self.assertTrue(resp.data["ok"], resp.data)
+
+    def test_a_page_costs_the_same_however_many_names_it_shows(self):
+        """Each row names its card's owner — one join, not a query per row."""
+        rows = self._seed(3)
+        for index, row in enumerate(rows):
+            subscriber = IntegrationSubscriber.objects.create(
+                account=self.account,
+                provider="hdbox",
+                subscriber_ref=row.card_no,
+                customer=Customer.objects.create(full_name=f"زبون {index}"),
+            )
+            IntegrationSearch.objects.filter(pk=row.pk).update(subscriber=subscriber)
+        self._recent()
+        with CaptureQueriesContext(connection) as few:
+            self._recent()
+
+        for index, row in enumerate(self._seed(12, start=3)):
+            subscriber = IntegrationSubscriber.objects.create(
+                account=self.account,
+                provider="hdbox",
+                subscriber_ref=f"extra-{index}",
+                customer=Customer.objects.create(full_name=f"زبون آخر {index}"),
+            )
+            IntegrationSearch.objects.filter(pk=row.pk).update(subscriber=subscriber)
+        with CaptureQueriesContext(connection) as many:
+            resp = self._recent()
+
+        self.assertTrue(all(e["subscriber_label"] for e in resp.data["results"]))
+        self.assertEqual(len(many.captured_queries), len(few.captured_queries))
+
+
+class LnetRecentSearchTests(TestCase):
+    """LNET's searches carry what the cashier said the number was."""
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.cashier = User.objects.create_user(username="csh-lnet-recent", password="x")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.cashier)
+        lnet_account()
+
+    def _recent(self):
+        return self.client.get("/api/integrations/lnet/searches/").data["results"]
+
+    def test_a_phone_search_remembers_the_line_it_found(self):
+        with patch_lnet(lnet_session()):
+            self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854&search_by=mobile"
+            )
+
+        [entry] = self._recent()
+        self.assertEqual(entry["term"], "0910682854")
+        self.assertEqual(entry["search_by"], "mobile")
+        # What it found is not what was typed — and both are worth showing.
+        self.assertEqual(entry["card_no"], "alhussainbasheir")
+        self.assertEqual(entry["match_count"], 1)
+
+    def test_a_household_is_remembered_as_several_lines(self):
+        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+            resp = self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854&search_by=mobile"
+            )
+        self.assertTrue(resp.data["needs_selection"])
+
+        [entry] = self._recent()
+        self.assertEqual(entry["match_count"], 3)
+        # No single line to name: running it again is how the till gets back
+        # to the choice.
+        self.assertEqual(entry["card_no"], "")
+
+    def test_the_same_digits_asked_two_ways_are_two_searches(self):
+        with patch_lnet(lnet_session()):
+            self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854&search_by=mobile"
+            )
+            self.client.get(
+                "/api/integrations/lnet/card/?card_no=0910682854&search_by=contract_number"
+            )
+        self.assertEqual(
+            sorted(entry["search_by"] for entry in self._recent()),
+            ["contract_number", "mobile"],
+        )
 
 
 class SellingPriceTests(TestCase):

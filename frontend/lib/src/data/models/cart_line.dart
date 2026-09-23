@@ -194,6 +194,16 @@ class CartLine {
   /// Is this line a top-up bought from an outside provider?
   bool get isIntegrationRecharge => integration != null;
 
+  /// Is this line a card off a provider's shelf (Qareeb)? Sold from the
+  /// catalog, so it carries no [integration] — the server knows which card
+  /// the variant is and buys it the moment the sale is recorded.
+  bool get isVoucher => variant.productDetail?.isVoucher ?? false;
+
+  /// A line a provider performs after the sale: a top-up or a card. Its
+  /// receipt waits for the provider's answer, because that answer — a PIN, a
+  /// new term — is printed beneath it.
+  bool get isProviderLine => isIntegrationRecharge || isVoucher;
+
   /// Has a lot been pinned to this line rather than left to FEFO?
   bool get hasPinnedBatch => stockBatchId != null;
 
@@ -202,10 +212,11 @@ class CartLine {
   /// One article is one article. The `+`/`−` hotkeys and the quantity sheet are
   /// both suppressed for these lines — a serialized line whose quantity said 2
   /// would be a claim to hold two handsets with the same IMEI.
-  /// A recharge is one top-up of one card. Quantity two would mean two
-  /// separate purchases from the provider, each with its own cost and its own
-  /// confirmation — so it is a second line, never a bigger number on the first.
-  bool get allowsQuantityEdit => !isSerialized && !isIntegrationRecharge;
+  /// A recharge is one top-up of one card, and a provider's card is one card
+  /// with one PIN. Quantity two would mean two separate purchases from the
+  /// provider, each with its own cost and its own confirmation — so it is a
+  /// second line, never a bigger number on the first.
+  bool get allowsQuantityEdit => !isSerialized && !isProviderLine;
 
   /// Quantity converted to the product's base unit (for stock-style display).
   double get baseQuantity => quantity * unitFactor;

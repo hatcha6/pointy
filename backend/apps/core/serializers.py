@@ -427,16 +427,38 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
     # several, and it should not need a second call to find out which. Rides
     # on shop settings because every till already loads them.
     connected_integrations = serializers.SerializerMethodField()
+    # The subset the till draws a top-up button for: providers that look a
+    # customer's line up. A provider that sells cards off a shelf (Qareeb) is
+    # connected — its float is topped up from Expenses like any other — but
+    # has no top-up screen: its cards are products in the catalog.
+    lookup_integrations = serializers.SerializerMethodField()
+
+    def _connected_accounts(self):
+        cached = getattr(self, "_connected_integration_accounts", None)
+        if cached is None:
+            from apps.integrations.models import IntegrationAccount
+
+            cached = [
+                account
+                for account in IntegrationAccount.objects.filter(
+                    is_active=True
+                ).order_by("provider")
+                if account.is_configured
+            ]
+            self._connected_integration_accounts = cached
+        return cached
 
     def get_connected_integrations(self, settings) -> list:
-        from apps.integrations.models import IntegrationAccount
+        return [account.provider for account in self._connected_accounts()]
+
+    def get_lookup_integrations(self, settings) -> list:
+        from apps.integrations import catalog as provider_catalog
 
         return [
             account.provider
-            for account in IntegrationAccount.objects.filter(
-                is_active=True
-            ).order_by("provider")
-            if account.is_configured
+            for account in self._connected_accounts()
+            if account.spec is not None
+            and provider_catalog.CAPABILITY_LOOKUP in account.spec.capabilities
         ]
 
     def get_default_payment_terms(self, settings) -> dict:
@@ -585,6 +607,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "default_payment_terms_basis",
             "default_payment_terms",
             "connected_integrations",
+            "lookup_integrations",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
             # Ceiling on the discount a cashier may take off one invoice at the
@@ -650,6 +673,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "logo_attachment",
             "default_payment_terms",
             "connected_integrations",
+            "lookup_integrations",
             "updated_at",
         ]
 

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db.models import Case, DecimalField, F, Q, Sum, Value, When
+from django.db.models import Case, Count, DecimalField, F, Q, Sum, Value, When
 from django.db.models.functions import Greatest
 
 from apps.documents.statuses import DocumentStatus
@@ -352,6 +352,16 @@ def consignor_claims_unassessed(as_of=None) -> int:
     return open_incidents(as_of).filter(is_assessed=False).count()
 
 
+def _custody_units(as_of=None):
+    """Consigned articles on the shelf — the rows both custody figures read."""
+    rows = StockUnit.objects.filter(
+        is_consignment=True, status__in=StockUnit.ON_HAND_STATUSES
+    )
+    if as_of is not None:
+        rows = rows.filter(acquired_at__lte=as_of)
+    return rows
+
+
 def custody_exposure(as_of=None) -> dict:
     """Goods held for other people: how many, and worth how much to them.
 
@@ -359,15 +369,28 @@ def custody_exposure(as_of=None) -> dict:
     the number that matters for an insurance conversation or a claim is what the
     owner and the shop agreed the thing was worth.
     """
-    rows = StockUnit.objects.filter(
-        is_consignment=True, status__in=StockUnit.ON_HAND_STATUSES
-    )
-    if as_of is not None:
-        rows = rows.filter(acquired_at__lte=as_of)
+    rows = _custody_units(as_of)
     totals = rows.aggregate(declared=Sum("declared_value"))
     return {
         "unit_count": rows.count(),
         "declared_value": _money(totals["declared"]),
+    }
+
+
+def custody_units_by_variant(as_of=None) -> dict:
+    """``{variant_id: count}`` of consigned articles on the shelf.
+
+    How much of each variant's quantity on hand is somebody else's. Stock at
+    cost never needed this — a consignment enters the ledger at zero — but
+    stock at a selling price does, or a shop holding forty consigned watches
+    counts forty watches it does not own at full price.
+    """
+    return {
+        row["variant_id"]: row["count"]
+        for row in _custody_units(as_of)
+        .order_by()
+        .values("variant_id")
+        .annotate(count=Count("id"))
     }
 
 
@@ -554,6 +577,7 @@ __all__ = [
     "net_due",
     "consignor_receivable",
     "custody_exposure",
+    "custody_units_by_variant",
     "notify_consignor_of_sale",
     "payable_units",
     "payout_floor",

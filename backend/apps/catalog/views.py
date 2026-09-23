@@ -88,6 +88,7 @@ from .serializers import (
 )
 from .pricing import set_base_price
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
+from .system_products import refuse_system_product, refuse_system_products
 from .services import (
     category_detail_prefetch,
     category_ids_with_descendants,
@@ -386,6 +387,31 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             return queryset.prefetch_related(None)
         return queryset
 
+    #: Detail actions that write the product they are addressed to — refused
+    #: for a system product, whoever asks (see ``catalog.system_products``).
+    #: ``variants`` and ``attachments`` write only on POST; their GETs read.
+    system_locked_actions = frozenset(
+        {
+            "update",
+            "partial_update",
+            "destroy",
+            "archive",
+            "restore",
+            "set_variant_prices",
+            "image_import",
+        }
+    )
+
+    def get_object(self):
+        product = super().get_object()
+        action_name = getattr(self, "action", None)
+        if action_name in self.system_locked_actions or (
+            action_name in ("variants", "attachments")
+            and self.request.method.upper() == "POST"
+        ):
+            refuse_system_product(product)
+        return product
+
     def filter_queryset(self, queryset):
         # The filter backends answer list questions — search relevance, the
         # client's sort, ``?is_active=`` — yet DRF runs them inside
@@ -465,23 +491,30 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         return queryset.filter(archived_at__isnull=True)
 
     def _filter_by_system(self, queryset):
-        # Products a feature owns rather than the shop (today: the recharge
-        # service product per provider) are hidden from the catalog list, and
-        # therefore from the POS grid, the POS search and the purchasing
-        # picker. They are priced per line and carry a standing price of zero,
-        # so a cashier who tapped one added a free line that topped nobody up
-        # — and because the default sort is most-bought, a busy agency's two
-        # of them sat at the front of the grid.
+        # Products a feature owns rather than the shop are hidden from the
+        # catalog list, and therefore from the POS grid, the POS search and
+        # the purchasing picker. The recharge service products are why: priced
+        # per line with a standing price of zero, a cashier who tapped one
+        # added a free line that topped nobody up — and because the default
+        # sort is most-bought, a busy agency's two of them sat at the front.
         #
         # Hidden by DEFAULT rather than opted out of: a surface added later
-        # should have to ask for these, not discover them. The back-office
-        # catalog passes ?system=all so an owner can still rename one and see
-        # what it earned. Only the list is scoped — detail, archive and
-        # restore must still reach them.
+        # should have to ask for these, not discover them. The till asks for
+        # the ones it sells (?system=sellable — a provider's cards); the
+        # back-office catalog asks for all of them (?system=all) so an owner
+        # can see them and what they earned, though never edit them. Only the
+        # list is scoped — a detail read must still reach them.
         if self.action != "list":
             return queryset
-        if self.request.query_params.get("system") == "all":
+        scope = self.request.query_params.get("system")
+        if scope == "all":
             return queryset
+        if scope == "sellable":
+            # The till: a provider's cards are sold from the catalog like
+            # anything else; the recharge service products are still not.
+            return queryset.filter(
+                Q(is_system=False) | Q(system_kind=Product.SystemKind.VOUCHER)
+            )
         return queryset.filter(is_system=False)
 
     def _filter_by_stock(self, queryset):
@@ -851,6 +884,7 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         serializer = ProductBulkArchiveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ids = serializer.validated_data["ids"]
+        refuse_system_products(ids)
         archived = serializer.validated_data["archived"]
 
         updated = 0
@@ -871,6 +905,7 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         serializer = ProductBulkRepriceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ids = serializer.validated_data["ids"]
+        refuse_system_products(ids)
         mode = serializer.validated_data["mode"]
         value = serializer.validated_data["value"]
 
@@ -918,6 +953,7 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         serializer = ProductBulkCategorizeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ids = serializer.validated_data["ids"]
+        refuse_system_products(ids)
         mode = serializer.validated_data["mode"]
         categories = list(
             ProductCategory.objects.filter(
@@ -944,6 +980,7 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         serializer = ProductBulkFlagsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ids = serializer.validated_data["ids"]
+        refuse_system_products(ids)
         flags = {
             field: serializer.validated_data[field]
             for field in ProductBulkFlagsSerializer.FLAG_FIELDS

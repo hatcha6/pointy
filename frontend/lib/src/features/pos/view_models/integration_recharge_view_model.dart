@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart';
 import '../../../core/result.dart';
 import '../../../data/models/integration_card.dart';
 import '../../../data/models/integration_provider.dart';
+import '../../../data/models/integration_recent_search.dart';
 import '../../../data/repositories/integrations_repository.dart';
 import '../../../data/services/integrations_api_client.dart';
+import 'integration_recent_searches_view_model.dart';
 
 /// Where the lookup has got to. Kept explicit rather than inferred from nulls
 /// because "not looked up yet" and "looked up and not found" are different
@@ -28,6 +30,33 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   final IntegrationProviderKey provider;
 
   String get providerKey => integrationProviderKeyToJson(provider);
+
+  /// The searches that found something before — what the screen shows while
+  /// nothing has been looked up, instead of an empty box.
+  late final IntegrationRecentSearchesViewModel recentSearches =
+      IntegrationRecentSearchesViewModel(
+        repository: _repository,
+        providerKey: providerKey,
+      );
+
+  String _searchText = '';
+
+  /// What the search box holds. The box owns its keystrokes; this is what it
+  /// is told when something other than typing changes it — running a recent
+  /// search puts that search's number in it, and starting over empties it.
+  String get searchText => _searchText;
+
+  /// The cashier paused typing (the box debounces). While nothing has been
+  /// looked up yet, that narrows the recent searches; once a card is on
+  /// screen the list is out of sight and there is nothing to narrow.
+  void setSearchText(String text) {
+    if (_searchText == text) return;
+    _searchText = text;
+    notifyListeners();
+    if (_lookupState == RechargeLookupState.idle) {
+      recentSearches.setQuery(text);
+    }
+  }
 
   RechargeLookupState _lookupState = RechargeLookupState.idle;
   String _cardNo = '';
@@ -58,10 +87,17 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   /// keeps a cashier from mistyping one.
   bool get allowsLetters => _searchMode == IntegrationSearchMode.username;
 
+  /// Switching mode empties the box: a contract number left in it is not
+  /// what a cashier who just picked "username" is about to search for, and
+  /// the box's own rules (digits only, or letters too) change with the pick.
   void selectSearchMode(IntegrationSearchMode mode) {
     if (_searchMode == mode) return;
     _searchMode = mode;
+    _searchText = '';
     notifyListeners();
+    if (_lookupState == RechargeLookupState.idle) {
+      recentSearches.setQuery('');
+    }
   }
 
   IntegrationHistoryKind _historyKind = IntegrationHistoryKind.purchases;
@@ -165,7 +201,31 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   /// Re-runs the lookup against that line's own identifier rather than
   /// trusting the row we already have: the offers, and the confirmation that
   /// this line can be topped up at all, only exist for a single line.
-  Future<void> selectLine(IntegrationCardInfo line) => lookup(line.cardNo);
+  ///
+  /// That identifier is a username, so it is searched AS one, whatever the
+  /// picker says: the recent searches then remember it as a username, and
+  /// running it again from there puts the box into a mode that can hold it.
+  Future<void> selectLine(IntegrationCardInfo line) => lookup(
+    line.cardNo,
+    searchBy: searchModes.contains(IntegrationSearchMode.username)
+        ? IntegrationSearchMode.username
+        : null,
+  );
+
+  /// Run a search from the recent list again, exactly as it was asked.
+  ///
+  /// Its mode comes back with it: the same digits asked as a phone number and
+  /// as a contract number are different questions to LNET, and the box has to
+  /// be able to hold what it is about to show (a username has letters). The
+  /// provider is asked again, live — nothing from the list is sold as it is.
+  Future<void> runRecentSearch(IntegrationRecentSearch search) {
+    final mode = search.searchMode;
+    if (mode != null && searchModes.contains(mode)) {
+      _searchMode = mode;
+    }
+    _searchText = search.term;
+    return lookup(search.term);
+  }
 
   /// True when the float cannot cover the selected top-up. Advisory: the sale
   /// is still recorded, and the shop tops the float up separately — but a
@@ -189,6 +249,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   void reset() {
     _lookupState = RechargeLookupState.idle;
     _cardNo = '';
+    _searchText = '';
     _snapshot = null;
     _refusalCode = '';
     _failure = null;
@@ -197,11 +258,19 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
     _historyPage = null;
     _historyKind = IntegrationHistoryKind.purchases;
     notifyListeners();
+    // Back to the list, re-read: the search just run belongs at its top.
+    recentSearches.reset();
   }
 
-  Future<void> lookup(String cardNo) async {
+  /// Ask the provider about [cardNo].
+  ///
+  /// [searchBy] overrides the picker for this one search — for a caller that
+  /// knows better than the picker what the number is.
+  Future<void> lookup(String cardNo, {IntegrationSearchMode? searchBy}) async {
     final trimmed = cardNo.trim();
     if (trimmed.isEmpty) return;
+    final mode = searchBy ?? _searchMode;
+    _lookupMode = mode;
 
     _cardNo = trimmed;
     _lookupState = RechargeLookupState.searching;
@@ -216,9 +285,7 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
     final result = await _repository.lookupCard(
       providerKey: providerKey,
       cardNo: trimmed,
-      searchBy: searchModes.isEmpty
-          ? ''
-          : integrationSearchModeToJson(_searchMode),
+      searchBy: searchModes.isEmpty ? '' : integrationSearchModeToJson(mode),
     );
     switch (result) {
       case Ok<IntegrationCardSnapshot>(value: final snapshot):
@@ -243,6 +310,14 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
       await loadHistory();
     }
   }
+
+  /// The mode the last lookup actually ran under, which is not always the
+  /// picker's (choosing a line searches it as a username).
+  IntegrationSearchMode? _lookupMode;
+
+  /// Ask again, exactly as last time — after a request that never got an
+  /// answer, when the box may already hold something else.
+  Future<void> retry() => lookup(_cardNo, searchBy: _lookupMode);
 
   Future<void> showHistoryKind(IntegrationHistoryKind kind) {
     if (_historyKind == kind && _historyPage != null) {
@@ -350,5 +425,11 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
         notifyListeners();
         return false;
     }
+  }
+
+  @override
+  void dispose() {
+    recentSearches.dispose();
+    super.dispose();
   }
 }

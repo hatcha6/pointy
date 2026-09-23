@@ -66,6 +66,9 @@ class ReportCatalogEntry {
   bool get needsCustomer => requiredParams.contains('customer_id');
   bool get needsSupplier => requiredParams.contains('supplier_id');
 
+  /// One article's identifier — the serial or IMEI a unit ledger is about.
+  bool get needsUnitCode => requiredParams.contains('code');
+
   factory ReportCatalogEntry.fromJson(Map<String, Object?> json) {
     return ReportCatalogEntry(
       key: json['key'] as String? ?? '',
@@ -121,7 +124,13 @@ class ReportCatalog {
     return ReportCatalog(
       reports: [
         for (final item in (json['reports'] as List? ?? const []))
-          if (item is Map)
+          // A report the server offers and this build cannot name is left out,
+          // never shown as another report. The fallback to the sales summary
+          // turned every newer server report into a second "sales summary"
+          // tile — and, the sales summary being the default selection, a tile
+          // that always looked selected.
+          if (item is Map &&
+              reportRunTypeFromKey(item['key'] as String?) != null)
             ReportCatalogEntry.fromJson(item.cast<String, Object?>()),
       ],
       presets: _stringList(json['presets']),

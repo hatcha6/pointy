@@ -15,6 +15,8 @@ enum BusinessReportType {
   customerStatement,
   supplierStatement,
   discountAudit,
+  balanceSheet,
+  consignmentLedger,
   auditTrail,
 }
 

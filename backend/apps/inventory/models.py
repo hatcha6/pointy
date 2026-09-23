@@ -1401,7 +1401,7 @@ class StockCountLine(TimeStampedModel):
     )
     counted_quantity = models.DecimalField(max_digits=12, decimal_places=3)
     # Snapshot of on_hand at the moment this line was counted (re-snapshotted on
-    # every edit). It backs the variance prompt and the apply-time delta.
+    # every edit). It backs reconciliation and the apply-time delta.
     expected_quantity = models.DecimalField(max_digits=12, decimal_places=3)
     counted_at = models.DateTimeField()
     counted_by = models.ForeignKey(

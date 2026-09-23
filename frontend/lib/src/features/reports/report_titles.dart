@@ -30,6 +30,11 @@ String reportTitle(AppLocalizations l10n, ReportRunType type) {
     ReportRunType.discountAudit => l10n.reportDiscountAuditTitle,
     ReportRunType.salesByStaff => l10n.reportSalesByStaffTitle,
     ReportRunType.monthEndPack => l10n.reportMonthEndPackTitle,
+    ReportRunType.balanceSheet => l10n.reportBalanceSheetTitle,
+    ReportRunType.unitAging => l10n.reportUnitAgingTitle,
+    ReportRunType.unitMargin => l10n.reportUnitMarginTitle,
+    ReportRunType.unitLedger => l10n.reportUnitLedgerTitle,
+    ReportRunType.consignmentLedger => l10n.reportConsignmentLedgerTitle,
   };
 }
 
@@ -54,6 +59,11 @@ String reportSubtitle(AppLocalizations l10n, ReportRunType type) {
     ReportRunType.discountAudit => l10n.reportDiscountAuditSubtitle,
     ReportRunType.salesByStaff => l10n.reportSalesByStaffSubtitle,
     ReportRunType.monthEndPack => l10n.reportMonthEndPackSubtitle,
+    ReportRunType.balanceSheet => l10n.reportBalanceSheetSubtitle,
+    ReportRunType.unitAging => l10n.reportUnitAgingSubtitle,
+    ReportRunType.unitMargin => l10n.reportUnitMarginSubtitle,
+    ReportRunType.unitLedger => l10n.reportUnitLedgerSubtitle,
+    ReportRunType.consignmentLedger => l10n.reportConsignmentLedgerSubtitle,
   };
 }
 

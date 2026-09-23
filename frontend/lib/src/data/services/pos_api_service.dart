@@ -120,6 +120,8 @@ import '../models/campaign.dart';
 import '../models/conversation.dart';
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
+import '../models/integration_recent_search.dart';
+import '../models/voucher_availability.dart';
 import '../models/messaging_gateway.dart';
 import 'crm_api_client.dart';
 import 'integrations_api_client.dart';
@@ -2223,6 +2225,36 @@ class PosApiService {
   Future<IntegrationProbeResult> probeIntegration(String providerKey) =>
       _integrations.probe(providerKey);
 
+  Future<IntegrationVerificationChallenge> startIntegrationVerification(
+    String providerKey,
+  ) => _integrations.startVerification(providerKey);
+
+  Future<IntegrationVerificationStep> sendIntegrationVerificationCode(
+    String providerKey, {
+    required String challengeRef,
+    required String answer,
+  }) => _integrations.sendVerificationCode(
+    providerKey,
+    challengeRef: challengeRef,
+    answer: answer,
+  );
+
+  Future<IntegrationVerificationStep> confirmIntegrationVerification(
+    String providerKey, {
+    required String code,
+  }) => _integrations.confirmVerification(providerKey, code: code);
+
+  Future<IntegrationProfileList> fetchIntegrationProfiles(String providerKey) =>
+      _integrations.fetchProfiles(providerKey);
+
+  Future<IntegrationProvider?> chooseIntegrationProfile(
+    String providerKey,
+    String profileId,
+  ) => _integrations.chooseProfile(providerKey, profileId);
+
+  Future<VoucherAvailability> fetchVoucherAvailability(int productId) =>
+      _integrations.fetchVoucherAvailability(productId);
+
   Future<IntegrationPriceList> fetchIntegrationPrices(String providerKey) =>
       _integrations.fetchPrices(providerKey);
 
@@ -2288,6 +2320,16 @@ class PosApiService {
     kind: kind,
     limit: limit,
     offset: offset,
+  );
+
+  Future<IntegrationRecentSearchPage> fetchIntegrationRecentSearches({
+    required String providerKey,
+    String search = '',
+    String? cursor,
+  }) => _integrations.fetchRecentSearches(
+    providerKey: providerKey,
+    search: search,
+    cursor: cursor,
   );
 
   Future<List<Conversation>> fetchConversations({String? status}) =>

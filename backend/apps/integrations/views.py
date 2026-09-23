@@ -8,7 +8,13 @@ reason — there is no account id to learn before you can save one.
 
 from __future__ import annotations
 
+import base64
+from dataclasses import replace
+
 from rest_framework import status
+from rest_framework.filters import SearchFilter
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,7 +23,7 @@ from apps.core.permissions import HasPointyPermission
 
 from . import catalog
 from . import recharge
-from .models import IntegrationAccount, IntegrationFulfillment
+from .models import IntegrationAccount, IntegrationFulfillment, IntegrationSearch
 from .providers import provider_for
 from .providers.base import (
     ERROR_NOT_CONFIGURED,
@@ -30,6 +36,10 @@ from .provisioning import service_variant_for
 from .serializers import (
     IntegrationAccountWriteSerializer,
     OptionPriceWriteSerializer,
+    ProfileChoiceSerializer,
+    VerificationConfirmSerializer,
+    VerificationSendSerializer,
+    profile_payload,
     SubscriberWriteSerializer,
     TopUpWriteSerializer,
     ProviderSerializer,
@@ -41,11 +51,13 @@ from .serializers import (
     option_price_payload,
     subscriber_payload,
     purchase_payload,
+    search_payload,
     status_payload,
 )
 from .services import (
     accounts_by_provider,
     probe_account,
+    record_search,
     record_seen_offers,
     record_subscriber,
 )
@@ -134,6 +146,7 @@ class IntegrationAccountView(APIView):
         data = serializer.validated_data
 
         account, _ = IntegrationAccount.objects.get_or_create(provider=provider)
+        previous_login = (account.username, account.password, account.resolved_base_url())
         if "base_url" in data:
             account.base_url = data["base_url"].strip()
         if "username" in data:
@@ -141,10 +154,17 @@ class IntegrationAccountView(APIView):
         if "is_active" in data:
             account.is_active = data["is_active"]
         # Absent or blank means "keep what is stored" — the client cannot read
-        # the password back, so it cannot round-trip one it never received.
-        password = data.get("password")
-        if password:
-            account.set_secret(catalog.FIELD_PASSWORD, password)
+        # a secret back, so it cannot round-trip one it never received. Every
+        # secret the provider declares is handled the same way: the password,
+        # and for a provider that has one, the purchase PIN.
+        for field in spec.secret_fields:
+            value = data.get(field)
+            if value:
+                account.set_secret(field, value)
+        # A login a driver kept (Qareeb's bearer token) belongs to the
+        # credentials that made it. New ones make it somebody else's.
+        if (account.username, account.password, account.resolved_base_url()) != previous_login:
+            account.forget_session()
 
         # Settings are the shop's commercial arrangement, not credentials, so
         # a bad one is refused loudly rather than quietly ignored: a shop that
@@ -156,6 +176,7 @@ class IntegrationAccountView(APIView):
                 {"settings": rejected}, status=status.HTTP_400_BAD_REQUEST
             )
         account.save()
+        _after_account_change(account)
 
         return Response(_provider_payload(spec))
 
@@ -165,8 +186,60 @@ class IntegrationAccountView(APIView):
             return Response(
                 {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
             )
-        IntegrationAccount.objects.filter(provider=provider).delete()
+        account = IntegrationAccount.objects.filter(provider=provider).first()
+        if account is not None:
+            disconnect_account(account)
         return Response(_provider_payload(spec))
+
+
+def disconnect_account(account) -> None:
+    """Forget the credentials; keep whatever the shop's history hangs on.
+
+    An account that ever sold anything is referenced by those sales
+    (``IntegrationFulfillment.account`` is PROTECT) and by its float's money
+    account, so deleting it would fail — and should: an invoice must still say
+    which provider performed its top-up. Such an account is emptied instead:
+    no username, no secrets, switched off. One that never did anything goes
+    entirely. Either way its cards leave the till first.
+    """
+    from . import vouchers
+
+    if vouchers.sells_vouchers(account):
+        vouchers.withdraw_shelf(account)
+    has_history = account.fulfillments.exists() or account.money_account_id is not None
+    if not has_history:
+        account.delete()
+        return
+    account.username = ""
+    account.secrets_encrypted = ""
+    account.is_active = False
+    account.last_error = ""
+    account.last_error_code = ""
+    account.last_error_at = None
+    account.save()
+
+
+def _after_account_change(account) -> None:
+    """Bring a voucher provider's shelf in line with an account that just changed.
+
+    Switched off or incomplete: its cards leave the till now, not at the next
+    sweep. Otherwise a full read is queued, so a freshly connected shop sees
+    its cards within seconds rather than at the next sweep.
+    """
+    from . import vouchers
+
+    if not vouchers.sells_vouchers(account):
+        return
+    if not account.is_active or not account.is_configured:
+        vouchers.withdraw_shelf(account)
+        return
+    schedule_voucher_sync(account)
+
+
+def schedule_voucher_sync(account) -> None:
+    from apps.core.dispatch import enqueue_best_effort
+
+    enqueue_best_effort("integrations.sync_voucher_catalog", account.pk)
 
 
 class IntegrationProbeView(APIView):
@@ -191,6 +264,8 @@ class IntegrationProbeView(APIView):
                 }
             )
         result = probe_account(account)
+        if result.ok:
+            _after_account_change(account)
         # A failed probe is a fact about the provider, not a failure of this
         # request: 200 with ok=false, so the client renders the reason instead
         # of a generic error toast.
@@ -267,6 +342,25 @@ def _service_variant_payload(provider: str) -> dict:
     }
 
 
+def _with_subscriber_balance(card, profile):
+    """The card, carrying the subscriber's own balance wherever it was read.
+
+    LNET prints a line's money on the search row, so its card already has it.
+    HD Box keeps a card's balance on the detail page instead — which the card
+    view reads anyway, beside the offers — so without this the one provider
+    whose balance was fetched would be the one whose till never showed it.
+
+    Only ever this request's own reads. A profile that failed leaves the card
+    blank rather than falling back to a balance remembered from an earlier
+    lookup: a stale figure shown as the customer's credit is worse than none.
+    """
+    if card.card_balance is not None or not profile.ok or profile.profile is None:
+        return card
+    if profile.profile.card_balance is None:
+        return card
+    return replace(card, card_balance=profile.profile.card_balance)
+
+
 def _page_bounds(request) -> tuple[int, int]:
     try:
         limit = int(request.query_params.get("limit", DEFAULT_PAGE_SIZE))
@@ -309,9 +403,8 @@ class IntegrationCardView(APIView):
         # number are both digits, so the portal has to be asked the right way
         # or asked twice; the picker beside the search box is what turns the
         # ordinary lookup into a single round trip.
-        lookup = driver.lookup(
-            card_no, search_by=request.query_params.get("search_by", "")
-        )
+        search_by = request.query_params.get("search_by", "")
+        lookup = driver.lookup(card_no, search_by=search_by)
         if not lookup.ok:
             return Response(
                 {
@@ -322,6 +415,9 @@ class IntegrationCardView(APIView):
             )
 
         if lookup.is_ambiguous:
+            # Still a search that worked: it found the household, and running
+            # it again from the history is how the till gets back to the choice.
+            record_search(account, term=card_no, search_by=search_by, lookup=lookup)
             # One phone number, several lines. Quoting the first would offer a
             # cashier a top-up for somebody's dead second line while the one
             # the customer came in about stays expired — so this answers with
@@ -382,12 +478,19 @@ class IntegrationCardView(APIView):
         subscriber = record_subscriber(
             account, profile.profile if profile.ok else None, card=lookup.card
         )
+        record_search(
+            account,
+            term=card_no,
+            search_by=search_by,
+            lookup=lookup,
+            subscriber=subscriber,
+        )
         # One query for the shop's whole price list rather than one per option.
         prices = account.option_price_map()
         return Response(
             {
                 "ok": True,
-                "card": card_payload(lookup.card),
+                "card": card_payload(_with_subscriber_balance(lookup.card, profile)),
                 "subscriber": subscriber_payload(subscriber),
                 "offers": [
                     offer_payload(option, account, prices=prices)
@@ -419,6 +522,66 @@ class IntegrationCardView(APIView):
                 "balance_at": account.balance_at,
             }
         )
+
+
+class RecentSearchPagination(CursorPagination):
+    """Newest search first, each page anchored to the last row the till saw.
+
+    This list is written to while it is being read: a search at any till lands
+    at its head, and a repeated search jumps back there. Page numbers would
+    hand a cashier scrolling it the same row twice or skip one outright; a
+    cursor can do neither. A row that jumps to the head mid-scroll is simply
+    not repeated further down — it is at the top on the next open.
+    """
+
+    ordering = ("-last_searched_at", "-id")
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class IntegrationSearchesView(ListAPIView):
+    """The searches a till ran against one provider that found something.
+
+    What the recharge screen opens on instead of an empty box: the customers
+    this shop actually serves, newest first. ``search`` narrows it as the
+    cashier types — by the number typed, the line it found, or the name the
+    shop gave the card.
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"GET": USE}
+    pagination_class = RecentSearchPagination
+    # Only the text filter: the project-wide defaults include an ordering
+    # filter that would fight the cursor's fixed order.
+    filter_backends = [SearchFilter]
+    search_fields = [
+        "term",
+        "card_no",
+        "holder_name",
+        "subscriber__display_name",
+        "subscriber__customer__full_name",
+    ]
+
+    def get_queryset(self):
+        account_id = (
+            IntegrationAccount.objects.filter(provider=self.kwargs["provider"])
+            .values_list("id", flat=True)
+            .first()
+        )
+        if account_id is None:
+            return IntegrationSearch.objects.none()
+        return IntegrationSearch.objects.filter(account_id=account_id).select_related(
+            "subscriber__customer"
+        )
+
+    def list(self, request, *args, **kwargs):
+        if catalog.spec_for(self.kwargs["provider"]) is None:
+            return Response(
+                {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+            )
+        page = self.paginate_queryset(self.filter_queryset(self.get_queryset()))
+        return self.get_paginated_response([search_payload(row) for row in page])
 
 
 class IntegrationHistoryView(APIView):
@@ -725,3 +888,230 @@ class IntegrationChargeView(APIView):
         # a till that re-sends a completed sale should get "nothing to do".
         rows = rows.filter(status=IntegrationFulfillment.Status.PENDING)
         return list(rows.order_by("pk")), ""
+
+
+# --- confirming a new device ------------------------------------------------------
+def _verifiable_account(provider: str):
+    """``(account, spec, response)`` — the account a verification step acts on."""
+    spec = catalog.spec_for(provider)
+    if spec is None:
+        return None, None, Response(
+            {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+        )
+    account = IntegrationAccount.objects.filter(provider=provider).first()
+    if account is None or not account.is_configured:
+        return None, spec, Response({"ok": False, "error_code": ERROR_NOT_CONFIGURED})
+    return account, spec, None
+
+
+class IntegrationVerificationView(APIView):
+    """Step one of trusting this Pointy: the picture a person has to read.
+
+    Qareeb refuses a password login from a device it has not seen and wants a
+    one-time code texted to the agency's phone instead — and asking for that
+    code needs the text of a captcha picture. None of it can happen without
+    the owner, so it is a short conversation in Shop Settings, done once.
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"POST": MANAGE}
+
+    def post(self, request, provider: str):
+        account, _spec, response = _verifiable_account(provider)
+        if response is not None:
+            return response
+        challenge = provider_for(account).start_verification()
+        if not challenge.ok:
+            return Response(
+                {
+                    "ok": False,
+                    "error_code": challenge.error_code,
+                    "error_detail": challenge.error_detail,
+                }
+            )
+        return Response(
+            {
+                "ok": True,
+                "challenge_ref": challenge.challenge_ref,
+                # Inline, so the till never has to reach the provider itself —
+                # it may not be able to, and it has no business trying.
+                "image": "data:{};base64,{}".format(
+                    challenge.image_type or "image/png",
+                    base64.b64encode(challenge.image).decode("ascii"),
+                ),
+                "help_text": challenge.help_text,
+            }
+        )
+
+
+class IntegrationVerificationSendView(APIView):
+    """Step two: the picture's text, and the provider texts the owner a code."""
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"POST": MANAGE}
+
+    def post(self, request, provider: str):
+        account, _spec, response = _verifiable_account(provider)
+        if response is not None:
+            return response
+        serializer = VerificationSendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = provider_for(account).send_verification_code(
+            serializer.validated_data["challenge_ref"],
+            serializer.validated_data["answer"],
+        )
+        return Response(
+            {
+                "ok": result.ok,
+                "expires_in": result.expires_in,
+                "error_code": result.error_code,
+                "error_detail": result.error_detail,
+            }
+        )
+
+
+class IntegrationVerificationConfirmView(APIView):
+    """Step three: the texted code. On success this device is trusted for good."""
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"POST": MANAGE}
+
+    def post(self, request, provider: str):
+        account, spec, response = _verifiable_account(provider)
+        if response is not None:
+            return response
+        serializer = VerificationConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = provider_for(account).confirm_verification(
+            serializer.validated_data["code"]
+        )
+        if result.ok:
+            account.refresh_from_db()
+            # Straight to a real read, so the screen says "connected, float
+            # 674.90" rather than leaving the owner to press Test.
+            if probe_account(account).ok:
+                _after_account_change(account)
+        return Response(
+            {
+                "ok": result.ok,
+                "error_code": result.error_code,
+                "error_detail": result.error_detail,
+                "provider": _provider_payload(spec),
+            }
+        )
+
+
+# --- which profile Pointy buys as ----------------------------------------------------
+class IntegrationProfilesView(APIView):
+    """The profiles one login may act as, and which of them Pointy buys as.
+
+    A Qareeb login can be a person and an employee of several shops at once,
+    each with its own wallet; the owner chooses which one this shop's tills
+    spend. The driver then refuses to buy while the login acts as any other
+    (``profile_mismatch``) rather than paying from the wrong shop's float.
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"GET": MANAGE, "PUT": MANAGE}
+
+    def _account(self, provider: str):
+        spec = catalog.spec_for(provider)
+        if spec is None:
+            return None, None, Response(
+                {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+            )
+        if catalog.CAPABILITY_PROFILES not in spec.capabilities:
+            return None, spec, Response({"ok": False, "error_code": ERROR_UNAVAILABLE})
+        account = IntegrationAccount.objects.filter(provider=provider).first()
+        if account is None or not account.is_configured:
+            return None, spec, Response({"ok": False, "error_code": ERROR_NOT_CONFIGURED})
+        return account, spec, None
+
+    def get(self, request, provider: str):
+        account, _spec, response = self._account(provider)
+        if response is not None:
+            return response
+        result = provider_for(account).profiles()
+        chosen = str((account.config or {}).get("profile_id") or "")
+        return Response(
+            {
+                "ok": result.ok,
+                "error_code": result.error_code,
+                "error_detail": result.error_detail,
+                "chosen": chosen,
+                "profiles": [
+                    profile_payload(profile, chosen=chosen) for profile in result.profiles
+                ],
+            }
+        )
+
+    def put(self, request, provider: str):
+        account, spec, response = self._account(provider)
+        if response is not None:
+            return response
+        serializer = ProfileChoiceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        chosen = serializer.validated_data["profile_id"].strip()
+        name = ""
+        if chosen:
+            result = provider_for(account).profiles()
+            if not result.ok:
+                return Response(
+                    {
+                        "ok": False,
+                        "error_code": result.error_code,
+                        "error_detail": result.error_detail,
+                    }
+                )
+            match = next(
+                (profile for profile in result.profiles if profile.profile_id == chosen),
+                None,
+            )
+            if match is None:
+                return Response(
+                    {"profile_id": "not one of this login's profiles"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            name = match.name
+        config = dict(account.config or {})
+        config["profile_id"] = chosen
+        config["profile_name"] = name
+        account.config = config
+        account.save(update_fields=["config", "updated_at"])
+        # Re-read the float as the chosen profile — or learn at once that the
+        # login is acting as another one.
+        probe_account(account)
+        return Response({"ok": True, "provider": _provider_payload(spec)})
+
+
+# --- the till's "is this card still in stock?" ------------------------------------
+class IntegrationVoucherView(APIView):
+    """One brand's cards as the provider has them right now.
+
+    The till calls this the moment a cashier opens a card's picker, and draws
+    the picker from what it already has while it waits — so a card that sold
+    out since the last sweep disappears while the cashier is still choosing,
+    and nothing about the tap ever waits on the provider. Shared between tills
+    for under a minute (``vouchers.refresh_brand``).
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"GET": USE}
+
+    def get(self, request, product_id: int):
+        from . import vouchers
+        from .models import IntegrationVoucherBrand
+
+        brand = (
+            IntegrationVoucherBrand.objects.select_related("account")
+            .filter(product_id=product_id)
+            .first()
+        )
+        if brand is None:
+            return Response(
+                {"detail": "not a provider's card"}, status=status.HTTP_404_NOT_FOUND
+            )
+        account, _spec, error = _usable_account(brand.account.provider)
+        if account is None:
+            return Response({"ok": False, "error_code": error})
+        return Response({"ok": True, **vouchers.refresh_brand(account, brand)})

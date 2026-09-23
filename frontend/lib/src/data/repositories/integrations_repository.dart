@@ -1,6 +1,8 @@
 import '../../core/result.dart';
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
+import '../models/integration_recent_search.dart';
+import '../models/voucher_availability.dart';
 import '../services/pos_api_service.dart';
 
 /// Access to the shop's resale-provider accounts (HD Box and friends) and the
@@ -30,6 +32,56 @@ class IntegrationsRepository {
 
   Future<Result<IntegrationProbeResult>> probe(String providerKey) {
     return Result.guard(() => _service.probeIntegration(providerKey));
+  }
+
+  Future<Result<IntegrationVerificationChallenge>> startVerification(
+    String providerKey,
+  ) {
+    return Result.guard(
+      () => _service.startIntegrationVerification(providerKey),
+    );
+  }
+
+  Future<Result<IntegrationVerificationStep>> sendVerificationCode(
+    String providerKey, {
+    required String challengeRef,
+    required String answer,
+  }) {
+    return Result.guard(
+      () => _service.sendIntegrationVerificationCode(
+        providerKey,
+        challengeRef: challengeRef,
+        answer: answer,
+      ),
+    );
+  }
+
+  Future<Result<IntegrationVerificationStep>> confirmVerification(
+    String providerKey, {
+    required String code,
+  }) {
+    return Result.guard(
+      () => _service.confirmIntegrationVerification(providerKey, code: code),
+    );
+  }
+
+  Future<Result<IntegrationProfileList>> loadProfiles(String providerKey) {
+    return Result.guard(() => _service.fetchIntegrationProfiles(providerKey));
+  }
+
+  Future<Result<IntegrationProvider?>> chooseProfile(
+    String providerKey,
+    String profileId,
+  ) {
+    return Result.guard(
+      () => _service.chooseIntegrationProfile(providerKey, profileId),
+    );
+  }
+
+  /// A card product's cards as the provider has them now. For the till's
+  /// picker, which opens without waiting for it.
+  Future<Result<VoucherAvailability>> loadVoucherAvailability(int productId) {
+    return Result.guard(() => _service.fetchVoucherAvailability(productId));
   }
 
   Future<Result<IntegrationCardSnapshot>> lookupCard({
@@ -74,6 +126,22 @@ class IntegrationsRepository {
         kind: kind,
         limit: limit,
         offset: offset,
+      ),
+    );
+  }
+
+  /// The searches that found something at this provider, newest first, one
+  /// cursor page at a time. [search] narrows them as the cashier types.
+  Future<Result<IntegrationRecentSearchPage>> loadRecentSearches({
+    required String providerKey,
+    String search = '',
+    String? cursor,
+  }) {
+    return Result.guard(
+      () => _service.fetchIntegrationRecentSearches(
+        providerKey: providerKey,
+        search: search,
+        cursor: cursor,
       ),
     );
   }

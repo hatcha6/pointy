@@ -4,6 +4,10 @@ import 'package:pointy_frontend/src/data/models/report_run.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/features/reports/pdf/report_document_builder.dart';
+import 'package:pointy_frontend/src/features/reports/pdf/report_pdf.dart';
+
+import '../balance_sheet_payload.dart';
+import '../identified_payloads.dart';
 
 void main() {
   final l10n = AppLocalizationsAr();
@@ -57,6 +61,131 @@ void main() {
     ]);
     expect(document.sections.first.tables.single.rows.single[1], 'مدفوعة');
     expect(document.sections.first.tables.single.rows.single[2], '120.50 د.ل');
+  });
+
+  test('prints the balance sheet under its own name, footed per side', () {
+    final document = buildBusinessReportPdfDocument(
+      run: _reportRun(
+        ReportRunType.balanceSheet,
+        payload: balanceSheetPayload(),
+      ),
+      l10n: l10n,
+      currentUser: _manager,
+      includeAuditTrail: false,
+      includePreparedBy: false,
+      shopSettings: _settings,
+    );
+
+    expect(document.title, 'الميزانية العمومية');
+    expect(document.type, BusinessReportType.balanceSheet);
+    expect(document.metrics.first.label, 'الصافي');
+    expect(document.metrics.first.value, '122.00 د.ل');
+    final assets = document.sections
+        .firstWhere((section) => section.heading == 'لنا — الأصول')
+        .tables
+        .single;
+    expect(assets.columns, [
+      'البند',
+      'رصيد أول المدة',
+      'رصيد آخر المدة',
+      'التغير',
+    ]);
+    expect(assets.rows.first, [
+      'البضاعة بسعر التكلفة',
+      '20.00 د.ل',
+      '12.00 د.ل',
+      '-8.00 د.ل',
+    ]);
+    expect(assets.rows.last, [
+      'الإجمالي',
+      '220.00 د.ل',
+      '172.00 د.ل',
+      '-48.00 د.ل',
+    ]);
+    // The valuation method decides what the goods are stated at.
+    expect(
+      document.shopSettingFields.map((field) => field.label),
+      contains('طريقة تقييم المخزون'),
+    );
+  });
+
+  test('prints each identified-stock report under a document type', () {
+    const expected = {
+      ReportRunType.unitAging: BusinessReportType.inventorySnapshot,
+      ReportRunType.unitMargin: BusinessReportType.salesSummary,
+      ReportRunType.unitLedger: BusinessReportType.stockMovementArchive,
+      ReportRunType.consignmentLedger: BusinessReportType.consignmentLedger,
+    };
+    for (final MapEntry(key: type, value: documentType) in expected.entries) {
+      final document = buildBusinessReportPdfDocument(
+        run: _reportRun(
+          type,
+          payload: identifiedPayload(reportRunTypeToJson(type)),
+        ),
+        l10n: l10n,
+        currentUser: _manager,
+        includeAuditTrail: false,
+        includePreparedBy: false,
+        shopSettings: _settings,
+      );
+      expect(document.type, documentType, reason: '$type');
+    }
+    expect(
+      const ReportPdfLabels.arabic().typeLabel(
+        BusinessReportType.consignmentLedger,
+      ),
+      'الأمانات',
+    );
+  });
+
+  test('prints an article ledger with its movements in Arabic', () {
+    final document = buildBusinessReportPdfDocument(
+      run: _reportRun(
+        ReportRunType.unitLedger,
+        payload: identifiedPayload('unit_ledger'),
+      ),
+      l10n: l10n,
+      currentUser: _manager,
+      includeAuditTrail: false,
+      includePreparedBy: false,
+      shopSettings: _settings,
+    );
+
+    expect(document.title, 'سجل جهاز');
+    final ledger = document.sections
+        .firstWhere((section) => section.heading == 'سجل الجهاز')
+        .tables
+        .single;
+    expect(ledger.columns, [
+      'التاريخ',
+      'الحركة',
+      'الاتجاه',
+      'المستودع',
+      'الدفعة',
+      'التكلفة',
+    ]);
+    expect(ledger.rows.first.sublist(1, 3), ['استلام مشتريات', 'وارد']);
+    expect(ledger.rows.last.sublist(1, 3), ['بيع', 'صادر']);
+    // Nothing in stock settings changes what one article's history says.
+    expect(document.shopSettingFields, isEmpty);
+  });
+
+  test('a per-article margin says whether a loss sale is even possible', () {
+    final document = buildBusinessReportPdfDocument(
+      run: _reportRun(
+        ReportRunType.unitMargin,
+        payload: identifiedPayload('unit_margin'),
+      ),
+      l10n: l10n,
+      currentUser: _manager,
+      includeAuditTrail: false,
+      includePreparedBy: false,
+      shopSettings: _settings,
+    );
+
+    expect(document.shopSettingFields.map((field) => field.label), [
+      'منع البيع بخسارة',
+    ]);
   });
 
   test('adds useful shop settings to payment reports', () {

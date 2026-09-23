@@ -11,7 +11,8 @@ import 'dart:async';
 //   flutter run -d web-server --web-port 8080 -t lib/dev/pos_preview.dart
 //
 // Screens: pos | purchase | pos-empty | purchase-empty | board
-// Add `&theme=dark` to check either surface against the dark palette.
+// Add `&theme=dark` to check either surface against the dark palette, and
+// `&picker=on` for the search-mode picker a device can turn on (code / name).
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -57,6 +58,7 @@ import 'package:pointy_frontend/src/features/purchasing/views/purchase_draft_pan
 import 'package:pointy_frontend/src/features/purchasing/views/purchasing_shortcuts_sheet.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/product_filter_sheet.dart';
+import 'package:pointy_frontend/src/shared/product_search/product_search_mode_controller.dart';
 import 'package:pointy_frontend/src/shared/formatters.dart';
 import 'package:pointy_frontend/src/shared/order/order.dart';
 import 'package:pointy_frontend/src/shared/responsive/responsive.dart';
@@ -80,10 +82,13 @@ class _PreviewApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: _isDark() ? PointyTheme.dark() : PointyTheme.light(),
-      builder: (context, child) => PointyNavigationRailScope(
-        isActive: false,
-        controller: PointyNavigationRailController(),
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => ProductSearchModeScope(
+        controller: _searchModes,
+        child: PointyNavigationRailScope(
+          isActive: false,
+          controller: PointyNavigationRailController(),
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       home: const _Router(),
     );
@@ -91,6 +96,12 @@ class _PreviewApp extends StatelessWidget {
 }
 
 bool _isDark() => Uri.base.queryParameters['theme'] == 'dark';
+
+// Never loaded from storage: the query string alone decides, so a preview
+// never inherits a setting from the browser it runs in.
+final _searchModes = ProductSearchModeController(
+  pickerEnabled: Uri.base.queryParameters['picker'] == 'on',
+);
 
 String _screen() {
   final uri = Uri.base;
@@ -1177,11 +1188,13 @@ class _Item {
 
   bool matches(ProductQuery query) {
     final search = query.search.trim().toLowerCase();
+    final readsNames = query.searchMode != ProductSearchMode.code;
+    final readsCodes = query.searchMode != ProductSearchMode.name;
     final matchesSearch =
         search.isEmpty ||
-        name.toLowerCase().contains(search) ||
-        sku.toLowerCase().contains(search) ||
-        barcode.contains(search);
+        (readsNames && name.toLowerCase().contains(search)) ||
+        (readsCodes &&
+            (sku.toLowerCase().contains(search) || barcode.contains(search)));
     final categoryIds = query.categories.map((c) => c.id).toSet();
     final matchesCategory =
         categoryIds.isEmpty || categoryIds.contains(categoryId);

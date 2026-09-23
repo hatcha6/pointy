@@ -17,6 +17,7 @@ import 'cups_pdf_spooler_stub.dart'
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
+import 'receipt_integration_rows.dart';
 import '../../shared/branding_assets.dart';
 import '../../shared/date_formatters.dart';
 import '../../shared/formatters.dart';
@@ -466,12 +467,15 @@ class OrderDocumentService {
         rows: [
           for (final line in order.lines)
             [
-              _saleLineName(line),
+              _saleLineProductName(line),
               _formatQuantityWithUnit(line.quantity, line.unitLabel),
               _formatMoney(line.unitPrice),
               _formatMoney(line.total),
             ],
         ],
+        // What each line issued (an IMEI, a lot) and what a provider did for
+        // it (a card's PIN, a subscriber's new term), one printed line each.
+        rowNotes: [for (final line in order.lines) _saleLineNotes(line)],
         columnFlex: const [2.8, 0.9, 1.1, 1.1],
       ),
       totals: [
@@ -1927,9 +1931,43 @@ class _ReceiptFrame {
       if (i > 0) {
         rows.add(pw.SizedBox(height: compact ? 2 : 4));
       }
-      rows.add(_itemRow(table.rows[i], twoColumn: twoColumn));
+      final row = _itemRow(table.rows[i], twoColumn: twoColumn);
+      final notes = table.notesFor(i);
+      // One widget per item, notes included, so a page break can never land
+      // between a card and its PIN.
+      rows.add(
+        notes.isEmpty
+            ? row
+            : pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [row, for (final note in notes) _itemNote(note)],
+              ),
+      );
     }
     return rows;
+  }
+
+  /// A line beneath an item. Never clipped, even on a compact roll: a PIN
+  /// cut off at the edge of the paper is a card the customer cannot use.
+  pw.Widget _itemNote(OrderDocumentNote note) {
+    if (note.emphasized) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 2),
+        child: pw.Text(
+          note.text,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            fontSize: _emphasisFont + 4,
+            fontWeight: pw.FontWeight.bold,
+            color: _ink,
+          ),
+        ),
+      );
+    }
+    return pw.Text(
+      note.text,
+      style: pw.TextStyle(fontSize: _detailFont, color: _ink),
+    );
   }
 
   pw.Widget _itemRow(List<String> row, {required bool twoColumn}) {
@@ -2092,30 +2130,72 @@ class OrderDocumentTable {
   const OrderDocumentTable({
     required this.columns,
     required this.rows,
+    this.rowNotes = const [],
     this.columnFlex = const [],
   });
 
   final List<String> columns;
   final List<List<String>> rows;
+
+  /// Lines printed beneath a row, parallel to [rows] (missing = none).
+  final List<List<OrderDocumentNote>> rowNotes;
   final List<double> columnFlex;
+
+  List<OrderDocumentNote> notesFor(int index) =>
+      index < rowNotes.length ? rowNotes[index] : const [];
 
   pw.Widget build(OrderDocumentLabels labels) {
     return PointyPdfTable.invoice(
       columns: columns,
-      rows: rows,
+      rows: [
+        for (var index = 0; index < rows.length; index++)
+          _withNotes(rows[index], notesFor(index)),
+      ],
       columnFlex: columnFlex,
       emptyValue: labels.emptyValue,
       valueFormatter: _tableValue,
     ).build();
   }
 
-  String _tableValue(String value) {
-    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.length <= 120) {
-      return normalized.isEmpty ? '-' : normalized;
+  /// The A4 table draws plain text cells, so a row's notes go beneath its
+  /// name, inside the same cell, one per line.
+  static List<String> _withNotes(
+    List<String> row,
+    List<OrderDocumentNote> notes,
+  ) {
+    if (notes.isEmpty || row.isEmpty) {
+      return row;
     }
-    return '${normalized.substring(0, 117)}...';
+    return [
+      [row.first, for (final note in notes) note.text].join('\n'),
+      ...row.skip(1),
+    ];
   }
+
+  /// Tidies a cell without flattening it: spaces collapse within a line, but
+  /// the line breaks a row's notes are laid out on survive, and each line is
+  /// capped on its own so a long note cannot swallow the one after it.
+  String _tableValue(String value) {
+    final lines = [
+      for (final line in value.split('\n'))
+        if (line.replaceAll(RegExp(r'\s+'), ' ').trim().isNotEmpty)
+          _capped(line.replaceAll(RegExp(r'\s+'), ' ').trim()),
+    ];
+    return lines.isEmpty ? '-' : lines.join('\n');
+  }
+
+  static String _capped(String line) =>
+      line.length <= 120 ? line : '${line.substring(0, 117)}...';
+}
+
+/// One line printed beneath a document row. [emphasized] is a card's PIN —
+/// the line that has to be read at arm's length.
+@immutable
+class OrderDocumentNote {
+  const OrderDocumentNote(this.text, {this.emphasized = false});
+
+  final String text;
+  final bool emphasized;
 }
 
 class OrderDocumentField {
@@ -2244,17 +2324,19 @@ List<String> _nonBlankStrings(Iterable<Object?> values) {
   return List.unmodifiable(lines);
 }
 
-String _saleLineName(SaleOrderLine line) {
-  final name = _saleLineProductName(line);
-  final identifiers = _saleLineIdentifierLines(line);
-  if (identifiers.isEmpty) {
-    return name;
-  }
-  // Under the name rather than in a column of their own: the table's widths and
-  // alignments are fixed in the same order the RTL renderer reverses them, and
-  // a fifth column would have to be threaded through both. A serial or a lot is
-  // part of naming the article anyway.
-  return '$name\n${identifiers.join('\n')}';
+/// The printed lines beneath a sale line, in order: the identifiers it
+/// issued, then what a provider did for it.
+///
+/// Notes rather than text folded into the name cell. Folded in, they were
+/// flattened onto the name's line by the table's whitespace clean-up — and
+/// clipped altogether on a compact roll — which for a provider's card would
+/// cut off the PIN the customer paid for.
+List<OrderDocumentNote> _saleLineNotes(SaleOrderLine line) {
+  return [
+    for (final identifier in _saleLineIdentifierLines(line))
+      OrderDocumentNote(identifier),
+    ..._saleLineIntegrationNotes(line),
+  ];
 }
 
 String _saleLineProductName(SaleOrderLine line) {
@@ -2270,6 +2352,26 @@ String _saleLineProductName(SaleOrderLine line) {
     return variant;
   }
   return '$product - $variant';
+}
+
+/// What a provider did for this line — a card's PIN, a subscriber's new term
+/// — from the same rows the thermal receipt prints.
+List<OrderDocumentNote> _saleLineIntegrationNotes(SaleOrderLine line) {
+  final integration = line.integration;
+  if (integration == null) {
+    return const [];
+  }
+  return [
+    for (final row in receiptIntegrationRows(
+      kind: integration.kind,
+      status: integration.status,
+      printed: integration.receipt,
+      subscriberRef: integration.subscriberRef,
+      reference: integration.providerReference,
+      months: integration.months,
+    ))
+      OrderDocumentNote(row.text, emphasized: row.emphasized),
+  ];
 }
 
 /// The IMEIs and lot numbers this line issued, one per printed line.

@@ -110,6 +110,48 @@ def stock_position_by_variant(as_of=None):
     }
 
 
+def stock_retail_value(as_of=None) -> Decimal:
+    """What the shop's own goods would sell for at today's selling prices.
+
+    The quantities are the ledger's, like ``stock_cost_value`` — now, or at the
+    close of ``as_of`` — so a cost figure and a selling-price figure stated side
+    by side are always about the same goods. Each variant is priced at its
+    ``unit_price``, which is base currency per base unit by the catalogue's own
+    invariant.
+
+    Three things are deliberately left out, and each would inflate the figure:
+
+    * **Consigned articles.** They are on the shelf and they are somebody
+      else's. At cost they already count for nothing; at a selling price they
+      would count in full.
+    * **Stock below zero.** A variant sold past what was ever received holds no
+      goods to value, and letting it subtract would hide real goods behind a
+      recording gap.
+    * **Past prices.** There is no price history, so a past quantity is valued
+      at *today's* price — a caller stating a past date must say so.
+    """
+    from apps.catalog.models import ProductVariant
+
+    from .consignment import custody_units_by_variant
+
+    unowned = custody_units_by_variant(
+        as_of=day_range_end(as_of) if as_of is not None else None
+    )
+    held = {}
+    for variant_id, (quantity, _value) in stock_position_by_variant(as_of).items():
+        owned = quantity - unowned.get(variant_id, 0)
+        if owned > 0:
+            held[variant_id] = owned
+    if not held:
+        return ZERO
+    prices = ProductVariant.objects.filter(pk__in=held).values_list("pk", "unit_price")
+    total = sum(
+        (held[variant_id] * Decimal(price) for variant_id, price in prices),
+        Decimal("0"),
+    )
+    return total.quantize(MONEY_PLACES)
+
+
 def _balances_as_of(as_of):
     """The last ledger entry per variant and warehouse at the close of ``as_of``.
 
@@ -201,6 +243,7 @@ __all__ = [
     "stock_cost_value",
     "stock_movement_values",
     "stock_position_by_variant",
+    "stock_retail_value",
 ]
 
 

@@ -5,6 +5,9 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/data/models/report_run.dart';
 import 'package:pointy_frontend/src/features/reports/views/report_result_view.dart';
 
+import '../balance_sheet_payload.dart';
+import '../identified_payloads.dart';
+
 /// The on-screen report has to say the three things the printed one used to
 /// leave out: that a schedule is short, what it totals, and what its figures
 /// mean.
@@ -100,6 +103,76 @@ void main() {
     ];
     await pump(tester, closed);
     expect(find.text('فترة مقفلة'), findsOneWidget);
+  });
+
+  testWidgets('reads a balance sheet as ours, what we owe, and the zakat', (
+    tester,
+  ) async {
+    await pump(tester, balanceSheetPayload());
+
+    expect(find.text('لنا — الأصول'), findsOneWidget);
+    expect(find.text('علينا — الخصوم'), findsOneWidget);
+    expect(find.text('حساب الزكاة'), findsOneWidget);
+    expect(find.text('البضاعة بسعر البيع'), findsOneWidget);
+    // Headline and zakat row both state it.
+    expect(find.text('4.25 د.ل'), findsNWidgets(2));
+    // Every key the payload carries has Arabic: an unknown one prints بيان,
+    // and an unknown note code prints nothing at all.
+    expect(find.text('بيان'), findsNothing);
+    expect(find.textContaining('نهاية يوم 2026-09-15'), findsOneWidget);
+    expect(find.textContaining('النصاب'), findsOneWidget);
+  });
+
+  group('the identified-stock reports', () {
+    /// Any text on the page that is still a payload key.
+    Iterable<String> untranslated(WidgetTester tester) {
+      final key = RegExp(r'^[a-z]+(_[a-z0-9]+)+$');
+      return tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data ?? '')
+          .where((data) => data == 'بيان' || key.hasMatch(data));
+    }
+
+    testWidgets('aging reads the shelf in age bands', (tester) async {
+      await pump(tester, identifiedPayload('unit_aging'));
+
+      expect(untranslated(tester), isEmpty);
+      expect(find.text('الأجهزة حسب مدة بقائها'), findsOneWidget);
+      expect(find.text('٩٠ – ١٧٩ يومًا'), findsOneWidget);
+      expect(find.text('أجهزة راكدة (٩٠ يومًا فأكثر)'), findsOneWidget);
+      expect(find.textContaining('تشغل المكان نفسه'), findsOneWidget);
+    });
+
+    testWidgets('margin shows the handset that lost money', (tester) async {
+      await pump(tester, identifiedPayload('unit_margin'));
+
+      expect(untranslated(tester), isEmpty);
+      expect(find.text('-50.00 د.ل'), findsOneWidget);
+      expect(find.text('أجهزة بيعت بخسارة'), findsOneWidget);
+    });
+
+    testWidgets('a ledger names every movement of the article', (tester) async {
+      await pump(tester, identifiedPayload('unit_ledger'));
+
+      expect(untranslated(tester), isEmpty);
+      expect(find.text('استلام مشتريات'), findsOneWidget);
+      expect(find.text('وارد'), findsOneWidget);
+      expect(find.text('صادر'), findsOneWidget);
+      expect(find.text('مباعة'), findsOneWidget);
+      expect(
+        find.textContaining('بغض النظر عن الفترة المختارة'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the consignment ledger names who is owed', (tester) async {
+      await pump(tester, identifiedPayload('consignment_ledger'));
+
+      expect(untranslated(tester), isEmpty);
+      expect(find.text('مستحقات لم تُصرف لأصحابها'), findsOneWidget);
+      expect(find.text('سالم'), findsNWidgets(2));
+      expect(find.text('مستحقات لأصحاب الأمانات'), findsOneWidget);
+    });
   });
 
   testWidgets('shows the movement against the comparison window', (

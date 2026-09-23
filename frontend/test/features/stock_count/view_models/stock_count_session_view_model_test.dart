@@ -52,8 +52,6 @@ void main() {
       expect(repo.drafts.single.mode, StockCountEntryMode.replace);
       expect(vm.countedCount, 1);
       expect(vm.currentVariant, isNull, reason: 'advances to the next item');
-      // Blind: a within-threshold entry never surfaces the expected quantity.
-      expect(vm.pendingVariance, isNull);
     },
   );
 
@@ -90,7 +88,7 @@ void main() {
     expect(second.input, '7');
   });
 
-  test('a flagged entry surfaces the variance prompt once', () async {
+  test('a flagged entry is saved and the loop moves straight on', () async {
     final repo = _FakeStockCountRepository()
       ..nextExpected = 50
       ..nextNeedsReview = true;
@@ -106,13 +104,11 @@ void main() {
     vm.appendDigit('3');
     await vm.submit();
 
-    expect(vm.pendingVariance, isNotNull);
-    expect(vm.pendingVariance!.expected, 50);
-    expect(vm.pendingVariance!.counted, 3);
-
-    vm.recountVariance();
-    expect(vm.pendingVariance, isNull);
-    expect(vm.currentVariant?.id, variant.id, reason: 're-selected to recount');
+    // Reconciliation reviews the gap; the counter is not stopped for it.
+    expect(repo.drafts.single.countedQuantity, 3);
+    expect(vm.countedQuantityFor(variant.id), 3);
+    expect(vm.currentVariant, isNull, reason: 'advances to the next item');
+    expect(vm.input, isEmpty);
   });
 
   test(

@@ -54,17 +54,45 @@ enum ProductStockFilter implements QueryFilterSet {
   }
 }
 
-/// Whether products a *feature* owns — today the one service product per
-/// recharge provider — are included. They exist so a top-up has an order line
-/// to be, are priced per line from the provider's quote, and so carry a
-/// standing price of zero; a till that showed one offered a free recharge.
-/// Hidden everywhere by default, and only the back-office catalog opts in via
-/// [includeSystem] so an owner can still rename one and see what it earned.
+/// Whether products a *feature* owns are included. There are two kinds: the
+/// service product a recharge is rung up as (priced per line from the
+/// provider's quote, so its standing price is zero — a till that showed one
+/// offered a free recharge), and a provider's cards (Qareeb), which the till
+/// sells from the catalog like anything else.
+///
+/// Hidden everywhere by default. The till asks for the cards it sells
+/// ([sellable]); the back-office catalog asks for all of them ([includeSystem])
+/// so an owner can see them and what they earned, though never edit them.
 enum ProductSystemFilter implements QueryFilterSet {
   excludeSystem(null),
+  sellable(QueryFilter(parameter: 'system', value: 'sellable')),
   includeSystem(QueryFilter(parameter: 'system', value: 'all'));
 
   const ProductSystemFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
+/// Which half of a product a search reads — the per-device search-mode picker
+/// on the till, the purchasing screen and the catalog.
+///
+/// [all] is the ordinary search (names, codes and barcodes together, codes
+/// first for a number) and sends nothing. [code] reads only the SKU, the
+/// barcode and the carton barcodes; [name] only the product and variant names
+/// and their aliases. Maps to the server's `?search_in=`, which a server that
+/// predates it ignores — the search then simply stays the ordinary one.
+enum ProductSearchMode implements QueryFilterSet {
+  all(null),
+  code(QueryFilter(parameter: 'search_in', value: 'code')),
+  name(QueryFilter(parameter: 'search_in', value: 'name'));
+
+  const ProductSearchMode(this._filter);
 
   final QueryFilter? _filter;
 
@@ -104,6 +132,7 @@ class ProductQuery extends ModelQuery {
     this.preferredSupplierId,
     this.warehouseId,
     this.ordering = ProductOrdering.name,
+    this.searchMode = ProductSearchMode.all,
   });
 
   @override
@@ -135,8 +164,14 @@ class ProductQuery extends ModelQuery {
   @override
   final ProductOrdering ordering;
 
+  /// What [search] reads. Only ever sent alongside a search term: browsing
+  /// with no term is the same request in every mode, so it keeps one cache
+  /// entry rather than three.
+  final ProductSearchMode searchMode;
+
   @override
   Iterable<QueryFilter> get filters => [
+    if (search.trim().isNotEmpty) ...searchMode.filters,
     ...availability.filters,
     ...archived.filters,
     ...stock.filters,
@@ -168,6 +203,7 @@ class ProductQuery extends ModelQuery {
     ProductStockFilter? stock,
     ProductSystemFilter? system,
     ProductOrdering? ordering,
+    ProductSearchMode? searchMode,
   }) {
     return ProductQuery(
       search: search ?? this.search,
@@ -182,6 +218,7 @@ class ProductQuery extends ModelQuery {
       supplierName: supplierName,
       preferredSupplierId: preferredSupplierId,
       ordering: ordering ?? this.ordering,
+      searchMode: searchMode ?? this.searchMode,
     );
   }
 
@@ -201,6 +238,7 @@ class ProductQuery extends ModelQuery {
       supplierName: supplierName,
       preferredSupplierId: preferredSupplierId,
       ordering: ordering,
+      searchMode: searchMode,
     );
   }
 
@@ -220,6 +258,7 @@ class ProductQuery extends ModelQuery {
       supplierName: supplierName,
       preferredSupplierId: preferredSupplierId,
       ordering: ordering,
+      searchMode: searchMode,
     );
   }
 
@@ -239,6 +278,7 @@ class ProductQuery extends ModelQuery {
       supplierName: supplierName,
       preferredSupplierId: preferredSupplierId,
       ordering: ordering,
+      searchMode: searchMode,
     );
   }
 
@@ -254,7 +294,8 @@ class ProductQuery extends ModelQuery {
         other.system == system &&
         other.supplierId == supplierId &&
         other.preferredSupplierId == preferredSupplierId &&
-        other.ordering == ordering;
+        other.ordering == ordering &&
+        other.searchMode == searchMode;
   }
 
   @override
@@ -269,6 +310,7 @@ class ProductQuery extends ModelQuery {
     supplierId,
     preferredSupplierId,
     ordering,
+    searchMode,
   );
 
   static bool _sameCategoryIds(

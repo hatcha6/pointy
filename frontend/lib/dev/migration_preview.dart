@@ -226,6 +226,8 @@ Map<String, Object?> _sourceJson(String screen) {
       'party_balance',
       'purchase_order',
       'sale',
+      'stock',
+      'money_account',
     ],
     'supports_stock_filter': true,
   };
@@ -685,7 +687,8 @@ class _FakeMigrationRepository implements MigrationRepository {
               'party_balance',
             ],
             'options': {
-              'stock_source': 'cost_only',
+              'stock_source': 'none',
+              'carry_costs': true,
               'party_balance_basis': 'current',
             },
             'is_preset': true,
@@ -696,6 +699,18 @@ class _FakeMigrationRepository implements MigrationRepository {
             'description': '',
             'entities': ['category', 'product', 'variant'],
             'options': {'stock_source': 'none', 'party_balance_basis': 'auto'},
+            'is_preset': true,
+          },
+          {
+            'key': 'costs_only',
+            'label': 'تحديث التكلفة فقط',
+            'description': '',
+            'entities': ['stock'],
+            'options': {
+              'stock_source': 'none',
+              'carry_costs': true,
+              'attach_to_catalogue': true,
+            },
             'is_preset': true,
           },
           {

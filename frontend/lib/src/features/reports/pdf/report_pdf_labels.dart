@@ -51,6 +51,8 @@ class ReportPdfLabels {
         BusinessReportType.customerStatement: 'كشف عميل',
         BusinessReportType.supplierStatement: 'كشف مورد',
         BusinessReportType.discountAudit: 'تدقيق الخصومات',
+        BusinessReportType.balanceSheet: 'الميزانية العمومية',
+        BusinessReportType.consignmentLedger: 'الأمانات',
         BusinessReportType.auditTrail: 'سجل تدقيق',
       };
 

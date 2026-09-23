@@ -362,6 +362,10 @@ class KassConnector(BaseConnector):
                 # The card's moving-average cost, which is what the source's own
                 # sale lines are stamped with.
                 unit_cost=_to_decimal(record.get("nawprice")),
+                # What ``_products`` made the barcode and SKU, so a costs-only
+                # run can find the product a previous import created.
+                barcode=_clean(record.get("barcode"))[:64],
+                sku=_clean(record.get("barcode"))[:64],
                 raw=record,
             )
 

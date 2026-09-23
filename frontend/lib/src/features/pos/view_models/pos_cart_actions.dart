@@ -60,7 +60,8 @@ extension PosCartActions on PosViewModel {
       source: source,
     )) {
       if (_activeLineAddSources.contains(source)) {
-        _activeCartLineKey = stockUnit != null
+        _activeCartLineKey =
+            stockUnit != null || (variant.productDetail?.isVoucher ?? false)
             ? _cart.lastOrNull?.lineKey
             : _mergeableLineFor(
                 variant,
@@ -98,9 +99,10 @@ extension PosCartActions on PosViewModel {
       stockUnit: stockUnit,
       stockBatch: stockBatch,
     )) {
-      // An identified article never merges, so the line it created is the last
-      // one; anything else is found by its merge key as before.
-      final updatedLine = stockUnit != null
+      // An identified article or a provider's card never merges, so the line
+      // it created is the last one; anything else is found by its merge key.
+      final updatedLine =
+          stockUnit != null || (variant.productDetail?.isVoucher ?? false)
           ? _cart.lastOrNull
           : _mergeableLineFor(variant, modifiers, unitCode);
       if (updatedLine != null) {
@@ -143,9 +145,10 @@ extension PosCartActions on PosViewModel {
               // line — never a quantity of two, which would be a claim to hold
               // two devices with the same IMEI.
               !line.isSerialized &&
-              // Same reasoning for a top-up: each one is its own purchase from
-              // the provider, with its own cost and its own confirmation.
-              !line.isIntegrationRecharge,
+              // Same reasoning for a top-up or a provider's card: each one is
+              // its own purchase from the provider, with its own cost, its own
+              // confirmation and — for a card — its own PIN.
+              !line.isProviderLine,
         )
         .firstOrNull;
   }
@@ -434,9 +437,12 @@ extension PosCartActions on PosViewModel {
 
     final signature = _modifierSignature(modifiers);
     final unitCode = _unitCodeFor(unit);
-    final index = stockUnit != null
-        // An identified article never merges into anything, and nothing merges
-        // into it: the line IS the handset.
+    // An identified article never merges into anything, and nothing merges
+    // into it: the line IS the handset. A provider's card is the same — one
+    // card, one PIN, one purchase — so tapping it again adds a second line.
+    final neverMerges =
+        stockUnit != null || (variant.productDetail?.isVoucher ?? false);
+    final index = neverMerges
         ? -1
         : _cart.indexWhere(
             (line) =>
@@ -445,6 +451,8 @@ extension PosCartActions on PosViewModel {
                 line.modifierSignature == signature &&
                 line.unitCode == unitCode &&
                 !line.isSerialized &&
+                // Nothing merges into a top-up or a card either.
+                !line.isProviderLine &&
                 // A line pinned to a lot only merges with one pinned to the
                 // same lot; leaving that to FEFO and pinning it are two
                 // different instructions.
@@ -568,6 +576,12 @@ extension PosCartActions on PosViewModel {
       return;
     }
     final line = _cart[index];
+    // A top-up or a provider's card is priced by the server from the
+    // provider's own figures, and the server replaces any price a till sends
+    // for one — so the till does not pretend it could be changed.
+    if (line.isProviderLine) {
+      return;
+    }
     // A price equal to what it would have sold for anyway is not an override:
     // recording it as one would put a repriced badge on a line nobody changed.
     final normalized = unitPrice == null || unitPrice == line.listUnitPrice

@@ -118,7 +118,10 @@ void main() {
       final viewModel = FakeReportRepository().viewModel();
       await viewModel.load();
 
-      expect(viewModel.reportsByCategory.keys, containsAll(['sales', 'receivables']));
+      expect(
+        viewModel.reportsByCategory.keys,
+        containsAll(['sales', 'receivables']),
+      );
       expect(viewModel.reportsByCategory['receivables']!.length, 2);
     });
 
@@ -132,6 +135,51 @@ void main() {
       expect(viewModel.selectedType, ReportRunType.salesSummary);
     });
 
+    test(
+      'a report this build cannot name is left out, not relabelled',
+      () async {
+        // A newer server can always offer a report this client never learned.
+        // The fallback used to render each as a second "sales summary" — and,
+        // the sales summary being the default selection, one that looked
+        // selected.
+        final viewModel = FakeReportRepository(
+          extraReports: [
+            {'key': 'fixed_asset_register', 'category': 'assets'},
+            {'key': 'balance_sheet', 'category': 'close'},
+          ],
+        ).viewModel();
+        await viewModel.load();
+
+        final types = [for (final entry in viewModel.reports) entry.type];
+        expect(
+          types.where((type) => type == ReportRunType.salesSummary),
+          hasLength(1),
+        );
+        expect(viewModel.reportsByCategory.containsKey('assets'), isFalse);
+        expect(types, contains(ReportRunType.balanceSheet));
+      },
+    );
+
+    test(
+      'the four identified-stock reports are offered as themselves',
+      () async {
+        final viewModel = FakeReportRepository(
+          extraReports: _identifiedReports,
+        ).viewModel();
+        await viewModel.load();
+
+        expect(
+          viewModel.reportsByCategory['inventory']!.map((entry) => entry.type),
+          [
+            ReportRunType.unitAging,
+            ReportRunType.unitMargin,
+            ReportRunType.unitLedger,
+            ReportRunType.consignmentLedger,
+          ],
+        );
+      },
+    );
+
     test('the accounting calendar arrives with the catalogue', () async {
       final viewModel = FakeReportRepository(
         lockedThrough: DateTime(2026, 8, 31),
@@ -140,6 +188,45 @@ void main() {
 
       expect(viewModel.lock.lockedThrough, DateTime(2026, 8, 31));
       expect(viewModel.lock.canManage, isTrue);
+    });
+  });
+
+  group('one article at a time', () {
+    test('the unit ledger cannot run until an article is named', () async {
+      final viewModel = FakeReportRepository(
+        extraReports: _identifiedReports,
+      ).viewModel();
+      await viewModel.load();
+      viewModel.selectType(ReportRunType.unitLedger);
+
+      expect(viewModel.canRun, isFalse);
+
+      viewModel.selectUnitCode('   ');
+      expect(viewModel.canRun, isFalse);
+
+      // A scanner or a hand can leave spaces either side; the server matches
+      // the identifier, not the keystrokes.
+      viewModel.selectUnitCode(' 351234567890116 ');
+      expect(viewModel.canRun, isTrue);
+      expect(viewModel.currentParams()['code'], '351234567890116');
+    });
+
+    test('a code rides only with the report that asks for it', () async {
+      final viewModel = FakeReportRepository(
+        extraReports: _identifiedReports,
+      ).viewModel();
+      await viewModel.load();
+      viewModel
+        ..selectType(ReportRunType.unitLedger)
+        ..selectUnitCode('351234567890116')
+        ..selectType(ReportRunType.unitAging);
+
+      expect(viewModel.currentParams().containsKey('code'), isFalse);
+      expect(viewModel.canRun, isTrue);
+
+      // And it is still there on the way back.
+      viewModel.selectType(ReportRunType.unitLedger);
+      expect(viewModel.currentParams()['code'], '351234567890116');
     });
   });
 
@@ -155,3 +242,16 @@ void main() {
     });
   });
 }
+
+/// The server's four identified-stock reports, as its catalogue lists them.
+const _identifiedReports = [
+  {'key': 'unit_aging', 'category': 'inventory', 'point_in_time': true},
+  {'key': 'unit_margin', 'category': 'inventory'},
+  {
+    'key': 'unit_ledger',
+    'category': 'inventory',
+    'required_params': ['code'],
+    'point_in_time': true,
+  },
+  {'key': 'consignment_ledger', 'category': 'inventory'},
+];

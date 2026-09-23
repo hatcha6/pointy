@@ -11,8 +11,12 @@ Two rules shape this module, and both come from apps.sales:
   in :class:`IntegrationFulfillment`.
 
 The fulfillment is written ``pending``: the sale happened, the provider has not
-been told. Until a write path exists that can be at-most-once, that is the only
-honest state for it to be in.
+been told yet. The till performs it the moment the sale is recorded, through
+the at-most-once guard in :mod:`apps.integrations.recharge`.
+
+A card off a provider's shelf (Qareeb) is the same thing with nothing for the
+till to say: the variant *is* the card, so the payload is built server-side
+(:func:`voucher_line_payload`) and priced from the mirror, never the request.
 """
 
 from __future__ import annotations
@@ -54,6 +58,29 @@ class IntegrationLineSerializer(serializers.Serializer):
     cost = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
 
 
+def voucher_line_payload(variant) -> dict | None:
+    """The fulfillment a card off a provider's shelf carries, built from the variant.
+
+    A voucher line needs nothing from the till: which card, whose shelf and
+    what it costs are all the server's own record of that variant. So the
+    checkout builds the payload itself, and a till that sends one — or sends
+    none — cannot change what is bought. ``None`` for any other variant.
+    """
+    from .vouchers import voucher_for_variant
+
+    product = getattr(variant, "product", None)
+    if product is None or product.system_kind != product.SystemKind.VOUCHER:
+        return None
+    voucher = voucher_for_variant(variant)
+    if voucher is None:
+        return None
+    return {
+        "provider": voucher.account.provider,
+        "subscriber_ref": "",
+        "option_code": voucher.code,
+    }
+
+
 def resolve_line_integration(payload: dict, variant):
     """Validate a top-up payload and price it. Returns the normalized dict.
 
@@ -66,6 +93,9 @@ def resolve_line_integration(payload: dict, variant):
         raise serializers.ValidationError(
             {"integration": "Unknown or unavailable provider."}
         )
+
+    if catalog.CAPABILITY_VOUCHERS in spec.capabilities:
+        return _resolve_voucher_line(provider, variant)
 
     # The line must be rung up as that provider's own service product. Anything
     # else would let a top-up be attached to, say, a bag of rice — and the
@@ -127,6 +157,45 @@ def resolve_line_integration(payload: dict, variant):
     }
 
 
+def _resolve_voucher_line(provider: str, variant) -> dict:
+    """A card off the shelf: everything comes from the server's own mirror.
+
+    The price is the one the catalog shows (``vouchers.voucher_price``), the
+    cost is the provider's as last read, and the card is the one this variant
+    *is* — never an option code a till could have swapped.
+    """
+    from .vouchers import voucher_for_variant, voucher_price
+
+    voucher = voucher_for_variant(variant)
+    if voucher is None or voucher.account.provider != provider:
+        raise serializers.ValidationError(
+            {"integration": "This line is not one of the provider's cards."}
+        )
+    account = voucher.account
+    if not account.is_active or not account.is_configured:
+        raise serializers.ValidationError(
+            {"integration": "This provider is not configured."}
+        )
+    brand = voucher.brand
+    return {
+        "account": account,
+        "provider": provider,
+        "subscriber": None,
+        # A card off a shelf belongs to nobody until it is scratched.
+        "subscriber_ref": "",
+        "option_code": voucher.code,
+        "option_label": f"{brand.name} {voucher.label}".strip()[:160],
+        "months": 0,
+        # The brand, in the provider's own code: two brands' cards can cost
+        # the same, and reconciliation must not confirm one with the other.
+        "package_id": brand.code[:32],
+        "package_name": brand.name[:160],
+        "cost": voucher.cost,
+        "price": voucher_price(account, voucher),
+        "voucher": voucher,
+    }
+
+
 def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
     """Record, beside the line that sold it, what the provider still owes."""
     return IntegrationFulfillment.objects.create(
@@ -143,3 +212,21 @@ def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
         cost=resolved["cost"],
         status=IntegrationFulfillment.Status.PENDING,
     )
+
+
+def fulfillment_kind(fulfillment) -> str:
+    """``voucher`` for a card sold off a provider's shelf, else ``recharge``.
+
+    A voucher is the thing sold — its PIN is printed for the customer — where
+    a recharge is time put on a line somebody named. Readers that treat them
+    differently (the receipt, reconciliation, the till's result dialog) ask
+    this rather than each re-deriving it.
+    """
+    spec = catalog.spec_for(fulfillment.provider)
+    if (
+        spec is not None
+        and catalog.CAPABILITY_VOUCHERS in spec.capabilities
+        and not fulfillment.subscriber_ref
+    ):
+        return "voucher"
+    return "recharge"

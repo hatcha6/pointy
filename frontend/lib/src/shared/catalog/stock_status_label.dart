@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../design/design.dart';
+import '../formatters.dart';
+import '../units.dart';
 
 class StockStatusLabel extends StatelessWidget {
   const StockStatusLabel({
@@ -10,12 +12,25 @@ class StockStatusLabel extends StatelessWidget {
     required this.isActive,
     this.lowStockThreshold = 5,
     this.compact = false,
-  });
+  }) : _showCount = false;
+
+  /// The on-hand count in place of the status word, which becomes its tooltip
+  /// — for a table column already headed "stock", where the number is the
+  /// answer. Only a low or empty count takes the status colour, so a column
+  /// of healthy stock reads as plain numbers and the short ones stand out.
+  const StockStatusLabel.count({
+    super.key,
+    required this.quantity,
+    required this.isActive,
+    this.lowStockThreshold = 5,
+  }) : compact = true,
+       _showCount = true;
 
   final double quantity;
   final bool isActive;
   final int lowStockThreshold;
   final bool compact;
+  final bool _showCount;
 
   @override
   Widget build(BuildContext context) {
@@ -46,14 +61,45 @@ class StockStatusLabel extends StatelessWidget {
     final quantityStyle = Theme.of(
       context,
     ).textTheme.bodySmall?.copyWith(color: colors.mutedInk);
+    final dot = DecoratedBox(
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      child: const SizedBox.square(dimension: 8),
+    );
+
+    if (_showCount) {
+      return Tooltip(
+        message: label,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dot,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                ltrIsolated(formatQuantity(quantity)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    PointyTypography.numeric(
+                      Theme.of(context).textTheme.labelLarge ??
+                          const TextStyle(),
+                    ).copyWith(
+                      color: status == _StockStatus.available
+                          ? colors.ink
+                          : color,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: const SizedBox.square(dimension: 8),
-        ),
+        dot,
         const SizedBox(width: 6),
         Flexible(
           child: Text(

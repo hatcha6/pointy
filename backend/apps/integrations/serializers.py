@@ -5,6 +5,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from . import catalog
+from .fulfillment import fulfillment_kind
 from .models import IntegrationAccount
 from .providers import is_implemented
 
@@ -18,6 +19,13 @@ class IntegrationAccountSerializer(serializers.ModelSerializer):
 
     has_password = serializers.SerializerMethodField()
     is_configured = serializers.BooleanField(read_only=True)
+    #: Which declared secret fields hold a value — never the values. The
+    #: client shows "saved" beside each, the way it always has for a password.
+    stored_secrets = serializers.SerializerMethodField()
+    #: The profile the owner chose for a provider whose login can act as
+    #: several (see ``catalog.CAPABILITY_PROFILES``). Blank when none was.
+    profile_id = serializers.SerializerMethodField()
+    profile_name = serializers.SerializerMethodField()
 
     class Meta:
         model = IntegrationAccount
@@ -26,6 +34,9 @@ class IntegrationAccountSerializer(serializers.ModelSerializer):
             "base_url",
             "username",
             "has_password",
+            "stored_secrets",
+            "profile_id",
+            "profile_name",
             "is_configured",
             "is_active",
             "balance",
@@ -42,6 +53,18 @@ class IntegrationAccountSerializer(serializers.ModelSerializer):
     def get_has_password(self, obj) -> bool:
         return obj.has_secret(catalog.FIELD_PASSWORD)
 
+    def get_stored_secrets(self, obj) -> list:
+        spec = obj.spec
+        if spec is None:
+            return []
+        return sorted(key for key in spec.secret_fields if obj.has_secret(key))
+
+    def get_profile_id(self, obj) -> str:
+        return str((obj.config or {}).get("profile_id") or "")
+
+    def get_profile_name(self, obj) -> str:
+        return str((obj.config or {}).get("profile_name") or "")
+
 
 class ProviderSerializer(serializers.Serializer):
     """A catalog entry, with this shop's account merged in when there is one."""
@@ -52,6 +75,7 @@ class ProviderSerializer(serializers.Serializer):
     capabilities = serializers.ListField(child=serializers.CharField())
     fields = serializers.ListField(child=serializers.CharField())
     secret_fields = serializers.ListField(child=serializers.CharField())
+    optional_fields = serializers.ListField(child=serializers.CharField())
     settings = serializers.ListField(child=serializers.DictField())
     currency = serializers.CharField()
     default_base_url = serializers.CharField()
@@ -67,6 +91,9 @@ class ProviderSerializer(serializers.Serializer):
             "capabilities": list(spec.capabilities),
             "fields": list(spec.fields),
             "secret_fields": sorted(spec.secret_fields),
+            # Offered by the form, never required: a blank one leaves the
+            # account configured.
+            "optional_fields": sorted(spec.optional_fields),
             # Both halves together: what may be set, and what it is right now.
             # The client renders one generic form from this, so a provider's
             # knobs never need a Flutter release — the same bargain ``fields``
@@ -106,6 +133,11 @@ class IntegrationAccountWriteSerializer(serializers.Serializer):
     username = serializers.CharField(required=False, allow_blank=True, max_length=120)
     password = serializers.CharField(
         required=False, allow_blank=True, write_only=True, max_length=255, trim_whitespace=False
+    )
+    # A purchase PIN, for a provider that declares one. Same rule as the
+    # password: blank or absent keeps what is stored.
+    pin = serializers.CharField(
+        required=False, allow_blank=True, write_only=True, max_length=32
     )
     is_active = serializers.BooleanField(required=False)
     # Free-form on the way in and validated against the provider's own catalog
@@ -322,6 +354,25 @@ def subscriber_payload(subscriber) -> dict | None:
     }
 
 
+def search_payload(row) -> dict:
+    """One past search the till can offer to run again."""
+    subscriber = row.subscriber
+    return {
+        "id": row.id,
+        "term": row.term,
+        "search_by": row.search_by,
+        "match_count": row.match_count,
+        "card_no": row.card_no,
+        "holder_name": row.holder_name,
+        "package_name": row.package_name,
+        # Who the shop says the card belongs to, read live: naming a card at
+        # the till names every search that ever found it.
+        "subscriber_label": subscriber.label if subscriber is not None else "",
+        "search_count": row.search_count,
+        "last_searched_at": row.last_searched_at,
+    }
+
+
 class SubscriberWriteSerializer(serializers.Serializer):
     """Naming a card's owner — the half the provider will not tell us."""
 
@@ -345,6 +396,10 @@ def charge_payload(outcome) -> dict:
     return {
         "fulfillment": fulfillment.pk if fulfillment else None,
         "order_line": fulfillment.order_line_id if fulfillment else None,
+        "provider": fulfillment.provider if fulfillment else "",
+        # ``voucher`` for a card off a provider's shelf (its PIN is the thing
+        # sold), ``recharge`` for a top-up of somebody's line.
+        "kind": fulfillment_kind(fulfillment) if fulfillment else "",
         "subscriber_ref": fulfillment.subscriber_ref if fulfillment else "",
         "option_label": fulfillment.option_label if fulfillment else "",
         "outcome": outcome.outcome,
@@ -355,4 +410,33 @@ def charge_payload(outcome) -> dict:
         "provider_reference": fulfillment.provider_reference if fulfillment else "",
         "balance_after": outcome.balance_after,
         "receipt": printed or {},
+    }
+
+
+class VerificationSendSerializer(serializers.Serializer):
+    """The owner's reading of the captcha picture."""
+
+    challenge_ref = serializers.CharField(max_length=128)
+    answer = serializers.CharField(max_length=32)
+
+
+class VerificationConfirmSerializer(serializers.Serializer):
+    """The one-time code the provider texted the owner."""
+
+    code = serializers.CharField(max_length=16)
+
+
+class ProfileChoiceSerializer(serializers.Serializer):
+    """Which of a login's profiles Pointy buys as. Blank = whichever is active."""
+
+    profile_id = serializers.CharField(max_length=64, allow_blank=True)
+
+
+def profile_payload(profile, *, chosen: str = "") -> dict:
+    return {
+        "profile_id": profile.profile_id,
+        "name": profile.name,
+        "kind": profile.kind,
+        "is_current": profile.is_current,
+        "is_chosen": bool(chosen) and profile.profile_id == chosen,
     }
