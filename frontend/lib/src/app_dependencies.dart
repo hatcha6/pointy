@@ -59,6 +59,7 @@ import 'data/repositories/user_repository.dart';
 import 'data/services/backend_discovery_service.dart';
 import 'data/services/client_update_service.dart';
 import 'data/services/connection_coordinator.dart';
+import 'data/services/connection_route_reporter.dart';
 import 'data/services/connection_profile_storage.dart';
 import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
@@ -510,7 +511,22 @@ class PointyAppDependencies {
     // own. Registered after the first load so it only handles later transitions.
     _wasConnectionReady = connectionStatus.isReady;
     connectionStatus.addListener(_handleConnectionStatusChanged);
+    _connectionRouteReporter = ConnectionRouteReporter(
+      connectionStatus,
+      ({required from, required to}) => unawaited(
+        analyticsEngine.trackUsage(
+          AnalyticsEventName.connectionRouteChanged,
+          // The relay is the slow path: moving onto it is worth a look.
+          severity: to == 'relay'
+              ? AnalyticsEventSeverity.warning
+              : AnalyticsEventSeverity.info,
+          attributes: {'from': from, 'to': to},
+        ),
+      ),
+    );
   }
+
+  ConnectionRouteReporter? _connectionRouteReporter;
 
   void _handlePriceCheckerModeChanged() {
     // Entering kiosk mode drops the queue; leaving it starts collecting again.
@@ -841,6 +857,7 @@ class PointyAppDependencies {
     serverStateWatcher.dispose();
     revalidator.dispose();
     connectionStatus.removeListener(_handleConnectionStatusChanged);
+    _connectionRouteReporter?.dispose();
     connectionStatus.dispose();
     connectionCoordinator.dispose();
     analyticsEngine.dispose();

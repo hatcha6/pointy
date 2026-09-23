@@ -68,31 +68,44 @@ void main() {
     expect(timings.single.errorMessage, contains('TimeoutException'));
   });
 
-  test('a hung read is retried against the relay fallback target', () async {
+  // A LAN request that times out reached a backend that is slow far more
+  // often than one that is gone — and the relay leads to that same backend.
+  // Replaying there used to double the wait, add load to a struggling server,
+  // and leave the till on the internet path for the rest of the day. The
+  // coordinator hears about it instead and decides after its own look.
+  test('a hung read is not replayed on the relay', () async {
     var attempts = 0;
+    var unreachable = 0;
     final session =
         PosApiSession(
-          client: MockClient((request) {
-            attempts++;
-            if (request.url.host == 'pointy.test') {
-              return Completer<http.Response>().future;
-            }
-            return Future.value(http.Response('{"ok":true}', 200));
-          }),
-          baseUrl: 'http://pointy.test/api',
-          requestTimeout: short,
-        )..configureConnectionTarget(
-          baseUrl: 'http://pointy.test/api',
-          fallbackTarget: const ApiConnectionTarget(
-            baseUrl: 'https://relay.test/api',
-            relayToken: 'token',
-          ),
-        );
+            client: MockClient((request) {
+              attempts++;
+              if (request.url.host == 'pointy.test') {
+                return Completer<http.Response>().future;
+              }
+              return Future.value(http.Response('{"ok":true}', 200));
+            }),
+            baseUrl: 'http://pointy.test/api',
+            requestTimeout: short,
+          )
+          ..configureConnectionTarget(
+            baseUrl: 'http://pointy.test/api',
+            fallbackTarget: const ApiConnectionTarget(
+              baseUrl: 'https://relay.test/api',
+              relayToken: 'token',
+            ),
+          )
+          ..onLocalTargetUnreachable = () => unreachable++;
 
-    final response = await session.get('products/').timeout(testBound);
+    await expectLater(
+      session.get('products/'),
+      throwsA(isA<TimeoutException>()),
+    ).timeout(testBound);
 
-    expect(response.statusCode, 200);
-    expect(attempts, 2);
+    expect(attempts, 1);
+    expect(session.usesRelay, isFalse);
+    expect(session.baseUrl, 'http://pointy.test/api');
+    expect(unreachable, 1);
   });
 
   test(
@@ -122,7 +135,7 @@ void main() {
   );
 
   test(
-    'a hung write with an idempotency key is replayed on the fallback',
+    'a hung write is not replayed on the relay even with an idempotency key',
     () async {
       var attempts = 0;
       final session =
@@ -144,16 +157,17 @@ void main() {
             ),
           );
 
-      final response = await session
-          .post(
-            'orders/checkout/',
-            body: {'lines': []},
-            idempotencyKey: 'checkout:1',
-          )
-          .timeout(testBound);
+      await expectLater(
+        session.post(
+          'orders/checkout/',
+          body: {'lines': []},
+          idempotencyKey: 'checkout:1',
+        ),
+        throwsA(isA<TimeoutException>()),
+      ).timeout(testBound);
 
-      expect(response.statusCode, 201);
-      expect(attempts, 2);
+      expect(attempts, 1);
+      expect(session.usesRelay, isFalse);
     },
   );
 

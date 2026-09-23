@@ -221,6 +221,10 @@ class PosApiService {
 
   /// Drop every cached response body — see [PosApiSession.purgeCachedResponses].
   void purgeCachedResponses() => _session.purgeCachedResponses();
+
+  /// Drop cached bodies AND state counters — see
+  /// [PosApiSession.forgetBackendState].
+  void forgetBackendState() => _session.forgetBackendState();
   bool get usesRelay => _session.usesRelay;
 
   late final PosApiSession _session;
@@ -292,8 +296,9 @@ class PosApiService {
     _session.performanceRecorder = recorder;
   }
 
-  /// Fires when a request fails against a local (LAN) target — the coordinator
-  /// uses it to trigger a debounced background re-discovery.
+  /// Fires when a request fails against a local (LAN) target — including one
+  /// the relay then answered, since that leaves the session on the relay. The
+  /// coordinator uses it to re-find the LAN or to hold the relay honestly.
   set onLocalTargetUnreachable(void Function()? callback) {
     _session.onLocalTargetUnreachable = callback;
   }

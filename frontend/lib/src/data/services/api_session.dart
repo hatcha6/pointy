@@ -142,8 +142,10 @@ class PosApiSession {
 
   /// Invoked when a request fails at the transport level while pointed at a
   /// local (LAN) target — the signal the on-prem backend has moved or the
-  /// network flapped. The coordinator debounces this into a background
-  /// re-discovery so the LAN target self-heals without an app restart.
+  /// network flapped. Fired even when the relay then answered the request,
+  /// because that leaves the whole session on the relay. The coordinator
+  /// debounces this into a background re-discovery so the LAN target
+  /// self-heals without an app restart.
   void Function()? onLocalTargetUnreachable;
 
   /// LRU of (etag, body) per request URL for opt-in conditional GETs — the
@@ -211,9 +213,26 @@ class PosApiSession {
     String relayToken = '',
     ApiConnectionTarget? fallbackTarget,
   }) {
-    _baseUrl = _normalizeBaseUrl(baseUrl);
+    final nextBaseUrl = _normalizeBaseUrl(baseUrl);
+    final sameAddress = nextBaseUrl == _baseUrl;
+    _baseUrl = nextBaseUrl;
     _relayToken = relayToken.trim();
     _fallbackTarget = fallbackTarget;
+    if (sameAddress) {
+      // Re-confirming the address we already talk to — a rediscovery that
+      // found the same LAN server, a refreshed relay ticket. Its cached bodies,
+      // shared reads and counters are still that server's; dropping them made
+      // every such confirmation a full re-download of each screen. A different
+      // installation behind the same address is the coordinator's to notice,
+      // and it calls [forgetBackendState] for that.
+      return;
+    }
+    forgetBackendState();
+  }
+
+  /// Drop everything this session learnt from its backend: cached bodies,
+  /// reads in flight, and the state counters.
+  void forgetBackendState() {
     _conditionalCache.clear();
     // New callers must not join requests still in flight to the old target.
     _inFlightGets.clear();
@@ -848,14 +867,22 @@ class PosApiSession {
       );
       return response;
     } on Exception catch (exception) {
-      // A connection that never opened proves the server never saw the
-      // request, so replaying it on the relay is free. A request that timed
-      // out proves nothing: the sale may already be recorded. Replay those
-      // only when the server can recognise the repeat — a GET, or a write
-      // carrying an idempotency key — and otherwise surface the timeout so
-      // the cashier decides, rather than risk billing the customer twice.
-      final mayReplay = replayable || exception is! TimeoutException;
-      if (mayReplay && _fallbackTarget != null && _fallbackTarget!.isUsable) {
+      // Replay this one request on the relay only when both hold:
+      //
+      // - It failed without timing out (refused, reset, unreachable): the LAN
+      //   path is broken. A timeout on the LAN is far more often a slow
+      //   backend, and the relay reaches that very backend — replaying there
+      //   doubled the wait and the load on a server already struggling.
+      // - The server can recognise a repeat — a GET, or a write carrying an
+      //   idempotency key. A reset can arrive after the request was sent, so
+      //   "failed" never proves "not recorded"; anything else is surfaced so
+      //   the cashier decides, rather than risk billing a customer twice.
+      //
+      // Either way the coordinator hears about a LAN failure (below) and
+      // decides where the session lives from here: back on the LAN once it
+      // answers, or on the relay with a probe running to find the way back.
+      final replay = wasLocal && replayable && exception is! TimeoutException;
+      if (replay && _fallbackTarget != null && _fallbackTarget!.isUsable) {
         final fallback = _fallbackTarget!;
         _fallbackTarget = null;
         configureConnectionTarget(
@@ -875,12 +902,16 @@ class PosApiSession {
             responseSizeBytes: response.bodyBytes.length,
             traceId: traceId,
           );
+          // The relay rescued this request, but the session now lives there.
+          // Until this call existed nothing ever brought it back: a till that
+          // hit one LAN hiccup ran the rest of the day over the internet.
+          onLocalTargetUnreachable?.call();
           return response;
         } on Exception {
           // Record the original failure below; it is usually the LAN failure
           // that caused routing to fall back.
         }
-      } else if (mayReplay && _fallbackTarget != null) {
+      } else if (replay && _fallbackTarget != null) {
         _fallbackTarget = null;
       }
       stopwatch.stop();

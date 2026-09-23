@@ -95,12 +95,17 @@ void main() {
           relayToken: 'ptt1.ticket',
         ),
       );
+      var unreachable = 0;
+      session.onLocalTargetUnreachable = () => unreachable++;
 
       final response = await session.get('products/');
 
       expect(response.statusCode, 200);
       expect(session.baseUrl, 'https://relay.test/api');
       expect(session.usesRelay, isTrue);
+      // The relay answered, but the session now lives there: the coordinator
+      // must hear about it, or nothing ever brings the till back to the LAN.
+      expect(unreachable, 1);
     },
   );
 

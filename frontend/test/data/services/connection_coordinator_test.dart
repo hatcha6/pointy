@@ -656,6 +656,292 @@ void main() {
     expect(status.isReady, isTrue);
     coordinator.dispose();
   });
+
+  group('coming back from the relay', () {
+    // Milliseconds here; the real schedule runs seconds to minutes.
+    const startupLooks = [Duration.zero, Duration(milliseconds: 10)];
+    const returnLooks = [Duration(milliseconds: 20)];
+
+    late _ShopNetwork shop;
+    late ConnectionStatusController status;
+    late PosApiService service;
+    late ConnectionCoordinator coordinator;
+
+    void build(ConnectionProfile profile) {
+      final storage = MemoryConnectionProfileStorage(
+        deviceId: 'device-1',
+        profile: profile,
+      );
+      status = ConnectionStatusController();
+      service = PosApiService(client: shop.client, baseUrl: _lanApi);
+      coordinator = ConnectionCoordinator(
+        service: service,
+        discovery: BackendDiscoveryService(
+          client: shop.client,
+          defaultApiBaseUrl: _lanApi,
+          udpDiscovery: _noUdp,
+          subnetSweep: _noSweep,
+        ),
+        storage: storage,
+        status: status,
+        startupRecoveryBackoffs: startupLooks,
+        localReturnBackoffs: returnLooks,
+      );
+      service.onLocalTargetUnreachable =
+          coordinator.notifyLocalTargetUnreachable;
+    }
+
+    setUp(() => shop = _ShopNetwork());
+    tearDown(() => coordinator.dispose());
+
+    test('a request the relay rescued shows the relay at once, and the till '
+        'returns to the LAN when it answers again', () async {
+      build(_relayCapableProfile());
+      await coordinator.bootstrap();
+      expect(status.phase, ConnectionPhase.connectedLocal);
+
+      shop.lanUp = false;
+      await service.fetchProducts(query: const ProductQuery());
+
+      expect(service.usesRelay, isTrue, reason: 'the relay answered it');
+      expect(
+        status.phase,
+        ConnectionPhase.connectedRelay,
+        reason: 'and the phase says so, instead of still claiming the LAN',
+      );
+
+      shop.lanUp = true;
+      await _eventually(
+        () => status.phase == ConnectionPhase.connectedLocal,
+        'the till returns to the LAN',
+      );
+      expect(service.usesRelay, isFalse);
+      expect(service.baseUrl, _lanApi);
+    });
+
+    // A phone that walked out of the shop's Wi-Fi: its LAN requests time out,
+    // which never moves the session by itself. The coordinator moves it once
+    // the LAN has failed discovery as well.
+    test(
+      'a LAN that stops answering discovery moves the session to the relay',
+      () async {
+        build(_relayCapableProfile());
+        await coordinator.bootstrap();
+        shop.lanUp = false;
+
+        coordinator.notifyLocalTargetUnreachable();
+
+        await _eventually(
+          () => status.phase == ConnectionPhase.connectedRelay,
+          'moved to the relay',
+        );
+        expect(service.baseUrl, _relayApi);
+
+        shop.lanUp = true;
+        await _eventually(
+          () => status.phase == ConnectionPhase.connectedLocal,
+          'and back once the LAN answers',
+        );
+        expect(service.usesRelay, isFalse);
+      },
+    );
+
+    // A slow backend: one request timed out, but the server still answers
+    // discovery. Nothing moves — and re-finding the same server must not throw
+    // away the cache every screen revalidates against.
+    test('a LAN that still answers keeps the session and its cache', () async {
+      build(_relayCapableProfile());
+      await coordinator.bootstrap();
+      await service.fetchProducts(query: const ProductQuery());
+      final lookedBefore = shop.discoveries;
+
+      coordinator.notifyLocalTargetUnreachable();
+      await _eventually(
+        () => shop.discoveries > lookedBefore && !status.searchingInBackground,
+        'the rediscovery finishes',
+      );
+      await service.fetchProducts(query: const ProductQuery());
+
+      expect(service.usesRelay, isFalse);
+      expect(status.phase, ConnectionPhase.connectedLocal);
+      expect(
+        shop.lanIfNoneMatch.last,
+        'W/"catalog-v1"',
+        reason: 'the ETag cache survived re-finding the same server',
+      );
+    });
+
+    test('a till that boots before its server keeps looking past the startup '
+        'looks', () async {
+      shop.lanUp = false;
+      build(_relayCapableProfile());
+      await coordinator.bootstrap();
+      expect(status.phase, ConnectionPhase.connectedRelay);
+
+      // The bootstrap look, both startup looks, and two more: the old
+      // recovery gave up for good after the startup looks.
+      await _eventually(() => shop.discoveries >= 5, 'still looking');
+      expect(status.phase, ConnectionPhase.connectedRelay);
+
+      shop.lanUp = true;
+      await _eventually(
+        () => status.phase == ConnectionPhase.connectedLocal,
+        'found the server once it came up',
+      );
+      expect(service.usesRelay, isFalse);
+    });
+
+    test('with no way onto the relay, the manual-address screen still '
+        'connects once the server answers', () async {
+      shop.lanUp = false;
+      build(
+        const ConnectionProfile(
+          localApiBaseUrl: _lanApi,
+          relayApiBaseUrl: '',
+          relayToken: '',
+          installationId: 'installation-1',
+          shopName: 'متجر آمن',
+        ),
+      );
+      await coordinator.bootstrap();
+      expect(status.phase, ConnectionPhase.needsManual);
+
+      shop.lanUp = true;
+      await _eventually(
+        () => status.phase == ConnectionPhase.connectedLocal,
+        'connected without anyone typing an address',
+      );
+    });
+
+    test('the hunt stops once the till is back on the LAN', () async {
+      shop.lanUp = false;
+      build(_relayCapableProfile());
+      await coordinator.bootstrap();
+      shop.lanUp = true;
+      await _eventually(
+        () => status.phase == ConnectionPhase.connectedLocal,
+        'back on the LAN',
+      );
+
+      final settled = shop.discoveries;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(shop.discoveries, settled);
+    });
+
+    test('dispose stops the hunt', () async {
+      shop.lanUp = false;
+      build(_relayCapableProfile());
+      await coordinator.bootstrap();
+
+      coordinator.dispose();
+      // Let a look already in flight finish before counting.
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      final settled = shop.discoveries;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(shop.discoveries, settled);
+    });
+
+    // A server rebuilt on the same IP is a different installation; its answers
+    // must not be matched against the old one's cached bodies and counters.
+    test(
+      'a different installation at the same address starts from nothing',
+      () async {
+        build(_relayCapableProfile());
+        await coordinator.bootstrap();
+        await service.fetchProducts(query: const ProductQuery());
+
+        shop.installationId = 'installation-rebuilt';
+        expect(await coordinator.connectManually(_lanApi), isTrue);
+        await service.fetchProducts(query: const ProductQuery());
+
+        expect(shop.lanIfNoneMatch.last, isNull);
+      },
+    );
+  });
+}
+
+const _lanApi = 'http://lan.test/api';
+const _relayApi = 'https://relay.test/api';
+
+/// A subnet sweep that finds nothing, so a hunt never touches the real LAN.
+Future<List<String>> _noSweep({String? expectedInstallationId}) async {
+  return const [];
+}
+
+ConnectionProfile _relayCapableProfile() {
+  return ConnectionProfile(
+    localApiBaseUrl: _lanApi,
+    relayApiBaseUrl: _relayApi,
+    relayToken: 'ptt1.installation-1.ticket',
+    installationId: 'installation-1',
+    shopName: 'متجر آمن',
+    relayTokenExpiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+  );
+}
+
+/// The shop's server on the LAN, which can be switched off and on, and the
+/// relay, which always answers.
+class _ShopNetwork {
+  bool lanUp = true;
+  String installationId = 'installation-1';
+
+  /// Discovery probes that reached the LAN address, up or not.
+  int discoveries = 0;
+
+  /// The If-None-Match of each catalog request that reached the LAN server.
+  final List<String?> lanIfNoneMatch = [];
+
+  late final MockClient client = MockClient((request) async {
+    final url = request.url;
+    if (url.host == 'lan.test') {
+      final isDiscovery = url.path == '/api/discovery/service/';
+      if (isDiscovery) {
+        discoveries++;
+      }
+      if (!lanUp) {
+        throw http.ClientException('Connection refused', url);
+      }
+      if (isDiscovery) {
+        return _jsonResponse(
+          _backendPayload(installationId: installationId, apiBaseUrl: _lanApi),
+        );
+      }
+      const etag = 'W/"catalog-v1"';
+      lanIfNoneMatch.add(request.headers['If-None-Match']);
+      if (request.headers['If-None-Match'] == etag) {
+        return http.Response('', 304, headers: {'etag': etag});
+      }
+      return http.Response(
+        jsonEncode(_emptyProductPage),
+        200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'etag': etag,
+        },
+      );
+    }
+    if (url.host == 'relay.test') {
+      return _jsonResponse(_emptyProductPage);
+    }
+    return http.Response('', 404);
+  });
+}
+
+const _emptyProductPage = <String, Object?>{
+  'count': 0,
+  'next': null,
+  'previous': null,
+  'results': <Object?>[],
+};
+
+Future<void> _eventually(bool Function() condition, String what) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 3));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('timed out waiting until $what');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
 }
 
 /// No-op UDP discovery so tests never open real sockets.
