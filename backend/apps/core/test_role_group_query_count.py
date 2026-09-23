@@ -1,8 +1,10 @@
 """Regression tests for the cost of ``ensure_role_groups``.
 
-``PosUserViewSet.initial`` calls ``ensure_role_groups()`` on *every* request to
-the users screen — list, retrieve, the permission catalog, and every write — so
-the shop re-syncs its eight role groups on a read path. That sync resolved each
+``PosUserViewSet.initial`` used to call ``ensure_role_groups()`` on *every*
+request to the users screen — list, retrieve, the permission catalog, and every
+write — so the shop re-synced its eight role groups on a read path. (It now runs
+on writes only; see ``test_permission_counter_loop.py`` for the loop the read
+path caused.) That sync resolved each
 of its 211 ``app_label.codename`` strings with its own
 ``Permission.objects.filter(...).first()``, which made an idempotent no-op call
 cost 228 queries and ``GET /api/users/`` cost 233 — flat in the number of users,

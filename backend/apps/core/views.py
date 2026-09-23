@@ -10,7 +10,7 @@ from rest_framework.decorators import (
     permission_classes,
     throttle_classes,
 )
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
@@ -274,7 +274,13 @@ class PosUserViewSet(viewsets.ModelViewSet):
         )
 
     def initial(self, request, *args, **kwargs):
-        ensure_role_groups()
+        # Only a write assigns roles, so only a write needs the groups
+        # guaranteed; every migrate (post_migrate) creates them anyway. This
+        # used to run on every read of the users list, and each run moved the
+        # permission counter every device watches — the activity log re-reads
+        # this list on that very signal, so the two fed each other forever.
+        if request.method not in SAFE_METHODS:
+            ensure_role_groups()
         return super().initial(request, *args, **kwargs)
 
     def perform_create(self, serializer):

@@ -20,6 +20,10 @@ import 'server_state.dart';
 ///   cashier must never have the screen move under their hands.
 /// - **Never overlaps itself.** A change arriving during a refresh queues one
 ///   more run afterwards rather than racing it.
+/// - **Can be spaced.** [watch]'s `minInterval` keeps runs at least that far
+///   apart. A refresh whose own requests move the counter it watches would
+///   otherwise go round forever, back to back — one did, from the users list,
+///   and held a shop's backend at ~35 requests a second for an hour.
 ///
 /// It carries no data of its own: every registered callback goes back to the
 /// normal, permission-checked endpoint. Revalidation therefore cannot widen
@@ -41,6 +45,7 @@ class Revalidator {
     required Set<String> domains,
     required Future<void> Function() onStale,
     Duration debounce = const Duration(milliseconds: 400),
+    Duration minInterval = Duration.zero,
     bool Function()? canRun,
     String label = '',
   }) {
@@ -48,6 +53,7 @@ class Revalidator {
       domains: domains,
       onStale: onStale,
       debounce: debounce,
+      minInterval: minInterval,
       canRun: canRun,
       label: label,
     );
@@ -112,6 +118,7 @@ class _Watcher {
     required this.domains,
     required this.onStale,
     required this.debounce,
+    required this.minInterval,
     required this.canRun,
     required this.label,
   });
@@ -119,10 +126,13 @@ class _Watcher {
   final Set<String> domains;
   final Future<void> Function() onStale;
   final Duration debounce;
+  final Duration minInterval;
   final bool Function()? canRun;
   final String label;
 
   Timer? _debounceTimer;
+  Timer? _spacingTimer;
+  DateTime? _lastStartedAt;
   bool _pending = false;
   bool _running = false;
   bool _disposed = false;
@@ -151,8 +161,22 @@ class _Watcher {
     if (canRun != null && !canRun!()) {
       return;
     }
+    // Spaced, not dropped: too soon after the last run, so [_pending] stays
+    // set and the run starts once the gap has passed.
+    final lastStartedAt = _lastStartedAt;
+    if (lastStartedAt != null && minInterval > Duration.zero) {
+      final wait = minInterval - DateTime.now().difference(lastStartedAt);
+      if (wait > Duration.zero) {
+        _spacingTimer ??= Timer(wait, () {
+          _spacingTimer = null;
+          _attempt();
+        });
+        return;
+      }
+    }
     _pending = false;
     _running = true;
+    _lastStartedAt = DateTime.now();
     onStale()
         .catchError((Object _) {
           // A failed refresh leaves the old data on screen, which is exactly the
@@ -177,5 +201,7 @@ class _Watcher {
     _pending = false;
     _debounceTimer?.cancel();
     _debounceTimer = null;
+    _spacingTimer?.cancel();
+    _spacingTimer = null;
   }
 }

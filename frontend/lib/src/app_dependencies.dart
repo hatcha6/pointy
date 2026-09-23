@@ -257,6 +257,11 @@ class PointyAppDependencies {
       label: 'permissions',
       domains: const {ServerStateDomain.permissions},
       debounce: Duration.zero,
+      // This is the heaviest refresh there is — every cache dropped and a
+      // dozen screens re-read — and it re-reads the users list, the one read
+      // a backend bug once turned into a permission change. Spacing it bounds
+      // any such loop to a refresh every few seconds instead of back to back.
+      minInterval: const Duration(seconds: 10),
       onStale: () async {
         service.purgeCachedResponses();
         catalogRepository.invalidateAll();

@@ -395,16 +395,31 @@ def connect_signals() -> None:
 _INVISIBLE_WRITES = ({"last_login"},)
 
 
+def m2m_rows_changed(action, pk_set) -> bool:
+    """Whether an ``m2m_changed`` signal reports rows that actually changed.
+
+    Django sends a ``pre_*`` and a ``post_*`` for every add, remove and clear,
+    and — whenever anything listens to that through table — sends ``add`` even
+    when every row was already there, with an empty ``pk_set``. Counting those
+    as news turned an idempotent ``.add()`` into a change every device hears
+    about: ``ensure_role_groups()`` re-adds the manager's permissions on every
+    read of the users list, which moved the permission counter, which made
+    every till purge its caches and re-read everything — the users list
+    included, on a till that had the activity log open. That was a loop, and
+    it held one shop's backend at ~35 requests a second for as long as the
+    screen stayed open.
+    """
+    if action == "post_clear":
+        return True
+    if action in ("post_add", "post_remove"):
+        return bool(pk_set)
+    return False
+
+
 def _make_receiver(name: str):
     def _bump_domain(sender, **kwargs):
-        # m2m_changed fires for pre_* actions too; bumping twice is harmless but
-        # pointless, so only act on the ones that actually changed rows.
         action = kwargs.get("action")
-        if action is not None and action not in {
-            "post_add",
-            "post_remove",
-            "post_clear",
-        }:
+        if action is not None and not m2m_rows_changed(action, kwargs.get("pk_set")):
             return
         update_fields = kwargs.get("update_fields")
         if update_fields and set(update_fields) in _INVISIBLE_WRITES:

@@ -11,6 +11,7 @@ from django.dispatch import receiver
 from . import caching
 from .models import RelayInstallation, ShopSettings
 from .roles import ensure_role_groups
+from .state_version import m2m_rows_changed
 
 
 @receiver(post_migrate)
@@ -58,7 +59,13 @@ def invalidate_relay_installation_cache(sender, **kwargs):
 @receiver(m2m_changed, sender=User.groups.through)
 @receiver(m2m_changed, sender=User.user_permissions.through)
 @receiver(m2m_changed, sender=Group.permissions.through)
-def bump_perm_version_on_membership_change(sender, **kwargs):
+def bump_perm_version_on_membership_change(sender, action=None, pk_set=None, **kwargs):
+    # Only a change that moved rows. Every device in the shop treats a move of
+    # this counter as "drop every cache and re-read who I am", so a no-op
+    # re-add (ensure_role_groups on a users-list read) must not count — see
+    # state_version.m2m_rows_changed for the loop that made this matter.
+    if not m2m_rows_changed(action, pk_set):
+        return
     caching.bump_perm_version()
 
 

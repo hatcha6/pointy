@@ -163,4 +163,64 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 10));
     expect(refreshes, 0);
   });
+
+  // A refresh whose own requests move the counter it watches — in the field,
+  // the permission refresh re-read the users list, and a backend bug made that
+  // read a permission change. Unspaced it ran back to back for an hour.
+  test('a self-feeding refresh is spaced, not run back to back', () async {
+    state.apply({'permissions': '1'});
+    var version = 1;
+    var refreshes = 0;
+    revalidator.watch(
+      domains: const {ServerStateDomain.permissions},
+      debounce: Duration.zero,
+      minInterval: const Duration(milliseconds: 150),
+      onStale: () async {
+        refreshes++;
+        version++;
+        state.apply({'permissions': '$version'});
+      },
+    );
+
+    state.apply({'permissions': '${++version}'});
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    // Runs at ~0, 150, 300 and 450 ms — never hundreds.
+    expect(refreshes, inInclusiveRange(2, 4));
+  });
+
+  test('spacing does not delay the first refresh', () async {
+    state.apply({'permissions': '1'});
+    var refreshes = 0;
+    revalidator.watch(
+      domains: const {ServerStateDomain.permissions},
+      debounce: Duration.zero,
+      minInterval: const Duration(seconds: 10),
+      onStale: () async => refreshes++,
+    );
+
+    state.apply({'permissions': '7'});
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(refreshes, 1);
+  });
+
+  test('a change held by spacing still runs once the gap has passed', () async {
+    state.apply({'permissions': '1'});
+    var refreshes = 0;
+    revalidator.watch(
+      domains: const {ServerStateDomain.permissions},
+      debounce: Duration.zero,
+      minInterval: const Duration(milliseconds: 80),
+      onStale: () async => refreshes++,
+    );
+
+    state.apply({'permissions': '7'});
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    state.apply({'permissions': '8'});
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(refreshes, 1, reason: 'too soon: held');
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    expect(refreshes, 2, reason: 'held, not dropped');
+  });
 }
