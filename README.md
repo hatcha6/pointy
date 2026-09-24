@@ -664,6 +664,33 @@ Output lands in `test/screens/goldens/`. An ordinary `flutter test` **skips**
 every case there, so it is a way to look at a screen — not a golden gate that
 fails CI on a deliberate design change.
 
+## Counter camera as a barcode scanner
+
+A USB camera on a stand over the counter can scan like a wedge scanner:
+**Device settings → الكاميرا كقارئ باركود**, per machine. On the Windows tills
+the whole thing — the camera's video stream (Media Foundation), zxing-cpp and
+the rule that a 1-D read needs two agreeing looks before it reaches a cart —
+runs in native code in `frontend/packages/pointy_camera_wedge`; Dart only
+receives finished scans. Android, iOS and macOS use `mobile_scanner` instead.
+
+- **F8** anywhere in the app shows what the camera sees, whether it is
+  reading, and the last thing it read (a small floating panel; F8 again
+  closes it). Device settings shows the same picture for aiming.
+- The camera recovers on its own when it is unplugged and plugged back in,
+  released by another program, or allowed through Windows' camera privacy
+  setting; settings says which of those is happening and, for the privacy
+  setting, opens the right Windows page.
+
+```sh
+make frontend-camera-wedge-test     # native engine tests + FFI tests (needs CMake)
+make frontend-camera-wedge-preview  # the F8 panel and settings states (?screen=board|panel|settings)
+```
+
+To check a camera on a real till without installing the app, build the
+package's `camera_wedge_probe` console tool — see
+[`frontend/packages/pointy_camera_wedge/README.md`](frontend/packages/pointy_camera_wedge/README.md),
+which also describes the design and how to add Linux.
+
 ## Cameras (DVR/NVR)
 
 Pointy talks to the shop's own Hikvision or Dahua recorder on the LAN and puts

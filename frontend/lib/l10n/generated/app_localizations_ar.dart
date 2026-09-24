@@ -19949,6 +19949,79 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cameraWedgeNoCameras => 'لم يتم العثور على كاميرا على هذا الجهاز.';
 
   @override
+  String get cameraWedgeStarting => 'جارٍ تشغيل الكاميرا…';
+
+  @override
+  String cameraWedgeStreamDetails(String resolution, String fps) {
+    return '$resolution · $fps إطار/ث';
+  }
+
+  @override
+  String get cameraWedgeFaultNoCamera =>
+      'لا توجد كاميرا موصولة بهذا الجهاز. صِل الكاميرا وستبدأ القراءة تلقائيًا.';
+
+  @override
+  String get cameraWedgeFaultDeviceNotFound =>
+      'الكاميرا المختارة غير موصولة. صِلها، أو اختر كاميرا أخرى من القائمة.';
+
+  @override
+  String get cameraWedgeFaultAccessDenied =>
+      'ويندوز يمنع التطبيقات من استخدام الكاميرا. فعّل «السماح لتطبيقات سطح المكتب بالوصول إلى الكاميرا» من إعدادات الخصوصية، وستبدأ القراءة تلقائيًا.';
+
+  @override
+  String get cameraWedgeFaultInUse =>
+      'الكاميرا مستخدمة من برنامج آخر. أغلق ذلك البرنامج وستعود القراءة تلقائيًا.';
+
+  @override
+  String get cameraWedgeFaultDeviceLost =>
+      'انقطع اتصال الكاميرا. جارٍ إعادة الاتصال بها…';
+
+  @override
+  String get cameraWedgeFaultNoUsableFormat =>
+      'هذه الكاميرا لا تُرسل صورة يمكن قراءتها. جرّب كاميرا أخرى.';
+
+  @override
+  String get cameraWedgeFaultStalled =>
+      'توقفت الكاميرا عن إرسال الصور. جارٍ إعادة تشغيلها…';
+
+  @override
+  String get cameraWedgeFaultPlatform =>
+      'تعذّر تشغيل الكاميرا. جارٍ المحاولة مجددًا…';
+
+  @override
+  String get cameraWedgeOpenPrivacySettings => 'فتح إعدادات خصوصية الكاميرا';
+
+  @override
+  String cameraWedgeSubstituted(String label) {
+    return 'الكاميرا المختارة غير موصولة، فتُستخدم «$label» بدلًا منها.';
+  }
+
+  @override
+  String cameraWedgeLastScan(String value) {
+    return 'آخر قراءة: $value';
+  }
+
+  @override
+  String get cameraWedgePreviewTitle => 'معاينة كاميرا القراءة';
+
+  @override
+  String get cameraWedgePreviewShortcutHint => 'F8 لإظهار المعاينة أو إخفائها';
+
+  @override
+  String get cameraWedgePreviewUnavailable =>
+      'المعاينة غير متاحة على هذا الجهاز.';
+
+  @override
+  String get cameraWedgePreviewWaiting => 'بانتظار صورة من الكاميرا…';
+
+  @override
+  String get cameraWedgePreviewClose => 'إغلاق المعاينة';
+
+  @override
+  String get cameraWedgeAimHint =>
+      'وجّه الكاميرا نحو الطاولة حتى يظهر الباركود واضحًا في المعاينة.';
+
+  @override
   String get productSearchSectionTitle => 'البحث عن المنتجات';
 
   @override
@@ -19997,6 +20070,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posShortcutToggleCost => 'إظهار/إخفاء تكلفة الأصناف';
+
+  @override
+  String get posShortcutCameraPreview => 'إظهار/إخفاء معاينة كاميرا القراءة';
 
   @override
   String cartLineCostLabel(String cost) {

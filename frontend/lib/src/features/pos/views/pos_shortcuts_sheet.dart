@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../shared/barcode/camera_wedge/camera_wedge_scope.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 
@@ -57,6 +58,10 @@ class _PosShortcutsSheet extends StatelessWidget {
         _PosShortcut(const ['F2'], l10n.posShortcutCycleUnit),
         _PosShortcut(const ['F4'], l10n.posShortcutDeleteLine),
         _PosShortcut(const ['F9'], l10n.posShortcutToggleCost),
+        // Only on a till with a counter camera running: F8 does nothing
+        // anywhere else (camera_wedge_preview_panel.dart).
+        if (CameraWedgeScope.controllerOf(context) != null)
+          _PosShortcut(const ['F8'], l10n.posShortcutCameraPreview),
       ]),
       _PosShortcutGroup(l10n.posShortcutsSectionCheckout, [
         _PosShortcut([commandKey, 'Enter'], l10n.posShortcutCheckout),

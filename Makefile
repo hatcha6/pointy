@@ -133,7 +133,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-printers-preview frontend-reports-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-printers-preview frontend-reports-preview \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean upgrade-rehearsal upgrade-check \
@@ -399,6 +399,9 @@ frontend-units-preview: frontend-install ## Run the units-of-measure management 
 frontend-scales-preview: frontend-install ## Run the weighing-scale (label rules + PLU push) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/scales_preview.dart
 
+frontend-camera-wedge-preview: frontend-install ## Run the counter-camera UI preview harness (F8 panel + settings; ?screen=board|panel|settings).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/camera_wedge_preview.dart
+
 frontend-product-units-editor-preview: frontend-install ## Run the product-form units + packaging-barcode editor preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/product_units_editor_preview.dart
 
@@ -461,6 +464,17 @@ frontend-login-preview: frontend-install ## Run the login screen UI preview harn
 
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test
+
+CAMERA_WEDGE_DIR := $(FRONTEND_DIR)/packages/pointy_camera_wedge
+CAMERA_WEDGE_BUILD ?= $(CAMERA_WEDGE_DIR)/build/native-tests
+CMAKE ?= cmake
+
+frontend-camera-wedge-test: ## Build and run the native counter-camera wedge tests (C++, drawn barcodes) and its Dart FFI tests. Needs CMake.
+	$(CMAKE) -S "$(CAMERA_WEDGE_DIR)/src" -B "$(CAMERA_WEDGE_BUILD)" -DCMAKE_BUILD_TYPE=Release -DPCW_BUILD_TESTS=ON
+	$(CMAKE) --build "$(CAMERA_WEDGE_BUILD)" --parallel
+	"$(CAMERA_WEDGE_BUILD)/pcw_tests"
+	cd "$(CAMERA_WEDGE_DIR)" && $(FLUTTER) pub get && \
+		POINTY_CAMERA_WEDGE_LIBRARY="$$(ls "$(abspath $(CAMERA_WEDGE_BUILD))"/libpointy_camera_wedge.* | head -n 1)" $(FLUTTER) test
 
 frontend-e2e: frontend-install ## Run Flutter end-to-end pilot flow tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test test/e2e

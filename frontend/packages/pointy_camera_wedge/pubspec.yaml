@@ -1,0 +1,31 @@
+name: pointy_camera_wedge
+description: >-
+  A camera over the counter as a barcode wedge. Capture, zxing-cpp decoding and
+  confirmation all run in native code; Dart receives finished scans.
+version: 1.0.0
+publish_to: 'none'
+
+# The floor is deliberately the oldest Dart the tills run (3.3, the frozen
+# compat/win8 build): the analyzer then refuses newer syntax here, so this
+# package can be ported to that branch as it is.
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  ffi: ^2.1.0
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^3.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      # Only where a capture backend exists. Linux is the next one: see
+      # README.md for the three steps it takes.
+      windows:
+        ffiPlugin: true

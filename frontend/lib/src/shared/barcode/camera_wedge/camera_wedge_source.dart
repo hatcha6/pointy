@@ -1,51 +1,62 @@
-/// Where a camera wedge's readings come from.
+/// Where a camera wedge's scans come from.
 ///
-/// The seam exists because **no single Flutter camera API spans the platforms
-/// Pointy ships on**, and the one that is missing is the one that matters. Read
-/// out of the packages rather than recalled:
+/// Two very different machines sit behind this seam, and the difference is
+/// which side of the FFI boundary the decoding happens on:
 ///
-/// | package | platforms |
-/// |---|---|
-/// | `mobile_scanner` (used here) | android, ios, macos, web |
-/// | `camera` | android, ios, web |
-/// | `camera_windows` | windows — but `startImageStream` throws `UnimplementedError` |
-/// | `flutter_webrtc` | everything, but `captureFrame()` round-trips a PNG through disk |
+/// | backend | platforms | decodes | confirms |
+/// |---|---|---|---|
+/// | `mobile_scanner` | android, ios, macos, web | the OS (ML Kit, Vision) | Dart ([CameraWedgePolicy]) |
+/// | native (`packages/pointy_camera_wedge`) | windows | zxing-cpp, in C++ | C++ (the same rule) |
 ///
-/// The tills are Windows. So the *policy* — how many agreeing looks a
-/// symbology needs, how long to hold off a re-read — is platform-agnostic pure
-/// Dart in [CameraWedgePolicy], and only the plumbing behind this interface
-/// differs. A platform with no source reports [CameraWedgeBackend.none] and the
-/// feature is offered nowhere, rather than throwing when someone taps it (the
-/// `MissingPluginException` every Windows till used to log when the old camera
-/// sheet was opened — see `camera_scanning_support.dart`).
+/// The tills are Windows, and there the whole wedge — the camera's video
+/// stream, zxing-cpp, the agreement between looks — runs on native threads;
+/// Dart receives finished scans and nothing else, the way it receives
+/// keystrokes from a hardware scanner. It replaced a Dart loop that took a
+/// PHOTO about once a second through `camera_windows`, saved it as a JPEG and
+/// decoded that, which is why reading a barcode used to take seconds.
+///
+/// Either way, a source hands over only scans it stands behind: the screen
+/// on the other end treats them exactly as it treats the counter wedge. A
+/// platform with no source reports [CameraWedgeBackend.none] and the feature
+/// is offered nowhere, rather than throwing when someone taps it.
 library;
 
+import 'package:flutter/foundation.dart';
+
+import 'camera_wedge_health.dart';
 import 'camera_wedge_policy.dart';
 
 /// A camera the wedge could run on. `id` is whatever the backend uses to
 /// address it and is never shown; `label` is what the shop sees.
 ///
-/// Those two are NOT the same string on Windows, and treating them as one is
-/// what put a MediaFoundation symbolic link in front of a cashier:
+/// On Windows the id is `"<display name> <<symbolic link>>"`:
 ///
 ///     Integrated Webcam <\\?\usb#vid_1bcf&pid_2b94&mi_00#6&316f151d&0&0000#{e5323777-…}\global>
 ///
-/// `camera_windows` builds that string itself — `display_name + " <" +
-/// device_id + ">"` in `CaptureDeviceInfo::GetUniqueDeviceName` — and parses
-/// the whole thing back apart when it is asked to open the camera. So the id
-/// has to be kept intact, and only the display half may be shown.
+/// That is the shape `camera_windows` gave device names, and it is kept so a
+/// camera a shop picked before the native wedge is still the camera picked
+/// after it: the stored string matches the new one exactly, and the native
+/// library reads the symbolic link back out of it. Only the display half is
+/// ever shown — showing the whole string once put a Media Foundation symbolic
+/// link in front of a cashier.
 class CameraWedgeDevice {
   const CameraWedgeDevice({required this.id, required this.label});
 
   /// Split a platform device name into the part to keep and the part to show.
   ///
-  /// The suffix is stripped by the same rule `camera_windows` uses to read it
-  /// (`CaptureDeviceInfo::ParseDeviceInfoFromCameraName`: last space, `<`
-  /// after it, `>` at the end). A name that does not match that shape is
-  /// shown whole rather than guessed at — every other platform's names are
-  /// already human, and a half-cut label is worse than an honest one.
+  /// The suffix is stripped by the rule `camera_windows` used to read it
+  /// (last space, `<` after it, `>` at the end) — which the native library's
+  /// `NormalizeDeviceId` mirrors. A name that does not match that shape is
+  /// shown whole rather than guessed at: a half-cut label is worse than an
+  /// honest one.
   factory CameraWedgeDevice.fromPlatformName(String name) =>
       CameraWedgeDevice(id: name, label: displayNameFrom(name));
+
+  /// A native device, given the id shape described on the class.
+  factory CameraWedgeDevice.native({
+    required String label,
+    required String nativeId,
+  }) => CameraWedgeDevice(id: '$label <$nativeId>', label: label);
 
   final String id;
   final String label;
@@ -105,29 +116,34 @@ class CameraWedgeDevice {
 /// Which implementation this platform would use, if any.
 enum CameraWedgeBackend {
   /// `mobile_scanner`: the platform's own detector (ML Kit, Apple Vision,
-  /// ZXing on the web). It decodes in native code and hands over values, so
-  /// the wedge never sees pixels here. 1-D and 2-D.
+  /// ZXing on the web) decodes, and [CameraWedgePolicy] confirms in Dart.
   platformScanner,
 
-  /// Stills through `camera_windows`/`camera_linux`, decoded by zxing-cpp
-  /// through `flutter_zxing`. The desktop till's path, because there is no
-  /// image stream there. 1-D and 2-D, and the same engine the backend and the
-  /// measurement lab use — so it is slower than a live stream, not narrower.
-  snapshot,
+  /// `packages/pointy_camera_wedge`: the camera stream, zxing-cpp and the
+  /// confirmation policy all in native code. The desktop tills' path.
+  native,
 
   /// Nothing available. The feature is hidden rather than broken.
   none,
 }
 
-/// A running camera, reporting what it thinks it sees.
+/// A running camera, reporting scans it stands behind.
 ///
-/// Implementations report EVERY decode, including repeats — the policy needs
-/// them to reach agreement, and a source that de-duplicates internally would
-/// silently make every 1-D scan impossible. That is a real trap: it is the
-/// default in `mobile_scanner` (`DetectionSpeed.noDuplicates`).
+/// Confirmation (enough agreeing looks for the symbology, one read per item
+/// left under the lens) is the source's job, not its caller's: on the native
+/// backend it happens before anything reaches Dart at all.
 abstract class CameraWedgeSource {
-  /// Every decode, unfiltered and un-deduplicated.
-  Stream<CameraWedgeReading> get readings;
+  /// Confirmed scans, in the order a till should act on them.
+  Stream<CameraWedgeScan> get scans;
+
+  /// What the camera is doing: starting, running, or why it is not.
+  ValueListenable<CameraWedgeHealth> get health;
+
+  /// The newest frame while [setPreviewEnabled] is on, for aiming the camera.
+  /// Always null on a source that cannot provide one ([supportsPreview]).
+  ValueListenable<CameraWedgePreviewFrame?> get preview;
+
+  bool get supportsPreview;
 
   /// Cameras this backend can see. May be empty before [start] on platforms
   /// that only reveal device labels once permission is granted.
@@ -138,6 +154,10 @@ abstract class CameraWedgeSource {
 
   /// Stop watching and release the camera. Safe to call when not started.
   Future<void> stop();
+
+  /// Ask for preview frames, or stop them. Off by default: frames are only
+  /// copied out for Dart while somebody is looking at them.
+  void setPreviewEnabled(bool enabled);
 
   Future<void> dispose();
 }

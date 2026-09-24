@@ -67,22 +67,14 @@ dependencies:
   sqflite_common_ffi: ^2.3.3
   sqlite3_flutter_libs: ^0.5.24
   mobile_scanner: ^7.2.0
-  # Camera-as-barcode-scanner on the platforms mobile_scanner does not reach.
-  # camera_windows is the Flutter team's own Windows implementation and is the
-  # ONLY way to get frames from a UVC camera on a Windows till: it has no image
-  # stream (`startImageStream` throws UnimplementedError there), so the wedge
-  # takes stills instead. camera_platform_interface is what addresses it
-  # without also pulling the Android/iOS/web implementations, which
-  # mobile_scanner already covers.
-  camera_platform_interface: ^2.10.0
-  camera_windows: ^0.2.6+5
-  # zxing-cpp itself, through FFI: the SAME engine the backend runs
-  # (apps/companion/decoding.py) and the same one tools/camera-wedge-lab
-  # measured, so its findings transfer exactly rather than approximately.
-  # Android, iOS, macOS, Windows and Linux, with the C++ sources vendored in
-  # the package — nothing is fetched at build time — and CI already compiles
-  # Windows (release.yml build-windows), which is what proves it.
-  flutter_zxing: ^2.2.1
+  # The counter camera as a barcode wedge where mobile_scanner does not reach
+  # (the Windows tills): capture through Media Foundation, zxing-cpp decoding
+  # and the confirmation policy, all in native code (packages/pointy_camera_wedge,
+  # an FFI plugin with zxing-cpp 3.1.1 vendored — nothing is fetched at build
+  # time). Replaced camera_windows + flutter_zxing, which could only take a
+  # photo about once a second.
+  pointy_camera_wedge:
+    path: packages/pointy_camera_wedge
   pdf: ^3.12.0
   printing: ^5.14.3
   qr: ^3.0.2

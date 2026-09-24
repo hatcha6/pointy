@@ -16,6 +16,7 @@ import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
 import 'features/treasury/view_models/bank_routing.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_controller.dart';
+import 'shared/barcode/camera_wedge/camera_wedge_preview_panel.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_scope.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'shared/documents/document_trail_scope.dart';
@@ -198,7 +199,13 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                       builder: (context, wedge, companionChild) =>
                           CameraWedgeScope(
                             controller: wedge,
-                            child: companionChild ?? const SizedBox.shrink(),
+                            // F8 anywhere: what the counter camera sees. Here,
+                            // above the Navigator, so it floats over every
+                            // route, sheets and dialogs included.
+                            child: CameraWedgePreviewHost(
+                              controller: wedge,
+                              child: companionChild ?? const SizedBox.shrink(),
+                            ),
                           ),
                       child: ValueListenableBuilder<CompanionBridge?>(
                         valueListenable:

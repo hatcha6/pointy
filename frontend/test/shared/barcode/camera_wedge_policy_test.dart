@@ -15,22 +15,17 @@ void main() {
   const misreads = ['9660323434725', '0608713434725', '9620723434725'];
 
   late DateTime now;
-  CameraWedgePolicy policy() =>
-      CameraWedgePolicy(clock: () => now);
+  CameraWedgePolicy policy() => CameraWedgePolicy(clock: () => now);
 
   setUp(() => now = DateTime(2026, 9, 22, 5));
 
-  void tick([int ms = 13]) =>
-      now = now.add(Duration(milliseconds: ms));
+  void tick([int ms = 13]) => now = now.add(Duration(milliseconds: ms));
 
   CameraWedgeScan? read(
     CameraWedgePolicy subject,
     String value, {
     String symbology = 'EAN13',
-  }) =>
-      subject.offer(
-        CameraWedgeReading(value: value, symbology: symbology),
-      );
+  }) => subject.offer(CameraWedgeReading(value: value, symbology: symbology));
 
   group('a 1-D read is never believed on its own', () {
     test('one look at a barcode emits nothing', () {
@@ -101,7 +96,12 @@ void main() {
     });
 
     test('Data Matrix, Aztec and PDF417 are trusted the same way', () {
-      for (final symbology in ['DataMatrix', 'Aztec', 'PDF417', 'MicroQRCode']) {
+      for (final symbology in [
+        'DataMatrix',
+        'Aztec',
+        'PDF417',
+        'MicroQRCode',
+      ]) {
         final subject = policy();
         expect(
           read(subject, 'x', symbology: symbology),
@@ -123,12 +123,15 @@ void main() {
       expect(read(subject, 'A123A', symbology: 'Codabar'), isNotNull);
     });
 
-    test('a symbology this code has never heard of gets the most suspicion', () {
-      expect(
-        CameraWedgeSymbology.classify('SomethingNewIn2030'),
-        CameraWedgeSymbologyClass.unprotected,
-      );
-    });
+    test(
+      'a symbology this code has never heard of gets the most suspicion',
+      () {
+        expect(
+          CameraWedgeSymbology.classify('SomethingNewIn2030'),
+          CameraWedgeSymbologyClass.unprotected,
+        );
+      },
+    );
 
     test('spelling differences between decoders do not change trust', () {
       for (final spelling in ['QRCode', 'qr_code', 'QR-CODE', 'qrcode']) {
@@ -200,6 +203,65 @@ void main() {
       expect(read(subject, '5449000000996'), isNull);
       tick();
       expect(read(subject, '5449000000996'), isNotNull);
+    });
+  });
+
+  group('a frame can hold more than one code', () {
+    // The native wedge's C++ policy (src/test/policy_test.cpp) has the same
+    // cases: the two implementations are one rule.
+    CameraWedgeScan? frame(
+      CameraWedgePolicy subject,
+      List<(String, String)> codes,
+    ) => subject.offerAll([
+      for (final (value, symbology) in codes)
+        CameraWedgeReading(value: value, symbology: symbology, at: now),
+    ]);
+
+    test('two codes in view are each scanned exactly once', () {
+      // A box with its EAN beside a QR, left under the camera. With a single
+      // "last scanned" value the two took turns being new, and the box was
+      // rung up again and again for as long as it sat there.
+      final subject = policy();
+      final scanned = <String>[];
+      for (var i = 0; i < 200; i += 1) {
+        final scan = frame(subject, [
+          (truth, 'EAN13'),
+          ('https://brand.example/p/1', 'QRCode'),
+        ]);
+        if (scan != null) scanned.add(scan.value);
+        tick(33);
+      }
+
+      expect(scanned, [truth, 'https://brand.example/p/1']);
+    });
+
+    test('a second code does not interrupt the first one\'s agreement', () {
+      final subject = policy();
+      expect(frame(subject, [(truth, 'EAN13')]), isNull);
+      tick();
+
+      // The QR appears too, listed first; the EAN being corroborated is still
+      // the one that advances.
+      final scan = frame(subject, [('pay://x', 'QRCode'), (truth, 'EAN13')]);
+
+      expect(scan?.value, truth);
+      expect(subject.rejectedDisagreements, 0);
+    });
+
+    test('a code repeated within one frame counts once', () {
+      final subject = policy();
+
+      expect(frame(subject, [(truth, 'EAN13'), (truth, 'EAN13')]), isNull);
+    });
+
+    test('an empty frame changes nothing', () {
+      final subject = policy();
+      expect(read(subject, truth), isNull);
+      tick();
+      expect(subject.offerAll(const []), isNull);
+      tick();
+
+      expect(read(subject, truth), isNotNull);
     });
   });
 

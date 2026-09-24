@@ -1,0 +1,130 @@
+# The counter camera's native engine (frontend/packages/pointy_camera_wedge):
+# its tests under MSVC — the compiler the tills' build uses — and under GCC
+# with sanitizers, the Media Foundation backend on real Windows, and the
+# package built into the Flutter app the way release.yml builds it.
+#
+# release.yml only compiles Windows when a release is cut; this catches a
+# break in the C++ the day it is made. It runs only when the package (or this
+# file) changes.
+name: Camera wedge (native)
+
+on:
+  pull_request:
+    paths:
+      - "frontend/packages/pointy_camera_wedge/**"
+      - ".github/workflows/camera-wedge.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/packages/pointy_camera_wedge/**"
+      - ".github/workflows/camera-wedge.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.38.6"
+  PACKAGE_DIR: frontend/packages/pointy_camera_wedge
+
+jobs:
+  windows-engine:
+    name: Windows engine (MSVC)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests on drawn barcodes (synthetic camera)
+        shell: pwsh
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          cmake -S src -B build/tests -DPCW_BUILD_TESTS=ON
+          cmake --build build/tests --config Release --parallel
+          ./build/tests/Release/pcw_tests.exe
+          if ($LASTEXITCODE -ne 0) { throw "native tests failed" }
+
+      - name: Media Foundation backend and probe
+        shell: pwsh
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          cmake -S src -B build/probe -DPCW_BUILD_PROBE=ON
+          cmake --build build/probe --config Release --parallel
+          # A hosted runner has no camera, which is itself a path worth
+          # running: Media Foundation starts, enumerates nothing, and the
+          # engine reports "no camera" and keeps retrying until told to stop.
+          # Windows Server images may lack the Media Foundation feature, in
+          # which case the build is the check.
+          if (Test-Path "$env:WINDIR\System32\mfplat.dll") {
+            ./build/probe/Release/camera_wedge_probe.exe --list
+            if ($LASTEXITCODE -ne 0) { throw "probe --list failed" }
+            ./build/probe/Release/camera_wedge_probe.exe --seconds 4
+            if ($LASTEXITCODE -ne 0) { throw "probe run failed" }
+          } else {
+            Write-Host "Media Foundation not installed on this runner; build checked, run skipped."
+          }
+
+      # The console probe, for checking a camera on a real till without
+      # installing the app (see the package README).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: camera-wedge-probe-windows
+          path: |
+            ${{ env.PACKAGE_DIR }}/build/probe/Release/camera_wedge_probe.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-engine:
+    name: Engine under sanitizers (GCC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests with AddressSanitizer + UBSan
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          flags="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+          cmake -S src -B build/asan -DPCW_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS="$flags" -DCMAKE_CXX_FLAGS="$flags" \
+            -DCMAKE_EXE_LINKER_FLAGS="$flags" -DCMAKE_SHARED_LINKER_FLAGS="$flags"
+          cmake --build build/asan --parallel
+          ASAN_OPTIONS=detect_leaks=0 build/asan/pcw_tests
+
+      - name: Tests with ThreadSanitizer
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          cmake -S src -B build/tsan -DPCW_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS=-fsanitize=thread -DCMAKE_CXX_FLAGS=-fsanitize=thread \
+            -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread -DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=thread
+          cmake --build build/tsan --parallel
+          TSAN_OPTIONS=halt_on_error=1 build/tsan/pcw_tests
+
+  windows-app:
+    name: Windows app build with the plugin
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build
+        working-directory: frontend
+        run: |
+          flutter config --enable-windows-desktop
+          flutter pub get
+          flutter gen-l10n
+          flutter build windows --release
+
+      - name: The DLL ships next to the app
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem frontend/build/windows -Recurse -Filter pointy_camera_wedge.dll |
+                 Where-Object { $_.FullName -match 'runner\\Release' } | Select-Object -First 1
+          if (-not $dll) { throw "pointy_camera_wedge.dll is not in the release output" }
+          Write-Host "Found $($dll.FullName)"

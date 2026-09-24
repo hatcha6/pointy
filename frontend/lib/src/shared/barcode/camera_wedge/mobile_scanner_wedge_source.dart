@@ -1,23 +1,29 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../camera_scanning_support.dart';
+import 'camera_wedge_health.dart';
 import 'camera_wedge_policy.dart';
 import 'camera_wedge_source.dart';
 
 /// A camera wedge on top of `mobile_scanner` — Android, iOS, macOS and web.
 ///
 /// The platform's own detector does the decoding (ML Kit, Apple Vision, ZXing
-/// on the web), so this class never touches a pixel: it turns a stream of
-/// detections into [CameraWedgeReading]s and lets [CameraWedgePolicy] decide
-/// what a till may believe.
+/// on the web), so this class never touches a pixel: it turns each frame's
+/// detections into readings and lets [CameraWedgePolicy] decide what a till
+/// may believe, before anything leaves the source.
 class MobileScannerWedgeSource implements CameraWedgeSource {
-  MobileScannerWedgeSource();
+  MobileScannerWedgeSource({CameraWedgePolicy? policy})
+    : _policy = policy ?? CameraWedgePolicy();
 
+  final CameraWedgePolicy _policy;
   MobileScannerController? _controller;
   StreamSubscription<BarcodeCapture>? _subscription;
-  final _readings = StreamController<CameraWedgeReading>.broadcast();
+  final _scans = StreamController<CameraWedgeScan>.broadcast();
+  final _health = ValueNotifier(CameraWedgeHealth.stopped);
+  final _preview = ValueNotifier<CameraWedgePreviewFrame?>(null);
 
   /// Exposed so a preview widget can render the same running camera rather
   /// than opening a second one — two `MobileScannerController`s fighting over
@@ -25,7 +31,16 @@ class MobileScannerWedgeSource implements CameraWedgeSource {
   MobileScannerController? get controller => _controller;
 
   @override
-  Stream<CameraWedgeReading> get readings => _readings.stream;
+  Stream<CameraWedgeScan> get scans => _scans.stream;
+
+  @override
+  ValueListenable<CameraWedgeHealth> get health => _health;
+
+  @override
+  ValueListenable<CameraWedgePreviewFrame?> get preview => _preview;
+
+  @override
+  bool get supportsPreview => false;
 
   @override
   Future<List<CameraWedgeDevice>> devices() async {
@@ -38,8 +53,9 @@ class MobileScannerWedgeSource implements CameraWedgeSource {
 
   @override
   Future<void> start({String? deviceId}) async {
-    if (!cameraScanningSupported) return;
-    if (_controller != null) return;
+    if (!cameraScanningSupported || _controller != null) return;
+    _policy.reset();
+    _health.value = const CameraWedgeHealth(state: CameraWedgeState.starting);
     final controller = MobileScannerController(
       // NOT noDuplicates, which is the default the in-app scanner sheet uses
       // and exactly wrong here: the policy reaches confidence by seeing the
@@ -53,19 +69,49 @@ class MobileScannerWedgeSource implements CameraWedgeSource {
     _subscription = controller.barcodes.listen(
       _handle,
       // A camera unplugged mid-shift must not take the till down with it.
-      onError: (Object _) {},
+      onError: (Object error) => _health.value = CameraWedgeHealth(
+        state: CameraWedgeState.recovering,
+        fault: CameraWedgeFault.platform,
+        detail: '$error',
+      ),
     );
-    await controller.start();
+    try {
+      await controller.start();
+      _health.value = const CameraWedgeHealth(state: CameraWedgeState.running);
+    } on Object catch (error) {
+      await stop();
+      _health.value = CameraWedgeHealth(
+        state: CameraWedgeState.stopped,
+        fault:
+            error is MobileScannerException &&
+                error.errorCode == MobileScannerErrorCode.permissionDenied
+            ? CameraWedgeFault.accessDenied
+            : CameraWedgeFault.platform,
+        detail: '$error',
+      );
+      rethrow;
+    }
   }
 
   void _handle(BarcodeCapture capture) {
-    for (final barcode in capture.barcodes) {
-      final value = barcode.rawValue?.trim();
-      if (value == null || value.isEmpty) continue;
-      _readings.add(
-        CameraWedgeReading(value: value, symbology: barcode.format.name),
-      );
-    }
+    final readings = [
+      for (final barcode in capture.barcodes)
+        if (barcode.rawValue case final value? when value.trim().isNotEmpty)
+          CameraWedgeReading(value: value, symbology: barcode.format.name),
+    ];
+    final scan = _policy.offerAll(readings);
+    if (scan == null || _scans.isClosed) return;
+    _scans.add(scan);
+    _health.value = _health.value.copyWith(
+      lastScan: scan,
+      lastScanAt: DateTime.now(),
+    );
+  }
+
+  @override
+  void setPreviewEnabled(bool enabled) {
+    // The OS decoder never hands pixels over; a preview here would be a second
+    // camera widget, which is what `controller` is exposed for instead.
   }
 
   @override
@@ -77,11 +123,15 @@ class MobileScannerWedgeSource implements CameraWedgeSource {
     if (controller != null) {
       await controller.dispose();
     }
+    _policy.reset();
+    _health.value = CameraWedgeHealth.stopped;
   }
 
   @override
   Future<void> dispose() async {
     await stop();
-    await _readings.close();
+    await _scans.close();
+    _health.dispose();
+    _preview.dispose();
   }
 }

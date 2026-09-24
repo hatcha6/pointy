@@ -737,15 +737,10 @@ class PointyAppDependencies {
   /// Serialized, because the settings screen can fire this twice in a second —
   /// flip the switch off and straight back on, or change camera — and the two
   /// runs would overlap on the one piece of hardware. Releasing a camera is
-  /// not instant (the capture loop has to finish whatever still it is waiting
-  /// on), and `camera_windows` refuses point blank to open a device it has not
-  /// been told to let go of:
-  ///
-  ///     "Camera with given device id already exists. Existing camera must be
-  ///      disposed before creating it again."
-  ///
-  /// which is a switch that turns the feature off and then will not turn it
-  /// back on.
+  /// not instant (the native wedge flushes the stream and shuts the device
+  /// down on its own thread), and Windows will not hand a camera to a second
+  /// reader while the first still holds it: the new wedge would report the
+  /// camera as in use by another program — its own predecessor.
   Future<void> syncCameraWedge() {
     return _cameraWedgeSync = _cameraWedgeSync
         .then((_) => _applyCameraWedgeSetting())

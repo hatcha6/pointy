@@ -356,6 +356,14 @@
       ],
       "cwd": "tools/camera-wedge-lab",
       "port": 8099
+    },
+    {
+      "name": "camera-wedge-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-camera-wedge-preview"
+      ],
+      "port": 8080
     }
   ]
 }

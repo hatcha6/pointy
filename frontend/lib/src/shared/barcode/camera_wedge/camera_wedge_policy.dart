@@ -64,6 +64,11 @@ class CameraWedgeScan {
 ///
 /// Stateful and single-threaded by design: it is one camera pointed at one
 /// counter. Construct one per running camera and throw it away when it stops.
+///
+/// The native wedge (`packages/pointy_camera_wedge`,
+/// `src/policy/confirmation_policy.cpp`) implements the same rule in C++ for
+/// the tills, where decoding happens on the other side of the FFI boundary.
+/// Keep the two in step; their tests are case for case.
 class CameraWedgePolicy {
   CameraWedgePolicy({
     this.agreementWindow = const Duration(milliseconds: 600),
@@ -90,8 +95,13 @@ class CameraWedgePolicy {
   int _pendingCount = 0;
   DateTime? _pendingAt;
 
-  String _lastEmittedValue = '';
-  DateTime? _lastEmittedAt;
+  /// Values already scanned and still in view, with when each was last seen.
+  ///
+  /// One entry PER VALUE. The first version kept a single "last scanned"
+  /// value, and with two codes in view — a product's EAN beside a QR on the
+  /// same box — each scan made the other one new again, so the box was rung
+  /// up over and over for as long as it sat under the camera.
+  final Map<String, DateTime> _held = {};
 
   /// Readings thrown away because a second look disagreed. Every one of these
   /// is a wrong product that did not reach a cart.
@@ -103,24 +113,42 @@ class CameraWedgePolicy {
   int _suppressedRereads = 0;
 
   /// Offer a reading. Returns the scan to act on, or null to keep looking.
-  CameraWedgeScan? offer(CameraWedgeReading reading) {
-    final value = reading.value.trim();
-    if (value.isEmpty) return null;
-    final now = reading.at ?? _clock();
-    final kind = CameraWedgeSymbology.classify(reading.symbology);
+  CameraWedgeScan? offer(CameraWedgeReading reading) => offerAll([reading]);
 
-    // Still looking at the thing we just sold. Refresh the holdoff rather than
-    // letting it expire under a stationary item, or a cashier who leaves the
-    // box on the counter gets it rung up twice.
-    final lastEmittedAt = _lastEmittedAt;
-    if (value == _lastEmittedValue &&
-        lastEmittedAt != null &&
-        now.difference(lastEmittedAt) < rereadHoldoff) {
-      _lastEmittedAt = now;
-      _suppressedRereads += 1;
-      return null;
+  /// Offer everything one frame was read as. Returns at most one scan.
+  ///
+  /// Of the codes not held off, the one already being corroborated is
+  /// preferred, so a second code in the picture cannot keep interrupting its
+  /// agreement.
+  CameraWedgeScan? offerAll(List<CameraWedgeReading> readings) {
+    if (readings.isEmpty) return null;
+    final now = readings.first.at ?? _clock();
+
+    // A code out of sight for the whole holdoff is a new sale when it comes
+    // back; one still in view keeps its hold refreshed below.
+    _held.removeWhere((_, seen) => now.difference(seen) >= rereadHoldoff);
+
+    final candidates = <String, CameraWedgeReading>{};
+    for (final reading in readings) {
+      final value = reading.value.trim();
+      if (value.isEmpty) continue;
+      if (_held.containsKey(value)) {
+        // Still looking at something already sold. Refresh rather than let
+        // the hold expire under a stationary item, or a box left on the
+        // counter is rung up twice.
+        _held[value] = now;
+        _suppressedRereads += 1;
+        continue;
+      }
+      candidates.putIfAbsent(value, () => reading);
     }
+    if (candidates.isEmpty) return null;
 
+    final value = _pendingCount > 0 && candidates.containsKey(_pendingValue)
+        ? _pendingValue
+        : candidates.keys.first;
+    final reading = candidates[value]!;
+    final kind = CameraWedgeSymbology.classify(reading.symbology);
     final needed = kind.requiredAgreement;
     final pendingAt = _pendingAt;
     final withinWindow =
@@ -132,7 +160,7 @@ class CameraWedgePolicy {
       // A DIFFERENT value inside the window is the misread case, and the only
       // one worth counting: a stale pending entry that simply timed out is an
       // item being taken away, not a decoder being wrong.
-      if (_pendingCount > 0 && withinWindow && value != _pendingValue) {
+      if (_pendingCount > 0 && withinWindow) {
         _rejectedDisagreements += 1;
       }
       _pendingValue = value;
@@ -148,8 +176,7 @@ class CameraWedgePolicy {
       symbology: _pendingSymbology,
       confirmations: _pendingCount,
     );
-    _lastEmittedValue = value;
-    _lastEmittedAt = now;
+    _held[value] = now;
     _pendingValue = '';
     _pendingSymbology = '';
     _pendingCount = 0;
@@ -166,7 +193,6 @@ class CameraWedgePolicy {
     _pendingSymbology = '';
     _pendingCount = 0;
     _pendingAt = null;
-    _lastEmittedValue = '';
-    _lastEmittedAt = null;
+    _held.clear();
   }
 }

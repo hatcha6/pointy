@@ -1,26 +1,50 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/shared/barcode/camera_wedge/camera_wedge_controller.dart';
+import 'package:pointy_frontend/src/shared/barcode/camera_wedge/camera_wedge_health.dart';
 import 'package:pointy_frontend/src/shared/barcode/camera_wedge/camera_wedge_listener.dart';
 import 'package:pointy_frontend/src/shared/barcode/camera_wedge/camera_wedge_policy.dart';
 import 'package:pointy_frontend/src/shared/barcode/camera_wedge/camera_wedge_source.dart';
 
-/// A source under the test's control, standing in for a camera.
+/// A source under the test's control, standing in for a camera. It confirms
+/// what it sees with the real policy before anything leaves it, the way both
+/// real sources do (the native one in C++, mobile_scanner's in Dart).
 class _FakeSource implements CameraWedgeSource {
-  final _controller = StreamController<CameraWedgeReading>.broadcast();
+  final policy = CameraWedgePolicy();
+  final _scans = StreamController<CameraWedgeScan>.broadcast();
+  final _health = ValueNotifier(CameraWedgeHealth.stopped);
+  final _preview = ValueNotifier<CameraWedgePreviewFrame?>(null);
   bool started = false;
 
-  void see(String value, {String symbology = 'QRCode'}) =>
-      _controller.add(CameraWedgeReading(value: value, symbology: symbology));
+  void see(String value, {String symbology = 'QRCode'}) {
+    final scan = policy.offer(
+      CameraWedgeReading(value: value, symbology: symbology),
+    );
+    if (scan != null) _scans.add(scan);
+  }
 
   @override
-  Stream<CameraWedgeReading> get readings => _controller.stream;
+  Stream<CameraWedgeScan> get scans => _scans.stream;
 
   @override
-  Future<List<CameraWedgeDevice>> devices() async =>
-      const [CameraWedgeDevice(id: 'x', label: 'x')];
+  ValueListenable<CameraWedgeHealth> get health => _health;
+
+  @override
+  ValueListenable<CameraWedgePreviewFrame?> get preview => _preview;
+
+  @override
+  bool get supportsPreview => false;
+
+  @override
+  void setPreviewEnabled(bool enabled) {}
+
+  @override
+  Future<List<CameraWedgeDevice>> devices() async => const [
+    CameraWedgeDevice(id: 'x', label: 'x'),
+  ];
 
   @override
   Future<void> start({String? deviceId}) async => started = true;
@@ -29,7 +53,7 @@ class _FakeSource implements CameraWedgeSource {
   Future<void> stop() async => started = false;
 
   @override
-  Future<void> dispose() async => _controller.close();
+  Future<void> dispose() async => _scans.close();
 }
 
 void main() {
@@ -101,7 +125,7 @@ void main() {
     }
 
     expect(scanned, isEmpty);
-    expect(controller.rejectedDisagreements, 3);
+    expect(source.policy.rejectedDisagreements, 3);
   });
 
   testWidgets('a disabled screen drops scans rather than queueing them', (

@@ -13984,6 +13984,100 @@
   "@cameraWedgeNoCameras": {
     "description": "Shown when no cameras are found"
   },
+  "cameraWedgeStarting": "جارٍ تشغيل الكاميرا…",
+  "@cameraWedgeStarting": {
+    "description": "Camera wedge status while the camera is being opened"
+  },
+  "cameraWedgeStreamDetails": "{resolution} · {fps} إطار/ث",
+  "@cameraWedgeStreamDetails": {
+    "description": "What the running counter camera delivers: resolution (e.g. 1280×720, passed bidi-isolated) and frames per second",
+    "placeholders": {
+      "resolution": {
+        "type": "String"
+      },
+      "fps": {
+        "type": "String"
+      }
+    }
+  },
+  "cameraWedgeFaultNoCamera": "لا توجد كاميرا موصولة بهذا الجهاز. صِل الكاميرا وستبدأ القراءة تلقائيًا.",
+  "@cameraWedgeFaultNoCamera": {
+    "description": "Camera wedge: no camera connected; it retries by itself"
+  },
+  "cameraWedgeFaultDeviceNotFound": "الكاميرا المختارة غير موصولة. صِلها، أو اختر كاميرا أخرى من القائمة.",
+  "@cameraWedgeFaultDeviceNotFound": {
+    "description": "Camera wedge: the picked camera is absent and there are others to choose from"
+  },
+  "cameraWedgeFaultAccessDenied": "ويندوز يمنع التطبيقات من استخدام الكاميرا. فعّل «السماح لتطبيقات سطح المكتب بالوصول إلى الكاميرا» من إعدادات الخصوصية، وستبدأ القراءة تلقائيًا.",
+  "@cameraWedgeFaultAccessDenied": {
+    "description": "Camera wedge: the Windows camera privacy setting blocks desktop apps"
+  },
+  "cameraWedgeFaultInUse": "الكاميرا مستخدمة من برنامج آخر. أغلق ذلك البرنامج وستعود القراءة تلقائيًا.",
+  "@cameraWedgeFaultInUse": {
+    "description": "Camera wedge: another program holds the camera"
+  },
+  "cameraWedgeFaultDeviceLost": "انقطع اتصال الكاميرا. جارٍ إعادة الاتصال بها…",
+  "@cameraWedgeFaultDeviceLost": {
+    "description": "Camera wedge: the camera was unplugged or reset while reading"
+  },
+  "cameraWedgeFaultNoUsableFormat": "هذه الكاميرا لا تُرسل صورة يمكن قراءتها. جرّب كاميرا أخرى.",
+  "@cameraWedgeFaultNoUsableFormat": {
+    "description": "Camera wedge: the camera offers no picture format the reader can use"
+  },
+  "cameraWedgeFaultStalled": "توقفت الكاميرا عن إرسال الصور. جارٍ إعادة تشغيلها…",
+  "@cameraWedgeFaultStalled": {
+    "description": "Camera wedge: the camera opened but stopped sending frames"
+  },
+  "cameraWedgeFaultPlatform": "تعذّر تشغيل الكاميرا. جارٍ المحاولة مجددًا…",
+  "@cameraWedgeFaultPlatform": {
+    "description": "Camera wedge: any other failure; it retries by itself"
+  },
+  "cameraWedgeOpenPrivacySettings": "فتح إعدادات خصوصية الكاميرا",
+  "@cameraWedgeOpenPrivacySettings": {
+    "description": "Button that opens the Windows camera privacy settings page"
+  },
+  "cameraWedgeSubstituted": "الكاميرا المختارة غير موصولة، فتُستخدم «{label}» بدلًا منها.",
+  "@cameraWedgeSubstituted": {
+    "description": "Camera wedge: the picked camera is absent and the only other one is reading instead",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "cameraWedgeLastScan": "آخر قراءة: {value}",
+  "@cameraWedgeLastScan": {
+    "description": "The last barcode the counter camera read",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "cameraWedgePreviewTitle": "معاينة كاميرا القراءة",
+  "@cameraWedgePreviewTitle": {
+    "description": "Title of the floating panel showing what the counter camera sees"
+  },
+  "cameraWedgePreviewShortcutHint": "F8 لإظهار المعاينة أو إخفائها",
+  "@cameraWedgePreviewShortcutHint": {
+    "description": "Tells the cashier which key toggles the camera preview"
+  },
+  "cameraWedgePreviewUnavailable": "المعاينة غير متاحة على هذا الجهاز.",
+  "@cameraWedgePreviewUnavailable": {
+    "description": "The camera preview cannot be shown on this platform"
+  },
+  "cameraWedgePreviewWaiting": "بانتظار صورة من الكاميرا…",
+  "@cameraWedgePreviewWaiting": {
+    "description": "Camera preview before the first frame arrives"
+  },
+  "cameraWedgePreviewClose": "إغلاق المعاينة",
+  "@cameraWedgePreviewClose": {
+    "description": "Closes the camera preview panel"
+  },
+  "cameraWedgeAimHint": "وجّه الكاميرا نحو الطاولة حتى يظهر الباركود واضحًا في المعاينة.",
+  "@cameraWedgeAimHint": {
+    "description": "Under the camera preview in device settings"
+  },
   "productSearchSectionTitle": "البحث عن المنتجات",
   "@productSearchSectionTitle": {
     "description": "Device settings section for how product searches behave on this device"
@@ -14048,6 +14142,10 @@
   "posShortcutToggleCost": "إظهار/إخفاء تكلفة الأصناف",
   "@posShortcutToggleCost": {
     "description": "F9 toggles cost visibility at the till"
+  },
+  "posShortcutCameraPreview": "إظهار/إخفاء معاينة كاميرا القراءة",
+  "@posShortcutCameraPreview": {
+    "description": "POS shortcuts sheet: F8 toggles the counter camera preview"
   },
   "cartLineCostLabel": "التكلفة: {cost}",
   "@cartLineCostLabel": {

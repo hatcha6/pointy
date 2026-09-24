@@ -34308,6 +34308,120 @@ abstract class AppLocalizations {
   /// **'لم يتم العثور على كاميرا على هذا الجهاز.'**
   String get cameraWedgeNoCameras;
 
+  /// Camera wedge status while the camera is being opened
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تشغيل الكاميرا…'**
+  String get cameraWedgeStarting;
+
+  /// What the running counter camera delivers: resolution (e.g. 1280×720, passed bidi-isolated) and frames per second
+  ///
+  /// In ar, this message translates to:
+  /// **'{resolution} · {fps} إطار/ث'**
+  String cameraWedgeStreamDetails(String resolution, String fps);
+
+  /// Camera wedge: no camera connected; it retries by itself
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كاميرا موصولة بهذا الجهاز. صِل الكاميرا وستبدأ القراءة تلقائيًا.'**
+  String get cameraWedgeFaultNoCamera;
+
+  /// Camera wedge: the picked camera is absent and there are others to choose from
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا المختارة غير موصولة. صِلها، أو اختر كاميرا أخرى من القائمة.'**
+  String get cameraWedgeFaultDeviceNotFound;
+
+  /// Camera wedge: the Windows camera privacy setting blocks desktop apps
+  ///
+  /// In ar, this message translates to:
+  /// **'ويندوز يمنع التطبيقات من استخدام الكاميرا. فعّل «السماح لتطبيقات سطح المكتب بالوصول إلى الكاميرا» من إعدادات الخصوصية، وستبدأ القراءة تلقائيًا.'**
+  String get cameraWedgeFaultAccessDenied;
+
+  /// Camera wedge: another program holds the camera
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا مستخدمة من برنامج آخر. أغلق ذلك البرنامج وستعود القراءة تلقائيًا.'**
+  String get cameraWedgeFaultInUse;
+
+  /// Camera wedge: the camera was unplugged or reset while reading
+  ///
+  /// In ar, this message translates to:
+  /// **'انقطع اتصال الكاميرا. جارٍ إعادة الاتصال بها…'**
+  String get cameraWedgeFaultDeviceLost;
+
+  /// Camera wedge: the camera offers no picture format the reader can use
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الكاميرا لا تُرسل صورة يمكن قراءتها. جرّب كاميرا أخرى.'**
+  String get cameraWedgeFaultNoUsableFormat;
+
+  /// Camera wedge: the camera opened but stopped sending frames
+  ///
+  /// In ar, this message translates to:
+  /// **'توقفت الكاميرا عن إرسال الصور. جارٍ إعادة تشغيلها…'**
+  String get cameraWedgeFaultStalled;
+
+  /// Camera wedge: any other failure; it retries by itself
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تشغيل الكاميرا. جارٍ المحاولة مجددًا…'**
+  String get cameraWedgeFaultPlatform;
+
+  /// Button that opens the Windows camera privacy settings page
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح إعدادات خصوصية الكاميرا'**
+  String get cameraWedgeOpenPrivacySettings;
+
+  /// Camera wedge: the picked camera is absent and the only other one is reading instead
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا المختارة غير موصولة، فتُستخدم «{label}» بدلًا منها.'**
+  String cameraWedgeSubstituted(String label);
+
+  /// The last barcode the counter camera read
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر قراءة: {value}'**
+  String cameraWedgeLastScan(String value);
+
+  /// Title of the floating panel showing what the counter camera sees
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة كاميرا القراءة'**
+  String get cameraWedgePreviewTitle;
+
+  /// Tells the cashier which key toggles the camera preview
+  ///
+  /// In ar, this message translates to:
+  /// **'F8 لإظهار المعاينة أو إخفائها'**
+  String get cameraWedgePreviewShortcutHint;
+
+  /// The camera preview cannot be shown on this platform
+  ///
+  /// In ar, this message translates to:
+  /// **'المعاينة غير متاحة على هذا الجهاز.'**
+  String get cameraWedgePreviewUnavailable;
+
+  /// Camera preview before the first frame arrives
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار صورة من الكاميرا…'**
+  String get cameraWedgePreviewWaiting;
+
+  /// Closes the camera preview panel
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق المعاينة'**
+  String get cameraWedgePreviewClose;
+
+  /// Under the camera preview in device settings
+  ///
+  /// In ar, this message translates to:
+  /// **'وجّه الكاميرا نحو الطاولة حتى يظهر الباركود واضحًا في المعاينة.'**
+  String get cameraWedgeAimHint;
+
   /// Device settings section for how product searches behave on this device
   ///
   /// In ar, this message translates to:
@@ -34397,6 +34511,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إظهار/إخفاء تكلفة الأصناف'**
   String get posShortcutToggleCost;
+
+  /// POS shortcuts sheet: F8 toggles the counter camera preview
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار/إخفاء معاينة كاميرا القراءة'**
+  String get posShortcutCameraPreview;
 
   /// Cost of one unit on a cart row
   ///
