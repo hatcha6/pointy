@@ -295,6 +295,33 @@ netsh interface portproxy show v4tov4                        # the LAN bridge
 Get-Content $env:ProgramData\Pointy\logs\bootstrap.log -Tail 50
 ```
 
+#### Windows: when the server does not come back, or keeps going down
+
+Do not restart anything by hand first. Collect the evidence, and send the zip
+to the developers. Use an elevated PowerShell, logged in as the Windows user
+that installed Pointy (WSL distros belong to one user):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File $env:ProgramData\Pointy\collect-diagnostics.ps1 -Arm
+```
+
+It records the state it found (distro running or stopped, WSL VM up or not,
+does the stack answer) *before* touching anything. Then it gathers `PointyWSL`'s
+settings and history, the Windows boot/shutdown/sleep/update events, systemd,
+Docker and the container logs. The zip goes to the Desktop. Credentials are
+masked: `.env` values that look like one, URL passwords, and tokens in logs. A
+summary at the top names what already looks wrong.
+
+`-Arm` also leaves a recorder for the *next* outage. It turns on Task
+Scheduler history and makes the distro's journal survive a restart. It also
+adds a `PointyProbe` task that appends one line a minute to
+`logs\probe.csv`: distro, VM, stack, last `PointyWSL` run. After the next
+outage, run the command again without `-Arm` and send the new zip. Remove the
+probe with `-Disarm` once the cause is known.
+
+Shops installed before the collector shipped do not have it at that path. Copy
+`wsl\collect-diagnostics.ps1` from any newer bundle and run it from there.
+
 ### Linux
 
 Nothing manual: `register-autostart.sh` enables Docker on boot

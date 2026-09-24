@@ -304,7 +304,11 @@ QAREEB = ProviderSpec(
     fields=(FIELD_USERNAME, FIELD_PASSWORD, FIELD_PIN),
     secret_fields=frozenset({FIELD_PASSWORD, FIELD_PIN}),
     optional_fields=frozenset({FIELD_PIN}),
-    default_base_url="https://api.qareb.ly",
+    # The agency app moved to api.qareeb.ly (194.99.21.178) — a live migration
+    # off the older api.qareb.ly (172.104.147.56), captured 2026-09-24. Both
+    # still answer, but this is the host the app itself uses and keeps current
+    # (freshest cert, where switch_profile lives), so the driver follows it.
+    default_base_url="https://api.qareeb.ly",
     # 100 covers the dearest card a local shop sells most (a 100-dinar
     # Libyana or Almadar card costs the float 97). A shop that sells gift
     # cards at five hundred dinars a time will raise it, which is the point

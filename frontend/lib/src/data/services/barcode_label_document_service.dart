@@ -14,6 +14,7 @@ import 'barcode_label_calibration.dart';
 import 'cups_pdf_spooler_stub.dart'
     if (dart.library.io) 'cups_pdf_spooler_io.dart';
 import 'print_transport.dart';
+import 'system_printer_lookup.dart';
 
 /// Renders and prints barcode-label stickers through the PDF/document path (the
 /// [PrinterOutputMode.pdfA4] output mode used by system / driver printers), the
@@ -190,7 +191,7 @@ class BarcodeLabelDocumentService {
     }
 
     final format = document.platformPageFormat;
-    final printer = await _resolvePrinter(endpoint);
+    final printer = await findSystemPrinter(endpoint);
     final printed = printer != null
         ? await Printing.directPrintPdf(
             printer: printer,
@@ -208,21 +209,6 @@ class BarcodeLabelDocumentService {
     return printed
         ? const PrintTransportResult.success('barcode labels printed')
         : const PrintTransportResult.failure('document print canceled');
-  }
-
-  Future<Printer?> _resolvePrinter(PrinterEndpoint endpoint) async {
-    final info = await Printing.info();
-    if (!info.canListPrinters) {
-      return null;
-    }
-    final printers = await Printing.listPrinters();
-    final address = endpoint.address.trim();
-    if (address.isNotEmpty) {
-      return printers
-          .where((printer) => printer.url == address && printer.isAvailable)
-          .firstOrNull;
-    }
-    return printers.where((printer) => printer.isDefault).firstOrNull;
   }
 
   List<_LabelSticker> _expand(List<BarcodeLabelPrintLine> lines) {

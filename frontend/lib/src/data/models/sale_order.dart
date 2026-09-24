@@ -597,6 +597,60 @@ class SaleOrder {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  /// A copy with different [lines], every other field carried over. Used to
+  /// overlay the provider's in-hand recharge results onto the order right
+  /// before printing, so a card's PIN reaches the receipt from the charge
+  /// response itself rather than a re-fetch that can lag behind it.
+  SaleOrder copyWith({List<SaleOrderLine>? lines}) => SaleOrder(
+    id: id,
+    status: status,
+    docStatus: docStatus,
+    cancelledAt: cancelledAt,
+    cancelledByUsername: cancelledByUsername,
+    cancelReason: cancelReason,
+    amendmentIndex: amendmentIndex,
+    lines: lines ?? this.lines,
+    payments: payments,
+    cardReceiptStatus: cardReceiptStatus,
+    subtotal: subtotal,
+    total: total,
+    receiptNumber: receiptNumber,
+    registerSession: registerSession,
+    registerSessionNumber: registerSessionNumber,
+    cashierId: cashierId,
+    cashierName: cashierName,
+    customer: customer,
+    customerNumber: customerNumber,
+    customerName: customerName,
+    customerPhone: customerPhone,
+    customerEmail: customerEmail,
+    publicInvoiceUrl: publicInvoiceUrl,
+    profit: profit,
+    profitMarginPercent: profitMarginPercent,
+    invoicePrintJob: invoicePrintJob,
+    kitchenPrintJobs: kitchenPrintJobs,
+    canVoid: canVoid,
+    canReturn: canReturn,
+    canExchange: canExchange,
+    canAssignCustomer: canAssignCustomer,
+    requiresManagerAdjustment: requiresManagerAdjustment,
+    lineCount: lineCount,
+    hasReturnableItems: hasReturnableItems,
+    discountTotal: discountTotal,
+    extraDiscountAmount: extraDiscountAmount,
+    appliedDiscounts: appliedDiscounts,
+    saleType: saleType,
+    amountPaid: amountPaid,
+    balanceDue: balanceDue,
+    paymentStatus: paymentStatus,
+    validUntil: validUntil,
+    dueDate: dueDate,
+    isOverdue: isOverdue,
+    daysOverdue: daysOverdue,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+  );
+
   factory SaleOrder.fromJson(Map<String, Object?> json) {
     final linesJson = (json['lines'] as List<Object?>?) ?? const [];
     final paymentsJson = (json['payments'] as List<Object?>?) ?? const [];
@@ -937,6 +991,27 @@ class SaleOrderLine {
       },
     );
   }
+
+  /// A copy with a different [integration], every other field carried over.
+  SaleOrderLine copyWith({SaleLineIntegration? integration}) => SaleOrderLine(
+    id: id,
+    productId: productId,
+    variantId: variantId,
+    quantity: quantity,
+    returnedQuantity: returnedQuantity,
+    returnableQuantity: returnableQuantity,
+    unit: unit,
+    unitLabel: unitLabel,
+    unitPrice: unitPrice,
+    total: total,
+    productName: productName,
+    variantName: variantName,
+    profit: profit,
+    subtotal: subtotal,
+    discountTotal: discountTotal,
+    identifiers: identifiers,
+    integration: integration ?? this.integration,
+  );
 }
 
 /// A provider top-up recorded against a sale line.
@@ -1035,6 +1110,32 @@ class SaleLineIntegration {
       },
     );
   }
+
+  /// A copy overlaying what a just-performed charge returned, every other field
+  /// carried over. Only the fields the provider's answer settles are exposed:
+  /// the status it moved to, the printed slip, and its reference.
+  SaleLineIntegration copyWith({
+    String? kind,
+    String? status,
+    String? providerReference,
+    DateTime? confirmedAt,
+    Map<String, String>? receipt,
+  }) => SaleLineIntegration(
+    provider: provider,
+    kind: kind ?? this.kind,
+    subscriberRef: subscriberRef,
+    subscriberLabel: subscriberLabel,
+    customerId: customerId,
+    optionLabel: optionLabel,
+    months: months,
+    cost: cost,
+    status: status ?? this.status,
+    providerReference: providerReference ?? this.providerReference,
+    confirmedAt: confirmedAt ?? this.confirmedAt,
+    errorCode: errorCode,
+    attemptCount: attemptCount,
+    receipt: receipt ?? this.receipt,
+  );
 }
 
 /// One identified thing a sale line moved.

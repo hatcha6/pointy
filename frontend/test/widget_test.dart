@@ -3366,7 +3366,17 @@ void main() {
     );
     expect(find.text('بلا طابعة — تُفتح نافذة الطباعة لتختار'), findsOneWidget);
 
+    // It does two jobs, so its test asks which one to prove: a shop that
+    // only ever printed labels on it must not be handed a receipt test.
     await tester.tap(find.byKey(const ValueKey('printer_test_legacy-receipt')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('printer_test_legacy-receipt_barcodeLabel')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('printer_test_legacy-receipt_receipt')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('أُرسلت الطباعة التجريبية'), findsOneWidget);
 

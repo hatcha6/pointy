@@ -457,7 +457,6 @@ class _PrinterCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
     final state = viewModel.connectionOf(printer.id);
-    final testing = viewModel.isTesting(printer.id);
     final testResult = viewModel.testResultOf(printer.id);
     final stationNames = {
       for (final station in viewModel.kitchenStations) station.id: station.name,
@@ -499,17 +498,7 @@ class _PrinterCard extends StatelessWidget {
           ),
       ],
       actions: [
-        OutlinedButton.icon(
-          key: ValueKey('printer_test_${printer.id}'),
-          onPressed: testing ? null : () => viewModel.testPrinter(printer.id),
-          icon: testing
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: PointySpinner(strokeWidth: 2),
-                )
-              : const Icon(Icons.print_outlined, size: 18),
-          label: Text(l10n.printerTestButton),
-        ),
+        _PrinterTestButton(printer: printer, viewModel: viewModel),
         PopupMenuButton<_PrinterAction>(
           key: ValueKey('printer_menu_${printer.id}'),
           tooltip: l10n.printerMoreActionsTooltip,
@@ -559,3 +548,64 @@ class _PrinterCard extends StatelessWidget {
 }
 
 enum _PrinterAction { edit, check, remove }
+
+/// The card's test print. A printer with one job tests it in one tap; one
+/// with several asks which job to test. The old single printer did receipts
+/// and labels, and carries both over. A shop that only ever used it for
+/// labels is then offered a receipt test first, and a receipt page on a label
+/// roll is the wrong thing to feed it.
+class _PrinterTestButton extends StatelessWidget {
+  const _PrinterTestButton({required this.printer, required this.viewModel});
+
+  final DevicePrinter printer;
+  final PrintingSettingsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final testing = viewModel.isTesting(printer.id);
+    final kinds = printerTestKinds(printer);
+    final icon = testing
+        ? const SizedBox.square(
+            dimension: 16,
+            child: PointySpinner(strokeWidth: 2),
+          )
+        : const Icon(Icons.print_outlined, size: 18);
+
+    if (kinds.length < 2) {
+      return OutlinedButton.icon(
+        key: ValueKey('printer_test_${printer.id}'),
+        onPressed: testing ? null : () => viewModel.testPrinter(printer.id),
+        icon: icon,
+        label: Text(l10n.printerTestButton),
+      );
+    }
+    return MenuAnchor(
+      builder: (context, controller, _) => OutlinedButton.icon(
+        key: ValueKey('printer_test_${printer.id}'),
+        onPressed: testing
+            ? null
+            : (controller.isOpen ? controller.close : controller.open),
+        icon: icon,
+        // Says there is a choice behind this before it is pressed.
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(l10n.printerTestButton),
+            const SizedBox(width: 2),
+            const Icon(Icons.arrow_drop_down, size: 20),
+          ],
+        ),
+      ),
+      menuChildren: [
+        for (final kind in kinds)
+          MenuItemButton(
+            key: ValueKey('printer_test_${printer.id}_${kind.name}'),
+            onPressed: () => viewModel.testPrinter(printer.id, kind: kind),
+            leadingIcon: Icon(printerTestIcon(kind), size: 20),
+            child: Text(printerTestButtonLabel(l10n, kind)),
+          ),
+      ],
+    );
+  }
+}

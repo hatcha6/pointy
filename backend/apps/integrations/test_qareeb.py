@@ -269,6 +269,11 @@ PROFILES = {
 }
 
 
+def switch_ok(profile_id):
+    """The provider's answer to a successful ``switch_profile`` (2026-09-24)."""
+    return _Resp(200, {"status": True, "profile_id": profile_id, "role": "sub_admin"})
+
+
 def cart(*items, pin=False, quick=False):
     return {
         "hash": "h" * 64,
@@ -575,37 +580,75 @@ class QareebProfileTests(TestCase):
         self.assertTrue(by_id[STORE_PROFILE].is_current)
         self.assertEqual(by_id[PERSONAL_PROFILE].kind, "individual")
 
-    def test_a_purchase_as_the_wrong_shop_is_refused(self):
+    def test_a_purchase_switches_the_session_to_the_chosen_profile(self):
+        # PERSONAL is chosen but STORE is the active one, so the driver switches
+        # the session to PERSONAL and then buys. The session is now on the right
+        # profile, so checkout carries profile: null exactly as the app does.
         account = logged_in(qareeb_account(profile_id=PERSONAL_PROFILE))
         fake = buying(_FakeQareeb())
         fake.on("GET", qareeb_driver.PROFILES_PATH, _Resp(200, PROFILES))
+        fake.on("POST", qareeb_driver.SWITCH_PROFILE_PATH, switch_ok(PERSONAL_PROFILE))
         with patch_qareeb(fake):
             result = provider_for(account).recharge("", LIBYANA_5, expected_cost=None)
-        self.assertEqual(result.error_code, ERROR_PROFILE_MISMATCH)
-        self.assertNotIn(qareeb_driver.CHECKOUT_PATH, fake.paths())
-
-    def test_quick_switch_pays_from_the_chosen_profile(self):
-        account = logged_in(qareeb_account(profile_id=PERSONAL_PROFILE))
-        fake = buying(_FakeQareeb(), quick=True)
-        fake.on("GET", qareeb_driver.PROFILES_PATH, _Resp(200, PROFILES))
-        with patch_qareeb(fake):
-            provider_for(account).recharge("", LIBYANA_5, expected_cost=None)
+        self.assertTrue(result.ok)
+        switched = [c for c in fake.calls if c["path"] == qareeb_driver.SWITCH_PROFILE_PATH]
+        self.assertEqual(switched[0]["json"], {"profile_id": PERSONAL_PROFILE})
         checkout = [c for c in fake.calls if c["path"] == qareeb_driver.CHECKOUT_PATH][0]
-        self.assertEqual(checkout["json"]["profile"], PERSONAL_PROFILE)
+        self.assertIsNone(checkout["json"]["profile"])
 
-    def test_the_chosen_profile_already_active_sends_null_like_the_app(self):
+    def test_the_chosen_profile_already_active_needs_no_switch(self):
+        # STORE is chosen and already active: nothing to switch, checkout null.
         account = logged_in(qareeb_account(profile_id=STORE_PROFILE))
         fake = buying(_FakeQareeb())
         fake.on("GET", qareeb_driver.PROFILES_PATH, _Resp(200, PROFILES))
         with patch_qareeb(fake):
             self.assertTrue(provider_for(account).recharge("", LIBYANA_5, expected_cost=None).ok)
+        self.assertNotIn(qareeb_driver.SWITCH_PROFILE_PATH, fake.paths())
         checkout = [c for c in fake.calls if c["path"] == qareeb_driver.CHECKOUT_PATH][0]
         self.assertIsNone(checkout["json"]["profile"])
 
-    def test_a_probe_as_the_wrong_shop_reports_no_balance(self):
+    def test_quick_switch_names_the_profile_when_the_session_switch_fails(self):
+        # The provider refuses the session switch, but this basket allows a
+        # per-checkout override, so checkout names the chosen profile instead of
+        # refusing the sale — the fallback the older driver relied on alone.
+        account = logged_in(qareeb_account(profile_id=PERSONAL_PROFILE))
+        fake = buying(_FakeQareeb(), quick=True)
+        fake.on("GET", qareeb_driver.PROFILES_PATH, _Resp(200, PROFILES))
+        fake.on("POST", qareeb_driver.SWITCH_PROFILE_PATH,
+                _Resp(400, {"error": "تعذّر تبديل الحساب"}))
+        with patch_qareeb(fake):
+            self.assertTrue(provider_for(account).recharge("", LIBYANA_5, expected_cost=None).ok)
+        checkout = [c for c in fake.calls if c["path"] == qareeb_driver.CHECKOUT_PATH][0]
+        self.assertEqual(checkout["json"]["profile"], PERSONAL_PROFILE)
+
+    def test_a_purchase_refuses_when_the_chosen_profile_is_gone(self):
+        # The chosen profile is not one of the login's at all: it cannot be
+        # switched to and cannot be named, so the sale is refused rather than
+        # paid from whatever wallet the login happens to be on.
+        account = logged_in(qareeb_account(profile_id="ghost-profile"))
+        fake = buying(_FakeQareeb(), quick=True)
+        fake.on("GET", qareeb_driver.PROFILES_PATH, _Resp(200, PROFILES))
+        with patch_qareeb(fake):
+            result = provider_for(account).recharge("", LIBYANA_5, expected_cost=None)
+        self.assertEqual(result.error_code, ERROR_PROFILE_MISMATCH)
+        self.assertNotIn(qareeb_driver.CHECKOUT_PATH, fake.paths())
+        self.assertNotIn(qareeb_driver.SWITCH_PROFILE_PATH, fake.paths())
+
+    def test_a_probe_switches_to_the_chosen_profile_then_reads_its_balance(self):
         account = logged_in(qareeb_account(profile_id=PERSONAL_PROFILE))
         fake = _FakeQareeb()
         fake.on("GET", qareeb_driver.ACCOUNT_PATH, _Resp(200, ACCOUNT_INFO))
+        fake.on("GET", qareeb_driver.PROFILES_PATH, _Resp(200, PROFILES))
+        fake.on("POST", qareeb_driver.SWITCH_PROFILE_PATH, switch_ok(PERSONAL_PROFILE))
+        with patch_qareeb(fake):
+            result = provider_for(account).probe()
+        self.assertTrue(result.ok)
+        self.assertEqual(result.balance, Decimal("674.90"))
+        self.assertIn(qareeb_driver.SWITCH_PROFILE_PATH, fake.paths())
+
+    def test_a_probe_refuses_when_the_chosen_profile_is_gone(self):
+        account = logged_in(qareeb_account(profile_id="ghost-profile"))
+        fake = _FakeQareeb()
         fake.on("GET", qareeb_driver.PROFILES_PATH, _Resp(200, PROFILES))
         with patch_qareeb(fake):
             result = provider_for(account).probe()

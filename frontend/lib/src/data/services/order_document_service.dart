@@ -18,6 +18,7 @@ import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
 import 'receipt_integration_rows.dart';
+import 'system_printer_lookup.dart';
 import '../../shared/branding_assets.dart';
 import '../../shared/date_formatters.dart';
 import '../../shared/formatters.dart';
@@ -94,12 +95,14 @@ class OrderDocumentService {
           message: 'system print dialog ready',
         );
       }
-      final printer = await _resolvePrinter(endpoint);
+      final printer = await findSystemPrinter(endpoint);
       return PrintTransportStatus(
         isAvailable: printer?.isAvailable ?? false,
-        message: printer?.isAvailable == true
+        message: printer == null
+            ? 'document printer not found'
+            : printer.isAvailable
             ? 'document printer ready'
-            : 'document printer unavailable',
+            : 'document printer reports offline, paused or in error',
       );
     } on Object catch (error) {
       return PrintTransportStatus(
@@ -745,7 +748,7 @@ class OrderDocumentService {
     final usePrinterSettings = width == null || height == null;
     final selectedPrinter = endpoint == null
         ? null
-        : await _resolvePrinter(endpoint);
+        : await findSystemPrinter(endpoint);
     if (selectedPrinter != null) {
       return Printing.directPrintPdf(
         printer: selectedPrinter,
@@ -789,7 +792,7 @@ class OrderDocumentService {
     bool usePrinterSettings = false,
     PrinterEndpoint? endpoint,
   }) async {
-    final printer = endpoint == null ? null : await _resolvePrinter(endpoint);
+    final printer = endpoint == null ? null : await findSystemPrinter(endpoint);
     if (printer != null) {
       return Printing.directPrintPdf(
         printer: printer,
@@ -805,21 +808,6 @@ class OrderDocumentService {
       usePrinterSettings: usePrinterSettings,
       onLayout: onLayout,
     );
-  }
-
-  Future<Printer?> _resolvePrinter(PrinterEndpoint endpoint) async {
-    final info = await Printing.info();
-    if (!info.canListPrinters) {
-      return null;
-    }
-    final printers = await Printing.listPrinters();
-    final address = endpoint.address.trim();
-    if (address.isNotEmpty) {
-      return printers
-          .where((printer) => printer.url == address && printer.isAvailable)
-          .firstOrNull;
-    }
-    return printers.where((printer) => printer.isDefault).firstOrNull;
   }
 
   Future<OrderDocumentActionStatus> _deliverPdf({

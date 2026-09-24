@@ -209,21 +209,21 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     }
   }
 
-  /// Prints a test of the first job the printer does, so a tap on its card
-  /// proves the thing it is there for.
-  Future<void> testPrinter(String printerId) async {
+  /// Prints [kind]'s test on the printer — by default the test of the first
+  /// job it does, so a tap on its card proves the thing it is there for.
+  Future<void> testPrinter(String printerId, {PrinterTestKind? kind}) async {
     final printer = _printers.byId(printerId);
     if (printer == null || _testing.contains(printerId)) {
       return;
     }
-    final kind = primaryTestKind(printer);
+    final testKind = kind ?? primaryTestKind(printer);
     _testing.add(printerId);
     _testResults.remove(printerId);
     _notify();
 
-    final result = await runPrinterTest(_repository, printer.config, kind);
+    final result = await runPrinterTest(_repository, printer.config, testKind);
     _testing.remove(printerId);
-    _testResults[printerId] = PrinterTestResult(kind, result.isSuccess);
+    _testResults[printerId] = PrinterTestResult(testKind, result.isSuccess);
     if (_printers.byId(printerId) != null) {
       _connection[printerId] = result.isSuccess
           ? PrinterConnectionState.connected
@@ -231,7 +231,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     }
     trackPrinterTest(
       _analyticsEngine,
-      kind: kind,
+      kind: testKind,
       endpoint: printer.endpoint,
       result: result,
       source: 'printer_card',

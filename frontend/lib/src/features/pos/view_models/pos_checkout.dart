@@ -403,7 +403,11 @@ extension PosCheckoutActions on PosViewModel {
         if (hasProviderLines && shouldPrintInvoice) {
           printStatus = receiptPrinterMissing
               ? InvoicePrintStatus.noPrinter
-              : await _printAfterProviders(result.value, invoicePrinterConfig);
+              : await _printAfterProviders(
+                  result.value,
+                  invoicePrinterConfig,
+                  recharges,
+                );
         }
         return SaleCheckoutOutcome.success(
           result.value,
@@ -694,6 +698,7 @@ extension PosCheckoutActions on PosViewModel {
   Future<InvoicePrintStatus> _printAfterProviders(
     SaleOrder order,
     PrinterConfig? config,
+    List<IntegrationChargeResult> recharges,
   ) async {
     var printable = order;
     try {
@@ -704,6 +709,14 @@ extension PosCheckoutActions on PosViewModel {
     } on Object {
       // Printing the sale as it was recorded still beats printing nothing.
     }
+    // Overlay what the provider answered THIS checkout onto the order, so a
+    // card's PIN reaches the receipt from the charge response we already hold —
+    // not from the re-read above, which can still show the line unconfirmed for
+    // a moment after the card was in fact issued (the "لم يتم إصدار الكرت" on a
+    // card that WAS handed over, then found later in the invoice). This feeds
+    // every document route — A4 and the receipt-roll PDF alike, which both draw
+    // the line's notes from the order model.
+    printable = orderWithPerformedRecharges(printable, recharges);
     return _guardedPrintValue(
       () => _printPaidInvoice(printable, config),
       fallback: InvoicePrintStatus.failed,

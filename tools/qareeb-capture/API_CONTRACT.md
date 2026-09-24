@@ -1,8 +1,15 @@
 # Qareeb — captured API contract
 
 Reverse-engineered 2026-09-23 from the **Qareeb iOS app** (an agency/store
-account) via `tools/qareeb-capture`. Host: `https://api.qareb.ly`
-(→ `172.104.147.56`). Auth is **JWT bearer** (`access` / `refresh`).
+account) via `tools/qareeb-capture`. Auth is **JWT bearer** (`access` /
+`refresh`).
+
+**Host (updated 2026-09-24):** the app now uses `https://api.qareeb.ly`
+(two e's → `194.99.21.178`). This is a live migration off the older
+`https://api.qareb.ly` (one e → `172.104.147.56`); both still answer today, but
+`api.qareeb.ly` is where the app goes, keeps its cert freshest, and where the
+newly captured `switch_profile` lives — so the driver's `default_base_url`
+follows it. All paths below are identical on both hosts.
 
 All secret values below are redacted; this file holds **shapes, not
 credentials**. The raw `.flows` stay local and gitignored.
@@ -215,10 +222,26 @@ GET /api/get_available_profiles/v1/
         "<profile_type>": {"name": "<display name>", …}}, …]}
 ```
 The record describing a profile sits under a key named after its
-`profile_type`. **The endpoint that switches the active profile was not
-captured.** Until it is, the owner picks a profile in Pointy, and the till
-refuses to buy (`profile_mismatch`) while the login is acting as a different
-one, unless quick switch lets checkout name the profile.
+`profile_type`.
+
+### Switch the active profile (captured 2026-09-24)
+```
+POST /api/switch_profile/v1/
+  → {"profile_id": "<id>"}
+  ← 200 {"status": true, "profile_id": "<id>", "role": "sub_admin|admin",
+         "account": "client|individual", "account_type_display": "متجر|شخصي",
+         "client_name": "<name>", "is_first_time": false, "info_completed": true,
+         "username": "<phone>", "phone_number": "<phone>",
+         "customer_service_phone_number": "<phone>"}
+```
+A **session** change, not a per-request one: afterwards
+`get_available_profiles` marks that `profile_id` `is_active`, and
+`account_info` returns its wallet. The owner picks a profile in Pointy and the
+driver **switches the session to it** (reconciling right before a balance read
+or a checkout, because the session is shared with the owner's phone and can
+drift). Only if the switch cannot be made does it fall back to naming the
+profile at checkout (quick switch), or refuse (`profile_mismatch`) when the
+profile is gone from the login entirely.
 
 ### Voucher history (reconciliation)
 ```

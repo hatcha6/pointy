@@ -656,6 +656,7 @@ jobs:
           echo "==> Staging the Windows (WSL) bootstrap…"
           mkdir -p "${BUNDLE}/wsl"
           cp deploy/onprem/wsl/bootstrap-wsl.ps1 \
+             deploy/onprem/wsl/collect-diagnostics.ps1 \
              deploy/onprem/wsl/timezone-map.txt "${BUNDLE}/wsl/"
           mv wsl-rootfs/pointy-wsl-rootfs.tar.gz "${BUNDLE}/wsl/"
           if [ -f wsl-msi/wsl.msi ]; then

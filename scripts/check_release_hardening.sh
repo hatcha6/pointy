@@ -100,19 +100,23 @@ echo "== The Windows installer is readable by Windows =="
 # Two independent defences, because either alone is one editor away from gone:
 # the file is pure ASCII (so the codepage cannot matter), and it carries a BOM
 # (so if a non-ASCII character ever comes back, it is still read as UTF-8).
-PS1=deploy/onprem/wsl/bootstrap-wsl.ps1
-check "the WSL bootstrap carries a UTF-8 BOM" \
-  "head -c3 $PS1 | cmp -s - <(printf '\\357\\273\\277')"
-# Byte-exact on purpose: a grep character class for "non-ASCII" is locale- and
-# implementation-dependent, and the obvious [^[:print:][:space:]] form silently
-# matches nothing on macOS. Deleting every ASCII byte and measuring what is left
-# cannot be argued with.
-ps1_high="$(tail -c +4 "$PS1" | LC_ALL=C tr -d '\000-\177' | wc -c | tr -d ' ')"
-if [ "$ps1_high" = 0 ]; then
-  ok "the WSL bootstrap is pure ASCII (codepage cannot corrupt it)"
-else
-  bad "the WSL bootstrap has ${ps1_high} non-ASCII byte(s); CP1256 can turn them into string delimiters"
-fi
+#
+# Every .ps1 the bundle ships to a shop, not only the installer: the
+# diagnostics collector is run on the same machines, usually on a bad day.
+for PS1 in deploy/onprem/wsl/bootstrap-wsl.ps1 deploy/onprem/wsl/collect-diagnostics.ps1; do
+  check "$(basename "$PS1") carries a UTF-8 BOM" \
+    "head -c3 $PS1 | cmp -s - <(printf '\\357\\273\\277')"
+  # Byte-exact on purpose: a grep character class for "non-ASCII" is locale- and
+  # implementation-dependent, and the obvious [^[:print:][:space:]] form silently
+  # matches nothing on macOS. Deleting every ASCII byte and measuring what is left
+  # cannot be argued with.
+  ps1_high="$(tail -c +4 "$PS1" | LC_ALL=C tr -d '\000-\177' | wc -c | tr -d ' ')"
+  if [ "$ps1_high" = 0 ]; then
+    ok "$(basename "$PS1") is pure ASCII (codepage cannot corrupt it)"
+  else
+    bad "$(basename "$PS1") has ${ps1_high} non-ASCII byte(s); CP1256 can turn them into string delimiters"
+  fi
+done
 
 echo "== The compose file we ship actually parses =="
 # Not a grep. `docker compose config` resolves anchors, merge keys and every

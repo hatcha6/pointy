@@ -258,6 +258,24 @@ void main() {
       expect(viewModel.testResultOf('counter')?.isSuccess, isTrue);
     });
 
+    test('a card test can prove any job the printer does', () async {
+      // The old single printer carries receipts and labels over; a shop that
+      // only ever printed labels on it must be able to test just that.
+      final viewModel = await loadedViewModel();
+
+      await viewModel.testPrinter(
+        'counter',
+        kind: PrinterTestKind.barcodeLabel,
+      );
+
+      expect(transport.printed, 1);
+      expect(
+        viewModel.testResultOf('counter')?.kind,
+        PrinterTestKind.barcodeLabel,
+      );
+      expect(viewModel.testResultOf('counter')?.isSuccess, isTrue);
+    });
+
     test(
       'kitchen stations load only for someone allowed to see them',
       () async {

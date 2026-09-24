@@ -813,7 +813,7 @@ function Invoke-GuestInstall {
 # stable path and run that.
 function Install-BootstrapToStablePath {
     New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-    foreach ($name in @("bootstrap-wsl.ps1", "timezone-map.txt")) {
+    foreach ($name in @("bootstrap-wsl.ps1", "collect-diagnostics.ps1", "timezone-map.txt")) {
         $src = Join-Path $PSScriptRoot $name
         if (Test-Path $src) { Copy-Item -Force $src (Join-Path $InstallRoot $name) }
     }
@@ -839,7 +839,7 @@ function Update-BootstrapFromGuest {
     if ($guestHash -eq $localHash) { return $false }
 
     Write-Log "a newer bootstrap arrived with a release update; promoting it"
-    foreach ($name in @("bootstrap-wsl.ps1", "timezone-map.txt")) {
+    foreach ($name in @("bootstrap-wsl.ps1", "collect-diagnostics.ps1", "timezone-map.txt")) {
         $win = (Join-Path $InstallRoot $name) -replace '\\', '/'
         $mnt = "/mnt/" + $win.Substring(0,1).ToLower() + $win.Substring(2)
         Invoke-Guest "test -f '${GuestDir}/wsl/${name}' && cp -f '${GuestDir}/wsl/${name}' '${mnt}'" | Out-Null
@@ -951,6 +951,7 @@ foreach ($address in $lan) {
 Write-Log "  Shell in          : wsl -d ${Distro} -u root --cd ${GuestDir}"
 Write-Log "  Stack status      : wsl -d ${Distro} -u root --cd ${GuestDir} -- docker compose ps"
 Write-Log "  Watchdog log      : wsl -d ${Distro} -u root -- journalctl -u pointy-watchdog -f"
+Write-Log "  If it misbehaves  : powershell -ExecutionPolicy Bypass -File `"$(Join-Path $InstallRoot 'collect-diagnostics.ps1')`""
 Write-Log ""
 Write-Log "Everything from here on is Linux. There is no second set of Windows scripts:"
 Write-Log "updates, healing and the watchdog all run as systemd units inside the distro."

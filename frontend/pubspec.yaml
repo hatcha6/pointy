@@ -76,7 +76,12 @@ dependencies:
   pointy_camera_wedge:
     path: packages/pointy_camera_wedge
   pdf: ^3.12.0
-  printing: ^5.14.3
+  # printing 5.14.3 with its Windows print job fixed: its custom-paper
+  # settings carried uninitialised memory to the driver, which stopped an HPRT
+  # label printer, and its print dialog had no owner window. Upstream's fix
+  # (5.15.1) needs Dart 3.12. See packages/printing/POINTY_PATCHES.md.
+  printing:
+    path: packages/printing
   qr: ^3.0.2
   file_picker: ^11.0.2
   http_parser: ^4.1.2
