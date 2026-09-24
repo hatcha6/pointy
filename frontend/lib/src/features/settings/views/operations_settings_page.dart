@@ -17,6 +17,7 @@ import '../view_models/prep_stations_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
 import 'modifier_groups_page.dart';
 import 'prep_stations_page.dart';
+import 'repair_ticket_settings_section.dart';
 
 /// The settings payload this page sends when one of its switches moves.
 ///
@@ -168,6 +169,16 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                               ),
                             ],
                           ),
+                          // Shown only to a shop that repairs things: the fee
+                          // and the conditions mean nothing to a kitchen.
+                          if (settings.enableRepairOperations) ...[
+                            SizedBox(height: spacing.lg),
+                            RepairTicketSettingsSection(
+                              settings: settings,
+                              enabled: !isBusy,
+                              onSave: _saveDraft,
+                            ),
+                          ],
                           SizedBox(height: spacing.lg),
                           PointySectionHeader(
                             title: l10n.kitchenPrintingSectionTitle,
@@ -327,6 +338,14 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
         autoPrintKitchenTickets: autoPrintKitchenTickets,
       ),
     );
+    if (!saved && mounted) {
+      _showError();
+    }
+    return saved;
+  }
+
+  Future<bool> _saveDraft(ShopSettingsDraft draft) async {
+    final saved = await widget.shopSettingsViewModel.updateSettings(draft);
     if (!saved && mounted) {
       _showError();
     }

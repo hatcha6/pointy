@@ -7,17 +7,26 @@ import '../../../data/models/analytics_event.dart';
 import '../../../data/models/job_refusal.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/repositories/operations_repository.dart';
+import 'job_print_actions.dart';
 
 class JobDetailsViewModel extends ChangeNotifier {
   JobDetailsViewModel(
     this._repository, {
     required this.jobId,
     AnalyticsEngine? analyticsEngine,
-  }) : _analyticsEngine = analyticsEngine;
+    JobPrintActions? printActions,
+  }) : _analyticsEngine = analyticsEngine,
+       _printActions = printActions;
 
   final OperationsRepository _repository;
   final int jobId;
   final AnalyticsEngine? _analyticsEngine;
+  final JobPrintActions? _printActions;
+  bool _isPrinting = false;
+
+  /// Whether this screen can print the intake receipt and the device sticker.
+  bool get canPrintIntakeDocuments => _printActions != null;
+  bool get isPrinting => _isPrinting;
 
   OperationsJob? _job;
   bool _isLoading = false;
@@ -162,6 +171,82 @@ class JobDetailsViewModel extends ChangeNotifier {
       ),
       eventName: 'operations.job.invoiced',
     );
+  }
+
+  /// The customer said yes: record the price they agreed to, then move the
+  /// job past the approval stage — the one tap that used to be an edit, a
+  /// save and an advance.
+  Future<bool> approveQuote(double price) async {
+    final saved = await _mutate(
+      () => _repository.updateJob(jobId, {
+        'approved_price': price.toStringAsFixed(2),
+      }),
+      eventName: 'operations.job.quote_approved',
+    );
+    if (saved == null) {
+      return false;
+    }
+    final next = saved.nextStage;
+    return next == null ? true : transition(next.id);
+  }
+
+  /// The customer said no, or it cannot be fixed: end the work and keep the
+  /// item on the shelf until it is handed back.
+  Future<bool> decline(JobDeclineDraft draft) async {
+    final updated = await _mutate(
+      () => _repository.declineJob(
+        jobId,
+        draft,
+        idempotencyKey: _newIdempotencyKey(),
+      ),
+      eventName: 'operations.job.declined',
+    );
+    return updated != null;
+  }
+
+  /// A declined job's item going home. Refused while a diagnosis fee is
+  /// unsettled — see [lastRefusal] — unless a manager forces it with a note.
+  Future<bool> handBack({
+    String handedOverTo = '',
+    String note = '',
+    bool forceRelease = false,
+  }) async {
+    final updated = await _mutate(
+      () => _repository.handBackJob(
+        jobId,
+        handedOverTo: handedOverTo,
+        note: note,
+        forceRelease: forceRelease,
+        idempotencyKey: _newIdempotencyKey(),
+      ),
+      eventName: 'operations.job.handed_back',
+    );
+    return updated != null;
+  }
+
+  Future<JobPrintStatus> printTicket() {
+    return _print((actions, job) => actions.printTicket(job));
+  }
+
+  Future<JobPrintStatus> printLabel() {
+    return _print((actions, job) => actions.printLabel(job));
+  }
+
+  Future<JobPrintStatus> _print(
+    Future<JobPrintStatus> Function(JobPrintActions actions, OperationsJob job)
+    print,
+  ) async {
+    final actions = _printActions;
+    final job = _job;
+    if (actions == null || job == null) {
+      return JobPrintStatus.failed;
+    }
+    _isPrinting = true;
+    notifyListeners();
+    final status = await print(actions, job);
+    _isPrinting = false;
+    notifyListeners();
+    return status;
   }
 
   Future<bool> cancel({String reason = ''}) async {

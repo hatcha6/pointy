@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,8 @@ import '../../shared/branding_assets.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import 'receipt_integration_rows.dart';
+
+part 'esc_pos_repair_ticket.dart';
 
 /// Sendable bundle for the ESC/POS isolate: payload + endpoint are plain data,
 /// the capability profile is loaded on the caller isolate and passed across, and
@@ -192,6 +195,16 @@ class EscPosReceiptEncoder {
     }
     if (_string(payload['kind']) == 'payment_receipt') {
       return _encodePaymentReceipt(
+        payload: payload,
+        endpoint: endpoint,
+        generator: generator,
+        codeTable: codeTable,
+        dense: dense,
+        brandLogoBytes: brandLogoBytes,
+      );
+    }
+    if (_string(payload['kind']) == 'repair_ticket') {
+      return _encodeRepairTicket(
         payload: payload,
         endpoint: endpoint,
         generator: generator,

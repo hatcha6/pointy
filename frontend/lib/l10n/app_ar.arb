@@ -2599,6 +2599,172 @@
   "jobForceReleaseExplainer": "سيخرج الجهاز والمبلغ لم يُسدَّد. تُسجَّل هذه العملية باسمك.",
   "jobForceReleaseNoteLabel": "السبب",
   "jobForceReleaseNoteHint": "زبون قديم، يدفع الأسبوع القادم",
+  "jobCustomerDecisionTitle": "بانتظار قرار الزبون",
+  "jobCustomerDecisionMessage": "أبلغ الزبون بالتشخيص والسعر، ثم سجّل قراره.",
+  "jobCustomerDecisionQuote": "السعر المبدئي: {price}",
+  "@jobCustomerDecisionQuote": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "jobApproveButton": "وافق الزبون",
+  "jobDeclineButton": "رفض الزبون",
+  "jobApproveDialogTitle": "موافقة الزبون على التصليح",
+  "jobApproveDialogMessage": "سجّل السعر الذي وافق عليه الزبون، وينتقل الجهاز بعدها إلى المرحلة التالية.",
+  "jobApproveConfirm": "تأكيد الموافقة",
+  "jobApprovedMessage": "سُجّلت موافقة الزبون.",
+  "jobDeclineMenuAction": "إرجاع بدون تصليح",
+  "jobDeclineSheetTitle": "إرجاع الجهاز بدون تصليح",
+  "jobDeclineSheetMessage": "ينتهي العمل على الجهاز وتعود أي قطع مستخدمة إلى المخزون، ويبقى الجهاز مسجلًا في المحل حتى يستلمه الزبون.",
+  "jobDeclineReasonLabel": "لماذا لن يُصلَح؟",
+  "jobDeclineReasonPrice": "السعر مرتفع",
+  "jobDeclineReasonDeclined": "لا يريد التصليح",
+  "jobDeclineReasonCannotRepair": "تعذّر الإصلاح",
+  "jobDeclineReasonNoResponse": "لم يرد الزبون",
+  "jobDeclineNoteLabel": "ملاحظة (اختياري)",
+  "jobDeclineFeeLabel": "رسوم الفحص",
+  "jobDeclineFeeHelper": "تُحصَّل عند تسليم الجهاز. اتركها صفرًا إن لم تكن هناك رسوم.",
+  "jobDeclineConfirm": "إنهاء بدون تصليح",
+  "jobDeclinedMessage": "انتهت المهمة بدون تصليح، والجهاز بانتظار أن يستلمه الزبون.",
+  "jobDeclinedTitle": "انتهت بدون تصليح",
+  "jobDeclinedByLine": "بواسطة {name} — {when}",
+  "@jobDeclinedByLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "jobDeclineFeeDueLine": "رسوم الفحص: {amount} — لم تُحصَّل بعد",
+  "@jobDeclineFeeDueLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobDeclineFeeSettledLine": "رسوم الفحص: {amount} — حُصّلت",
+  "@jobDeclineFeeSettledLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobDeclineFeeCreditLine": "رسوم الفحص: {amount} — آجل على الزبون",
+  "@jobDeclineFeeCreditLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobDeclineNoFeeLine": "بدون رسوم فحص",
+  "jobAwaitingHandBackHint": "الجهاز ما زال في المحل حتى يستلمه الزبون.",
+  "jobHandBackButton": "تسليم الجهاز",
+  "jobHandBackDialogTitle": "تسليم الجهاز بدون تصليح",
+  "jobHandedBackMessage": "سُلّم الجهاز للزبون.",
+  "jobHandedBackLine": "سُلّم الجهاز إلى {name} — {when}",
+  "@jobHandedBackLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "jobHandedBackNoNameLine": "سُلّم الجهاز للزبون — {when}",
+  "@jobHandedBackNoNameLine": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "jobHandBackBlockedTitle": "رسوم الفحص لم تُحصَّل",
+  "jobHandBackBlockedMessage": "حصّل رسوم الفحص قبل تسليم الجهاز، أو سجّلها آجلًا على الزبون.",
+  "jobCollectFeeButton": "تحصيل رسوم الفحص",
+  "jobCollectFeeTitle": "فاتورة رسوم الفحص",
+  "jobCollectFeeExplainer": "فاتورة برسوم الفحص وحدها، فالتصليح لم يتم. يدخل المبلغ في جلسة الدرج الحالية.",
+  "jobCollectFeeAmountLabel": "رسوم الفحص: {amount}",
+  "@jobCollectFeeAmountLabel": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobCancelDeclineHint": "إذا رفض الزبون التصليح فاختر «إرجاع بدون تصليح» بدل الإلغاء، ليبقى الجهاز مسجلًا حتى يستلمه.",
+  "jobTimelineDeclined": "انتهت بدون تصليح — {reason}",
+  "@jobTimelineDeclined": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "jobTimelineCancelled": "أُلغيت المهمة",
+  "jobTimelineHandedBack": "سُلّم الجهاز بدون تصليح",
+  "jobsAwaitingHandBackTitle": "بانتظار الاستلام بدون تصليح",
+  "jobsAwaitingHandBackHint": "أجهزة انتهى العمل عليها ولم يستلمها أصحابها بعد.",
+  "jobAwaitingHandBackBadge": "بانتظار الاستلام",
+  "jobDeclineFeeDueBadge": "رسوم فحص {amount}",
+  "@jobDeclineFeeDueBadge": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobPrintTicketAction": "طباعة إيصال الاستلام",
+  "jobPrintLabelAction": "طباعة ملصق الجهاز",
+  "jobTicketPrintedMessage": "طُبع إيصال الاستلام.",
+  "jobLabelPrintedMessage": "طُبع ملصق الجهاز.",
+  "jobTicketNoPrinterMessage": "لا توجد طابعة إيصالات على هذا الجهاز — اختر واحدة من إعدادات الطابعات.",
+  "jobLabelNoPrinterMessage": "لا توجد طابعة ملصقات على هذا الجهاز — اختر واحدة من إعدادات الطابعات.",
+  "jobTicketPrintFailedMessage": "تعذّرت طباعة إيصال الاستلام.",
+  "jobLabelPrintFailedMessage": "تعذّرت طباعة ملصق الجهاز.",
+  "intakePrintSectionTitle": "الطباعة بعد الاستلام",
+  "intakePrintTicketLabel": "إيصال للزبون",
+  "intakePrintLabelLabel": "ملصق للجهاز",
+  "repairTicketSectionTitle": "إيصال الصيانة",
+  "repairTicketSectionHint": "ما يُطبع للزبون عند استلام جهازه، ورسوم الفحص إذا رفض التصليح.",
+  "repairDiagnosisFeeTitle": "رسوم الفحص عند رفض التصليح",
+  "repairDiagnosisFeeNone": "بدون رسوم",
+  "repairDiagnosisFeeHelper": "تُقترح عند رفض الزبون للتصليح ويمكن تعديلها وقتها. صفر يعني بدون رسوم.",
+  "repairTicketTermsTitle": "شروط إيصال الاستلام",
+  "repairTicketTermsHelper": "تُطبع على إيصال الاستلام بهذا الترتيب.",
+  "repairTicketTermsManageButton": "تعديل الشروط",
+  "repairTicketTermsDefaultNotice": "لم تكتب شروطًا خاصة بمحلك بعد، فتُطبع الشروط الافتراضية أدناه.",
+  "repairTicketTermsDialogDescription": "أضف الشروط التي تُطبع على إيصال الاستلام، ورتّبها بالسحب، واحذف ما لا تحتاجه.",
+  "repairTicketTermsEditingDefaultsNotice": "هذه هي الشروط الافتراضية. أي تعديل عليها يجعلها شروط محلك.",
+  "repairTicketTermFieldLabel": "شرط جديد",
+  "repairTicketTermFieldHint": "مثال: لا يسلم الجهاز إلا لحامل الإيصال",
+  "repairTicketTermAddButton": "إضافة",
+  "repairTicketTermRequiredError": "اكتب الشرط أولًا",
+  "repairTicketTermDuplicateError": "هذا الشرط موجود بالفعل",
+  "repairTicketTermsLimitError": "يمكن إضافة {max} شرطًا على الأكثر",
+  "@repairTicketTermsLimitError": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "repairTicketTermEditTooltip": "تعديل الشرط",
+  "repairTicketTermRemoveTooltip": "حذف الشرط",
+  "repairTicketTermReorderTooltip": "اسحب لتغيير الترتيب",
+  "repairTicketTermEditTitle": "تعديل نص الشرط",
+  "repairTicketTermLabel": "نص الشرط",
+  "repairTicketTermsNoneMessage": "لن تُطبع أي شروط على الإيصال.",
+  "repairTicketTermsRestoreDefaults": "استعادة الشروط الافتراضية",
   "jobBalanceDueLabel": "المتبقي: {amount}",
   "@jobBalanceDueLabel": {
     "description": "Outstanding balance on a job's invoice.",

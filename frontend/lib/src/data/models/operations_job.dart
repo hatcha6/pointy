@@ -171,6 +171,30 @@ enum JobCustodyState {
   }
 }
 
+/// Why a repair ended without the work being done. Every value is a decline:
+/// the job is over, but the shop still holds the item until it is handed back.
+/// A job cancelled because it was opened by mistake has no reason at all.
+enum JobDeclineReason {
+  price('price'),
+  declined('declined'),
+  cannotRepair('cannot_repair'),
+  noResponse('no_response');
+
+  const JobDeclineReason(this.apiValue);
+
+  final String apiValue;
+
+  static JobDeclineReason? fromJson(Object? value) {
+    final raw = value?.toString();
+    for (final reason in values) {
+      if (reason.apiValue == raw) {
+        return reason;
+      }
+    }
+    return null;
+  }
+}
+
 /// Priced work on a job — a diagnosis fee, an oil change, a screen swap.
 ///
 /// Distinct from [JobMaterial]: a service holds no stock, so it has no cost,
@@ -286,6 +310,13 @@ class OperationsJob {
     this.onHoldSince,
     this.handedOverAt,
     this.handedOverTo = '',
+    this.cancelReason,
+    this.cancelNote = '',
+    this.cancelledByName = '',
+    this.declineFee,
+    this.isDeclined = false,
+    this.awaitingHandBack = false,
+    this.createdByName = '',
     this.orderBalanceDue,
     this.orderAmountPaid,
     this.orderSaleType = '',
@@ -360,6 +391,22 @@ class OperationsJob {
   final DateTime? onHoldSince;
   final DateTime? handedOverAt;
   final String handedOverTo;
+
+  /// Why the job ended unfinished — set only for a decline. A plain cancel
+  /// keeps its free text in [cancelNote] and has no reason.
+  final JobDeclineReason? cancelReason;
+  final String cancelNote;
+  final String cancelledByName;
+
+  /// The diagnosis fee a declined job still bills; null means nothing is owed.
+  final double? declineFee;
+  final bool isDeclined;
+
+  /// A declined job whose item is still on the shop's shelf.
+  final bool awaitingHandBack;
+
+  /// Who took the item in at the counter.
+  final String createdByName;
   final double? orderBalanceDue;
   final double? orderAmountPaid;
   final String orderSaleType;
@@ -379,6 +426,11 @@ class OperationsJob {
   /// Whether the shop may not release this item yet.
   bool get blockedOnPayment =>
       nextStage?.requiresSettlement == true && !settlementState.isSettled;
+
+  /// A declined job's diagnosis fee that has not been billed yet — the one
+  /// thing standing between the customer and their item.
+  bool get owesDeclineFee =>
+      isDeclined && (declineFee ?? 0) > 0 && order == null;
 
   factory OperationsJob.fromJson(Map<String, Object?> json) {
     final assetsJson = (json['assets'] as List<Object?>?) ?? const [];
@@ -455,6 +507,13 @@ class OperationsJob {
       onHoldSince: _dateTimeFromJson(json['on_hold_since']),
       handedOverAt: _dateTimeFromJson(json['handed_over_at']),
       handedOverTo: json['handed_over_to']?.toString() ?? '',
+      cancelReason: JobDeclineReason.fromJson(json['cancel_reason']),
+      cancelNote: json['cancel_note']?.toString() ?? '',
+      cancelledByName: json['cancelled_by_name']?.toString() ?? '',
+      declineFee: _nullableMoneyFromJson(json['decline_fee']),
+      isDeclined: json['is_declined'] == true,
+      awaitingHandBack: json['awaiting_hand_back'] == true,
+      createdByName: json['created_by_name']?.toString() ?? '',
       orderBalanceDue: _nullableMoneyFromJson(json['order_balance_due']),
       orderAmountPaid: _nullableMoneyFromJson(json['order_amount_paid']),
       orderSaleType: json['order_sale_type']?.toString() ?? '',
@@ -592,6 +651,26 @@ class JobServiceDraft {
       'variant': variant,
       'quantity': quantity.toStringAsFixed(3),
       if (note.trim().isNotEmpty) 'note': note.trim(),
+    };
+  }
+}
+
+/// The customer said no: why, anything worth writing down, and what the
+/// diagnosis costs them. A fee of zero (or none) means nothing is owed.
+class JobDeclineDraft {
+  const JobDeclineDraft({required this.reason, this.note = '', this.fee});
+
+  final JobDeclineReason reason;
+  final String note;
+  final double? fee;
+
+  Map<String, Object?> toJson() {
+    final normalizedNote = note.trim();
+    final owed = fee;
+    return {
+      'reason': reason.apiValue,
+      if (normalizedNote.isNotEmpty) 'note': normalizedNote,
+      'fee': owed == null || owed <= 0 ? null : owed.toStringAsFixed(2),
     };
   }
 }

@@ -18,12 +18,14 @@ class OperationsApiClient {
     int? asset,
     int? workflowTemplate,
     String search = '',
+    bool awaitingHandBack = false,
     int page = 1,
   }) async {
     final normalizedSearch = search.trim();
     final response = await _session.get(
       'jobs/',
       query: {
+        if (awaitingHandBack) 'awaiting_hand_back': 'true',
         if (status != null) 'status': status.toJson(),
         if (jobType != null) 'job_type': jobType.toJson(),
         if (currentStage != null) 'current_stage': '$currentStage',
@@ -195,6 +197,47 @@ class OperationsApiClient {
       body: {if (normalizedReason.isNotEmpty) 'reason': normalizedReason},
     );
     _session.ensureSuccess(response, 'Job cancel failed with status');
+    return OperationsJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<OperationsJob> declineJob(
+    int jobId,
+    JobDeclineDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'jobs/$jobId/decline/',
+      body: draft.toJson(),
+      idempotencyKey: idempotencyKey,
+    );
+    _session.ensureSuccess(response, 'Job decline failed with status');
+    return OperationsJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<OperationsJob> handBackJob(
+    int jobId, {
+    String handedOverTo = '',
+    String note = '',
+    bool forceRelease = false,
+    String? idempotencyKey,
+  }) async {
+    final normalizedCollector = handedOverTo.trim();
+    final normalizedNote = note.trim();
+    final response = await _session.post(
+      'jobs/$jobId/hand-back/',
+      body: {
+        if (normalizedCollector.isNotEmpty)
+          'handed_over_to': normalizedCollector,
+        if (normalizedNote.isNotEmpty) 'note': normalizedNote,
+        if (forceRelease) 'force_release': true,
+      },
+      idempotencyKey: idempotencyKey,
+    );
+    _session.ensureSuccess(response, 'Job hand-back failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );

@@ -15,6 +15,7 @@ import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/purchase_submission.dart';
 import '../models/register_session_summary.dart';
+import '../models/repair_ticket.dart';
 import '../models/sale_order.dart';
 import '../models/shop_settings.dart';
 import '../services/barcode_label_calibration.dart';
@@ -27,6 +28,8 @@ import '../services/order_document_service.dart';
 import '../services/pos_api_service.dart';
 import '../services/print_transport.dart';
 import '../services/print_transports.dart';
+import '../services/repair_intake_printables.dart';
+import '../services/repair_ticket_document_service.dart';
 
 class PrintingRepository {
   PrintingRepository(
@@ -44,6 +47,8 @@ class PrintingRepository {
         const BarcodeLabelLanguageDetector(),
     EscPosReceiptEncoder receiptEncoder = const EscPosReceiptEncoder(),
     OrderDocumentService documentService = const OrderDocumentService(),
+    RepairTicketDocumentService repairTicketDocumentService =
+        const RepairTicketDocumentService(),
     DevicePrintersStorage printersStorage = const DevicePrintersStorage(),
   }) : _serialTransport = serialTransport ?? SerialPrintTransport(),
        _bluetoothTransport = bluetoothTransport ?? BluetoothPrintTransport(),
@@ -55,6 +60,7 @@ class PrintingRepository {
        _barcodeLabelLanguageDetector = barcodeLabelLanguageDetector,
        _receiptEncoder = receiptEncoder,
        _documentService = documentService,
+       _repairTicketDocumentService = repairTicketDocumentService,
        _printersStorage = printersStorage;
 
   final PosApiService _service;
@@ -68,6 +74,7 @@ class PrintingRepository {
   final BarcodeLabelLanguageDetector _barcodeLabelLanguageDetector;
   final EscPosReceiptEncoder _receiptEncoder;
   final OrderDocumentService _documentService;
+  final RepairTicketDocumentService _repairTicketDocumentService;
   final DevicePrintersStorage _printersStorage;
 
   Future<Result<List<PrintJob>>> loadPrintJobs({
@@ -635,6 +642,39 @@ class PrintingRepository {
     });
   }
 
+  /// Prints the receipt a repair customer takes home at intake, on the
+  /// receipt printer: the PDF roll (or an A4 page) on a driver printer, the
+  /// native ESC/POS ticket on a raw thermal one. Never throws.
+  Future<PrintTransportResult> printRepairTicket({
+    required RepairTicket ticket,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) {
+    return _withPrinterFor(PrinterRole.posReceipt, (printer, _) async {
+      final endpoint = printer.config.endpoint;
+      if (endpoint.usesDocumentInvoice) {
+        return _repairTicketDocumentService.printTicket(
+          ticket: ticket,
+          endpoint: endpoint,
+          shopLogoBytes: shopLogoBytes,
+        );
+      }
+      if (!endpoint.usesThermalReceipt) {
+        return const PrintTransportResult.failure(
+          'repair tickets require a thermal or document printer',
+        );
+      }
+      return _printThermalPayload(
+        _repairTicketPayload(
+          ticket: ticket,
+          shopSettings: shopSettings,
+          shopLogoBytes: shopLogoBytes,
+        ),
+        printer.config,
+      );
+    });
+  }
+
   /// Prints an end-of-shift Z-Report on the POS receipt printer (the classic
   /// thermal drawer copy). The A4/PDF variant is produced separately by
   /// [RegisterZReportPdfService] for archiving/sharing.
@@ -1158,6 +1198,85 @@ class PrintingRepository {
           {'title': 'المبيعات حسب الفئة', 'rows': categoryRows},
           {'title': 'تسوية النقد', 'rows': cashRows},
         ],
+      },
+    };
+  }
+
+  /// Thermal payload for the repair intake receipt. Worded and formatted here,
+  /// from the same [RepairTicketLabels] the PDF uses, so the two print the same
+  /// receipt; the encoder only lays it out.
+  Map<String, Object?> _repairTicketPayload({
+    required RepairTicket ticket,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) {
+    const labels = RepairTicketLabels.arabic();
+    final quoted = ticket.quotedPrice;
+    final fee = ticket.diagnosisFee;
+    return {
+      'kind': 'repair_ticket',
+      'shop': {
+        ..._shopPayload(shopSettings, logoBytes: shopLogoBytes),
+        'currency_symbol': currencySymbol,
+      },
+      'ticket': {
+        'title': labels.title,
+        'job_number': ticket.jobNumber,
+        'scan_code': ticket.scanCode,
+        'scan_hint': labels.scanHint,
+        if (ticket.shopPhone.isNotEmpty)
+          'shop_phone_line': '${labels.shopPhone}: ${ticket.shopPhone}',
+        'details': [
+          if (ticket.receivedAt != null)
+            {
+              'label': labels.receivedAt,
+              'value': formatDateTime(ticket.receivedAt!),
+            },
+          if (ticket.dueAt != null)
+            {'label': labels.dueAt, 'value': formatDateTime(ticket.dueAt!)},
+        ],
+        'sections': [
+          {
+            'title': labels.customer,
+            'lead': true,
+            'lines': [ticket.customerName, ticket.customerPhone],
+          },
+          for (final device in ticket.devices)
+            {
+              'title': labels.device,
+              'lead': true,
+              'lines': [
+                device.name,
+                ...device.identifiers,
+                if (device.color.isNotEmpty) '${labels.color}: ${device.color}',
+              ],
+            },
+          if (ticket.problem.isNotEmpty)
+            {
+              'title': labels.problem,
+              'lines': [ticket.problem],
+            },
+        ],
+        'money': [
+          if (quoted != null)
+            {
+              'label': labels.quotedPrice,
+              'value': formatMoney(quoted),
+              'emphasize': true,
+            },
+          if (fee != null)
+            {'label': labels.diagnosisFee, 'value': formatMoney(fee)},
+          if (ticket.warrantyDays > 0)
+            {
+              'label': labels.warranty,
+              'value': labels.warrantyDays(ticket.warrantyDays),
+            },
+        ],
+        'terms_title': labels.terms,
+        'terms': ticket.terms,
+        if (ticket.receivedBy.isNotEmpty)
+          'received_by': '${labels.receivedBy}: ${ticket.receivedBy}',
+        'signature_label': labels.customerSignature,
       },
     };
   }

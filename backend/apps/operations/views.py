@@ -24,6 +24,8 @@ from .serializers import (
     BillOfMaterialsSerializer,
     JobAssignSerializer,
     JobCreateSerializer,
+    JobDeclineSerializer,
+    JobHandBackSerializer,
     JobHoldSerializer,
     JobInvoiceSerializer,
     JobMaterialCreateSerializer,
@@ -38,9 +40,12 @@ from .services import (
     add_job_material,
     add_job_service,
     assign_job,
+    awaiting_hand_back_q,
     cancel_job,
     create_job,
+    decline_job,
     explode_bom_into_job,
+    hand_back_declined_job,
     hold_job,
     invoice_job,
     remove_job_service,
@@ -75,6 +80,8 @@ class JobViewSet(
         "hold": ("operations.change_job",),
         "resume": ("operations.change_job",),
         "cancel": ("operations.change_job",),
+        "decline": ("operations.change_job",),
+        "hand_back": ("operations.change_job",),
         "reopen": ("operations.reopen_job",),
         "invoice": (
             "operations.change_job",
@@ -89,6 +96,8 @@ class JobViewSet(
             "customer",
             "assigned_to",
             "assigned_employee",
+            "created_by",
+            "cancelled_by",
             "sales_channel",
             "order",
             "output_variant",
@@ -155,6 +164,10 @@ class JobViewSet(
         asset_id = self.request.query_params.get("asset")
         if asset_id:
             queryset = queryset.filter(job_assets__asset_id=asset_id).distinct()
+        # The shelf the board cannot show: declined jobs whose item is still
+        # here, waiting for the customer to collect it unrepaired.
+        if self.request.query_params.get("awaiting_hand_back") in ("true", "1"):
+            queryset = queryset.filter(awaiting_hand_back_q())
         return queryset
 
     def create(self, request, *args, **kwargs):
@@ -331,6 +344,40 @@ class JobViewSet(
         return self._refreshed(request, job.pk)
 
     @action(detail=True, methods=["post"])
+    def decline(self, request, pk=None):
+        return run_idempotent_request(request, lambda: self._decline(request))
+
+    def _decline(self, request):
+        job = self.get_object()
+        serializer = JobDeclineSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        decline_job(
+            job=job,
+            reason=serializer.validated_data["reason"],
+            note=serializer.validated_data.get("note", ""),
+            fee=serializer.validated_data.get("fee"),
+            request=request,
+        )
+        return self._refreshed(request, job.pk)
+
+    @action(detail=True, methods=["post"], url_path="hand-back")
+    def hand_back(self, request, pk=None):
+        return run_idempotent_request(request, lambda: self._hand_back(request))
+
+    def _hand_back(self, request):
+        job = self.get_object()
+        serializer = JobHandBackSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        hand_back_declined_job(
+            job=job,
+            handed_over_to=serializer.validated_data.get("handed_over_to", ""),
+            note=serializer.validated_data.get("note", ""),
+            force_release=serializer.validated_data.get("force_release", False),
+            request=request,
+        )
+        return self._refreshed(request, job.pk)
+
+    @action(detail=True, methods=["post"])
     def reopen(self, request, pk=None):
         job = self.get_object()
         reopen_job(job=job, request=request, note=str(request.data.get("note", "")))
@@ -395,9 +442,12 @@ class AssetViewSet(viewsets.ModelViewSet):
     }
     queryset = Asset.objects.select_related("customer", "asset_type").annotate(
         job_count=Count("job_links", distinct=True),
+        # "Is it in the shop right now?" An open job holds the item, and so
+        # does a declined one until the customer collects it unrepaired.
         open_job_count=Count(
             "job_links",
-            filter=Q(job_links__job__status=Job.Status.OPEN),
+            filter=Q(job_links__job__status=Job.Status.OPEN)
+            | awaiting_hand_back_q("job_links__job__"),
             distinct=True,
         ),
         last_job_at=Max("job_links__job__created_at"),

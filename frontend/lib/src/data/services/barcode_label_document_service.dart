@@ -234,15 +234,19 @@ class BarcodeLabelDocumentService {
       if (barcode.isEmpty || line.copies <= 0) {
         continue;
       }
+      final caption = line.caption?.trim() ?? '';
       final sticker = _LabelSticker(
         name: line.label.displayName.trim().isEmpty
             ? line.label.productName.trim()
             : line.label.displayName.trim(),
         barcode: barcode,
-        priceText: line.includePrice ? formatMoney(line.label.unitPrice) : null,
-        expiryText: line.expiryDate == null
+        priceText: caption.isEmpty && line.includePrice
+            ? formatMoney(line.label.unitPrice)
+            : null,
+        expiryText: caption.isNotEmpty || line.expiryDate == null
             ? null
             : formatDate(line.expiryDate!),
+        captionText: caption.isEmpty ? null : caption,
       );
       for (var i = 0; i < line.copies; i++) {
         stickers.add(sticker);
@@ -284,12 +288,16 @@ class _LabelSticker {
     required this.barcode,
     this.priceText,
     this.expiryText,
+    this.captionText,
   });
 
   final String name;
   final String barcode;
   final String? priceText;
   final String? expiryText;
+
+  /// A line in the price's place, for a sticker that is not a product.
+  final String? captionText;
 
   String? get expiryLine => expiryText == null ? null : 'ينتهي $expiryText';
 }
@@ -599,7 +607,10 @@ class _BarcodeLabelSheet {
     required double cardWidth,
     required double cardHeight,
   }) {
-    final hasFooter = sticker.priceText != null || sticker.expiryLine != null;
+    final hasFooter =
+        sticker.priceText != null ||
+        sticker.expiryLine != null ||
+        sticker.captionText != null;
     final name = sticker.name.isEmpty ? '\u2014' : sticker.name;
 
     // The one size the name and the price are both set at.
@@ -619,14 +630,18 @@ class _BarcodeLabelSheet {
     final digitsHeight = cardHeight * 0.1;
     final digitsGap = cardHeight * 0.03;
     final footerHeight = hasFooter ? headlineFontSize * 1.34 : 0.0;
-    final footer = _footer(sticker, fontSize: headlineFontSize);
+    final caption = sticker.captionText;
+    final footer = caption != null
+        ? _caption(caption, fontSize: headlineFontSize, width: cardWidth)
+        : _footer(sticker, fontSize: headlineFontSize);
 
     // Bars wider than ~60 mm buy nothing but ink: a scanner needs module width,
     // not overall length.
-    final modules = _moduleCount(sticker.barcode);
-    final barcodeWidth = _snappedBarcodeWidth(
+    final modules = pdfCode128ModuleCount(sticker.barcode);
+    final barcodeWidth = pdfSnappedBarcodeWidth(
       modules,
       math.min(cardWidth, 60 * _mm),
+      dpi: dpi,
     );
 
     return pw.SizedBox(
@@ -660,7 +675,7 @@ class _BarcodeLabelSheet {
                         drawText: false,
                         color: _ink,
                       )
-                    : _DotSnappedBarcode(
+                    : PointyPdfCode128(
                         data: sticker.barcode,
                         modules: modules,
                         dpi: dpi <= 0 ? 203 : dpi,
@@ -779,6 +794,41 @@ class _BarcodeLabelSheet {
     );
   }
 
+  /// A caption in the price's row, at the price's size — unless it is too long
+  /// for the sticker, in which case it is set smaller until it fits.
+  ///
+  /// A price is a few characters and never needs this. A caption is a phrase,
+  /// and the row cannot shrink it: the text lays out at the card's full width
+  /// and simply clips, so the fitting size is solved from the face's own
+  /// metrics instead (see [_digits]). Arabic measures a little wide that way —
+  /// the metrics are the isolated glyphs, the print the joined ones — so it
+  /// errs smaller, never clipped.
+  pw.Widget _caption(
+    String caption, {
+    required double fontSize,
+    required double width,
+  }) {
+    return pw.Builder(
+      builder: (context) {
+        final metrics = fonts.bold.getFont(context).stringMetrics(caption);
+        final fitting = metrics.advanceWidth > 0
+            ? width / metrics.advanceWidth
+            : fontSize;
+        return pw.Text(
+          caption,
+          maxLines: 1,
+          overflow: pw.TextOverflow.clip,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            fontSize: math.min(fontSize, fitting * 0.98),
+            fontWeight: pw.FontWeight.bold,
+            color: _ink,
+          ),
+        );
+      },
+    );
+  }
+
   /// Price (and expiry, when the line carries one). The price is set in the
   /// name's face at the name's size — [fontSize] is the very number the name
   /// used — so the two read as one pair from across an aisle.
@@ -825,144 +875,5 @@ class _BarcodeLabelSheet {
         ),
       ],
     );
-  }
-
-  double _snappedBarcodeWidth(int modules, double available) {
-    if (modules <= 0) {
-      return available;
-    }
-    final dotsPerPoint = (dpi <= 0 ? 203 : dpi) / PdfPageFormat.inch;
-    final dotsPerModule = available * dotsPerPoint / modules;
-    if (dotsPerModule < 2) {
-      // Dense data on a small label: there is no room to round down without
-      // throwing away most of the symbol (rounding 1.8 dots down to 1 halves
-      // it), and a sub-2-dot module is at the head's limit anyway. Use every
-      // millimetre the label has instead.
-      return available;
-    }
-    return modules * dotsPerModule.floorToDouble() / dotsPerPoint;
-  }
-
-  /// Number of Code 128 modules [data] encodes to, measured off a trial layout:
-  /// the narrowest bar in any 1D symbology is exactly one module wide, so the
-  /// probe width divided by that bar gives the module count. (The `Barcode1D`
-  /// class that would answer directly isn't exported by the barcode package.)
-  int _moduleCount(String data) {
-    const probeWidth = 1000.0;
-    try {
-      final bars = pw.Barcode.code128()
-          .make(data, width: probeWidth, height: 10)
-          .whereType<pw.BarcodeBar>()
-          .where((bar) => bar.width > 0);
-      if (bars.isEmpty) {
-        return 0;
-      }
-      final module = bars.map((bar) => bar.width).reduce(math.min);
-      return module <= 0 ? 0 : (probeWidth / module).round();
-    } on Object {
-      // Data this symbology can't express: let the widget report it as it will.
-      return 0;
-    }
-  }
-}
-
-/// Code 128 bars drawn on whole printer dots.
-///
-/// [pw.BarcodeWidget] places bars at whatever fractional point the layout lands
-/// on, and a 203-dpi head can only round that to the nearest dot — so a nominal
-/// 2-dot module prints as a mix of 1-, 2- and 3-dot bars, which is what a
-/// scanner reads as a fuzzy, hard-to-decode symbol. Bars here are snapped to the
-/// device grid in page coordinates: every module comes out the same whole number
-/// of dots wide. (Under a rotation or a scale-down the canvas transform moves
-/// the grid, and this degrades to the same fractional placement as before.)
-class _DotSnappedBarcode extends pw.Widget {
-  _DotSnappedBarcode({
-    required this.data,
-    required this.modules,
-    required this.dpi,
-    required this.color,
-  });
-
-  final String data;
-  final int modules;
-  final int dpi;
-  final PdfColor color;
-
-  @override
-  void layout(
-    pw.Context context,
-    pw.BoxConstraints constraints, {
-    bool parentUsesSize = false,
-  }) {
-    box = PdfRect.fromPoints(PdfPoint.zero, constraints.biggest);
-  }
-
-  @override
-  void paint(pw.Context context) {
-    super.paint(context);
-    final rect = box;
-    if (rect == null || modules <= 0) {
-      return;
-    }
-    final dotsPerPoint = dpi / PdfPageFormat.inch;
-    final dotsPerModule = rect.width * dotsPerPoint / modules;
-    // Below two dots a module can't be rounded to the grid without losing most
-    // of the symbol, so a dense code on a small label keeps its exact width and
-    // lets the head round each bar (see _snappedBarcodeWidth).
-    final snapToDots = dotsPerModule >= 2;
-    final moduleWidth = snapToDots
-        ? dotsPerModule.floorToDouble() / dotsPerPoint
-        : rect.width / modules;
-
-    // Widgets paint in their parent's coordinate space, so the printer's dot
-    // grid has to be found through the canvas transform. Follow the image of
-    // our own x axis: upright or quarter-turned it still lands on a page axis
-    // (only the sign and which axis change), and the bars can be pinned to whole
-    // dots along it. Under a scale it no longer maps to whole dots at all — the
-    // bars stay evenly sized, they just can't be pinned.
-    final matrix = context.canvas.getTransform();
-    final alongX = matrix.entry(0, 0);
-    final alongY = matrix.entry(1, 0);
-    bool isUnit(double value) => (value.abs() - 1).abs() < 1e-6;
-    bool isZero(double value) => value.abs() < 1e-6;
-    final double scale;
-    final double origin;
-    if (isZero(alongY) && isUnit(alongX)) {
-      scale = alongX;
-      origin = matrix.entry(0, 3);
-    } else if (isZero(alongX) && isUnit(alongY)) {
-      scale = alongY;
-      origin = matrix.entry(1, 3);
-    } else {
-      scale = 0;
-      origin = 0;
-    }
-    var left = rect.left;
-    if (scale != 0 && snapToDots) {
-      final absolute = origin + left * scale;
-      final snapped = (absolute * dotsPerPoint).roundToDouble() / dotsPerPoint;
-      left = (snapped - origin) / scale;
-    }
-
-    // Laying the symbol out `modules` points wide makes every element's left
-    // and width an exact module count.
-    for (final element in pw.Barcode.code128().make(
-      data,
-      width: modules.toDouble(),
-      height: 1,
-    )) {
-      if (element is! pw.BarcodeBar || !element.black || element.width <= 0) {
-        continue;
-      }
-      context.canvas.drawRect(
-        left + element.left.roundToDouble() * moduleWidth,
-        rect.bottom,
-        element.width.roundToDouble() * moduleWidth,
-        rect.height,
-      );
-    }
-    context.canvas
-      ..setFillColor(color)
-      ..fillPath();
   }
 }

@@ -104,6 +104,9 @@ class _PointyTextEntryDialogState extends State<PointyTextEntryDialog> {
     return AdaptiveDialogSurface(
       size: AdaptiveModalSize.compact,
       child: AlertDialog(
+        // A long explanation plus the keyboard this field raises on a phone is
+        // more than a short screen holds; scroll rather than overflow.
+        scrollable: true,
         icon: icon == null
             ? null
             : Icon(

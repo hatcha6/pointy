@@ -380,6 +380,10 @@ class BarcodeLabelCommandEncoder {
   }
 
   String _detailText(BarcodeLabelPrintLine line) {
+    final caption = line.caption?.trim() ?? '';
+    if (caption.isNotEmpty) {
+      return caption;
+    }
     final details = [
       if (line.includePrice) 'السعر ${_money(line.label.unitPrice)}',
       if (line.expiryDate != null) 'تاريخ الانتهاء ${_date(line.expiryDate!)}',

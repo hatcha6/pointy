@@ -61,6 +61,9 @@ class ShopSettings {
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
+    this.shopPhone = '',
+    this.repairDiagnosisFee,
+    this.repairTicketTerms,
     this.posCashPurchaseLimit,
     this.maxInvoiceDiscountAmount,
     this.enforceCustomerCreditLimits = false,
@@ -128,6 +131,19 @@ class ShopSettings {
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
   final bool enableJobTracking;
+
+  /// The shop's own number, printed where a customer needs to call back — the
+  /// repair intake receipt.
+  final String shopPhone;
+
+  /// What a declined repair's diagnosis costs, suggested by the decline form.
+  /// Null means the shop charges nothing.
+  final double? repairDiagnosisFee;
+
+  /// The conditions printed on the repair intake receipt, in order. Null
+  /// means the shop has not written its own, so the app's defaults print; an
+  /// empty list is a shop that prints no conditions at all.
+  final List<String>? repairTicketTerms;
 
   /// Per-purchase ceiling for POS cash purchases (drawer-paid POs from the
   /// sell screen). Null or 0 = no cap.
@@ -330,6 +346,11 @@ class ShopSettings {
         false,
       ),
       enableJobTracking: _boolFromJson(json['enable_job_tracking'], false),
+      shopPhone: json['shop_phone']?.toString() ?? '',
+      repairDiagnosisFee: json['repair_diagnosis_fee'] == null
+          ? null
+          : _moneyFromJson(json['repair_diagnosis_fee'], 0),
+      repairTicketTerms: _termsFromJson(json['repair_ticket_terms']),
       posCashPurchaseLimit: json['pos_cash_purchase_limit'] == null
           ? null
           : _moneyFromJson(json['pos_cash_purchase_limit'], 0),
@@ -432,6 +453,8 @@ class ShopSettingsDraft {
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
+    this.repairDiagnosisFee,
+    this.repairTicketTerms,
     this.posCashPurchaseLimit,
     this.maxInvoiceDiscountAmount,
     this.enforceCustomerCreditLimits = false,
@@ -480,6 +503,8 @@ class ShopSettingsDraft {
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
   final bool enableJobTracking;
+  final double? repairDiagnosisFee;
+  final List<String>? repairTicketTerms;
   final double? posCashPurchaseLimit;
   final double? maxInvoiceDiscountAmount;
   final bool enablePurchaseSuggestions;
@@ -528,6 +553,8 @@ class ShopSettingsDraft {
       enableProductionOperations: settings.enableProductionOperations,
       enableKitchenOperations: settings.enableKitchenOperations,
       enableJobTracking: settings.enableJobTracking,
+      repairDiagnosisFee: settings.repairDiagnosisFee,
+      repairTicketTerms: settings.repairTicketTerms,
       enablePurchaseSuggestions: settings.enablePurchaseSuggestions,
       enableSurveillance: settings.enableSurveillance,
       surveillancePreRollSeconds: settings.surveillancePreRollSeconds,
@@ -591,6 +618,8 @@ class ShopSettingsDraft {
     bool? enableProductionOperations,
     bool? enableKitchenOperations,
     bool? enableJobTracking,
+    Object? repairDiagnosisFee = _keep,
+    Object? repairTicketTerms = _keep,
     bool? enablePurchaseSuggestions,
     bool? enableSurveillance,
     int? surveillancePreRollSeconds,
@@ -658,6 +687,12 @@ class ShopSettingsDraft {
       enableKitchenOperations:
           enableKitchenOperations ?? this.enableKitchenOperations,
       enableJobTracking: enableJobTracking ?? this.enableJobTracking,
+      repairDiagnosisFee: identical(repairDiagnosisFee, _keep)
+          ? this.repairDiagnosisFee
+          : repairDiagnosisFee as double?,
+      repairTicketTerms: identical(repairTicketTerms, _keep)
+          ? this.repairTicketTerms
+          : repairTicketTerms as List<String>?,
       enablePurchaseSuggestions:
           enablePurchaseSuggestions ?? this.enablePurchaseSuggestions,
       enableSurveillance: enableSurveillance ?? this.enableSurveillance,
@@ -707,6 +742,8 @@ class ShopSettingsDraft {
       'enable_production_operations': enableProductionOperations,
       'enable_kitchen_operations': enableKitchenOperations,
       'enable_job_tracking': enableJobTracking,
+      'repair_diagnosis_fee': repairDiagnosisFee?.toStringAsFixed(2),
+      'repair_ticket_terms': repairTicketTerms,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
       'max_invoice_discount_amount': maxInvoiceDiscountAmount?.toStringAsFixed(
         2,
@@ -727,6 +764,18 @@ class ShopSettingsDraft {
         'valuation_method_change_acknowledged': true,
     };
   }
+}
+
+/// The repair receipt's conditions: null (the app's defaults) stays null, so a
+/// shop that never wrote any is not mistaken for one that chose to print none.
+List<String>? _termsFromJson(Object? value) {
+  if (value is! List) {
+    return null;
+  }
+  return [
+    for (final item in value)
+      if ((item?.toString() ?? '').trim().isNotEmpty) item.toString().trim(),
+  ];
 }
 
 bool _boolFromJson(Object? value, bool fallback) {

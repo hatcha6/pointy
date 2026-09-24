@@ -25,6 +25,7 @@ class JobsBoardViewModel extends ChangeNotifier {
   final AnalyticsEngine? _analyticsEngine;
 
   List<OperationsJob> _jobs = const [];
+  List<OperationsJob> _awaitingHandBack = const [];
   List<WorkflowTemplate> _templates = const [];
   List<BillOfMaterials> _boms = const [];
   OperationsJobType? _jobTypeFilter;
@@ -38,6 +39,11 @@ class JobsBoardViewModel extends ChangeNotifier {
   bool _hasMutationError = false;
 
   List<OperationsJob> get jobs => _jobs;
+
+  /// Declined jobs whose item is still here, waiting for its owner. Finished
+  /// work, so not a column — but the phone is on the shelf, and the board is
+  /// where the counter looks for what the shop is holding.
+  List<OperationsJob> get awaitingHandBack => _awaitingHandBack;
   List<WorkflowTemplate> get templates => _templates;
   List<BillOfMaterials> get boms => _boms;
   OperationsJobType? get jobTypeFilter => _jobTypeFilter;
@@ -168,6 +174,7 @@ class JobsBoardViewModel extends ChangeNotifier {
       case Error<List<OperationsJob>>():
         _hasLoadError = true;
     }
+    await _loadAwaitingHandBack();
 
     _isLoading = false;
     notifyListeners();
@@ -185,9 +192,22 @@ class JobsBoardViewModel extends ChangeNotifier {
       case Error<List<OperationsJob>>():
         _hasLoadError = true;
     }
+    await _loadAwaitingHandBack();
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Follows the board's search, so a ticket scanned into it finds a declined
+  /// phone as readily as one still being worked on. A failure leaves the shelf
+  /// as it was rather than blanking the board: these jobs are a side list.
+  Future<void> _loadAwaitingHandBack() async {
+    final result = await _repository.loadJobsAwaitingHandBack(
+      search: _searchQuery,
+    );
+    if (result case Ok<List<OperationsJob>>(value: final jobs)) {
+      _awaitingHandBack = jobs;
+    }
   }
 
   Future<OperationsJob?> createJob(OperationsJobDraft draft) async {
@@ -212,6 +232,27 @@ class JobsBoardViewModel extends ChangeNotifier {
     notifyListeners();
     await loadJobs();
     return created;
+  }
+
+  // A reload fired by a filter change is not awaited, and it now makes two
+  // requests — the board, then the declined phones on the shelf — so leaving
+  // the screen mid-reload is ordinary. Swallow the late notification rather
+  // than assert "used after disposed", as the catalog and invoice view models
+  // do for the same reason.
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   Map<int, List<OperationsJob>> jobsByStage(WorkflowTemplate template) {

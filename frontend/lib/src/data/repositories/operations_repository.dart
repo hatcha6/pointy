@@ -70,6 +70,30 @@ class OperationsRepository {
     });
   }
 
+  /// Declined jobs whose item is still on the shelf, waiting for the customer
+  /// to collect it unrepaired. Kept apart from [loadAllJobs] on purpose: the
+  /// board lists open work, and these are finished jobs it still has to show.
+  Future<Result<List<OperationsJob>>> loadJobsAwaitingHandBack({
+    String search = '',
+  }) async {
+    return Result.guard(() async {
+      final jobs = <OperationsJob>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore) {
+        final result = await _service.fetchJobs(
+          awaitingHandBack: true,
+          search: search,
+          page: page,
+        );
+        jobs.addAll(result.jobs);
+        hasMore = result.hasMore;
+        page += 1;
+      }
+      return jobs;
+    });
+  }
+
   Future<Result<OperationsJob>> loadJob(int jobId) async {
     return Result.guard(() => _service.fetchJob(jobId));
   }
@@ -173,6 +197,34 @@ class OperationsRepository {
     String reason = '',
   }) async {
     return Result.guard(() => _service.cancelJob(jobId, reason: reason));
+  }
+
+  Future<Result<OperationsJob>> declineJob(
+    int jobId,
+    JobDeclineDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.declineJob(jobId, draft, idempotencyKey: idempotencyKey),
+    );
+  }
+
+  Future<Result<OperationsJob>> handBackJob(
+    int jobId, {
+    String handedOverTo = '',
+    String note = '',
+    bool forceRelease = false,
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.handBackJob(
+        jobId,
+        handedOverTo: handedOverTo,
+        note: note,
+        forceRelease: forceRelease,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
   }
 
   Future<Result<OperationsJob>> reopenJob(int jobId, {String note = ''}) async {

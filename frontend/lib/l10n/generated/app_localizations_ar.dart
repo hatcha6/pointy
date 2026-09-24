@@ -4418,6 +4418,296 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobForceReleaseNoteHint => 'زبون قديم، يدفع الأسبوع القادم';
 
   @override
+  String get jobCustomerDecisionTitle => 'بانتظار قرار الزبون';
+
+  @override
+  String get jobCustomerDecisionMessage =>
+      'أبلغ الزبون بالتشخيص والسعر، ثم سجّل قراره.';
+
+  @override
+  String jobCustomerDecisionQuote(String price) {
+    return 'السعر المبدئي: $price';
+  }
+
+  @override
+  String get jobApproveButton => 'وافق الزبون';
+
+  @override
+  String get jobDeclineButton => 'رفض الزبون';
+
+  @override
+  String get jobApproveDialogTitle => 'موافقة الزبون على التصليح';
+
+  @override
+  String get jobApproveDialogMessage =>
+      'سجّل السعر الذي وافق عليه الزبون، وينتقل الجهاز بعدها إلى المرحلة التالية.';
+
+  @override
+  String get jobApproveConfirm => 'تأكيد الموافقة';
+
+  @override
+  String get jobApprovedMessage => 'سُجّلت موافقة الزبون.';
+
+  @override
+  String get jobDeclineMenuAction => 'إرجاع بدون تصليح';
+
+  @override
+  String get jobDeclineSheetTitle => 'إرجاع الجهاز بدون تصليح';
+
+  @override
+  String get jobDeclineSheetMessage =>
+      'ينتهي العمل على الجهاز وتعود أي قطع مستخدمة إلى المخزون، ويبقى الجهاز مسجلًا في المحل حتى يستلمه الزبون.';
+
+  @override
+  String get jobDeclineReasonLabel => 'لماذا لن يُصلَح؟';
+
+  @override
+  String get jobDeclineReasonPrice => 'السعر مرتفع';
+
+  @override
+  String get jobDeclineReasonDeclined => 'لا يريد التصليح';
+
+  @override
+  String get jobDeclineReasonCannotRepair => 'تعذّر الإصلاح';
+
+  @override
+  String get jobDeclineReasonNoResponse => 'لم يرد الزبون';
+
+  @override
+  String get jobDeclineNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get jobDeclineFeeLabel => 'رسوم الفحص';
+
+  @override
+  String get jobDeclineFeeHelper =>
+      'تُحصَّل عند تسليم الجهاز. اتركها صفرًا إن لم تكن هناك رسوم.';
+
+  @override
+  String get jobDeclineConfirm => 'إنهاء بدون تصليح';
+
+  @override
+  String get jobDeclinedMessage =>
+      'انتهت المهمة بدون تصليح، والجهاز بانتظار أن يستلمه الزبون.';
+
+  @override
+  String get jobDeclinedTitle => 'انتهت بدون تصليح';
+
+  @override
+  String jobDeclinedByLine(String name, String when) {
+    return 'بواسطة $name — $when';
+  }
+
+  @override
+  String jobDeclineFeeDueLine(String amount) {
+    return 'رسوم الفحص: $amount — لم تُحصَّل بعد';
+  }
+
+  @override
+  String jobDeclineFeeSettledLine(String amount) {
+    return 'رسوم الفحص: $amount — حُصّلت';
+  }
+
+  @override
+  String jobDeclineFeeCreditLine(String amount) {
+    return 'رسوم الفحص: $amount — آجل على الزبون';
+  }
+
+  @override
+  String get jobDeclineNoFeeLine => 'بدون رسوم فحص';
+
+  @override
+  String get jobAwaitingHandBackHint =>
+      'الجهاز ما زال في المحل حتى يستلمه الزبون.';
+
+  @override
+  String get jobHandBackButton => 'تسليم الجهاز';
+
+  @override
+  String get jobHandBackDialogTitle => 'تسليم الجهاز بدون تصليح';
+
+  @override
+  String get jobHandedBackMessage => 'سُلّم الجهاز للزبون.';
+
+  @override
+  String jobHandedBackLine(String name, String when) {
+    return 'سُلّم الجهاز إلى $name — $when';
+  }
+
+  @override
+  String jobHandedBackNoNameLine(String when) {
+    return 'سُلّم الجهاز للزبون — $when';
+  }
+
+  @override
+  String get jobHandBackBlockedTitle => 'رسوم الفحص لم تُحصَّل';
+
+  @override
+  String get jobHandBackBlockedMessage =>
+      'حصّل رسوم الفحص قبل تسليم الجهاز، أو سجّلها آجلًا على الزبون.';
+
+  @override
+  String get jobCollectFeeButton => 'تحصيل رسوم الفحص';
+
+  @override
+  String get jobCollectFeeTitle => 'فاتورة رسوم الفحص';
+
+  @override
+  String get jobCollectFeeExplainer =>
+      'فاتورة برسوم الفحص وحدها، فالتصليح لم يتم. يدخل المبلغ في جلسة الدرج الحالية.';
+
+  @override
+  String jobCollectFeeAmountLabel(String amount) {
+    return 'رسوم الفحص: $amount';
+  }
+
+  @override
+  String get jobCancelDeclineHint =>
+      'إذا رفض الزبون التصليح فاختر «إرجاع بدون تصليح» بدل الإلغاء، ليبقى الجهاز مسجلًا حتى يستلمه.';
+
+  @override
+  String jobTimelineDeclined(String reason) {
+    return 'انتهت بدون تصليح — $reason';
+  }
+
+  @override
+  String get jobTimelineCancelled => 'أُلغيت المهمة';
+
+  @override
+  String get jobTimelineHandedBack => 'سُلّم الجهاز بدون تصليح';
+
+  @override
+  String get jobsAwaitingHandBackTitle => 'بانتظار الاستلام بدون تصليح';
+
+  @override
+  String get jobsAwaitingHandBackHint =>
+      'أجهزة انتهى العمل عليها ولم يستلمها أصحابها بعد.';
+
+  @override
+  String get jobAwaitingHandBackBadge => 'بانتظار الاستلام';
+
+  @override
+  String jobDeclineFeeDueBadge(String amount) {
+    return 'رسوم فحص $amount';
+  }
+
+  @override
+  String get jobPrintTicketAction => 'طباعة إيصال الاستلام';
+
+  @override
+  String get jobPrintLabelAction => 'طباعة ملصق الجهاز';
+
+  @override
+  String get jobTicketPrintedMessage => 'طُبع إيصال الاستلام.';
+
+  @override
+  String get jobLabelPrintedMessage => 'طُبع ملصق الجهاز.';
+
+  @override
+  String get jobTicketNoPrinterMessage =>
+      'لا توجد طابعة إيصالات على هذا الجهاز — اختر واحدة من إعدادات الطابعات.';
+
+  @override
+  String get jobLabelNoPrinterMessage =>
+      'لا توجد طابعة ملصقات على هذا الجهاز — اختر واحدة من إعدادات الطابعات.';
+
+  @override
+  String get jobTicketPrintFailedMessage => 'تعذّرت طباعة إيصال الاستلام.';
+
+  @override
+  String get jobLabelPrintFailedMessage => 'تعذّرت طباعة ملصق الجهاز.';
+
+  @override
+  String get intakePrintSectionTitle => 'الطباعة بعد الاستلام';
+
+  @override
+  String get intakePrintTicketLabel => 'إيصال للزبون';
+
+  @override
+  String get intakePrintLabelLabel => 'ملصق للجهاز';
+
+  @override
+  String get repairTicketSectionTitle => 'إيصال الصيانة';
+
+  @override
+  String get repairTicketSectionHint =>
+      'ما يُطبع للزبون عند استلام جهازه، ورسوم الفحص إذا رفض التصليح.';
+
+  @override
+  String get repairDiagnosisFeeTitle => 'رسوم الفحص عند رفض التصليح';
+
+  @override
+  String get repairDiagnosisFeeNone => 'بدون رسوم';
+
+  @override
+  String get repairDiagnosisFeeHelper =>
+      'تُقترح عند رفض الزبون للتصليح ويمكن تعديلها وقتها. صفر يعني بدون رسوم.';
+
+  @override
+  String get repairTicketTermsTitle => 'شروط إيصال الاستلام';
+
+  @override
+  String get repairTicketTermsHelper =>
+      'تُطبع على إيصال الاستلام بهذا الترتيب.';
+
+  @override
+  String get repairTicketTermsManageButton => 'تعديل الشروط';
+
+  @override
+  String get repairTicketTermsDefaultNotice =>
+      'لم تكتب شروطًا خاصة بمحلك بعد، فتُطبع الشروط الافتراضية أدناه.';
+
+  @override
+  String get repairTicketTermsDialogDescription =>
+      'أضف الشروط التي تُطبع على إيصال الاستلام، ورتّبها بالسحب، واحذف ما لا تحتاجه.';
+
+  @override
+  String get repairTicketTermsEditingDefaultsNotice =>
+      'هذه هي الشروط الافتراضية. أي تعديل عليها يجعلها شروط محلك.';
+
+  @override
+  String get repairTicketTermFieldLabel => 'شرط جديد';
+
+  @override
+  String get repairTicketTermFieldHint =>
+      'مثال: لا يسلم الجهاز إلا لحامل الإيصال';
+
+  @override
+  String get repairTicketTermAddButton => 'إضافة';
+
+  @override
+  String get repairTicketTermRequiredError => 'اكتب الشرط أولًا';
+
+  @override
+  String get repairTicketTermDuplicateError => 'هذا الشرط موجود بالفعل';
+
+  @override
+  String repairTicketTermsLimitError(int max) {
+    return 'يمكن إضافة $max شرطًا على الأكثر';
+  }
+
+  @override
+  String get repairTicketTermEditTooltip => 'تعديل الشرط';
+
+  @override
+  String get repairTicketTermRemoveTooltip => 'حذف الشرط';
+
+  @override
+  String get repairTicketTermReorderTooltip => 'اسحب لتغيير الترتيب';
+
+  @override
+  String get repairTicketTermEditTitle => 'تعديل نص الشرط';
+
+  @override
+  String get repairTicketTermLabel => 'نص الشرط';
+
+  @override
+  String get repairTicketTermsNoneMessage => 'لن تُطبع أي شروط على الإيصال.';
+
+  @override
+  String get repairTicketTermsRestoreDefaults => 'استعادة الشروط الافتراضية';
+
+  @override
   String jobBalanceDueLabel(String amount) {
     return 'المتبقي: $amount';
   }

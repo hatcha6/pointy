@@ -8,6 +8,8 @@
 //
 // Screens: board | board-empty | history | details | details-done | asset-types
 //          | intake | recipes | assets | assets-empty | asset-details
+//          | details-decision | details-declined | details-handed-back
+//          | decline-sheet | repair-ticket-settings | repair-ticket-terms
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -30,7 +32,9 @@ import 'package:pointy_frontend/src/data/repositories/operations_repository.dart
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/assets/view_models/asset_details_view_model.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/asset_types_view_model.dart';
+import 'package:pointy_frontend/src/data/models/shop_settings.dart';
 import 'package:pointy_frontend/src/features/settings/views/asset_types_section.dart';
+import 'package:pointy_frontend/src/features/settings/views/repair_ticket_settings_section.dart';
 import 'package:pointy_frontend/src/features/assets/view_models/assets_view_model.dart';
 import 'package:pointy_frontend/src/features/assets/views/asset_details_screen.dart';
 import 'package:pointy_frontend/src/features/assets/views/assets_screen.dart';
@@ -38,6 +42,7 @@ import 'package:pointy_frontend/src/features/operations/view_models/job_details_
 import 'package:pointy_frontend/src/features/operations/view_models/job_history_view_model.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/jobs_board_view_model.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/recipes_view_model.dart';
+import 'package:pointy_frontend/src/features/operations/views/job_decline_sheet.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_details_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_history_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_intake_wizard.dart';
@@ -111,6 +116,18 @@ class _Router extends StatelessWidget {
         return _details(_richJob);
       case 'details-done':
         return _details(_doneJob);
+      case 'details-decision':
+        return _details(_approvalJob);
+      case 'details-declined':
+        return _details(_declinedJob);
+      case 'details-handed-back':
+        return _details(_handedBackJob);
+      case 'decline-sheet':
+        return const _DeclineSheetHost();
+      case 'repair-ticket-settings':
+        return const _RepairTicketSettingsHost();
+      case 'repair-ticket-terms':
+        return const _RepairTicketSettingsHost(openEditor: true);
       case 'intake':
         return _intake();
       case 'recipes':
@@ -122,9 +139,101 @@ class _Router extends StatelessWidget {
   }
 }
 
+/// Opens the decline sheet on load, over the job it declines, so the sheet can
+/// be screenshotted without a click (Flutter web draws to a canvas).
+class _DeclineSheetHost extends StatefulWidget {
+  const _DeclineSheetHost();
+
+  @override
+  State<_DeclineSheetHost> createState() => _DeclineSheetHostState();
+}
+
+class _DeclineSheetHostState extends State<_DeclineSheetHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(showJobDeclineSheet(context, suggestedFee: 10));
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => _details(_approvalJob);
+}
+
+/// The repair receipt settings as the operations settings page shows them,
+/// saving into local state so the editor's result is visible straight away.
+/// With [openEditor] the terms editor opens on load, for a screenshot.
+class _RepairTicketSettingsHost extends StatefulWidget {
+  const _RepairTicketSettingsHost({this.openEditor = false});
+
+  final bool openEditor;
+
+  @override
+  State<_RepairTicketSettingsHost> createState() =>
+      _RepairTicketSettingsHostState();
+}
+
+class _RepairTicketSettingsHostState extends State<_RepairTicketSettingsHost> {
+  ShopSettings _settings = ShopSettings.fromJson(const {
+    'shop_name': 'محل النور للهواتف',
+    'repair_diagnosis_fee': '10.00',
+    'enable_repair_operations': true,
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openEditor) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(
+            showDialog<RepairTicketTermsEdit>(
+              context: context,
+              builder: (_) => const RepairTicketTermsDialog(initialTerms: null),
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PointyScaffold(
+      appBar: const PointyAppBar(title: Text('العمليات والمهام')),
+      body: ListView(
+        padding: AdaptiveSpacing.of(context).pagePadding,
+        children: [
+          AdaptiveMaxWidth(
+            width: AppContentWidth.form,
+            child: RepairTicketSettingsSection(
+              settings: _settings,
+              enabled: true,
+              onSave: (draft) async {
+                final json = draft.toJson();
+                setState(() {
+                  _settings = ShopSettings.fromJson({
+                    'shop_name': draft.shopName,
+                    'repair_diagnosis_fee': json['repair_diagnosis_fee'],
+                    'repair_ticket_terms': json['repair_ticket_terms'],
+                  });
+                });
+                return true;
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 Widget _board({List<OperationsJob>? jobs}) {
   final repo = _FakeOperationsRepository(
-    jobs: jobs ?? _boardJobs,
+    jobs: jobs ?? [..._boardJobs, _declinedJob],
     templates: _templates,
     boms: _boms,
   );
@@ -366,6 +475,15 @@ class _FakeOperationsRepository extends OperationsRepository {
   }
 
   @override
+  Future<Result<List<OperationsJob>>> loadJobsAwaitingHandBack({
+    String search = '',
+  }) async {
+    return Ok(
+      jobs.where((job) => job.awaitingHandBack).toList(growable: false),
+    );
+  }
+
+  @override
   Future<Result<OperationsJob>> loadJob(int jobId) async {
     return Ok(
       jobs.firstWhere((job) => job.id == jobId, orElse: () => jobs.first),
@@ -392,7 +510,9 @@ class _FakeOperationsRepository extends OperationsRepository {
   }
 
   @override
-  Future<Result<List<CustomerAssetType>>> loadAssetTypes({bool? isActive}) async {
+  Future<Result<List<CustomerAssetType>>> loadAssetTypes({
+    bool? isActive,
+  }) async {
     return Ok(assetTypes);
   }
 
@@ -669,6 +789,15 @@ OperationsJob _job({
   JobCustodyState custodyState = JobCustodyState.withShop,
   String holdReason = '',
   DateTime? createdAt,
+  JobDeclineReason? cancelReason,
+  String cancelNote = '',
+  String cancelledByName = '',
+  double? declineFee,
+  DateTime? cancelledAt,
+  DateTime? handedOverAt,
+  String handedOverTo = '',
+  int? order,
+  String orderSaleType = '',
 }) {
   return OperationsJob(
     id: id,
@@ -706,6 +835,17 @@ OperationsJob _job({
     isOnHold: holdReason.isNotEmpty,
     holdReason: holdReason,
     createdAt: createdAt ?? DateTime(2026, 6, 14, 10, 30),
+    cancelReason: cancelReason,
+    cancelNote: cancelNote,
+    cancelledByName: cancelledByName,
+    declineFee: declineFee,
+    isDeclined: cancelReason != null,
+    awaitingHandBack: cancelReason != null && handedOverAt == null,
+    cancelledAt: cancelledAt,
+    handedOverAt: handedOverAt,
+    handedOverTo: handedOverTo,
+    order: order,
+    orderSaleType: orderSaleType,
   );
 }
 
@@ -896,6 +1036,117 @@ final OperationsJob _doneJob = _job(
   orderReceiptNumber: 'INV-2042',
   materialsTotal: 45,
   createdAt: DateTime(2026, 6, 10, 11, 0),
+);
+
+JobAssetLink _phoneLink() => JobAssetLink(
+  id: 1,
+  asset: 2,
+  assetDetails: CustomerAsset.fromJson(const {
+    'id': 2,
+    'asset_type': 2,
+    'asset_type_name': 'هاتف',
+    'asset_type_icon': 'phone',
+    'brand': 'Samsung',
+    'model_name': 'Galaxy S23',
+    'display_name': 'Samsung Galaxy S23',
+    'imei': '352099001761481',
+    'color': 'أسود',
+  }),
+);
+
+final List<JobStageEvent> _toApprovalEvents = [
+  JobStageEvent(
+    id: 1,
+    toStage: 1,
+    toStageName: 'تم الاستلام',
+    fromStageName: '',
+    changedByName: 'منى',
+    note: '',
+    createdAt: DateTime(2026, 9, 23, 10, 15),
+  ),
+  JobStageEvent(
+    id: 2,
+    toStage: 2,
+    toStageName: 'قيد التشخيص',
+    fromStageName: 'تم الاستلام',
+    changedByName: 'خالد العمري',
+    note: '',
+    createdAt: DateTime(2026, 9, 23, 11, 40),
+  ),
+  JobStageEvent(
+    id: 3,
+    toStage: 3,
+    toStageName: 'بانتظار موافقة الزبون',
+    fromStageName: 'قيد التشخيص',
+    changedByName: 'خالد العمري',
+    note: 'اللوحة الأم تحتاج تغيير شريحة الشحن',
+    createdAt: DateTime(2026, 9, 23, 13, 5),
+  ),
+];
+
+/// Diagnosed and priced; the customer has not answered yet.
+final OperationsJob _approvalJob = _job(
+  id: 21,
+  jobNumber: 'REP-20260923-000021',
+  currentStage: 3,
+  nextStage: _repairStages[3],
+  customerName: 'مروان الطرابلسي',
+  customerPhone: '0925550142',
+  assignedEmployeeName: 'خالد العمري',
+  symptoms: 'لا يشحن نهائيًا بعد سقوطه في الماء',
+  diagnosis: 'تلف شريحة الشحن في اللوحة الأم بسبب السوائل.',
+  quotedPrice: 250,
+  assets: [_phoneLink()],
+  stageEvents: _toApprovalEvents,
+  createdAt: DateTime(2026, 9, 23, 10, 15),
+);
+
+/// The customer said the price was too high; the phone is still here and a
+/// 10 LYD diagnosis fee is owed.
+final OperationsJob _declinedJob = _job(
+  id: 22,
+  jobNumber: 'REP-20260923-000022',
+  currentStage: 3,
+  status: OperationsJobStatus.cancelled,
+  customerName: 'مروان الطرابلسي',
+  customerPhone: '0925550142',
+  assignedEmployeeName: 'خالد العمري',
+  symptoms: 'لا يشحن نهائيًا بعد سقوطه في الماء',
+  diagnosis: 'تلف شريحة الشحن في اللوحة الأم بسبب السوائل.',
+  quotedPrice: 250,
+  assets: [_phoneLink()],
+  stageEvents: _toApprovalEvents,
+  cancelReason: JobDeclineReason.price,
+  cancelNote: 'قال إن السعر أعلى من قيمة الهاتف',
+  cancelledByName: 'منى',
+  cancelledAt: DateTime(2026, 9, 23, 16, 20),
+  declineFee: 10,
+  createdAt: DateTime(2026, 9, 23, 10, 15),
+);
+
+/// Declined, fee paid, and collected by his brother.
+final OperationsJob _handedBackJob = _job(
+  id: 23,
+  jobNumber: 'REP-20260923-000023',
+  currentStage: 3,
+  status: OperationsJobStatus.cancelled,
+  customerName: 'مروان الطرابلسي',
+  customerPhone: '0925550142',
+  symptoms: 'لا يشحن نهائيًا بعد سقوطه في الماء',
+  quotedPrice: 250,
+  assets: [_phoneLink()],
+  stageEvents: _toApprovalEvents,
+  cancelReason: JobDeclineReason.price,
+  cancelledByName: 'منى',
+  cancelledAt: DateTime(2026, 9, 23, 16, 20),
+  declineFee: 10,
+  order: 77,
+  orderReceiptNumber: 'INV-3120',
+  settlementState: JobSettlementState.settled,
+  custodyState: JobCustodyState.released,
+  handedOverAt: DateTime(2026, 9, 24, 9, 45),
+  handedOverTo: 'أخوه عادل',
+  createdAt: DateTime(2026, 9, 23, 10, 15),
 );
 
 final List<BillOfMaterials> _boms = const [];

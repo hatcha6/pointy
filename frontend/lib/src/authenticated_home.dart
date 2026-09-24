@@ -56,6 +56,7 @@ import 'features/assets/views/asset_details_screen.dart';
 import 'features/assets/views/assets_screen.dart';
 import 'features/operations/view_models/asset_types_view_model.dart';
 import 'features/operations/view_models/job_details_view_model.dart';
+import 'features/operations/view_models/job_print_actions.dart';
 import 'features/operations/view_models/job_history_view_model.dart';
 import 'features/operations/view_models/jobs_board_view_model.dart';
 import 'features/operations/view_models/recipes_view_model.dart';
@@ -458,6 +459,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         operationsRepository: dependencies.operationsRepository,
         catalogRepository: dependencies.catalogRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
+        printActions: _jobPrintActions(),
         recipesViewModel: RecipesViewModel(
           dependencies.operationsRepository,
           analyticsEngine: dependencies.analyticsEngine,
@@ -481,6 +483,15 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
+  /// Prints a repair's intake receipt and device sticker on this device's
+  /// receipt and label printers.
+  JobPrintActions _jobPrintActions() {
+    return JobPrintActions(
+      printingRepository: dependencies.printingRepository,
+      shopSettingsRepository: dependencies.shopSettingsRepository,
+    );
+  }
+
   /// Opens one job. Takes an id rather than a loaded job so the board, the
   /// history list and an asset's service record can all land on the same screen.
   void openJobDetails(BuildContext routeContext, int jobId) {
@@ -493,12 +504,14 @@ class _AuthenticatedRoutes implements AppNavigation {
             dependencies.operationsRepository,
             jobId: jobId,
             analyticsEngine: dependencies.analyticsEngine,
+            printActions: _jobPrintActions(),
           ),
           capabilities: capabilities,
           currentUser: currentUser,
           catalogRepository: dependencies.catalogRepository,
           operationsRepository: dependencies.operationsRepository,
           employeeRepository: dependencies.employeeRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
         ),
       ),
     );
@@ -2234,12 +2247,14 @@ class _AuthenticatedRoutes implements AppNavigation {
             dependencies.operationsRepository,
             jobId: jobId,
             analyticsEngine: dependencies.analyticsEngine,
+            printActions: _jobPrintActions(),
           ),
           capabilities: capabilities,
           currentUser: currentUser,
           catalogRepository: dependencies.catalogRepository,
           operationsRepository: dependencies.operationsRepository,
           employeeRepository: dependencies.employeeRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
         ),
       ),
     );

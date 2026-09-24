@@ -110,6 +110,21 @@ class Job(TimeStampedModel):
         HIGH = "high", "High"
         URGENT = "urgent", "Urgent"
 
+    class CancelReason(models.TextChoices):
+        """Why a job ended without the work being done.
+
+        Every reason here is a *decline*: the customer said no, or the item
+        cannot be fixed. The work stops, but the shop still holds the item
+        until someone hands it back — which is why a declined job is not simply
+        cancelled and forgotten. A job opened by mistake has no reason at all
+        (blank): it never held anything worth returning.
+        """
+
+        PRICE = "price", "Declined: price"
+        DECLINED = "declined", "Declined: another reason"
+        CANNOT_REPAIR = "cannot_repair", "Cannot be repaired"
+        NO_RESPONSE = "no_response", "Customer did not respond"
+
     job_number = models.CharField(max_length=32, unique=True, blank=True)
     job_type = models.CharField(max_length=24, choices=WorkflowTemplate.JobType.choices)
     workflow_template = models.ForeignKey(
@@ -155,6 +170,34 @@ class Job(TimeStampedModel):
     due_at = models.DateTimeField(blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
     cancelled_at = models.DateTimeField(blank=True, null=True)
+    # Why the job ended unfinished, and who ended it. ``cancel_reason`` is blank
+    # for a plain cancel (opened by mistake) and one of ``CancelReason`` for a
+    # decline; ``cancel_note`` is the free text either way, kept so the job can
+    # still say *why* long after the phone call that decided it.
+    cancel_reason = models.CharField(
+        max_length=24,
+        choices=CancelReason.choices,
+        blank=True,
+        default="",
+        db_default="",
+    )
+    cancel_note = models.TextField(blank=True, default="", db_default="")
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+    # The diagnosis fee a declined job still owes — the one line it bills. Null
+    # or zero means the customer walks away owing nothing.
+    decline_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     # Custody: when the customer's property actually went back to them, and who
     # physically collected it ("his brother came for it" is the norm here). A
     # job can be paid for days before this happens — a repaired car sits in the
@@ -279,6 +322,20 @@ class Job(TimeStampedModel):
     @property
     def is_on_hold(self) -> bool:
         return self.on_hold_since is not None
+
+    @property
+    def is_declined(self) -> bool:
+        """Did this job end because the customer said no, or it can't be fixed?"""
+        return self.status == self.Status.CANCELLED and bool(self.cancel_reason)
+
+    @property
+    def awaiting_hand_back(self) -> bool:
+        """Is a declined job's item still on the shop's shelf?
+
+        The one state a cancel used to lose: the work is over, the phone is
+        not. It stays true until someone records who collected it.
+        """
+        return self.is_declined and self.handed_over_at is None
 
     @property
     def settlement_state(self) -> str:

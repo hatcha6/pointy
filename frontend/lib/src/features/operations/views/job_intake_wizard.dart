@@ -18,6 +18,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../view_models/job_print_actions.dart';
 import '../view_models/jobs_board_view_model.dart';
 import '../../assets/views/assets_ui.dart';
 import 'operations_ui.dart';
@@ -36,12 +37,18 @@ class JobIntakeWizard extends StatefulWidget {
     required this.contactRepository,
     required this.operationsRepository,
     this.shopSettingsRepository,
+    this.printActions,
   });
 
   final WorkflowTemplate template;
   final JobsBoardViewModel boardViewModel;
   final ContactRepository contactRepository;
   final OperationsRepository operationsRepository;
+
+  /// Prints the customer's receipt and the device sticker once a repair is
+  /// taken in. Optional: without it (the preview harness, tests) intake saves
+  /// the job and prints nothing.
+  final JobPrintActions? printActions;
 
   /// Read once, to open the device step on the kind of item this shop actually
   /// works on. Optional so the preview harness and tests need not supply it.
@@ -97,6 +104,11 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   );
   var _priority = OperationsJobPriority.normal;
   DateTime? _dueAt;
+
+  // What prints when the repair is saved. Both by default: the customer walks
+  // away with the receipt, the phone goes into the tray with its sticker.
+  var _printTicket = true;
+  var _printLabel = true;
 
   bool get _isRepair => widget.template.jobType == OperationsJobType.repair;
 
@@ -746,6 +758,32 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
           ),
           onTap: _pickDueDate,
         ),
+        if (_isRepair && widget.printActions != null) ...[
+          SizedBox(height: spacing.md),
+          Text(
+            l10n.intakePrintSectionTitle,
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          SizedBox(height: spacing.xs),
+          Wrap(
+            spacing: spacing.xs,
+            runSpacing: spacing.xs,
+            children: [
+              FilterChip(
+                avatar: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: Text(l10n.intakePrintTicketLabel),
+                selected: _printTicket,
+                onSelected: (value) => setState(() => _printTicket = value),
+              ),
+              FilterChip(
+                avatar: const Icon(Icons.qr_code_2_outlined, size: 18),
+                label: Text(l10n.intakePrintLabelLabel),
+                selected: _printLabel,
+                onSelected: (value) => setState(() => _printLabel = value),
+              ),
+            ],
+          ),
+        ],
         if (_isRepair) ...[
           SizedBox(height: spacing.md),
           TextField(
@@ -863,7 +901,40 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
     messenger.showSnackBar(
       SnackBar(content: Text(l10n.intakeJobCreated(job.jobNumber))),
     );
+    // Printing starts after the pop, not before it: the job is saved, and a
+    // slow or missing printer must not keep the clerk on a finished form.
+    unawaited(_printIntakeDocuments(job, messenger, l10n));
     Navigator.of(context).pop(job);
+  }
+
+  /// The receipt, then the sticker — in turn, not together, because a shop
+  /// with one printer doing both jobs would get them interleaved. Only a
+  /// problem is reported: paper coming out of the printer says the rest.
+  Future<void> _printIntakeDocuments(
+    OperationsJob job,
+    ScaffoldMessengerState messenger,
+    AppLocalizations l10n,
+  ) async {
+    final actions = widget.printActions;
+    if (actions == null || !_isRepair) {
+      return;
+    }
+    final problems = <String>[];
+    if (_printTicket) {
+      final status = await actions.printTicket(job);
+      if (status != JobPrintStatus.printed) {
+        problems.add(jobPrintStatusMessage(l10n, status, ticket: true));
+      }
+    }
+    if (_printLabel) {
+      final status = await actions.printLabel(job);
+      if (status != JobPrintStatus.printed) {
+        problems.add(jobPrintStatusMessage(l10n, status, ticket: false));
+      }
+    }
+    if (problems.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(problems.join('\n'))));
+    }
   }
 }
 

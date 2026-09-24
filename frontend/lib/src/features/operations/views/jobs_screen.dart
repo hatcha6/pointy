@@ -20,8 +20,10 @@ import '../../../shared/design/design.dart';
 import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../view_models/job_print_actions.dart';
 import '../view_models/jobs_board_view_model.dart';
 import '../view_models/recipes_view_model.dart';
+import 'job_awaiting_hand_back_strip.dart';
 import 'job_intake_wizard.dart';
 import 'operations_ui.dart';
 import 'recipes_page.dart';
@@ -44,6 +46,7 @@ class JobsScreen extends StatefulWidget {
     required this.onOpenJob,
     required this.onOpenHistory,
     this.shopSettingsRepository,
+    this.printActions,
   });
 
   final JobsBoardViewModel viewModel;
@@ -63,6 +66,10 @@ class JobsScreen extends StatefulWidget {
   /// Opens the finished-work list. The board deliberately cannot show it: what
   /// is done is history, and history is a different screen.
   final VoidCallback onOpenHistory;
+
+  /// Handed to the intake wizard, which prints the customer's receipt and the
+  /// device sticker for a new repair. Optional, like the settings repository.
+  final JobPrintActions? printActions;
 
   @override
   State<JobsScreen> createState() => _JobsScreenState();
@@ -175,10 +182,22 @@ class _JobsScreenState extends State<JobsScreen> {
           ),
           child: AdaptiveMaxWidth(
             width: AppContentWidth.list,
-            child: _FilterBar(
-              searchController: _searchController,
-              onSearchChanged: _onSearchChanged,
-              viewModel: viewModel,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _FilterBar(
+                  searchController: _searchController,
+                  onSearchChanged: _onSearchChanged,
+                  viewModel: viewModel,
+                ),
+                if (viewModel.awaitingHandBack.isNotEmpty) ...[
+                  SizedBox(height: spacing.sm),
+                  JobAwaitingHandBackStrip(
+                    jobs: viewModel.awaitingHandBack,
+                    onOpenJob: widget.onOpenJob,
+                  ),
+                ],
+              ],
             ),
           ),
         ),
@@ -357,6 +376,7 @@ class _JobsScreenState extends State<JobsScreen> {
               contactRepository: widget.contactRepository,
               operationsRepository: widget.operationsRepository,
               shopSettingsRepository: widget.shopSettingsRepository,
+              printActions: widget.printActions,
             ),
           ),
         );

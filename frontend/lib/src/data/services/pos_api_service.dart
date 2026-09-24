@@ -1571,6 +1571,7 @@ class PosApiService {
     int? asset,
     int? workflowTemplate,
     String search = '',
+    bool awaitingHandBack = false,
     int page = 1,
   }) {
     return _operations.fetchJobs(
@@ -1582,6 +1583,7 @@ class PosApiService {
       asset: asset,
       workflowTemplate: workflowTemplate,
       search: search,
+      awaitingHandBack: awaitingHandBack,
       page: page,
     );
   }
@@ -1669,6 +1671,30 @@ class PosApiService {
 
   Future<OperationsJob> cancelJob(int jobId, {String reason = ''}) {
     return _operations.cancelJob(jobId, reason: reason);
+  }
+
+  Future<OperationsJob> declineJob(
+    int jobId,
+    JobDeclineDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _operations.declineJob(jobId, draft, idempotencyKey: idempotencyKey);
+  }
+
+  Future<OperationsJob> handBackJob(
+    int jobId, {
+    String handedOverTo = '',
+    String note = '',
+    bool forceRelease = false,
+    String? idempotencyKey,
+  }) {
+    return _operations.handBackJob(
+      jobId,
+      handedOverTo: handedOverTo,
+      note: note,
+      forceRelease: forceRelease,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   Future<OperationsJob> reopenJob(int jobId, {String note = ''}) {

@@ -47,6 +47,9 @@ void main() {
     'enable_production_operations': false,
     'enable_kitchen_operations': false,
     'enable_job_tracking': false,
+    'repair_diagnosis_fee': null,
+    // Null (the defaults print) against a list: the two answers the field has.
+    'repair_ticket_terms': null,
     'pos_cash_purchase_limit': null,
     // Zero, not null: on this setting zero is an answer ("nobody discounts at
     // the till") rather than the absence of one, and it is the value most
@@ -91,6 +94,8 @@ void main() {
     'enable_production_operations': true,
     'enable_kitchen_operations': true,
     'enable_job_tracking': true,
+    'repair_diagnosis_fee': '10.00',
+    'repair_ticket_terms': <String>['يسلم الجهاز لحامل الإيصال.'],
     'pos_cash_purchase_limit': '250.00',
     'max_invoice_discount_amount': '150.00',
     'enforce_customer_credit_limits': true,

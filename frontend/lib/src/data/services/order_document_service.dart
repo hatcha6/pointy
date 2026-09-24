@@ -763,6 +763,21 @@ class OrderDocumentService {
     );
   }
 
+  /// Prints a document rendered elsewhere — the repair intake receipt — down
+  /// the same road as an invoice: CUPS with the render's measured roll media
+  /// where there is a CUPS client, the printing plugin everywhere else.
+  Future<bool> printRender({
+    required Future<OrderDocumentRender> Function() renderBuilder,
+    required String jobName,
+    PrinterEndpoint? endpoint,
+  }) {
+    return _printPdf(
+      renderBuilder: renderBuilder,
+      jobName: jobName,
+      endpoint: endpoint,
+    );
+  }
+
   /// Prints a finished full-page document built elsewhere (a business report,
   /// a statement) on [endpoint] without a dialog when that printer can be
   /// reached, and through the system print dialog otherwise — including when
@@ -953,7 +968,7 @@ class OrderDocumentRender {
 
 /// The page height of a receipt roll, in whole millimetres of media. Rounded up
 /// so a sub-millimetre remainder can never clip the last line off the slip.
-double _rollMediaHeightMm(double heightPoints) =>
+double rollMediaHeightMm(double heightPoints) =>
     (heightPoints / PdfPageFormat.mm).ceilToDouble();
 
 /// A single roll "segment" is at most this many times the paper width tall. It
@@ -961,7 +976,7 @@ double _rollMediaHeightMm(double heightPoints) =>
 /// point at which a long receipt stops being one continuous page and paginates
 /// ([_ReceiptFrame]) — keeping the two in agreement so a driver never receives a
 /// page taller than the hint (which pushed a long receipt's total off the top).
-const double _kRollPageHeightMultiple = 6;
+const double kRollPageHeightMultiple = 6;
 
 /// Sendable bundle for [_buildOrderDocumentRender] so PDF rendering can run in a
 /// background isolate. Every field is plain data (the template and labels) or
@@ -1688,7 +1703,7 @@ class _ReceiptFrame {
   /// Matches the media height a paginated roll job asks for, so no page ever
   /// exceeds what the driver is told to expect.
   double get _maxPageHeight =>
-      widthMm * PdfPageFormat.mm * _kRollPageHeightMultiple;
+      widthMm * PdfPageFormat.mm * kRollPageHeightMultiple;
 
   pw.EdgeInsets get _pageMargin => pw.EdgeInsets.symmetric(
     horizontal: _horizontalMarginMm * PdfPageFormat.mm,
@@ -1709,7 +1724,7 @@ class _ReceiptFrame {
       return OrderDocumentRender(
         bytes: bytes,
         mediaWidthMm: widthMm.toDouble(),
-        mediaHeightMm: _rollMediaHeightMm(measured),
+        mediaHeightMm: rollMediaHeightMm(measured),
       );
     }
     // A long receipt (many items) whose content overruns a roll segment: a
@@ -1719,7 +1734,7 @@ class _ReceiptFrame {
     return OrderDocumentRender(
       bytes: await _paginatedDocument().save(),
       mediaWidthMm: widthMm.toDouble(),
-      mediaHeightMm: _rollMediaHeightMm(_maxPageHeight),
+      mediaHeightMm: rollMediaHeightMm(_maxPageHeight),
     );
   }
 

@@ -12,6 +12,7 @@ import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/job_history_view_model.dart';
+import 'job_decline_sheet.dart';
 import 'operations_ui.dart';
 
 /// Finished work, on its own page.
@@ -222,7 +223,15 @@ class _HistoryCard extends StatelessWidget {
                               ).copyWith(fontWeight: FontWeight.w800),
                             ),
                           ),
-                          if (job.orderBalanceDue != null &&
+                          // A declined phone still on the shelf outranks every
+                          // other status: someone is coming back for it.
+                          if (job.awaitingHandBack)
+                            PointyStatusPill(
+                              label: l10n.jobAwaitingHandBackBadge,
+                              icon: Icons.inventory_2_outlined,
+                              color: colors.warning,
+                            )
+                          else if (job.orderBalanceDue != null &&
                               job.orderBalanceDue! > 0)
                             PointyStatusPill(
                               label: l10n.jobSettlementCreditOpen,
@@ -231,7 +240,12 @@ class _HistoryCard extends StatelessWidget {
                             )
                           else
                             PointyStatusPill(
-                              label: visual.label,
+                              label: job.cancelReason == null
+                                  ? visual.label
+                                  : jobDeclineReasonLabel(
+                                      l10n,
+                                      job.cancelReason!,
+                                    ),
                               icon: visual.icon,
                               color: visual.color,
                             ),
@@ -261,7 +275,13 @@ class _HistoryCard extends StatelessWidget {
                           const Spacer(),
                           if (job.orderReceiptNumber.trim().isNotEmpty)
                             Text(
-                              formatMoney(job.billableTotal),
+                              // A declined job billed its fee, not the repair
+                              // it was quoted for.
+                              formatMoney(
+                                job.isDeclined
+                                    ? job.declineFee ?? 0
+                                    : job.billableTotal,
+                              ),
                               style: PointyTypography.numeric(
                                 textTheme.bodySmall ?? const TextStyle(),
                               ).copyWith(fontWeight: FontWeight.w700),

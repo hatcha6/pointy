@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -25,6 +26,28 @@ MONEY_PLACES = Decimal("0.01")
 
 LABOR_PRODUCT_SKU = "SVC-LABOR"
 LABOR_PRODUCT_NAME = "أجور خدمة وصيانة"
+DIAGNOSIS_FEE_PRODUCT_SKU = "SVC-DIAGNOSIS"
+DIAGNOSIS_FEE_PRODUCT_NAME = "رسوم فحص وتشخيص"
+
+#: Every reason a job can be *declined* for. Each one means the same thing to
+#: the shop: the work stops, and the item waits on the shelf to be handed back.
+DECLINE_REASONS = frozenset(Job.CancelReason.values)
+
+
+def awaiting_hand_back_q(prefix=""):
+    """Declined jobs whose item has not gone home yet, as a query filter.
+
+    ``prefix`` reaches the job through a relation (``"job_links__job__"`` from
+    an asset), so the board's list and the assets screen's "in the shop now"
+    ask exactly the same question.
+    """
+    return Q(
+        **{
+            f"{prefix}status": Job.Status.CANCELLED,
+            f"{prefix}cancel_reason__in": sorted(DECLINE_REASONS),
+            f"{prefix}handed_over_at__isnull": True,
+        }
+    )
 
 
 def money(value):
@@ -131,7 +154,12 @@ def job_has_anything_to_bill(job) -> bool:
     customer nothing. Those still have to be handed back, and making a cashier
     fetch a manager to release a free repair would teach everyone to reach for
     the override, which is exactly how a guard stops working.
+
+    A declined job bills one thing only, its diagnosis fee: the parts went back
+    on the shelf and the quoted work never happened.
     """
+    if job.is_declined:
+        return job.decline_fee is not None and job.decline_fee > Decimal("0.00")
     if any(material.is_consumed for material in job.materials.all()):
         return True
     if job.services.exists():
@@ -410,9 +438,28 @@ def reopen_job(*, job, request=None, note=""):
     job = Job.objects.select_for_update().get(pk=job.pk)
     if not job.is_locked:
         raise serializers.ValidationError({"detail": "Job is already open."})
+    if job.is_declined and job.order_id is not None:
+        # The invoice on a declined job is its diagnosis fee, and a job carries
+        # one invoice. Reopened, the repair could never be billed — the fee
+        # would stand in for it. The repair the customer came back for is a new
+        # job; the fee they paid stays exactly where it is.
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    "This declined job's diagnosis fee is already invoiced. "
+                    "Open a new job for the repair."
+                )
+            }
+        )
     job.status = Job.Status.OPEN
     job.completed_at = None
     job.cancelled_at = None
+    # Back on the bench, the decline no longer stands: the customer changed
+    # their mind. The audit trail keeps the decline; the job forgets it.
+    job.cancelled_by = None
+    job.cancel_reason = ""
+    job.cancel_note = ""
+    job.decline_fee = None
     # Reopening a handed-over job means the item is back on the bench, so the
     # shop holds it again. Leaving the handover stamped would let it walk out a
     # second time without passing the settlement gate.
@@ -423,6 +470,10 @@ def reopen_job(*, job, request=None, note=""):
             "status",
             "completed_at",
             "cancelled_at",
+            "cancelled_by",
+            "cancel_reason",
+            "cancel_note",
+            "decline_fee",
             "handed_over_at",
             "handed_over_to",
             "updated_at",
@@ -470,7 +521,19 @@ def cancel_job(*, job, request=None, reason=""):
 
     job.status = Job.Status.CANCELLED
     job.cancelled_at = timezone.now()
-    job.save(update_fields=["status", "cancelled_at", "updated_at"])
+    job.cancelled_by = request_user(request)
+    # Kept on the job, not just counted: "why was this cancelled?" is asked of
+    # the job, weeks later, by someone who was not there.
+    job.cancel_note = (reason or "").strip()
+    job.save(
+        update_fields=[
+            "status",
+            "cancelled_at",
+            "cancelled_by",
+            "cancel_note",
+            "updated_at",
+        ]
+    )
     record_domain_event(
         name="operations.job.cancelled",
         event_type=AnalyticsEvent.EventType.AUDIT,
@@ -484,6 +547,204 @@ def cancel_job(*, job, request=None, reason=""):
             "reversed_material_count": len(consumed),
         },
     )
+    return job
+
+
+@transaction.atomic
+def decline_job(*, job, reason, note="", fee=None, request=None):
+    """End a repair the customer said no to — without losing the phone.
+
+    The diagnosis is done, the customer has heard the price, and they do not
+    want the work: too dear, changed their mind, or the item cannot be fixed at
+    all. A plain cancel got the first half right and the second half wrong. It
+    stopped the work, then dropped the job off the board while the phone was
+    still on the shelf, with nowhere to say who eventually collected it.
+
+    A decline keeps both halves. The job is finished (``CANCELLED``, parts back
+    in stock, reason on the record) but the shop still holds the item until
+    :func:`hand_back_declined_job` records it going home. ``fee`` is the
+    diagnosis charge the customer still owes, if any; it is billed through the
+    normal invoice and gates the hand-back exactly as a repair bill gates a
+    handover.
+    """
+    job = (
+        Job.objects.select_for_update(of=("self",))
+        .select_related("workflow_template", "current_stage")
+        .get(pk=job.pk)
+    )
+    user = request_user(request)
+    if job.is_locked:
+        raise serializers.ValidationError(
+            {"detail": "Completed or cancelled jobs cannot be declined."}
+        )
+    if job.order_id is not None:
+        raise serializers.ValidationError(
+            {"detail": "Invoiced jobs cannot be declined."}
+        )
+    if not job_releases_custody(job):
+        # A kitchen order or a production batch holds nothing of a customer's,
+        # so there is nothing to hand back and nothing a decline adds.
+        raise serializers.ValidationError(
+            {"detail": "Only a job holding a customer's item can be declined."}
+        )
+    if reason not in DECLINE_REASONS:
+        raise serializers.ValidationError(
+            {"reason": "Say why the repair is not going ahead."}
+        )
+    fee = money(fee) if fee is not None else None
+    if fee is not None and fee < Decimal("0.00"):
+        raise serializers.ValidationError({"fee": "The fee cannot be negative."})
+
+    outstanding = [
+        material for material in job.materials.all() if material.reversed_at is None
+    ]
+    consumed = [material for material in outstanding if material.is_consumed]
+    if consumed and not user_is_manager(user):
+        raise serializers.ValidationError(
+            {"detail": "Only a manager can decline a job that used materials."}
+        )
+    # Fitted parts go back on the shelf; parts that were only reserved are
+    # closed too, so a declined job can never consume anything later.
+    for material in outstanding:
+        reverse_job_material(job=job, material=material, request=request)
+
+    update_fields = [
+        "status",
+        "cancelled_at",
+        "cancelled_by",
+        "cancel_reason",
+        "cancel_note",
+        "decline_fee",
+        "updated_at",
+    ]
+    if job.on_hold_since is not None:
+        # Whatever it was waiting on no longer matters.
+        job.held_seconds += _held_seconds_since(job.on_hold_since)
+        job.on_hold_since = None
+        job.hold_reason = ""
+        update_fields += ["held_seconds", "on_hold_since", "hold_reason"]
+    job.status = Job.Status.CANCELLED
+    job.cancelled_at = timezone.now()
+    job.cancelled_by = user
+    job.cancel_reason = reason
+    job.cancel_note = (note or "").strip()
+    job.decline_fee = fee if fee is not None and fee > Decimal("0.00") else None
+    job.save(update_fields=update_fields)
+    record_domain_event(
+        name="operations.job.declined",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        severity=AnalyticsEvent.Severity.WARNING,
+        user=user,
+        entity_type="operations_job",
+        entity_id=job.pk,
+        attributes={
+            "job_number": job.job_number,
+            "reason": reason,
+            "note_present": bool(job.cancel_note),
+            "stage": job.current_stage.code if job.current_stage_id else "",
+            "reversed_material_count": len(consumed),
+        },
+        metrics={"decline_fee": float(job.decline_fee or Decimal("0.00"))},
+    )
+    return job
+
+
+@transaction.atomic
+def hand_back_declined_job(
+    *,
+    job,
+    handed_over_to="",
+    note="",
+    force_release=False,
+    request=None,
+):
+    """Record a declined job's item going home, unrepaired.
+
+    The same promise a repair's handover makes, applied to a decline: if the
+    customer owes a diagnosis fee, it is settled (paid, or booked آجل to a
+    named customer) before the phone leaves, and a manager can release it
+    anyway only on the record, with a reason. A decline with no fee has
+    nothing to settle and goes straight home.
+    """
+    job = Job.objects.select_for_update(of=("self",)).select_related("order").get(
+        pk=job.pk
+    )
+    user = request_user(request)
+    if not job.is_declined:
+        raise serializers.ValidationError(
+            {"detail": "Only a declined job is handed back this way."}
+        )
+    if job.handed_over_at is not None:
+        raise serializers.ValidationError(
+            {"detail": "This item has already been handed back."}
+        )
+    note = (note or "").strip()
+    if force_release and not note:
+        raise serializers.ValidationError(
+            {"note": "Say why this job is being released unsettled."}
+        )
+    settled = _job_is_settled(job)
+    if not settled:
+        if not force_release:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "Collect the diagnosis fee before handing the "
+                        "customer's item back."
+                    ),
+                    "code": "settlement_required",
+                }
+            )
+        if not _can(user, "operations.release_unpaid_job"):
+            raise serializers.ValidationError(
+                {"detail": "Only a manager can release a job that is not settled."}
+            )
+
+    job.handed_over_at = timezone.now()
+    job.handed_over_to = (handed_over_to or "").strip()
+    job.save(update_fields=["handed_over_at", "handed_over_to", "updated_at"])
+    record_domain_event(
+        name="operations.job.handed_back",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        severity=(
+            AnalyticsEvent.Severity.INFO
+            if settled
+            else AnalyticsEvent.Severity.WARNING
+        ),
+        user=user,
+        entity_type="operations_job",
+        entity_id=job.pk,
+        attributes={
+            "job_number": job.job_number,
+            "reason": job.cancel_reason,
+            "released_unsettled": not settled,
+            "note_present": bool(note),
+        },
+    )
+    if not settled:
+        # The same finding a repair's unpaid handover raises, under the same
+        # name, so one search finds both.
+        record_domain_event(
+            name="operations.job.released_unsettled",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            severity=AnalyticsEvent.Severity.WARNING,
+            user=user,
+            entity_type="operations_job",
+            entity_id=job.pk,
+            attributes={
+                "job_number": job.job_number,
+                "customer_id": job.customer_id,
+                "order_id": job.order_id,
+                "note": note,
+            },
+            metrics={
+                "balance_due": float(
+                    job.order.balance_due
+                    if job.order_id
+                    else (job.decline_fee or Decimal("0.00"))
+                ),
+            },
+        )
     return job
 
 
@@ -1020,24 +1281,29 @@ def create_kitchen_job_for_order(*, order, request=None):
 # ---------------------------------------------------------------------------
 
 
-def _labor_variant():
+def _service_variant(sku, name):
+    """The one service line a job bills an amount under, made on first use."""
     from apps.catalog.models import Product, ProductVariant
 
-    variant = (
-        ProductVariant.objects.filter(sku=LABOR_PRODUCT_SKU)
-        .select_related("product")
-        .first()
-    )
+    variant = ProductVariant.objects.filter(sku=sku).select_related("product").first()
     if variant is not None:
         return variant
-    product = Product.objects.create(name=LABOR_PRODUCT_NAME, is_service=True)
+    product = Product.objects.create(name=name, is_service=True)
     return ProductVariant.objects.create(
         product=product,
         name="",
-        sku=LABOR_PRODUCT_SKU,
+        sku=sku,
         unit_price=Decimal("0.00"),
         is_default=True,
     )
+
+
+def _labor_variant():
+    return _service_variant(LABOR_PRODUCT_SKU, LABOR_PRODUCT_NAME)
+
+
+def _diagnosis_fee_variant():
+    return _service_variant(DIAGNOSIS_FEE_PRODUCT_SKU, DIAGNOSIS_FEE_PRODUCT_NAME)
 
 
 def job_releases_custody(job) -> bool:
@@ -1093,7 +1359,10 @@ def invoice_job(
     job = Job.objects.select_for_update().select_related("workflow_template").get(
         pk=job.pk
     )
-    if job.status == Job.Status.CANCELLED:
+    # A declined job is the one cancelled job that still bills: its diagnosis
+    # fee, and nothing else.
+    declined = job.is_declined
+    if job.status == Job.Status.CANCELLED and not declined:
         raise serializers.ValidationError({"detail": "Cancelled jobs cannot be invoiced."})
     if job.order_id is not None:
         raise serializers.ValidationError({"detail": "Job is already invoiced."})
@@ -1110,29 +1379,51 @@ def invoice_job(
             {"customer": "A credit invoice needs a customer to owe the money."}
         )
 
-    # Materials sit "pending" from when they are added until a consuming stage
-    # finalizes them. Invoicing is a finalizing step too, so consume any still
-    # pending materials now: this moves their stock exactly once (already
-    # consumed materials are skipped) and bills every non-reversed material on
-    # the job — matching the materials total the cashier sees and pays.
-    consume_pending_materials(job, request=request)
-
-    materials = [
-        material
-        for material in job.materials.select_related("variant", "variant__product")
-        if material.is_consumed
-    ]
-    job_services = list(job.services.select_related("variant", "variant__product"))
     labor_total = money(labor_total or 0)
-    if not materials and not job_services and labor_total <= 0:
-        raise serializers.ValidationError(
-            {
-                "detail": (
-                    "Nothing to invoice: no parts used, no services, and no "
-                    "labor amount."
-                )
-            }
+    diagnosis_fee = Decimal("0.00")
+    if declined:
+        # The quoted work never happened, so neither its parts (already back on
+        # the shelf) nor its services are billed — only the fee agreed when the
+        # repair was declined.
+        diagnosis_fee = money(job.decline_fee or 0)
+        if diagnosis_fee <= 0:
+            raise serializers.ValidationError(
+                {"detail": "This declined job owes no diagnosis fee."}
+            )
+        if labor_total > 0:
+            raise serializers.ValidationError(
+                {"labor_total": "A declined job bills its diagnosis fee only."}
+            )
+        materials = []
+        job_services = []
+    else:
+        # Materials sit "pending" from when they are added until a consuming
+        # stage finalizes them. Invoicing is a finalizing step too, so consume
+        # any still pending materials now: this moves their stock exactly once
+        # (already consumed materials are skipped) and bills every non-reversed
+        # material on the job — matching the materials total the cashier sees
+        # and pays.
+        consume_pending_materials(job, request=request)
+
+        materials = [
+            material
+            for material in job.materials.select_related(
+                "variant", "variant__product"
+            )
+            if material.is_consumed
+        ]
+        job_services = list(
+            job.services.select_related("variant", "variant__product")
         )
+        if not materials and not job_services and labor_total <= 0:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "Nothing to invoice: no parts used, no services, and "
+                        "no labor amount."
+                    )
+                }
+            )
 
     order = Order.objects.create(
         register_session=register_session,
@@ -1170,14 +1461,26 @@ def invoice_job(
             unit_price=labor_total,
             unit_cost=Decimal("0.00"),
         )
+    if diagnosis_fee > 0:
+        # Like labour: the technician's time, which payroll already costs.
+        OrderLine.objects.create(
+            order=order,
+            variant=_diagnosis_fee_variant(),
+            quantity=1,
+            unit_price=diagnosis_fee,
+            unit_cost=Decimal("0.00"),
+        )
     order.recalculate()
     order.save(update_fields=["subtotal", "discount_total", "total", "updated_at"])
 
     # Billing above what the customer agreed to is the classic repair-shop
     # dispute. It stays possible — parts really do turn out worse than the
-    # diagnosis said — but only as a deliberate, recorded act.
+    # diagnosis said — but only as a deliberate, recorded act. A declined job
+    # bills the fee it was declined with, which no approved repair price
+    # speaks to.
     if (
-        job.approved_price is not None
+        not declined
+        and job.approved_price is not None
         and order.total > money(job.approved_price)
         and not acknowledge_over_quote
     ):
@@ -1250,7 +1553,8 @@ def invoice_job(
     # bench — so paying only bills it, and handing it back is a separate act
     # that the settlement gate now guards. A kitchen or production job has
     # nothing left to return, so payment finishes it, exactly as it always did.
-    if not job_releases_custody(job):
+    # A declined job is already finished; its fee changes nothing about that.
+    if not declined and not job_releases_custody(job):
         _complete_job_at_terminal(job, request=request, note="اكتمل بعد إصدار الفاتورة")
     record_domain_event(
         name="operations.job.invoiced",
@@ -1265,8 +1569,10 @@ def invoice_job(
             "material_count": len(materials),
             "service_count": len(job_services),
             "sale_type": order.sale_type,
+            "diagnosis_fee": declined,
             "over_approved_price": bool(
-                job.approved_price is not None
+                not declined
+                and job.approved_price is not None
                 and order.total > money(job.approved_price)
             ),
         },

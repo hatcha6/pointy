@@ -61,12 +61,18 @@ class BarcodeLabelPrintLine {
     required this.copies,
     this.includePrice = true,
     this.expiryDate,
+    this.caption,
   });
 
   final BarcodeLabelDraft label;
   final int copies;
   final bool includePrice;
   final DateTime? expiryDate;
+
+  /// A line printed where a product label puts its price — for stickers that
+  /// are not products, such as the one a repair job puts on the customer's
+  /// phone. Takes the place of the price and expiry when set.
+  final String? caption;
 
   bool get includeExpiryDate => expiryDate != null;
 

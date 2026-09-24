@@ -5,6 +5,7 @@ import '../../../data/models/operations_job.dart';
 import '../../../data/models/workflow.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../view_models/job_print_actions.dart';
 
 /// Where a job sits in its workflow: the zero-based [index] of the current
 /// stage and the [total] number of stages. Null when the template/stage can't
@@ -34,6 +35,25 @@ import '../../../shared/design/design.dart';
 /// details, the intake wizard, and recipes share one visual language.
 
 // -- label / icon helpers ----------------------------------------------------
+
+/// What the counter is told after printing the intake receipt ([ticket]) or
+/// the device sticker.
+String jobPrintStatusMessage(
+  AppLocalizations l10n,
+  JobPrintStatus status, {
+  required bool ticket,
+}) {
+  return switch (status) {
+    JobPrintStatus.printed =>
+      ticket ? l10n.jobTicketPrintedMessage : l10n.jobLabelPrintedMessage,
+    JobPrintStatus.noPrinter =>
+      ticket ? l10n.jobTicketNoPrinterMessage : l10n.jobLabelNoPrinterMessage,
+    JobPrintStatus.failed =>
+      ticket
+          ? l10n.jobTicketPrintFailedMessage
+          : l10n.jobLabelPrintFailedMessage,
+  };
+}
 
 String jobTypeLabel(AppLocalizations l10n, OperationsJobType type) {
   return switch (type) {

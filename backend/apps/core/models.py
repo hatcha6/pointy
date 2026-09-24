@@ -149,6 +149,20 @@ class ShopSettings(TimeStampedModel):
     kitchen_auto_complete = models.BooleanField(default=True)
     # Public job tracking page (relay-gated), like online invoices.
     enable_job_tracking = models.BooleanField(default=False)
+    # What a repair shop charges for the diagnosis when the customer declines
+    # the repair. Only a suggestion: the decline form starts from it and the
+    # person declining can change it. Null means the shop charges nothing.
+    repair_diagnosis_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
+    # The conditions printed on the intake receipt a repair customer takes
+    # home, in order. Null means the shop has not written its own and the app
+    # prints its defaults; an empty list is a shop that prints none at all.
+    repair_ticket_terms = models.JSONField(blank=True, null=True, default=None)
     require_opening_cash = models.BooleanField(default=True)
     auto_print_receipts = models.BooleanField(default=False)
     # Auto-print floor: how big a sale has to be before it prints by itself.

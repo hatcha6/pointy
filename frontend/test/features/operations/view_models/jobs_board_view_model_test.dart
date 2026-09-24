@@ -187,4 +187,11 @@ class _FakeOperationsRepository extends OperationsRepository {
     lastAssignedTo = assignedTo;
     return const Ok([]);
   }
+
+  @override
+  Future<Result<List<OperationsJob>>> loadJobsAwaitingHandBack({
+    String search = '',
+  }) async {
+    return const Ok([]);
+  }
 }

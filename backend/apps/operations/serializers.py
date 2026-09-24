@@ -17,6 +17,13 @@ from .models import (
 )
 
 
+def _user_display_name(user) -> str:
+    """The name a person goes by here: their full name, else their login."""
+    if user is None:
+        return ""
+    return (user.get_full_name() or "").strip() or user.get_username()
+
+
 class AssetTypeSerializer(serializers.ModelSerializer):
     """A kind of thing this shop works on, and which numbers it is identified by.
 
@@ -456,6 +463,13 @@ class JobSerializer(serializers.ModelSerializer):
     order_balance_due = serializers.SerializerMethodField()
     order_amount_paid = serializers.SerializerMethodField()
     order_sale_type = serializers.CharField(source="order.sale_type", read_only=True)
+    # A declined job is finished but may still be on the shelf; the screens need
+    # both halves, and the name of whoever took the decision.
+    is_declined = serializers.BooleanField(read_only=True)
+    awaiting_hand_back = serializers.BooleanField(read_only=True)
+    cancelled_by_name = serializers.SerializerMethodField()
+    # Who took the item in at the counter — printed on the intake receipt.
+    created_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Job
@@ -479,6 +493,12 @@ class JobSerializer(serializers.ModelSerializer):
             "due_at",
             "completed_at",
             "cancelled_at",
+            "cancel_reason",
+            "cancel_note",
+            "cancelled_by_name",
+            "decline_fee",
+            "is_declined",
+            "awaiting_hand_back",
             "handed_over_at",
             "handed_over_to",
             "on_hold_since",
@@ -487,6 +507,7 @@ class JobSerializer(serializers.ModelSerializer):
             "is_on_hold",
             "settlement_state",
             "custody_state",
+            "created_by_name",
             "symptoms",
             "diagnosis",
             "technician_notes",
@@ -525,6 +546,10 @@ class JobSerializer(serializers.ModelSerializer):
             "assigned_employee",
             "completed_at",
             "cancelled_at",
+            # Set only by the cancel and decline actions, never by an edit.
+            "cancel_reason",
+            "cancel_note",
+            "decline_fee",
             "handed_over_at",
             "handed_over_to",
             "on_hold_since",
@@ -567,6 +592,12 @@ class JobSerializer(serializers.ModelSerializer):
             Decimal("0.00"),
         )
         return str(total.quantize(Decimal("0.01")))
+
+    def get_cancelled_by_name(self, job) -> str:
+        return _user_display_name(job.cancelled_by)
+
+    def get_created_by_name(self, job) -> str:
+        return _user_display_name(job.created_by)
 
     def get_order_balance_due(self, job) -> str | None:
         return str(job.order.balance_due) if job.order_id else None
@@ -668,6 +699,40 @@ class JobTransitionSerializer(serializers.Serializer):
 
 class JobHoldSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=200)
+
+
+class JobDeclineSerializer(serializers.Serializer):
+    """The customer said no: why, anything worth writing down, and the fee."""
+
+    reason = serializers.ChoiceField(choices=Job.CancelReason.choices)
+    note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=500,
+    )
+    fee = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+
+
+class JobHandBackSerializer(serializers.Serializer):
+    """A declined job's item going home: who took it, and — only for a
+    manager releasing it with the fee unpaid — why."""
+
+    handed_over_to = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=120,
+    )
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+    force_release = serializers.BooleanField(default=False)
 
 
 class JobServiceCreateSerializer(serializers.Serializer):

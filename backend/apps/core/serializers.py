@@ -532,6 +532,38 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             }
         )
 
+    #: How many conditions a repair receipt carries, and how long each may be.
+    #: Past these a thermal slip stops being something a customer reads.
+    REPAIR_TICKET_TERMS_MAX = 20
+    REPAIR_TICKET_TERM_MAX_LENGTH = 300
+
+    def validate_repair_ticket_terms(self, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Repair ticket terms must be a list.")
+        terms = []
+        for item in value:
+            if not isinstance(item, str):
+                raise serializers.ValidationError("Each term must be text.")
+            # One printed line per term: a stray line break inside one would
+            # read as two conditions with one number.
+            term = " ".join(item.split())
+            if not term:
+                continue
+            if len(term) > self.REPAIR_TICKET_TERM_MAX_LENGTH:
+                raise serializers.ValidationError(
+                    f"A term can be at most {self.REPAIR_TICKET_TERM_MAX_LENGTH} "
+                    "characters."
+                )
+            terms.append(term)
+        if len(terms) > self.REPAIR_TICKET_TERMS_MAX:
+            raise serializers.ValidationError(
+                f"A repair ticket can carry at most {self.REPAIR_TICKET_TERMS_MAX} "
+                "terms."
+            )
+        return terms
+
     def validate_trusted_card_terminal_ids(self, value):
         if not isinstance(value, list):
             raise serializers.ValidationError("Trusted terminal IDs must be a list.")
@@ -572,6 +604,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "enable_kitchen_operations",
             "kitchen_auto_complete",
             "enable_job_tracking",
+            "repair_diagnosis_fee",
+            "repair_ticket_terms",
             "require_opening_cash",
             "auto_print_receipts",
             # Auto-print floor — a sale prints by itself once it clears either.

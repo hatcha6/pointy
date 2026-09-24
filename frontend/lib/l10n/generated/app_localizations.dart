@@ -7806,6 +7806,504 @@ abstract class AppLocalizations {
   /// **'زبون قديم، يدفع الأسبوع القادم'**
   String get jobForceReleaseNoteHint;
 
+  /// No description provided for @jobCustomerDecisionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار قرار الزبون'**
+  String get jobCustomerDecisionTitle;
+
+  /// No description provided for @jobCustomerDecisionMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أبلغ الزبون بالتشخيص والسعر، ثم سجّل قراره.'**
+  String get jobCustomerDecisionMessage;
+
+  /// No description provided for @jobCustomerDecisionQuote.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر المبدئي: {price}'**
+  String jobCustomerDecisionQuote(String price);
+
+  /// No description provided for @jobApproveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'وافق الزبون'**
+  String get jobApproveButton;
+
+  /// No description provided for @jobDeclineButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض الزبون'**
+  String get jobDeclineButton;
+
+  /// No description provided for @jobApproveDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'موافقة الزبون على التصليح'**
+  String get jobApproveDialogTitle;
+
+  /// No description provided for @jobApproveDialogMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل السعر الذي وافق عليه الزبون، وينتقل الجهاز بعدها إلى المرحلة التالية.'**
+  String get jobApproveDialogMessage;
+
+  /// No description provided for @jobApproveConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الموافقة'**
+  String get jobApproveConfirm;
+
+  /// No description provided for @jobApprovedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّلت موافقة الزبون.'**
+  String get jobApprovedMessage;
+
+  /// No description provided for @jobDeclineMenuAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع بدون تصليح'**
+  String get jobDeclineMenuAction;
+
+  /// No description provided for @jobDeclineSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع الجهاز بدون تصليح'**
+  String get jobDeclineSheetTitle;
+
+  /// No description provided for @jobDeclineSheetMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي العمل على الجهاز وتعود أي قطع مستخدمة إلى المخزون، ويبقى الجهاز مسجلًا في المحل حتى يستلمه الزبون.'**
+  String get jobDeclineSheetMessage;
+
+  /// No description provided for @jobDeclineReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لماذا لن يُصلَح؟'**
+  String get jobDeclineReasonLabel;
+
+  /// No description provided for @jobDeclineReasonPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر مرتفع'**
+  String get jobDeclineReasonPrice;
+
+  /// No description provided for @jobDeclineReasonDeclined.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يريد التصليح'**
+  String get jobDeclineReasonDeclined;
+
+  /// No description provided for @jobDeclineReasonCannotRepair.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الإصلاح'**
+  String get jobDeclineReasonCannotRepair;
+
+  /// No description provided for @jobDeclineReasonNoResponse.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يرد الزبون'**
+  String get jobDeclineReasonNoResponse;
+
+  /// No description provided for @jobDeclineNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get jobDeclineNoteLabel;
+
+  /// No description provided for @jobDeclineFeeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم الفحص'**
+  String get jobDeclineFeeLabel;
+
+  /// No description provided for @jobDeclineFeeHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحصَّل عند تسليم الجهاز. اتركها صفرًا إن لم تكن هناك رسوم.'**
+  String get jobDeclineFeeHelper;
+
+  /// No description provided for @jobDeclineConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء بدون تصليح'**
+  String get jobDeclineConfirm;
+
+  /// No description provided for @jobDeclinedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت المهمة بدون تصليح، والجهاز بانتظار أن يستلمه الزبون.'**
+  String get jobDeclinedMessage;
+
+  /// No description provided for @jobDeclinedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت بدون تصليح'**
+  String get jobDeclinedTitle;
+
+  /// No description provided for @jobDeclinedByLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name} — {when}'**
+  String jobDeclinedByLine(String name, String when);
+
+  /// No description provided for @jobDeclineFeeDueLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم الفحص: {amount} — لم تُحصَّل بعد'**
+  String jobDeclineFeeDueLine(String amount);
+
+  /// No description provided for @jobDeclineFeeSettledLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم الفحص: {amount} — حُصّلت'**
+  String jobDeclineFeeSettledLine(String amount);
+
+  /// No description provided for @jobDeclineFeeCreditLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم الفحص: {amount} — آجل على الزبون'**
+  String jobDeclineFeeCreditLine(String amount);
+
+  /// No description provided for @jobDeclineNoFeeLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون رسوم فحص'**
+  String get jobDeclineNoFeeLine;
+
+  /// No description provided for @jobAwaitingHandBackHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز ما زال في المحل حتى يستلمه الزبون.'**
+  String get jobAwaitingHandBackHint;
+
+  /// No description provided for @jobHandBackButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم الجهاز'**
+  String get jobHandBackButton;
+
+  /// No description provided for @jobHandBackDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم الجهاز بدون تصليح'**
+  String get jobHandBackDialogTitle;
+
+  /// No description provided for @jobHandedBackMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُلّم الجهاز للزبون.'**
+  String get jobHandedBackMessage;
+
+  /// No description provided for @jobHandedBackLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُلّم الجهاز إلى {name} — {when}'**
+  String jobHandedBackLine(String name, String when);
+
+  /// No description provided for @jobHandedBackNoNameLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُلّم الجهاز للزبون — {when}'**
+  String jobHandedBackNoNameLine(String when);
+
+  /// No description provided for @jobHandBackBlockedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم الفحص لم تُحصَّل'**
+  String get jobHandBackBlockedTitle;
+
+  /// No description provided for @jobHandBackBlockedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'حصّل رسوم الفحص قبل تسليم الجهاز، أو سجّلها آجلًا على الزبون.'**
+  String get jobHandBackBlockedMessage;
+
+  /// No description provided for @jobCollectFeeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحصيل رسوم الفحص'**
+  String get jobCollectFeeButton;
+
+  /// No description provided for @jobCollectFeeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة رسوم الفحص'**
+  String get jobCollectFeeTitle;
+
+  /// No description provided for @jobCollectFeeExplainer.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة برسوم الفحص وحدها، فالتصليح لم يتم. يدخل المبلغ في جلسة الدرج الحالية.'**
+  String get jobCollectFeeExplainer;
+
+  /// No description provided for @jobCollectFeeAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم الفحص: {amount}'**
+  String jobCollectFeeAmountLabel(String amount);
+
+  /// No description provided for @jobCancelDeclineHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'إذا رفض الزبون التصليح فاختر «إرجاع بدون تصليح» بدل الإلغاء، ليبقى الجهاز مسجلًا حتى يستلمه.'**
+  String get jobCancelDeclineHint;
+
+  /// No description provided for @jobTimelineDeclined.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت بدون تصليح — {reason}'**
+  String jobTimelineDeclined(String reason);
+
+  /// No description provided for @jobTimelineCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغيت المهمة'**
+  String get jobTimelineCancelled;
+
+  /// No description provided for @jobTimelineHandedBack.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُلّم الجهاز بدون تصليح'**
+  String get jobTimelineHandedBack;
+
+  /// No description provided for @jobsAwaitingHandBackTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الاستلام بدون تصليح'**
+  String get jobsAwaitingHandBackTitle;
+
+  /// No description provided for @jobsAwaitingHandBackHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجهزة انتهى العمل عليها ولم يستلمها أصحابها بعد.'**
+  String get jobsAwaitingHandBackHint;
+
+  /// No description provided for @jobAwaitingHandBackBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الاستلام'**
+  String get jobAwaitingHandBackBadge;
+
+  /// No description provided for @jobDeclineFeeDueBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم فحص {amount}'**
+  String jobDeclineFeeDueBadge(String amount);
+
+  /// No description provided for @jobPrintTicketAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة إيصال الاستلام'**
+  String get jobPrintTicketAction;
+
+  /// No description provided for @jobPrintLabelAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصق الجهاز'**
+  String get jobPrintLabelAction;
+
+  /// No description provided for @jobTicketPrintedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبع إيصال الاستلام.'**
+  String get jobTicketPrintedMessage;
+
+  /// No description provided for @jobLabelPrintedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبع ملصق الجهاز.'**
+  String get jobLabelPrintedMessage;
+
+  /// No description provided for @jobTicketNoPrinterMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طابعة إيصالات على هذا الجهاز — اختر واحدة من إعدادات الطابعات.'**
+  String get jobTicketNoPrinterMessage;
+
+  /// No description provided for @jobLabelNoPrinterMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طابعة ملصقات على هذا الجهاز — اختر واحدة من إعدادات الطابعات.'**
+  String get jobLabelNoPrinterMessage;
+
+  /// No description provided for @jobTicketPrintFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت طباعة إيصال الاستلام.'**
+  String get jobTicketPrintFailedMessage;
+
+  /// No description provided for @jobLabelPrintFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت طباعة ملصق الجهاز.'**
+  String get jobLabelPrintFailedMessage;
+
+  /// No description provided for @intakePrintSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطباعة بعد الاستلام'**
+  String get intakePrintSectionTitle;
+
+  /// No description provided for @intakePrintTicketLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال للزبون'**
+  String get intakePrintTicketLabel;
+
+  /// No description provided for @intakePrintLabelLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصق للجهاز'**
+  String get intakePrintLabelLabel;
+
+  /// No description provided for @repairTicketSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال الصيانة'**
+  String get repairTicketSectionTitle;
+
+  /// No description provided for @repairTicketSectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما يُطبع للزبون عند استلام جهازه، ورسوم الفحص إذا رفض التصليح.'**
+  String get repairTicketSectionHint;
+
+  /// No description provided for @repairDiagnosisFeeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم الفحص عند رفض التصليح'**
+  String get repairDiagnosisFeeTitle;
+
+  /// No description provided for @repairDiagnosisFeeNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون رسوم'**
+  String get repairDiagnosisFeeNone;
+
+  /// No description provided for @repairDiagnosisFeeHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُقترح عند رفض الزبون للتصليح ويمكن تعديلها وقتها. صفر يعني بدون رسوم.'**
+  String get repairDiagnosisFeeHelper;
+
+  /// No description provided for @repairTicketTermsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'شروط إيصال الاستلام'**
+  String get repairTicketTermsTitle;
+
+  /// No description provided for @repairTicketTermsHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُطبع على إيصال الاستلام بهذا الترتيب.'**
+  String get repairTicketTermsHelper;
+
+  /// No description provided for @repairTicketTermsManageButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الشروط'**
+  String get repairTicketTermsManageButton;
+
+  /// No description provided for @repairTicketTermsDefaultNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تكتب شروطًا خاصة بمحلك بعد، فتُطبع الشروط الافتراضية أدناه.'**
+  String get repairTicketTermsDefaultNotice;
+
+  /// No description provided for @repairTicketTermsDialogDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف الشروط التي تُطبع على إيصال الاستلام، ورتّبها بالسحب، واحذف ما لا تحتاجه.'**
+  String get repairTicketTermsDialogDescription;
+
+  /// No description provided for @repairTicketTermsEditingDefaultsNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه هي الشروط الافتراضية. أي تعديل عليها يجعلها شروط محلك.'**
+  String get repairTicketTermsEditingDefaultsNotice;
+
+  /// No description provided for @repairTicketTermFieldLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'شرط جديد'**
+  String get repairTicketTermFieldLabel;
+
+  /// No description provided for @repairTicketTermFieldHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: لا يسلم الجهاز إلا لحامل الإيصال'**
+  String get repairTicketTermFieldHint;
+
+  /// No description provided for @repairTicketTermAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة'**
+  String get repairTicketTermAddButton;
+
+  /// No description provided for @repairTicketTermRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب الشرط أولًا'**
+  String get repairTicketTermRequiredError;
+
+  /// No description provided for @repairTicketTermDuplicateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الشرط موجود بالفعل'**
+  String get repairTicketTermDuplicateError;
+
+  /// No description provided for @repairTicketTermsLimitError.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكن إضافة {max} شرطًا على الأكثر'**
+  String repairTicketTermsLimitError(int max);
+
+  /// No description provided for @repairTicketTermEditTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الشرط'**
+  String get repairTicketTermEditTooltip;
+
+  /// No description provided for @repairTicketTermRemoveTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الشرط'**
+  String get repairTicketTermRemoveTooltip;
+
+  /// No description provided for @repairTicketTermReorderTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسحب لتغيير الترتيب'**
+  String get repairTicketTermReorderTooltip;
+
+  /// No description provided for @repairTicketTermEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل نص الشرط'**
+  String get repairTicketTermEditTitle;
+
+  /// No description provided for @repairTicketTermLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نص الشرط'**
+  String get repairTicketTermLabel;
+
+  /// No description provided for @repairTicketTermsNoneMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تُطبع أي شروط على الإيصال.'**
+  String get repairTicketTermsNoneMessage;
+
+  /// No description provided for @repairTicketTermsRestoreDefaults.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعادة الشروط الافتراضية'**
+  String get repairTicketTermsRestoreDefaults;
+
   /// Outstanding balance on a job's invoice.
   ///
   /// In ar, this message translates to:

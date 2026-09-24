@@ -14,6 +14,8 @@ import '../../../data/models/workflow.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/employee_repository.dart';
 import '../../../data/repositories/operations_repository.dart';
+import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
@@ -22,6 +24,8 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/job_details_view_model.dart';
+import 'job_decline_sheet.dart';
+import 'job_declined_callout.dart';
 import 'jobs_screen.dart' show formatQuantity, unitLabel;
 import '../../assets/views/assets_ui.dart';
 import 'operations_ui.dart';
@@ -36,6 +40,7 @@ class JobDetailsScreen extends StatefulWidget {
     required this.catalogRepository,
     required this.operationsRepository,
     required this.employeeRepository,
+    this.shopSettingsRepository,
   });
 
   final JobDetailsViewModel viewModel;
@@ -44,6 +49,10 @@ class JobDetailsScreen extends StatefulWidget {
   final CatalogRepository catalogRepository;
   final OperationsRepository operationsRepository;
   final EmployeeRepository employeeRepository;
+
+  /// Supplies the shop's usual diagnosis fee to the decline form. Optional:
+  /// without it the form simply starts with no fee.
+  final ShopSettingsRepository? shopSettingsRepository;
 
   @override
   State<JobDetailsScreen> createState() => _JobDetailsScreenState();
@@ -75,7 +84,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         return PointyScaffold(
           appBar: PointyAppBar(
             title: Text(job?.jobNumber ?? l10n.jobDetailsTitle),
-            isLoading: viewModel.isLoading || viewModel.isMutating,
+            isLoading:
+                viewModel.isLoading ||
+                viewModel.isMutating ||
+                viewModel.isPrinting,
             actions: [
               // Every entry is conditional, so a completed or cancelled job
               // seen by someone without reopen permission leaves the menu
@@ -111,6 +123,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   catalogRepository: widget.catalogRepository,
                   operationsRepository: widget.operationsRepository,
                   employeeRepository: widget.employeeRepository,
+                  shopSettingsRepository: widget.shopSettingsRepository,
                 ),
         );
       },
@@ -124,9 +137,29 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     OperationsJob job,
   ) {
     final isOpen = job.status == OperationsJobStatus.open;
+    final isRepair = job.jobType == OperationsJobType.repair;
+    // The receipt and the sticker are for an item the shop holds: an open
+    // repair, or a declined one still waiting on the shelf.
+    final canPrint =
+        widget.viewModel.canPrintIntakeDocuments &&
+        isRepair &&
+        (isOpen || job.awaitingHandBack);
     return [
+      if (canPrint) ...[
+        PopupMenuItem(
+          value: 'print_ticket',
+          child: Text(l10n.jobPrintTicketAction),
+        ),
+        PopupMenuItem(
+          value: 'print_label',
+          child: Text(l10n.jobPrintLabelAction),
+        ),
+        const PopupMenuDivider(),
+      ],
       if (isOpen)
         PopupMenuItem(value: 'move', child: Text(l10n.jobMoveToStageAction)),
+      if (isOpen && job.order == null && isRepair)
+        PopupMenuItem(value: 'decline', child: Text(l10n.jobDeclineMenuAction)),
       if (isOpen && job.order == null)
         PopupMenuItem(value: 'cancel', child: Text(l10n.jobCancelAction)),
       if (!isOpen && widget.capabilities.canReopenJobs)
@@ -136,13 +169,39 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   Future<void> _onMenuAction(String action, OperationsJob job) async {
     switch (action) {
+      case 'print_ticket':
+        await _print(ticket: true);
+      case 'print_label':
+        await _print(ticket: false);
       case 'move':
         await _openMoveDialog(job);
+      case 'decline':
+        await _runDecline(
+          context,
+          viewModel: widget.viewModel,
+          shopSettingsRepository: widget.shopSettingsRepository,
+        );
       case 'cancel':
         await _confirmCancel(job);
       case 'reopen':
         await _reopen();
     }
+  }
+
+  Future<void> _print({required bool ticket}) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final status = ticket
+        ? await widget.viewModel.printTicket()
+        : await widget.viewModel.printLabel();
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(jobPrintStatusMessage(l10n, status, ticket: ticket)),
+      ),
+    );
   }
 
   Future<void> _openMoveDialog(OperationsJob job) async {
@@ -231,7 +290,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         icon: Icons.warning_amber_outlined,
         isDestructive: true,
         title: l10n.jobCancelConfirmTitle,
-        message: l10n.jobCancelConfirmMessage,
+        // A repair the customer said no to is not a mistake to cancel: point at
+        // the decline, which keeps the phone on the record until it goes home.
+        message: job.jobType == OperationsJobType.repair
+            ? '${l10n.jobCancelConfirmMessage}\n\n${l10n.jobCancelDeclineHint}'
+            : l10n.jobCancelConfirmMessage,
         fieldLabel: l10n.jobCancelReasonLabel,
         confirmLabel: l10n.jobCancelAction,
       ),
@@ -268,6 +331,7 @@ class _JobDetailsBody extends StatefulWidget {
     required this.catalogRepository,
     required this.operationsRepository,
     required this.employeeRepository,
+    this.shopSettingsRepository,
   });
 
   final OperationsJob job;
@@ -277,6 +341,7 @@ class _JobDetailsBody extends StatefulWidget {
   final CatalogRepository catalogRepository;
   final OperationsRepository operationsRepository;
   final EmployeeRepository employeeRepository;
+  final ShopSettingsRepository? shopSettingsRepository;
 
   @override
   State<_JobDetailsBody> createState() => _JobDetailsBodyState();
@@ -331,6 +396,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final spacing = AdaptiveSpacing.of(context);
     final job = widget.job;
     final needsApproval =
+        job.isOpen &&
         (job.currentStageDetails?.requiresCustomerApproval ?? false) &&
         job.approvedPrice == null;
 
@@ -347,13 +413,29 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                   children: [
                     _headerCard(context),
                     SizedBox(height: spacing.md),
+                    // The one moment the customer decides: say so, with the
+                    // price they are deciding on, and let the footer carry
+                    // their answer either way.
                     if (needsApproval)
                       Padding(
                         padding: EdgeInsets.only(bottom: spacing.md),
-                        child: PointyInlineMessage.warning(
-                          message: l10n.jobApprovalRequiredHint,
-                          icon: Icons.price_check_outlined,
+                        child: PointyDetailCallout(
+                          icon: Icons.support_agent_outlined,
+                          tone: PointyCalloutTone.warning,
+                          title: l10n.jobCustomerDecisionTitle,
+                          message: [
+                            l10n.jobCustomerDecisionMessage,
+                            if (job.quotedPrice != null)
+                              l10n.jobCustomerDecisionQuote(
+                                formatMoney(job.quotedPrice!),
+                              ),
+                          ].join('\n'),
                         ),
+                      ),
+                    if (job.isDeclined)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: spacing.md),
+                        child: JobDeclinedCallout(job: job),
                       ),
                     if (job.isOnHold)
                       Padding(
@@ -400,7 +482,55 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
             ],
           ),
         ),
-        if (job.status == OperationsJobStatus.open && job.nextStage != null)
+        if (needsApproval)
+          PointyStickyActionFooter(
+            primaryAction: FilledButton.icon(
+              onPressed: widget.viewModel.isMutating ? null : _approve,
+              icon: const Icon(Icons.thumb_up_alt_outlined),
+              label: Text(l10n.jobApproveButton),
+            ),
+            secondaryActions: [
+              OutlinedButton.icon(
+                onPressed: widget.viewModel.isMutating ? null : _decline,
+                icon: const Icon(Icons.assignment_return_outlined),
+                label: Text(l10n.jobDeclineButton),
+              ),
+              if (job.isOnHold)
+                OutlinedButton.icon(
+                  onPressed: widget.viewModel.isMutating ? null : _resume,
+                  icon: const Icon(Icons.play_arrow_outlined),
+                  label: Text(l10n.jobResumeButton),
+                )
+              else
+                OutlinedButton.icon(
+                  onPressed: widget.viewModel.isMutating
+                      ? null
+                      : _openHoldDialog,
+                  icon: const Icon(Icons.pause_outlined),
+                  label: Text(l10n.jobHoldButton),
+                ),
+            ],
+          )
+        else if (job.awaitingHandBack)
+          PointyStickyActionFooter(
+            primaryAction: FilledButton.icon(
+              onPressed: widget.viewModel.isMutating ? null : _handBack,
+              icon: const Icon(Icons.how_to_reg_outlined),
+              label: Text(l10n.jobHandBackButton),
+            ),
+            secondaryActions: [
+              if (job.owesDeclineFee && widget.capabilities.canCheckoutSale)
+                FilledButton.tonalIcon(
+                  onPressed: widget.viewModel.isMutating
+                      ? null
+                      : () => _openInvoiceDialog(job),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: Text(l10n.jobCollectFeeButton),
+                ),
+            ],
+          )
+        else if (job.status == OperationsJobStatus.open &&
+            job.nextStage != null)
           PointyStickyActionFooter(
             primaryAction: FilledButton.icon(
               onPressed: widget.viewModel.isMutating ? null : _advance,
@@ -492,11 +622,18 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        job.jobNumber,
-                        style: PointyTypography.numeric(
-                          textTheme.titleLarge ?? const TextStyle(),
-                        ).copyWith(fontWeight: FontWeight.w800),
+                      // Shrunk to fit rather than wrapped: a job number broken
+                      // across two lines is one someone misreads aloud.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          job.jobNumber,
+                          maxLines: 1,
+                          style: PointyTypography.numeric(
+                            textTheme.titleLarge ?? const TextStyle(),
+                          ).copyWith(fontWeight: FontWeight.w800),
+                        ),
                       ),
                       Text(
                         jobTypeLabel(l10n, job.jobType),
@@ -508,11 +645,20 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                   ),
                 ),
                 SizedBox(width: spacing.sm),
-                PointyStatusPill(
-                  label: statusVisual.label,
-                  icon: statusVisual.icon,
-                  color: statusVisual.color,
-                ),
+                // A declined phone still on the shelf is not simply "cancelled":
+                // somebody is coming back for it.
+                if (job.awaitingHandBack)
+                  PointyStatusPill(
+                    label: l10n.jobAwaitingHandBackBadge,
+                    icon: Icons.inventory_2_outlined,
+                    color: colors.warning,
+                  )
+                else
+                  PointyStatusPill(
+                    label: statusVisual.label,
+                    icon: statusVisual.icon,
+                    color: statusVisual.color,
+                  ),
               ],
             ),
             if (job.priority != OperationsJobPriority.normal ||
@@ -558,6 +704,36 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
   Widget _timelineSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final job = widget.job;
+    // How the job ended, when it ended without the work: not stage moves, so
+    // the server records them on the job itself, and they are drawn here as
+    // the timeline's closing entries.
+    final reason = job.cancelReason;
+    final closing = <JobStageEvent>[
+      if (job.status == OperationsJobStatus.cancelled &&
+          job.cancelledAt != null)
+        JobStageEvent(
+          id: -1,
+          toStage: -1,
+          toStageName: reason == null
+              ? l10n.jobTimelineCancelled
+              : l10n.jobTimelineDeclined(jobDeclineReasonLabel(l10n, reason)),
+          fromStageName: '',
+          changedByName: job.cancelledByName,
+          note: job.cancelNote,
+          createdAt: job.cancelledAt,
+        ),
+      if (job.isDeclined && job.handedOverAt != null)
+        JobStageEvent(
+          id: -2,
+          toStage: -2,
+          toStageName: l10n.jobTimelineHandedBack,
+          fromStageName: '',
+          changedByName: '',
+          note: job.handedOverTo,
+          createdAt: job.handedOverAt,
+        ),
+    ];
+    final events = [...job.stageEvents, ...closing];
 
     return PointyDetailSection(
       title: l10n.jobTimelineTitle,
@@ -565,11 +741,15 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < job.stageEvents.length; i++)
+          for (var i = 0; i < events.length; i++)
             _TimelineEntry(
-              event: job.stageEvents[i],
-              isCurrent: job.stageEvents[i].toStage == job.currentStage,
-              isLast: i == job.stageEvents.length - 1,
+              event: events[i],
+              isCurrent: closing.isEmpty
+                  ? events[i].toStage == job.currentStage
+                  : i == events.length - 1,
+              isLast: i == events.length - 1,
+              // How a job ended is not a stage it is in.
+              labelCurrentStage: closing.isEmpty,
             ),
         ],
       ),
@@ -1224,6 +1404,143 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     return (reason ?? '').isEmpty ? null : reason;
   }
 
+  /// The customer said yes: the price they agreed to, then on to the work.
+  Future<void> _approve() async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final quoted = widget.job.quotedPrice;
+    final price = await showDialog<double>(
+      context: context,
+      builder: (_) => PointyNumberEntryDialog(
+        icon: Icons.thumb_up_alt_outlined,
+        title: l10n.jobApproveDialogTitle,
+        message: l10n.jobApproveDialogMessage,
+        fieldLabel: l10n.jobApprovedPriceLabel,
+        suffixText: currencySymbol,
+        initialValue: quoted == null ? '' : quoted.toStringAsFixed(2),
+        // Zero is a real answer: a warranty repair agreed at no charge.
+        isValid: (value) => value >= 0,
+        confirmLabel: l10n.jobApproveConfirm,
+      ),
+    );
+    if (price == null || !mounted) {
+      return;
+    }
+    final approved = await widget.viewModel.approveQuote(price);
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          approved ? l10n.jobApprovedMessage : l10n.operationsActionError,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _decline() {
+    return _runDecline(
+      context,
+      viewModel: widget.viewModel,
+      shopSettingsRepository: widget.shopSettingsRepository,
+    );
+  }
+
+  /// A declined job's item going home: who took it, and — when a diagnosis
+  /// fee is still owed — the same question an unpaid repair's handover asks.
+  Future<void> _handBack() async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final collector = await showDialog<String>(
+      context: context,
+      builder: (_) => _PromptDialog(
+        title: l10n.jobHandBackDialogTitle,
+        fieldLabel: l10n.jobHandoverCollectorLabel,
+        fieldHint: l10n.jobHandoverCollectorHint,
+        confirmLabel: l10n.jobHandoverConfirm,
+        cancelLabel: l10n.cancelButton,
+      ),
+    );
+    if (collector == null || !mounted) {
+      return;
+    }
+    final handed = await widget.viewModel.handBack(handedOverTo: collector);
+    if (!mounted) {
+      return;
+    }
+    if (handed) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.jobHandedBackMessage)),
+      );
+      return;
+    }
+    if (widget.viewModel.lastRefusal?.kind ==
+        JobRefusalKind.settlementRequired) {
+      await _handleUnsettledHandBack(collector);
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text(l10n.operationsActionError)));
+  }
+
+  Future<void> _handleUnsettledHandBack(String collector) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final job = widget.job;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.lock_outline),
+        title: Text(l10n.jobHandBackBlockedTitle),
+        content: Text(l10n.jobHandBackBlockedMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.cancelButton),
+          ),
+          // Offered only to someone who holds the permission, as on a repair's
+          // handover: a button that always fails teaches distrust.
+          if (widget.capabilities.canReleaseUnpaidJobs)
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('force'),
+              child: Text(l10n.jobForceReleaseButton),
+            ),
+          if (job.owesDeclineFee && widget.capabilities.canCheckoutSale)
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop('invoice'),
+              child: Text(l10n.jobCollectFeeButton),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    if (action == 'invoice') {
+      await _openInvoiceDialog(job);
+      return;
+    }
+    final note = await _askForceReleaseReason();
+    if (note == null || !mounted) {
+      return;
+    }
+    final released = await widget.viewModel.handBack(
+      handedOverTo: collector,
+      note: note,
+      forceRelease: true,
+    );
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          released ? l10n.jobHandedBackMessage : l10n.operationsActionError,
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveEdits() async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
@@ -1464,6 +1781,49 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
   }
 }
 
+/// The decline flow, from the menu or the approval footer: ask why and what the
+/// diagnosis costs, then end the job with the item still on the shelf.
+Future<void> _runDecline(
+  BuildContext context, {
+  required JobDetailsViewModel viewModel,
+  ShopSettingsRepository? shopSettingsRepository,
+}) async {
+  final l10n = AppLocalizations.of(context)!;
+  final messenger = ScaffoldMessenger.of(context);
+  final suggestedFee = await _suggestedDiagnosisFee(shopSettingsRepository);
+  if (!context.mounted) {
+    return;
+  }
+  final draft = await showJobDeclineSheet(context, suggestedFee: suggestedFee);
+  if (draft == null || !context.mounted) {
+    return;
+  }
+  final declined = await viewModel.decline(draft);
+  if (!context.mounted) {
+    return;
+  }
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        declined ? l10n.jobDeclinedMessage : l10n.operationsActionError,
+      ),
+    ),
+  );
+}
+
+Future<double?> _suggestedDiagnosisFee(
+  ShopSettingsRepository? repository,
+) async {
+  if (repository == null) {
+    return null;
+  }
+  final result = await repository.loadSettings();
+  return switch (result) {
+    Ok<ShopSettings>(value: final settings) => settings.repairDiagnosisFee,
+    Error<ShopSettings>() => null,
+  };
+}
+
 class _AssignSelection {
   const _AssignSelection(this.employeeId);
 
@@ -1584,11 +1944,13 @@ class _TimelineEntry extends StatelessWidget {
     required this.event,
     required this.isCurrent,
     required this.isLast,
+    this.labelCurrentStage = true,
   });
 
   final JobStageEvent event;
   final bool isCurrent;
   final bool isLast;
+  final bool labelCurrentStage;
 
   @override
   Widget build(BuildContext context) {
@@ -1648,7 +2010,7 @@ class _TimelineEntry extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (isCurrent) ...[
+                      if (isCurrent && labelCurrentStage) ...[
                         const SizedBox(width: 6),
                         Text(
                           '· ${l10n.jobCurrentStageLabel}',
@@ -1858,11 +2220,17 @@ class _JobInvoiceDialog extends StatefulWidget {
 }
 
 class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
+  // A declined job bills its diagnosis fee and nothing else: no parts were
+  // fitted, no work was done, and there is no labour to type.
+  late final bool _feeOnly = widget.job.isDeclined;
+
   // Parts and services are already priced on the job; the labour box is for
   // the one-off amount that has no catalog line behind it.
-  late final double _lineTotal = widget.job.billableTotal;
+  late final double _lineTotal = _feeOnly
+      ? (widget.job.declineFee ?? 0)
+      : widget.job.billableTotal;
   late final TextEditingController _laborController = TextEditingController(
-    text: widget.job.approvedPrice == null
+    text: _feeOnly || widget.job.approvedPrice == null
         ? ''
         : (widget.job.approvedPrice! - _lineTotal)
               .clamp(0, double.infinity)
@@ -1886,7 +2254,9 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final job = widget.job;
-    final labor = double.tryParse(_laborController.text.trim()) ?? 0;
+    final labor = _feeOnly
+        ? 0.0
+        : double.tryParse(_laborController.text.trim()) ?? 0;
     final total = _lineTotal + labor;
     final paidNow = _onCredit
         ? (double.tryParse(_paidNowController.text.trim()) ?? 0)
@@ -1897,7 +2267,7 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
 
     return AlertDialog(
       icon: const Icon(Icons.receipt_long_outlined),
-      title: Text(l10n.jobInvoiceTitle),
+      title: Text(_feeOnly ? l10n.jobCollectFeeTitle : l10n.jobInvoiceTitle),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -1906,26 +2276,36 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                l10n.jobInvoiceExplainer,
+                _feeOnly
+                    ? l10n.jobCollectFeeExplainer
+                    : l10n.jobInvoiceExplainer,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              Text(l10n.jobMaterialsTotalLabel(formatMoney(job.materialsTotal))),
-              if (job.servicesTotal > 0)
+              if (_feeOnly)
+                Text(l10n.jobCollectFeeAmountLabel(formatMoney(_lineTotal)))
+              else ...[
                 Text(
-                  '${l10n.jobInvoiceServicesLabel}: '
-                  '${formatMoney(job.servicesTotal)}',
+                  l10n.jobMaterialsTotalLabel(formatMoney(job.materialsTotal)),
                 ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _laborController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+                if (job.servicesTotal > 0)
+                  Text(
+                    '${l10n.jobInvoiceServicesLabel}: '
+                    '${formatMoney(job.servicesTotal)}',
+                  ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _laborController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [DecimalTextInputFormatter()],
+                  decoration: InputDecoration(
+                    labelText: l10n.jobLaborTotalLabel,
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
-                inputFormatters: [DecimalTextInputFormatter()],
-                decoration: InputDecoration(labelText: l10n.jobLaborTotalLabel),
-                onChanged: (_) => setState(() {}),
-              ),
+              ],
               const SizedBox(height: 12),
               SegmentedButton<PaymentMethod>(
                 segments: [
@@ -2017,7 +2397,9 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
                     ],
                   ),
                 ),
-          child: Text(l10n.jobInvoiceButton),
+          child: Text(
+            _feeOnly ? l10n.jobCollectFeeButton : l10n.jobInvoiceButton,
+          ),
         ),
       ],
     );
