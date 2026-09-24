@@ -5703,7 +5703,7 @@ abstract class AppLocalizations {
   /// No description provided for @devicePrinterSectionTitle.
   ///
   /// In ar, this message translates to:
-  /// **'أدوار الطباعة'**
+  /// **'الطابعات'**
   String get devicePrinterSectionTitle;
 
   /// No description provided for @shopIdentitySectionTitle.
@@ -8292,35 +8292,11 @@ abstract class AppLocalizations {
   /// **'تعذّر حذف المحطة.'**
   String get prepStationDeleteError;
 
-  /// No description provided for @kitchenPrintersSectionTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'طابعات المطبخ'**
-  String get kitchenPrintersSectionTitle;
-
-  /// No description provided for @kitchenPrintersSectionHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'اربط طابعة حرارية بكل محطة تحضير يخدمها هذا الجهاز.'**
-  String get kitchenPrintersSectionHint;
-
-  /// No description provided for @kitchenPrintersNoStations.
-  ///
-  /// In ar, this message translates to:
-  /// **'لا توجد محطات تحضير. أضِفها من إعدادات المتجر.'**
-  String get kitchenPrintersNoStations;
-
   /// No description provided for @kitchenPrintersLoadError.
   ///
   /// In ar, this message translates to:
   /// **'تعذّر تحميل محطات التحضير.'**
   String get kitchenPrintersLoadError;
-
-  /// No description provided for @kitchenStationNotConfigured.
-  ///
-  /// In ar, this message translates to:
-  /// **'لم تُضبط طابعة لهذه المحطة.'**
-  String get kitchenStationNotConfigured;
 
   /// No description provided for @enableJobTrackingTitle.
   ///
@@ -10255,48 +10231,6 @@ abstract class AppLocalizations {
   /// **'طابعة النظام الافتراضية'**
   String get systemDefaultPrinterLabel;
 
-  /// No description provided for @posReceiptPrinterRoleTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'إيصال نقطة البيع'**
-  String get posReceiptPrinterRoleTitle;
-
-  /// No description provided for @posReceiptPrinterRoleDescription.
-  ///
-  /// In ar, this message translates to:
-  /// **'الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.'**
-  String get posReceiptPrinterRoleDescription;
-
-  /// No description provided for @configurePrinterRoleButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'اختيار طابعة الإيصال'**
-  String get configurePrinterRoleButton;
-
-  /// No description provided for @printerRoleDialogTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'طابعة إيصال نقطة البيع'**
-  String get printerRoleDialogTitle;
-
-  /// No description provided for @printerRoleDialogDoneButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم'**
-  String get printerRoleDialogDoneButton;
-
-  /// No description provided for @selectedPrinterLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'طابعة إيصال نقطة البيع'**
-  String get selectedPrinterLabel;
-
-  /// No description provided for @noSelectedPrinter.
-  ///
-  /// In ar, this message translates to:
-  /// **'لم يتم اختيار طابعة'**
-  String get noSelectedPrinter;
-
   /// No description provided for @paperWidthLabel.
   ///
   /// In ar, this message translates to:
@@ -10453,22 +10387,10 @@ abstract class AppLocalizations {
   /// **'الدقة DPI'**
   String get printerLabelDpiLabel;
 
-  /// Selected barcode label printer language summary.
-  ///
-  /// In ar, this message translates to:
-  /// **'لغة الملصقات: {language}'**
-  String printerBarcodeLanguageSummary(String language);
-
-  /// Barcode label dimensions and resolution summary.
-  ///
-  /// In ar, this message translates to:
-  /// **'الملصق: {width}×{height} مم، فاصل {gap} مم، {dpi} DPI'**
-  String printerLabelGeometrySummary(int width, int height, int gap, int dpi);
-
   /// No description provided for @barcodeLabelLanguageDetected.
   ///
   /// In ar, this message translates to:
-  /// **'تم اكتشاف لغة طابعة الملصقات وحفظها.'**
+  /// **'تم اكتشاف لغة طابعة الملصقات.'**
   String get barcodeLabelLanguageDetected;
 
   /// No description provided for @barcodeLabelLanguageInferred.
@@ -10525,65 +10447,431 @@ abstract class AppLocalizations {
   /// **'فحص الاتصال'**
   String get checkPrinterConnectionButton;
 
-  /// No description provided for @printerStatusUnknown.
-  ///
-  /// In ar, this message translates to:
-  /// **'لم يتم فحص اتصال الطابعة بعد.'**
-  String get printerStatusUnknown;
-
-  /// No description provided for @printerStatusNotConfigured.
-  ///
-  /// In ar, this message translates to:
-  /// **'اختر طابعة إيصال حتى يبدأ الجهاز بفحص اتصالها.'**
-  String get printerStatusNotConfigured;
-
-  /// No description provided for @printerStatusChecking.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار فحص اتصال الطابعة...'**
-  String get printerStatusChecking;
-
-  /// No description provided for @printerStatusConnected.
-  ///
-  /// In ar, this message translates to:
-  /// **'طابعة الإيصال متصلة وجاهزة.'**
-  String get printerStatusConnected;
-
-  /// No description provided for @printerStatusDisconnected.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذر الاتصال بطابعة الإيصال. تحقق من تشغيلها واتصالها.'**
-  String get printerStatusDisconnected;
-
   /// No description provided for @printerDisconnectedSnackBar.
   ///
   /// In ar, this message translates to:
   /// **'تعذر الاتصال بطابعة إيصال نقطة البيع.'**
   String get printerDisconnectedSnackBar;
 
-  /// No description provided for @testPrinterButton.
+  /// Intro line of the Printers section in device settings.
   ///
   /// In ar, this message translates to:
-  /// **'اختبار الطابعة'**
-  String get testPrinterButton;
+  /// **'أضف كل طابعة موصولة بهذا الجهاز واختر ما تطبعه. تذهب كل طباعة إلى طابعتها تلقائيًا، فلا حاجة للعودة إلى الإعدادات عند طباعة ملصق أو تقرير.'**
+  String get printersSectionHint;
 
-  /// No description provided for @testingPrinterButton.
+  /// Heading of the job-to-printer summary in device settings.
   ///
   /// In ar, this message translates to:
-  /// **'جار الاختبار...'**
-  String get testingPrinterButton;
+  /// **'ماذا يُطبع وأين'**
+  String get printerJobsTitle;
 
-  /// No description provided for @testBarcodeLabelPrinterButton.
+  /// Printer job: sale receipts, their reprints, payment receipts and the shift report slip.
   ///
   /// In ar, this message translates to:
-  /// **'اختبار ملصق باركود'**
-  String get testBarcodeLabelPrinterButton;
+  /// **'إيصالات البيع'**
+  String get printerRoleReceipts;
 
-  /// No description provided for @testingBarcodeLabelPrinterButton.
+  /// No description provided for @printerRoleReceiptsDescription.
   ///
   /// In ar, this message translates to:
-  /// **'جار اختبار الملصق...'**
-  String get testingBarcodeLabelPrinterButton;
+  /// **'فواتير البيع وإعادة طباعتها، وسندات القبض، وتقرير إغلاق الوردية.'**
+  String get printerRoleReceiptsDescription;
+
+  /// Printer job: barcode stickers.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصقات الباركود'**
+  String get printerRoleLabels;
+
+  /// No description provided for @printerRoleLabelsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصقات الباركود والأسعار للمنتجات.'**
+  String get printerRoleLabelsDescription;
+
+  /// Printer job: full-page documents (reports, purchase orders, A4 shift report, consignment papers).
+  ///
+  /// In ar, this message translates to:
+  /// **'المستندات والتقارير A4'**
+  String get printerRoleDocuments;
+
+  /// No description provided for @printerRoleDocumentsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقارير وأوامر الشراء وتقرير الوردية A4 وسندات الأمانات.'**
+  String get printerRoleDocumentsDescription;
+
+  /// Printer job: kitchen chits for one prep station.
+  ///
+  /// In ar, this message translates to:
+  /// **'المطبخ: {station}'**
+  String printerRoleKitchen(String station);
+
+  /// No description provided for @printerRoleKitchenDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذاكر التحضير لهذه المحطة.'**
+  String get printerRoleKitchenDescription;
+
+  /// Status of the receipts job when no printer on the device does it.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا طابعة — لن تُطبع الإيصالات'**
+  String get printerRoleReceiptsUnassigned;
+
+  /// Status of the barcode-labels job when no printer on the device does it.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا طابعة — لن تُطبع الملصقات'**
+  String get printerRoleLabelsUnassigned;
+
+  /// Status of the documents job when no printer does it: the system print dialog opens instead.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا طابعة — تُفتح نافذة الطباعة لتختار'**
+  String get printerRoleDocumentsUnassigned;
+
+  /// Status of a kitchen station job with no printer on this device: another device may print its chits.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا طابعة هنا — تُترك التذاكر لجهاز آخر'**
+  String get printerRoleKitchenUnassigned;
+
+  /// Menu option that leaves a print job without a printer on this device.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا طابعة'**
+  String get printerAssignNone;
+
+  /// Why a thermal printer cannot take the documents job.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج طابعة نظام (PDF)'**
+  String get printerAssignNeedsDocumentPrinter;
+
+  /// Why a driver/PDF printer cannot take a kitchen job.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج طابعة حرارية'**
+  String get printerAssignNeedsThermalPrinter;
+
+  /// No description provided for @printersListTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعات على هذا الجهاز'**
+  String get printersListTitle;
+
+  /// No description provided for @addPrinterButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة طابعة'**
+  String get addPrinterButton;
+
+  /// No description provided for @printersEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طابعات على هذا الجهاز بعد'**
+  String get printersEmptyTitle;
+
+  /// No description provided for @printersEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابدأ بطابعة الإيصالات، ثم أضف أي طابعة أخرى — طابعة ملصقات أو طابعة A4 — واختر ما تطبعه كل واحدة.'**
+  String get printersEmptyMessage;
+
+  /// Shown on a printer that has no job assigned.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا مهمة — لا تطبع شيئًا'**
+  String get printerNoJobs;
+
+  /// No description provided for @printerTestButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة تجريبية'**
+  String get printerTestButton;
+
+  /// No description provided for @printerMoreActionsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات الطابعة'**
+  String get printerMoreActionsTooltip;
+
+  /// No description provided for @printerEditAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get printerEditAction;
+
+  /// No description provided for @printerRemoveAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة'**
+  String get printerRemoveAction;
+
+  /// Short printer connection state.
+  ///
+  /// In ar, this message translates to:
+  /// **'متصلة'**
+  String get printerStateConnected;
+
+  /// Short printer connection state.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متصلة'**
+  String get printerStateDisconnected;
+
+  /// Short printer connection state.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الفحص'**
+  String get printerStateChecking;
+
+  /// Short printer connection state.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُفحص'**
+  String get printerStateUnknown;
+
+  /// Confirmation title for removing a printer from the device.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة «{name}»؟'**
+  String removePrinterTitle(String name);
+
+  /// No description provided for @removePrinterMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يطبع هذا الجهاز على هذه الطابعة بعد الآن.'**
+  String get removePrinterMessage;
+
+  /// Removal confirmation listing the jobs left without a printer.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يطبع هذا الجهاز على هذه الطابعة بعد الآن، وستبقى هذه المهام بلا طابعة حتى تعيّنها لطابعة أخرى: {jobs}.'**
+  String removePrinterJobsMessage(String jobs);
+
+  /// No description provided for @removePrinterConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الطابعة'**
+  String get removePrinterConfirm;
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيفت «{name}».'**
+  String printerAddedMessage(String name);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'حُفظت «{name}».'**
+  String printerSavedMessage(String name);
+
+  ///
+  ///
+  /// In ar, this message translates to:
+  /// **'أُزيلت «{name}».'**
+  String printerRemovedMessage(String name);
+
+  /// No description provided for @printerTestDocumentSent.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسلت صفحة A4 التجريبية.'**
+  String get printerTestDocumentSent;
+
+  /// No description provided for @printerTestKitchenSent.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسلت تذكرة المطبخ التجريبية.'**
+  String get printerTestKitchenSent;
+
+  /// Short pill on a printer card after a test print was sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسلت الطباعة التجريبية'**
+  String get printerTestPassedShort;
+
+  /// Short pill on a printer card after a test print failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت الطباعة التجريبية'**
+  String get printerTestFailedShort;
+
+  /// No description provided for @addPrinterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة طابعة'**
+  String get addPrinterTitle;
+
+  /// No description provided for @editPrinterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الطابعة'**
+  String get editPrinterTitle;
+
+  /// Editor section that picks the physical printer.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعة'**
+  String get printerDeviceSectionTitle;
+
+  /// No description provided for @printerDeviceSectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الطابعة من القائمة. إن لم تظهر طابعة شبكة، أضفها بعنوانها.'**
+  String get printerDeviceSectionHint;
+
+  /// No description provided for @printerManualNetworkButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة طابعة شبكة بعنوانها'**
+  String get printerManualNetworkButton;
+
+  /// No description provided for @printerNetworkAddressLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان IP'**
+  String get printerNetworkAddressLabel;
+
+  /// No description provided for @printerNetworkPortLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنفذ'**
+  String get printerNetworkPortLabel;
+
+  /// No description provided for @printerNetworkUseButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام العنوان'**
+  String get printerNetworkUseButton;
+
+  /// No description provided for @printerNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الطابعة'**
+  String get printerNameLabel;
+
+  /// No description provided for @printerNameHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم يميّزها بين طابعاتك، مثل «الكاشير» أو «الملصقات».'**
+  String get printerNameHelper;
+
+  /// No description provided for @printerJobsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماذا تطبع هذه الطابعة؟'**
+  String get printerJobsSectionTitle;
+
+  /// No description provided for @printerJobsNoneSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تطبع هذه الطابعة شيئًا حتى تختار لها مهمة.'**
+  String get printerJobsNoneSelected;
+
+  /// Explains that selecting a job takes it from the printer that has it.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستنتقل «{job}» من «{printer}» إلى هذه الطابعة.'**
+  String printerJobMovesFrom(String job, String printer);
+
+  /// Which printer does a job now, shown beside a job this printer does not do.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبعها «{printer}» الآن.'**
+  String printerJobCurrentlyOn(String printer);
+
+  /// Warns that the chosen device is already another printer on this device.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الطابعة مضافة بالفعل باسم «{printer}». أعطِ المهمة لتلك الطابعة بدل إضافتها مرة ثانية.'**
+  String printerDuplicateDevice(String printer);
+
+  /// No description provided for @printerKitchenStationsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذاكر المطبخ'**
+  String get printerKitchenStationsLabel;
+
+  /// No description provided for @printerJobDocumentsNeedsPdf.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستندات والتقارير تُطبع عبر تعريف الطابعة (PDF)، فلا تناسبها طابعة حرارية مباشرة.'**
+  String get printerJobDocumentsNeedsPdf;
+
+  /// No description provided for @printerJobKitchenNeedsThermal.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذاكر المطبخ تحتاج طابعة حرارية.'**
+  String get printerJobKitchenNeedsThermal;
+
+  /// No description provided for @printerReceiptSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الإيصال'**
+  String get printerReceiptSettingsTitle;
+
+  /// No description provided for @printerAdvancedSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات متقدمة'**
+  String get printerAdvancedSettingsTitle;
+
+  /// No description provided for @printerTestSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرّبها'**
+  String get printerTestSectionTitle;
+
+  /// No description provided for @printerTestReceiptButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال تجريبي'**
+  String get printerTestReceiptButton;
+
+  /// No description provided for @printerTestLabelButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصق تجريبي'**
+  String get printerTestLabelButton;
+
+  /// No description provided for @printerTestDocumentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'صفحة A4 تجريبية'**
+  String get printerTestDocumentButton;
+
+  /// No description provided for @printerTestKitchenButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذكرة مطبخ تجريبية'**
+  String get printerTestKitchenButton;
+
+  /// No description provided for @printerTestNeedsDevice.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الطابعة أولًا لتجربتها.'**
+  String get printerTestNeedsDevice;
+
+  /// No description provided for @addPrinterConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة الطابعة'**
+  String get addPrinterConfirmButton;
+
+  /// Appended to the checkout message when the sale should have printed but no printer does receipts.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طابعة إيصالات على هذا الجهاز. عيّنها من إعدادات الجهاز ← الطابعات.'**
+  String get invoicePrintNoPrinter;
+
+  /// Shown when printing labels while no printer on the device does barcode labels.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طابعة ملصقات على هذا الجهاز. عيّنها من إعدادات الجهاز ← الطابعات.'**
+  String get barcodeLabelNoPrinter;
 
   /// No description provided for @fakePrintButton.
   ///
@@ -10620,18 +10908,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'طريقة الاتصال غير متاحة على هذا الجهاز.'**
   String get printerTestUnsupported;
-
-  /// No description provided for @fakePrintSuccess.
-  ///
-  /// In ar, this message translates to:
-  /// **'نجحت الطباعة التجريبية بالمحاكاة.'**
-  String get fakePrintSuccess;
-
-  /// No description provided for @fakePrintFailure.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذرت الطباعة التجريبية بالمحاكاة.'**
-  String get fakePrintFailure;
 
   /// No description provided for @saveSettingsButton.
   ///

@@ -19,6 +19,7 @@ import 'package:pointy_frontend/src/data/models/barcode_label.dart';
 import 'package:pointy_frontend/src/data/models/card_payment_receipt.dart';
 import 'package:pointy_frontend/src/data/models/device_settings.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
+import 'package:pointy_frontend/src/data/models/device_printers.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
@@ -398,19 +399,25 @@ void main() {
         port: 9100,
       );
 
-      final saveResult = await repository.saveDefaultPrinterConfig(
-        const PrinterConfig(
-          endpoint: endpoint,
-          isEnabled: false,
-          autoClaimJobs: false,
-        ),
+      final saveResult = await repository.saveDevicePrinters(
+        const DevicePrinters([
+          DevicePrinter(
+            id: 'counter',
+            config: PrinterConfig(
+              endpoint: endpoint,
+              isEnabled: false,
+              autoClaimJobs: false,
+            ),
+            roles: {PrinterRole.posReceipt},
+          ),
+        ]),
       );
       expect(saveResult, isA<Ok<void>>());
 
-      final loadResult = await repository.loadDefaultPrinterConfig();
+      final loadResult = await repository.loadReceiptPrinterConfig();
       final config = switch (loadResult) {
         Ok<PrinterConfig>() => loadResult.value,
-        Error<PrinterConfig>() => fail('Default printer should load'),
+        Error<PrinterConfig>() => fail('Receipt printer should load'),
       };
 
       expect(config.endpoint.address, '192.168.1.55');
@@ -440,49 +447,56 @@ void main() {
     }, DeviceUsageMode.multiUser);
   });
 
-  test('printing repository stores POS receipt role printer config', () async {
-    final store = installMemoryKeyValueStore({
-      'default_printer_config': jsonEncode({
-        'endpoint': {
-          'kind': 'serial',
-          'name': 'Legacy',
-          'address': '/dev/tty.legacy',
-        },
-      }),
-    });
-    final repository = PrintingRepository(_mockApiService());
+  test(
+    'printing repository migrates and mirrors the legacy receipt printer',
+    () async {
+      final store = installMemoryKeyValueStore({
+        'default_printer_config': jsonEncode({
+          'endpoint': {
+            'kind': 'serial',
+            'name': 'Legacy',
+            'address': '/dev/tty.legacy',
+          },
+        }),
+      });
+      final repository = PrintingRepository(_mockApiService());
 
-    final migratedResult = await repository.loadPrinterConfigForRole(
-      PrinterRole.posReceipt,
-    );
-    final migratedConfig = switch (migratedResult) {
-      Ok<PrinterConfig>(value: final config) => config,
-      Error<PrinterConfig>() => fail('POS receipt printer should load'),
-    };
-    expect(migratedConfig.endpoint.address, '/dev/tty.legacy');
+      final migratedResult = await repository.loadReceiptPrinterConfig();
+      final migratedConfig = switch (migratedResult) {
+        Ok<PrinterConfig>(value: final config) => config,
+        Error<PrinterConfig>() => fail('POS receipt printer should load'),
+      };
+      expect(migratedConfig.endpoint.address, '/dev/tty.legacy');
 
-    final saveResult = await repository.savePrinterConfigForRole(
-      PrinterRole.posReceipt,
-      const PrinterConfig(
-        endpoint: PrinterEndpoint(
-          kind: PrintTransportKind.wifi,
-          name: 'Counter',
-          address: '192.168.1.55',
-          port: 9100,
-        ),
-      ),
-    );
-    expect(saveResult, isA<Ok<void>>());
+      final saveResult = await repository.saveDevicePrinters(
+        const DevicePrinters([
+          DevicePrinter(
+            id: 'counter',
+            config: PrinterConfig(
+              endpoint: PrinterEndpoint(
+                kind: PrintTransportKind.wifi,
+                name: 'Counter',
+                address: '192.168.1.55',
+                port: 9100,
+              ),
+            ),
+            roles: {PrinterRole.posReceipt},
+          ),
+        ]),
+      );
+      expect(saveResult, isA<Ok<void>>());
 
-    expect(
-      await store.getString('printer_role_configs'),
-      contains('pos_receipt'),
-    );
-    expect(
-      await store.getString('default_printer_config'),
-      contains('192.168.1.55'),
-    );
-  });
+      // An older build still reads these two keys for its receipt printer.
+      expect(
+        await store.getString('printer_role_configs'),
+        contains('pos_receipt'),
+      );
+      expect(
+        await store.getString('default_printer_config'),
+        contains('192.168.1.55'),
+      );
+    },
+  );
 
   test(
     'printing settings view model tracks disconnected printer health',
@@ -502,10 +516,10 @@ void main() {
       );
       addTearDown(viewModel.dispose);
 
-      await viewModel.loadDefaultConfig();
+      await viewModel.load();
       await Future<void>.delayed(Duration.zero);
 
-      expect(viewModel.hasConfiguredPrinter, isTrue);
+      expect(viewModel.receiptPrinter, isNotNull);
       expect(viewModel.connectionState, PrinterConnectionState.disconnected);
       expect(viewModel.shouldWarnPrinterDisconnected, isTrue);
     },
@@ -886,6 +900,16 @@ void main() {
       wifiTransport: transport,
       fakeTransport: transport,
     );
+    await _saveOnlyPrinter(
+      repository,
+      const PrinterConfig(
+        endpoint: PrinterEndpoint(
+          kind: PrintTransportKind.serial,
+          name: 'Label printer',
+          address: '/dev/tty.label',
+        ),
+      ),
+    );
 
     final result = await repository.printBarcodeLabels([
       BarcodeLabelPrintLine.product(
@@ -920,7 +944,8 @@ void main() {
       wifiTransport: transport,
       fakeTransport: transport,
     );
-    await repository.saveDefaultPrinterConfig(
+    await _saveOnlyPrinter(
+      repository,
       const PrinterConfig(
         endpoint: PrinterEndpoint(
           kind: PrintTransportKind.wifi,
@@ -976,7 +1001,8 @@ void main() {
         wifiTransport: transport,
         fakeTransport: transport,
       );
-      await repository.saveDefaultPrinterConfig(
+      await _saveOnlyPrinter(
+        repository,
         const PrinterConfig(
           endpoint: PrinterEndpoint(
             kind: PrintTransportKind.wifi,
@@ -1021,7 +1047,8 @@ void main() {
         wifiTransport: transport,
         fakeTransport: transport,
       );
-      await repository.saveDefaultPrinterConfig(
+      await _saveOnlyPrinter(
+        repository,
         const PrinterConfig(
           endpoint: PrinterEndpoint(
             kind: PrintTransportKind.wifi,
@@ -3300,7 +3327,7 @@ void main() {
     );
   });
 
-  testWidgets('manager can configure and fake-test local printing', (
+  testWidgets('manager sees the migrated printer, tests it and edits it', (
     WidgetTester tester,
   ) async {
     _setFakePrinterConfig();
@@ -3316,32 +3343,45 @@ void main() {
 
     expect(find.text('إعدادات الجهاز'), findsWidgets);
     expect(find.text('استخدام الجهاز'), findsOneWidget);
-    expect(find.text('أدوار الطباعة'), findsOneWidget);
-    expect(find.text('إيصال نقطة البيع'), findsOneWidget);
-    expect(find.text('طابعة إيصال نقطة البيع'), findsOneWidget);
-    expect(find.text('طريقة الاتصال'), findsNothing);
-    expect(find.byType(SegmentedButton<PrintTransportKind>), findsNothing);
+    expect(find.text('الطابعات'), findsOneWidget);
+    expect(find.text('ماذا يُطبع وأين'), findsOneWidget);
     expect(find.text('تفعيل وكيل الطباعة المحلي'), findsNothing);
-    expect(find.text('استلام مهام الطباعة تلقائيًا'), findsNothing);
 
-    // The printing section sits below the price-checker section in the (now
-    // longer) device settings list; scroll each button into view before
-    // tapping so the tap lands inside the viewport.
-    await tester.ensureVisible(find.text('اختبار الطابعة'));
+    // The one printer an older build knew about is on the list, still doing
+    // receipts and labels; nobody does A4 documents yet.
+    final card = find.byKey(const ValueKey('printer_card_legacy-receipt'));
+    await tester.ensureVisible(card);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('اختبار الطابعة'));
-    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: card, matching: find.text('محاكاة الطابعة')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: card, matching: find.text('إيصالات البيع')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: card, matching: find.text('ملصقات الباركود')),
+      findsOneWidget,
+    );
+    expect(find.text('بلا طابعة — تُفتح نافذة الطباعة لتختار'), findsOneWidget);
 
-    expect(find.text('تم إرسال اختبار الطباعة.'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('اختيار طابعة الإيصال'));
+    await tester.tap(find.byKey(const ValueKey('printer_test_legacy-receipt')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('اختيار طابعة الإيصال'));
+    expect(find.text('أُرسلت الطباعة التجريبية'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('printer_menu_legacy-receipt')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تعديل').last);
+    // The editor looks for printers as it opens, and the platform's printer
+    // list never answers under test: its spinner would never settle.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
+    expect(find.text('تعديل الطابعة'), findsOneWidget);
     expect(find.text('اختر الطابعة'), findsOneWidget);
     expect(find.text('عرض الورق بالملليمتر'), findsOneWidget);
+    expect(find.text('ماذا تطبع هذه الطابعة؟'), findsOneWidget);
     final dropdownCenterY = tester
         .getCenter(find.byType(DropdownButtonFormField<String>))
         .dy;
@@ -3349,9 +3389,12 @@ void main() {
         .getCenter(find.byTooltip('اكتشاف الطابعات'))
         .dy;
     expect((dropdownCenterY - discoverButtonCenterY).abs(), lessThan(1));
-    await tester.tap(find.text('تم'));
+
+    // Nothing changed, so leaving asks nothing.
+    await tester.tap(find.text('إلغاء'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    expect(find.text('اختيار طابعة الإيصال'), findsOneWidget);
+    expect(find.text('تعديل الطابعة'), findsNothing);
+    expect(card, findsOneWidget);
   });
 
   testWidgets('cashier navigation hides management destinations', (
@@ -4456,6 +4499,9 @@ void main() {
   testWidgets('product details barcode labels ask for copy count', (
     WidgetTester tester,
   ) async {
+    // The device's one printer, from before printers had jobs: it keeps the
+    // label job it always had.
+    _setFakePrinterConfig();
     final product = const Product(
       id: 42,
       name: 'قهوة عربية',
@@ -7781,6 +7827,24 @@ Map<String, Object?> _printAuditEventJson(Map<String, Object?> body) {
     'created_at': '2026-05-15T09:11:00Z',
     'updated_at': '2026-05-15T09:12:00Z',
   };
+}
+
+/// Makes [config] this device's only printer, doing receipts and labels —
+/// what the one printer did before printers had jobs.
+Future<void> _saveOnlyPrinter(
+  PrintingRepository repository,
+  PrinterConfig config,
+) async {
+  final result = await repository.saveDevicePrinters(
+    DevicePrinters([
+      DevicePrinter(
+        id: 'only-printer',
+        config: config,
+        roles: const {PrinterRole.posReceipt, PrinterRole.barcodeLabels},
+      ),
+    ]),
+  );
+  expect(result, isA<Ok<void>>());
 }
 
 void _setFakePrinterConfig() {

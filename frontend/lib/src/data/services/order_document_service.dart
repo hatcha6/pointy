@@ -763,6 +763,35 @@ class OrderDocumentService {
     );
   }
 
+  /// Prints a finished full-page document built elsewhere (a business report,
+  /// a statement) on [endpoint] without a dialog when that printer can be
+  /// reached, and through the system print dialog otherwise — including when
+  /// no [endpoint] is given, which is how these documents always printed.
+  Future<bool> printA4Document({
+    required String jobName,
+    required LayoutCallback onLayout,
+    PdfPageFormat format = PdfPageFormat.a4,
+    bool usePrinterSettings = false,
+    PrinterEndpoint? endpoint,
+  }) async {
+    final printer = endpoint == null ? null : await _resolvePrinter(endpoint);
+    if (printer != null) {
+      return Printing.directPrintPdf(
+        printer: printer,
+        name: jobName,
+        format: format,
+        onLayout: onLayout,
+        usePrinterSettings: usePrinterSettings,
+      );
+    }
+    return Printing.layoutPdf(
+      name: jobName,
+      format: format,
+      usePrinterSettings: usePrinterSettings,
+      onLayout: onLayout,
+    );
+  }
+
   Future<Printer?> _resolvePrinter(PrinterEndpoint endpoint) async {
     final info = await Printing.info();
     if (!info.canListPrinters) {

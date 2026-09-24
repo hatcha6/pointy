@@ -2258,7 +2258,7 @@ class _StubPrintingRepository extends PrintingRepository {
   }
 
   @override
-  Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
+  Future<Result<PrinterConfig>> loadReceiptPrinterConfig() async {
     return Ok(
       const PrinterConfig(
         endpoint: PrinterEndpoint(
@@ -2299,7 +2299,7 @@ class _DriftingPrinterRepository extends PrintingRepository {
   Future<Map<int, PrinterConfig>> loadKitchenStationConfigs() async => const {};
 
   @override
-  Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
+  Future<Result<PrinterConfig>> loadReceiptPrinterConfig() async {
     configLoads += 1;
     if (configLoads > 1) {
       return Error(Exception('printer configuration unavailable'));

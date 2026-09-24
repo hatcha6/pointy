@@ -2,12 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/device_settings.dart';
-import '../../../data/repositories/prep_station_repository.dart';
 import '../../../data/repositories/price_checker_repository.dart';
-import '../../../data/repositories/printing_repository.dart';
 import '../../../data/services/auto_start_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -24,18 +21,15 @@ import '../../../shared/theme/theme_mode_controls.dart';
 import '../view_models/device_settings_view_model.dart';
 import '../../price_checker/views/price_checker_settings_panel.dart';
 import '../../printing/view_models/printing_settings_view_model.dart';
-import '../../printing/views/printing_settings_panel.dart';
+import '../../printing/views/printers_panel.dart';
 
 class DeviceSettingsScreen extends StatelessWidget {
   const DeviceSettingsScreen({
     super.key,
     required this.deviceSettingsViewModel,
     required this.printingSettingsViewModel,
-    required this.printingRepository,
-    required this.prepStationRepository,
     required this.priceCheckerController,
     required this.priceCheckerRepository,
-    required this.analyticsEngine,
     required this.capabilities,
     required this.navigation,
     this.onCameraWedgeChanged,
@@ -46,11 +40,8 @@ class DeviceSettingsScreen extends StatelessWidget {
 
   final DeviceSettingsViewModel deviceSettingsViewModel;
   final PrintingSettingsViewModel printingSettingsViewModel;
-  final PrintingRepository printingRepository;
-  final PrepStationRepository prepStationRepository;
   final PriceCheckerModeController priceCheckerController;
   final PriceCheckerRepository priceCheckerRepository;
-  final AnalyticsEngine? analyticsEngine;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -66,7 +57,7 @@ class DeviceSettingsScreen extends StatelessWidget {
           builder: (context, _) {
             final isLoading =
                 deviceSettingsViewModel.isLoading ||
-                printingSettingsViewModel.isLoadingConfig;
+                printingSettingsViewModel.isLoading;
 
             return PointyScaffold(
               drawer: AppNavigationDrawer(
@@ -88,7 +79,7 @@ class DeviceSettingsScreen extends StatelessWidget {
                           ? null
                           : () {
                               deviceSettingsViewModel.loadSettings();
-                              printingSettingsViewModel.loadDefaultConfig();
+                              printingSettingsViewModel.load();
                             },
                       icon: const Icon(Icons.sync),
                     ),
@@ -100,12 +91,9 @@ class DeviceSettingsScreen extends StatelessWidget {
                 child: _DeviceSettingsBody(
                   deviceSettingsViewModel: deviceSettingsViewModel,
                   printingSettingsViewModel: printingSettingsViewModel,
-                  printingRepository: printingRepository,
-                  prepStationRepository: prepStationRepository,
                   capabilities: capabilities,
                   priceCheckerController: priceCheckerController,
                   priceCheckerRepository: priceCheckerRepository,
-                  analyticsEngine: analyticsEngine,
                   onCameraWedgeChanged: onCameraWedgeChanged,
                 ),
               ),
@@ -121,12 +109,9 @@ class _DeviceSettingsBody extends StatelessWidget {
   const _DeviceSettingsBody({
     required this.deviceSettingsViewModel,
     required this.printingSettingsViewModel,
-    required this.printingRepository,
-    required this.prepStationRepository,
     required this.priceCheckerController,
     required this.priceCheckerRepository,
     required this.capabilities,
-    required this.analyticsEngine,
     this.onCameraWedgeChanged,
   });
 
@@ -136,12 +121,9 @@ class _DeviceSettingsBody extends StatelessWidget {
 
   final DeviceSettingsViewModel deviceSettingsViewModel;
   final PrintingSettingsViewModel printingSettingsViewModel;
-  final PrintingRepository printingRepository;
-  final PrepStationRepository prepStationRepository;
   final AuthorizationCapabilities capabilities;
   final PriceCheckerModeController priceCheckerController;
   final PriceCheckerRepository priceCheckerRepository;
-  final AnalyticsEngine? analyticsEngine;
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +131,7 @@ class _DeviceSettingsBody extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
 
     if (deviceSettingsViewModel.isLoading ||
-        printingSettingsViewModel.isLoadingConfig) {
+        printingSettingsViewModel.isLoading) {
       return const PointyLoadingArea();
     }
     final productSearchModes = ProductSearchModeScope.maybeOf(context);
@@ -241,44 +223,9 @@ class _DeviceSettingsBody extends StatelessWidget {
           child: PointyDetailSection(
             icon: Icons.print_outlined,
             title: l10n.devicePrinterSectionTitle,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (printingSettingsViewModel.hasConfigLoadError) ...[
-                  PointyErrorState(
-                    title: l10n.deviceSettingsLoadError,
-                    icon: Icons.print_disabled_outlined,
-                  ),
-                  SizedBox(height: spacing.md),
-                ],
-                PrintingSettingsPanel(viewModel: printingSettingsViewModel),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(height: spacing.lg),
-        AdaptiveMaxWidth(
-          width: AppContentWidth.form,
-          child: PointyDetailSection(
-            icon: Icons.dinner_dining_outlined,
-            title: l10n.kitchenPrintersSectionTitle,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(bottom: spacing.sm),
-                  child: Text(
-                    l10n.kitchenPrintersSectionHint,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                KitchenPrintersPanel(
-                  printingRepository: printingRepository,
-                  prepStationRepository: prepStationRepository,
-                  capabilities: capabilities,
-                  analyticsEngine: analyticsEngine,
-                ),
-              ],
+            child: PrintersPanel(
+              viewModel: printingSettingsViewModel,
+              capabilities: capabilities,
             ),
           ),
         ),

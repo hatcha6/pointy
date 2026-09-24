@@ -326,6 +326,8 @@ class PosCartPane extends StatelessWidget {
       message = switch (outcome.printStatus) {
         InvoicePrintStatus.printed => '$message ${l10n.invoicePrintSuccess}',
         InvoicePrintStatus.failed => '$message ${l10n.invoicePrintError}',
+        InvoicePrintStatus.noPrinter =>
+          '$message ${l10n.invoicePrintNoPrinter}',
         InvoicePrintStatus.notRequested => message,
       };
     }

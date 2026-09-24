@@ -3277,7 +3277,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopTypeRetailDescription => 'متجر تجزئة مع مراقبة مخزون صارمة.';
 
   @override
-  String get devicePrinterSectionTitle => 'أدوار الطباعة';
+  String get devicePrinterSectionTitle => 'الطابعات';
 
   @override
   String get shopIdentitySectionTitle => 'هوية المتجر';
@@ -4689,21 +4689,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get prepStationDeleteError => 'تعذّر حذف المحطة.';
 
   @override
-  String get kitchenPrintersSectionTitle => 'طابعات المطبخ';
-
-  @override
-  String get kitchenPrintersSectionHint =>
-      'اربط طابعة حرارية بكل محطة تحضير يخدمها هذا الجهاز.';
-
-  @override
-  String get kitchenPrintersNoStations =>
-      'لا توجد محطات تحضير. أضِفها من إعدادات المتجر.';
-
-  @override
   String get kitchenPrintersLoadError => 'تعذّر تحميل محطات التحضير.';
-
-  @override
-  String get kitchenStationNotConfigured => 'لم تُضبط طابعة لهذه المحطة.';
 
   @override
   String get enableJobTrackingTitle => 'صفحة تتبع للزبائن';
@@ -5854,28 +5840,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get systemDefaultPrinterLabel => 'طابعة النظام الافتراضية';
 
   @override
-  String get posReceiptPrinterRoleTitle => 'إيصال نقطة البيع';
-
-  @override
-  String get posReceiptPrinterRoleDescription =>
-      'الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.';
-
-  @override
-  String get configurePrinterRoleButton => 'اختيار طابعة الإيصال';
-
-  @override
-  String get printerRoleDialogTitle => 'طابعة إيصال نقطة البيع';
-
-  @override
-  String get printerRoleDialogDoneButton => 'تم';
-
-  @override
-  String get selectedPrinterLabel => 'طابعة إيصال نقطة البيع';
-
-  @override
-  String get noSelectedPrinter => 'لم يتم اختيار طابعة';
-
-  @override
   String get paperWidthLabel => 'عرض الورق بالملليمتر';
 
   @override
@@ -5958,18 +5922,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerLabelDpiLabel => 'الدقة DPI';
 
   @override
-  String printerBarcodeLanguageSummary(String language) {
-    return 'لغة الملصقات: $language';
-  }
-
-  @override
-  String printerLabelGeometrySummary(int width, int height, int gap, int dpi) {
-    return 'الملصق: $width×$height مم، فاصل $gap مم، $dpi DPI';
-  }
-
-  @override
-  String get barcodeLabelLanguageDetected =>
-      'تم اكتشاف لغة طابعة الملصقات وحفظها.';
+  String get barcodeLabelLanguageDetected => 'تم اكتشاف لغة طابعة الملصقات.';
 
   @override
   String get barcodeLabelLanguageInferred =>
@@ -6003,37 +5956,251 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checkPrinterConnectionButton => 'فحص الاتصال';
 
   @override
-  String get printerStatusUnknown => 'لم يتم فحص اتصال الطابعة بعد.';
-
-  @override
-  String get printerStatusNotConfigured =>
-      'اختر طابعة إيصال حتى يبدأ الجهاز بفحص اتصالها.';
-
-  @override
-  String get printerStatusChecking => 'جار فحص اتصال الطابعة...';
-
-  @override
-  String get printerStatusConnected => 'طابعة الإيصال متصلة وجاهزة.';
-
-  @override
-  String get printerStatusDisconnected =>
-      'تعذر الاتصال بطابعة الإيصال. تحقق من تشغيلها واتصالها.';
-
-  @override
   String get printerDisconnectedSnackBar =>
       'تعذر الاتصال بطابعة إيصال نقطة البيع.';
 
   @override
-  String get testPrinterButton => 'اختبار الطابعة';
+  String get printersSectionHint =>
+      'أضف كل طابعة موصولة بهذا الجهاز واختر ما تطبعه. تذهب كل طباعة إلى طابعتها تلقائيًا، فلا حاجة للعودة إلى الإعدادات عند طباعة ملصق أو تقرير.';
 
   @override
-  String get testingPrinterButton => 'جار الاختبار...';
+  String get printerJobsTitle => 'ماذا يُطبع وأين';
 
   @override
-  String get testBarcodeLabelPrinterButton => 'اختبار ملصق باركود';
+  String get printerRoleReceipts => 'إيصالات البيع';
 
   @override
-  String get testingBarcodeLabelPrinterButton => 'جار اختبار الملصق...';
+  String get printerRoleReceiptsDescription =>
+      'فواتير البيع وإعادة طباعتها، وسندات القبض، وتقرير إغلاق الوردية.';
+
+  @override
+  String get printerRoleLabels => 'ملصقات الباركود';
+
+  @override
+  String get printerRoleLabelsDescription =>
+      'ملصقات الباركود والأسعار للمنتجات.';
+
+  @override
+  String get printerRoleDocuments => 'المستندات والتقارير A4';
+
+  @override
+  String get printerRoleDocumentsDescription =>
+      'التقارير وأوامر الشراء وتقرير الوردية A4 وسندات الأمانات.';
+
+  @override
+  String printerRoleKitchen(String station) {
+    return 'المطبخ: $station';
+  }
+
+  @override
+  String get printerRoleKitchenDescription => 'تذاكر التحضير لهذه المحطة.';
+
+  @override
+  String get printerRoleReceiptsUnassigned => 'بلا طابعة — لن تُطبع الإيصالات';
+
+  @override
+  String get printerRoleLabelsUnassigned => 'بلا طابعة — لن تُطبع الملصقات';
+
+  @override
+  String get printerRoleDocumentsUnassigned =>
+      'بلا طابعة — تُفتح نافذة الطباعة لتختار';
+
+  @override
+  String get printerRoleKitchenUnassigned =>
+      'بلا طابعة هنا — تُترك التذاكر لجهاز آخر';
+
+  @override
+  String get printerAssignNone => 'بلا طابعة';
+
+  @override
+  String get printerAssignNeedsDocumentPrinter => 'تحتاج طابعة نظام (PDF)';
+
+  @override
+  String get printerAssignNeedsThermalPrinter => 'تحتاج طابعة حرارية';
+
+  @override
+  String get printersListTitle => 'الطابعات على هذا الجهاز';
+
+  @override
+  String get addPrinterButton => 'إضافة طابعة';
+
+  @override
+  String get printersEmptyTitle => 'لا توجد طابعات على هذا الجهاز بعد';
+
+  @override
+  String get printersEmptyMessage =>
+      'ابدأ بطابعة الإيصالات، ثم أضف أي طابعة أخرى — طابعة ملصقات أو طابعة A4 — واختر ما تطبعه كل واحدة.';
+
+  @override
+  String get printerNoJobs => 'بلا مهمة — لا تطبع شيئًا';
+
+  @override
+  String get printerTestButton => 'طباعة تجريبية';
+
+  @override
+  String get printerMoreActionsTooltip => 'خيارات الطابعة';
+
+  @override
+  String get printerEditAction => 'تعديل';
+
+  @override
+  String get printerRemoveAction => 'إزالة';
+
+  @override
+  String get printerStateConnected => 'متصلة';
+
+  @override
+  String get printerStateDisconnected => 'غير متصلة';
+
+  @override
+  String get printerStateChecking => 'جارٍ الفحص';
+
+  @override
+  String get printerStateUnknown => 'لم تُفحص';
+
+  @override
+  String removePrinterTitle(String name) {
+    return 'إزالة «$name»؟';
+  }
+
+  @override
+  String get removePrinterMessage =>
+      'لن يطبع هذا الجهاز على هذه الطابعة بعد الآن.';
+
+  @override
+  String removePrinterJobsMessage(String jobs) {
+    return 'لن يطبع هذا الجهاز على هذه الطابعة بعد الآن، وستبقى هذه المهام بلا طابعة حتى تعيّنها لطابعة أخرى: $jobs.';
+  }
+
+  @override
+  String get removePrinterConfirm => 'إزالة الطابعة';
+
+  @override
+  String printerAddedMessage(String name) {
+    return 'أُضيفت «$name».';
+  }
+
+  @override
+  String printerSavedMessage(String name) {
+    return 'حُفظت «$name».';
+  }
+
+  @override
+  String printerRemovedMessage(String name) {
+    return 'أُزيلت «$name».';
+  }
+
+  @override
+  String get printerTestDocumentSent => 'أُرسلت صفحة A4 التجريبية.';
+
+  @override
+  String get printerTestKitchenSent => 'أُرسلت تذكرة المطبخ التجريبية.';
+
+  @override
+  String get printerTestPassedShort => 'أُرسلت الطباعة التجريبية';
+
+  @override
+  String get printerTestFailedShort => 'تعذّرت الطباعة التجريبية';
+
+  @override
+  String get addPrinterTitle => 'إضافة طابعة';
+
+  @override
+  String get editPrinterTitle => 'تعديل الطابعة';
+
+  @override
+  String get printerDeviceSectionTitle => 'الطابعة';
+
+  @override
+  String get printerDeviceSectionHint =>
+      'اختر الطابعة من القائمة. إن لم تظهر طابعة شبكة، أضفها بعنوانها.';
+
+  @override
+  String get printerManualNetworkButton => 'إضافة طابعة شبكة بعنوانها';
+
+  @override
+  String get printerNetworkAddressLabel => 'عنوان IP';
+
+  @override
+  String get printerNetworkPortLabel => 'المنفذ';
+
+  @override
+  String get printerNetworkUseButton => 'استخدام العنوان';
+
+  @override
+  String get printerNameLabel => 'اسم الطابعة';
+
+  @override
+  String get printerNameHelper =>
+      'اسم يميّزها بين طابعاتك، مثل «الكاشير» أو «الملصقات».';
+
+  @override
+  String get printerJobsSectionTitle => 'ماذا تطبع هذه الطابعة؟';
+
+  @override
+  String get printerJobsNoneSelected =>
+      'لن تطبع هذه الطابعة شيئًا حتى تختار لها مهمة.';
+
+  @override
+  String printerJobMovesFrom(String job, String printer) {
+    return 'ستنتقل «$job» من «$printer» إلى هذه الطابعة.';
+  }
+
+  @override
+  String printerJobCurrentlyOn(String printer) {
+    return 'تطبعها «$printer» الآن.';
+  }
+
+  @override
+  String printerDuplicateDevice(String printer) {
+    return 'هذه الطابعة مضافة بالفعل باسم «$printer». أعطِ المهمة لتلك الطابعة بدل إضافتها مرة ثانية.';
+  }
+
+  @override
+  String get printerKitchenStationsLabel => 'تذاكر المطبخ';
+
+  @override
+  String get printerJobDocumentsNeedsPdf =>
+      'المستندات والتقارير تُطبع عبر تعريف الطابعة (PDF)، فلا تناسبها طابعة حرارية مباشرة.';
+
+  @override
+  String get printerJobKitchenNeedsThermal =>
+      'تذاكر المطبخ تحتاج طابعة حرارية.';
+
+  @override
+  String get printerReceiptSettingsTitle => 'إعدادات الإيصال';
+
+  @override
+  String get printerAdvancedSettingsTitle => 'إعدادات متقدمة';
+
+  @override
+  String get printerTestSectionTitle => 'جرّبها';
+
+  @override
+  String get printerTestReceiptButton => 'إيصال تجريبي';
+
+  @override
+  String get printerTestLabelButton => 'ملصق تجريبي';
+
+  @override
+  String get printerTestDocumentButton => 'صفحة A4 تجريبية';
+
+  @override
+  String get printerTestKitchenButton => 'تذكرة مطبخ تجريبية';
+
+  @override
+  String get printerTestNeedsDevice => 'اختر الطابعة أولًا لتجربتها.';
+
+  @override
+  String get addPrinterConfirmButton => 'إضافة الطابعة';
+
+  @override
+  String get invoicePrintNoPrinter =>
+      'لا توجد طابعة إيصالات على هذا الجهاز. عيّنها من إعدادات الجهاز ← الطابعات.';
+
+  @override
+  String get barcodeLabelNoPrinter =>
+      'لا توجد طابعة ملصقات على هذا الجهاز. عيّنها من إعدادات الجهاز ← الطابعات.';
 
   @override
   String get fakePrintButton => 'طباعة تجريبية بالمحاكاة';
@@ -6055,12 +6222,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get printerTestUnsupported =>
       'طريقة الاتصال غير متاحة على هذا الجهاز.';
-
-  @override
-  String get fakePrintSuccess => 'نجحت الطباعة التجريبية بالمحاكاة.';
-
-  @override
-  String get fakePrintFailure => 'تعذرت الطباعة التجريبية بالمحاكاة.';
 
   @override
   String get saveSettingsButton => 'حفظ الإعدادات';

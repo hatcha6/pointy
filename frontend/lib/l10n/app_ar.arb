@@ -2055,7 +2055,7 @@
   "shopTypeBakeryDescription": "عمليات المطبخ والإنتاج للتحضير المسبق.",
   "shopTypeRetail": "ملابس وتجزئة",
   "shopTypeRetailDescription": "متجر تجزئة مع مراقبة مخزون صارمة.",
-  "devicePrinterSectionTitle": "أدوار الطباعة",
+  "devicePrinterSectionTitle": "الطابعات",
   "shopIdentitySectionTitle": "هوية المتجر",
   "shopBehaviorSectionTitle": "سلوك التطبيق",
   "receiptSettingsSectionTitle": "الإيصالات",
@@ -2734,11 +2734,7 @@
   "prepStationDeleteMessage": "لن تُطبع تذاكر هذه المحطة بعد الآن.",
   "prepStationSaveError": "تعذّر حفظ المحطة.",
   "prepStationDeleteError": "تعذّر حذف المحطة.",
-  "kitchenPrintersSectionTitle": "طابعات المطبخ",
-  "kitchenPrintersSectionHint": "اربط طابعة حرارية بكل محطة تحضير يخدمها هذا الجهاز.",
-  "kitchenPrintersNoStations": "لا توجد محطات تحضير. أضِفها من إعدادات المتجر.",
   "kitchenPrintersLoadError": "تعذّر تحميل محطات التحضير.",
-  "kitchenStationNotConfigured": "لم تُضبط طابعة لهذه المحطة.",
   "enableJobTrackingTitle": "صفحة تتبع للزبائن",
   "enableJobTrackingDescription": "رابط عام يطّلع منه الزبون على حالة مهمته دون الاتصال بك.",
   "workflowsTitle": "مراحل العمل",
@@ -3503,13 +3499,6 @@
   "printerBarcodeLabelRotation180": "180°",
   "printerBarcodeLabelRotation270": "270° يسار",
   "systemDefaultPrinterLabel": "طابعة النظام الافتراضية",
-  "posReceiptPrinterRoleTitle": "إيصال نقطة البيع",
-  "posReceiptPrinterRoleDescription": "الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.",
-  "configurePrinterRoleButton": "اختيار طابعة الإيصال",
-  "printerRoleDialogTitle": "طابعة إيصال نقطة البيع",
-  "printerRoleDialogDoneButton": "تم",
-  "selectedPrinterLabel": "طابعة إيصال نقطة البيع",
-  "noSelectedPrinter": "لم يتم اختيار طابعة",
   "paperWidthLabel": "عرض الورق بالملليمتر",
   "printerCodeTableLabel": "جدول ترميز الطابعة",
   "printerCapabilityProfileLabel": "ملف تعريف الطابعة",
@@ -3536,34 +3525,7 @@
   "printerBarcodeLabelHeightHelper": "بوحدات الصفحة لا بمليمترات الورق: تغذية هذه الطابعات أقصر من قياسها الاسمي (٩٪ في LPQ80). اضرب الارتفاع المقاس بالمسطرة في: الخطوة ÷ (الملصق + الفاصل بالمسطرة). للتحقّق: الارتفاع + الفاصل = الخطوة.",
   "printerLabelGapLabel": "الفاصل مم",
   "printerLabelDpiLabel": "الدقة DPI",
-  "printerBarcodeLanguageSummary": "لغة الملصقات: {language}",
-  "@printerBarcodeLanguageSummary": {
-    "description": "Selected barcode label printer language summary.",
-    "placeholders": {
-      "language": {
-        "type": "String"
-      }
-    }
-  },
-  "printerLabelGeometrySummary": "الملصق: {width}×{height} مم، فاصل {gap} مم، {dpi} DPI",
-  "@printerLabelGeometrySummary": {
-    "description": "Barcode label dimensions and resolution summary.",
-    "placeholders": {
-      "width": {
-        "type": "int"
-      },
-      "height": {
-        "type": "int"
-      },
-      "gap": {
-        "type": "int"
-      },
-      "dpi": {
-        "type": "int"
-      }
-    }
-  },
-  "barcodeLabelLanguageDetected": "تم اكتشاف لغة طابعة الملصقات وحفظها.",
+  "barcodeLabelLanguageDetected": "تم اكتشاف لغة طابعة الملصقات.",
   "barcodeLabelLanguageInferred": "تم تخمين لغة طابعة الملصقات من اسم الطابعة. راجعها إذا لم تطبع الملصقات بشكل صحيح.",
   "barcodeLabelLanguageDetectionUnavailable": "تعذر اكتشاف لغة الملصقات تلقائيًا. اختر اللغة يدويًا لتجنب إرسال أوامر غير مناسبة.",
   "barcodeLabelLanguageDetectionFailed": "فشل اكتشاف لغة طابعة الملصقات. تحقق من الاتصال أو اختر اللغة يدويًا.",
@@ -3573,24 +3535,224 @@
   "discoverPrintersButton": "اكتشاف الطابعات",
   "printerDiscoveryError": "تعذر اكتشاف الطابعات. تحقق من الاتصال وحاول مرة أخرى.",
   "checkPrinterConnectionButton": "فحص الاتصال",
-  "printerStatusUnknown": "لم يتم فحص اتصال الطابعة بعد.",
-  "printerStatusNotConfigured": "اختر طابعة إيصال حتى يبدأ الجهاز بفحص اتصالها.",
-  "printerStatusChecking": "جار فحص اتصال الطابعة...",
-  "printerStatusConnected": "طابعة الإيصال متصلة وجاهزة.",
-  "printerStatusDisconnected": "تعذر الاتصال بطابعة الإيصال. تحقق من تشغيلها واتصالها.",
   "printerDisconnectedSnackBar": "تعذر الاتصال بطابعة إيصال نقطة البيع.",
-  "testPrinterButton": "اختبار الطابعة",
-  "testingPrinterButton": "جار الاختبار...",
-  "testBarcodeLabelPrinterButton": "اختبار ملصق باركود",
-  "testingBarcodeLabelPrinterButton": "جار اختبار الملصق...",
+  "printersSectionHint": "أضف كل طابعة موصولة بهذا الجهاز واختر ما تطبعه. تذهب كل طباعة إلى طابعتها تلقائيًا، فلا حاجة للعودة إلى الإعدادات عند طباعة ملصق أو تقرير.",
+  "@printersSectionHint": {
+    "description": "Intro line of the Printers section in device settings."
+  },
+  "printerJobsTitle": "ماذا يُطبع وأين",
+  "@printerJobsTitle": {
+    "description": "Heading of the job-to-printer summary in device settings."
+  },
+  "printerRoleReceipts": "إيصالات البيع",
+  "@printerRoleReceipts": {
+    "description": "Printer job: sale receipts, their reprints, payment receipts and the shift report slip."
+  },
+  "printerRoleReceiptsDescription": "فواتير البيع وإعادة طباعتها، وسندات القبض، وتقرير إغلاق الوردية.",
+  "printerRoleLabels": "ملصقات الباركود",
+  "@printerRoleLabels": {
+    "description": "Printer job: barcode stickers."
+  },
+  "printerRoleLabelsDescription": "ملصقات الباركود والأسعار للمنتجات.",
+  "printerRoleDocuments": "المستندات والتقارير A4",
+  "@printerRoleDocuments": {
+    "description": "Printer job: full-page documents (reports, purchase orders, A4 shift report, consignment papers)."
+  },
+  "printerRoleDocumentsDescription": "التقارير وأوامر الشراء وتقرير الوردية A4 وسندات الأمانات.",
+  "printerRoleKitchen": "المطبخ: {station}",
+  "@printerRoleKitchen": {
+    "description": "Printer job: kitchen chits for one prep station.",
+    "placeholders": {
+      "station": {
+        "type": "String"
+      }
+    }
+  },
+  "printerRoleKitchenDescription": "تذاكر التحضير لهذه المحطة.",
+  "printerRoleReceiptsUnassigned": "بلا طابعة — لن تُطبع الإيصالات",
+  "@printerRoleReceiptsUnassigned": {
+    "description": "Status of the receipts job when no printer on the device does it."
+  },
+  "printerRoleLabelsUnassigned": "بلا طابعة — لن تُطبع الملصقات",
+  "@printerRoleLabelsUnassigned": {
+    "description": "Status of the barcode-labels job when no printer on the device does it."
+  },
+  "printerRoleDocumentsUnassigned": "بلا طابعة — تُفتح نافذة الطباعة لتختار",
+  "@printerRoleDocumentsUnassigned": {
+    "description": "Status of the documents job when no printer does it: the system print dialog opens instead."
+  },
+  "printerRoleKitchenUnassigned": "بلا طابعة هنا — تُترك التذاكر لجهاز آخر",
+  "@printerRoleKitchenUnassigned": {
+    "description": "Status of a kitchen station job with no printer on this device: another device may print its chits."
+  },
+  "printerAssignNone": "بلا طابعة",
+  "@printerAssignNone": {
+    "description": "Menu option that leaves a print job without a printer on this device."
+  },
+  "printerAssignNeedsDocumentPrinter": "تحتاج طابعة نظام (PDF)",
+  "@printerAssignNeedsDocumentPrinter": {
+    "description": "Why a thermal printer cannot take the documents job."
+  },
+  "printerAssignNeedsThermalPrinter": "تحتاج طابعة حرارية",
+  "@printerAssignNeedsThermalPrinter": {
+    "description": "Why a driver/PDF printer cannot take a kitchen job."
+  },
+  "printersListTitle": "الطابعات على هذا الجهاز",
+  "addPrinterButton": "إضافة طابعة",
+  "printersEmptyTitle": "لا توجد طابعات على هذا الجهاز بعد",
+  "printersEmptyMessage": "ابدأ بطابعة الإيصالات، ثم أضف أي طابعة أخرى — طابعة ملصقات أو طابعة A4 — واختر ما تطبعه كل واحدة.",
+  "printerNoJobs": "بلا مهمة — لا تطبع شيئًا",
+  "@printerNoJobs": {
+    "description": "Shown on a printer that has no job assigned."
+  },
+  "printerTestButton": "طباعة تجريبية",
+  "printerMoreActionsTooltip": "خيارات الطابعة",
+  "printerEditAction": "تعديل",
+  "printerRemoveAction": "إزالة",
+  "printerStateConnected": "متصلة",
+  "@printerStateConnected": {
+    "description": "Short printer connection state."
+  },
+  "printerStateDisconnected": "غير متصلة",
+  "@printerStateDisconnected": {
+    "description": "Short printer connection state."
+  },
+  "printerStateChecking": "جارٍ الفحص",
+  "@printerStateChecking": {
+    "description": "Short printer connection state."
+  },
+  "printerStateUnknown": "لم تُفحص",
+  "@printerStateUnknown": {
+    "description": "Short printer connection state."
+  },
+  "removePrinterTitle": "إزالة «{name}»؟",
+  "@removePrinterTitle": {
+    "description": "Confirmation title for removing a printer from the device.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "removePrinterMessage": "لن يطبع هذا الجهاز على هذه الطابعة بعد الآن.",
+  "removePrinterJobsMessage": "لن يطبع هذا الجهاز على هذه الطابعة بعد الآن، وستبقى هذه المهام بلا طابعة حتى تعيّنها لطابعة أخرى: {jobs}.",
+  "@removePrinterJobsMessage": {
+    "description": "Removal confirmation listing the jobs left without a printer.",
+    "placeholders": {
+      "jobs": {
+        "type": "String"
+      }
+    }
+  },
+  "removePrinterConfirm": "إزالة الطابعة",
+  "printerAddedMessage": "أُضيفت «{name}».",
+  "@printerAddedMessage": {
+    "description": "",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "printerSavedMessage": "حُفظت «{name}».",
+  "@printerSavedMessage": {
+    "description": "",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "printerRemovedMessage": "أُزيلت «{name}».",
+  "@printerRemovedMessage": {
+    "description": "",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "printerTestDocumentSent": "أُرسلت صفحة A4 التجريبية.",
+  "printerTestKitchenSent": "أُرسلت تذكرة المطبخ التجريبية.",
+  "printerTestPassedShort": "أُرسلت الطباعة التجريبية",
+  "@printerTestPassedShort": {
+    "description": "Short pill on a printer card after a test print was sent."
+  },
+  "printerTestFailedShort": "تعذّرت الطباعة التجريبية",
+  "@printerTestFailedShort": {
+    "description": "Short pill on a printer card after a test print failed."
+  },
+  "addPrinterTitle": "إضافة طابعة",
+  "editPrinterTitle": "تعديل الطابعة",
+  "printerDeviceSectionTitle": "الطابعة",
+  "@printerDeviceSectionTitle": {
+    "description": "Editor section that picks the physical printer."
+  },
+  "printerDeviceSectionHint": "اختر الطابعة من القائمة. إن لم تظهر طابعة شبكة، أضفها بعنوانها.",
+  "printerManualNetworkButton": "إضافة طابعة شبكة بعنوانها",
+  "printerNetworkAddressLabel": "عنوان IP",
+  "printerNetworkPortLabel": "المنفذ",
+  "printerNetworkUseButton": "استخدام العنوان",
+  "printerNameLabel": "اسم الطابعة",
+  "printerNameHelper": "اسم يميّزها بين طابعاتك، مثل «الكاشير» أو «الملصقات».",
+  "printerJobsSectionTitle": "ماذا تطبع هذه الطابعة؟",
+  "printerJobsNoneSelected": "لن تطبع هذه الطابعة شيئًا حتى تختار لها مهمة.",
+  "printerJobMovesFrom": "ستنتقل «{job}» من «{printer}» إلى هذه الطابعة.",
+  "@printerJobMovesFrom": {
+    "description": "Explains that selecting a job takes it from the printer that has it.",
+    "placeholders": {
+      "job": {
+        "type": "String"
+      },
+      "printer": {
+        "type": "String"
+      }
+    }
+  },
+  "printerJobCurrentlyOn": "تطبعها «{printer}» الآن.",
+  "@printerJobCurrentlyOn": {
+    "description": "Which printer does a job now, shown beside a job this printer does not do.",
+    "placeholders": {
+      "printer": {
+        "type": "String"
+      }
+    }
+  },
+  "printerDuplicateDevice": "هذه الطابعة مضافة بالفعل باسم «{printer}». أعطِ المهمة لتلك الطابعة بدل إضافتها مرة ثانية.",
+  "@printerDuplicateDevice": {
+    "description": "Warns that the chosen device is already another printer on this device.",
+    "placeholders": {
+      "printer": {
+        "type": "String"
+      }
+    }
+  },
+  "printerKitchenStationsLabel": "تذاكر المطبخ",
+  "printerJobDocumentsNeedsPdf": "المستندات والتقارير تُطبع عبر تعريف الطابعة (PDF)، فلا تناسبها طابعة حرارية مباشرة.",
+  "printerJobKitchenNeedsThermal": "تذاكر المطبخ تحتاج طابعة حرارية.",
+  "printerReceiptSettingsTitle": "إعدادات الإيصال",
+  "printerAdvancedSettingsTitle": "إعدادات متقدمة",
+  "printerTestSectionTitle": "جرّبها",
+  "printerTestReceiptButton": "إيصال تجريبي",
+  "printerTestLabelButton": "ملصق تجريبي",
+  "printerTestDocumentButton": "صفحة A4 تجريبية",
+  "printerTestKitchenButton": "تذكرة مطبخ تجريبية",
+  "printerTestNeedsDevice": "اختر الطابعة أولًا لتجربتها.",
+  "addPrinterConfirmButton": "إضافة الطابعة",
+  "invoicePrintNoPrinter": "لا توجد طابعة إيصالات على هذا الجهاز. عيّنها من إعدادات الجهاز ← الطابعات.",
+  "@invoicePrintNoPrinter": {
+    "description": "Appended to the checkout message when the sale should have printed but no printer does receipts."
+  },
+  "barcodeLabelNoPrinter": "لا توجد طابعة ملصقات على هذا الجهاز. عيّنها من إعدادات الجهاز ← الطابعات.",
+  "@barcodeLabelNoPrinter": {
+    "description": "Shown when printing labels while no printer on the device does barcode labels."
+  },
   "fakePrintButton": "طباعة تجريبية بالمحاكاة",
   "printerTestSuccess": "تم إرسال اختبار الطباعة.",
   "printerTestFailure": "تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.",
   "barcodeLabelTestSuccess": "تم إرسال ملصق اختبار الباركود.",
   "barcodeLabelTestFailure": "تعذر إرسال ملصق اختبار الباركود. تحقق من لغة الملصقات والإعدادات.",
   "printerTestUnsupported": "طريقة الاتصال غير متاحة على هذا الجهاز.",
-  "fakePrintSuccess": "نجحت الطباعة التجريبية بالمحاكاة.",
-  "fakePrintFailure": "تعذرت الطباعة التجريبية بالمحاكاة.",
   "saveSettingsButton": "حفظ الإعدادات",
   "catalogTitle": "المنتجات",
   "catalogManagementTitle": "إدارة المنتجات",

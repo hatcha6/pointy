@@ -101,23 +101,6 @@ ReceiptCutMode receiptCutModeFromJson(Object? value) {
   };
 }
 
-enum PrinterRole { posReceipt, kitchen }
-
-PrinterRole printerRoleFromJson(Object? value) {
-  return switch (value?.toString()) {
-    'pos_receipt' || 'posReceipt' => PrinterRole.posReceipt,
-    'kitchen' => PrinterRole.kitchen,
-    _ => PrinterRole.posReceipt,
-  };
-}
-
-String printerRoleToJson(PrinterRole role) {
-  return switch (role) {
-    PrinterRole.posReceipt => 'pos_receipt',
-    PrinterRole.kitchen => 'kitchen',
-  };
-}
-
 class PrinterEndpoint {
   const PrinterEndpoint({
     required this.kind,
@@ -218,6 +201,25 @@ class PrinterEndpoint {
   /// as a compact receipt at [pdfPageSize] rather than a full A4 page.
   bool get usesReceiptStylePdf =>
       outputMode == PrinterOutputMode.pdfA4 && pdfPageSize != PdfPageSize.a4;
+
+  /// Whether this names an actual device. The out-of-the-box config is a
+  /// serial port nobody chose, and that must not read as a printer.
+  bool get isConfigured {
+    final trimmedName = name.trim();
+    final trimmedAddress = address.trim();
+    if (kind == PrintTransportKind.system || usesDocumentInvoice) {
+      return true;
+    }
+    if (kind == PrintTransportKind.fake) {
+      return trimmedName.isNotEmpty || trimmedAddress.isNotEmpty;
+    }
+    if (trimmedAddress.isEmpty) {
+      return false;
+    }
+    return kind != PrintTransportKind.serial ||
+        trimmedName.isNotEmpty ||
+        trimmedAddress != '/dev/tty.usbserial';
+  }
 
   factory PrinterEndpoint.fromJson(Map<String, Object?> json) {
     return PrinterEndpoint(

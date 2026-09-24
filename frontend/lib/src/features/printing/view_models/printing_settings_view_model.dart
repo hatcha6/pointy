@@ -6,28 +6,14 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/device_printers.dart';
+import '../../../data/models/prep_station.dart';
 import '../../../data/models/printer_config.dart';
+import '../../../data/repositories/prep_station_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
-import '../../../data/services/barcode_label_calibration.dart';
-import '../../../data/services/print_transport.dart';
+import 'printer_test.dart';
 
-enum PrinterTestOutcome {
-  none,
-  success,
-  failed,
-  barcodeLabelSuccess,
-  barcodeLabelFailed,
-  fakeSuccess,
-  fakeFailed,
-}
-
-enum BarcodeLabelLanguageDetectionOutcome {
-  none,
-  detected,
-  inferred,
-  unavailable,
-  failed,
-}
+export 'printer_test.dart';
 
 enum PrinterConnectionState {
   unknown,
@@ -37,636 +23,338 @@ enum PrinterConnectionState {
   disconnected,
 }
 
+enum KitchenStationsState { idle, loading, loaded, failed, unavailable }
+
+/// The printers on this device, the job each one does, and whether each is
+/// answering.
+///
+/// Lives for the whole app, not just the settings screen: it also watches the
+/// receipt printer in the background, because a receipt printer that went
+/// dark is worth saying out loud before the next sale rather than after it.
 class PrintingSettingsViewModel extends ChangeNotifier {
   PrintingSettingsViewModel(
     this._repository, {
+    PrepStationRepository? prepStationRepository,
     AnalyticsEngine? analyticsEngine,
     Duration statusCheckInterval = const Duration(minutes: 2),
     bool autoLoad = true,
-    PrinterRole role = PrinterRole.posReceipt,
-    int? stationId,
-  }) : _analyticsEngine = analyticsEngine,
-       _statusCheckInterval = statusCheckInterval,
-       _role = role,
-       _stationId = stationId {
+  }) : _prepStationRepository = prepStationRepository,
+       _analyticsEngine = analyticsEngine,
+       _statusCheckInterval = statusCheckInterval {
     if (autoLoad) {
-      loadDefaultConfig();
+      unawaited(load());
     }
   }
 
   final PrintingRepository _repository;
+  final PrepStationRepository? _prepStationRepository;
   final AnalyticsEngine? _analyticsEngine;
   final Duration _statusCheckInterval;
 
-  /// Which printer this view model configures. Defaults to the POS receipt
-  /// printer; a kitchen target also carries the [PrepStation] id it serves.
-  final PrinterRole _role;
-  final int? _stationId;
-
-  bool get _isKitchenTarget =>
-      _role == PrinterRole.kitchen && _stationId != null;
-
-  PrinterConfig _config = PrinterConfig.defaultConfig();
-  Timer? _statusTimer;
-  bool _isLoadingConfig = false;
-  bool _isSavingConfig = false;
-  bool _isTesting = false;
-  bool _isTestingBarcodeLabelPrinter = false;
-  bool _isDiscovering = false;
-  bool _isDetectingBarcodeLabelLanguage = false;
-  bool _isCheckingConnection = false;
+  DevicePrinters _printers = DevicePrinters.empty;
+  bool _isLoading = false;
+  bool _hasLoadError = false;
+  bool _isSaving = false;
+  bool _hasSaveError = false;
   bool _isDisposed = false;
-  bool _hasConfigLoadError = false;
-  bool _hasConfigSaveError = false;
-  bool _hasDiscoveryError = false;
+  Timer? _receiptWatch;
+  Future<void> _writes = Future<void>.value();
+
+  final Map<String, PrinterConnectionState> _connection = {};
+  final Map<String, PrinterTestResult> _testResults = {};
+  final Set<String> _testing = {};
+
   List<PrinterEndpoint> _discoveredPrinters = const [];
-  PrinterTestOutcome _testOutcome = PrinterTestOutcome.none;
-  BarcodeLabelLanguageDetectionOutcome _barcodeLabelLanguageDetectionOutcome =
-      BarcodeLabelLanguageDetectionOutcome.none;
-  PrinterConnectionState _connectionState = PrinterConnectionState.unknown;
-  String _connectionMessage = '';
-  String _barcodeLabelLanguageDetectionMessage = '';
-  DateTime? _lastConnectionCheckedAt;
+  bool _isDiscovering = false;
+  bool _hasDiscoveryError = false;
 
-  PrinterConfig get config => _config;
-  bool get isLoadingConfig => _isLoadingConfig;
-  bool get isSavingConfig => _isSavingConfig;
-  bool get isTesting => _isTesting;
-  bool get isTestingBarcodeLabelPrinter => _isTestingBarcodeLabelPrinter;
-  bool get isDiscovering => _isDiscovering;
-  bool get isDetectingBarcodeLabelLanguage => _isDetectingBarcodeLabelLanguage;
-  bool get isCheckingConnection => _isCheckingConnection;
-  bool get hasConfigLoadError => _hasConfigLoadError;
-  bool get hasConfigSaveError => _hasConfigSaveError;
-  bool get hasDiscoveryError => _hasDiscoveryError;
+  List<PrepStation> _kitchenStations = const [];
+  KitchenStationsState _kitchenStationsState = KitchenStationsState.idle;
+
+  PrintingRepository get repository => _repository;
+  AnalyticsEngine? get analyticsEngine => _analyticsEngine;
+
+  DevicePrinters get printers => _printers;
+  bool get isLoading => _isLoading;
+  bool get hasLoadError => _hasLoadError;
+  bool get isSaving => _isSaving;
+  bool get hasSaveError => _hasSaveError;
+
+  DevicePrinter? holderOf(PrinterRole role) => _printers.holderOf(role);
+  DevicePrinter? kitchenPrinterFor(int stationId) =>
+      _printers.kitchenPrinterFor(stationId);
+  DevicePrinter? get receiptPrinter => holderOf(PrinterRole.posReceipt);
+
   List<PrinterEndpoint> get discoveredPrinters => _discoveredPrinters;
-  PrinterTestOutcome get testOutcome => _testOutcome;
-  BarcodeLabelLanguageDetectionOutcome
-  get barcodeLabelLanguageDetectionOutcome =>
-      _barcodeLabelLanguageDetectionOutcome;
-  PrinterConnectionState get connectionState => _connectionState;
-  String get connectionMessage => _connectionMessage;
-  String get barcodeLabelLanguageDetectionMessage =>
-      _barcodeLabelLanguageDetectionMessage;
-  DateTime? get lastConnectionCheckedAt => _lastConnectionCheckedAt;
-  bool get hasConfiguredPrinter => _hasConfiguredEndpoint(_config.endpoint);
+  bool get isDiscovering => _isDiscovering;
+  bool get hasDiscoveryError => _hasDiscoveryError;
+
+  /// The shop's active prep stations, when this user may see them.
+  List<PrepStation> get kitchenStations => _kitchenStations;
+  KitchenStationsState get kitchenStationsState => _kitchenStationsState;
+
+  PrinterConnectionState connectionOf(String printerId) =>
+      _connection[printerId] ?? PrinterConnectionState.unknown;
+
+  bool isTesting(String printerId) => _testing.contains(printerId);
+
+  PrinterTestResult? testResultOf(String printerId) => _testResults[printerId];
+
+  /// The receipt printer's health, for the app-wide "printer disconnected"
+  /// warning.
+  PrinterConnectionState get connectionState {
+    final receipt = receiptPrinter;
+    return receipt == null
+        ? PrinterConnectionState.notConfigured
+        : connectionOf(receipt.id);
+  }
+
   bool get shouldWarnPrinterDisconnected =>
-      hasConfiguredPrinter &&
-      _connectionState == PrinterConnectionState.disconnected;
+      receiptPrinter != null &&
+      connectionState == PrinterConnectionState.disconnected;
 
-  Future<void> loadDefaultConfig() async {
-    _isLoadingConfig = true;
-    _hasConfigLoadError = false;
-    notifyListeners();
+  Future<void> load() async {
+    _isLoading = true;
+    _hasLoadError = false;
+    _notify();
 
-    final result = await _loadConfigForTarget();
+    final result = await _repository.loadDevicePrinters();
     switch (result) {
-      case Ok<PrinterConfig>():
-        _config = result.value;
-        _restartConnectionChecks(checkNow: true);
-      case Error<PrinterConfig>():
-        _hasConfigLoadError = true;
-        _stopConnectionChecks();
+      case Ok<DevicePrinters>(:final value):
+        _printers = value;
+        _forgetRemovedPrinters();
+        _watchReceiptPrinter(checkNow: true);
+      case Error<DevicePrinters>():
+        _hasLoadError = true;
+        _receiptWatch?.cancel();
     }
 
-    _isLoadingConfig = false;
-    notifyListeners();
+    _isLoading = false;
+    _notify();
   }
 
-  void updateTransportKind(PrintTransportKind kind) {
-    final current = _config.endpoint;
-    final endpoint = switch (kind) {
-      PrintTransportKind.serial => current.copyWith(
-        kind: kind,
-        address: current.address.isEmpty
-            ? '/dev/tty.usbserial'
-            : current.address,
-      ),
-      PrintTransportKind.bluetooth => current.copyWith(
-        kind: kind,
-        address: current.address.startsWith('/dev/') ? '' : current.address,
-      ),
-      PrintTransportKind.wifi => current.copyWith(
-        kind: kind,
-        address: _looksLikeNetworkHost(current.address) ? current.address : '',
-        port: current.port == 0 ? 9100 : current.port,
-        outputMode: PrinterOutputMode.escPos,
-      ),
-      PrintTransportKind.system => current.copyWith(
-        kind: kind,
-        name: '',
-        address: '',
-        outputMode: PrinterOutputMode.pdfA4,
-      ),
-      PrintTransportKind.usb => current.copyWith(
-        kind: kind,
-        address: current.address.startsWith('/dev/') ? '' : current.address,
-        outputMode: PrinterOutputMode.escPos,
-      ),
-      PrintTransportKind.fake => current.copyWith(kind: kind),
-    };
-    _updateConfig(_config.copyWith(endpoint: endpoint), checkConnection: true);
-  }
-
-  void updatePrinterName(String value) {
-    _updateConfig(
-      _config.copyWith(endpoint: _config.endpoint.copyWith(name: value)),
-      checkConnection: true,
-    );
-  }
-
-  void updateAddress(String value) {
-    _updateConfig(
-      _config.copyWith(endpoint: _config.endpoint.copyWith(address: value)),
-      checkConnection: true,
-    );
-  }
-
-  void updateBaudRate(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          baudRate: int.tryParse(value) ?? _config.endpoint.baudRate,
-        ),
-      ),
-      checkConnection: true,
-    );
-  }
-
-  void updatePort(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          port: int.tryParse(value) ?? _config.endpoint.port,
-        ),
-      ),
-      checkConnection: true,
-    );
-  }
-
-  void updatePaperWidth(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          paperWidthMm: int.tryParse(value) ?? _config.endpoint.paperWidthMm,
-        ),
-      ),
-    );
-  }
-
-  void updatePdfPageSize(PdfPageSize size) {
-    _updateConfig(
-      _config.copyWith(endpoint: _config.endpoint.copyWith(pdfPageSize: size)),
-    );
-  }
-
-  void updateCodeTable(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(codeTable: value.trim()),
-      ),
-    );
-  }
-
-  void updateCapabilityProfile(String value) {
-    final trimmed = value.trim();
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          capabilityProfile: trimmed.isEmpty ? 'default' : trimmed,
-        ),
-      ),
-    );
-  }
-
-  void updateCutMode(ReceiptCutMode mode) {
-    _updateConfig(
-      _config.copyWith(endpoint: _config.endpoint.copyWith(cutMode: mode)),
-    );
-  }
-
-  void updateFeedLines(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          feedLines: int.tryParse(value) ?? _config.endpoint.feedLines,
-        ),
-      ),
-    );
-  }
-
-  void updateCompactReceipt(bool value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(compactReceipt: value),
-      ),
-    );
-  }
-
-  void updateBarcodeLabelLanguage(BarcodeLabelPrinterLanguage language) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(barcodeLabelLanguage: language),
-      ),
-    );
-  }
-
-  void updateLabelWidth(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelWidthMm: int.tryParse(value) ?? _config.endpoint.labelWidthMm,
-        ),
-      ),
-    );
-  }
-
-  void updateLabelHeight(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelHeightMm: int.tryParse(value) ?? _config.endpoint.labelHeightMm,
-        ),
-      ),
-    );
-  }
-
-  void updateLabelPdfOffsetX(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelPdfOffsetXMm:
-              int.tryParse(value) ?? _config.endpoint.labelPdfOffsetXMm,
-        ),
-      ),
-    );
-  }
-
-  void updateLabelPdfPitch(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelPdfPitchMm:
-              double.tryParse(value) ?? _config.endpoint.labelPdfPitchMm,
-        ),
-      ),
-    );
-  }
-
-  void updateLabelPdfOffsetY(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelPdfOffsetYMm:
-              int.tryParse(value) ?? _config.endpoint.labelPdfOffsetYMm,
-        ),
-      ),
-    );
-  }
-
-  void updateLabelGap(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelGapMm: int.tryParse(value) ?? _config.endpoint.labelGapMm,
-        ),
-      ),
-    );
-  }
-
-  void updateLabelDpi(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelDpi: int.tryParse(value) ?? _config.endpoint.labelDpi,
-        ),
-      ),
-    );
-  }
-
-  void updateLabelPdfSize(BarcodeLabelPdfSize size) {
-    _updateConfig(
-      _config.copyWith(endpoint: _config.endpoint.copyWith(labelPdfSize: size)),
-    );
-  }
-
-  void updateLabelRotation(int quarterTurns) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          labelRotationQuarterTurns: ((quarterTurns % 4) + 4) % 4,
-        ),
-      ),
-    );
-  }
-
-  void updateTimeout(String value) {
-    _updateConfig(
-      _config.copyWith(
-        endpoint: _config.endpoint.copyWith(
-          timeoutMs: int.tryParse(value) ?? _config.endpoint.timeoutMs,
-        ),
-      ),
-    );
-  }
-
-  void selectDiscoveredPrinter(PrinterEndpoint endpoint) {
-    _updateConfig(_config.copyWith(endpoint: endpoint), checkConnection: true);
-  }
-
-  void _updateConfig(PrinterConfig config, {bool checkConnection = false}) {
-    _config = config.copyWith(isEnabled: true, autoClaimJobs: true);
-    _clearTestOutcome();
-    if (checkConnection) {
-      _restartConnectionChecks(checkNow: true);
+  /// Adds [printer] or saves changes to it. The jobs it claims move to it
+  /// from whichever printer had them.
+  Future<bool> savePrinter(DevicePrinter printer) async {
+    final saved = await _commit((printers) => printers.upsert(printer));
+    if (saved) {
+      unawaited(checkConnection(printer.id));
     }
-    unawaited(_saveDefaultConfig());
+    return saved;
   }
 
-  Future<void> discoverPrinters() async {
-    _isDiscovering = true;
-    _hasDiscoveryError = false;
-    notifyListeners();
-
-    final result = await _repository.discoverPrinters();
-    switch (result) {
-      case Ok<List<PrinterEndpoint>>():
-        _discoveredPrinters = result.value;
-        _trackPrinterDiscovery(
-          success: true,
-          discoveredCount: result.value.length,
-        );
-      case Error<List<PrinterEndpoint>>():
-        _hasDiscoveryError = true;
-        _trackPrinterDiscovery(success: false, discoveredCount: 0);
-    }
-
-    _isDiscovering = false;
-    notifyListeners();
+  Future<bool> removePrinter(String printerId) {
+    return _commit((printers) => printers.remove(printerId));
   }
 
-  Future<void> testPrinter() async {
-    _isTesting = true;
-    _isTestingBarcodeLabelPrinter = false;
-    _testOutcome = PrinterTestOutcome.none;
-    notifyListeners();
-
-    final result = _isKitchenTarget
-        ? await _repository.printKitchenTest(_config)
-        : await _repository.testPrinter(_config);
-    _testOutcome = result.isSuccess
-        ? PrinterTestOutcome.success
-        : PrinterTestOutcome.failed;
-    _updateConnectionStateFromPrintResult(result);
-    _trackPrinterTest(result, name: 'printing.printer.tested');
-    _isTesting = false;
-    notifyListeners();
+  /// Hands [role] to the printer with [printerId], or to none when null.
+  Future<bool> assignRole(PrinterRole role, String? printerId) {
+    return _commit((printers) => printers.assignRole(role, printerId));
   }
 
-  Future<void> testBarcodeLabelPrinter() async {
-    if (_isTesting || !hasConfiguredPrinter) {
+  Future<bool> assignKitchenStation(int stationId, String? printerId) {
+    return _commit(
+      (printers) => printers.assignKitchenStation(stationId, printerId),
+    );
+  }
+
+  Future<void> checkConnection(String printerId) async {
+    final printer = _printers.byId(printerId);
+    if (_isDisposed ||
+        printer == null ||
+        connectionOf(printerId) == PrinterConnectionState.checking) {
       return;
     }
+    _connection[printerId] = PrinterConnectionState.checking;
+    _notify();
 
-    _isTesting = true;
-    _isTestingBarcodeLabelPrinter = true;
-    _testOutcome = PrinterTestOutcome.none;
-    notifyListeners();
-
-    final result = await _repository.printBarcodeLabelTest(_config);
-    _testOutcome = result.isSuccess
-        ? PrinterTestOutcome.barcodeLabelSuccess
-        : PrinterTestOutcome.barcodeLabelFailed;
-    _updateConnectionStateFromPrintResult(result);
-    _trackPrinterTest(result, name: 'printing.printer.barcode_label_tested');
-    _isTesting = false;
-    _isTestingBarcodeLabelPrinter = false;
-    notifyListeners();
-  }
-
-  /// Prints a calibration sheet so the die-cut settings can be read off the
-  /// sticker rather than guessed at.
-  Future<void> printBarcodeLabelCalibration(
-    BarcodeLabelCalibrationSheet sheet,
-  ) async {
-    if (_isTesting || !hasConfiguredPrinter) {
-      return;
-    }
-
-    _isTesting = true;
-    _isTestingBarcodeLabelPrinter = true;
-    _testOutcome = PrinterTestOutcome.none;
-    notifyListeners();
-
-    final result = await _repository.printBarcodeLabelCalibration(
-      _config,
-      sheet,
-    );
-    _testOutcome = result.isSuccess
-        ? PrinterTestOutcome.barcodeLabelSuccess
-        : PrinterTestOutcome.barcodeLabelFailed;
-    _updateConnectionStateFromPrintResult(result);
-    _trackPrinterTest(result, name: 'printing.printer.label_calibrated');
-    _isTesting = false;
-    _isTestingBarcodeLabelPrinter = false;
-    notifyListeners();
-  }
-
-  Future<void> detectBarcodeLabelLanguage() async {
-    if (_isDetectingBarcodeLabelLanguage || !hasConfiguredPrinter) {
-      return;
-    }
-
-    _isDetectingBarcodeLabelLanguage = true;
-    _barcodeLabelLanguageDetectionOutcome =
-        BarcodeLabelLanguageDetectionOutcome.none;
-    _barcodeLabelLanguageDetectionMessage = '';
-    notifyListeners();
-
-    final result = await _repository.detectBarcodeLabelLanguage(_config);
-    switch (result) {
-      case Ok():
-        final detection = result.value;
-        final language = detection.language;
-        if (detection.isSuccess && language != null) {
-          _config = _config.copyWith(
-            endpoint: _config.endpoint.copyWith(barcodeLabelLanguage: language),
-          );
-          _barcodeLabelLanguageDetectionOutcome = detection.isInferred
-              ? BarcodeLabelLanguageDetectionOutcome.inferred
-              : BarcodeLabelLanguageDetectionOutcome.detected;
-          _barcodeLabelLanguageDetectionMessage = detection.message;
-          unawaited(_saveDefaultConfig());
-          _trackBarcodeLabelLanguageDetection(success: true);
-        } else {
-          _barcodeLabelLanguageDetectionOutcome =
-              BarcodeLabelLanguageDetectionOutcome.unavailable;
-          _barcodeLabelLanguageDetectionMessage = detection.message;
-          _trackBarcodeLabelLanguageDetection(success: false);
-        }
-      case Error():
-        _barcodeLabelLanguageDetectionOutcome =
-            BarcodeLabelLanguageDetectionOutcome.failed;
-        _barcodeLabelLanguageDetectionMessage = result.exception.toString();
-        _trackBarcodeLabelLanguageDetection(success: false);
-    }
-
-    _isDetectingBarcodeLabelLanguage = false;
-    notifyListeners();
-  }
-
-  Future<void> runFakePrint() async {
-    _isTesting = true;
-    _isTestingBarcodeLabelPrinter = false;
-    _testOutcome = PrinterTestOutcome.none;
-    notifyListeners();
-
-    final PrintTransportResult result = await _repository.printFakeReceipt(
-      _config,
-    );
-    _testOutcome = result.isSuccess
-        ? PrinterTestOutcome.fakeSuccess
-        : PrinterTestOutcome.fakeFailed;
-    _updateConnectionStateFromPrintResult(result);
-    _trackPrinterTest(result, name: 'printing.printer.fake_receipt_printed');
-    _isTesting = false;
-    _isTestingBarcodeLabelPrinter = false;
-    notifyListeners();
-  }
-
-  Future<void> checkPrinterConnection() async {
-    if (_isDisposed || _isCheckingConnection) {
-      return;
-    }
-    if (!hasConfiguredPrinter) {
-      _connectionState = PrinterConnectionState.notConfigured;
-      _connectionMessage = '';
-      _lastConnectionCheckedAt = null;
-      _notifyIfActive();
-      return;
-    }
-
-    _isCheckingConnection = true;
-    _connectionState = PrinterConnectionState.checking;
-    _notifyIfActive();
-
-    var status = const PrintTransportStatus(
-      isAvailable: false,
-      message: 'printer status unavailable',
-    );
+    var available = false;
     try {
-      status = await _repository.printerStatus(_config);
-    } on Object catch (error) {
-      status = PrintTransportStatus(
-        isAvailable: false,
-        message: error.toString(),
-      );
+      available = (await _repository.printerStatus(printer.config)).isAvailable;
+    } on Object {
+      available = false;
     }
     if (_isDisposed) {
       return;
     }
-    _connectionState = status.isAvailable
+    // The printer may have been removed, or pointed elsewhere, while it was
+    // being asked: an answer about the old device must not land on the new
+    // one, which gets asked in its own right.
+    final current = _printers.byId(printerId);
+    if (!_sameDevice(current?.endpoint, printer.endpoint)) {
+      _connection.remove(printerId);
+      _notify();
+      if (current != null) {
+        unawaited(checkConnection(printerId));
+      }
+      return;
+    }
+    _connection[printerId] = available
         ? PrinterConnectionState.connected
         : PrinterConnectionState.disconnected;
-    _connectionMessage = status.message;
-    _lastConnectionCheckedAt = DateTime.now();
-    _isCheckingConnection = false;
-    _notifyIfActive();
+    _notify();
   }
 
-  void _clearTestOutcome() {
-    _testOutcome = PrinterTestOutcome.none;
-    _barcodeLabelLanguageDetectionOutcome =
-        BarcodeLabelLanguageDetectionOutcome.none;
-    _barcodeLabelLanguageDetectionMessage = '';
-    notifyListeners();
+  Future<void> checkAllConnections() async {
+    await Future.wait([
+      for (final printer in _printers.printers) checkConnection(printer.id),
+    ]);
   }
 
-  Future<Result<PrinterConfig>> _loadConfigForTarget() async {
-    if (_isKitchenTarget) {
-      final config = await _repository.loadKitchenStationConfig(_stationId!);
-      return Ok(config ?? PrinterConfig.defaultConfig());
+  /// Checks the receipt printer, the one the till cannot sell well without.
+  Future<void> checkPrinterConnection() async {
+    final receipt = receiptPrinter;
+    if (receipt != null) {
+      await checkConnection(receipt.id);
     }
-    return _repository.loadDefaultPrinterConfig();
   }
 
-  Future<void> _saveDefaultConfig() async {
-    _isSavingConfig = true;
-    _hasConfigSaveError = false;
-    notifyListeners();
+  /// Prints a test of the first job the printer does, so a tap on its card
+  /// proves the thing it is there for.
+  Future<void> testPrinter(String printerId) async {
+    final printer = _printers.byId(printerId);
+    if (printer == null || _testing.contains(printerId)) {
+      return;
+    }
+    final kind = primaryTestKind(printer);
+    _testing.add(printerId);
+    _testResults.remove(printerId);
+    _notify();
 
-    final result = _isKitchenTarget
-        ? await _repository.saveKitchenStationConfig(_stationId!, _config)
-        : await _repository.saveDefaultPrinterConfig(_config);
-    _isSavingConfig = false;
-    _hasConfigSaveError = result is Error<void>;
-    notifyListeners();
+    final result = await runPrinterTest(_repository, printer.config, kind);
+    _testing.remove(printerId);
+    _testResults[printerId] = PrinterTestResult(kind, result.isSuccess);
+    if (_printers.byId(printerId) != null) {
+      _connection[printerId] = result.isSuccess
+          ? PrinterConnectionState.connected
+          : PrinterConnectionState.disconnected;
+    }
+    trackPrinterTest(
+      _analyticsEngine,
+      kind: kind,
+      endpoint: printer.endpoint,
+      result: result,
+      source: 'printer_card',
+    );
+    _notify();
   }
 
-  bool _looksLikeNetworkHost(String value) {
-    return value.contains('.') || value.contains(':');
+  Future<void> discoverPrinters() async {
+    if (_isDiscovering) {
+      return;
+    }
+    _isDiscovering = true;
+    _hasDiscoveryError = false;
+    _notify();
+
+    final result = await _repository.discoverPrinters();
+    switch (result) {
+      case Ok<List<PrinterEndpoint>>(:final value):
+        _discoveredPrinters = value;
+        _trackDiscovery(success: true, discoveredCount: value.length);
+      case Error<List<PrinterEndpoint>>():
+        _hasDiscoveryError = true;
+        _trackDiscovery(success: false, discoveredCount: 0);
+    }
+
+    _isDiscovering = false;
+    _notify();
   }
 
-  void _restartConnectionChecks({required bool checkNow}) {
-    _statusTimer?.cancel();
-    _statusTimer = null;
-    if (!hasConfiguredPrinter) {
-      _connectionState = PrinterConnectionState.notConfigured;
-      _connectionMessage = '';
-      _lastConnectionCheckedAt = null;
+  /// Loads the prep stations whose chits this device could print. [allowed]
+  /// is the user's permission: asking without it only earns a 403.
+  Future<void> loadKitchenStations({required bool allowed}) async {
+    final repository = _prepStationRepository;
+    if (!allowed || repository == null) {
+      _kitchenStations = const [];
+      _kitchenStationsState = KitchenStationsState.unavailable;
+      _notify();
+      return;
+    }
+    if (_kitchenStationsState == KitchenStationsState.loading) {
+      return;
+    }
+    _kitchenStationsState = KitchenStationsState.loading;
+    _notify();
+
+    final result = await repository.loadStations();
+    switch (result) {
+      case Ok<List<PrepStation>>(:final value):
+        _kitchenStations = [
+          for (final station in value)
+            if (station.isActive) station,
+        ];
+        _kitchenStationsState = KitchenStationsState.loaded;
+      case Error<List<PrepStation>>():
+        _kitchenStationsState = KitchenStationsState.failed;
+    }
+    _notify();
+  }
+
+  /// Applies [change] to the printers as last saved, and keeps it only once
+  /// it is on disk — the list on screen is always the list the till prints
+  /// from. Writes run one at a time, each on the result of the one before,
+  /// so two quick taps cannot overwrite each other.
+  Future<bool> _commit(DevicePrinters Function(DevicePrinters) change) {
+    final write = _writes.then((_) => _save(change(_printers)));
+    _writes = write.then<void>((_) {}, onError: (_) {});
+    return write;
+  }
+
+  Future<bool> _save(DevicePrinters next) async {
+    final previousReceipt = receiptPrinter;
+    _isSaving = true;
+    _notify();
+
+    final result = await _repository.saveDevicePrinters(next);
+    _isSaving = false;
+    final saved = result is Ok<void>;
+    _hasSaveError = !saved;
+    if (saved) {
+      _printers = next;
+      _forgetRemovedPrinters();
+      final receipt = receiptPrinter;
+      if (receipt?.id != previousReceipt?.id ||
+          !_sameDevice(receipt?.endpoint, previousReceipt?.endpoint)) {
+        _watchReceiptPrinter(checkNow: true);
+      }
+    }
+    _notify();
+    return saved;
+  }
+
+  static bool _sameDevice(PrinterEndpoint? a, PrinterEndpoint? b) {
+    if (a == null || b == null) {
+      return a == b;
+    }
+    return a.kind == b.kind &&
+        a.address == b.address &&
+        a.port == b.port &&
+        a.outputMode == b.outputMode;
+  }
+
+  void _forgetRemovedPrinters() {
+    bool gone(String id) => _printers.byId(id) == null;
+    _connection.removeWhere((id, _) => gone(id));
+    _testResults.removeWhere((id, _) => gone(id));
+  }
+
+  void _watchReceiptPrinter({required bool checkNow}) {
+    _receiptWatch?.cancel();
+    _receiptWatch = null;
+    if (receiptPrinter == null || _isDisposed) {
       return;
     }
     if (checkNow) {
       unawaited(checkPrinterConnection());
     }
-    _statusTimer = Timer.periodic(
+    _receiptWatch = Timer.periodic(
       _statusCheckInterval,
       (_) => unawaited(checkPrinterConnection()),
     );
   }
 
-  void _stopConnectionChecks() {
-    _statusTimer?.cancel();
-    _statusTimer = null;
-    _connectionState = PrinterConnectionState.unknown;
-    _connectionMessage = '';
-    _lastConnectionCheckedAt = null;
-  }
-
-  void _updateConnectionStateFromPrintResult(PrintTransportResult result) {
-    if (!hasConfiguredPrinter) {
-      _connectionState = PrinterConnectionState.notConfigured;
-      return;
-    }
-    _connectionState = result.isSuccess
-        ? PrinterConnectionState.connected
-        : PrinterConnectionState.disconnected;
-    _connectionMessage = result.message;
-    _lastConnectionCheckedAt = DateTime.now();
-  }
-
-  bool _hasConfiguredEndpoint(PrinterEndpoint endpoint) {
-    final name = endpoint.name.trim();
-    final address = endpoint.address.trim();
-    if (endpoint.kind == PrintTransportKind.system ||
-        endpoint.usesDocumentInvoice) {
-      return true;
-    }
-    if (endpoint.kind == PrintTransportKind.fake) {
-      return name.isNotEmpty || address.isNotEmpty;
-    }
-    if (address.isEmpty) {
-      return false;
-    }
-    return endpoint.kind != PrintTransportKind.serial ||
-        name.isNotEmpty ||
-        address != '/dev/tty.usbserial';
-  }
-
-  void _trackPrinterDiscovery({
-    required bool success,
-    required int discoveredCount,
-  }) {
+  void _trackDiscovery({required bool success, required int discoveredCount}) {
     trackAuditEvent(
       _analyticsEngine,
       name: success
@@ -677,7 +365,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
           : AnalyticsEventSeverity.warning,
       entityType: 'printer_settings',
       attributes: {
-        'transport_kind': _config.endpoint.kind.name,
+        'printer_count': _printers.printers.length,
         'source': 'printing_settings',
       },
       metrics: {'discovered_count': discoveredCount},
@@ -685,49 +373,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     );
   }
 
-  void _trackPrinterTest(PrintTransportResult result, {required String name}) {
-    trackAuditEvent(
-      _analyticsEngine,
-      name: name,
-      severity: result.isSuccess
-          ? AnalyticsEventSeverity.info
-          : AnalyticsEventSeverity.warning,
-      entityType: 'printer_settings',
-      attributes: {
-        'transport_kind': _config.endpoint.kind.name,
-        'printer_configured': hasConfiguredPrinter,
-        'paper_width_mm': _config.endpoint.paperWidthMm,
-        'barcode_label_language': _config.endpoint.barcodeLabelLanguage.name,
-        'outcome': result.isSuccess ? 'success' : 'failed',
-        'source': 'printing_settings',
-      },
-      metrics: {'timeout_ms': _config.endpoint.timeoutMs},
-      flushImmediately: !result.isSuccess,
-    );
-  }
-
-  void _trackBarcodeLabelLanguageDetection({required bool success}) {
-    trackAuditEvent(
-      _analyticsEngine,
-      name: success
-          ? 'printing.barcode_label_language.detected'
-          : 'printing.barcode_label_language.detect_failed',
-      severity: success
-          ? AnalyticsEventSeverity.info
-          : AnalyticsEventSeverity.warning,
-      entityType: 'printer_settings',
-      attributes: {
-        'transport_kind': _config.endpoint.kind.name,
-        'barcode_label_language': _config.endpoint.barcodeLabelLanguage.name,
-        'outcome': _barcodeLabelLanguageDetectionOutcome.name,
-        'source': 'printing_settings',
-      },
-      metrics: {'timeout_ms': _config.endpoint.timeoutMs},
-      flushImmediately: !success,
-    );
-  }
-
-  void _notifyIfActive() {
+  void _notify() {
     if (!_isDisposed) {
       notifyListeners();
     }
@@ -736,7 +382,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
-    _statusTimer?.cancel();
+    _receiptWatch?.cancel();
     super.dispose();
   }
 }

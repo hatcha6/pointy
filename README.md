@@ -196,6 +196,24 @@ Screens are reviewed without a backend through dev-only preview harnesses under
 (`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
 repositories, so there is no server, no login, and no shop data involved.
 
+## Device Printers
+
+Each till keeps its own list of printers (Device Settings → الطابعات), and every
+print job belongs to exactly one of them: sale receipts (with payment receipts
+and the thermal shift report), barcode labels, full-page documents (reports,
+purchase orders, the A4 shift report, consignment papers), and each kitchen
+station's chits. A shop with a receipt printer and a label printer sets that up
+once; labels never go to the receipt roll and nobody flips a setting to print
+one. With no documents printer, reports still open the system print dialog and
+purchase orders print on the receipt printer, as before.
+
+The list lives in device storage (`device_printers`). The first read migrates the
+old single-printer and kitchen-station settings — the old printer keeps receipts
+and labels, with every setting and label calibration — and each save mirrors the
+receipt and kitchen printers back into the old keys so an older build still
+prints. Preview with `make frontend-printers-preview`
+(`?screen=settings|board|migrated|empty|add|edit-receipt|edit-labels`).
+
 ## Balance Sheet and Zakat
 
 `الميزانية العمومية` (report `balance_sheet`, under الإقفال) states what the shop

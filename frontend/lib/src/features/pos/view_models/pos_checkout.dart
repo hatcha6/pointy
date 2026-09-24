@@ -221,13 +221,18 @@ extension PosCheckoutActions on PosViewModel {
         _printInvoiceAfterPayment ||
         cartSnapshot.any((line) => line.isVoucher);
     PrinterConfig? invoicePrinterConfig;
+    // No printer on this till does receipts. Said as that after the sale, not
+    // as a failed print: it is fixed in the device's printer settings, and
+    // trying again cannot fix it.
+    var receiptPrinterMissing = false;
     if (shouldPrintInvoice) {
-      final configResult = await _printingRepository.loadDefaultPrinterConfig();
+      final configResult = await _printingRepository.loadReceiptPrinterConfig();
       switch (configResult) {
         case Ok<PrinterConfig>():
           invoicePrinterConfig = configResult.value;
-        case Error<PrinterConfig>():
+        case Error<PrinterConfig>(:final exception):
           invoicePrinterConfig = null;
+          receiptPrinterMissing = exception is PrinterRoleUnassigned;
       }
     }
     // Not for a sale with provider lines: a job minted at checkout would carry
@@ -305,15 +310,17 @@ extension PosCheckoutActions on PosViewModel {
         // steps got its own full deadline, so two hung printers summed to ~2x
         // and froze the POS for ~40s (the checkout-hang tail seen in the field).
         final printDeadline = DateTime.now().add(_checkoutPrintDeadline);
-        var printStatus = shouldPrintInvoice && !hasProviderLines
-            ? await _guardedPrintValue(
+        var printStatus = !shouldPrintInvoice || hasProviderLines
+            ? InvoicePrintStatus.notRequested
+            : receiptPrinterMissing
+            ? InvoicePrintStatus.noPrinter
+            : await _guardedPrintValue(
                 () => _printPaidInvoice(result.value, invoicePrinterConfig),
                 fallback: InvoicePrintStatus.failed,
                 label: 'invoice',
                 order: result.value,
                 deadline: printDeadline,
-              )
-            : InvoicePrintStatus.notRequested;
+              );
         if (_checkoutSettings?.autoPrintKitchenTickets == true) {
           await _guardedPrintVoid(
             () => _printPaidKitchenTickets(result.value),
@@ -394,10 +401,9 @@ extension PosCheckoutActions on PosViewModel {
         // which is the right way round, because the customer has paid.
         final recharges = await _performSoldRecharges(result.value);
         if (hasProviderLines && shouldPrintInvoice) {
-          printStatus = await _printAfterProviders(
-            result.value,
-            invoicePrinterConfig,
-          );
+          printStatus = receiptPrinterMissing
+              ? InvoicePrintStatus.noPrinter
+              : await _printAfterProviders(result.value, invoicePrinterConfig);
         }
         return SaleCheckoutOutcome.success(
           result.value,
@@ -860,7 +866,14 @@ double _checkoutCartTotal(List<CartLine> lines) {
   return lines.fold(0, (sum, line) => sum + line.total);
 }
 
-enum InvoicePrintStatus { notRequested, printed, failed }
+enum InvoicePrintStatus {
+  notRequested,
+  printed,
+  failed,
+
+  /// The sale should have printed, but no printer on this till does receipts.
+  noPrinter,
+}
 
 class SaleCheckoutOutcome {
   const SaleCheckoutOutcome._({

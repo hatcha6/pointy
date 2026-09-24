@@ -6,6 +6,7 @@ import '../../../core/result.dart';
 import '../../../data/models/consignment.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/consignment_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../pdf/consignment_pdf.dart';
 
@@ -19,13 +20,18 @@ class ConsignmentViewModel extends ChangeNotifier {
   ConsignmentViewModel(
     this._repository, {
     ShopSettingsRepository? shopSettingsRepository,
+    PrintingRepository? printingRepository,
     ConsignmentDocumentPdfService documents =
         const ConsignmentDocumentPdfService(),
   }) : _shopSettings = shopSettingsRepository,
+       _printingRepository = printingRepository,
        _documents = documents;
 
   final ConsignmentRepository _repository;
   final ShopSettingsRepository? _shopSettings;
+
+  /// Sends the vouchers to this device's documents printer when one is set.
+  final PrintingRepository? _printingRepository;
   final ConsignmentDocumentPdfService _documents;
 
   ConsignmentPayablePage _payables = const ConsignmentPayablePage();
@@ -241,6 +247,7 @@ class ConsignmentViewModel extends ChangeNotifier {
       units: agreement.units,
       shopSettings: settings,
       shopLogoBytes: await _loadShopLogoBytes(settings),
+      printingRepository: _printingRepository,
     );
   }
 
@@ -251,6 +258,7 @@ class ConsignmentViewModel extends ChangeNotifier {
       payout: payout,
       shopSettings: settings,
       shopLogoBytes: await _loadShopLogoBytes(settings),
+      printingRepository: _printingRepository,
     );
   }
 

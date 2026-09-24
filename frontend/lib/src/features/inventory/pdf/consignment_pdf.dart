@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import '../../../data/models/consignment.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/models/stock_unit.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/branding_assets.dart';
 import '../../../shared/pdf/pdf.dart';
 import 'consignment_document_content.dart';
@@ -58,6 +59,7 @@ class ConsignmentDocumentPdfService {
     List<StockUnit> units = const [],
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
+    PrintingRepository? printingRepository,
   }) async {
     final bytes = await buildVoucherBytes(
       agreement: agreement,
@@ -65,7 +67,11 @@ class ConsignmentDocumentPdfService {
       shopSettings: shopSettings,
       shopLogoBytes: shopLogoBytes,
     );
-    return _layout('consignment-${agreement.number}.pdf', bytes);
+    return _layout(
+      'consignment-${agreement.number}.pdf',
+      bytes,
+      printingRepository,
+    );
   }
 
   // -- the payout receipt ---------------------------------------------------
@@ -87,13 +93,18 @@ class ConsignmentDocumentPdfService {
     required ConsignorPayout payout,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
+    PrintingRepository? printingRepository,
   }) async {
     final bytes = await buildPayoutBytes(
       payout: payout,
       shopSettings: shopSettings,
       shopLogoBytes: shopLogoBytes,
     );
-    return _layout('consignor-payout-${payout.number}.pdf', bytes);
+    return _layout(
+      'consignor-payout-${payout.number}.pdf',
+      bytes,
+      printingRepository,
+    );
   }
 
   // -- rendering ------------------------------------------------------------
@@ -126,7 +137,20 @@ class ConsignmentDocumentPdfService {
     return pdf.save();
   }
 
-  Future<bool> _layout(String name, Uint8List bytes) {
+  /// The device's documents printer when one is set, else the system print
+  /// dialog.
+  Future<bool> _layout(
+    String name,
+    Uint8List bytes,
+    PrintingRepository? printingRepository,
+  ) {
+    if (printingRepository != null) {
+      return printingRepository.printDocumentPdf(
+        jobName: name,
+        usePrinterSettings: true,
+        onLayout: (_) async => bytes,
+      );
+    }
     return Printing.layoutPdf(
       name: name,
       format: PdfPageFormat.a4,

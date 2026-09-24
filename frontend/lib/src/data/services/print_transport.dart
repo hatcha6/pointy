@@ -1,3 +1,4 @@
+import '../models/device_printers.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 
@@ -44,12 +45,27 @@ class PrintTransportStatus {
 }
 
 class PrintTransportResult {
-  const PrintTransportResult.success(this.message) : isSuccess = true;
+  const PrintTransportResult.success(this.message)
+    : isSuccess = true,
+      unassignedRole = null;
 
-  const PrintTransportResult.failure(this.message) : isSuccess = false;
+  const PrintTransportResult.failure(this.message)
+    : isSuccess = false,
+      unassignedRole = null;
+
+  /// Nothing was sent, because no printer on this device does [role]'s job.
+  PrintTransportResult.unassigned(PrinterRole role)
+    : isSuccess = false,
+      unassignedRole = role,
+      message = PrinterRoleUnassigned(role).toString();
 
   final bool isSuccess;
   final String message;
+
+  /// Set when the print never reached a printer because none holds the job:
+  /// something only the device's printer settings can fix, unlike a printer
+  /// that is switched off.
+  final PrinterRole? unassignedRole;
 }
 
 class PrintTransportResponse {

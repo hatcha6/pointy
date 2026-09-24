@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 
 import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/branding_assets.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/pdf/pdf.dart';
@@ -46,17 +47,27 @@ class RegisterZReportPdfService {
     return document.save();
   }
 
-  /// Opens the system print dialog (any A4/office printer, or save-as-PDF).
+  /// Prints on the device's documents printer when [printingRepository] is
+  /// given and one is set; otherwise opens the system print dialog (any
+  /// A4/office printer, or save-as-PDF).
   Future<bool> printZReport({
     required RegisterSessionSummary summary,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
+    PrintingRepository? printingRepository,
   }) async {
     final bytes = await buildBytes(
       summary: summary,
       shopSettings: shopSettings,
       shopLogoBytes: shopLogoBytes,
     );
+    if (printingRepository != null) {
+      return printingRepository.printDocumentPdf(
+        jobName: _fileName(summary),
+        usePrinterSettings: true,
+        onLayout: (_) async => bytes,
+      );
+    }
     return Printing.layoutPdf(
       name: _fileName(summary),
       format: PdfPageFormat.a4,

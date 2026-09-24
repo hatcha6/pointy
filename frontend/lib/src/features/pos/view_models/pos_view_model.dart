@@ -17,6 +17,7 @@ import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/formatters.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
+import '../../../data/models/device_printers.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/printer_config.dart';

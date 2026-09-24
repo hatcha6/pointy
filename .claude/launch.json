@@ -340,6 +340,14 @@
       "port": 8080
     },
     {
+      "name": "printers-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-printers-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "camera-wedge-lab",
       "runtimeExecutable": "python3",
       "runtimeArgs": [

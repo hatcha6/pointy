@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart' show LayoutCallback;
+
 import '../../core/result.dart';
 import '../../shared/date_formatters.dart';
 import '../../shared/formatters.dart';
 import '../models/barcode_label.dart';
+import '../models/device_printers.dart';
 import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
@@ -17,7 +21,7 @@ import '../services/barcode_label_calibration.dart';
 import '../services/barcode_label_command_encoder.dart';
 import '../services/barcode_label_document_service.dart';
 import '../services/barcode_label_language_detector.dart';
-import '../services/device_settings_storage_service.dart';
+import '../services/device_printers_storage.dart';
 import '../services/esc_pos_receipt_encoder.dart';
 import '../services/order_document_service.dart';
 import '../services/pos_api_service.dart';
@@ -40,8 +44,7 @@ class PrintingRepository {
         const BarcodeLabelLanguageDetector(),
     EscPosReceiptEncoder receiptEncoder = const EscPosReceiptEncoder(),
     OrderDocumentService documentService = const OrderDocumentService(),
-    DeviceSettingsStorageService storageService =
-        const DeviceSettingsStorageService(),
+    DevicePrintersStorage printersStorage = const DevicePrintersStorage(),
   }) : _serialTransport = serialTransport ?? SerialPrintTransport(),
        _bluetoothTransport = bluetoothTransport ?? BluetoothPrintTransport(),
        _wifiTransport = wifiTransport ?? WifiPrintTransport(),
@@ -52,7 +55,7 @@ class PrintingRepository {
        _barcodeLabelLanguageDetector = barcodeLabelLanguageDetector,
        _receiptEncoder = receiptEncoder,
        _documentService = documentService,
-       _storageService = storageService;
+       _printersStorage = printersStorage;
 
   final PosApiService _service;
   final PrintTransport _serialTransport;
@@ -65,7 +68,7 @@ class PrintingRepository {
   final BarcodeLabelLanguageDetector _barcodeLabelLanguageDetector;
   final EscPosReceiptEncoder _receiptEncoder;
   final OrderDocumentService _documentService;
-  final DeviceSettingsStorageService _storageService;
+  final DevicePrintersStorage _printersStorage;
 
   Future<Result<List<PrintJob>>> loadPrintJobs({
     PrintJobStatus? status,
@@ -194,65 +197,116 @@ class PrintingRepository {
     });
   }
 
-  Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
-    return loadPrinterConfigForRole(PrinterRole.posReceipt);
+  /// Every printer on this device and the jobs each one does.
+  Future<Result<DevicePrinters>> loadDevicePrinters() {
+    return Result.guard(_loadPrinters);
   }
 
-  Future<Result<void>> saveDefaultPrinterConfig(PrinterConfig config) async {
-    return savePrinterConfigForRole(PrinterRole.posReceipt, config);
+  Future<Result<void>> saveDevicePrinters(DevicePrinters printers) {
+    return Result.guard(
+      () => _printersStorage.save(
+        DevicePrinters([
+          for (final printer in printers.printers)
+            printer.copyWith(config: _devicePrintableConfig(printer.config)),
+        ]),
+      ),
+    );
   }
 
-  Future<Result<PrinterConfig>> loadPrinterConfigForRole(
-    PrinterRole role,
-  ) async {
-    return Result.guard(() async {
-      final config = await _storageService.loadPrinterConfigForRole(role);
-      return _devicePrintableConfig(config ?? PrinterConfig.defaultConfig());
-    });
+  /// The printer that does [role]'s job on this device. An [Error] carrying
+  /// [PrinterRoleUnassigned] when no printer holds it.
+  Future<Result<PrinterConfig>> loadPrinterConfigFor(PrinterRole role) async {
+    final printers = await loadDevicePrinters();
+    return switch (printers) {
+      Ok<DevicePrinters>(:final value) => switch (value.holderOf(role)) {
+        final DevicePrinter printer => Ok(printer.config),
+        null => Error(PrinterRoleUnassigned(role)),
+      },
+      Error<DevicePrinters>(:final exception) => Error(exception),
+    };
   }
 
-  Future<Result<void>> savePrinterConfigForRole(
-    PrinterRole role,
-    PrinterConfig config,
-  ) async {
-    return Result.guard(() async {
-      await _storageService.savePrinterConfigForRole(
-        role,
-        _devicePrintableConfig(config),
-      );
-    });
+  Future<Result<PrinterConfig>> loadReceiptPrinterConfig() {
+    return loadPrinterConfigFor(PrinterRole.posReceipt);
   }
 
   /// The kitchen station printers this device serves, keyed by prep station id.
   Future<Map<int, PrinterConfig>> loadKitchenStationConfigs() async {
-    final configs = await _storageService.loadKitchenStationConfigs();
-    return configs.map(
-      (stationId, config) =>
-          MapEntry(stationId, _devicePrintableConfig(config)),
+    return (await _loadPrinters()).kitchenStationConfigs;
+  }
+
+  /// The printer full-page documents go to without asking, or null when no
+  /// printer here does that job — the caller then opens the system print
+  /// dialog, as reports always did.
+  Future<PrinterEndpoint?> loadDocumentsPrinterEndpoint() async {
+    final endpoint = (await _loadPrinters())
+        .holderOf(PrinterRole.documents)
+        ?.endpoint;
+    return endpoint != null && endpoint.usesDocumentInvoice ? endpoint : null;
+  }
+
+  /// Prints a finished A4 document — a report, the A4 shift report, a
+  /// consignment paper — on this device's documents printer, straight to it
+  /// when it can be reached and through the system print dialog otherwise.
+  Future<bool> printDocumentPdf({
+    required String jobName,
+    required LayoutCallback onLayout,
+    PdfPageFormat format = PdfPageFormat.a4,
+    bool usePrinterSettings = false,
+  }) async {
+    PrinterEndpoint? endpoint;
+    try {
+      endpoint = await loadDocumentsPrinterEndpoint();
+    } on Object {
+      // Unreadable settings still leave the dialog, which prints anywhere.
+      endpoint = null;
+    }
+    return _documentService.printA4Document(
+      jobName: jobName,
+      onLayout: onLayout,
+      format: format,
+      usePrinterSettings: usePrinterSettings,
+      endpoint: endpoint,
     );
   }
 
-  Future<PrinterConfig?> loadKitchenStationConfig(int stationId) async {
-    final config = await _storageService.loadKitchenStationConfig(stationId);
-    return config == null ? null : _devicePrintableConfig(config);
+  Future<DevicePrinters> _loadPrinters() async {
+    final printers = await _printersStorage.load();
+    return DevicePrinters([
+      for (final printer in printers.printers)
+        printer.copyWith(config: _devicePrintableConfig(printer.config)),
+    ]);
   }
 
-  Future<Result<void>> saveKitchenStationConfig(
-    int stationId,
-    PrinterConfig config,
-  ) async {
-    return Result.guard(() async {
-      await _storageService.saveKitchenStationConfig(
-        stationId,
-        _devicePrintableConfig(config),
+  /// Runs [print] on the printer that does [role]'s job — or, when nobody
+  /// does, on [fallback]'s printer. Never throws: unreadable settings and a
+  /// job with no printer both come back as a failed result.
+  Future<PrintTransportResult> _withPrinterFor(
+    PrinterRole role,
+    Future<PrintTransportResult> Function(
+      DevicePrinter printer,
+      PrinterRole role,
+    )
+    print, {
+    PrinterRole? fallback,
+  }) async {
+    final DevicePrinters printers;
+    try {
+      printers = await _loadPrinters();
+    } on Object catch (error) {
+      return PrintTransportResult.failure(
+        'printer settings unavailable: $error',
       );
-    });
-  }
-
-  Future<Result<void>> removeKitchenStationConfig(int stationId) async {
-    return Result.guard(
-      () => _storageService.removeKitchenStationConfig(stationId),
-    );
+    }
+    final holder = printers.holderOf(role);
+    if (holder != null) {
+      return print(holder, role);
+    }
+    final standIn = fallback == null ? null : printers.holderOf(fallback);
+    if (standIn != null) {
+      return print(standIn, fallback!);
+    }
+    return PrintTransportResult.unassigned(role);
   }
 
   /// Claims a queued kitchen job for this device's station printer, then prints
@@ -291,6 +345,24 @@ class PrintingRepository {
     return _fakeTransport.printTest(config.endpoint);
   }
 
+  /// A full A4 test page, whatever roll the printer's receipts are set to —
+  /// reports and purchase orders print on A4 there.
+  Future<PrintTransportResult> printDocumentTest(PrinterConfig config) {
+    if (!config.endpoint.usesDocumentInvoice) {
+      return Future.value(
+        const PrintTransportResult.failure(
+          'documents require a system (PDF) printer',
+        ),
+      );
+    }
+    return _documentService.printTest(
+      config.endpoint.copyWith(
+        pdfPageSize: PdfPageSize.a4,
+        compactReceipt: false,
+      ),
+    );
+  }
+
   /// Prints a sample kitchen chit so a station's thermal printer can be tested
   /// from settings without ringing up a sale.
   Future<PrintTransportResult> printKitchenTest(PrinterConfig config) async {
@@ -321,36 +393,30 @@ class PrintingRepository {
       return const PrintTransportResult.failure('no barcode labels to print');
     }
 
-    final configResult = await loadDefaultPrinterConfig();
-    final config = switch (configResult) {
-      Ok<PrinterConfig>() => configResult.value,
-      Error<PrinterConfig>() => null,
-    };
-    if (config == null) {
-      return const PrintTransportResult.failure('printer config unavailable');
-    }
+    return _withPrinterFor(PrinterRole.barcodeLabels, (printer, _) async {
+      final config = printer.config;
+      // A system/driver printer (Xprinter N160II and friends) that only speaks
+      // its vendor PDF/graphics driver prints stickers through the document
+      // path, the same route its receipts take. Raw ESC/POS-family printers
+      // use the native label-language encoder.
+      if (config.endpoint.usesDocumentInvoice) {
+        return _barcodeLabelDocumentService.printLabels(
+          lines: lines,
+          endpoint: config.endpoint,
+        );
+      }
+      if (!config.endpoint.usesThermalReceipt) {
+        return const PrintTransportResult.failure(
+          'barcode labels require a thermal or document printer',
+        );
+      }
 
-    // A system/driver printer (Xprinter N160II and friends) that only speaks its
-    // vendor PDF/graphics driver prints stickers through the document path, the
-    // same route its receipts take. Raw ESC/POS-family printers use the native
-    // label-language encoder.
-    if (config.endpoint.usesDocumentInvoice) {
-      return _barcodeLabelDocumentService.printLabels(
-        lines: lines,
-        endpoint: config.endpoint,
-      );
-    }
-    if (!config.endpoint.usesThermalReceipt) {
-      return const PrintTransportResult.failure(
-        'barcode labels require a thermal or document printer',
-      );
-    }
-
-    try {
-      return _printBarcodeLabelLines(lines, config);
-    } on Object catch (error) {
-      return PrintTransportResult.failure(error.toString());
-    }
+      try {
+        return await _printBarcodeLabelLines(lines, config);
+      } on Object catch (error) {
+        return PrintTransportResult.failure(error.toString());
+      }
+    });
   }
 
   /// Prints one of the label calibration sheets. Document/PDF printers only —
@@ -419,108 +485,105 @@ class PrintingRepository {
     required SaleOrder order,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
-  }) async {
-    final configResult = await loadDefaultPrinterConfig();
-    final config = switch (configResult) {
-      Ok<PrinterConfig>() => configResult.value,
-      Error<PrinterConfig>() => null,
-    };
-    if (config == null) {
-      return const PrintTransportResult.failure('printer config unavailable');
-    }
-
-    if (config.endpoint.usesDocumentInvoice) {
-      final auditEvent = await _beginPrintAudit(
-        documentType: PrintAuditDocumentType.saleOrder,
-        documentId: order.id,
-        action: PrintAuditAction.print,
-        config: config,
-      );
-      if (auditEvent == null) {
-        return const PrintTransportResult.failure('print audit unavailable');
+  }) {
+    return _withPrinterFor(PrinterRole.posReceipt, (printer, role) async {
+      final config = printer.config;
+      if (config.endpoint.usesDocumentInvoice) {
+        final auditEvent = await _beginPrintAudit(
+          documentType: PrintAuditDocumentType.saleOrder,
+          documentId: order.id,
+          action: PrintAuditAction.print,
+          printer: printer,
+          role: role,
+        );
+        if (auditEvent == null) {
+          return const PrintTransportResult.failure('print audit unavailable');
+        }
+        final result = await _printDocument(() {
+          return _documentService.printSaleInvoice(
+            order: order,
+            shopSettings: shopSettings,
+            shopLogoBytes: shopLogoBytes,
+            endpoint: config.endpoint,
+          );
+        });
+        _reportPrintAudit(
+          auditEvent,
+          _auditStatusForPrintResult(result),
+          message: result.message,
+        );
+        return result;
       }
-      final result = await _printDocument(() {
-        return _documentService.printSaleInvoice(
-          order: order,
-          shopSettings: shopSettings,
-          shopLogoBytes: shopLogoBytes,
-          endpoint: config.endpoint,
-        );
-      });
-      _reportPrintAudit(
-        auditEvent,
-        _auditStatusForPrintResult(result),
-        message: result.message,
-      );
-      return result;
-    }
 
-    final jobResult = await requestSaleReprint(order.id);
-    switch (jobResult) {
-      case Ok<PrintJob>(value: final printJob):
-        final result = await printAndReportJob(job: printJob, config: config);
-        return switch (result) {
-          Ok<PrintJob>() => const PrintTransportResult.success(
-            'sale invoice printed',
-          ),
-          Error<PrintJob>(:final exception) => PrintTransportResult.failure(
-            exception.toString(),
-          ),
-        };
-      case Error<PrintJob>(:final exception):
-        return PrintTransportResult.failure(
-          'sale print audit unavailable: $exception',
-        );
-    }
+      final jobResult = await requestSaleReprint(order.id);
+      switch (jobResult) {
+        case Ok<PrintJob>(value: final printJob):
+          final result = await printAndReportJob(job: printJob, config: config);
+          return switch (result) {
+            Ok<PrintJob>() => const PrintTransportResult.success(
+              'sale invoice printed',
+            ),
+            Error<PrintJob>(:final exception) => PrintTransportResult.failure(
+              exception.toString(),
+            ),
+          };
+        case Error<PrintJob>(:final exception):
+          return PrintTransportResult.failure(
+            'sale print audit unavailable: $exception',
+          );
+      }
+    });
   }
 
+  /// A purchase order is a document: it goes to the documents printer, and to
+  /// the receipt printer — where it always printed — when nobody does
+  /// documents.
   Future<PrintTransportResult> printPurchaseOrder({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
-  }) async {
-    final configResult = await loadDefaultPrinterConfig();
-    final config = switch (configResult) {
-      Ok<PrinterConfig>() => configResult.value,
-      Error<PrinterConfig>() => null,
-    };
-    if (config == null) {
-      return const PrintTransportResult.failure('printer config unavailable');
-    }
+  }) {
+    return _withPrinterFor(
+      PrinterRole.documents,
+      fallback: PrinterRole.posReceipt,
+      (printer, role) async {
+        final config = printer.config;
+        final auditEvent = await _beginPrintAudit(
+          documentType: PrintAuditDocumentType.purchaseOrder,
+          documentId: order.id,
+          action: PrintAuditAction.print,
+          printer: printer,
+          role: role,
+        );
+        if (auditEvent == null) {
+          return const PrintTransportResult.failure('print audit unavailable');
+        }
 
-    final auditEvent = await _beginPrintAudit(
-      documentType: PrintAuditDocumentType.purchaseOrder,
-      documentId: order.id,
-      action: PrintAuditAction.print,
-      config: config,
+        final result = config.endpoint.usesDocumentInvoice
+            ? await _printDocument(() {
+                return _documentService.printPurchaseOrder(
+                  order: order,
+                  shopSettings: shopSettings,
+                  shopLogoBytes: shopLogoBytes,
+                  endpoint: config.endpoint,
+                );
+              })
+            : await _printThermalPayload(
+                _purchaseReceiptPayload(
+                  order: order,
+                  shopSettings: shopSettings,
+                  shopLogoBytes: shopLogoBytes,
+                ),
+                config,
+              );
+        _reportPrintAudit(
+          auditEvent,
+          _auditStatusForPrintResult(result),
+          message: result.message,
+        );
+        return result;
+      },
     );
-    if (auditEvent == null) {
-      return const PrintTransportResult.failure('print audit unavailable');
-    }
-
-    final result = config.endpoint.usesDocumentInvoice
-        ? await _printDocument(() {
-            return _documentService.printPurchaseOrder(
-              order: order,
-              shopSettings: shopSettings,
-              shopLogoBytes: shopLogoBytes,
-              endpoint: config.endpoint,
-            );
-          })
-        : await _printThermalPayload(
-            _purchaseReceiptPayload(
-              order: order,
-              shopSettings: shopSettings,
-              shopLogoBytes: shopLogoBytes,
-            ),
-            config,
-          );
-    _reportPrintAudit(
-      auditEvent,
-      _auditStatusForPrintResult(result),
-      message: result.message,
-    );
-    return result;
   }
 
   /// Prints a standalone proof-of-payment slip (سند قبض / سند صرف) for a single
@@ -533,48 +596,43 @@ class PrintingRepository {
     required PrintAuditPaymentKind paymentKind,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
-  }) async {
-    final configResult = await loadDefaultPrinterConfig();
-    final config = switch (configResult) {
-      Ok<PrinterConfig>() => configResult.value,
-      Error<PrinterConfig>() => null,
-    };
-    if (config == null) {
-      return const PrintTransportResult.failure('printer config unavailable');
-    }
-
-    final auditEvent = await _beginPaymentProofAudit(
-      paymentId: paymentId,
-      paymentKind: paymentKind,
-      config: config,
-    );
-
-    final result = config.endpoint.usesDocumentInvoice
-        ? await _printDocument(() {
-            return _documentService.printProofOfPayment(
-              proof: proof,
-              shopSettings: shopSettings,
-              shopLogoBytes: shopLogoBytes,
-              endpoint: config.endpoint,
-            );
-          })
-        : await _printThermalPayload(
-            _proofOfPaymentPayload(
-              proof: proof,
-              shopSettings: shopSettings,
-              shopLogoBytes: shopLogoBytes,
-            ),
-            config,
-          );
-
-    if (auditEvent != null) {
-      _reportPrintAudit(
-        auditEvent,
-        _auditStatusForPrintResult(result),
-        message: result.message,
+  }) {
+    return _withPrinterFor(PrinterRole.posReceipt, (printer, role) async {
+      final config = printer.config;
+      final auditEvent = await _beginPaymentProofAudit(
+        paymentId: paymentId,
+        paymentKind: paymentKind,
+        printer: printer,
+        role: role,
       );
-    }
-    return result;
+
+      final result = config.endpoint.usesDocumentInvoice
+          ? await _printDocument(() {
+              return _documentService.printProofOfPayment(
+                proof: proof,
+                shopSettings: shopSettings,
+                shopLogoBytes: shopLogoBytes,
+                endpoint: config.endpoint,
+              );
+            })
+          : await _printThermalPayload(
+              _proofOfPaymentPayload(
+                proof: proof,
+                shopSettings: shopSettings,
+                shopLogoBytes: shopLogoBytes,
+              ),
+              config,
+            );
+
+      if (auditEvent != null) {
+        _reportPrintAudit(
+          auditEvent,
+          _auditStatusForPrintResult(result),
+          message: result.message,
+        );
+      }
+      return result;
+    });
   }
 
   /// Prints an end-of-shift Z-Report on the POS receipt printer (the classic
@@ -584,23 +642,17 @@ class PrintingRepository {
     required RegisterSessionSummary summary,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
-  }) async {
-    final configResult = await loadDefaultPrinterConfig();
-    final config = switch (configResult) {
-      Ok<PrinterConfig>() => configResult.value,
-      Error<PrinterConfig>() => null,
-    };
-    if (config == null) {
-      return const PrintTransportResult.failure('printer config unavailable');
-    }
-    return _printThermalPayload(
-      _zReportPayload(
-        summary: summary,
-        shopSettings: shopSettings,
-        shopLogoBytes: shopLogoBytes,
-      ),
-      config,
-    );
+  }) {
+    return _withPrinterFor(PrinterRole.posReceipt, (printer, _) {
+      return _printThermalPayload(
+        _zReportPayload(
+          summary: summary,
+          shopSettings: shopSettings,
+          shopLogoBytes: shopLogoBytes,
+        ),
+        printer.config,
+      );
+    });
   }
 
   Future<OrderDocumentActionStatus> shareSaleInvoice({
@@ -649,8 +701,10 @@ class PrintingRepository {
     required PrintAuditDocumentType documentType,
     required int documentId,
     required PrintAuditAction action,
-    required PrinterConfig config,
+    required DevicePrinter printer,
+    required PrinterRole role,
   }) {
+    final config = printer.config;
     return _recordPrintAuditEvent(
       PrintAuditEventDraft(
         documentType: documentType,
@@ -660,12 +714,25 @@ class PrintingRepository {
         printerEndpoint: config.endpoint.toJson(),
         deviceName: config.agentId,
         printerName: _endpointDisplayName(config.endpoint),
-        metadata: {
-          'output_mode': config.endpoint.outputMode.name,
-          'transport_kind': config.endpoint.kind.name,
-        },
+        metadata: _printerAuditMetadata(printer, role),
       ),
     );
+  }
+
+  /// Which printer on the device took the job, and which job it was taken as:
+  /// a purchase order printing on the receipt printer reads differently from
+  /// one on the documents printer.
+  Map<String, Object?> _printerAuditMetadata(
+    DevicePrinter printer,
+    PrinterRole role,
+  ) {
+    return {
+      'output_mode': printer.endpoint.outputMode.name,
+      'transport_kind': printer.endpoint.kind.name,
+      'printer_role': printerRoleToJson(role),
+      if (printer.label.trim().isNotEmpty)
+        'printer_label': printer.label.trim(),
+    };
   }
 
   Future<PrintAuditEvent?> _beginShareAudit({
@@ -698,8 +765,10 @@ class PrintingRepository {
   Future<PrintAuditEvent?> _beginPaymentProofAudit({
     required int paymentId,
     required PrintAuditPaymentKind paymentKind,
-    required PrinterConfig config,
+    required DevicePrinter printer,
+    required PrinterRole role,
   }) {
+    final config = printer.config;
     return _recordPrintAuditEvent(
       PrintAuditEventDraft(
         documentType: PrintAuditDocumentType.paymentReceipt,
@@ -710,16 +779,15 @@ class PrintingRepository {
         printerEndpoint: config.endpoint.toJson(),
         deviceName: config.agentId,
         printerName: _endpointDisplayName(config.endpoint),
-        metadata: {
-          'output_mode': config.endpoint.outputMode.name,
-          'transport_kind': config.endpoint.kind.name,
-        },
+        metadata: _printerAuditMetadata(printer, role),
       ),
     );
   }
 
+  /// The receipt printer's config for a share's audit row, which records the
+  /// device's printer beside the PDF it shared.
   Future<PrinterConfig> _loadAuditPrinterConfig() async {
-    final result = await loadDefaultPrinterConfig();
+    final result = await loadReceiptPrinterConfig();
     return switch (result) {
       Ok<PrinterConfig>(value: final config) => config,
       Error<PrinterConfig>() => PrinterConfig.defaultConfig(),

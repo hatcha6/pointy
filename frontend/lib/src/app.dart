@@ -342,9 +342,11 @@ class _PrinterConnectionNotifierState
   }
 
   void _handleStateChanged() {
-    final endpoint = widget.printingSettingsViewModel.config.endpoint;
-    final endpointKey =
-        '${endpoint.kind.name}:${endpoint.address}:${endpoint.port}';
+    // Watches the receipt printer: the one a sale waits on.
+    final endpoint = widget.printingSettingsViewModel.receiptPrinter?.endpoint;
+    final endpointKey = endpoint == null
+        ? ''
+        : '${endpoint.kind.name}:${endpoint.address}:${endpoint.port}';
     if (_lastEndpointKey != endpointKey) {
       _lastEndpointKey = endpointKey;
       _notifiedDisconnectedEndpointKey = null;

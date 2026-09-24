@@ -184,6 +184,7 @@ class PointyAppDependencies {
     consignmentViewModel = ConsignmentViewModel(
       consignmentRepository,
       shopSettingsRepository: shopSettingsRepository,
+      printingRepository: printingRepository,
     );
     subscriptionRepository = SubscriptionRepository(service);
     fxRepository = FxRepository(service);
@@ -585,6 +586,7 @@ class PointyAppDependencies {
   PrintingSettingsViewModel get printingSettingsViewModel =>
       _printingSettingsViewModel ??= PrintingSettingsViewModel(
         printingRepository,
+        prepStationRepository: prepStationRepository,
         analyticsEngine: analyticsEngine,
       );
 

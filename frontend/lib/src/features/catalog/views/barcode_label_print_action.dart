@@ -173,6 +173,8 @@ class _BarcodeLabelPrintButtonState extends State<BarcodeLabelPrintButton> {
         content: Text(
           result.isSuccess
               ? l10n.barcodeLabelPrintSuccess(options.copies)
+              : result.unassignedRole != null
+              ? l10n.barcodeLabelNoPrinter
               : l10n.barcodeLabelPrintError,
         ),
       ),

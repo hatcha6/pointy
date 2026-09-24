@@ -8,13 +8,23 @@ const devicesGuides = <LearningGuide>[
   LearningGuide(
     id: 'devices.printers',
     title: 'إعداد الطابعات وأدوارها',
-    summary: 'طابعة الإيصالات وطابعة المطبخ وطابعة الملصقات، لكل دورها.',
+    summary:
+        'طابعة الإيصالات والملصقات وA4 والمطبخ على جهاز واحد، لكل منها مهمتها.',
     track: LearningTrack.devices,
     level: LearningLevel.intermediate,
     kind: LearningKind.walkthrough,
     minutes: 4,
     capability: AppCapability.manageDeviceSettings,
-    keywords: ['printer', 'طابعة', 'طباعة', 'إيصال', 'حرارية'],
+    keywords: [
+      'printer',
+      'طابعة',
+      'طباعة',
+      'إيصال',
+      'حرارية',
+      'ملصقات',
+      'A4',
+      'طابعتين',
+    ],
     related: ['selling.receipt', 'devices.labels', 'operations.kitchen'],
     opens: AppNavigationDestination.deviceSettings,
     sections: [
@@ -24,14 +34,35 @@ const devicesGuides = <LearningGuide>[
           LearningSteps([
             LearningStep('افتح «إعدادات الجهاز» ثم الطابعات.'),
             LearningStep(
-              'اضغط «اكتشاف الطابعات» لعرض المتاح، أو أضِف طابعة يدويًا بعنوانها.',
+              'اضغط «إضافة طابعة» واختر الطابعة من القائمة، أو أضِف طابعة شبكة بعنوانها.',
               detail: 'يدعم البرنامج الشبكة وUSB وبلوتوث والطباعة عبر النظام.',
             ),
             LearningStep(
-              'اختر دور الطابعة: إيصالات نقطة البيع، أو محطة تحضير، أو ملصقات.',
+              'اختر ما تطبعه: إيصالات البيع، أو ملصقات الباركود، أو المستندات والتقارير A4، أو تذاكر محطة تحضير.',
+              detail:
+                  'لكل مهمة طابعة واحدة؛ إن كانت طابعة أخرى تطبعها انتقلت إلى هذه.',
             ),
-            LearningStep('اضغط «فحص الاتصال» وجرّب طباعة اختبارية.'),
+            LearningStep('جرّب الطباعة التجريبية، ثم احفظ.'),
           ]),
+        ],
+      ),
+      LearningSection(
+        title: 'أكثر من طابعة',
+        blocks: [
+          LearningParagraph(
+            'أضف كل طابعة موصولة بالجهاز مرة واحدة، وأعطِ كلًّا منها مهمتها: '
+            'الإيصالات على طابعة الكاشير، والملصقات على طابعة الملصقات، '
+            'والتقارير على طابعة A4. بعدها تذهب كل طباعة إلى طابعتها وحدها، '
+            'فلا حاجة لتغيير الإعدادات عند طباعة ملصق أو تقرير.',
+          ),
+          LearningNote(
+            tone: LearningNoteTone.tip,
+            title: 'ماذا يُطبع وأين',
+            message:
+                'في أعلى قسم الطابعات قائمة بكل مهمة وطابعتها. غيّر الطابعة من '
+                'هناك مباشرة، أو اتركها «بلا طابعة»: تفتح التقارير عندها نافذة '
+                'الطباعة كما كانت.',
+          ),
         ],
       ),
       LearningSection(

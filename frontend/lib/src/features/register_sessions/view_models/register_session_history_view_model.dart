@@ -352,13 +352,15 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     });
   }
 
-  /// Opens the system print dialog for the A4 PDF Z-Report.
+  /// Prints the A4 PDF Z-Report on the device's documents printer, or opens
+  /// the system print dialog when no printer does that job.
   Future<bool> printZReportPdf() async {
     return _runZReport('pdf_print', (summary, shopSettings, logoBytes) {
       return _pdfService.printZReport(
         summary: summary,
         shopSettings: shopSettings,
         shopLogoBytes: logoBytes,
+        printingRepository: _printingRepository,
       );
     });
   }

@@ -1111,11 +1111,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       DeviceSettingsScreen(
         deviceSettingsViewModel: dependencies.deviceSettingsViewModel,
         printingSettingsViewModel: dependencies.printingSettingsViewModel,
-        printingRepository: dependencies.printingRepository,
-        prepStationRepository: dependencies.prepStationRepository,
         priceCheckerController: dependencies.priceCheckerModeController,
         priceCheckerRepository: dependencies.priceCheckerRepository,
-        analyticsEngine: dependencies.analyticsEngine,
         capabilities: capabilities,
         navigation: this,
         // Flipping the switch starts or stops the camera immediately, rather
@@ -1504,7 +1501,10 @@ class _AuthenticatedRoutes implements AppNavigation {
     if (document == null || !context.mounted) {
       return;
     }
-    final printed = await const ReportPrintingService().print(document);
+    final printed = await const ReportPrintingService().print(
+      document,
+      printingRepository: dependencies.printingRepository,
+    );
     if (printed && context.mounted) {
       unawaited(
         dependencies.analyticsEngine.trackUsage(
@@ -1966,6 +1966,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         content: Text(
           result.isSuccess
               ? l10n.commandPaletteLabelPrinted
+              : result.unassignedRole != null
+              ? l10n.barcodeLabelNoPrinter
               : l10n.commandPaletteLabelPrintFailed,
         ),
       ),

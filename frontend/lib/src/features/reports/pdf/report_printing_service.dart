@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
+import '../../../data/repositories/printing_repository.dart';
 import 'report_pdf_fonts.dart';
 import 'report_pdf_generator.dart';
 import 'report_pdf_models.dart';
@@ -56,21 +57,34 @@ class ReportPrintingService {
     );
   }
 
+  /// Prints [report] on the device's documents printer when
+  /// [printingRepository] is given and one is set, and through the system
+  /// print dialog otherwise.
   Future<bool> print(
     BusinessReportPdfDocument report, {
     ReportPdfOptions? options,
     String? jobName,
     ReportPdfFonts? fonts,
+    PrintingRepository? printingRepository,
   }) {
     final resolvedOptions = options ?? this.options;
+    final name = jobName ?? report.title;
+    final onLayout = layoutCallback(
+      report,
+      options: resolvedOptions,
+      fonts: fonts ?? this.fonts,
+    );
+    if (printingRepository != null) {
+      return printingRepository.printDocumentPdf(
+        jobName: name,
+        format: resolvedOptions.pageFormat,
+        onLayout: onLayout,
+      );
+    }
     return Printing.layoutPdf(
-      name: jobName ?? report.title,
+      name: name,
       format: resolvedOptions.pageFormat,
-      onLayout: layoutCallback(
-        report,
-        options: resolvedOptions,
-        fonts: fonts ?? this.fonts,
-      ),
+      onLayout: onLayout,
     );
   }
 
