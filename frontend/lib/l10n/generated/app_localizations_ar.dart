@@ -2549,6 +2549,42 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.';
 
   @override
+  String get loginErrorAccountDisabled =>
+      'هذا الحساب معطّل. تواصل مع مدير المتجر.';
+
+  @override
+  String get loginErrorTooManyAttempts =>
+      'محاولات كثيرة لتسجيل الدخول. انتظر دقيقة ثم حاول مجددًا.';
+
+  @override
+  String get loginErrorRelayRejected =>
+      'انتهت صلاحية ربط هذا الجهاز بالوصول عن بُعد. افتح التطبيق مرة على شبكة المتجر وسجّل الدخول لإعادة الربط.';
+
+  @override
+  String get loginErrorRelaySubscriptionInactive =>
+      'الوصول عن بُعد غير مفعّل لهذا المتجر. الاشتراك غير نشط.';
+
+  @override
+  String get loginErrorRelayConnectorOffline =>
+      'خادم المتجر غير متصل بخدمة الوصول عن بُعد الآن. تأكد من تشغيل الخادم واتصاله بالإنترنت.';
+
+  @override
+  String get loginErrorRelayUnavailable =>
+      'تعذر الوصول إلى خادم المتجر عبر خدمة الوصول عن بُعد. حاول مجددًا بعد قليل.';
+
+  @override
+  String get loginErrorRelayUnreachable =>
+      'تعذر الاتصال بخدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.';
+
+  @override
+  String get loginErrorServerUnreachable =>
+      'تعذر الوصول إلى خادم المتجر. تحقق من اتصال الجهاز بشبكة المتجر.';
+
+  @override
+  String get loginErrorServer =>
+      'حدث خطأ في الخادم أثناء تسجيل الدخول. حاول مجددًا.';
+
+  @override
   String get managerRoleLabel => 'مدير';
 
   @override

@@ -1782,6 +1782,90 @@ func TestHTTPRelayRefreshRequiresActiveSubscription(t *testing.T) {
 	if response.StatusCode != http.StatusPaymentRequired {
 		t.Fatalf("expected 402, got %d", response.StatusCode)
 	}
+
+	// The 402 left the refresh token unspent: once the subscription is back,
+	// the same token still buys a ticket, so the device needs no new LAN
+	// pairing to return.
+	relayEnabled = true
+	if _, err := store.UpdateSubscription(context.Background(), provisioned.Installation.ID, control.SubscriptionUpdate{
+		RelayEnabled: &relayEnabled,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	retry, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/relay-ticket-refresh",
+		strings.NewReader(`{"device_id":"register-1"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry.Header.Set(RefreshTokenHeader, issued.RefreshToken)
+	retryRecorder := httptest.NewRecorder()
+	server.ServeHTTP(retryRecorder, retry)
+	retryResponse := retryRecorder.Result()
+	defer retryResponse.Body.Close()
+
+	if retryResponse.StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(retryResponse.Body)
+		t.Fatalf("expected 201 once the subscription is back, got %d: %s", retryResponse.StatusCode, string(content))
+	}
+}
+
+func TestHTTPRelayRefreshStampsTheRelayClockOnTheTicket(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionRelayInstallation(t)
+	tickets := newMemoryTicketService(now)
+	issued, err := tickets.IssueTicket(
+		context.Background(),
+		provisioned.Installation,
+		control.RelayTicketRequest{DeviceID: "register-1"},
+		time.Minute,
+		24*time.Hour,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !issued.IssuedAt.Equal(now) {
+		t.Fatalf("expected the issued ticket to be stamped %s, got %s", now, issued.IssuedAt)
+	}
+	server := HTTPServer{
+		Store:            store,
+		Hub:              NewHub(),
+		Logger:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Tickets:          tickets,
+		TicketTTL:        time.Minute,
+		TicketRefreshTTL: 24 * time.Hour,
+		Clock:            testClock{now: now},
+	}
+
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/relay-ticket-refresh",
+		strings.NewReader(`{"device_id":"register-1"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set(RefreshTokenHeader, issued.RefreshToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 201, got %d: %s", response.StatusCode, string(content))
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	// On the wire, so a device can read it: the refresh answer carries the
+	// relay's own issue time next to the expiry.
+	if payload["issued_at"] != now.Format(time.RFC3339) {
+		t.Fatalf("expected issued_at %q on the wire, got %v", now.Format(time.RFC3339), payload["issued_at"])
+	}
 }
 
 func TestHTTPRelayIssuesConnectorCertificateAndStoresBinding(t *testing.T) {
@@ -3058,6 +3142,7 @@ func (s *memoryTicketService) IssueTicket(
 		DeviceID:         request.DeviceID,
 		DeviceName:       request.DeviceName,
 		Token:            token,
+		IssuedAt:         s.now,
 		ExpiresAt:        expiresAt,
 		RefreshToken:     refreshToken,
 		RefreshExpiresAt: refreshExpiresAt,
@@ -3086,10 +3171,27 @@ func (s *memoryTicketService) ValidateTicket(
 	return ticket, nil
 }
 
+func (s *memoryTicketService) PeekRefreshToken(
+	ctx context.Context,
+	rawToken string,
+	now time.Time,
+) (control.RelayRefreshToken, error) {
+	return s.readRefreshToken(ctx, rawToken, now, false)
+}
+
 func (s *memoryTicketService) ConsumeRefreshToken(
+	ctx context.Context,
+	rawToken string,
+	now time.Time,
+) (control.RelayRefreshToken, error) {
+	return s.readRefreshToken(ctx, rawToken, now, true)
+}
+
+func (s *memoryTicketService) readRefreshToken(
 	_ context.Context,
 	rawToken string,
 	now time.Time,
+	consume bool,
 ) (control.RelayRefreshToken, error) {
 	parsed, err := control.ParseToken(rawToken)
 	if err != nil {
@@ -3100,7 +3202,9 @@ func (s *memoryTicketService) ConsumeRefreshToken(
 	}
 	tokenHash := control.TokenHash(rawToken)
 	refresh, ok := s.refreshes[tokenHash]
-	delete(s.refreshes, tokenHash)
+	if consume {
+		delete(s.refreshes, tokenHash)
+	}
 	if !ok {
 		return control.RelayRefreshToken{}, control.ErrRelayRefreshTokenNotFound
 	}

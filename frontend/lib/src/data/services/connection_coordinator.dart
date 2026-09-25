@@ -20,6 +20,7 @@ class ConnectionCoordinator {
     RelayTicketRefreshClient? relayTicketRefreshClient,
     List<Duration> startupRecoveryBackoffs = defaultStartupRecoveryBackoffs,
     List<Duration> localReturnBackoffs = defaultLocalReturnBackoffs,
+    Duration pairingRetryDelay = defaultPairingRetryDelay,
   }) : _service = service,
        _discovery = discovery,
        _storage = storage,
@@ -27,7 +28,8 @@ class ConnectionCoordinator {
        _relayTicketRefreshClient =
            relayTicketRefreshClient ?? RelayTicketRefreshClient(),
        _startupRecoveryBackoffs = startupRecoveryBackoffs,
-       _localReturnBackoffs = localReturnBackoffs;
+       _localReturnBackoffs = localReturnBackoffs,
+       _pairingRetryDelay = pairingRetryDelay;
 
   final PosApiService _service;
   final BackendDiscoveryService _discovery;
@@ -36,11 +38,22 @@ class ConnectionCoordinator {
   final RelayTicketRefreshClient _relayTicketRefreshClient;
   final List<Duration> _startupRecoveryBackoffs;
   final List<Duration> _localReturnBackoffs;
+  final Duration _pairingRetryDelay;
   bool _isPairing = false;
   bool _isDiscovering = false;
   bool _disposed = false;
   DateTime? _lastFailureRecoveryAt;
   Timer? _refreshTimer;
+
+  /// The one exchange of the refresh token in flight, which every caller that
+  /// needs a ticket meanwhile joins — see [_refreshRelayTicketRemotely].
+  Future<_RemoteRefresh>? _remoteRefreshInFlight;
+
+  /// Until when the relay's last word on this shop's subscription — off —
+  /// is taken as read, so a burst of refused requests is not a burst of
+  /// exchanges. The relay answers that before spending the token, so the
+  /// credentials survive it.
+  DateTime? _relaySubscriptionInactiveUntil;
 
   /// Whether the session is on a LAN endpoint this coordinator applied. False
   /// from startup until one is found, and from the moment the session leaves
@@ -53,6 +66,22 @@ class ConnectionCoordinator {
   int _huntAttempt = 0;
 
   static const _refreshSkew = Duration(minutes: 5);
+
+  /// The least time between two ticket refreshes. A ticket that arrives
+  /// already inside its refresh window — a phone clock ahead of the relay's —
+  /// would otherwise be refreshed again the moment it was saved, without end.
+  static const _minRefreshDelay = Duration(minutes: 1);
+
+  /// How long to wait before asking for a ticket again after the backend
+  /// answered pairing without one, or the relay could not be reached for a
+  /// refresh. Matches the backend's own relay-unavailable cooldown, so the
+  /// retry lands once the shop's uplink has had time to recover instead of
+  /// hammering a pairing endpoint that is answering from memory.
+  static const defaultPairingRetryDelay = Duration(minutes: 5);
+
+  /// How long a 402 from the relay is remembered before the next refused
+  /// request asks again.
+  static const _subscriptionInactiveMemory = Duration(minutes: 5);
 
   /// How long to ignore repeated "local target unreachable" signals after
   /// kicking a recovery, so a burst of failing requests triggers one sweep, not
@@ -245,7 +274,8 @@ class ConnectionCoordinator {
       relayProfile,
       activateRelay: true,
     );
-    return activated != null && _service.usesRelay ? activated : null;
+    final refreshed = activated.profile;
+    return refreshed != null && _service.usesRelay ? refreshed : null;
   }
 
   /// The session is off the LAN — on the relay, or on the manual-address
@@ -367,61 +397,116 @@ class ConnectionCoordinator {
     await refreshRelayTicketIfNeeded(force: true);
   }
 
+  /// Hook for [PosApiService.onRelayTicketRejected]: the relay refused the
+  /// ticket the session carries. Mints a new one from the device's refresh
+  /// token and installs it, answering whether the request may be sent again
+  /// — or that the relay refused the device itself, for a subscription that
+  /// is off, which no ticket would get past.
+  ///
+  /// Every request in flight meets the same 401 at once — the sign-in fan-out
+  /// alone is a dozen — so the exchange is single-flight: they all wait on
+  /// the one refresh, and the refresh token is spent exactly once.
+  Future<RelayTicketRecovery> refreshRelayTicketAfterRejection() async {
+    if (_disposed || !_service.usesRelay) {
+      return RelayTicketRecovery.failed;
+    }
+    final inactiveUntil = _relaySubscriptionInactiveUntil;
+    if (inactiveUntil != null &&
+        DateTime.now().toUtc().isBefore(inactiveUntil)) {
+      return RelayTicketRecovery.subscriptionInactive;
+    }
+    final profile = await _storage.loadProfile();
+    if (profile == null) {
+      return RelayTicketRecovery.failed;
+    }
+    final exchange = await _refreshRelayTicketRemotely(
+      profile,
+      activateRelay: true,
+    );
+    if (exchange.profile != null && _service.usesRelay) {
+      return RelayTicketRecovery.refreshed;
+    }
+    if (exchange.refusedWith == 402) {
+      return RelayTicketRecovery.subscriptionInactive;
+    }
+    return RelayTicketRecovery.failed;
+  }
+
   Future<void> refreshRelayTicketIfNeeded({bool force = false}) async {
-    if (_isPairing) {
+    if (_isPairing || _disposed) {
       return;
     }
     final currentProfile = await _storage.loadProfile();
+    final now = DateTime.now().toUtc();
     if (!force &&
         currentProfile != null &&
-        !currentProfile.shouldRefreshRelayTicketAt(
-          DateTime.now().toUtc(),
-          _refreshSkew,
-        )) {
+        !currentProfile.shouldRefreshRelayTicketAt(now, _refreshSkew)) {
       _scheduleRefresh(currentProfile);
-      return;
-    }
-    if (_service.usesRelay) {
-      _isPairing = true;
-      try {
-        if (currentProfile != null) {
-          await _refreshRelayTicketRemotely(
-            currentProfile,
-            activateRelay: true,
-          );
-        }
-      } finally {
-        _isPairing = false;
-      }
       return;
     }
     _isPairing = true;
     try {
-      final deviceId = await _storage.loadOrCreateDeviceId();
-      final pairing = await _service.requestRelayPairing(deviceId: deviceId);
-      final storedProfile = await _storage.loadProfile();
-      final profile = _profileFromPairing(
-        pairing,
-        localApiBaseUrl: _service.baseUrl,
-        existingProfile: storedProfile,
-      );
-      final savedProfile = profile.copyWith(
-        localApiBaseUrl: profile.localApiBaseUrl.isEmpty
-            ? storedProfile?.localApiBaseUrl
-            : profile.localApiBaseUrl,
-      );
-      await _storage.saveProfile(savedProfile);
-      _configureLocal(savedProfile);
-      _scheduleRefresh(savedProfile);
-    } on Object {
-      if (currentProfile != null) {
-        await _refreshRelayTicketRemotely(
+      if (_service.usesRelay) {
+        // Off the LAN, the refresh token is the only way to a ticket.
+        if (currentProfile == null) {
+          return;
+        }
+        final exchange = await _refreshRelayTicketRemotely(
           currentProfile,
-          activateRelay: _service.usesRelay,
+          activateRelay: true,
         );
+        if (exchange.profile == null) {
+          await _scheduleRetry();
+        }
+        return;
       }
-      // Discovery and pairing are opportunistic. Normal LAN-only operation
-      // should continue when the relay is unavailable or unsubscribed.
+      var profile = currentProfile;
+      var relayTemporarilyUnavailable = false;
+      try {
+        final deviceId = await _storage.loadOrCreateDeviceId();
+        final pairing = await _service.requestRelayPairing(deviceId: deviceId);
+        final storedProfile = await _storage.loadProfile();
+        final paired = _profileFromPairing(
+          pairing,
+          localApiBaseUrl: _service.baseUrl,
+          existingProfile: storedProfile,
+        );
+        final savedProfile = paired.copyWith(
+          localApiBaseUrl: paired.localApiBaseUrl.isEmpty
+              ? storedProfile?.localApiBaseUrl
+              : paired.localApiBaseUrl,
+        );
+        await _storage.saveProfile(savedProfile);
+        _configureLocal(savedProfile);
+        if (pairing.hasTicket) {
+          _scheduleRefresh(savedProfile);
+          return;
+        }
+        // The backend answered without a ticket: its link to the relay is
+        // down, or it is answering from memory during its cooldown. The
+        // credentials this device already holds were kept (see
+        // _profileFromPairing); if they are due, the relay is asked directly
+        // below — it answers refreshes on its own, without the shop's uplink.
+        profile = savedProfile;
+        relayTemporarilyUnavailable = pairing.reason == 'relay_unavailable';
+      } on Object {
+        // Discovery and pairing are opportunistic. Normal LAN-only operation
+        // should continue when the relay is unavailable or unsubscribed.
+      }
+      if (profile == null) {
+        return;
+      }
+      if (!profile.shouldRefreshRelayTicketAt(now, _refreshSkew)) {
+        _scheduleRefresh(profile);
+        return;
+      }
+      final exchange = await _refreshRelayTicketRemotely(
+        profile,
+        activateRelay: _service.usesRelay,
+      );
+      if (exchange.profile == null) {
+        await _scheduleRetry(transient: relayTemporarilyUnavailable);
+      }
     } finally {
       _isPairing = false;
     }
@@ -447,47 +532,117 @@ class ConnectionCoordinator {
     );
   }
 
-  Future<ConnectionProfile?> _refreshRelayTicketRemotely(
+  /// Trades the device's refresh token for a new ticket at the relay and
+  /// installs it — on the relay as the primary target, or as the LAN's
+  /// fallback. The profile is null when the device has no way in, the relay
+  /// could not be reached, or it refused; [_RemoteRefresh.refusedWith] then
+  /// carries the relay's status, when it answered at all.
+  ///
+  /// Single-flight: a refresh token is consumed the moment the relay reads
+  /// it, so two exchanges of the same token cannot both succeed. The second
+  /// used to come back 401 and, worse, wipe the credentials the first had
+  /// just saved. Now a caller that arrives mid-exchange waits for it and
+  /// installs its result.
+  Future<_RemoteRefresh> _refreshRelayTicketRemotely(
     ConnectionProfile profile, {
     required bool activateRelay,
   }) async {
-    if (!profile.hasUsableRelayRefreshAt(DateTime.now().toUtc())) {
-      final cleared = profile.withoutRelayCredentials();
-      await _storage.saveProfile(cleared);
-      return null;
+    var exchange = _remoteRefreshInFlight;
+    if (exchange == null) {
+      exchange = _consumeRelayRefreshToken(profile);
+      _remoteRefreshInFlight = exchange;
+      unawaited(
+        exchange.whenComplete(() {
+          if (identical(_remoteRefreshInFlight, exchange)) {
+            _remoteRefreshInFlight = null;
+          }
+        }),
+      );
+    }
+    final result = await exchange;
+    final refreshed = result.profile;
+    if (refreshed == null || _disposed) {
+      return result;
+    }
+    if (activateRelay) {
+      _configureRelay(refreshed);
+    } else {
+      _configureLocal(refreshed);
+    }
+    _scheduleRefresh(refreshed);
+    return result;
+  }
+
+  Future<_RemoteRefresh> _consumeRelayRefreshToken(
+    ConnectionProfile profile,
+  ) async {
+    final now = DateTime.now().toUtc();
+    var current = profile;
+    if (!current.hasUsableRelayRefreshAt(now)) {
+      // The caller's copy may be older than what is stored — another
+      // exchange may just have saved a fresh pair. Only a stored profile
+      // with no way in is cleared.
+      current = await _storage.loadProfile() ?? current;
+      if (!current.hasUsableRelayRefreshAt(now)) {
+        await _storage.saveProfile(current.withoutRelayCredentials());
+        return const _RemoteRefresh();
+      }
     }
 
     try {
       final deviceId = await _storage.loadOrCreateDeviceId();
       final pairing = await _relayTicketRefreshClient.refreshTicket(
-        relayApiBaseUrl: profile.relayApiBaseUrl,
-        refreshToken: profile.relayRefreshToken,
+        relayApiBaseUrl: current.relayApiBaseUrl,
+        refreshToken: current.relayRefreshToken,
         request: RelayPairingRequest(deviceId: deviceId),
       );
       if (!pairing.hasTicket) {
-        return null;
+        return const _RemoteRefresh();
       }
       final refreshed = _profileFromPairing(
         pairing,
-        localApiBaseUrl: profile.localApiBaseUrl,
-        existingProfile: profile,
+        localApiBaseUrl: current.localApiBaseUrl,
+        existingProfile: current,
       );
       await _storage.saveProfile(refreshed);
-      if (activateRelay) {
-        _configureRelay(refreshed);
-      } else {
-        _configureLocal(refreshed);
-      }
-      _scheduleRefresh(refreshed);
-      return refreshed;
+      _relaySubscriptionInactiveUntil = null;
+      return _RemoteRefresh(profile: refreshed);
     } on RelayTicketRefreshException catch (exception) {
       if (exception.isCredentialRejected) {
-        await _storage.saveProfile(profile.withoutRelayCredentials());
+        await _dropRejectedRelayCredentials(current.relayRefreshToken);
+      } else if (exception.isSubscriptionInactive) {
+        // Not a word against the credentials: the relay answers this
+        // before spending the token, and the device keeps them for when
+        // the subscription is back. Remember the answer for a while, so
+        // every refused request meanwhile is not another exchange.
+        _relaySubscriptionInactiveUntil = DateTime.now().toUtc().add(
+          _subscriptionInactiveMemory,
+        );
       }
-      return null;
+      return _RemoteRefresh(refusedWith: exception.statusCode);
     } on Object {
-      return null;
+      // Unreachable or slow relay: the credentials are still good, and the
+      // next attempt may well get through.
+      return const _RemoteRefresh();
     }
+  }
+
+  /// Forget the relay credentials the relay just refused — unless the stored
+  /// ones are already different: a refresh that lost a race has nothing to
+  /// say about the pair the winner saved.
+  Future<void> _dropRejectedRelayCredentials(
+    String rejectedRefreshToken,
+  ) async {
+    final stored = await _storage.loadProfile();
+    if (stored == null) {
+      return;
+    }
+    final storedRefreshToken = stored.relayRefreshToken.trim();
+    if (storedRefreshToken.isNotEmpty &&
+        storedRefreshToken != rejectedRefreshToken.trim()) {
+      return;
+    }
+    await _storage.saveProfile(stored.withoutRelayCredentials());
   }
 
   void _scheduleRefresh(ConnectionProfile profile) {
@@ -497,9 +652,33 @@ class ConnectionCoordinator {
       return;
     }
     final refreshAt = expiresAt.toUtc().subtract(_refreshSkew);
-    final delay = refreshAt.difference(DateTime.now().toUtc());
+    var delay = refreshAt.difference(DateTime.now().toUtc());
+    if (delay < _minRefreshDelay) {
+      delay = _minRefreshDelay;
+    }
+    _refreshTimer = Timer(delay, () => unawaited(refreshRelayTicketIfNeeded()));
+  }
+
+  /// Ask for a ticket again in a while. Worth doing when the device still
+  /// holds a refresh token to keep alive, or when the backend said the relay
+  /// was only temporarily out of reach ([transient]); a device with neither
+  /// has nothing to retry for until someone signs in again. Judged on what is
+  /// stored now, not on a caller's copy: the attempt that just failed may
+  /// have dropped the credentials it was made with.
+  Future<void> _scheduleRetry({bool transient = false}) async {
+    _refreshTimer?.cancel();
+    if (_disposed) {
+      return;
+    }
+    if (!transient) {
+      final stored = await _storage.loadProfile();
+      if (stored == null ||
+          !stored.hasUsableRelayRefreshAt(DateTime.now().toUtc())) {
+        return;
+      }
+    }
     _refreshTimer = Timer(
-      delay.isNegative ? Duration.zero : delay,
+      _pairingRetryDelay,
       () => unawaited(refreshRelayTicketIfNeeded()),
     );
   }
@@ -510,6 +689,15 @@ class ConnectionCoordinator {
     _refreshTimer = null;
     _stopHunt();
   }
+}
+
+/// One exchange of the refresh token: the profile it produced, or the relay's
+/// status when it refused ([refusedWith] is null when it never answered).
+class _RemoteRefresh {
+  const _RemoteRefresh({this.profile, this.refusedWith});
+
+  final ConnectionProfile? profile;
+  final int? refusedWith;
 }
 
 ConnectionProfile _profileFromPairing(
@@ -523,18 +711,35 @@ ConnectionProfile _profileFromPairing(
       ? existingProfile!.relayApiBaseUrl
       : kDefaultRelayApiBaseUrl;
   if (!pairing.hasTicket) {
+    // Nothing was issued — but the credentials this device already holds are
+    // its only way in from outside the shop, so they stay. A ticket-less
+    // answer is far more often the backend's own link to the relay (down, or
+    // remembered as down for its cooldown) than a lost entitlement, and the
+    // relay is the judge of the latter: it refuses a lapsed subscription when
+    // the credentials are next used, and they are dropped then. Until this
+    // held, one bad uplink minute at sign-in stranded a phone for the day.
     return ConnectionProfile(
       localApiBaseUrl: localApiBaseUrl,
       relayApiBaseUrl: relayApiBaseUrl,
-      relayToken: '',
+      relayToken: existingProfile?.relayToken ?? '',
+      relayRefreshToken: existingProfile?.relayRefreshToken ?? '',
       installationId: pairing.installationId.isNotEmpty
           ? pairing.installationId
           : (existingProfile?.installationId ?? ''),
       shopName: pairing.shopName.isNotEmpty
           ? pairing.shopName
           : (existingProfile?.shopName ?? ''),
+      relayTokenExpiresAt: existingProfile?.relayTokenExpiresAt,
+      relayRefreshExpiresAt: existingProfile?.relayRefreshExpiresAt,
     );
   }
+  // The expiries in this device's own clock. The relay stamps them with its
+  // clock; a phone running ten minutes ahead read every fresh 15-minute
+  // ticket as already inside its refresh window, refreshed it at once, and
+  // again a minute later, for as long as it ran — an exchange a minute per
+  // skewed device, against the relay's rate limit. With the relay's own
+  // issue time in hand the skew is measured, not guessed.
+  final skew = _clockSkewOf(pairing);
   return ConnectionProfile(
     localApiBaseUrl: localApiBaseUrl,
     relayApiBaseUrl: relayApiBaseUrl,
@@ -546,9 +751,25 @@ ConnectionProfile _profileFromPairing(
     shopName: pairing.shopName.isNotEmpty
         ? pairing.shopName
         : (existingProfile?.shopName ?? ''),
-    relayTokenExpiresAt: pairing.expiresAt,
-    relayRefreshExpiresAt: pairing.refreshExpiresAt,
+    relayTokenExpiresAt: _inDeviceClock(pairing.expiresAt, skew),
+    relayRefreshExpiresAt: _inDeviceClock(pairing.refreshExpiresAt, skew),
   );
+}
+
+/// How far the relay's clock is from this device's: the ticket's issue time
+/// (the relay's now, give or take the round trip) against the device's now.
+/// Zero when the answer carries no issue time — an older relay or backend —
+/// so the expiries are taken as they are, as before.
+Duration _clockSkewOf(RelayPairing pairing) {
+  final issuedAt = pairing.issuedAt;
+  if (issuedAt == null) {
+    return Duration.zero;
+  }
+  return issuedAt.toUtc().difference(DateTime.now().toUtc());
+}
+
+DateTime? _inDeviceClock(DateTime? relayTime, Duration skew) {
+  return relayTime?.toUtc().subtract(skew);
 }
 
 String _relayApiBaseUrl(String relayPublicApiUrl) {

@@ -221,6 +221,10 @@ class RelayPairingView(views.APIView):
             "shop_name": installation.shop_name,
             "relay_public_api_url": installation.relay_public_api_url,
             "relay_token": issued["token"],
+            # The relay's clock at issue, passed through untouched: the phone
+            # measures its clock against it and reads the expiries below in
+            # its own time. Absent from an older relay's answer.
+            "issued_at": issued.get("issued_at"),
             "expires_at": issued["expires_at"],
             "relay_refresh_token": issued.get("refresh_token", ""),
             "refresh_expires_at": issued.get("refresh_expires_at"),
@@ -245,6 +249,7 @@ class RelayPairingView(views.APIView):
                     installation.relay_public_api_url if installation else ""
                 ),
                 "relay_token": "",
+                "issued_at": None,
                 "expires_at": None,
                 "relay_refresh_token": "",
                 "refresh_expires_at": None,

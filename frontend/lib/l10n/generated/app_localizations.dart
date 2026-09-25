@@ -4410,11 +4410,65 @@ abstract class AppLocalizations {
   /// **'جار الدخول...'**
   String get loggingInButton;
 
-  /// No description provided for @loginError.
+  /// Login screen: the backend refused the username/password pair.
   ///
   /// In ar, this message translates to:
   /// **'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.'**
   String get loginError;
+
+  /// Login screen: the account exists but is disabled.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الحساب معطّل. تواصل مع مدير المتجر.'**
+  String get loginErrorAccountDisabled;
+
+  /// Login screen: the backend's sign-in throttle refused the attempt.
+  ///
+  /// In ar, this message translates to:
+  /// **'محاولات كثيرة لتسجيل الدخول. انتظر دقيقة ثم حاول مجددًا.'**
+  String get loginErrorTooManyAttempts;
+
+  /// Login screen: the relay no longer accepts this device's ticket and a refresh failed; the device must pair again on the shop LAN.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت صلاحية ربط هذا الجهاز بالوصول عن بُعد. افتح التطبيق مرة على شبكة المتجر وسجّل الدخول لإعادة الربط.'**
+  String get loginErrorRelayRejected;
+
+  /// Login screen: the relay refused because the shop's remote-access subscription is inactive.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول عن بُعد غير مفعّل لهذا المتجر. الاشتراك غير نشط.'**
+  String get loginErrorRelaySubscriptionInactive;
+
+  /// Login screen: the relay is reachable but the shop's server is not connected to it.
+  ///
+  /// In ar, this message translates to:
+  /// **'خادم المتجر غير متصل بخدمة الوصول عن بُعد الآن. تأكد من تشغيل الخادم واتصاله بالإنترنت.'**
+  String get loginErrorRelayConnectorOffline;
+
+  /// Login screen: the relay answered with a failure of its own (timeout, bad gateway, rate limit).
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر الوصول إلى خادم المتجر عبر خدمة الوصول عن بُعد. حاول مجددًا بعد قليل.'**
+  String get loginErrorRelayUnavailable;
+
+  /// Login screen: the relay itself could not be reached from this device.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر الاتصال بخدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.'**
+  String get loginErrorRelayUnreachable;
+
+  /// Login screen: the shop's server could not be reached on the LAN.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر الوصول إلى خادم المتجر. تحقق من اتصال الجهاز بشبكة المتجر.'**
+  String get loginErrorServerUnreachable;
+
+  /// Login screen: the backend answered, but not with a sign-in (a server error).
+  ///
+  /// In ar, this message translates to:
+  /// **'حدث خطأ في الخادم أثناء تسجيل الدخول. حاول مجددًا.'**
+  String get loginErrorServer;
 
   /// No description provided for @managerRoleLabel.
   ///

@@ -688,6 +688,12 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     installation.subscription_ends_at = parse_relay_datetime(
         relay_installation.get("subscription_ends_at")
     )
+    # The relay's addresses are deployment config, mirrored onto the row when
+    # it was enrolled — and then never again. A relay that moved (a new
+    # platform environment, a custom domain) left every shop handing phones
+    # the old public URL at pairing, so remote access failed everywhere at
+    # once while the shop itself, configured with the new address, was fine.
+    _mirror_relay_addresses(installation, relay_client.config)
     installation.last_synced_at = timezone.now()
     installation.save(
         update_fields=[
@@ -696,6 +702,8 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
             "subscription_active",
             "ai_enabled",
             "subscription_ends_at",
+            "relay_public_api_url",
+            "relay_connector_address",
             "last_synced_at",
             "updated_at",
         ]
@@ -707,6 +715,20 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     if push_shop_name:
         push_shop_name_to_relay(installation, client=relay_client)
     return installation
+
+
+def _mirror_relay_addresses(installation, config):
+    """Copy the configured relay addresses onto ``installation`` when set.
+
+    Empty config values are left alone: a backend that sets neither (tests, a
+    developer machine) keeps whatever the row was enrolled with.
+    """
+    public_api_url = str(getattr(config, "public_api_url", "") or "").strip()
+    if public_api_url:
+        installation.relay_public_api_url = public_api_url
+    connector_address = str(getattr(config, "connector_address", "") or "").strip()
+    if connector_address:
+        installation.relay_connector_address = connector_address
 
 
 def issue_pairing_ticket(

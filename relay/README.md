@@ -426,9 +426,16 @@ curl \
 Refresh tokens are issued only as part of authenticated LAN pairing through the
 backend. They are stored hash-only in Redis, consumed atomically on refresh, and
 rotated with the newly issued `ptt1...` relay ticket. The relay rechecks the
-installation's relay entitlement and subscription before every refresh. If a
-device's refresh token expires while LAN is unavailable, it cannot remotely
-pair again; it must return to LAN pairing.
+installation's relay entitlement and subscription before every refresh — and
+before spending the token, so a `402` for a lapsed subscription leaves the
+device its way back in once the subscription is restored. If a device's refresh
+token expires while LAN is unavailable, it cannot remotely pair again; it must
+return to LAN pairing.
+
+Every issued ticket (pairing and refresh alike) carries `issued_at`, the relay's
+own clock at issue, next to `expires_at`. A device compares it with its clock at
+receipt and schedules its refresh off the ticket's real lifetime, so a phone
+whose clock runs ahead does not read every fresh ticket as already due.
 
 ## Relay-Hosted AI
 

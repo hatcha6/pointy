@@ -8,6 +8,7 @@ import '../../../data/models/analytics_event.dart';
 import '../../../data/models/onboarding.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/auth_repository.dart';
+import 'login_failure.dart';
 
 enum AuthStatus { checking, setupRequired, unauthenticated, authenticated }
 
@@ -30,11 +31,22 @@ class AuthViewModel extends ChangeNotifier {
   bool _isSubmitting = false;
   bool _hasError = false;
   bool _requiresShopSetup = false;
+  LoginFailure? _loginFailure;
+  LoginFailure? _connectionProblem;
 
   AuthStatus get status => _status;
   PosUser? get currentUser => _currentUser;
   bool get isSubmitting => _isSubmitting;
   bool get hasError => _hasError;
+
+  /// Why the last sign-in attempt failed, or null after a success or before
+  /// any attempt.
+  LoginFailure? get loginFailure => _loginFailure;
+
+  /// The way to the server is broken, as the last session probe found it —
+  /// so the login screen can say so before anyone types a password that
+  /// cannot get through. Cleared by the next probe or sign-in that works.
+  LoginFailure? get connectionProblem => _connectionProblem;
 
   /// True for the one session right after the initial admin is created, so the
   /// app shows the first-run shop-setup wizard before the main shell.
@@ -58,6 +70,11 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> loadCurrentUser({bool forgetRememberedUser = false}) async {
     _status = AuthStatus.checking;
     _hasError = false;
+    // A new probe is a new situation: whatever the last attempt ran into (a
+    // server that has since come back, say) is not it. The probe below
+    // records its own finding, if the way to the server is still broken.
+    _loginFailure = null;
+    _connectionProblem = null;
     notifyListeners();
 
     if (forgetRememberedUser) {
@@ -73,15 +90,31 @@ class AuthViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<PosUser?>(value: final user):
         _currentUser = user;
-        _status = user == null
-            ? await _resolveUnauthenticatedStatus(retryOnFailure: true)
-            : AuthStatus.authenticated;
-      case Error<PosUser?>(exception: _):
+        if (user != null) {
+          _connectionProblem = null;
+          _status = AuthStatus.authenticated;
+        } else {
+          _status = await _resolveUnauthenticatedStatus(retryOnFailure: true);
+        }
+      case Error<PosUser?>(exception: final exception):
+        _noteConnectionProblem(exception);
         _currentUser = null;
         _status = await _resolveUnauthenticatedStatus(retryOnFailure: true);
         _hasError = false;
     }
     notifyListeners();
+  }
+
+  /// Remember a probe that failed on the way to the server. A failure of any
+  /// other kind says nothing about the connection and is not kept.
+  void _noteConnectionProblem(Object exception) {
+    final failure = classifyLoginFailure(
+      exception,
+      viaRelay: _authRepository.usesRelay,
+    );
+    if (failure.isConnectionProblem) {
+      _connectionProblem = failure;
+    }
   }
 
   /// Re-read who we are, quietly.
@@ -145,10 +178,15 @@ class AuthViewModel extends ChangeNotifier {
         await Future<void>.delayed(delays[attempt - 1]);
       }
       final result = await _authRepository.loadOnboardingStatus();
-      if (result case Ok<OnboardingStatus>(value: final status)) {
-        return status.requiresOnboarding
-            ? AuthStatus.setupRequired
-            : AuthStatus.unauthenticated;
+      switch (result) {
+        case Ok<OnboardingStatus>(value: final status):
+          // The server answered, whatever it said: the way there is open.
+          _connectionProblem = null;
+          return status.requiresOnboarding
+              ? AuthStatus.setupRequired
+              : AuthStatus.unauthenticated;
+        case Error<OnboardingStatus>(exception: final exception):
+          _noteConnectionProblem(exception);
       }
     }
     return AuthStatus.unauthenticated;
@@ -160,6 +198,7 @@ class AuthViewModel extends ChangeNotifier {
   }) async {
     _isSubmitting = true;
     _hasError = false;
+    _loginFailure = null;
     notifyListeners();
 
     final result = await _authRepository.login(
@@ -171,6 +210,7 @@ class AuthViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<PosUser>(value: final user):
         _currentUser = user;
+        _connectionProblem = null;
         _status = AuthStatus.authenticated;
         _analyticsEngine?.setCurrentUser(user.id);
         unawaited(
@@ -183,14 +223,28 @@ class AuthViewModel extends ChangeNotifier {
         );
         notifyListeners();
         return true;
-      case Error<PosUser>(exception: _):
+      case Error<PosUser>(exception: final exception):
+        final failure = classifyLoginFailure(
+          exception,
+          viaRelay: _authRepository.usesRelay,
+        );
         _currentUser = null;
         _status = AuthStatus.unauthenticated;
         _hasError = true;
+        _loginFailure = failure;
+        // A refused password, a throttle, a server error: the server was
+        // reached, so any earlier connection problem is over.
+        _connectionProblem = failure.isConnectionProblem ? failure : null;
         unawaited(
           _analyticsEngine?.trackUsage(
                 AnalyticsEventName.authLoginFailed,
                 severity: AnalyticsEventSeverity.warning,
+                // Which failure, so a field export can tell a wrong password
+                // from a shop whose relay was down at every sign-in.
+                attributes: {
+                  'failure': failure.name,
+                  'via_relay': _authRepository.usesRelay,
+                },
                 flushImmediately: true,
               ) ??
               Future<void>.value(),

@@ -727,7 +727,33 @@ func (s HTTPServer) handleRefreshRelayTicket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	refresh, err := s.Tickets.ConsumeRefreshToken(r.Context(), rawToken, s.clock().Now())
+	now := s.clock().Now()
+	// Read the token before spending it. The subscription check below used
+	// to run after the spend, so a shop whose subscription lapsed for a day
+	// lost every remote device with it: each phone's refresh token was
+	// consumed on the way to a 402, and each had to be paired again on the
+	// LAN once the subscription was restored. Now a 402 leaves the token in
+	// place and the device comes back on its own.
+	peeked, err := s.Tickets.PeekRefreshToken(r.Context(), rawToken, now)
+	if err != nil {
+		s.recordCredentialError(err)
+		writeRelayCredentialError(w, err)
+		return
+	}
+	installation, err := s.Store.GetInstallation(r.Context(), peeked.InstallationID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !installation.RelayActive(now) {
+		s.recordCredentialError(control.ErrSubscriptionInactive)
+		writeRelayCredentialError(w, control.ErrSubscriptionInactive)
+		return
+	}
+
+	// Another exchange of the same token may have won since the read; the
+	// spend is what decides.
+	refresh, err := s.Tickets.ConsumeRefreshToken(r.Context(), rawToken, now)
 	if err != nil {
 		s.recordCredentialError(err)
 		writeRelayCredentialError(w, err)
@@ -737,17 +763,6 @@ func (s HTTPServer) handleRefreshRelayTicket(w http.ResponseWriter, r *http.Requ
 	if refresh.DeviceID != "" && requestDeviceID != "" && requestDeviceID != refresh.DeviceID {
 		s.recordCredentialError(control.ErrInvalidToken)
 		writeRelayCredentialError(w, control.ErrInvalidToken)
-		return
-	}
-
-	installation, err := s.Store.GetInstallation(r.Context(), refresh.InstallationID)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	if !installation.RelayActive(s.clock().Now()) {
-		s.recordCredentialError(control.ErrSubscriptionInactive)
-		writeRelayCredentialError(w, control.ErrSubscriptionInactive)
 		return
 	}
 

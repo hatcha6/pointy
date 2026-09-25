@@ -24,9 +24,18 @@ class AuthApiClient {
   /// retry could double up, so failing early is free.
   static const Duration authTimeout = Duration(seconds: 5);
 
+  /// The same calls through the relay: phone to relay to the shop's uplink
+  /// to the backend and back. Field data put a single relay round trip from a
+  /// shop with a poor uplink at about eight seconds, so the LAN's five-second
+  /// wall failed a sign-in from outside the shop before the backend could
+  /// answer — and the failure was reported as a wrong password.
+  static const Duration relayAuthTimeout = Duration(seconds: 15);
+
+  Duration get _timeout => _session.usesRelay ? relayAuthTimeout : authTimeout;
+
   Future<OnboardingStatus> fetchOnboardingStatus() async {
-    final response = await _session.get('setup/status/', timeout: authTimeout);
-    _session.ensureSuccess(
+    final response = await _session.get('setup/status/', timeout: _timeout);
+    _session.throwApiException(
       response,
       'Onboarding status request failed with status',
     );
@@ -48,29 +57,44 @@ class AuthApiClient {
     required String username,
     required String password,
   }) async {
+    // The CSRF token rides along when the session holds one. A sign-in with
+    // no session is not CSRF-checked and the header is ignored — but a
+    // sign-in that still carries a live session cookie (the app reached the
+    // login screen because a probe failed, not because the session ended) is
+    // authenticated by that cookie first, and DRF then demands the token: a
+    // sign-in without it was refused with 403, and shown as a wrong password.
     final response = await _session.post(
       'auth/login/',
       body: {'username': username, 'password': password},
-      includeCsrf: false,
-      timeout: authTimeout,
+      timeout: _timeout,
     );
-    _session.ensureSuccess(response, 'Login failed with status');
+    // Typed, not a bare message: the status and body are what tell a wrong
+    // password from a relay that refused the ticket or a shop that is offline.
+    _session.throwApiException(response, 'Login failed with status');
     return _decodeUserResponse(response);
   }
 
   Future<void> logout() async {
-    final response = await _session.post('auth/logout/', timeout: authTimeout);
+    final response = await _session.post('auth/logout/', timeout: _timeout);
     _session.ensureSuccess(response, 'Logout failed with status');
     _session.clearAuthState();
   }
 
   Future<PosUser?> fetchCurrentUser() async {
-    final response = await _session.get('auth/me/', timeout: authTimeout);
-    if (response.statusCode == 401 || response.statusCode == 403) {
+    final response = await _session.get('auth/me/', timeout: _timeout);
+    // Signed out — as the backend says it, not the relay. A 401 of the relay's
+    // own means the ticket is refused, and the session may be perfectly
+    // alive behind it; treating that as "signed out" sent the phone to a
+    // login screen on which no sign-in could ever succeed.
+    if ((response.statusCode == 401 || response.statusCode == 403) &&
+        !isRelayError(response)) {
       return null;
     }
 
-    _session.ensureSuccess(response, 'Current user request failed with status');
+    _session.throwApiException(
+      response,
+      'Current user request failed with status',
+    );
     return _decodeUserResponse(response);
   }
 

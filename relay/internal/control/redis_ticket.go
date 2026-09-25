@@ -94,6 +94,7 @@ func (s *RedisRelayTicketService) IssueTicket(
 		DeviceID:         ticket.DeviceID,
 		DeviceName:       ticket.DeviceName,
 		Token:            token,
+		IssuedAt:         now,
 		ExpiresAt:        expiresAt,
 		RefreshToken:     refreshToken,
 		RefreshExpiresAt: refreshExpiresAt,
@@ -137,10 +138,29 @@ func (s *RedisRelayTicketService) ValidateTicket(
 	return ticket, nil
 }
 
+func (s *RedisRelayTicketService) PeekRefreshToken(
+	ctx context.Context,
+	rawToken string,
+	now time.Time,
+) (RelayRefreshToken, error) {
+	return s.readRefreshToken(ctx, rawToken, now, false)
+}
+
 func (s *RedisRelayTicketService) ConsumeRefreshToken(
 	ctx context.Context,
 	rawToken string,
 	now time.Time,
+) (RelayRefreshToken, error) {
+	return s.readRefreshToken(ctx, rawToken, now, true)
+}
+
+// readRefreshToken validates a refresh token, spending it (GETDEL, so two
+// exchanges of one token cannot both succeed) or merely reading it.
+func (s *RedisRelayTicketService) readRefreshToken(
+	ctx context.Context,
+	rawToken string,
+	now time.Time,
+	consume bool,
 ) (RelayRefreshToken, error) {
 	parsed, err := ParseToken(rawToken)
 	if err != nil {
@@ -151,7 +171,12 @@ func (s *RedisRelayTicketService) ConsumeRefreshToken(
 	}
 
 	tokenHash := TokenHash(rawToken)
-	content, err := s.client.GetDel(ctx, s.refreshKey(tokenHash)).Bytes()
+	var content []byte
+	if consume {
+		content, err = s.client.GetDel(ctx, s.refreshKey(tokenHash)).Bytes()
+	} else {
+		content, err = s.client.Get(ctx, s.refreshKey(tokenHash)).Bytes()
+	}
 	if errors.Is(err, redis.Nil) {
 		return RelayRefreshToken{}, ErrRelayRefreshTokenNotFound
 	}
