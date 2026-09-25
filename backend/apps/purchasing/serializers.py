@@ -1,10 +1,12 @@
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 from django.db.models import Manager, Sum
 from rest_framework import serializers
 
 from apps.documents.serializers import DocumentLifecycleFields
+from apps.balances.opening import OpeningBalanceField, write_opening_balance
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
@@ -87,6 +89,12 @@ class SupplierListSerializer(serializers.ListSerializer):
 
 
 class SupplierSerializer(serializers.ModelSerializer):
+    # What the shop owed this supplier — or was owed — the day it started
+    # keeping their account here. Create only; written as a balance entry in
+    # the same transaction (``apps.balances``). Later changes are adjustments.
+    opening_balance = OpeningBalanceField(
+        permission="balances.add_supplierbalanceentry"
+    )
     payable_balance = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -117,6 +125,7 @@ class SupplierSerializer(serializers.ModelSerializer):
             "address",
             "notes",
             "is_active",
+            "opening_balance",
             "payable_balance",
             "credit_balance",
             "net_balance",
@@ -135,6 +144,28 @@ class SupplierSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    @transaction.atomic
+    def create(self, validated_data):
+        opening = validated_data.pop("opening_balance", None)
+        supplier = super().create(validated_data)
+        if opening:
+            from apps.balances.suppliers import create_supplier_entry
+
+            write_opening_balance(
+                create_supplier_entry,
+                opening,
+                request=self.context.get("request"),
+                supplier=supplier,
+            )
+            # Primed before the balance existed would state it as zero.
+            for cached in ("_payable_balance", "_credit_balance"):
+                supplier.__dict__.pop(cached, None)
+        return supplier
+
+    def update(self, instance, validated_data):
+        validated_data.pop("opening_balance", None)
+        return super().update(instance, validated_data)
 
     def to_representation(self, supplier):
         # A lone supplier (retrieve/create/update) still reads three balance
@@ -2528,6 +2559,10 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
 class SupplierPaymentSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     purchase_order_number = serializers.SerializerMethodField()
+    # The balance on the supplier's account this payment settles, when it is
+    # not an order (an opening balance, an adjustment). Its number is what a
+    # proof of payment and the payments hub name it by.
+    balance_entry_number = serializers.SerializerMethodField()
     created_by_username = serializers.CharField(
         source="created_by.username",
         read_only=True,
@@ -2553,6 +2588,8 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             "supplier_name",
             "purchase_order",
             "purchase_order_number",
+            "balance_entry",
+            "balance_entry_number",
             "amount",
             "method",
             "reference",
@@ -2574,6 +2611,7 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             "id",
             "supplier_name",
             "purchase_order_number",
+            "balance_entry_number",
             "money_account_name",
             "money_account_bank_slug",
             "money_account_bank_name",
@@ -2588,6 +2626,11 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
         if payment.purchase_order_id is None:
             return None
         return payment.purchase_order.order_number
+
+    def get_balance_entry_number(self, payment):
+        if payment.balance_entry_id is None:
+            return None
+        return payment.balance_entry.number
 
     def validate(self, attrs):
         # ``paid_at`` is caller-supplied, so a supplier payment can be dated

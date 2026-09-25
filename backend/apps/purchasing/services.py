@@ -2228,6 +2228,20 @@ def cancel_supplier_payment(payment, *, reason, request=None, register_session=N
     """
     from apps.sales.models import RegisterSession
 
+    entry = payment.balance_entry if payment.balance_entry_id else None
+    if entry is not None and entry.kind == entry.Kind.REFUND:
+        # This payment is how a supplier's cash refund spent their credit.
+        # Cancelling it alone would give the credit back while the cash they
+        # handed over stays in the drawer — the shop would be owed twice.
+        raise serializers.ValidationError(
+            {
+                "code": "refund_is_final",
+                "detail": (
+                    "This settles cash the supplier paid back and cannot be "
+                    "cancelled on its own."
+                ),
+            }
+        )
     if payment.cash_movement_id is not None and register_session is None:
         register_session = RegisterSession.open_for(getattr(request, "user", None))
         if register_session is None:
@@ -2247,6 +2261,42 @@ def cancel_supplier_payment(payment, *, reason, request=None, register_session=N
     )
 
 
+def _locked_payable_entry(supplier, entry, *, purchase_order):
+    """The account entry a payment settles, locked and checked, or ``None``.
+
+    Only a live entry recording that the shop owes this supplier can be paid:
+    paying a credit the supplier owes *us* would move the balance the wrong
+    way, and paying a cancelled one would pay a debt that was retracted.
+    """
+    if entry is None:
+        return None
+    from apps.balances.models import SupplierBalanceEntry
+
+    if purchase_order is not None:
+        raise serializers.ValidationError(
+            {
+                "balance_entry": (
+                    "A payment settles either a purchase order or an account "
+                    "balance, not both."
+                )
+            }
+        )
+    entry = SupplierBalanceEntry.objects.select_for_update().get(pk=entry.pk)
+    if entry.supplier_id != supplier.pk:
+        raise serializers.ValidationError(
+            {"balance_entry": "This balance belongs to another supplier."}
+        )
+    if not entry.is_submitted:
+        raise serializers.ValidationError(
+            {"balance_entry": "This balance has been cancelled."}
+        )
+    if entry.direction != SupplierBalanceEntry.Direction.WE_OWE_THEM:
+        raise serializers.ValidationError(
+            {"balance_entry": "This balance is owed to the shop, not by it."}
+        )
+    return entry
+
+
 @transaction.atomic
 def create_supplier_payment(*, created_by=None, **payment_fields):
     supplier = Supplier.objects.select_for_update().get(pk=payment_fields["supplier"].pk)
@@ -2259,6 +2309,11 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
         )
         payment_fields["purchase_order"] = purchase_order
     validate_supplier_payment_order(supplier, purchase_order)
+    balance_entry = _locked_payable_entry(
+        supplier, payment_fields.get("balance_entry"), purchase_order=purchase_order
+    )
+    if balance_entry is not None:
+        payment_fields["balance_entry"] = balance_entry
 
     amount = payment_fields["amount"].quantize(Decimal("0.01"))
     method = payment_fields["method"]
@@ -2266,7 +2321,7 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
         raise serializers.ValidationError({"amount": "Payment amount must be positive."})
 
     if method == SupplierPayment.Method.SUPPLIER_CREDIT:
-        if purchase_order is None:
+        if purchase_order is None and balance_entry is None:
             raise serializers.ValidationError(
                 {"purchase_order": "Supplier credit payments require a purchase order."}
             )
@@ -2275,7 +2330,11 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
             raise serializers.ValidationError(
                 {"amount": "Payment exceeds available supplier credit."}
             )
-    elif purchase_order is None and amount > supplier.payable_balance:
+    elif (
+        purchase_order is None
+        and balance_entry is None
+        and amount > supplier.payable_balance
+    ):
         raise serializers.ValidationError(
             {"amount": "Payment exceeds the supplier payable balance."}
         )
@@ -2284,6 +2343,13 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
         raise serializers.ValidationError(
             {"amount": "Payment exceeds the purchase order balance."}
         )
+    if balance_entry is not None:
+        from apps.balances.suppliers import entry_outstanding
+
+        if amount > entry_outstanding(balance_entry):
+            raise serializers.ValidationError(
+                {"amount": "Payment exceeds what is left of this balance."}
+            )
 
     payment_fields["amount"] = amount
     payment_fields["created_by"] = created_by

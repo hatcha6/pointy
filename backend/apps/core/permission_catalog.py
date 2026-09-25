@@ -307,6 +307,49 @@ PERMISSION_CATALOG = [
             _perm("purchasing.add_supplier", "إضافة الموردين", "إنشاء موردين جدد."),
             _perm("purchasing.change_supplier", "تعديل الموردين", "تعديل بيانات الموردين."),
             _perm("purchasing.delete_supplier", "حذف الموردين", "حذف الموردين."),
+            # Writing a balance onto an account is split from editing the
+            # contact: a clerk trusted with a phone number is not thereby
+            # trusted to say a customer owes the shop two thousand dinars.
+            _perm(
+                "balances.view_customerbalanceentry",
+                "عرض أرصدة العملاء الافتتاحية والتسويات",
+                "الاطلاع على الأرصدة الافتتاحية وتسويات الرصيد في حسابات العملاء.",
+            ),
+            _perm(
+                "balances.add_customerbalanceentry",
+                "تسجيل رصيد افتتاحي أو تسوية لعميل",
+                "تسجيل مبلغ على العميل أو له دون فاتورة، كرصيد سابق أو تسوية.",
+            ),
+            _perm(
+                "balances.change_customerbalanceentry",
+                "تعديل ملاحظة رصيد العميل",
+                "تعديل ملاحظة قيد الرصيد فقط؛ المبلغ لا يُعدّل.",
+            ),
+            _perm(
+                "balances.cancel_customerbalanceentry",
+                "إلغاء رصيد عميل",
+                "إلغاء رصيد افتتاحي أو تسوية لم يُحصّل منها شيء بعد.",
+            ),
+            _perm(
+                "balances.view_supplierbalanceentry",
+                "عرض أرصدة الموردين الافتتاحية والتسويات",
+                "الاطلاع على الأرصدة الافتتاحية وتسويات الرصيد في حسابات الموردين.",
+            ),
+            _perm(
+                "balances.add_supplierbalanceentry",
+                "تسجيل رصيد افتتاحي أو تسوية لمورد",
+                "تسجيل مبلغ للمورد أو عليه دون أمر شراء، كرصيد سابق أو تسوية.",
+            ),
+            _perm(
+                "balances.change_supplierbalanceentry",
+                "تعديل ملاحظة رصيد المورد",
+                "تعديل ملاحظة قيد الرصيد فقط؛ المبلغ لا يُعدّل.",
+            ),
+            _perm(
+                "balances.cancel_supplierbalanceentry",
+                "إلغاء رصيد مورد",
+                "إلغاء رصيد افتتاحي أو تسوية لم يُدفع منها شيء بعد.",
+            ),
         ],
     },
     {

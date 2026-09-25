@@ -460,6 +460,11 @@ def _top_supplier_balances(balances_by_supplier):
         return []
 
     supplier_ids = set(active_suppliers)
+    # What the shop owes on suppliers' accounts beyond any order — an opening
+    # balance, an adjustment — by the one definition the supplier screen uses.
+    from apps.balances.suppliers import payable_entries_outstanding
+
+    owed_on_account = payable_entries_outstanding(supplier_ids)
 
     unallocated_payments_by_supplier = {
         row["supplier_id"]: row["total"]
@@ -467,6 +472,7 @@ def _top_supplier_balances(balances_by_supplier):
         .filter(
             supplier_id__in=supplier_ids,
             purchase_order__isnull=True,
+            balance_entry__isnull=True,
         )
         .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
         .values("supplier_id")
@@ -498,6 +504,7 @@ def _top_supplier_balances(balances_by_supplier):
     for supplier_id, supplier_name in active_suppliers.items():
         payable = max(
             balances_by_supplier.get(supplier_id, Decimal("0.00"))
+            + owed_on_account.get(supplier_id, Decimal("0.00"))
             - unallocated_payments_by_supplier.get(supplier_id, Decimal("0.00")),
             Decimal("0.00"),
         )

@@ -66,6 +66,7 @@ void main() {
     // money collected and the money handed back again.
     for (final figure in [
       'opening_balance',
+      'account_entries_total',
       'invoiced_total',
       'returned_total',
       'received_total',
@@ -78,6 +79,7 @@ void main() {
     }
     expect(reportLabel('returned_total'), 'المرتجعات');
     expect(reportLabel('refunded_total'), 'المبالغ المردودة');
+    expect(reportLabel('account_entries_total'), 'الأرصدة والتسويات');
     expect(reportValue('kind', 'return', columnType: 'choice'), 'مرتجع');
     expect(reportValue('kind', 'refund', columnType: 'choice'), 'ردّ مبلغ');
   });

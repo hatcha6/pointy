@@ -37,7 +37,7 @@ from apps.treasury.position import outside_money_totals, treasury_position
 
 from ..sections import Column, ColumnType, decimal_from, money, note, report_section
 from .purchasing import payables_total, supplier_credits_total
-from .receivables import receivables_total
+from .receivables import customer_credits_total, receivables_total
 
 ZERO = Decimal("0.00")
 #: A quarter of a tenth, on trade goods and money held for a lunar year.
@@ -58,6 +58,11 @@ LIABILITY_LINES = (
     "supplier_payables",
     "employee_payables",
     "consignor_payables",
+    # Credit written onto customers' accounts — money the shop owes them and
+    # has not yet spent against anything they owe (``apps.balances``). Its own
+    # line rather than netted into the receivables, the way an advance is
+    # stated beside the debts rather than subtracted from them.
+    "customer_credits",
 )
 #: The statement every shop gets. The other lines print only for a shop that has
 #: something on them, so a grocer's page does not carry three rows of zeros
@@ -91,8 +96,17 @@ def balance_sheet(context):
     closing_net = closing_assets - closing_liabilities
 
     outside = outside_money_totals(start=period.start_date, end=period.end_date)
+    # An opening balance recorded during the period is the position the shop
+    # was already in, brought onto the books — not something it earned. Left
+    # in, the day a shop types its paper ledger in would read as the year's
+    # profit.
+    openings = opening_balances_recorded(start=period.start_date, end=period.end_date)
     period_result = (
-        closing_net - opening_net - outside["added"] + outside["withdrawn"]
+        closing_net
+        - opening_net
+        - outside["added"]
+        + outside["withdrawn"]
+        - openings
     )
     zakat = _zakat(closing, closing_liabilities, closing_date, live=live)
 
@@ -128,6 +142,11 @@ def balance_sheet(context):
                     ("opening_net_position", opening_net),
                     ("outside_money_added", outside["added"]),
                     ("outside_money_withdrawn", -outside["withdrawn"]),
+                    *(
+                        [("opening_balances_recorded", openings)]
+                        if openings
+                        else []
+                    ),
                     ("period_result", period_result),
                     ("closing_net_position", closing_net),
                 ],
@@ -167,7 +186,46 @@ def _position(context, as_of, *, live=False):
         "supplier_payables": decimal_from(payables_total(day)["total"]),
         "employee_payables": wages_payable(as_of),
         "consignor_payables": obligations["consignor_payable"],
+        "customer_credits": customer_credits_total(as_of),
     }
+
+
+def opening_balances_recorded(*, start, end):
+    """What the opening balances dated inside ``start``..``end`` added to the
+    shop's net position.
+
+    A customer who owes the shop, or a supplier who does, adds to it; a
+    customer or a supplier the shop owes takes from it. Only *opening*
+    balances: an adjustment is a real change in what the shop is owed or owes
+    — a service nobody invoiced, a compensation — and belongs in the result.
+    """
+    from apps.balances.models import (
+        BalanceEntry,
+        CustomerBalanceEntry,
+        SupplierBalanceEntry,
+    )
+    from apps.core.money_dates import money_period
+    from django.db.models import Sum
+
+    total = ZERO
+    for model in (CustomerBalanceEntry, SupplierBalanceEntry):
+        rows = (
+            money_period(
+                model.objects.live().filter(kind=BalanceEntry.Kind.OPENING),
+                start,
+                end,
+            )
+            .order_by()
+            .values("direction")
+            .annotate(amount=Sum("amount"))
+        )
+        for row in rows:
+            amount = decimal_from(row["amount"])
+            if row["direction"] == BalanceEntry.Direction.THEY_OWE_US:
+                total += amount
+            else:
+                total -= amount
+    return total
 
 
 def _totals(position):

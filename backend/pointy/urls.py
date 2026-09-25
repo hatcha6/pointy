@@ -24,6 +24,10 @@ from apps.migration.views import (
     MigrationSourceViewSet,
     MigrationSystemsView,
 )
+from apps.balances.views import (
+    CustomerBalanceEntryViewSet,
+    SupplierBalanceEntryViewSet,
+)
 from apps.catalog.views import (
     ModifierGroupViewSet,
     ProductCategoryViewSet,
@@ -227,6 +231,16 @@ router.register(
 router.register("orders", OrderViewSet)
 router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)
+router.register(
+    "customer-balance-entries",
+    CustomerBalanceEntryViewSet,
+    basename="customer-balance-entry",
+)
+router.register(
+    "supplier-balance-entries",
+    SupplierBalanceEntryViewSet,
+    basename="supplier-balance-entry",
+)
 router.register("payment-cards", PaymentCardViewSet, basename="payment-card")
 router.register("discount-rules", DiscountRuleViewSet)
 router.register("currencies", CurrencyViewSet, basename="currency")

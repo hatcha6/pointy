@@ -552,6 +552,7 @@ String _paymentMethodLabel(AppLocalizations l10n, String method) {
     'card' => l10n.paymentMethodCard,
     'transfer' => l10n.paymentMethodTransfer,
     'salary_deduction' => l10n.paymentMethodSalaryDeduction,
+    'account_credit' => l10n.paymentMethodAccountCredit,
     _ => method,
   };
 }

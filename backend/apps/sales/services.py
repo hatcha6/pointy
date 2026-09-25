@@ -1154,6 +1154,13 @@ def checkout_order(
     """
     from apps.payments.serializers import PaymentSerializer
 
+    if sale_type not in Order.CHECKOUT_SALE_TYPES:
+        # The serializer offers only these, but the service is reachable
+        # directly too. An account entry rung up here would carry lines, stock
+        # and a till — everything its own service exists to keep it free of.
+        raise serializers.ValidationError(
+            {"sale_type": "This kind of order cannot be rung up at checkout."}
+        )
     settings = ShopSettings.load()
     # Where this till stands. A shop with one location — which is every shop
     # until it opens a second — resolves to the same warehouse it has always
@@ -1861,7 +1868,12 @@ def record_customer_account_payment(
     money_account=None,
     request=None,
 ):
-    """Apply a payment to a customer's outstanding debt invoices, oldest first.
+    """Apply a payment to a customer's outstanding debts, oldest first.
+
+    The debts are their open آجل invoices and anything written onto their
+    account (an opening balance, an adjustment — ``apps.balances``). Any credit
+    the shop holds for the customer is spent against them first, so the cash
+    asked for is what they owe net of it.
 
     Cash, transfer, or card. A card swipe is one receipt for the whole
     collection: it's validated once against the TOTAL here, then split across
@@ -1870,6 +1882,8 @@ def record_customer_account_payment(
     same card). Rejects over-payment beyond the total outstanding. Returns the
     per-invoice allocation (for the proof-of-payment).
     """
+    from apps.balances.customers import apply_customer_credit
+    from apps.customers.models import Customer
     from apps.payments.models import Payment
 
     if method not in (
@@ -1882,8 +1896,12 @@ def record_customer_account_payment(
     if amount <= 0:
         raise serializers.ValidationError({"amount": "Amount must be positive."})
 
+    # The account first, then its documents: the lock order every writer to a
+    # customer's account takes, so two of them can never wait on each other.
+    Customer.objects.select_for_update().filter(pk=customer.pk).first()
+    apply_customer_credit(customer, actor=adjustment_created_by(request))
     invoices = list(
-        Order.objects.open_credit()
+        Order.objects.open_receivables()
         .filter(customer=customer)
         .select_for_update()
         # Read under the lock, once, rather than per invoice twice over (the
@@ -2284,7 +2302,10 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
         locked_order = document_services.submit(locked_order, request=request)
     else:
         sales_documents.recompute_progress(locked_order)
-    create_receipt_print_job(locked_order.pk, request=request)
+    # A settled account entry sold nothing, so there is no sale receipt to
+    # print; the collection's own proof of payment is its document.
+    if locked_order.sale_type != Order.SaleType.ACCOUNT_ENTRY:
+        create_receipt_print_job(locked_order.pk, request=request)
     record_domain_event(
         name="sales.order.paid",
         event_type=AnalyticsEvent.EventType.AUDIT,
@@ -2302,6 +2323,17 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
 
 
 def validate_order_adjustment_allowed(order, *, request=None, allow_window_override=False):
+    if order.sale_type == Order.SaleType.ACCOUNT_ENTRY:
+        # Nothing was sold, so nothing can come back. The entry that wrote this
+        # debt is what gets cancelled — through its own rules, not a void.
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    "This is a balance entry on the customer's account, not an "
+                    "invoice. Cancel the balance entry instead."
+                )
+            }
+        )
     if order.status != Order.Status.PAID:
         raise serializers.ValidationError({"detail": "Only paid orders can be adjusted."})
     if order.register_session is None:
@@ -2335,14 +2367,17 @@ def refund_method_for_order(order):
 def refund_tender(method):
     """The tender a refund goes back through, for money taken by ``method``.
 
-    Every tender but one refunds through itself: a card sale back to the card,
-    cash from the drawer. A salary deduction cannot — there is no wage to hand
-    back at the counter — so what the employee's wages settled is given back in
-    cash, and the drawer that pays it out is the one that counts it.
+    Every money tender refunds through itself: a card sale back to the card,
+    cash from the drawer. The two that moved no money cannot — there is no wage
+    to hand back at the counter, and account credit was money the shop already
+    owed the customer, settled when they spent it — so whatever they settled is
+    given back in cash, and the drawer that pays it out is the one that counts
+    it. For the credit that is the honest reading, not a shortcut: the customer
+    was owed that money, used it on these goods, and has handed the goods back.
     """
     from apps.payments.models import Payment
 
-    if method == Payment.Method.SALARY_DEDUCTION:
+    if method in Payment.NON_MONEY_METHODS:
         return Payment.Method.CASH
     return method
 

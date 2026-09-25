@@ -131,6 +131,9 @@ INSTALLED_APPS = [
     "apps.fraud",
     "apps.customers",
     "apps.purchasing",
+    # Opening balances and adjustments on customers' and suppliers' accounts.
+    # Reads both sides above; nothing below it depends on it.
+    "apps.balances",
     "apps.invoice_intake",
     "apps.discounts",
     "apps.payments",

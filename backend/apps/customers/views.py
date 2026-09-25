@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Count, Max, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, serializers, status, viewsets
@@ -26,8 +27,10 @@ from apps.sales.serializers import (
     CustomerAccountPaymentSerializer,
     OrderSerializer,
 )
+from apps.balances.customers import account_position
+
 from .models import Customer, PaymentCard
-from .receivables import assess_credit
+from .receivables import assess_credit, customer_balance
 from .serializers import (
     CustomerOrderAdjustmentSerializer,
     CustomerSerializer,
@@ -92,6 +95,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
         # issued. Accountants have no till/session, so AR collection by them
         # needs a separate back-office flow — this path doesn't serve them.
         "record_payment": ("customers.view_customer", "sales.add_order"),
+        # Spend credit the shop owes the customer against what they owe. Moves
+        # no money and changes neither figure's net, so it asks for no more
+        # than a collection does — a collection does this itself, first.
+        "apply_credit": ("customers.view_customer", "sales.add_order"),
     }
     queryset = Customer.objects.all()
     filterset_fields = (
@@ -294,6 +301,26 @@ class CustomerViewSet(viewsets.ModelViewSet):
             }
         return response
 
+    @action(detail=True, methods=["post"], url_path="apply-credit")
+    def apply_credit(self, request, pk=None):
+        """Settle the customer's debts from the credit the shop holds for them.
+
+        A collection does this on its own before taking any money; this is for
+        the owner tidying an account in between — a customer who is owed money
+        and has since bought on آجل should not be shown owing and owed at once.
+        Answers with the refreshed summary.
+        """
+        customer = self.get_object()
+
+        def apply():
+            from apps.balances.customers import apply_customer_credit
+
+            with transaction.atomic():
+                apply_customer_credit(customer, actor=request.user)
+            return self.sales_summary(request, pk=customer.pk)
+
+        return run_idempotent_request(request, apply)
+
     @action(detail=True, methods=["get"], url_path="sales-summary")
     def sales_summary(self, request, pk=None):
         customer = self.get_object()
@@ -337,9 +364,12 @@ class CustomerViewSet(viewsets.ModelViewSet):
         # Outstanding receivable and the ceiling it is judged against, both
         # from the one definition in apps.customers.receivables — so the number
         # on this screen and the number the till refuses a sale over can never
-        # drift apart.
-        assessment = assess_credit(customer, Decimal("0.00"))
-        outstanding_balance = assessment.outstanding
+        # drift apart. ``outstanding_balance`` keeps its meaning for every till
+        # already reading it — what a collection will ask the customer for —
+        # which is their debts net of any credit the shop holds for them.
+        position = account_position(customer)
+        balance = customer_balance(customer, position=position)
+        assessment = assess_credit(customer, Decimal("0.00"), balance=balance)
         credit_limit = assessment.limit
         available_credit = assessment.available
 
@@ -360,7 +390,15 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 "refund_total": _money_string(refund_total),
                 "exchange_total": _money_string(Decimal("0.00")),
                 "net_sales": _money_string(total_invoiced - refund_total),
-                "outstanding_balance": _money_string(outstanding_balance),
+                "outstanding_balance": _money_string(balance.owed_by_customer),
+                # What the shop owes this customer once their debts are set
+                # against it, and the two sides before netting — the screen
+                # offers to apply the credit when both are non-zero.
+                "credit_balance": _money_string(balance.owed_to_customer),
+                "net_balance": _money_string(balance.net),
+                "open_debts_total": _money_string(balance.open_debts),
+                "unapplied_credit": _money_string(balance.unapplied_credit),
+                "has_opening_balance": position.has_opening,
                 "credit_limit": (
                     None if credit_limit is None else _money_string(credit_limit)
                 ),

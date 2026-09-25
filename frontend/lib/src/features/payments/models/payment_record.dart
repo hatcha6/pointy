@@ -13,6 +13,7 @@ class CustomerPaymentRecord {
     required this.orderId,
     this.externalReference = '',
     this.orderReceiptNumber,
+    this.orderSaleType = '',
     this.customerId,
     this.customerName,
     this.createdByUsername,
@@ -28,11 +29,18 @@ class CustomerPaymentRecord {
   final String externalReference;
   final int orderId;
   final String? orderReceiptNumber;
+
+  /// The paid order's `sale_type`. `account_entry` is not an invoice but a
+  /// debt written onto the customer's account (an opening balance or an
+  /// adjustment); its number is the balance entry's.
+  final String orderSaleType;
   final int? customerId;
   final String? customerName;
   final String? createdByUsername;
   final DateTime? paidAt;
   final DateTime? createdAt;
+
+  bool get settlesAccountEntry => orderSaleType == 'account_entry';
 
   factory CustomerPaymentRecord.fromJson(Map<String, Object?> json) {
     return CustomerPaymentRecord(
@@ -44,6 +52,7 @@ class CustomerPaymentRecord {
       externalReference: json['external_reference']?.toString() ?? '',
       orderId: _intFromJson(json['order']),
       orderReceiptNumber: _nullableTrimmed(json['order_receipt_number']),
+      orderSaleType: json['order_sale_type']?.toString() ?? '',
       customerId: _nullableIntFromJson(json['customer']),
       customerName: _nullableTrimmed(json['customer_name']),
       createdByUsername: _nullableTrimmed(json['created_by_username']),

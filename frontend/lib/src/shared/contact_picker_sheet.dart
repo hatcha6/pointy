@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../core/result.dart';
+import '../data/models/balance_entry.dart';
 import '../data/models/contact.dart';
 import '../data/repositories/contact_repository.dart';
+import 'balance_labels.dart';
 import 'components/components.dart';
 import 'design/design.dart';
+import 'opening_balance_fields.dart';
 import 'query_controls/debounced_search_field.dart';
 import 'query_controls/query_empty_state.dart';
 import 'responsive/responsive.dart';
@@ -141,9 +144,12 @@ Future<SupplierContact?> showSupplierPickerSheet({
   );
 }
 
+/// [allowOpeningBalance] offers the optional opening balance — only for
+/// someone allowed to write one, which the server checks again.
 Future<Customer?> showCreateCustomerSheet({
   required BuildContext context,
   required ContactRepository repository,
+  bool allowOpeningBalance = false,
 }) {
   return showAdaptiveFormSurface<Customer?>(
     context: context,
@@ -156,6 +162,7 @@ Future<Customer?> showCreateCustomerSheet({
         ),
         child: CustomerForm(
           repository: repository,
+          allowOpeningBalance: allowOpeningBalance,
           onSaved: (customer) => Navigator.of(context).pop(customer),
         ),
       );
@@ -166,6 +173,7 @@ Future<Customer?> showCreateCustomerSheet({
 Future<SupplierContact?> showCreateSupplierSheet({
   required BuildContext context,
   required ContactRepository repository,
+  bool allowOpeningBalance = false,
 }) {
   return showAdaptiveFormSurface<SupplierContact?>(
     context: context,
@@ -178,6 +186,7 @@ Future<SupplierContact?> showCreateSupplierSheet({
         ),
         child: SupplierForm(
           repository: repository,
+          allowOpeningBalance: allowOpeningBalance,
           onSaved: (supplier) => Navigator.of(context).pop(supplier),
         ),
       );
@@ -642,6 +651,7 @@ class CustomerForm extends StatefulWidget {
     required this.repository,
     required this.onSaved,
     this.initial,
+    this.allowOpeningBalance = false,
   });
 
   final ContactRepository repository;
@@ -650,6 +660,10 @@ class CustomerForm extends StatefulWidget {
   /// Non-null switches the form from create to edit: fields are prefilled and
   /// submitting PATCHes this customer instead of creating a new one.
   final Customer? initial;
+
+  /// Offers the optional opening balance. Create only: a balance on an
+  /// existing account is changed with an adjustment on its details screen.
+  final bool allowOpeningBalance;
 
   @override
   State<CustomerForm> createState() => _CustomerFormState();
@@ -662,13 +676,16 @@ class _CustomerFormState extends State<CustomerForm> {
   final _emailController = TextEditingController();
   final _birthdayController = TextEditingController();
   final _notesController = TextEditingController();
+  final _openingBalance = OpeningBalanceController();
   CustomerGender _gender = CustomerGender.unspecified;
   bool _marketingConsent = false;
   bool _isActive = true;
   bool _isSaving = false;
   bool _hasError = false;
+  String? _errorMessage;
 
   bool get _isEditing => widget.initial != null;
+  bool get _offersOpeningBalance => widget.allowOpeningBalance && !_isEditing;
 
   @override
   void initState() {
@@ -695,6 +712,7 @@ class _CustomerFormState extends State<CustomerForm> {
     _emailController.dispose();
     _birthdayController.dispose();
     _notesController.dispose();
+    _openingBalance.dispose();
     super.dispose();
   }
 
@@ -789,12 +807,21 @@ class _CustomerFormState extends State<CustomerForm> {
               maxLines: 4,
               decoration: InputDecoration(labelText: l10n.notesOptionalLabel),
             ),
+            if (_offersOpeningBalance) ...[
+              const SizedBox(height: 10),
+              OpeningBalanceFields(
+                controller: _openingBalance,
+                party: BalanceParty.customer,
+                enabled: !_isSaving,
+              ),
+            ],
             if (_hasError) ...[
               const SizedBox(height: 8),
               Text(
-                _isEditing
-                    ? l10n.customerUpdateError
-                    : l10n.customerCreateError,
+                _errorMessage ??
+                    (_isEditing
+                        ? l10n.customerUpdateError
+                        : l10n.customerCreateError),
                 style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
@@ -843,6 +870,7 @@ class _CustomerFormState extends State<CustomerForm> {
     setState(() {
       _isSaving = true;
       _hasError = false;
+      _errorMessage = null;
     });
     final draft = CustomerDraft(
       fullName: _nameController.text.trim(),
@@ -853,6 +881,7 @@ class _CustomerFormState extends State<CustomerForm> {
       marketingConsent: _marketingConsent,
       notes: _notesController.text.trim(),
       isActive: _isActive,
+      openingBalance: _offersOpeningBalance ? _openingBalance.draft : null,
     );
     final initial = widget.initial;
     final result = initial == null
@@ -868,13 +897,41 @@ class _CustomerFormState extends State<CustomerForm> {
     switch (result) {
       case Ok<Customer>():
         widget.onSaved(result.value);
-      case Error<Customer>():
+      case Error<Customer>(:final exception):
         setState(() {
           _isSaving = false;
           _hasError = true;
+          _errorMessage = _openingBalanceError(context, exception, draft);
         });
     }
   }
+}
+
+/// The refusal a create form shows when the server turned down the opening
+/// balance it carried — the whole create is refused with it, so the person
+/// has to be told which part to fix. Null for any other failure.
+String? _openingBalanceError(
+  BuildContext context,
+  Exception exception,
+  Object draft,
+) {
+  final carriedBalance = switch (draft) {
+    CustomerDraft(:final openingBalance) => openingBalance != null,
+    SupplierDraft(:final openingBalance) => openingBalance != null,
+    _ => false,
+  };
+  if (!carriedBalance) {
+    return null;
+  }
+  final failure = classifyBalanceFailure(exception);
+  if (failure == BalanceFailure.generic) {
+    return null;
+  }
+  return balanceFailureMessage(
+    AppLocalizations.of(context)!,
+    failure,
+    fallback: '',
+  );
 }
 
 class SupplierForm extends StatefulWidget {
@@ -883,6 +940,7 @@ class SupplierForm extends StatefulWidget {
     required this.repository,
     required this.onSaved,
     this.initial,
+    this.allowOpeningBalance = false,
   });
 
   final ContactRepository repository;
@@ -891,6 +949,9 @@ class SupplierForm extends StatefulWidget {
   /// Non-null switches the form from create to edit: fields are prefilled and
   /// submitting PATCHes this supplier instead of creating a new one.
   final SupplierContact? initial;
+
+  /// Offers the optional opening balance. Create only.
+  final bool allowOpeningBalance;
 
   @override
   State<SupplierForm> createState() => _SupplierFormState();
@@ -904,11 +965,14 @@ class _SupplierFormState extends State<SupplierForm> {
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
   final _notesController = TextEditingController();
+  final _openingBalance = OpeningBalanceController();
   bool _isActive = true;
   bool _isSaving = false;
   bool _hasError = false;
+  String? _errorMessage;
 
   bool get _isEditing => widget.initial != null;
+  bool get _offersOpeningBalance => widget.allowOpeningBalance && !_isEditing;
 
   @override
   void initState() {
@@ -933,6 +997,7 @@ class _SupplierFormState extends State<SupplierForm> {
     _emailController.dispose();
     _addressController.dispose();
     _notesController.dispose();
+    _openingBalance.dispose();
     super.dispose();
   }
 
@@ -997,12 +1062,21 @@ class _SupplierFormState extends State<SupplierForm> {
               maxLines: 4,
               decoration: InputDecoration(labelText: l10n.notesOptionalLabel),
             ),
+            if (_offersOpeningBalance) ...[
+              const SizedBox(height: 10),
+              OpeningBalanceFields(
+                controller: _openingBalance,
+                party: BalanceParty.supplier,
+                enabled: !_isSaving,
+              ),
+            ],
             if (_hasError) ...[
               const SizedBox(height: 8),
               Text(
-                _isEditing
-                    ? l10n.supplierUpdateError
-                    : l10n.supplierCreateError,
+                _errorMessage ??
+                    (_isEditing
+                        ? l10n.supplierUpdateError
+                        : l10n.supplierCreateError),
                 style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
@@ -1042,6 +1116,7 @@ class _SupplierFormState extends State<SupplierForm> {
     setState(() {
       _isSaving = true;
       _hasError = false;
+      _errorMessage = null;
     });
     final draft = SupplierDraft(
       name: _nameController.text.trim(),
@@ -1051,6 +1126,7 @@ class _SupplierFormState extends State<SupplierForm> {
       address: _addressController.text.trim(),
       notes: _notesController.text.trim(),
       isActive: _isActive,
+      openingBalance: _offersOpeningBalance ? _openingBalance.draft : null,
     );
     final initial = widget.initial;
     final result = initial == null
@@ -1062,10 +1138,11 @@ class _SupplierFormState extends State<SupplierForm> {
     switch (result) {
       case Ok<SupplierContact>():
         widget.onSaved(result.value);
-      case Error<SupplierContact>():
+      case Error<SupplierContact>(:final exception):
         setState(() {
           _isSaving = false;
           _hasError = true;
+          _errorMessage = _openingBalanceError(context, exception, draft);
         });
     }
   }

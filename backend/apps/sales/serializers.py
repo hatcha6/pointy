@@ -1318,8 +1318,10 @@ class CheckoutSerializer(serializers.Serializer):
         required=False,
         default=Decimal("0.00"),
     )
+    # The kinds of sale a till rings up — never an account entry, which is not
+    # a sale and is written only by ``apps.balances`` (see ``Order.SaleType``).
     sale_type = serializers.ChoiceField(
-        choices=Order.SaleType.choices,
+        choices=Order.checkout_sale_type_choices(),
         required=False,
         default=Order.SaleType.STANDARD,
     )

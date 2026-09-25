@@ -570,3 +570,83 @@ def _register_consignment_incident():
 _register_consignment_agreement()
 _register_consignor_payout()
 _register_consignment_incident()
+
+
+def _register_customer_balance_entry():
+    from apps.balances import customers as balance_customers
+    from apps.balances.models import CustomerBalanceEntry
+
+    registry.register(
+        key="customer_balance_entry",
+        label="قيد رصيد عميل",
+        model=CustomerBalanceEntry,
+        number_field="number",
+        money_date_field="effective_date",
+        # Born final: the balance either stands on the account or it does not.
+        # A half-written opening balance is not a thing an owner can mean.
+        has_draft_state=False,
+        draft_effects=(),
+        submit_effects=("customer_balance",),
+        # Put right by an entry the other way once anything rests on it; the
+        # words are editable, and so is whose account it sits on — the one
+        # change a merge of two duplicate customers has to make.
+        corrections=(Correction.COUNTER, Correction.ALLOW_AFTER_SUBMIT),
+        mutable_after_submit=("note", "customer"),
+        derived_fields=(),
+        # Credit that has already paid something off cannot be withdrawn: the
+        # debt it settled would reopen with nothing to show why. A debt that has
+        # been collected from is refused by the reversal itself, because the
+        # payments hang off its carrier order rather than off the entry.
+        blocks_cancel=(("applications", "رصيد مستخدم في سداد ديون العميل"),),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "balances.add_customerbalanceentry",
+            Transition.CANCEL: "balances.cancel_customerbalanceentry",
+            Transition.EDIT: "balances.change_customerbalanceentry",
+        },
+        correction_window=None,
+        reverse=balance_customers.reverse_entry,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
+def _register_supplier_balance_entry():
+    from apps.balances import suppliers as balance_suppliers
+    from apps.balances.models import SupplierBalanceEntry
+
+    registry.register(
+        key="supplier_balance_entry",
+        label="قيد رصيد مورد",
+        model=SupplierBalanceEntry,
+        number_field="number",
+        money_date_field="effective_date",
+        has_draft_state=False,
+        draft_effects=(),
+        submit_effects=("supplier_balance",),
+        corrections=(Correction.COUNTER, Correction.ALLOW_AFTER_SUBMIT),
+        mutable_after_submit=("note",),
+        derived_fields=(),
+        # A balance something has been paid against is history. A credit note
+        # that has been drawn on is refused by the reversal, which is where the
+        # note is.
+        blocks_cancel=(("payments", "دفعات للمورد"),),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "balances.add_supplierbalanceentry",
+            Transition.CANCEL: "balances.cancel_supplierbalanceentry",
+            Transition.EDIT: "balances.change_supplierbalanceentry",
+        },
+        correction_window=None,
+        reverse=balance_suppliers.reverse_entry,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
+_register_customer_balance_entry()
+_register_supplier_balance_entry()

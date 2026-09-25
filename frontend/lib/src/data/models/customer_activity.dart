@@ -17,6 +17,11 @@ class CustomerSalesSummary {
     required this.exchangeTotal,
     required this.netSales,
     this.outstandingBalance = 0,
+    this.creditBalance = 0,
+    this.netBalance = 0,
+    this.openDebtsTotal = 0,
+    this.unappliedCredit = 0,
+    this.hasOpeningBalance = false,
     this.creditLimit,
     this.availableCredit,
     this.quotationCount = 0,
@@ -39,8 +44,28 @@ class CustomerSalesSummary {
   final double exchangeTotal;
   final double netSales;
 
-  /// Total still owed across the customer's open (credit) debt invoices.
+  /// What a collection will ask the customer for: everything they owe — آجل
+  /// invoices and debts written onto the account — net of any credit the shop
+  /// holds for them. Never negative.
   final double outstandingBalance;
+
+  /// What the shop owes the customer once their debts are set against it.
+  /// Never negative; zero whenever [outstandingBalance] is not.
+  final double creditBalance;
+
+  /// Positive when the customer owes the shop, negative when the shop owes
+  /// them.
+  final double netBalance;
+
+  /// The two sides before netting. Both non-zero means the customer's credit
+  /// has not been spent against their debts yet — the screen offers to.
+  final double openDebtsTotal;
+  final double unappliedCredit;
+
+  /// Whether an opening balance is on record (one live per account).
+  final bool hasOpeningBalance;
+
+  bool get canApplyCredit => openDebtsTotal > 0.005 && unappliedCredit > 0.005;
 
   /// The ceiling this customer's debt is judged against, after the shop default
   /// and any per-customer override have been resolved. Null = no limit.
@@ -95,6 +120,15 @@ class CustomerSalesSummary {
       exchangeTotal: _moneyFromJson(json['exchange_total']),
       netSales: _moneyFromJson(json['net_sales']),
       outstandingBalance: _moneyFromJson(json['outstanding_balance']),
+      creditBalance: _moneyFromJson(json['credit_balance']),
+      netBalance: _moneyFromJson(
+        json['net_balance'] ?? json['outstanding_balance'],
+      ),
+      openDebtsTotal: _moneyFromJson(
+        json['open_debts_total'] ?? json['outstanding_balance'],
+      ),
+      unappliedCredit: _moneyFromJson(json['unapplied_credit']),
+      hasOpeningBalance: json['has_opening_balance'] == true,
       creditLimit: json['credit_limit'] == null
           ? null
           : _moneyFromJson(json['credit_limit']),

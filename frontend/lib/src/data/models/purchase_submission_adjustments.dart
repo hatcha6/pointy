@@ -417,6 +417,8 @@ class SupplierPayment {
     required this.method,
     this.purchaseOrderId,
     this.purchaseOrderNumber,
+    this.balanceEntryId,
+    this.balanceEntryNumber,
     this.reference = '',
     this.notes = '',
     this.paidAt,
@@ -431,6 +433,11 @@ class SupplierPayment {
   final String supplierName;
   final int? purchaseOrderId;
   final String? purchaseOrderNumber;
+
+  /// The opening balance or adjustment this payment settled, when it paid
+  /// down a debt no purchase order carries.
+  final int? balanceEntryId;
+  final String? balanceEntryNumber;
   final double amount;
   final SupplierPaymentMethod method;
   final String reference;
@@ -450,6 +457,8 @@ class SupplierPayment {
       supplierName: json['supplier_name']?.toString() ?? '',
       purchaseOrderId: _nullableIntFromJson(json['purchase_order']),
       purchaseOrderNumber: json['purchase_order_number']?.toString(),
+      balanceEntryId: _nullableIntFromJson(json['balance_entry']),
+      balanceEntryNumber: json['balance_entry_number']?.toString(),
       amount: _moneyFromJson(json['amount']),
       method: SupplierPaymentMethod.fromApiValue(json['method']),
       reference: json['reference']?.toString() ?? '',

@@ -74,6 +74,14 @@
       "port": 8080
     },
     {
+      "name": "balances-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-balances-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "reports-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

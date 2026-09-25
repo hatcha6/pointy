@@ -101,6 +101,8 @@ class SupplierViewSet(viewsets.ModelViewSet):
         "update": ("purchasing.change_supplier",),
         "partial_update": ("purchasing.change_supplier",),
         "destroy": ("purchasing.delete_supplier",),
+        # The same right as paying one order: money leaving for this supplier.
+        "record_payment": ("purchasing.add_supplierpayment",),
     }
     queryset = Supplier.objects.all()
     filterset_fields = ("is_active",)
@@ -137,6 +139,47 @@ class SupplierViewSet(viewsets.ModelViewSet):
             .order_by("name")
         )
 
+    @action(detail=True, methods=["post"], url_path="record-payment")
+    def record_payment(self, request, pk=None):
+        """Pay this supplier on account.
+
+        Split across everything the shop owes them, oldest first — purchase
+        orders and the balances on their account alike — as one ordinary
+        supplier payment per document it settles. The only way to pay an
+        opening balance, which has no order to pay it from.
+        """
+        supplier = self.get_object()
+        return run_idempotent_request(
+            request, lambda: self._record_payment(request, supplier)
+        )
+
+    def _record_payment(self, request, supplier):
+        from apps.balances.serializers import SupplierAccountPaymentSerializer
+        from apps.balances.suppliers import record_supplier_account_payment
+
+        payload = SupplierAccountPaymentSerializer(
+            data=request.data, context={"request": request}
+        )
+        payload.is_valid(raise_exception=True)
+        payments = record_supplier_account_payment(
+            supplier, created_by=request.user, **payload.validated_data
+        )
+        fresh = self.get_queryset().get(pk=supplier.pk)
+        return Response(
+            {
+                "supplier": self.get_serializer(fresh).data,
+                "payments": SupplierPaymentSerializer(
+                    SupplierPayment.objects.select_related(
+                        "supplier", "purchase_order", "balance_entry",
+                        "created_by", "money_account",
+                    ).filter(pk__in=[payment.pk for payment in payments]),
+                    many=True,
+                    context=self.get_serializer_context(),
+                ).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     @action(detail=True, methods=["get"], url_path="purchase-history")
     def purchase_history(self, request, pk=None):
         supplier = self.get_object()
@@ -171,6 +214,7 @@ class SupplierPaymentViewSet(
     queryset = SupplierPayment.objects.select_related(
         "supplier",
         "purchase_order",
+        "balance_entry",
         "created_by",
         "money_account",
     )
@@ -179,6 +223,7 @@ class SupplierPaymentViewSet(
     filterset_fields = {
         "supplier": ["exact"],
         "purchase_order": ["exact"],
+        "balance_entry": ["exact"],
         "method": ["exact"],
         "paid_at": ["exact", "gte", "lte", "date"],
     }

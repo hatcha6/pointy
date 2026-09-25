@@ -79,7 +79,9 @@ def _outstanding_debt() -> Decimal:
 
     total = Decimal("0")
     # Prefetch so balance_due (summed in Python) doesn't N+1 per order.
-    for order in Order.objects.open_credit().with_balance_relations():
+    # Every open debt, including the ones written onto customers' accounts
+    # (an opening balance, an adjustment) rather than invoiced.
+    for order in Order.objects.open_receivables().with_balance_relations():
         total += order.balance_due
     return total
 

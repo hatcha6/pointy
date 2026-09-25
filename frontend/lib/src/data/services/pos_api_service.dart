@@ -32,6 +32,7 @@ import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
+import '../models/balance_entry.dart';
 import '../models/contact.dart';
 import '../models/customer_activity.dart';
 import '../models/customer_asset.dart';
@@ -101,6 +102,7 @@ import 'analytics_api_client.dart';
 import 'attendance_api_client.dart';
 import 'auth_api_client.dart';
 import 'business_notification_api_client.dart';
+import 'balance_api_client.dart';
 import 'catalog_api_client.dart';
 import 'customer_api_client.dart';
 import 'dashboard_api_client.dart';
@@ -173,6 +175,7 @@ class PosApiService {
     _shopSettings = ShopSettingsApiClient(_session);
     _catalog = CatalogApiClient(_session);
     _customers = CustomerApiClient(_session);
+    _balances = BalanceApiClient(_session);
     _documentTrail = DocumentTrailApiClient(_session);
     _warehouses = WarehouseApiClient(_session);
     _dashboard = DashboardApiClient(_session);
@@ -259,6 +262,7 @@ class PosApiService {
   late final ShopSettingsApiClient _shopSettings;
   late final CatalogApiClient _catalog;
   late final CustomerApiClient _customers;
+  late final BalanceApiClient _balances;
   late final DashboardApiClient _dashboard;
   late final DiscountApiClient _discounts;
   late final EmployeeApiClient _employees;
@@ -1090,6 +1094,88 @@ class PosApiService {
       method: method,
       amount: amount,
       cardReceiptUrl: cardReceiptUrl,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<BalanceEntryPage> fetchBalanceEntries({
+    required BalanceParty party,
+    required int partyId,
+    int page = 1,
+  }) {
+    return _balances.fetchEntries(party: party, partyId: partyId, page: page);
+  }
+
+  Future<BalanceEntry> createBalanceEntry({
+    required BalanceParty party,
+    required int partyId,
+    required BalanceEntryDraft draft,
+    String? idempotencyKey,
+  }) {
+    return _balances.createEntry(
+      party: party,
+      partyId: partyId,
+      draft: draft,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<BalanceEntry> refundBalance({
+    required BalanceParty party,
+    required int partyId,
+    required double amount,
+    String note = '',
+    String? idempotencyKey,
+  }) {
+    return _balances.refund(
+      party: party,
+      partyId: partyId,
+      amount: amount,
+      note: note,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<BalanceEntry> cancelBalanceEntry({
+    required BalanceParty party,
+    required int entryId,
+    required String reason,
+    String? idempotencyKey,
+  }) {
+    return _balances.cancelEntry(
+      party: party,
+      entryId: entryId,
+      reason: reason,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<CustomerSalesSummary> applyCustomerCredit(
+    int customerId, {
+    String? idempotencyKey,
+  }) {
+    return _balances.applyCustomerCredit(
+      customerId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<SupplierAccountPaymentResult> recordSupplierAccountPayment(
+    int supplierId, {
+    required String method,
+    required double amount,
+    String reference = '',
+    String notes = '',
+    int? moneyAccountId,
+    String? idempotencyKey,
+  }) {
+    return _balances.recordSupplierAccountPayment(
+      supplierId,
+      method: method,
+      amount: amount,
+      reference: reference,
+      notes: notes,
+      moneyAccountId: moneyAccountId,
       idempotencyKey: idempotencyKey,
     );
   }

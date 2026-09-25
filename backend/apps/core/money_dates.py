@@ -53,6 +53,12 @@ MONEY_DATE_FIELDS = {
     # Pointy sold it — so the money date is the confirmation, and a row still
     # waiting for one is correctly outside every period.
     "integrations.IntegrationFulfillment": "confirmed_at",
+    # An opening balance or an adjustment is dated the day it applies from,
+    # which is often before it was typed — the day the shop started keeping
+    # its books here. No money moves on that day; what moves is what a party
+    # owes, and that is what a period of receivables or payables slices by.
+    "balances.CustomerBalanceEntry": "effective_date",
+    "balances.SupplierBalanceEntry": "effective_date",
 }
 
 

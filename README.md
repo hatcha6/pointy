@@ -233,6 +233,29 @@ with `make frontend-reports-preview` (`?screen=reports|result|board`, and
 `consignment_ledger` are the serialized-stock reports; the unit ledger asks for a
 device's serial or IMEI before it runs).
 
+## Opening Balances and Account Adjustments
+
+A customer or supplier can carry a balance no invoice or purchase order could:
+an opening balance (`رصيد افتتاحي`, one per account, optionally set in the same
+form that creates the contact) and later adjustments (`تسوية رصيد`, a reason
+required), each either `عليه لنا` or `له علينا`. They live in `apps.balances`
+and are born-submitted documents: numbered, dated, never edited, cancelled with
+a reason only while nothing has been settled against them, and refused inside a
+closed period.
+
+They are real debts, not annotations. A customer debt becomes a non-sale
+`account_entry` order that is collected like any آجل invoice (oldest first) and
+counts in aging, statements, credit limits and reminders without counting as
+revenue; a credit is spent automatically on what the customer owes, or paid out
+in cash from the drawer (`رد المبلغ للعميل`). A supplier debt is paid through
+the supplier's `record-payment` (oldest first across purchase orders and
+entries); what a supplier owes the shop is a supplier credit, applied to a
+purchase order or taken back in cash (`استلام المبلغ من المورد`). The balance
+sheet carries both sides and keeps opening balances out of the period's result;
+the profit report's cash bridge names what was settled from credit. Preview
+with `make frontend-balances-preview`
+(`?screen=customer|supplier|entry|refund|create`).
+
 ## Learning Module
 
 `التعلّم` is an in-app library of short Arabic guides, one per operation the

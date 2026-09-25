@@ -21715,4 +21715,288 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get rechargeHistoryTopUp => 'شحن رصيد';
+
+  @override
+  String get paymentMethodAccountCredit => 'من رصيد العميل';
+
+  @override
+  String get balanceDirectionTheyOweUs => 'عليه لنا';
+
+  @override
+  String get balanceDirectionWeOweThem => 'له علينا';
+
+  @override
+  String get customerBalanceTheyOweUsHint => 'مبلغ مستحق على العميل للمحل';
+
+  @override
+  String get customerBalanceWeOweThemHint =>
+      'مبلغ مستحق للعميل على المحل (رصيد دائن)';
+
+  @override
+  String get supplierBalanceTheyOweUsHint =>
+      'مبلغ مستحق على المورد للمحل (رصيد لدى المورد)';
+
+  @override
+  String get supplierBalanceWeOweThemHint => 'مبلغ مستحق للمورد على المحل';
+
+  @override
+  String get balanceKindOpening => 'رصيد افتتاحي';
+
+  @override
+  String get balanceKindAdjustment => 'تسوية رصيد';
+
+  @override
+  String get balanceEntriesTitle => 'الرصيد الافتتاحي والتسويات';
+
+  @override
+  String get balanceEntriesEmpty =>
+      'لا يوجد رصيد افتتاحي أو تسويات على هذا الحساب.';
+
+  @override
+  String get balanceEntriesLoadError => 'تعذر تحميل الأرصدة والتسويات.';
+
+  @override
+  String get addOpeningBalanceButton => 'تسجيل رصيد افتتاحي';
+
+  @override
+  String get addBalanceAdjustmentButton => 'تسوية الرصيد';
+
+  @override
+  String get balanceEntryOpeningHint =>
+      'ما كان على الحساب أو له يوم بدأ المحل تسجيله في النظام. يظهر في كشف الحساب ويُحصّل أو يُسدّد مثل أي دين.';
+
+  @override
+  String get balanceEntryAdjustmentHint =>
+      'لمبلغ لا يمكن تسجيله كفاتورة أو أمر شراء. يظهر في كشف الحساب ويُحصّل أو يُسدّد لاحقًا، ولا يُحسب مبيعات أو مشتريات.';
+
+  @override
+  String get balanceEntryAmountLabel => 'المبلغ';
+
+  @override
+  String get balanceEntryDirectionLabel => 'اتجاه الرصيد';
+
+  @override
+  String get balanceEntryDateLabel => 'يسري من تاريخ';
+
+  @override
+  String get balanceEntryDateToday => 'اليوم';
+
+  @override
+  String get balanceEntryNoteLabel => 'البيان';
+
+  @override
+  String get balanceEntryNoteOptionalLabel => 'البيان (اختياري)';
+
+  @override
+  String get balanceEntryNoteRequired => 'اكتب سبب التسوية.';
+
+  @override
+  String get balanceEntryAmountInvalid => 'أدخل مبلغًا أكبر من صفر.';
+
+  @override
+  String get balanceEntrySaved => 'تم تسجيل الرصيد.';
+
+  @override
+  String get balanceEntrySaveError => 'تعذر تسجيل الرصيد.';
+
+  @override
+  String get balanceEntryOpeningExistsError =>
+      'لهذا الحساب رصيد افتتاحي مسجل. ألغِه أولًا أو سجّل تسوية بدلًا منه.';
+
+  @override
+  String get balanceEntryFutureDateError =>
+      'لا يمكن أن يبدأ الرصيد في تاريخ لاحق.';
+
+  @override
+  String get balanceEntryPeriodLockedError =>
+      'هذه الفترة مغلقة، ولا يمكن تسجيل رصيد أو إلغاؤه بتاريخ داخلها.';
+
+  @override
+  String get balanceEntryPermissionError =>
+      'ليست لديك صلاحية لهذا الإجراء على الأرصدة.';
+
+  @override
+  String get balanceEntryCancelAction => 'إلغاء الرصيد';
+
+  @override
+  String balanceEntryCancelTitle(String number) {
+    return 'إلغاء الرصيد $number';
+  }
+
+  @override
+  String get balanceEntryCancelBody =>
+      'سيُحذف أثر هذا الرصيد من الحساب وكشف الحساب، ويبقى مسجلًا كقيد ملغى مع السبب.';
+
+  @override
+  String get balanceEntryCancelReasonLabel => 'سبب الإلغاء';
+
+  @override
+  String get balanceEntryCancelReasonRequired => 'اكتب سبب الإلغاء.';
+
+  @override
+  String get balanceEntryCancelled => 'تم إلغاء الرصيد.';
+
+  @override
+  String get balanceEntryCancelError => 'تعذر إلغاء الرصيد.';
+
+  @override
+  String get balanceEntryCancelBlockedError =>
+      'لا يمكن إلغاء هذا الرصيد لأنه حُصّل أو سُدّد منه جزء. سجّل تسوية معاكسة بدلًا من ذلك.';
+
+  @override
+  String get balanceEntryCancelledBadge => 'ملغى';
+
+  @override
+  String balanceEntrySettledValue(String amount) {
+    return 'سُدّد $amount';
+  }
+
+  @override
+  String balanceEntryRemainingValue(String amount) {
+    return 'المتبقي $amount';
+  }
+
+  @override
+  String balanceEntryEffectiveValue(String date) {
+    return 'من $date';
+  }
+
+  @override
+  String balanceEntryCreatedByValue(String name) {
+    return 'بواسطة $name';
+  }
+
+  @override
+  String balanceEntryCancelReasonValue(String reason) {
+    return 'سبب الإلغاء: $reason';
+  }
+
+  @override
+  String get openingBalanceSectionTitle => 'رصيد افتتاحي (اختياري)';
+
+  @override
+  String get openingBalanceSectionHint =>
+      'اتركه فارغًا إن لم يكن على الحساب أو له رصيد سابق.';
+
+  @override
+  String customerCreditBalanceCalloutTitle(String amount) {
+    return 'للعميل رصيد دائن قدره $amount.';
+  }
+
+  @override
+  String get customerCreditBalanceCalloutBody =>
+      'هذا المبلغ مستحق للعميل على المحل، ويُخصم تلقائيًا من ديونه عند التحصيل.';
+
+  @override
+  String customerUnappliedCreditCalloutTitle(String credit, String debts) {
+    return 'للعميل رصيد دائن $credit لم يُخصم بعد من ديونه ($debts).';
+  }
+
+  @override
+  String get applyCustomerCreditButton => 'خصم الرصيد الدائن من الديون';
+
+  @override
+  String get applyCustomerCreditSuccess =>
+      'تم خصم الرصيد الدائن من ديون العميل.';
+
+  @override
+  String get applyCustomerCreditError => 'تعذر خصم الرصيد الدائن.';
+
+  @override
+  String get customerCreditBalanceLabel => 'رصيد دائن للعميل';
+
+  @override
+  String get supplierNetBalanceLabel => 'صافي حساب المورد';
+
+  @override
+  String get supplierCreditBalanceLabel => 'رصيد لدى المورد';
+
+  @override
+  String supplierNetBalanceWeOweValue(String amount) {
+    return 'مستحق للمورد $amount';
+  }
+
+  @override
+  String supplierNetBalanceTheyOweValue(String amount) {
+    return 'مستحق على المورد $amount';
+  }
+
+  @override
+  String get recordSupplierAccountPaymentButton => 'تسجيل دفعة للمورد';
+
+  @override
+  String get supplierAccountPaymentTitle => 'دفعة للمورد على الحساب';
+
+  @override
+  String supplierAccountPaymentBalanceValue(String amount) {
+    return 'المستحق للمورد: $amount';
+  }
+
+  @override
+  String get supplierAccountPaymentHint =>
+      'تُوزَّع الدفعة على أقدم المستحقات أولًا: الرصيد الافتتاحي ثم أوامر الشراء.';
+
+  @override
+  String get supplierAccountPaymentSuccess => 'تم تسجيل الدفعة للمورد.';
+
+  @override
+  String get supplierAccountPaymentError => 'تعذر تسجيل الدفعة للمورد.';
+
+  @override
+  String get balanceEntriesLoadMoreButton => 'عرض المزيد';
+
+  @override
+  String get balanceKindRefund => 'رد مبلغ نقدًا';
+
+  @override
+  String get customerRefundButton => 'رد المبلغ للعميل';
+
+  @override
+  String get supplierRefundButton => 'استلام المبلغ من المورد';
+
+  @override
+  String get customerRefundTitle => 'رد مبلغ للعميل';
+
+  @override
+  String get supplierRefundTitle => 'استلام مبلغ من المورد';
+
+  @override
+  String get customerRefundHint =>
+      'يُصرف المبلغ نقدًا من درج ورديتك المفتوحة ويُخصم من الرصيد المستحق للعميل. لا يمكن إلغاؤه بعد تسجيله.';
+
+  @override
+  String get supplierRefundHint =>
+      'يُستلم المبلغ نقدًا في درج ورديتك المفتوحة ويُخصم مما على المورد للمحل. لا يمكن إلغاؤه بعد تسجيله.';
+
+  @override
+  String balanceRefundAvailableValue(String amount) {
+    return 'المتاح: $amount';
+  }
+
+  @override
+  String balanceRefundAmountTooHigh(String amount) {
+    return 'المبلغ أكبر من المتاح ($amount).';
+  }
+
+  @override
+  String get customerRefundSaved => 'تم صرف المبلغ للعميل.';
+
+  @override
+  String get supplierRefundSaved => 'تم استلام المبلغ من المورد.';
+
+  @override
+  String get balanceRefundSessionRequiredError =>
+      'افتح وردية أولًا — المبلغ يُصرف أو يُستلم عبر درج الوردية.';
+
+  @override
+  String get balanceRefundExceedsCreditError => 'المبلغ أكبر من الرصيد المتاح.';
+
+  @override
+  String get balanceRefundFinalError =>
+      'هذا المبلغ سُلِّم نقدًا ولا يمكن إلغاؤه. سجّل تسوية معاكسة بدلًا من ذلك.';
+
+  @override
+  String paymentsHubBalanceEntryValue(String number) {
+    return 'قيد رصيد $number';
+  }
 }

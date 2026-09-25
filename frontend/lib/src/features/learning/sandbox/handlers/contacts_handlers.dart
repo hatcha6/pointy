@@ -132,6 +132,13 @@ SandboxReply handleContacts(SandboxShop shop, SandboxRequest request) {
     return (200, page(const []));
   }
 
+  // The practice shop starts every account at zero: no opening balances and
+  // no adjustments to list.
+  if (request.on('GET', 'customer-balance-entries/') != null ||
+      request.on('GET', 'supplier-balance-entries/') != null) {
+    return (200, page(const []));
+  }
+
   if (request.on('GET', 'supplier-payments/') != null) {
     return (200, page(const []));
   }

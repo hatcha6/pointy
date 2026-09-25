@@ -263,8 +263,10 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
     def transactional(self):
         """Recognized sales plus their voids — the basis for sales/profit
         aggregates that net refunds out of a paid+void gross. Always excludes
-        quotations (a voided/converted quotation is not a transaction)."""
-        return self.exclude(sale_type=Order.SaleType.QUOTATION).filter(
+        quotations (a voided/converted quotation is not a transaction) and
+        account entries (a debt recorded on a customer's account is not a sale,
+        however it is later settled)."""
+        return self.exclude(sale_type__in=Order.NON_SALE_TYPES).filter(
             Q(status__in=(Order.Status.PAID, Order.Status.VOID))
             | Q(sale_type=Order.SaleType.CREDIT, status=Order.Status.OPEN)
         )
@@ -275,19 +277,34 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
             sale_type=Order.SaleType.CREDIT, status=Order.Status.OPEN
         )
 
+    def open_receivables(self):
+        """Everything a customer still owes on: open credit invoices, and the
+        debts written straight onto their account (an opening balance, an
+        adjustment) that no invoice could carry.
+
+        The one set a collection settles and a receivable sums. Deliberately a
+        separate name from :meth:`open_credit`, which stays "credit invoices":
+        the payroll deduction and a cashier's own activity read that one, and
+        neither should start treating an account entry as something that was
+        sold.
+        """
+        return self.filter(
+            sale_type__in=Order.RECEIVABLE_SALE_TYPES, status=Order.Status.OPEN
+        )
+
     def due_on_or_before(self, when):
-        """Open credit whose due date has arrived — the collectable set.
+        """Open receivables whose due date has arrived — the collectable set.
 
         A null due date counts as due: an invoice issued with no terms recorded
         is an open tab, payable now. That is how the debt sweep has always read
         it, and the aging report's invoice-date fallback says the same thing.
         """
-        return self.open_credit().filter(
+        return self.open_receivables().filter(
             Q(due_date__isnull=True) | Q(due_date__lte=when)
         )
 
     def overdue(self, when=None):
-        """Open credit past its recorded due date.
+        """Open receivables past their recorded due date.
 
         Narrower than :meth:`due_on_or_before` by exactly the invoices with no
         due date: "due now" and "late" are different claims, and only one of
@@ -304,7 +321,9 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
             from apps.core.timeutils import business_local_date
 
             when = business_local_date()
-        return self.open_credit().filter(due_date__isnull=False, due_date__lt=when)
+        return self.open_receivables().filter(
+            due_date__isnull=False, due_date__lt=when
+        )
 
     def quotations(self):
         return self.filter(sale_type=Order.SaleType.QUOTATION)
@@ -443,6 +462,34 @@ class Order(DocumentMixin, TimeStampedModel):
         # A debt/credit invoice (آجل): a real sale issued unpaid or partly paid;
         # stock leaves and revenue is recognized at issue.
         CREDIT = "credit", "Credit"
+        # Not a sale. The carrier of a debt written straight onto a customer's
+        # account — an opening balance brought from the paper ledger, or an
+        # adjustment for something no invoice could hold — owned by
+        # ``apps.balances.CustomerBalanceEntry``. It exists as an order for one
+        # reason: a ``Payment`` must name an order, and this debt has to be
+        # collectable at the till exactly like an آجل invoice. It has no lines,
+        # no register session and no stock, it is never counted as revenue
+        # (``committed_sales`` names the sale types it counts, and
+        # ``transactional`` excludes ``NON_SALE_TYPES``), and it is created and
+        # retracted only through its entry — never through checkout.
+        ACCOUNT_ENTRY = "account_entry", "Account entry"
+
+    #: Orders that are not sales at all: no revenue, no stock, no Z-report.
+    NON_SALE_TYPES = (SaleType.QUOTATION, SaleType.ACCOUNT_ENTRY)
+    #: Orders a customer can owe money on — what a receivable sums and what a
+    #: collection settles.
+    RECEIVABLE_SALE_TYPES = (SaleType.CREDIT, SaleType.ACCOUNT_ENTRY)
+    #: What a till may ring up. An account entry is written by its own service,
+    #: never by a checkout that a client could point at it.
+    CHECKOUT_SALE_TYPES = (SaleType.STANDARD, SaleType.QUOTATION, SaleType.CREDIT)
+
+    @classmethod
+    def checkout_sale_type_choices(cls):
+        return [
+            (value, label)
+            for value, label in cls.SaleType.choices
+            if value in cls.CHECKOUT_SALE_TYPES
+        ]
 
     objects = OrderQuerySet.as_manager()
 
@@ -819,10 +866,11 @@ def recognized_sale_q(prefix: str = "") -> Q:
 
 def transactional_sale_q(prefix: str = "") -> Q:
     """``Q`` matching recognized sales plus their voids, always excluding
-    quotations. Mirror of ``OrderQuerySet.transactional`` for use across a
-    related accessor or inside ``Count(filter=...)`` annotations."""
+    quotations and account entries. Mirror of ``OrderQuerySet.transactional``
+    for use across a related accessor or inside ``Count(filter=...)``
+    annotations."""
     p = f"{prefix}__" if prefix else ""
-    return ~Q(**{f"{p}sale_type": Order.SaleType.QUOTATION}) & (
+    return ~Q(**{f"{p}sale_type__in": Order.NON_SALE_TYPES}) & (
         Q(**{f"{p}status__in": (Order.Status.PAID, Order.Status.VOID)})
         | Q(**{f"{p}sale_type": Order.SaleType.CREDIT, f"{p}status": Order.Status.OPEN})
     )

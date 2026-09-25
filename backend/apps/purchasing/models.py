@@ -36,6 +36,8 @@ class Supplier(TimeStampedModel):
         primed = getattr(self, "_payable_balance", None)
         if primed is not None:
             return primed
+        from apps.balances.suppliers import payable_entries_outstanding
+
         # Each order owes its billable total — what was ordered, less anything
         # a receipt cancelled — minus everything paid against it (cash or
         # applied credit); i.e. ``raw_balance_due``. Batch the per-order paid
@@ -63,9 +65,14 @@ class Supplier(TimeStampedModel):
             ),
             Decimal("0.00"),
         )
+        # What the shop owes on its account beyond any order: an opening
+        # balance, an adjustment. Each settled by the payments that name it.
+        outstanding += payable_entries_outstanding([self.pk]).get(
+            self.pk, Decimal("0.00")
+        )
         unallocated = (
             self.payments.live()
-            .filter(purchase_order__isnull=True)
+            .filter(purchase_order__isnull=True, balance_entry__isnull=True)
             .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
             .aggregate(total=Sum("amount"))["total"]
             or Decimal("0.00")
@@ -1132,6 +1139,18 @@ class SupplierPayment(DocumentMixin, TimeStampedModel):
         blank=True,
         null=True,
     )
+    # What this payment settles when it is not an order: a balance the shop
+    # owes on the supplier's account with no order behind it — an opening
+    # balance, an adjustment (``apps.balances``). Never set together with
+    # ``purchase_order``. A payment naming neither is "on account", and pays
+    # the supplier's oldest debts wherever a report has to say which.
+    balance_entry = models.ForeignKey(
+        "balances.SupplierBalanceEntry",
+        on_delete=models.PROTECT,
+        related_name="payments",
+        blank=True,
+        null=True,
+    )
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -1190,12 +1209,31 @@ class SupplierPayment(DocumentMixin, TimeStampedModel):
                 name="supplier_payment_account_idx",
             ),
         ]
+        constraints = [
+            # One thing settled per payment. A row naming both an order and an
+            # account entry would be counted against each, and the supplier's
+            # balance would come down twice for money that left once.
+            models.CheckConstraint(
+                condition=models.Q(purchase_order__isnull=True)
+                | models.Q(balance_entry__isnull=True),
+                name="supplier_payment_settles_one_thing",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.method} {self.amount} for supplier {self.supplier_id}"
 
 
 class SupplierCredit(TimeStampedModel):
+    """Money a supplier owes the shop, spent against what the shop owes them.
+
+    Issued by a purchase return settled as credit (``purchase_order`` and
+    ``adjustment`` set), or by a balance entry recording that the supplier owes
+    the shop (``balance_entry`` set) — an advance paid before the supplier was
+    typed in, say. Both are spent the same way, oldest first, by a
+    ``SUPPLIER_CREDIT`` payment (``services.consume_supplier_credit``).
+    """
+
     class Status(models.TextChoices):
         OPEN = "open", "Open"
         USED = "used", "Used"
@@ -1209,11 +1247,22 @@ class SupplierCredit(TimeStampedModel):
         PurchaseOrder,
         on_delete=models.PROTECT,
         related_name="supplier_credits",
+        blank=True,
+        null=True,
     )
     adjustment = models.OneToOneField(
         PurchaseOrderAdjustment,
         on_delete=models.PROTECT,
         related_name="supplier_credit",
+        blank=True,
+        null=True,
+    )
+    balance_entry = models.OneToOneField(
+        "balances.SupplierBalanceEntry",
+        on_delete=models.PROTECT,
+        related_name="supplier_credit",
+        blank=True,
+        null=True,
     )
     amount = models.DecimalField(
         max_digits=10,
@@ -1301,7 +1350,7 @@ class PurchaseOrderAdjustmentReplacementLine(TimeStampedModel):
 
 def prime_supplier_balances(suppliers):
     """Compute ``payable_balance``/``credit_balance`` for many suppliers using a
-    fixed 3 queries instead of 6 per supplier.
+    fixed 4 queries instead of 6 per supplier.
 
     Serializing a supplier reads ``payable_balance`` (2 queries), then
     ``credit_balance`` (1), then ``net_balance`` — which re-ran both. That is 6
@@ -1311,8 +1360,11 @@ def prime_supplier_balances(suppliers):
 
     Measured on ``supplier-list`` (SQLite, 2 orders + 1 payment per supplier):
     6.0 queries/row -> 0.0. A full 50-row page goes 303 -> 6 queries; 20 rows
-    129 -> 6; a single supplier (retrieve/create/update) 8 -> 5.
+    129 -> 6; a single supplier (retrieve/create/update) 8 -> 5. The balance
+    entries on the supplier's account (``apps.balances``) add one fixed query.
     """
+    from apps.balances.suppliers import payable_entries_outstanding
+
     suppliers = list(suppliers)
     ids = [supplier.pk for supplier in suppliers if supplier.pk is not None]
     if not ids:
@@ -1335,6 +1387,8 @@ def prime_supplier_balances(suppliers):
         outstanding[supplier_id] = outstanding.get(supplier_id, zero) + max(
             po_total - (cancelled or zero) - (paid or zero), zero
         )
+    for supplier_id, owed in payable_entries_outstanding(ids).items():
+        outstanding[supplier_id] = outstanding.get(supplier_id, zero) + owed
 
     unallocated = {
         row["supplier_id"]: row["total"] or zero
@@ -1343,6 +1397,7 @@ def prime_supplier_balances(suppliers):
             .filter(
                 supplier_id__in=ids,
                 purchase_order__isnull=True,
+                balance_entry__isnull=True,
             )
             .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
             .values("supplier_id")

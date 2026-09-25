@@ -17,6 +17,7 @@ from decimal import Decimal
 from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, TruncDate
 
+from apps.balances.common import statement_kind
 from apps.core.money_dates import day_range_end
 from apps.purchasing.models import (
     PurchaseOrder,
@@ -37,7 +38,7 @@ from ..sections import (
     percent,
     report_section,
 )
-from .scope import in_period, money_sum
+from .scope import in_period, in_window, money_sum
 
 MONEY = DecimalField(max_digits=12, decimal_places=2)
 ZERO = Decimal("0.00")
@@ -236,6 +237,11 @@ def _supplier_balances(as_of, *, detail=True):
     * **A payment on account** — made to the supplier, not to one order — pays
       that supplier's orders oldest first. Leaving it out stated a debt the
       shop had already settled.
+
+    A balance the shop owes on the supplier's account with no order behind it
+    (an opening balance, an adjustment — ``apps.balances``) is aged beside the
+    orders from the day it applies from, and settled by the payments that name
+    it exactly as an order is by its own.
     """
     cutoff = day_range_end(as_of)
     paid = (
@@ -257,15 +263,28 @@ def _supplier_balances(as_of, *, detail=True):
         )
         .annotate(balance=F("total") - F("cancelled_total") - F("paid_amount"))
         .filter(balance__gt=0)
-        # Oldest first within each supplier: the order a payment on account
-        # settles them in.
         .order_by("supplier_id", "reference_date", "created_at", "pk")
         .values("supplier_id", "supplier__name", "reference_date", "balance")
+    )
+    # Oldest first within each supplier, orders and account entries together:
+    # the order a payment on account settles them in. On the same day an
+    # account entry — usually the opening balance — goes first; the sort is
+    # stable, so orders keep the order the database gave them.
+    outstanding = sorted(
+        [
+            *_payable_entries_at(as_of),
+            *outstanding,
+        ],
+        key=lambda row: (row["supplier_id"], row["reference_date"]),
     )
     on_account = {
         row["supplier_id"]: decimal_from(row["total"])
         for row in SupplierPayment.objects.live()
-        .filter(purchase_order__isnull=True, paid_at__lt=cutoff)
+        .filter(
+            purchase_order__isnull=True,
+            balance_entry__isnull=True,
+            paid_at__lt=cutoff,
+        )
         .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
         .order_by()
         .values("supplier_id")
@@ -326,6 +345,47 @@ def _supplier_balances(as_of, *, detail=True):
         }
         for row in rows
     ], totals
+
+
+def _payable_entries_at(as_of):
+    """Balances the shop owed on suppliers' accounts at the close of ``as_of``,
+    in the rows ``_supplier_balances`` ages: each entry less the payments that
+    named it by then."""
+    from apps.balances.models import SupplierBalanceEntry
+
+    cutoff = day_range_end(as_of)
+    paid = (
+        SupplierPayment.objects.live()
+        .filter(balance_entry=OuterRef("pk"), paid_at__lt=cutoff)
+        .order_by()
+        .values("balance_entry")
+        .annotate(total=Sum("amount"))
+        .values("total")[:1]
+    )
+    rows = (
+        SupplierBalanceEntry.objects.live()
+        .filter(
+            direction=SupplierBalanceEntry.Direction.WE_OWE_THEM,
+            effective_date__lte=as_of,
+        )
+        .annotate(
+            paid_amount=Coalesce(
+                Subquery(paid, output_field=MONEY), Value(ZERO), output_field=MONEY
+            ),
+        )
+        .annotate(balance=F("amount") - F("paid_amount"))
+        .filter(balance__gt=0)
+        .values("supplier_id", "supplier__name", "effective_date", "balance")
+    )
+    return [
+        {
+            "supplier_id": row["supplier_id"],
+            "supplier__name": row["supplier__name"],
+            "reference_date": row["effective_date"],
+            "balance": row["balance"],
+        }
+        for row in rows
+    ]
 
 
 def _bucket_for(reference, thresholds):
@@ -410,7 +470,23 @@ def supplier_statement(context):
     }
 
 
+def _statement_payments(supplier):
+    """The money paid to a supplier. Supplier credit spent on an order is left
+    out: the statement already credits the shop with that credit on the day
+    the supplier came to owe it (a return settled as credit, a balance entry),
+    so counting it again when it was spent would count it twice."""
+    return (
+        SupplierPayment.objects.live()
+        .filter(supplier=supplier)
+        .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
+    )
+
+
 def _supplier_balance_at(supplier, when):
+    """What the shop owed this supplier at the close of ``when`` — negative
+    when the supplier owed the shop."""
+    from apps.balances.models import SupplierBalanceEntry
+
     cutoff = day_range_end(when)
     billed = (
         PurchaseOrder.objects.filter(supplier=supplier, created_at__lt=cutoff)
@@ -423,15 +499,35 @@ def _supplier_balance_at(supplier, when):
             )
         )
     )["total"]
-    paid = (
-        SupplierPayment.objects.live()
-        .filter(supplier=supplier, paid_at__lt=cutoff)
+    owed_on_account = (
+        SupplierBalanceEntry.objects.live()
+        .filter(
+            supplier=supplier,
+            direction=SupplierBalanceEntry.Direction.WE_OWE_THEM,
+            effective_date__lte=when,
+        )
         .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
     )["total"]
-    return decimal_from(billed) - decimal_from(paid)
+    paid = (
+        _statement_payments(supplier)
+        .filter(paid_at__lt=cutoff)
+        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
+    )["total"]
+    credited = (
+        SupplierCredit.objects.filter(supplier=supplier, created_at__lt=cutoff)
+        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
+    )["total"]
+    return (
+        decimal_from(billed)
+        + decimal_from(owed_on_account)
+        - decimal_from(paid)
+        - decimal_from(credited)
+    )
 
 
 def _supplier_entries(supplier, period):
+    from apps.balances.models import BalanceEntry, SupplierBalanceEntry
+
     entries = []
 
     orders = in_period(
@@ -452,22 +548,71 @@ def _supplier_entries(supplier, period):
             }
         )
 
-    payments = in_period(
-        SupplierPayment.objects.live().filter(supplier=supplier), period
-    ).values("purchase_order__order_number", "paid_at", "amount", "method")
+    # What the shop owes, or is owed, on the account itself: opening balances
+    # and adjustments, on the day each applies from.
+    account_entries = in_period(
+        SupplierBalanceEntry.objects.live().filter(supplier=supplier), period
+    ).values("number", "effective_date", "amount", "direction", "kind")
+    for entry in account_entries:
+        amount = decimal_from(entry["amount"])
+        owed_by_shop = entry["direction"] == BalanceEntry.Direction.WE_OWE_THEM
+        entries.append(
+            {
+                "date": entry["effective_date"],
+                "document": entry["number"],
+                "kind": statement_kind(entry["kind"]),
+                "credit": amount if owed_by_shop else ZERO,
+                "debit": ZERO if owed_by_shop else amount,
+            }
+        )
+
+    # Credit a purchase return earned the shop, on the day it was issued. (A
+    # balance entry's credit note is the entry above, so it is not repeated.)
+    returns_credited = in_window(
+        SupplierCredit.objects.filter(supplier=supplier, balance_entry__isnull=True),
+        period,
+    ).values("purchase_order__order_number", "created_at", "amount")
+    for credit in returns_credited:
+        entries.append(
+            {
+                "date": credit["created_at"].date(),
+                "document": credit["purchase_order__order_number"] or "",
+                "kind": "supplier_credit",
+                "credit": ZERO,
+                "debit": decimal_from(credit["amount"]),
+            }
+        )
+
+    payments = in_period(_statement_payments(supplier), period).values(
+        "purchase_order__order_number",
+        "balance_entry__number",
+        "paid_at",
+        "amount",
+        "method",
+    )
     for payment in payments:
         entries.append(
             {
                 "date": payment["paid_at"].date(),
-                "document": payment["purchase_order__order_number"] or "",
+                "document": (
+                    payment["purchase_order__order_number"]
+                    or payment["balance_entry__number"]
+                    or ""
+                ),
                 "kind": payment["method"],
                 "credit": ZERO,
                 "debit": decimal_from(payment["amount"]),
             }
         )
 
-    entries.sort(key=lambda entry: (entry["date"], entry["kind"], entry["document"]))
+    entries.sort(key=_statement_order)
     return entries
+
+
+def _statement_order(entry):
+    """Date order, with an opening balance first on its day."""
+    first = 0 if entry["kind"] == "opening_balance" else 1
+    return (entry["date"], first, entry["kind"], entry["document"])
 
 
 __all__ = [

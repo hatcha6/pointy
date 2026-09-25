@@ -10,6 +10,7 @@ String paymentMethodLabel(AppLocalizations l10n, PaymentMethod method) {
     PaymentMethod.card => l10n.paymentMethodCard,
     PaymentMethod.transfer => l10n.paymentMethodTransfer,
     PaymentMethod.salaryDeduction => l10n.paymentMethodSalaryDeduction,
+    PaymentMethod.accountCredit => l10n.paymentMethodAccountCredit,
   };
 }
 
@@ -19,6 +20,7 @@ IconData paymentMethodIcon(PaymentMethod method) {
     PaymentMethod.card => Icons.credit_card_outlined,
     PaymentMethod.transfer => Icons.account_balance_outlined,
     PaymentMethod.salaryDeduction => Icons.badge_outlined,
+    PaymentMethod.accountCredit => Icons.savings_outlined,
   };
 }
 
@@ -32,6 +34,19 @@ String supplierPaymentMethodLabel(
     SupplierPaymentMethod.transfer => l10n.paymentMethodTransfer,
     SupplierPaymentMethod.supplierCredit => l10n.supplierPaymentMethodCredit,
     SupplierPaymentMethod.refund => l10n.purchaseAdjustmentTypeRefund,
+  };
+}
+
+/// The method as a printed proof names it. The document renders in an
+/// isolate without an l10n context, so these words live here, matching
+/// [supplierPaymentMethodLabel].
+String supplierPaymentMethodProofText(SupplierPaymentMethod method) {
+  return switch (method) {
+    SupplierPaymentMethod.cash => 'نقدًا',
+    SupplierPaymentMethod.card => 'بطاقة',
+    SupplierPaymentMethod.transfer => 'تحويل',
+    SupplierPaymentMethod.supplierCredit => 'رصيد المورد',
+    SupplierPaymentMethod.refund => 'استرداد',
   };
 }
 

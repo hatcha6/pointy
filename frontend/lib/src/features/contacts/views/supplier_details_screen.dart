@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/balance_entry.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
@@ -12,11 +13,14 @@ import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
+import '../../../data/services/payment_proof_printer.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
 import '../view_models/supplier_details_view_model.dart';
+import 'balance_entries_section.dart';
 
 class SupplierDetailsScreen extends StatefulWidget {
   const SupplierDetailsScreen({
@@ -45,6 +49,10 @@ class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
     contactRepository: widget.contactRepository,
     purchaseRepository: widget.purchaseRepository,
     initialSupplier: widget.supplier,
+    proofPrinter: PaymentProofPrinter(
+      printingRepository: widget.printingRepository,
+      shopSettingsRepository: widget.shopSettingsRepository,
+    ),
   );
 
   @override
@@ -141,8 +149,31 @@ class SupplierDetailsView extends StatelessWidget {
               PointyDetailSection(
                 title: l10n.supplierPurchaseSummaryTitle,
                 icon: Icons.summarize_outlined,
-                child: _SupplierTotals(viewModel: viewModel),
+                child: _SupplierTotals(
+                  viewModel: viewModel,
+                  canRecordPayment: capabilities.canRecordSupplierPayment,
+                ),
               ),
+              if (capabilities.canViewSupplierBalances) ...[
+                SizedBox(height: spacing.md),
+                BalanceEntriesSection(
+                  key: ValueKey('supplier_balance_entries_${supplier.id}'),
+                  repository: viewModel.repository,
+                  party: BalanceParty.supplier,
+                  partyId: supplier.id,
+                  canManage: capabilities.canManageSupplierBalances,
+                  canCancel: capabilities.canCancelSupplierBalances,
+                  // The cash comes into a drawer, so it takes the drawer's
+                  // own movement right as well.
+                  canRefund:
+                      capabilities.canManageSupplierBalances &&
+                      capabilities.canCreateRegisterCashMovement,
+                  refundableAmount: supplier.creditBalance,
+                  // An entry moves what the shop owes this supplier; the
+                  // figures above are the server's, so re-read them.
+                  onChanged: viewModel.loadSupplier,
+                ),
+              ],
               SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.supplierPurchaseHistoryTitle,
@@ -296,9 +327,62 @@ class _SupplierHero extends StatelessWidget {
 }
 
 class _SupplierTotals extends StatelessWidget {
-  const _SupplierTotals({required this.viewModel});
+  const _SupplierTotals({
+    required this.viewModel,
+    required this.canRecordPayment,
+  });
 
   final SupplierDetailsViewModel viewModel;
+  final bool canRecordPayment;
+
+  Future<void> _recordPayment(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final supplier = viewModel.supplier;
+    final result = await showRecordPaymentDialog(
+      context,
+      title: l10n.supplierAccountPaymentTitle,
+      maxAmount: supplier.payableBalance,
+      balanceLabel: l10n.supplierAccountPaymentBalanceValue(
+        formatMoney(supplier.payableBalance),
+      ),
+      methods: supplierPaymentMethodOptions(l10n)
+          .where(
+            (option) =>
+                option.apiValue !=
+                    SupplierPaymentMethod.supplierCredit.apiValue ||
+                supplier.creditBalance > 0.005,
+          )
+          .toList(),
+      showReference: true,
+      showNotes: true,
+      proofToggleLabel: viewModel.canPrintPaymentProof
+          ? l10n.supplierPaymentPrintProofLabel
+          : null,
+    );
+    if (result == null || !context.mounted) {
+      return;
+    }
+    final ok = await viewModel.recordAccountPayment(
+      method: SupplierPaymentMethod.fromApiValue(result.methodApiValue),
+      amount: result.amount,
+      reference: result.reference,
+      notes: result.notes,
+      moneyAccountId: result.moneyAccountId,
+      printProof: result.printProof,
+    );
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? l10n.supplierAccountPaymentSuccess
+                : l10n.supplierAccountPaymentError,
+          ),
+        ),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +390,7 @@ class _SupplierTotals extends StatelessWidget {
     final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
     final supplier = viewModel.supplier;
+    final net = supplier.netBalance;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -340,13 +425,55 @@ class _SupplierTotals extends StatelessWidget {
             ),
             if (supplier.creditBalance > 0)
               PointyMetricGridItem(
-                label: l10n.purchaseOrderCreditAppliedLabel,
+                label: l10n.supplierCreditBalanceLabel,
                 value: formatMoney(supplier.creditBalance),
                 icon: Icons.savings_outlined,
                 accentColor: colors.success,
               ),
+            // Both sides can be open at once — what the shop owes on its
+            // orders and what the supplier owes it — so the one figure a
+            // conversation with the supplier starts from is stated too.
+            if (supplier.creditBalance > 0)
+              PointyMetricGridItem(
+                label: l10n.supplierNetBalanceLabel,
+                value: net >= 0
+                    ? l10n.supplierNetBalanceWeOweValue(formatMoney(net))
+                    : l10n.supplierNetBalanceTheyOweValue(formatMoney(-net)),
+                icon: Icons.balance_outlined,
+                accentColor: net > 0 ? colors.danger : colors.success,
+              ),
           ],
         ),
+        if (canRecordPayment && supplier.payableBalance > 0.005) ...[
+          SizedBox(height: spacing.sm),
+          if (viewModel.hasPaymentError) ...[
+            PointyInlineMessage.error(
+              message: l10n.supplierAccountPaymentError,
+            ),
+            SizedBox(height: spacing.sm),
+          ],
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FilledButton.icon(
+              key: const ValueKey('record_supplier_account_payment_button'),
+              onPressed: viewModel.isRecordingPayment
+                  ? null
+                  : () => _recordPayment(context),
+              icon: viewModel.isRecordingPayment
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: PointySpinner(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.payments_outlined),
+              label: Text(l10n.recordSupplierAccountPaymentButton),
+            ),
+          ),
+          SizedBox(height: spacing.xs),
+          Text(
+            l10n.supplierAccountPaymentHint,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ],
     );
   }

@@ -50,7 +50,9 @@ from decimal import Decimal
 from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, TruncDate
 
+from apps.balances.common import statement_kind
 from apps.core.money_dates import day_range_end
+from apps.documents.statuses import DocumentStatus
 from apps.payments.models import Payment
 from apps.sales.models import Order, OrderAdjustment
 
@@ -229,10 +231,17 @@ def _per_invoice_sum(queryset):
 
 
 def _outstanding_invoices(as_of):
+    """Every debt open at the close of ``as_of``: آجل invoices, and the debts
+    written straight onto customers' accounts (an opening balance, an
+    adjustment — carried on ``ACCOUNT_ENTRY`` orders dated the day they apply
+    from). Credit the shop holds for a customer is not netted in here: it is a
+    liability of its own (:func:`customer_credits_total`), stated beside this
+    figure the way an advance sits beside the debts on any balance sheet.
+    """
     cutoff = day_range_end(as_of)
     return (
         Order.objects.filter(
-            sale_type=Order.SaleType.CREDIT,
+            sale_type__in=Order.RECEIVABLE_SALE_TYPES,
             created_at__lt=cutoff,
         )
         .exclude(status=Order.Status.VOID)
@@ -324,17 +333,25 @@ def customer_statement(context):
     # Each figure is one kind of line, never a column total: the debit column
     # also carries refunds and the credit column returns, and summed whole
     # they would put money handed back under «إجمالي الفواتير» and goods taken
-    # back under «المحصَّل». So opening + invoiced − returned − received +
-    # refunded = closing, and every term says what it is.
+    # back under «المحصَّل». The balances written onto the account (an opening
+    # balance, an adjustment, a refund against one) run either way, so they
+    # are one figure, debit less credit. So opening + account entries +
+    # invoiced − returned − received + refunded = closing, and every term says
+    # what it is.
     by_kind = {kind: {"debit": ZERO, "credit": ZERO} for kind in _STATEMENT_KIND_ORDER}
     for entry in entries:
         by_kind[entry["kind"]]["debit"] += entry["debit"]
         by_kind[entry["kind"]]["credit"] += entry["credit"]
+    account_entries = sum(
+        (by_kind[kind]["debit"] - by_kind[kind]["credit"] for kind in _ACCOUNT_ENTRY_KINDS),
+        ZERO,
+    )
     bounded = bounded_rows(rows, limit=context.row_limit("statement_entries"))
 
     figures = {
         "customer_name": customer.full_name,
         "opening_balance": money(opening),
+        "account_entries_total": money(account_entries),
         "invoiced_total": money(by_kind["invoice"]["debit"]),
         "returned_total": money(by_kind["return"]["credit"]),
         "received_total": money(by_kind["payment"]["credit"]),
@@ -374,13 +391,31 @@ def customer_statement(context):
         ],
         "notes": [
             note("statement_running_balance"),
-            note("statement_credit_only"),
+            note("statement_credit_and_account_entries"),
         ],
     }
 
 
+def _statement_payments(customer):
+    """The money that moved on this customer's account: payments against their
+    آجل invoices and against the debts written onto the account.
+
+    Credit spent against a debt (``ACCOUNT_CREDIT``) is left out on purpose. It
+    moved no money: the statement already credited the account on the day the
+    shop came to owe that credit, so crediting it again when it was spent would
+    count it twice.
+    """
+    return Payment.objects.filter(
+        order__customer=customer,
+        order__sale_type__in=Order.RECEIVABLE_SALE_TYPES,
+    ).exclude(method=Payment.Method.ACCOUNT_CREDIT)
+
+
 def _customer_balance_at(customer, when):
-    """What this customer owed at the close of ``when``."""
+    """What this customer owed at the close of ``when`` — negative when the
+    shop owed them."""
+    from apps.balances.models import CustomerBalanceEntry
+
     cutoff = day_range_end(when)
     invoiced = (
         Order.objects.filter(
@@ -394,12 +429,32 @@ def _customer_balance_at(customer, when):
     returned = _statement_returns(customer).filter(created_at__lt=cutoff).aggregate(
         total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY)
     )["total"]
-    paid = Payment.objects.filter(
-        order__customer=customer,
-        order__sale_type=Order.SaleType.CREDIT,
-        paid_at__lt=cutoff,
-    ).aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))["total"]
-    return decimal_from(invoiced) - decimal_from(returned) - decimal_from(paid)
+    paid = (
+        _statement_payments(customer)
+        .filter(paid_at__lt=cutoff)
+        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
+    )["total"]
+    entries = (
+        CustomerBalanceEntry.objects.live()
+        .filter(customer=customer, effective_date__lte=when)
+        .order_by()
+        .values("direction")
+        .annotate(total=Sum("amount"))
+    )
+    written = ZERO
+    for row in entries:
+        amount = decimal_from(row["total"])
+        written += (
+            amount
+            if row["direction"] == CustomerBalanceEntry.Direction.THEY_OWE_US
+            else -amount
+        )
+    return (
+        decimal_from(invoiced)
+        + written
+        - decimal_from(returned)
+        - decimal_from(paid)
+    )
 
 
 def _statement_returns(customer):
@@ -420,8 +475,11 @@ def _statement_entries(customer, period):
     Invoices debit the account, payments credit it. Returns arrive as their own
     line rather than being netted into the invoice, because a customer reading
     a statement needs to see the credit note that explains why the balance
-    fell.
+    fell. Opening balances and adjustments arrive as their own lines too, on the
+    day they apply from, debit or credit by which way they run.
     """
+    from apps.balances.models import CustomerBalanceEntry
+
     entries = []
 
     invoices = in_period(
@@ -445,12 +503,26 @@ def _statement_entries(customer, period):
             }
         )
 
-    payments = in_period(
-        Payment.objects.filter(
-            order__customer=customer, order__sale_type=Order.SaleType.CREDIT
-        ),
-        period,
-    ).values("order__receipt_number", "paid_at", "amount", "method")
+    balance_entries = in_period(
+        CustomerBalanceEntry.objects.live().filter(customer=customer), period
+    ).values("number", "effective_date", "amount", "direction", "kind")
+    for entry in balance_entries:
+        amount = decimal_from(entry["amount"])
+        owed_by_them = entry["direction"] == CustomerBalanceEntry.Direction.THEY_OWE_US
+        entries.append(
+            {
+                "date": entry["effective_date"],
+                "document": entry["number"],
+                "kind": statement_kind(entry["kind"]),
+                "debit": amount if owed_by_them else ZERO,
+                "credit": ZERO if owed_by_them else amount,
+                "due_date": None,
+            }
+        )
+
+    payments = in_period(_statement_payments(customer), period).values(
+        "order__receipt_number", "paid_at", "amount", "method"
+    )
     for payment in payments:
         amount = decimal_from(payment["amount"])
         entries.append(
@@ -494,11 +566,59 @@ def _statement_entries(customer, period):
     return entries
 
 
-# Same-day order: a return's credit note before the refund that pays it out —
-# the order the two are written in — so the refund line reads as settling a
-# credit the reader has just seen. The other three keep the alphabetical order
-# they have always had.
-_STATEMENT_KIND_ORDER = {"invoice": 0, "payment": 1, "return": 2, "refund": 3}
+# Same-day order. An opening balance comes first on its day — it is the
+# position everything else that day started from — and the other entries
+# written onto the account follow it, ahead of the documents, where they have
+# always sorted. Then a return's credit note before the refund that pays it
+# out — the order the two are written in — so the refund line reads as
+# settling a credit the reader has just seen. The documents otherwise keep the
+# alphabetical order they have always had.
+_STATEMENT_KIND_ORDER = {
+    "opening_balance": 0,
+    "balance_adjustment": 1,
+    "balance_refund": 2,
+    "invoice": 3,
+    "payment": 4,
+    "return": 5,
+    "refund": 6,
+}
+
+# The lines written straight onto the account rather than invoiced or paid
+# (``apps.balances.common.statement_kind``).
+_ACCOUNT_ENTRY_KINDS = ("opening_balance", "balance_adjustment", "balance_refund")
 
 
-__all__ = ["customer_statement", "receivables_aging", "receivables_total"]
+def customer_credits_total(as_of):
+    """What the shop owed its customers in account credit at the close of
+    ``as_of``: the credit written onto their accounts by then, less what had
+    been spent against their debts by then.
+
+    Rebuilt from dated rows, like every figure here, so a report for last month
+    states last month's credit even after it has since been spent. A cancelled
+    entry never counted — the same rule as a cancelled payment.
+    """
+    from apps.balances.models import CustomerBalanceEntry, CustomerCreditApplication
+
+    cutoff = day_range_end(as_of)
+    issued = (
+        CustomerBalanceEntry.objects.live()
+        .filter(
+            direction=CustomerBalanceEntry.Direction.WE_OWE_THEM,
+            effective_date__lte=as_of,
+        )
+        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
+    )["total"]
+    spent = (
+        CustomerCreditApplication.objects.filter(payment__paid_at__lt=cutoff)
+        .exclude(entry__doc_status=DocumentStatus.CANCELLED)
+        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))
+    )["total"]
+    return max(decimal_from(issued) - decimal_from(spent), ZERO)
+
+
+__all__ = [
+    "customer_credits_total",
+    "customer_statement",
+    "receivables_aging",
+    "receivables_total",
+]

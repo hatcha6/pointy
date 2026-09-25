@@ -1,6 +1,8 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.balances.opening import OpeningBalanceField, write_opening_balance
 from apps.sales.models import OrderAdjustment, OrderAdjustmentLine
 from .models import Customer, PaymentCard
 
@@ -29,6 +31,12 @@ class CustomerSerializer(serializers.ModelSerializer):
     # Set when this is an employee's own account: what they buy on آجل is
     # deducted from their next payroll run. Null for every ordinary customer.
     staff_employee = serializers.SerializerMethodField()
+    # What the customer owed — or was owed — the day the shop started keeping
+    # their account here. Create only; written as a balance entry in the same
+    # transaction (``apps.balances``). Later changes are adjustments.
+    opening_balance = OpeningBalanceField(
+        permission="balances.add_customerbalanceentry"
+    )
 
     class Meta:
         model = Customer
@@ -48,6 +56,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             "is_auto_created",
             "card_count",
             "staff_employee",
+            "opening_balance",
             # Credit (آجل) ceiling.
             "credit_limit_policy",
             "credit_limit",
@@ -149,6 +158,25 @@ class CustomerSerializer(serializers.ModelSerializer):
                 {"payment_terms_days": "Custom payment terms need a number of days."}
             )
         return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        opening = validated_data.pop("opening_balance", None)
+        customer = super().create(validated_data)
+        if opening:
+            from apps.balances.customers import create_customer_entry
+
+            write_opening_balance(
+                create_customer_entry,
+                opening,
+                request=self.context.get("request"),
+                customer=customer,
+            )
+        return customer
+
+    def update(self, instance, validated_data):
+        validated_data.pop("opening_balance", None)
+        return super().update(instance, validated_data)
 
     def get_card_count(self, obj):
         # Uses the list queryset's annotation when present, falling back to a

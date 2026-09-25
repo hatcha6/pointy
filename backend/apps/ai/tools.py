@@ -600,6 +600,24 @@ def _window(period, start, end, today):
     return (*_resolve_period(period, today), None)
 
 
+def _account_debts(user):
+    """Debts written straight onto customers' accounts — an opening balance, an
+    adjustment — which the invoice-scoped queryset never includes, because they
+    are not invoices. Only for someone who sees the whole shop's receivables:
+    they belong to no till, so no cashier's own-session scope can reach them.
+    """
+    from apps.core.roles import user_has_full_visibility
+    from apps.sales.models import Order
+
+    if user is None or not user_has_full_visibility(user):
+        return Order.objects.none()
+    return (
+        Order.objects.open_receivables()
+        .filter(sale_type=Order.SaleType.ACCOUNT_ENTRY)
+        .with_balance_relations()
+    )
+
+
 def _scoped_orders(user, *, start=None, end=None):
     """Permission-scoped ``OrderQuerySet`` (the same boundary as every read tool),
     optionally bounded to a local-date range on ``created_at``. Returns
@@ -1283,7 +1301,7 @@ def customer_insights(*, user, mode="top", days=90, limit=10):
                 .with_balance_relations()
             )
             balances = {}
-            for o in rows:
+            for o in [*rows, *_account_debts(user).select_related("customer")]:
                 bal = o.balance_due
                 if bal <= 0:
                     continue
@@ -1418,7 +1436,10 @@ def project_forecast(*, user):
             return err
         receivable_total = Decimal("0")
         receivable_count = 0
-        for o in receivables_qs.open_credit().with_balance_relations():
+        for o in [
+            *receivables_qs.open_credit().with_balance_relations(),
+            *_account_debts(user),
+        ]:
             bal = o.balance_due
             if bal > 0:
                 receivable_total += bal

@@ -170,7 +170,11 @@ class CustomerSalesSummaryQueryCountTests(APITestCase):
         # query that grows with history — which is what the equality above and
         # this ceiling together are guarding. 9 → 10 when the balance began
         # netting returns: the open-debt pass prefetches them beside payments.
-        self.assertLessEqual(large_count, 10)
+        # 10 → 11 when it began stating the balances written onto the account
+        # (``apps.balances``): one aggregate over that table answers both the
+        # credit and "is there an opening balance", and it is read whatever
+        # the history — constant again.
+        self.assertLessEqual(large_count, 11)
 
     def test_summary_values_cover_every_order_and_adjustment_shape(self):
         self._seed_every_order_shape()

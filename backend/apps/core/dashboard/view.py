@@ -497,6 +497,11 @@ def _purchasing_section(period):
         balances_by_supplier[row["supplier_id"]] += balance
         if row["due_date"] is not None and row["due_date"] < today:
             overdue_orders.append((row, balance))
+    # What the shop owes on suppliers' accounts beyond any order — an opening
+    # balance, an adjustment (apps.balances) — is due to them all the same.
+    from apps.balances.suppliers import payable_entries_outstanding
+
+    due_total += sum(payable_entries_outstanding().values(), Decimal("0.00"))
     overdue_orders.sort(key=lambda item: (item[0]["due_date"], -item[1]))
 
     return {
@@ -755,6 +760,9 @@ def _customers_section(period):
                 created_at__lt=period["end"],
             ).count(),
             "customers_with_sales_count": active.filter(
+                # One filter call, so the type and the date judge the same
+                # order: a balance written onto an account is not a sale.
+                orders__sale_type__in=Order.CHECKOUT_SALE_TYPES,
                 orders__created_at__gte=period["start"],
                 orders__created_at__lt=period["end"],
             )

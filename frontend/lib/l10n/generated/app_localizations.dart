@@ -37229,6 +37229,480 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'شحن رصيد'**
   String get rechargeHistoryTopUp;
+
+  /// Payment method: a debt settled from credit the shop already owed the customer (no money moved).
+  ///
+  /// In ar, this message translates to:
+  /// **'من رصيد العميل'**
+  String get paymentMethodAccountCredit;
+
+  /// Balance direction: the customer or supplier owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'عليه لنا'**
+  String get balanceDirectionTheyOweUs;
+
+  /// Balance direction: the shop owes the customer or supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'له علينا'**
+  String get balanceDirectionWeOweThem;
+
+  /// Helper under the direction choice for a customer who owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ مستحق على العميل للمحل'**
+  String get customerBalanceTheyOweUsHint;
+
+  /// Helper under the direction choice when the shop owes the customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ مستحق للعميل على المحل (رصيد دائن)'**
+  String get customerBalanceWeOweThemHint;
+
+  /// Helper under the direction choice for a supplier who owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ مستحق على المورد للمحل (رصيد لدى المورد)'**
+  String get supplierBalanceTheyOweUsHint;
+
+  /// Helper under the direction choice when the shop owes the supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ مستحق للمورد على المحل'**
+  String get supplierBalanceWeOweThemHint;
+
+  /// Balance entry kind: opening balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد افتتاحي'**
+  String get balanceKindOpening;
+
+  /// Balance entry kind: balance adjustment.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوية رصيد'**
+  String get balanceKindAdjustment;
+
+  /// Section title on customer/supplier details listing opening balances and adjustments.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد الافتتاحي والتسويات'**
+  String get balanceEntriesTitle;
+
+  /// Empty state for the balance entries section.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد رصيد افتتاحي أو تسويات على هذا الحساب.'**
+  String get balanceEntriesEmpty;
+
+  /// Error loading balance entries.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الأرصدة والتسويات.'**
+  String get balanceEntriesLoadError;
+
+  /// Button opening the opening-balance dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل رصيد افتتاحي'**
+  String get addOpeningBalanceButton;
+
+  /// Button opening the balance adjustment dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوية الرصيد'**
+  String get addBalanceAdjustmentButton;
+
+  /// Explanation shown in the opening balance dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما كان على الحساب أو له يوم بدأ المحل تسجيله في النظام. يظهر في كشف الحساب ويُحصّل أو يُسدّد مثل أي دين.'**
+  String get balanceEntryOpeningHint;
+
+  /// Explanation shown in the balance adjustment dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'لمبلغ لا يمكن تسجيله كفاتورة أو أمر شراء. يظهر في كشف الحساب ويُحصّل أو يُسدّد لاحقًا، ولا يُحسب مبيعات أو مشتريات.'**
+  String get balanceEntryAdjustmentHint;
+
+  /// Amount field label in the balance entry dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get balanceEntryAmountLabel;
+
+  /// Direction selector label.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتجاه الرصيد'**
+  String get balanceEntryDirectionLabel;
+
+  /// Effective date field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'يسري من تاريخ'**
+  String get balanceEntryDateLabel;
+
+  /// Effective date shown when the entry applies from today.
+  ///
+  /// In ar, this message translates to:
+  /// **'اليوم'**
+  String get balanceEntryDateToday;
+
+  /// Note/description field label for a balance entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيان'**
+  String get balanceEntryNoteLabel;
+
+  /// Optional note label for an opening balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيان (اختياري)'**
+  String get balanceEntryNoteOptionalLabel;
+
+  /// Validation: an adjustment needs a note.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب سبب التسوية.'**
+  String get balanceEntryNoteRequired;
+
+  /// Validation: amount must be positive.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر.'**
+  String get balanceEntryAmountInvalid;
+
+  /// Snackbar after a balance entry is saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الرصيد.'**
+  String get balanceEntrySaved;
+
+  /// Generic error when saving a balance entry fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل الرصيد.'**
+  String get balanceEntrySaveError;
+
+  /// Error: the account already has an opening balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'لهذا الحساب رصيد افتتاحي مسجل. ألغِه أولًا أو سجّل تسوية بدلًا منه.'**
+  String get balanceEntryOpeningExistsError;
+
+  /// Error: effective date in the future.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن أن يبدأ الرصيد في تاريخ لاحق.'**
+  String get balanceEntryFutureDateError;
+
+  /// Error: the date falls in a closed accounting period.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الفترة مغلقة، ولا يمكن تسجيل رصيد أو إلغاؤه بتاريخ داخلها.'**
+  String get balanceEntryPeriodLockedError;
+
+  /// Error: the user lacks the balance permission.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليست لديك صلاحية لهذا الإجراء على الأرصدة.'**
+  String get balanceEntryPermissionError;
+
+  /// Action cancelling a balance entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الرصيد'**
+  String get balanceEntryCancelAction;
+
+  /// Cancel dialog title.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الرصيد {number}'**
+  String balanceEntryCancelTitle(String number);
+
+  /// Cancel dialog explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحذف أثر هذا الرصيد من الحساب وكشف الحساب، ويبقى مسجلًا كقيد ملغى مع السبب.'**
+  String get balanceEntryCancelBody;
+
+  /// Cancel reason field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الإلغاء'**
+  String get balanceEntryCancelReasonLabel;
+
+  /// Validation: cancel reason required.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب سبب الإلغاء.'**
+  String get balanceEntryCancelReasonRequired;
+
+  /// Snackbar after cancelling a balance entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إلغاء الرصيد.'**
+  String get balanceEntryCancelled;
+
+  /// Generic error cancelling a balance entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إلغاء الرصيد.'**
+  String get balanceEntryCancelError;
+
+  /// Error: the entry has been partly settled and cannot be cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن إلغاء هذا الرصيد لأنه حُصّل أو سُدّد منه جزء. سجّل تسوية معاكسة بدلًا من ذلك.'**
+  String get balanceEntryCancelBlockedError;
+
+  /// Badge on a cancelled balance entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغى'**
+  String get balanceEntryCancelledBadge;
+
+  /// Amount already settled on an entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُدّد {amount}'**
+  String balanceEntrySettledValue(String amount);
+
+  /// Amount still open on an entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي {amount}'**
+  String balanceEntryRemainingValue(String amount);
+
+  /// The day an entry applies from.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {date}'**
+  String balanceEntryEffectiveValue(String date);
+
+  /// Who recorded the entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name}'**
+  String balanceEntryCreatedByValue(String name);
+
+  /// Why an entry was cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الإلغاء: {reason}'**
+  String balanceEntryCancelReasonValue(String reason);
+
+  /// Section in the create customer/supplier form.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد افتتاحي (اختياري)'**
+  String get openingBalanceSectionTitle;
+
+  /// Helper under the opening balance section in the create form.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا إن لم يكن على الحساب أو له رصيد سابق.'**
+  String get openingBalanceSectionHint;
+
+  /// Callout when the shop owes the customer money.
+  ///
+  /// In ar, this message translates to:
+  /// **'للعميل رصيد دائن قدره {amount}.'**
+  String customerCreditBalanceCalloutTitle(String amount);
+
+  /// Explanation under the customer credit callout.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المبلغ مستحق للعميل على المحل، ويُخصم تلقائيًا من ديونه عند التحصيل.'**
+  String get customerCreditBalanceCalloutBody;
+
+  /// Callout when a customer holds both unspent credit and open debts.
+  ///
+  /// In ar, this message translates to:
+  /// **'للعميل رصيد دائن {credit} لم يُخصم بعد من ديونه ({debts}).'**
+  String customerUnappliedCreditCalloutTitle(String credit, String debts);
+
+  /// Button that spends the customer's credit against their debts.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم الرصيد الدائن من الديون'**
+  String get applyCustomerCreditButton;
+
+  /// Snackbar after applying customer credit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم خصم الرصيد الدائن من ديون العميل.'**
+  String get applyCustomerCreditSuccess;
+
+  /// Error applying customer credit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر خصم الرصيد الدائن.'**
+  String get applyCustomerCreditError;
+
+  /// Metric label: what the shop owes the customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد دائن للعميل'**
+  String get customerCreditBalanceLabel;
+
+  /// Metric label: supplier net balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي حساب المورد'**
+  String get supplierNetBalanceLabel;
+
+  /// Metric label: supplier owes the shop (credit).
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد لدى المورد'**
+  String get supplierCreditBalanceLabel;
+
+  /// Net balance sentence when the shop owes the supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق للمورد {amount}'**
+  String supplierNetBalanceWeOweValue(String amount);
+
+  /// Net balance sentence when the supplier owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق على المورد {amount}'**
+  String supplierNetBalanceTheyOweValue(String amount);
+
+  /// Button paying a supplier on account.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة للمورد'**
+  String get recordSupplierAccountPaymentButton;
+
+  /// Title of the supplier account payment dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة للمورد على الحساب'**
+  String get supplierAccountPaymentTitle;
+
+  /// Balance shown in the supplier account payment dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستحق للمورد: {amount}'**
+  String supplierAccountPaymentBalanceValue(String amount);
+
+  /// Explains how an account payment is allocated.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُوزَّع الدفعة على أقدم المستحقات أولًا: الرصيد الافتتاحي ثم أوامر الشراء.'**
+  String get supplierAccountPaymentHint;
+
+  /// Snackbar after a supplier account payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الدفعة للمورد.'**
+  String get supplierAccountPaymentSuccess;
+
+  /// Error recording a supplier account payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل الدفعة للمورد.'**
+  String get supplierAccountPaymentError;
+
+  /// Loads the next page of balance entries.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المزيد'**
+  String get balanceEntriesLoadMoreButton;
+
+  /// Balance entry kind: a balance settled with cash through the drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'رد مبلغ نقدًا'**
+  String get balanceKindRefund;
+
+  /// Button paying a customer the credit the shop owes them, in cash.
+  ///
+  /// In ar, this message translates to:
+  /// **'رد المبلغ للعميل'**
+  String get customerRefundButton;
+
+  /// Button taking in cash a supplier owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام المبلغ من المورد'**
+  String get supplierRefundButton;
+
+  /// Title of the customer refund dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'رد مبلغ للعميل'**
+  String get customerRefundTitle;
+
+  /// Title of the supplier refund dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام مبلغ من المورد'**
+  String get supplierRefundTitle;
+
+  /// Explains the customer refund.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُصرف المبلغ نقدًا من درج ورديتك المفتوحة ويُخصم من الرصيد المستحق للعميل. لا يمكن إلغاؤه بعد تسجيله.'**
+  String get customerRefundHint;
+
+  /// Explains the supplier refund.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُستلم المبلغ نقدًا في درج ورديتك المفتوحة ويُخصم مما على المورد للمحل. لا يمكن إلغاؤه بعد تسجيله.'**
+  String get supplierRefundHint;
+
+  /// Amount available to refund.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتاح: {amount}'**
+  String balanceRefundAvailableValue(String amount);
+
+  /// Validation: refund above what is available.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ أكبر من المتاح ({amount}).'**
+  String balanceRefundAmountTooHigh(String amount);
+
+  /// Snackbar after a customer refund.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم صرف المبلغ للعميل.'**
+  String get customerRefundSaved;
+
+  /// Snackbar after a supplier refund.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم استلام المبلغ من المورد.'**
+  String get supplierRefundSaved;
+
+  /// Error: a refund needs the user's open register session.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح وردية أولًا — المبلغ يُصرف أو يُستلم عبر درج الوردية.'**
+  String get balanceRefundSessionRequiredError;
+
+  /// Error: refund exceeds the available credit.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ أكبر من الرصيد المتاح.'**
+  String get balanceRefundExceedsCreditError;
+
+  /// Error: a refund cannot be cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المبلغ سُلِّم نقدًا ولا يمكن إلغاؤه. سجّل تسوية معاكسة بدلًا من ذلك.'**
+  String get balanceRefundFinalError;
+
+  /// Payments hub: the account entry a payment settled.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد رصيد {number}'**
+  String paymentsHubBalanceEntryValue(String number);
 }
 
 class _AppLocalizationsDelegate

@@ -78,11 +78,21 @@ def send_debt_reminder(order, *, now=None) -> OutboundMessage | None:
         return None
 
     shop_name, currency = _shop_context()
-    link = public_invoice_url_for_order(order)
-    body = (
-        f"تذكير من {shop_name}: لديك مبلغ مستحق {_money(balance)} {currency} "
-        f"على الفاتورة {order.receipt_number}."
-    )
+    if getattr(order, "sale_type", None) == "account_entry":
+        # A debt written onto the account — an opening balance, an adjustment —
+        # is not an invoice, and has no invoice page to link to. Calling it one
+        # would send the customer looking for a sale that never happened.
+        link = None
+        body = (
+            f"تذكير من {shop_name}: لديك مبلغ مستحق {_money(balance)} {currency} "
+            f"من رصيد مسجّل على حسابك برقم {order.receipt_number}."
+        )
+    else:
+        link = public_invoice_url_for_order(order)
+        body = (
+            f"تذكير من {shop_name}: لديك مبلغ مستحق {_money(balance)} {currency} "
+            f"على الفاتورة {order.receipt_number}."
+        )
     due_date = getattr(order, "due_date", None)
     if due_date is not None:
         body += f" تاريخ الاستحقاق: {due_date:%Y-%m-%d}."

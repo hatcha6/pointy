@@ -297,6 +297,9 @@ def _register_payout_rows(start_dt, end_dt):
         expense__isnull=True,
         supplier_payment__isnull=True,
         consignor_payouts__isnull=True,
+        # Cash handed to a customer the shop owed it to (``apps.balances``
+        # refund): settling a debt the shop had, not spending money.
+        customer_balance_entry__isnull=True,
     )
     return [
         _row(

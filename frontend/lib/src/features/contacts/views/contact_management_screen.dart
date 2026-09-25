@@ -6,6 +6,7 @@ import '../../../data/models/contact.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/payment_proof_printer.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -101,6 +102,10 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
         contactRepository: viewModel.repository,
         purchaseRepository: widget.purchaseRepository,
         initialSupplier: supplier,
+        proofPrinter: PaymentProofPrinter(
+          printingRepository: widget.printingRepository,
+          shopSettingsRepository: widget.shopSettingsRepository,
+        ),
       );
     });
   }
@@ -172,6 +177,7 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
     return CustomerDetailsView(
       key: ValueKey('contact_detail_customer_${customer.id}'),
       viewModel: customerViewModel,
+      capabilities: widget.capabilities,
       onMerged: () {
         setState(() {
           _selectedCustomer = null;
@@ -248,6 +254,7 @@ class _ContactManagementBody extends StatelessWidget {
           child: _ContactActionBar(
             viewModel: viewModel,
             tabController: tabController,
+            capabilities: capabilities,
           ),
         ),
         _CustomerStatusFilter(
@@ -275,6 +282,7 @@ class _ContactManagementBody extends StatelessWidget {
                             viewModel: viewModel,
                             printingRepository: printingRepository,
                             shopSettingsRepository: shopSettingsRepository,
+                            capabilities: capabilities,
                             onSelectCustomer: isDualPane
                                 ? onSelectCustomer
                                 : null,
@@ -447,10 +455,12 @@ class _ContactActionBar extends StatelessWidget {
   const _ContactActionBar({
     required this.viewModel,
     required this.tabController,
+    required this.capabilities,
   });
 
   final ContactManagementViewModel viewModel;
   final TabController tabController;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -508,6 +518,7 @@ class _ContactActionBar extends StatelessWidget {
       final created = await showCreateCustomerSheet(
         context: context,
         repository: viewModel.repository,
+        allowOpeningBalance: capabilities.canManageCustomerBalances,
       );
       if (created != null) {
         await viewModel.loadContacts();
@@ -517,6 +528,7 @@ class _ContactActionBar extends StatelessWidget {
     final created = await showCreateSupplierSheet(
       context: context,
       repository: viewModel.repository,
+      allowOpeningBalance: capabilities.canManageSupplierBalances,
     );
     if (created != null) {
       await viewModel.loadContacts();
@@ -529,6 +541,7 @@ class _CustomerList extends StatelessWidget {
     required this.viewModel,
     required this.printingRepository,
     required this.shopSettingsRepository,
+    required this.capabilities,
     this.onSelectCustomer,
     this.selectedCustomerId,
   });
@@ -536,6 +549,7 @@ class _CustomerList extends StatelessWidget {
   final ContactManagementViewModel viewModel;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+  final AuthorizationCapabilities capabilities;
   final ValueChanged<Customer>? onSelectCustomer;
   final int? selectedCustomerId;
 
@@ -561,6 +575,7 @@ class _CustomerList extends StatelessWidget {
                   final created = await showCreateCustomerSheet(
                     context: context,
                     repository: viewModel.repository,
+                    allowOpeningBalance: capabilities.canManageCustomerBalances,
                   );
                   if (created != null) {
                     await viewModel.loadContacts();
@@ -630,6 +645,7 @@ class _CustomerList extends StatelessWidget {
           contactRepository: viewModel.repository,
           printingRepository: printingRepository,
           shopSettingsRepository: shopSettingsRepository,
+          capabilities: capabilities,
         ),
       ),
     );
@@ -677,6 +693,7 @@ class _SupplierList extends StatelessWidget {
                   final created = await showCreateSupplierSheet(
                     context: context,
                     repository: viewModel.repository,
+                    allowOpeningBalance: capabilities.canManageSupplierBalances,
                   );
                   if (created != null) {
                     await viewModel.loadContacts();

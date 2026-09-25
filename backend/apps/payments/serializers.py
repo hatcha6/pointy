@@ -330,6 +330,13 @@ class PaymentLedgerSerializer(serializers.ModelSerializer):
         source="order.receipt_number",
         read_only=True,
     )
+    # ``account_entry`` when the payment collected a debt written onto the
+    # customer's account (an opening balance, an adjustment) rather than an
+    # invoice — the hub names it by its entry, not as a sale.
+    order_sale_type = serializers.CharField(
+        source="order.sale_type",
+        read_only=True,
+    )
     customer = serializers.PrimaryKeyRelatedField(
         source="order.customer",
         read_only=True,
@@ -351,6 +358,7 @@ class PaymentLedgerSerializer(serializers.ModelSerializer):
             "created_by_username",
             "order",
             "order_receipt_number",
+            "order_sale_type",
             "customer",
             "customer_name",
         ]

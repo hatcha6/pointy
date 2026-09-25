@@ -1,3 +1,4 @@
+import 'balance_entry.dart';
 import 'query.dart';
 
 enum ContactStatusFilter implements QueryFilterSet {
@@ -455,6 +456,7 @@ class CustomerDraft {
     required this.marketingConsent,
     required this.notes,
     required this.isActive,
+    this.openingBalance,
   });
 
   final String fullName;
@@ -466,6 +468,11 @@ class CustomerDraft {
   final String notes;
   final bool isActive;
 
+  /// Create only: what the customer already owed — or was owed — when the
+  /// shop started keeping their account here. The server refuses it on an
+  /// edit; later changes are balance adjustments.
+  final OpeningBalanceDraft? openingBalance;
+
   Map<String, Object?> toJson() {
     return {
       'full_name': fullName,
@@ -476,6 +483,7 @@ class CustomerDraft {
       'marketing_consent': marketingConsent,
       'notes': notes,
       'is_active': isActive,
+      if (openingBalance != null) 'opening_balance': openingBalance!.toJson(),
     };
   }
 }
@@ -561,6 +569,7 @@ class SupplierDraft {
     required this.address,
     required this.notes,
     required this.isActive,
+    this.openingBalance,
   });
 
   final String name;
@@ -571,6 +580,10 @@ class SupplierDraft {
   final String notes;
   final bool isActive;
 
+  /// Create only: what the shop already owed this supplier — or was owed —
+  /// when it started keeping their account here.
+  final OpeningBalanceDraft? openingBalance;
+
   Map<String, Object?> toJson() {
     return {
       'name': name,
@@ -580,6 +593,7 @@ class SupplierDraft {
       'address': address,
       'notes': notes,
       'is_active': isActive,
+      if (openingBalance != null) 'opening_balance': openingBalance!.toJson(),
     };
   }
 }

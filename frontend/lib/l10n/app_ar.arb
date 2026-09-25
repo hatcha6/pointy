@@ -15986,5 +15986,394 @@
   "rechargeHistoryTopUp": "شحن رصيد",
   "@rechargeHistoryTopUp": {
     "description": "Recharge history row title for a stored-value top-up (LNET)."
+  },
+  "paymentMethodAccountCredit": "من رصيد العميل",
+  "@paymentMethodAccountCredit": {
+    "description": "Payment method: a debt settled from credit the shop already owed the customer (no money moved)."
+  },
+  "balanceDirectionTheyOweUs": "عليه لنا",
+  "@balanceDirectionTheyOweUs": {
+    "description": "Balance direction: the customer or supplier owes the shop."
+  },
+  "balanceDirectionWeOweThem": "له علينا",
+  "@balanceDirectionWeOweThem": {
+    "description": "Balance direction: the shop owes the customer or supplier."
+  },
+  "customerBalanceTheyOweUsHint": "مبلغ مستحق على العميل للمحل",
+  "@customerBalanceTheyOweUsHint": {
+    "description": "Helper under the direction choice for a customer who owes the shop."
+  },
+  "customerBalanceWeOweThemHint": "مبلغ مستحق للعميل على المحل (رصيد دائن)",
+  "@customerBalanceWeOweThemHint": {
+    "description": "Helper under the direction choice when the shop owes the customer."
+  },
+  "supplierBalanceTheyOweUsHint": "مبلغ مستحق على المورد للمحل (رصيد لدى المورد)",
+  "@supplierBalanceTheyOweUsHint": {
+    "description": "Helper under the direction choice for a supplier who owes the shop."
+  },
+  "supplierBalanceWeOweThemHint": "مبلغ مستحق للمورد على المحل",
+  "@supplierBalanceWeOweThemHint": {
+    "description": "Helper under the direction choice when the shop owes the supplier."
+  },
+  "balanceKindOpening": "رصيد افتتاحي",
+  "@balanceKindOpening": {
+    "description": "Balance entry kind: opening balance."
+  },
+  "balanceKindAdjustment": "تسوية رصيد",
+  "@balanceKindAdjustment": {
+    "description": "Balance entry kind: balance adjustment."
+  },
+  "balanceEntriesTitle": "الرصيد الافتتاحي والتسويات",
+  "@balanceEntriesTitle": {
+    "description": "Section title on customer/supplier details listing opening balances and adjustments."
+  },
+  "balanceEntriesEmpty": "لا يوجد رصيد افتتاحي أو تسويات على هذا الحساب.",
+  "@balanceEntriesEmpty": {
+    "description": "Empty state for the balance entries section."
+  },
+  "balanceEntriesLoadError": "تعذر تحميل الأرصدة والتسويات.",
+  "@balanceEntriesLoadError": {
+    "description": "Error loading balance entries."
+  },
+  "addOpeningBalanceButton": "تسجيل رصيد افتتاحي",
+  "@addOpeningBalanceButton": {
+    "description": "Button opening the opening-balance dialog."
+  },
+  "addBalanceAdjustmentButton": "تسوية الرصيد",
+  "@addBalanceAdjustmentButton": {
+    "description": "Button opening the balance adjustment dialog."
+  },
+  "balanceEntryOpeningHint": "ما كان على الحساب أو له يوم بدأ المحل تسجيله في النظام. يظهر في كشف الحساب ويُحصّل أو يُسدّد مثل أي دين.",
+  "@balanceEntryOpeningHint": {
+    "description": "Explanation shown in the opening balance dialog."
+  },
+  "balanceEntryAdjustmentHint": "لمبلغ لا يمكن تسجيله كفاتورة أو أمر شراء. يظهر في كشف الحساب ويُحصّل أو يُسدّد لاحقًا، ولا يُحسب مبيعات أو مشتريات.",
+  "@balanceEntryAdjustmentHint": {
+    "description": "Explanation shown in the balance adjustment dialog."
+  },
+  "balanceEntryAmountLabel": "المبلغ",
+  "@balanceEntryAmountLabel": {
+    "description": "Amount field label in the balance entry dialog."
+  },
+  "balanceEntryDirectionLabel": "اتجاه الرصيد",
+  "@balanceEntryDirectionLabel": {
+    "description": "Direction selector label."
+  },
+  "balanceEntryDateLabel": "يسري من تاريخ",
+  "@balanceEntryDateLabel": {
+    "description": "Effective date field label."
+  },
+  "balanceEntryDateToday": "اليوم",
+  "@balanceEntryDateToday": {
+    "description": "Effective date shown when the entry applies from today."
+  },
+  "balanceEntryNoteLabel": "البيان",
+  "@balanceEntryNoteLabel": {
+    "description": "Note/description field label for a balance entry."
+  },
+  "balanceEntryNoteOptionalLabel": "البيان (اختياري)",
+  "@balanceEntryNoteOptionalLabel": {
+    "description": "Optional note label for an opening balance."
+  },
+  "balanceEntryNoteRequired": "اكتب سبب التسوية.",
+  "@balanceEntryNoteRequired": {
+    "description": "Validation: an adjustment needs a note."
+  },
+  "balanceEntryAmountInvalid": "أدخل مبلغًا أكبر من صفر.",
+  "@balanceEntryAmountInvalid": {
+    "description": "Validation: amount must be positive."
+  },
+  "balanceEntrySaved": "تم تسجيل الرصيد.",
+  "@balanceEntrySaved": {
+    "description": "Snackbar after a balance entry is saved."
+  },
+  "balanceEntrySaveError": "تعذر تسجيل الرصيد.",
+  "@balanceEntrySaveError": {
+    "description": "Generic error when saving a balance entry fails."
+  },
+  "balanceEntryOpeningExistsError": "لهذا الحساب رصيد افتتاحي مسجل. ألغِه أولًا أو سجّل تسوية بدلًا منه.",
+  "@balanceEntryOpeningExistsError": {
+    "description": "Error: the account already has an opening balance."
+  },
+  "balanceEntryFutureDateError": "لا يمكن أن يبدأ الرصيد في تاريخ لاحق.",
+  "@balanceEntryFutureDateError": {
+    "description": "Error: effective date in the future."
+  },
+  "balanceEntryPeriodLockedError": "هذه الفترة مغلقة، ولا يمكن تسجيل رصيد أو إلغاؤه بتاريخ داخلها.",
+  "@balanceEntryPeriodLockedError": {
+    "description": "Error: the date falls in a closed accounting period."
+  },
+  "balanceEntryPermissionError": "ليست لديك صلاحية لهذا الإجراء على الأرصدة.",
+  "@balanceEntryPermissionError": {
+    "description": "Error: the user lacks the balance permission."
+  },
+  "balanceEntryCancelAction": "إلغاء الرصيد",
+  "@balanceEntryCancelAction": {
+    "description": "Action cancelling a balance entry."
+  },
+  "balanceEntryCancelTitle": "إلغاء الرصيد {number}",
+  "@balanceEntryCancelTitle": {
+    "description": "Cancel dialog title.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "balanceEntryCancelBody": "سيُحذف أثر هذا الرصيد من الحساب وكشف الحساب، ويبقى مسجلًا كقيد ملغى مع السبب.",
+  "@balanceEntryCancelBody": {
+    "description": "Cancel dialog explanation."
+  },
+  "balanceEntryCancelReasonLabel": "سبب الإلغاء",
+  "@balanceEntryCancelReasonLabel": {
+    "description": "Cancel reason field label."
+  },
+  "balanceEntryCancelReasonRequired": "اكتب سبب الإلغاء.",
+  "@balanceEntryCancelReasonRequired": {
+    "description": "Validation: cancel reason required."
+  },
+  "balanceEntryCancelled": "تم إلغاء الرصيد.",
+  "@balanceEntryCancelled": {
+    "description": "Snackbar after cancelling a balance entry."
+  },
+  "balanceEntryCancelError": "تعذر إلغاء الرصيد.",
+  "@balanceEntryCancelError": {
+    "description": "Generic error cancelling a balance entry."
+  },
+  "balanceEntryCancelBlockedError": "لا يمكن إلغاء هذا الرصيد لأنه حُصّل أو سُدّد منه جزء. سجّل تسوية معاكسة بدلًا من ذلك.",
+  "@balanceEntryCancelBlockedError": {
+    "description": "Error: the entry has been partly settled and cannot be cancelled."
+  },
+  "balanceEntryCancelledBadge": "ملغى",
+  "@balanceEntryCancelledBadge": {
+    "description": "Badge on a cancelled balance entry."
+  },
+  "balanceEntrySettledValue": "سُدّد {amount}",
+  "@balanceEntrySettledValue": {
+    "description": "Amount already settled on an entry.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "balanceEntryRemainingValue": "المتبقي {amount}",
+  "@balanceEntryRemainingValue": {
+    "description": "Amount still open on an entry.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "balanceEntryEffectiveValue": "من {date}",
+  "@balanceEntryEffectiveValue": {
+    "description": "The day an entry applies from.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "balanceEntryCreatedByValue": "بواسطة {name}",
+  "@balanceEntryCreatedByValue": {
+    "description": "Who recorded the entry.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "balanceEntryCancelReasonValue": "سبب الإلغاء: {reason}",
+  "@balanceEntryCancelReasonValue": {
+    "description": "Why an entry was cancelled.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "openingBalanceSectionTitle": "رصيد افتتاحي (اختياري)",
+  "@openingBalanceSectionTitle": {
+    "description": "Section in the create customer/supplier form."
+  },
+  "openingBalanceSectionHint": "اتركه فارغًا إن لم يكن على الحساب أو له رصيد سابق.",
+  "@openingBalanceSectionHint": {
+    "description": "Helper under the opening balance section in the create form."
+  },
+  "customerCreditBalanceCalloutTitle": "للعميل رصيد دائن قدره {amount}.",
+  "@customerCreditBalanceCalloutTitle": {
+    "description": "Callout when the shop owes the customer money.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "customerCreditBalanceCalloutBody": "هذا المبلغ مستحق للعميل على المحل، ويُخصم تلقائيًا من ديونه عند التحصيل.",
+  "@customerCreditBalanceCalloutBody": {
+    "description": "Explanation under the customer credit callout."
+  },
+  "customerUnappliedCreditCalloutTitle": "للعميل رصيد دائن {credit} لم يُخصم بعد من ديونه ({debts}).",
+  "@customerUnappliedCreditCalloutTitle": {
+    "description": "Callout when a customer holds both unspent credit and open debts.",
+    "placeholders": {
+      "credit": {
+        "type": "String"
+      },
+      "debts": {
+        "type": "String"
+      }
+    }
+  },
+  "applyCustomerCreditButton": "خصم الرصيد الدائن من الديون",
+  "@applyCustomerCreditButton": {
+    "description": "Button that spends the customer's credit against their debts."
+  },
+  "applyCustomerCreditSuccess": "تم خصم الرصيد الدائن من ديون العميل.",
+  "@applyCustomerCreditSuccess": {
+    "description": "Snackbar after applying customer credit."
+  },
+  "applyCustomerCreditError": "تعذر خصم الرصيد الدائن.",
+  "@applyCustomerCreditError": {
+    "description": "Error applying customer credit."
+  },
+  "customerCreditBalanceLabel": "رصيد دائن للعميل",
+  "@customerCreditBalanceLabel": {
+    "description": "Metric label: what the shop owes the customer."
+  },
+  "supplierNetBalanceLabel": "صافي حساب المورد",
+  "@supplierNetBalanceLabel": {
+    "description": "Metric label: supplier net balance."
+  },
+  "supplierCreditBalanceLabel": "رصيد لدى المورد",
+  "@supplierCreditBalanceLabel": {
+    "description": "Metric label: supplier owes the shop (credit)."
+  },
+  "supplierNetBalanceWeOweValue": "مستحق للمورد {amount}",
+  "@supplierNetBalanceWeOweValue": {
+    "description": "Net balance sentence when the shop owes the supplier.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "supplierNetBalanceTheyOweValue": "مستحق على المورد {amount}",
+  "@supplierNetBalanceTheyOweValue": {
+    "description": "Net balance sentence when the supplier owes the shop.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "recordSupplierAccountPaymentButton": "تسجيل دفعة للمورد",
+  "@recordSupplierAccountPaymentButton": {
+    "description": "Button paying a supplier on account."
+  },
+  "supplierAccountPaymentTitle": "دفعة للمورد على الحساب",
+  "@supplierAccountPaymentTitle": {
+    "description": "Title of the supplier account payment dialog."
+  },
+  "supplierAccountPaymentBalanceValue": "المستحق للمورد: {amount}",
+  "@supplierAccountPaymentBalanceValue": {
+    "description": "Balance shown in the supplier account payment dialog.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "supplierAccountPaymentHint": "تُوزَّع الدفعة على أقدم المستحقات أولًا: الرصيد الافتتاحي ثم أوامر الشراء.",
+  "@supplierAccountPaymentHint": {
+    "description": "Explains how an account payment is allocated."
+  },
+  "supplierAccountPaymentSuccess": "تم تسجيل الدفعة للمورد.",
+  "@supplierAccountPaymentSuccess": {
+    "description": "Snackbar after a supplier account payment."
+  },
+  "supplierAccountPaymentError": "تعذر تسجيل الدفعة للمورد.",
+  "@supplierAccountPaymentError": {
+    "description": "Error recording a supplier account payment."
+  },
+  "balanceEntriesLoadMoreButton": "عرض المزيد",
+  "@balanceEntriesLoadMoreButton": {
+    "description": "Loads the next page of balance entries."
+  },
+  "balanceKindRefund": "رد مبلغ نقدًا",
+  "@balanceKindRefund": {
+    "description": "Balance entry kind: a balance settled with cash through the drawer."
+  },
+  "customerRefundButton": "رد المبلغ للعميل",
+  "@customerRefundButton": {
+    "description": "Button paying a customer the credit the shop owes them, in cash."
+  },
+  "supplierRefundButton": "استلام المبلغ من المورد",
+  "@supplierRefundButton": {
+    "description": "Button taking in cash a supplier owes the shop."
+  },
+  "customerRefundTitle": "رد مبلغ للعميل",
+  "@customerRefundTitle": {
+    "description": "Title of the customer refund dialog."
+  },
+  "supplierRefundTitle": "استلام مبلغ من المورد",
+  "@supplierRefundTitle": {
+    "description": "Title of the supplier refund dialog."
+  },
+  "customerRefundHint": "يُصرف المبلغ نقدًا من درج ورديتك المفتوحة ويُخصم من الرصيد المستحق للعميل. لا يمكن إلغاؤه بعد تسجيله.",
+  "@customerRefundHint": {
+    "description": "Explains the customer refund."
+  },
+  "supplierRefundHint": "يُستلم المبلغ نقدًا في درج ورديتك المفتوحة ويُخصم مما على المورد للمحل. لا يمكن إلغاؤه بعد تسجيله.",
+  "@supplierRefundHint": {
+    "description": "Explains the supplier refund."
+  },
+  "balanceRefundAvailableValue": "المتاح: {amount}",
+  "@balanceRefundAvailableValue": {
+    "description": "Amount available to refund.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "balanceRefundAmountTooHigh": "المبلغ أكبر من المتاح ({amount}).",
+  "@balanceRefundAmountTooHigh": {
+    "description": "Validation: refund above what is available.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "customerRefundSaved": "تم صرف المبلغ للعميل.",
+  "@customerRefundSaved": {
+    "description": "Snackbar after a customer refund."
+  },
+  "supplierRefundSaved": "تم استلام المبلغ من المورد.",
+  "@supplierRefundSaved": {
+    "description": "Snackbar after a supplier refund."
+  },
+  "balanceRefundSessionRequiredError": "افتح وردية أولًا — المبلغ يُصرف أو يُستلم عبر درج الوردية.",
+  "@balanceRefundSessionRequiredError": {
+    "description": "Error: a refund needs the user's open register session."
+  },
+  "balanceRefundExceedsCreditError": "المبلغ أكبر من الرصيد المتاح.",
+  "@balanceRefundExceedsCreditError": {
+    "description": "Error: refund exceeds the available credit."
+  },
+  "balanceRefundFinalError": "هذا المبلغ سُلِّم نقدًا ولا يمكن إلغاؤه. سجّل تسوية معاكسة بدلًا من ذلك.",
+  "@balanceRefundFinalError": {
+    "description": "Error: a refund cannot be cancelled."
+  },
+  "paymentsHubBalanceEntryValue": "قيد رصيد {number}",
+  "@paymentsHubBalanceEntryValue": {
+    "description": "Payments hub: the account entry a payment settled.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
   }
 }

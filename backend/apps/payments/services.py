@@ -214,6 +214,19 @@ def _given_back_from(payment):
                 ),
             }
         )
+    if payment.method == Payment.Method.ACCOUNT_CREDIT:
+        # It spent credit the shop owed the customer. Cancelling this row alone
+        # would reopen the debt and leave the credit spent — the customer would
+        # owe the same money twice.
+        raise serializers.ValidationError(
+            {
+                "code": "account_credit_owned_by_balance",
+                "detail": (
+                    "This debt was settled from the customer's account credit, "
+                    "and cannot be cancelled on its own."
+                ),
+            }
+        )
     # Read the invoice, do not trust the caller's copy of it: a payment handed
     # in from before its order was voided would otherwise carry a stale
     # lifecycle and walk straight past this guard. Locked, because what it

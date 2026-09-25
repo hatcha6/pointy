@@ -99,9 +99,18 @@ def debt_reminder_sweep_task():
         # needs a text asking them to come in and pay it.
         .exclude(customer__staff_employee__isnull=False)
     )
+    # A customer the shop holds credit for is asked for their debts net of it,
+    # at the next collection — so an SMS quoting one invoice's full balance
+    # would ask them for money they do not owe. They are left alone until the
+    # credit is spent (``apps.balances.customers.apply_customer_credit``).
+    from apps.balances.customers import customers_holding_credit
+
+    holding_credit = customers_holding_credit()
     sent = 0
     # chunk_size is required to combine iterator() with prefetch_related().
     for order in orders.iterator(chunk_size=500):
+        if order.customer_id in holding_credit:
+            continue
         try:
             if send_debt_reminder(order) is not None:
                 sent += 1

@@ -453,7 +453,11 @@ class _CustomerPaymentTile extends StatelessWidget {
   List<String> _customerSubtitle(AppLocalizations l10n) {
     return [
       if (payment.orderReceiptNumber?.trim().isNotEmpty ?? false)
-        l10n.paymentsHubInvoiceValue(payment.orderReceiptNumber!.trim()),
+        payment.settlesAccountEntry
+            ? l10n.paymentsHubBalanceEntryValue(
+                payment.orderReceiptNumber!.trim(),
+              )
+            : l10n.paymentsHubInvoiceValue(payment.orderReceiptNumber!.trim()),
       if (payment.commissionAmount > 0.005)
         l10n.paymentsHubCommissionValue(formatMoney(payment.commissionAmount)),
       if (payment.externalReference.trim().isNotEmpty)
@@ -558,6 +562,8 @@ class _SupplierPaymentTile extends StatelessWidget {
     return [
       if (payment.purchaseOrderNumber?.trim().isNotEmpty ?? false)
         l10n.paymentsHubPurchaseOrderValue(payment.purchaseOrderNumber!.trim()),
+      if (payment.balanceEntryNumber?.trim().isNotEmpty ?? false)
+        l10n.paymentsHubBalanceEntryValue(payment.balanceEntryNumber!.trim()),
       if (payment.reference.trim().isNotEmpty)
         l10n.paymentsHubReferenceValue(payment.reference.trim()),
       if (payment.createdByUsername?.trim().isNotEmpty ?? false)
@@ -576,7 +582,8 @@ class _SupplierPaymentTile extends StatelessWidget {
       partyName: payment.supplierName.trim().isNotEmpty
           ? payment.supplierName.trim()
           : l10n.paymentsHubUnknownSupplier,
-      relatedDocumentNumber: payment.purchaseOrderNumber,
+      relatedDocumentNumber:
+          payment.purchaseOrderNumber ?? payment.balanceEntryNumber,
       amount: payment.amount,
       method: _supplierMethodLabel(l10n, payment.method),
       externalReference: payment.reference,
@@ -609,6 +616,8 @@ class _SupplierPaymentTile extends StatelessWidget {
       paymentKind: PrintAuditPaymentKind.supplier,
       documentNumber: payment.purchaseOrderNumber?.trim().isNotEmpty == true
           ? payment.purchaseOrderNumber!.trim()
+          : payment.balanceEntryNumber?.trim().isNotEmpty == true
+          ? payment.balanceEntryNumber!.trim()
           : l10n.paymentsHubPurchaseOrderValue('${payment.id}'),
     );
   }
@@ -726,6 +735,7 @@ String _customerMethodLabel(AppLocalizations l10n, PaymentMethod method) {
     PaymentMethod.card => l10n.paymentMethodCard,
     PaymentMethod.transfer => l10n.paymentMethodTransfer,
     PaymentMethod.salaryDeduction => l10n.paymentMethodSalaryDeduction,
+    PaymentMethod.accountCredit => l10n.paymentMethodAccountCredit,
   };
 }
 
@@ -735,6 +745,7 @@ IconData _customerMethodIcon(PaymentMethod method) {
     PaymentMethod.card => Icons.credit_card_outlined,
     PaymentMethod.transfer => Icons.account_balance_outlined,
     PaymentMethod.salaryDeduction => Icons.badge_outlined,
+    PaymentMethod.accountCredit => Icons.savings_outlined,
   };
 }
 

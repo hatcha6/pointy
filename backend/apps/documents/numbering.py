@@ -79,6 +79,12 @@ CONSIGNOR_PAYOUT_SERIES = "consignor_payout"
 #: document two people, and sometimes a court, will refer to by name.
 CONSIGNMENT_INCIDENT_SERIES = "consignment_incident"
 
+#: قيد رصيد — an opening balance or an adjustment written straight onto a
+#: customer's or a supplier's account. One series for both sides: the number
+#: is what an owner quotes when a customer disputes a figure on a statement,
+#: and it has to name one entry whichever ledger it sits in.
+PARTY_BALANCE_SERIES = "party_balance_entry"
+
 
 def next_document_number(key: str) -> int:
     """The next number in [key], reserved for this transaction only.

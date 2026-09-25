@@ -12,6 +12,7 @@ import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/api_session.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/payment_proof_printer.dart';
+import '../../../shared/payment_labels.dart';
 
 enum PurchaseOrderActionError {
   generic,
@@ -304,7 +305,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
           ? payment.purchaseOrderNumber!.trim()
           : _order.orderNumber,
       amount: payment.amount,
-      method: _supplierPaymentMethodText(payment.method),
+      method: supplierPaymentMethodProofText(payment.method),
       externalReference: payment.reference,
       handledBy: payment.createdByUsername,
       balanceAfter: _order.balanceDue,
@@ -316,19 +317,6 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
       paymentId: payment.id,
       paymentKind: PrintAuditPaymentKind.supplier,
     );
-  }
-
-  /// Arabic label for a supplier payment method on the printed proof. (The
-  /// document renders in an isolate without an l10n context, so the strings
-  /// live here, matching the dialog's l10n-backed labels.)
-  String _supplierPaymentMethodText(SupplierPaymentMethod method) {
-    return switch (method) {
-      SupplierPaymentMethod.cash => 'نقدًا',
-      SupplierPaymentMethod.card => 'بطاقة',
-      SupplierPaymentMethod.transfer => 'تحويل',
-      SupplierPaymentMethod.supplierCredit => 'رصيد المورد',
-      SupplierPaymentMethod.refund => 'استرداد',
-    };
   }
 
   String _supplierPaymentSignature({

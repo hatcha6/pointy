@@ -57,6 +57,11 @@ INITIAL_SETUP_SHOP_ACTIVITY_MODELS = (
     ("catalog", "productcategory"),
     ("customers", "customer"),
     ("customers", "asset"),
+    # A balance typed onto a customer's or a supplier's account is shop work
+    # by definition — nothing seeds one — and a supplier's opening balance can
+    # be the first thing an owner enters.
+    ("balances", "customerbalanceentry"),
+    ("balances", "supplierbalanceentry"),
     ("purchasing", "purchaseorder"),
     ("inventory", "stockmovement"),
     ("inventory", "stockledgerentry"),
@@ -96,6 +101,8 @@ MANAGER_PERMISSION_DOMAINS = (
     "sales",
     "fraud",
     "customers",
+    # Opening balances and adjustments on customers' and suppliers' accounts.
+    "balances",
     "discounts",
     "purchasing",
     "payments",
@@ -305,6 +312,16 @@ ACCOUNTANT_PERMISSION_CODES = (
     "attendance.change_attendanceprofile",
     "attendance.view_attendancepunch",
     "attendance.view_attendanceday",
+    # Opening balances and adjustments on customers' and suppliers' accounts
+    # are bookkeeping: the accountant is the person who carries a paper
+    # ledger's balances in and corrects them later. Withdrawing one is refused
+    # once anything has been settled against it, whoever asks.
+    "balances.view_customerbalanceentry",
+    "balances.add_customerbalanceentry",
+    "balances.cancel_customerbalanceentry",
+    "balances.view_supplierbalanceentry",
+    "balances.add_supplierbalanceentry",
+    "balances.cancel_supplierbalanceentry",
 )
 # مشرف / assistant manager: shop-wide oversight plus the ability to run a till.
 # reports.view_reportrun is what flips full (shop-wide) visibility on — see
@@ -376,6 +393,9 @@ SUPERVISOR_PERMISSION_CODES = (
     "customers.view_customer",
     "customers.add_customer",
     "customers.change_customer",
+    # Sees the balances written onto a customer's account; writing one is an
+    # owner's or an accountant's act, granted per person when wanted.
+    "balances.view_customerbalanceentry",
     "customers.add_asset",
     "customers.change_asset",
     "customers.view_asset",
@@ -452,6 +472,9 @@ PURCHASING_AGENT_PERMISSION_CODES = (
     "purchasing.cancel_purchaseorder",
     "purchasing.add_pos_cash_purchase",
     "purchasing.view_supplierpayment",
+    # What the shop owes a supplier beyond any order is part of the conversation
+    # a buyer has with them — read-only.
+    "balances.view_supplierbalanceentry",
     # A buyer captures identifiers where the goods are — at the receiving bay —
     # so receiving a serialized or lot-tracked delivery is part of the job.
     "inventory.view_stockunit",
@@ -488,6 +511,8 @@ AUDITOR_PERMISSION_CODES = (
     "purchasing.view_supplierpayment",
     "customers.view_customer",
     "customers.view_asset",
+    "balances.view_customerbalanceentry",
+    "balances.view_supplierbalanceentry",
     "discounts.view_discountrule",
     "expenses.view_expense",
     "treasury.view_moneyaccount",

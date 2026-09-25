@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
+import '../../../data/models/balance_entry.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
 import '../../../data/models/payment_card.dart';
@@ -19,6 +21,7 @@ import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../register_sessions/views/sale_order_details_sheet.dart';
 import '../view_models/customer_details_view_model.dart';
+import 'balance_entries_section.dart';
 
 class CustomerDetailsScreen extends StatefulWidget {
   const CustomerDetailsScreen({
@@ -27,12 +30,17 @@ class CustomerDetailsScreen extends StatefulWidget {
     required this.contactRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
+    this.capabilities,
   });
 
   final Customer customer;
   final ContactRepository contactRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+
+  /// What this user may do on the account. Null hides everything that needs
+  /// a permission to show — the balance entries, for one.
+  final AuthorizationCapabilities? capabilities;
 
   @override
   State<CustomerDetailsScreen> createState() => _CustomerDetailsScreenState();
@@ -74,6 +82,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
           body: SafeArea(
             child: CustomerDetailsView(
               viewModel: _viewModel,
+              capabilities: widget.capabilities,
               onMerged: () => Navigator.of(context).maybePop(),
             ),
           ),
@@ -90,12 +99,16 @@ class CustomerDetailsView extends StatelessWidget {
   const CustomerDetailsView({
     super.key,
     required this.viewModel,
+    this.capabilities,
     this.onMerged,
     this.onClaimed,
     this.onEdited,
   });
 
   final CustomerDetailsViewModel viewModel;
+
+  /// Null hides whatever needs a permission to show.
+  final AuthorizationCapabilities? capabilities;
 
   /// Invoked after this customer is folded into another (it no longer exists).
   final VoidCallback? onMerged;
@@ -126,6 +139,11 @@ class CustomerDetailsView extends StatelessWidget {
                 _OutstandingBalanceCallout(viewModel: viewModel),
                 SizedBox(height: spacing.md),
               ],
+              if (viewModel.creditBalance > 0.005 ||
+                  viewModel.canApplyCredit) ...[
+                _CreditBalanceCallout(viewModel: viewModel),
+                SizedBox(height: spacing.md),
+              ],
               if (customer.isAutoCreated) ...[
                 _UnclaimedCardCallout(
                   viewModel: viewModel,
@@ -145,6 +163,26 @@ class CustomerDetailsView extends StatelessWidget {
                 ),
                 child: _CustomerProfile(viewModel: viewModel),
               ),
+              if (capabilities?.canViewCustomerBalances ?? false) ...[
+                SizedBox(height: spacing.md),
+                BalanceEntriesSection(
+                  key: ValueKey('customer_balance_entries_${customer.id}'),
+                  repository: viewModel.repository,
+                  party: BalanceParty.customer,
+                  partyId: customer.id,
+                  canManage: capabilities!.canManageCustomerBalances,
+                  canCancel: capabilities!.canCancelCustomerBalances,
+                  // The cash leaves a drawer, so it takes the drawer's own
+                  // pay-out right as well.
+                  canRefund:
+                      capabilities!.canManageCustomerBalances &&
+                      capabilities!.canCreateRegisterCashMovement,
+                  refundableAmount: viewModel.creditBalance,
+                  // An entry moves what the customer owes and the credit they
+                  // hold; the callouts above read the server's figures again.
+                  onChanged: viewModel.loadSummary,
+                ),
+              ],
               if (viewModel.creditLimitsEnforced) ...[
                 SizedBox(height: spacing.md),
                 PointyDetailSection(
@@ -832,6 +870,70 @@ class _OutstandingBalanceCallout extends StatelessWidget {
   }
 }
 
+/// The shop owes this customer money — or holds credit for them it has not
+/// yet spent against their debts, which a collection would do first and the
+/// owner can do from here.
+class _CreditBalanceCallout extends StatelessWidget {
+  const _CreditBalanceCallout({required this.viewModel});
+
+  final CustomerDetailsViewModel viewModel;
+
+  Future<void> _apply(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final ok = await viewModel.applyCredit();
+    if (!context.mounted) {
+      return;
+    }
+    _showSnack(
+      context,
+      ok ? l10n.applyCustomerCreditSuccess : l10n.applyCustomerCreditError,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final summary = viewModel.summary;
+    final canApply = viewModel.canApplyCredit;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PointyDetailCallout(
+          icon: Icons.savings_outlined,
+          tone: PointyCalloutTone.success,
+          title: canApply
+              ? l10n.customerUnappliedCreditCalloutTitle(
+                  formatMoney(summary.unappliedCredit),
+                  formatMoney(summary.openDebtsTotal),
+                )
+              : l10n.customerCreditBalanceCalloutTitle(
+                  formatMoney(viewModel.creditBalance),
+                ),
+          message: l10n.customerCreditBalanceCalloutBody,
+        ),
+        if (canApply) ...[
+          SizedBox(height: spacing.sm),
+          OutlinedButton.icon(
+            key: const ValueKey('apply_customer_credit_button'),
+            onPressed: viewModel.isApplyingCredit
+                ? null
+                : () => _apply(context),
+            icon: viewModel.isApplyingCredit
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: PointySpinner(strokeWidth: 2),
+                  )
+                : const Icon(Icons.swap_horiz_outlined),
+            label: Text(l10n.applyCustomerCreditButton),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _CustomerPaymentCards extends StatelessWidget {
   const _CustomerPaymentCards({required this.viewModel});
 
@@ -1043,6 +1145,13 @@ class _CustomerSalesSummary extends StatelessWidget {
                   ? colors.danger
                   : null,
             ),
+            if (summary.creditBalance > 0.005)
+              PointyMetricGridItem(
+                label: l10n.customerCreditBalanceLabel,
+                value: formatMoney(summary.creditBalance),
+                icon: Icons.savings_outlined,
+                accentColor: colors.success,
+              ),
             PointyMetricGridItem(
               label: l10n.customerInvoiceCountLabel,
               value: summary.invoiceCount.toString(),

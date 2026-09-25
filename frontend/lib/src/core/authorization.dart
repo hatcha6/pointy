@@ -53,6 +53,22 @@ enum AppCapability {
   /// nothing about anybody else, while the contact book lists every customer
   /// with what they owe, and the customer dashboard adds it all up.
   createCustomers,
+
+  /// Reads the opening balances and adjustments written onto customers'
+  /// accounts.
+  viewCustomerBalances,
+
+  /// Writes one: an opening balance, or an adjustment for something no invoice
+  /// could carry. Separate from [manageContacts] — someone trusted with a
+  /// customer's phone number is not thereby trusted to say they owe the shop
+  /// two thousand dinars.
+  manageCustomerBalances,
+
+  /// Withdraws one that nothing has been settled against yet.
+  cancelCustomerBalances,
+  viewSupplierBalances,
+  manageSupplierBalances,
+  cancelSupplierBalances,
   collectCustomerDebt,
   checkoutSale,
   startRegisterSession,
@@ -592,6 +608,52 @@ class AuthorizationCapabilities {
       // edit or delete from.
       if (_hasAny(user, const ['add_customer', 'customers.add_customer'])) {
         capabilities.add(AppCapability.createCustomers);
+      }
+      // Balances written onto an account (apps.balances): reading them, writing
+      // one, and withdrawing one are three rights, held by different people.
+      if (_hasAny(user, const [
+        'view_customerbalanceentry',
+        'balances.view_customerbalanceentry',
+      ])) {
+        capabilities.add(AppCapability.viewCustomerBalances);
+      }
+      if (_hasAny(user, const [
+        'add_customerbalanceentry',
+        'balances.add_customerbalanceentry',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewCustomerBalances)
+          ..add(AppCapability.manageCustomerBalances);
+      }
+      if (_hasAny(user, const [
+        'cancel_customerbalanceentry',
+        'balances.cancel_customerbalanceentry',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewCustomerBalances)
+          ..add(AppCapability.cancelCustomerBalances);
+      }
+      if (_hasAny(user, const [
+        'view_supplierbalanceentry',
+        'balances.view_supplierbalanceentry',
+      ])) {
+        capabilities.add(AppCapability.viewSupplierBalances);
+      }
+      if (_hasAny(user, const [
+        'add_supplierbalanceentry',
+        'balances.add_supplierbalanceentry',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewSupplierBalances)
+          ..add(AppCapability.manageSupplierBalances);
+      }
+      if (_hasAny(user, const [
+        'cancel_supplierbalanceentry',
+        'balances.cancel_supplierbalanceentry',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewSupplierBalances)
+          ..add(AppCapability.cancelSupplierBalances);
       }
       if (_hasAny(user, const [
         'view_registersession',
@@ -1238,6 +1300,18 @@ class AuthorizationCapabilities {
       allows(AppCapability.recordSupplierPayment);
   bool get canManageContacts => allows(AppCapability.manageContacts);
   bool get canCreateCustomers => allows(AppCapability.createCustomers);
+  bool get canViewCustomerBalances =>
+      allows(AppCapability.viewCustomerBalances);
+  bool get canManageCustomerBalances =>
+      allows(AppCapability.manageCustomerBalances);
+  bool get canCancelCustomerBalances =>
+      allows(AppCapability.cancelCustomerBalances);
+  bool get canViewSupplierBalances =>
+      allows(AppCapability.viewSupplierBalances);
+  bool get canManageSupplierBalances =>
+      allows(AppCapability.manageSupplierBalances);
+  bool get canCancelSupplierBalances =>
+      allows(AppCapability.cancelSupplierBalances);
   bool get canCheckoutSale => allows(AppCapability.checkoutSale);
   bool get canStartRegisterSession =>
       allows(AppCapability.startRegisterSession);

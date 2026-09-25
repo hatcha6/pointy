@@ -1,8 +1,10 @@
 import '../../core/result.dart';
+import '../models/balance_entry.dart';
 import '../models/contact.dart';
 import '../models/customer_activity.dart';
 import '../models/payment_card.dart';
 import '../models/sale_order_page.dart';
+import '../services/balance_api_client.dart';
 import '../services/pos_api_service.dart';
 
 class ContactRepository {
@@ -78,6 +80,109 @@ class ContactRepository {
         method: method,
         amount: amount,
         cardReceiptUrl: cardReceiptUrl,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  /// Spends the credit the shop holds for the customer against what they owe
+  /// (a collection does this itself, first). Answers with the new summary.
+  Future<Result<CustomerSalesSummary>> applyCustomerCredit(
+    int customerId, {
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.applyCustomerCredit(
+        customerId,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  Future<Result<BalanceEntryPage>> loadBalanceEntries({
+    required BalanceParty party,
+    required int partyId,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchBalanceEntries(
+        party: party,
+        partyId: partyId,
+        page: page,
+      ),
+    );
+  }
+
+  Future<Result<BalanceEntry>> createBalanceEntry({
+    required BalanceParty party,
+    required int partyId,
+    required BalanceEntryDraft draft,
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.createBalanceEntry(
+        party: party,
+        partyId: partyId,
+        draft: draft,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  /// Settles a party's credit side with cash through the caller's open drawer.
+  Future<Result<BalanceEntry>> refundBalance({
+    required BalanceParty party,
+    required int partyId,
+    required double amount,
+    String note = '',
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.refundBalance(
+        party: party,
+        partyId: partyId,
+        amount: amount,
+        note: note,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  Future<Result<BalanceEntry>> cancelBalanceEntry({
+    required BalanceParty party,
+    required int entryId,
+    required String reason,
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.cancelBalanceEntry(
+        party: party,
+        entryId: entryId,
+        reason: reason,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  /// Pays a supplier on account, split by the server across what the shop
+  /// owes them, oldest first — the only way to pay an opening balance.
+  Future<Result<SupplierAccountPaymentResult>> recordSupplierAccountPayment(
+    int supplierId, {
+    required String method,
+    required double amount,
+    String reference = '',
+    String notes = '',
+    int? moneyAccountId,
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.recordSupplierAccountPayment(
+        supplierId,
+        method: method,
+        amount: amount,
+        reference: reference,
+        notes: notes,
+        moneyAccountId: moneyAccountId,
         idempotencyKey: idempotencyKey,
       ),
     );

@@ -61,13 +61,23 @@ class CustomerDetailsViewModel extends ChangeNotifier {
   ShopSettings? _shopSettings;
   bool _isRecordingPayment = false;
   bool _hasPaymentError = false;
+  bool _isApplyingCredit = false;
   final Map<String, String> _idempotencyKeysBySignature = {};
 
   Customer get customer => _customer;
   CustomerSalesSummary get summary => _summary;
 
-  /// Total the customer still owes across their open debt invoices.
+  /// What a collection will ask the customer for: their open invoices and the
+  /// debts written onto their account, net of any credit the shop holds.
   double get outstandingBalance => _summary.outstandingBalance;
+
+  /// What the shop owes the customer once their debts are set against it.
+  double get creditBalance => _summary.creditBalance;
+
+  /// The customer holds credit the shop has not yet spent against their
+  /// debts — a collection would, and so can the owner, from the screen.
+  bool get canApplyCredit => _summary.canApplyCredit;
+  bool get isApplyingCredit => _isApplyingCredit;
 
   /// Whether the shop has switched credit ceilings on at all. Off (the default)
   /// hides the whole section: a control that decides nothing is worse than no
@@ -347,6 +357,33 @@ class CustomerDetailsViewModel extends ChangeNotifier {
 
     _isLoadingSummary = false;
     notifyListeners();
+  }
+
+  /// Spends the customer's credit against their open debts, then refreshes
+  /// the summary and the invoice history whose balances just changed.
+  Future<bool> applyCredit() async {
+    if (_isApplyingCredit) {
+      return false;
+    }
+    _isApplyingCredit = true;
+    notifyListeners();
+
+    final signature = 'customer-apply-credit:${_customer.id}';
+    final result = await _contactRepository.applyCustomerCredit(
+      _customer.id,
+      idempotencyKey: _idempotencyKeyFor(signature),
+    );
+    final ok = result is Ok<CustomerSalesSummary>;
+    if (ok) {
+      _clearIdempotencyKey(signature);
+      _summary = result.value;
+    }
+    _isApplyingCredit = false;
+    notifyListeners();
+    if (ok) {
+      await Future.wait([loadSummary(), loadOrderHistory()]);
+    }
+    return ok;
   }
 
   /// Trusted card terminals for the receipt-scan dialog (empty on failure), so

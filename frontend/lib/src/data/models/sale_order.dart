@@ -750,20 +750,28 @@ enum PaymentMethod {
 
   /// A staff purchase settled out of the employee's wages when their payroll
   /// run was paid. Only ever read back: no till can tender it.
-  salaryDeduction('salary_deduction');
+  salaryDeduction('salary_deduction'),
+
+  /// A debt settled from credit the shop already owed the customer — an
+  /// opening balance or an adjustment in their favour. No money moved, so it
+  /// is only ever read back: no till can tender it.
+  accountCredit('account_credit');
 
   const PaymentMethod(this.apiValue);
 
   final String apiValue;
 
   /// Whether a cashier can take money this way at the counter.
-  bool get isTillTender => this != PaymentMethod.salaryDeduction;
+  bool get isTillTender =>
+      this != PaymentMethod.salaryDeduction &&
+      this != PaymentMethod.accountCredit;
 
   static PaymentMethod fromApiValue(Object? value) {
     return switch (value?.toString()) {
       'card' => PaymentMethod.card,
       'transfer' => PaymentMethod.transfer,
       'salary_deduction' => PaymentMethod.salaryDeduction,
+      'account_credit' => PaymentMethod.accountCredit,
       _ => PaymentMethod.cash,
     };
   }

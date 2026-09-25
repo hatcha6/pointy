@@ -180,6 +180,12 @@ class OrderViewSet(
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if self.action != "retrieve":
+            # An account entry's carrier is not an invoice: it has no lines, was
+            # never sold, and is settled and retracted through its balance
+            # entry. It stays readable by id (a payment on it links here) but
+            # never appears in an invoice list or answers an invoice action.
+            queryset = queryset.exclude(sale_type=Order.SaleType.ACCOUNT_ENTRY)
         if self.action == "list":
             queryset = self._list_summary_queryset(queryset)
         product_id = self.request.query_params.get("product")
@@ -714,10 +720,13 @@ class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
         if not ShopSettings.load().enable_online_invoices:
             return Order.objects.none()
         # Hide only transient standard carts; credit (debt) invoices and
-        # quotations are shareable documents even while OPEN.
-        return super().get_queryset().exclude(
-            status=Order.Status.OPEN,
-            sale_type=Order.SaleType.STANDARD,
+        # quotations are shareable documents even while OPEN. An account entry
+        # is never an invoice to share: it has nothing on it but a figure.
+        return (
+            super()
+            .get_queryset()
+            .exclude(status=Order.Status.OPEN, sale_type=Order.SaleType.STANDARD)
+            .exclude(sale_type=Order.SaleType.ACCOUNT_ENTRY)
         )
 
 

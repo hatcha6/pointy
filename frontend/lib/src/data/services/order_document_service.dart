@@ -1292,6 +1292,7 @@ class OrderDocumentLabels {
       PaymentMethod.card => 'بطاقة',
       PaymentMethod.transfer => 'تحويل',
       PaymentMethod.salaryDeduction => 'خصم من الراتب',
+      PaymentMethod.accountCredit => 'من رصيد العميل',
     };
   }
 

@@ -12,14 +12,16 @@ from apps.sales.models import Order, RegisterSession
 
 class PaymentQuerySet(DocumentQuerySetMixin, models.QuerySet):
     def money_received(self):
-        """Payments that brought money in: every tender but a salary deduction.
+        """Payments that brought money in: every tender but the ones that
+        settle a debt without money moving.
 
         A salary deduction settles a staff purchase out of the employee's wages
-        and puts nothing in a drawer or a bank, so a figure that means "what
-        customers paid us" leaves it out. Balances and statements do not — to an
-        invoice it is as much a payment as cash.
+        and puts nothing in a drawer or a bank; an account-credit payment spends
+        money the shop already owed the customer. A figure that means "what
+        customers paid us" leaves both out. Balances do not — to an invoice they
+        are as much a payment as cash.
         """
-        return self.exclude(method=Payment.Method.SALARY_DEDUCTION)
+        return self.exclude(method__in=Payment.NON_MONEY_METHODS)
 
     def takings(self):
         """What a till took, net of what it gave back by cancelling a payment.
@@ -64,9 +66,19 @@ class Payment(DocumentMixin, TimeStampedModel):
         # money position and the reports, and money *in* must not read as
         # money *out*.
         SALARY_DEDUCTION = "salary_deduction", "Salary deduction"
+        # Credit the shop already owed the customer (an opening balance or an
+        # adjustment in their favour, ``apps.balances``) spent against what
+        # they owe. Written only by ``apps.balances.customers.apply_customer_credit``,
+        # always linked to the credit it drew on by a ``CustomerCreditApplication``.
+        # No money moves, so it lands in no drawer, no bank and no "money
+        # received" figure, and no till can tender it.
+        ACCOUNT_CREDIT = "account_credit", "Account credit"
 
-    #: What a till can take: every method but the one only payroll writes.
+    #: What a till can take: every method but the ones only a service writes.
     TILL_METHODS = (Method.CASH, Method.CARD, Method.TRANSFER)
+    #: Settle a debt without any money arriving. Every figure about money
+    #: received leaves these out (``PaymentQuerySet.money_received``).
+    NON_MONEY_METHODS = (Method.SALARY_DEDUCTION, Method.ACCOUNT_CREDIT)
 
     @classmethod
     def till_method_choices(cls):

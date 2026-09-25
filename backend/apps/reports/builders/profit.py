@@ -203,7 +203,25 @@ def _cash_bridge_section(context, revenue):
             total=money_sum("amount")
         )["total"]
     )
-    residual = revenue - movement - received - settled_from_wages
+    # Debts settled from credit the shop already owed the customer: the
+    # receivable fell and no money arrived. Named, like the wages line, rather
+    # than left to surface as an unexplained difference.
+    settled_from_credit = decimal_from(
+        period_payments.filter(method=Payment.Method.ACCOUNT_CREDIT).aggregate(
+            total=money_sum("amount")
+        )["total"]
+    )
+    # Debts written straight onto customers' accounts (an opening balance, an
+    # adjustment) raised what they owe without anything being sold.
+    written_on_account = account_debts_recorded(context)
+    residual = (
+        revenue
+        - movement
+        - received
+        - settled_from_wages
+        - settled_from_credit
+        + written_on_account
+    )
 
     rows = [
         _line("revenue_recognised", money(revenue)),
@@ -214,6 +232,10 @@ def _cash_bridge_section(context, revenue):
     ]
     if settled_from_wages:
         rows.append(_line("settled_from_wages", money(settled_from_wages)))
+    if settled_from_credit:
+        rows.append(_line("settled_from_account_credit", money(settled_from_credit)))
+    if written_on_account:
+        rows.append(_line("debts_recorded_on_account", money(written_on_account)))
     rows.append(_line("unreconciled_difference", money(residual)))
     return report_section(
         "cash_bridge",
@@ -224,6 +246,21 @@ def _cash_bridge_section(context, revenue):
             Column("below_total"),
         ],
         rows,
+    )
+
+
+def account_debts_recorded(context):
+    """Debts written onto customers' accounts during the period — the
+    receivable they added, which no revenue line accounts for."""
+    from apps.balances.models import CustomerBalanceEntry
+
+    return decimal_from(
+        in_period(
+            CustomerBalanceEntry.objects.live().filter(
+                direction=CustomerBalanceEntry.Direction.THEY_OWE_US
+            ),
+            context.period,
+        ).aggregate(total=money_sum("amount"))["total"]
     )
 
 

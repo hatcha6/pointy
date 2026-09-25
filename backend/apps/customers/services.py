@@ -303,6 +303,10 @@ def merge_customers(*, source: Customer, target: Customer) -> Customer:
     _carry_staff_account(source=source, target=target)
     source.cards.update(customer=target)
     source.assets.update(customer=target)
+    # Before the orders, which include the carriers of the debts these entries
+    # wrote: an entry and its carrier must never name two different people.
+    # PROTECT, so it has to move before the delete regardless.
+    source.balance_entries.update(customer=target)
     source.orders.update(customer=target)
     source.jobs.update(customer=target)
     source.discount_redemptions.update(customer=target)

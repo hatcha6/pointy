@@ -28,7 +28,38 @@ def _money(value: Decimal) -> Decimal:
     return Decimal(value).quantize(MONEY)
 
 
-def outstanding_balance(customer, exclude_order_id=None) -> Decimal:
+@dataclass(frozen=True)
+class CustomerBalance:
+    """Where a customer's account stands, both ways.
+
+    ``open_debts`` is everything they still owe on: آجل invoices and debts
+    written onto the account (an opening balance, an adjustment).
+    ``unapplied_credit`` is what the shop owes *them* and has not yet spent
+    against those debts. Collecting from the account spends the credit first
+    (``apps.balances.customers.apply_customer_credit``), so the figure a
+    customer is asked for — and the one a ceiling is judged against — is the
+    two netted.
+    """
+
+    open_debts: Decimal
+    unapplied_credit: Decimal
+
+    @property
+    def net(self) -> Decimal:
+        """Positive when the customer owes the shop, negative when the shop
+        owes them."""
+        return _money(self.open_debts - self.unapplied_credit)
+
+    @property
+    def owed_by_customer(self) -> Decimal:
+        return max(self.net, Decimal("0.00"))
+
+    @property
+    def owed_to_customer(self) -> Decimal:
+        return max(-self.net, Decimal("0.00"))
+
+
+def open_debts(customer, exclude_order_id=None) -> Decimal:
     """The customer's FULL open debt, across every session and cashier.
 
     Scoped to the customer, never to the register session that happens to be
@@ -43,7 +74,7 @@ def outstanding_balance(customer, exclude_order_id=None) -> Decimal:
     """
     from apps.sales.models import Order
 
-    orders = Order.objects.open_credit().filter(customer=customer)
+    orders = Order.objects.open_receivables().filter(customer=customer)
     if exclude_order_id is not None:
         orders = orders.exclude(pk=exclude_order_id)
     return _money(
@@ -52,6 +83,26 @@ def outstanding_balance(customer, exclude_order_id=None) -> Decimal:
             Decimal("0.00"),
         )
     )
+
+
+def customer_balance(customer, exclude_order_id=None, position=None) -> CustomerBalance:
+    """``position`` is ``apps.balances.customers.account_position`` when the
+    caller has read it already."""
+    if position is None:
+        from apps.balances.customers import account_position
+
+        position = account_position(customer)
+    return CustomerBalance(
+        open_debts=open_debts(customer, exclude_order_id=exclude_order_id),
+        unapplied_credit=_money(position.unapplied_credit),
+    )
+
+
+def outstanding_balance(customer, exclude_order_id=None) -> Decimal:
+    """What the customer owes once their own credit is set against it — the
+    figure a collection asks for. Never negative; see :func:`customer_balance`
+    for the other side."""
+    return customer_balance(customer, exclude_order_id=exclude_order_id).owed_by_customer
 
 
 def effective_credit_limit(customer, settings=None) -> Decimal | None:
@@ -82,7 +133,13 @@ def effective_credit_limit(customer, settings=None) -> Decimal | None:
 
 @dataclass(frozen=True)
 class CreditAssessment:
-    """Whether this customer may take on ``new_debt`` more."""
+    """Whether this customer may take on ``new_debt`` more.
+
+    ``outstanding`` is the customer's *net* position: what they owe less the
+    credit the shop holds for them. It goes negative for a customer the shop
+    owes money — who can therefore take that much more on account before the
+    ceiling is reached, because the next collection spends the credit first.
+    """
 
     allowed: bool
     limit: Decimal | None
@@ -107,16 +164,21 @@ class CreditAssessment:
 
 
 def assess_credit(
-    customer, new_debt: Decimal, settings=None, exclude_order_id=None
+    customer, new_debt: Decimal, settings=None, exclude_order_id=None, balance=None
 ) -> CreditAssessment:
     """Can ``customer`` owe ``new_debt`` more than they already do?
 
     ``new_debt`` is what the sale actually puts on account — the total less any
     down-payment taken at the till — not the invoice total. A 500 sale with 500
     handed over adds nothing to the receivable and must never be refused.
+
+    ``balance`` lets a caller that has just read the account pass it in rather
+    than have it read twice.
     """
     limit = effective_credit_limit(customer, settings=settings)
-    outstanding = outstanding_balance(customer, exclude_order_id=exclude_order_id)
+    if balance is None:
+        balance = customer_balance(customer, exclude_order_id=exclude_order_id)
+    outstanding = balance.net
     new_debt = _money(max(Decimal(new_debt), Decimal("0.00")))
     if limit is None:
         return CreditAssessment(True, None, outstanding, new_debt)

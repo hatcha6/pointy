@@ -75,6 +75,36 @@ class PaymentProofPrinter {
     );
   }
 
+  /// Builds + prints a disbursement ("سند صرف") for a payment made to a
+  /// supplier *on account* — split by the server across what the shop owed
+  /// them, so there is no single order to name. [paymentId] is the first
+  /// payment the split wrote; [balanceAfter] is what the shop still owes.
+  Future<PrintTransportResult> printSupplierAccountDisbursement({
+    required int paymentId,
+    required String partyName,
+    String? partyContact,
+    required double amount,
+    required String methodLabel,
+    String reference = '',
+    required double balanceAfter,
+  }) {
+    return printProof(
+      proof: PaymentProof(
+        kind: PaymentProofKind.disbursement,
+        reference: '$paymentId',
+        partyName: partyName,
+        partyContact: partyContact,
+        amount: amount,
+        method: methodLabel,
+        externalReference: reference,
+        balanceAfter: balanceAfter,
+        createdAt: DateTime.now(),
+      ),
+      paymentId: paymentId,
+      paymentKind: PrintAuditPaymentKind.supplier,
+    );
+  }
+
   Future<ShopSettings?> _loadShopSettings() async {
     final result = await _shopSettingsRepository.loadSettings();
     return switch (result) {

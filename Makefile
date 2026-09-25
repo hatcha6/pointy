@@ -133,7 +133,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check \
@@ -377,6 +377,9 @@ frontend-navigation-preview: frontend-install ## Run the navigation drawer/rail 
 
 frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
+
+frontend-balances-preview: frontend-install ## Run the customer/supplier opening balance UI preview harness (?screen=customer|supplier|entry|refund|create).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/balances_preview.dart
 
 frontend-reports-preview: frontend-install ## Run the reports screen UI preview harness (any report via ?report=) as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/reports_preview.dart

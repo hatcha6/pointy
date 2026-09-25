@@ -1,24 +1,34 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/services/balance_api_client.dart';
+import '../../../data/services/payment_proof_printer.dart';
+import '../../../shared/payment_labels.dart';
 
 class SupplierDetailsViewModel extends ChangeNotifier {
   SupplierDetailsViewModel({
     required ContactRepository contactRepository,
     required PurchaseRepository purchaseRepository,
     required SupplierContact initialSupplier,
+    PaymentProofPrinter? proofPrinter,
   }) : _contactRepository = contactRepository,
        _purchaseRepository = purchaseRepository,
+       _proofPrinter = proofPrinter,
        _supplier = initialSupplier {
     load();
   }
 
   final ContactRepository _contactRepository;
   final PurchaseRepository _purchaseRepository;
+  final PaymentProofPrinter? _proofPrinter;
+  bool _isRecordingPayment = false;
+  bool _hasPaymentError = false;
+  final Map<String, String> _idempotencyKeys = {};
 
   ContactRepository get repository => _contactRepository;
 
@@ -54,6 +64,11 @@ class SupplierDetailsViewModel extends ChangeNotifier {
   bool get hasMoreAdjustments =>
       _hasMoreReturnAdjustments || _hasMoreRefundAdjustments;
   bool get hasSupplierError => _hasSupplierError;
+  bool get isRecordingPayment => _isRecordingPayment;
+  bool get hasPaymentError => _hasPaymentError;
+
+  /// Whether printing a disbursement slip can be offered at all.
+  bool get canPrintPaymentProof => _proofPrinter != null;
   bool get hasHistoryError => _hasHistoryError;
   bool get hasAdjustmentError => _hasAdjustmentError;
 
@@ -87,6 +102,80 @@ class SupplierDetailsViewModel extends ChangeNotifier {
 
     _isLoadingSupplier = false;
     notifyListeners();
+  }
+
+  /// Pays the supplier on account: the server splits the amount across what
+  /// the shop owes them, oldest first — opening balances and orders alike —
+  /// which is the only way to pay a balance that has no order behind it.
+  /// A double tap cannot pay twice: the idempotency key is per intended payment.
+  Future<bool> recordAccountPayment({
+    required SupplierPaymentMethod method,
+    required double amount,
+    String reference = '',
+    String notes = '',
+    int? moneyAccountId,
+    bool printProof = false,
+  }) async {
+    if (_isRecordingPayment) {
+      return false;
+    }
+    _isRecordingPayment = true;
+    _hasPaymentError = false;
+    notifyListeners();
+
+    final signature = [
+      'supplier-account-payment',
+      _supplier.id,
+      method.apiValue,
+      amount.toStringAsFixed(2),
+      reference.trim(),
+      notes.trim(),
+      moneyAccountId ?? '',
+    ].join(':');
+    final result = await _contactRepository.recordSupplierAccountPayment(
+      _supplier.id,
+      method: method.apiValue,
+      amount: amount,
+      reference: reference,
+      notes: notes,
+      moneyAccountId: moneyAccountId,
+      idempotencyKey: _idempotencyKeys.putIfAbsent(
+        signature,
+        () => 'supplier-account-payment:${generateAnalyticsEventId()}',
+      ),
+    );
+    SupplierAccountPaymentResult? recorded;
+    switch (result) {
+      case Ok<SupplierAccountPaymentResult>():
+        _idempotencyKeys.remove(signature);
+        recorded = result.value;
+        _supplier = recorded.supplier;
+      case Error<SupplierAccountPaymentResult>():
+        _hasPaymentError = true;
+    }
+    _isRecordingPayment = false;
+    notifyListeners();
+
+    if (recorded == null) {
+      return false;
+    }
+    // Orders it paid show their new balances in the history below.
+    await loadPurchaseHistory();
+    final printer = _proofPrinter;
+    if (printProof && printer != null && recorded.paymentIds.isNotEmpty) {
+      // Best-effort: the payment is recorded; a print failure must not flip
+      // the result to a failure.
+      await printer.printSupplierAccountDisbursement(
+        paymentId: recorded.paymentIds.first,
+        partyName: _supplier.name,
+        partyContact: _supplier.phone.trim().isEmpty ? null : _supplier.phone,
+        amount: amount,
+        methodLabel: supplierPaymentMethodProofText(method),
+        reference: reference,
+        balanceAfter: _supplier.payableBalance,
+      );
+    }
+    return true;
   }
 
   Future<void> loadPurchaseHistory() async {

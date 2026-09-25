@@ -1292,6 +1292,7 @@ class PrintingRepository {
       'card' => 'بطاقة',
       'transfer' => 'تحويل',
       'salary_deduction' => 'خصم من الراتب',
+      'account_credit' => 'من رصيد العميل',
       _ => method,
     };
   }
