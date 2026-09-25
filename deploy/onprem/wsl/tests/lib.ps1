@@ -18,6 +18,17 @@ foreach ($fn in $ast.FindAll({ param($n)
     $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     Invoke-Expression $fn.Extent.Text
 }
+$script:BootstrapAst = $ast
+
+# The real definition of one function, for a test that faked it earlier and
+# wants the original back for one check: dot-source the result inside the
+# check, and the fake is back once the check ends.
+function Get-RealFunction([string]$Name) {
+    $fn = @($script:BootstrapAst.FindAll({ param($n)
+        $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $Name }, $false))
+    if (-not $fn.Count) { throw "no function '$Name' in bootstrap-wsl.ps1" }
+    return [scriptblock]::Create($fn[0].Extent.Text)
+}
 
 # Script-scope variables the real file sets at the top.
 $Distro      = "Pointy"

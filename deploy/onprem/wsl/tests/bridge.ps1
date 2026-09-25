@@ -38,6 +38,11 @@ check "a failed guest command yields no address" {
         return [pscustomobject]@{ ExitCode = 1; Output = "" } }
     $null -eq (Get-WslIp)
 }
+check "an address is read even when the exit code is unknown (a 5.1 Start-Process quirk)" {
+    function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
+        return [pscustomobject]@{ ExitCode = $null; Output = '2: eth0    inet 172.28.144.3/20 brd 172.28.159.255 scope global eth0' } }
+    (Get-WslIp) -eq "172.28.144.3"
+}
 
 # netsh reports success for `portproxy add` even when the listener never binds,
 # so reading back what is actually configured is the only honest check.

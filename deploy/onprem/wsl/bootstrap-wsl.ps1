@@ -153,38 +153,48 @@ function ConvertTo-NativeArgument {
 
 # Like Invoke-Native, but bounded. A wedged WSL service answers nothing, ever,
 # and a supervisor blocked on it forever is a supervisor that never restarts
-# anything. Output goes through files rather than pipes: a Linux daemon that
-# inherits a pipe would keep the read side open long after wsl.exe returned.
+# anything.
+#
+# System.Diagnostics.Process, deliberately not Start-Process: on Windows
+# PowerShell 5.1 a process from `Start-Process -PassThru` reports a NULL exit
+# code once it has exited, so every wsl.exe call read as a failure and the
+# installer declared a working WSL broken. A Process that started the child
+# itself owns the handle and its ExitCode is real. Both pipes are drained by
+# background tasks so neither can fill up and stall the child.
 function Invoke-NativeTimeout {
     param([string]$File, [string[]]$Arguments, [int]$TimeoutSec = 120)
-    $stamp   = [guid]::NewGuid().ToString("N")
-    $tempDir = [System.IO.Path]::GetTempPath()
-    $outFile = Join-Path $tempDir "pointy-native-${stamp}.out"
-    $errFile = Join-Path $tempDir "pointy-native-${stamp}.err"
-    $line    = (($Arguments | ForEach-Object { ConvertTo-NativeArgument $_ }) -join " ")
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
+    $line = (($Arguments | ForEach-Object { ConvertTo-NativeArgument $_ }) -join " ")
+    $p = $null
     try {
-        $start = @{ FilePath = $File; NoNewWindow = $true; PassThru = $true; ErrorAction = "Stop"
-                    RedirectStandardOutput = $outFile; RedirectStandardError = $errFile }
-        if ($line -ne "") { $start.ArgumentList = $line }   # an empty -ArgumentList is an error, not "no arguments"
-        $p = Start-Process @start
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName               = $File
+        $psi.Arguments              = $line
+        $psi.UseShellExecute        = $false
+        $psi.CreateNoWindow         = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError  = $true
+        $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $psi.StandardErrorEncoding  = [System.Text.Encoding]::UTF8
+        $p = New-Object System.Diagnostics.Process
+        $p.StartInfo = $psi
+        [void]$p.Start()
+        $outTask = $p.StandardOutput.ReadToEndAsync()
+        $errTask = $p.StandardError.ReadToEndAsync()
         if (-not $p.WaitForExit($TimeoutSec * 1000)) {
             try { $p.Kill() } catch { }
             return [pscustomobject]@{ ExitCode = -1; TimedOut = $true
                 Output = "timed out after ${TimeoutSec}s: ${File} ${line}" }
         }
-        $p.WaitForExit()
         $text = ""
-        foreach ($f in @($outFile, $errFile)) {
-            if (Test-Path $f) { $text += [System.IO.File]::ReadAllText($f, (New-Object System.Text.UTF8Encoding($false))) }
+        foreach ($task in @($outTask, $errTask)) {
+            # Bounded too: a grandchild holding the pipe must not hold us.
+            if ($task.Wait(10000)) { $text += $task.Result }
         }
-        return [pscustomobject]@{ ExitCode = $p.ExitCode; TimedOut = $false; Output = $text }
+        return [pscustomobject]@{ ExitCode = [int]$p.ExitCode; TimedOut = $false; Output = $text }
     } catch {
         return [pscustomobject]@{ ExitCode = -1; TimedOut = $false; Output = "could not run ${File}: $($_.Exception.Message)" }
     } finally {
-        $ErrorActionPreference = $prev
-        Remove-Item $outFile, $errFile -Force -ErrorAction SilentlyContinue
+        if ($p) { try { $p.Dispose() } catch { } }
     }
 }
 
@@ -341,10 +351,13 @@ function Write-DistroVisibilityDiagnosis {
 }
 
 # Does the distro answer at all? Bounded: at boot the WSL service may not be
-# ready yet, and a wedged one never is.
+# ready yet, and a wedged one never is. Judged on what the distro prints, not
+# on an exit code: this is the check that can restart a trading shop's server,
+# and an exit code has lied to this script before (see Invoke-NativeTimeout).
 function Test-DistroAnswers {
     param([int]$TimeoutSec = 60)
-    return ((Invoke-Guest "true" -TimeoutSec $TimeoutSec).ExitCode -eq 0)
+    $r = Invoke-Guest "echo pointy-alive" -TimeoutSec $TimeoutSec
+    return (($r.Output -replace "`0", "") -like "*pointy-alive*")
 }
 
 
@@ -568,8 +581,9 @@ function Get-WslIp {
     # Parsed here rather than with awk/cut inside the guest: the command crosses
     # PowerShell -> wsl.exe -> bash quoting, and a nested quote is a real bug
     # waiting to happen for no benefit.
+    # Judged on the output alone: an address in it is an address, whatever
+    # the exit code claims.
     $r = Invoke-Guest "ip -4 -o addr show dev eth0"
-    if ($r.ExitCode -ne 0) { return $null }
     if (($r.Output -replace "`0", "") -match 'inet\s+(\d{1,3}(?:\.\d{1,3}){3})') {
         return $Matches[1]
     }

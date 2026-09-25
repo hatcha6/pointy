@@ -196,19 +196,27 @@ if ($sh) {
     }
 } else { Write-Host "skip bounded native calls (needs sh)" -ForegroundColor Yellow }
 
+check "the distro is judged alive by what it prints, never by an exit code" {
+    # Windows PowerShell 5.1 handed this script a null exit code for every
+    # call once; an exit-code check here would then have restarted a healthy
+    # distro every three cycles, on every shop.
+    . (Get-RealFunction "Test-DistroAnswers")
+    function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
+        return [pscustomobject]@{ ExitCode = $script:GuestExit; Output = $script:GuestSays } }
+    $script:GuestExit = $null; $script:GuestSays = "pointy-alive"
+    $nullCodeButAlive = Test-DistroAnswers
+    $script:GuestExit = 0; $script:GuestSays = "p`0o`0i`0n`0t`0y`0-`0a`0l`0i`0v`0e`0"
+    $utf16Alive = Test-DistroAnswers
+    $script:GuestExit = 0; $script:GuestSays = ""
+    $zeroButSilent = Test-DistroAnswers
+    $script:GuestExit = 1; $script:GuestSays = "The Windows Subsystem for Linux instance has terminated."
+    $dead = Test-DistroAnswers
+    $nullCodeButAlive -and $utf16Alive -and (-not $zeroButSilent) -and (-not $dead)
+}
 check "the heartbeat file carries what the collector reads" {
     $script:SupervisorStateFile = Join-Path ([IO.Path]::GetTempPath()) ("pointy-supervisor-" + [guid]::NewGuid().ToString("N") + ".json")
     # The real writer, not the fake above.
-    function Write-SupervisorState {
-        param($Anchor, [bool]$Answering, [int]$Restarts, [datetime]$StartedAt)
-        try {
-            $anchorPid = 0
-            if (Test-ProcessAlive $Anchor) { $anchorPid = [int]$Anchor.Id }
-            @{ supervisor_pid = $PID; started_at = $StartedAt.ToString("o"); heartbeat_at = (Get-Date -Format "o")
-               anchor_pid = $anchorPid; distro_answering = $Answering; distro_restarts = $Restarts } |
-                ConvertTo-Json | Set-Content -Path $SupervisorStateFile -Encoding UTF8
-        } catch { }
-    }
+    . (Get-RealFunction "Write-SupervisorState")
     Write-SupervisorState -Anchor (newProc 77) -Answering $true -Restarts 2 -StartedAt (Get-Date).AddHours(-1)
     $state = Get-Content -Raw $script:SupervisorStateFile | ConvertFrom-Json
     Remove-Item $script:SupervisorStateFile -ErrorAction SilentlyContinue
