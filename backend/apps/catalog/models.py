@@ -691,6 +691,24 @@ class ProductCategory(TimeStampedModel):
     # Manual sort order, primarily used to arrange the quick-access strip.
     # Lower values come first; ties fall back to name.
     display_order = models.PositiveIntegerField(default=0)
+    # Which feature made this category and keeps it filled — blank for every
+    # category the shop made. Today that is a provider's shelf of cards
+    # (``vouchers:qareeb``, see apps.integrations.shelf_category): its cards
+    # are system products nobody can categorise by hand, so the feature files
+    # them itself. The feature finds its category by this key and never by
+    # name, so the shop may rename, move, switch off, unpin or reorder it; the
+    # one thing refused is deleting it, which the next sync would only undo.
+    #
+    # ``db_default`` as well as ``default``: the previous release, still
+    # serving for the minute a live update overlaps, creates categories with an
+    # INSERT that names no such column. See DOCUMENT_LIFECYCLE_PLAN.md §11.
+    system_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_default="",
+        editable=False,
+    )
 
     class Meta:
         ordering = ["display_order", "name"]
@@ -700,10 +718,19 @@ class ProductCategory(TimeStampedModel):
                 fields=["parent", "name"],
                 name="unique_product_category_sibling_name",
             ),
+            models.UniqueConstraint(
+                fields=["system_key"],
+                condition=~models.Q(system_key=""),
+                name="unique_product_category_system_key",
+            ),
         ]
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def is_system(self) -> bool:
+        return bool(self.system_key)
 
 
 class VariantOptionQuerySet(models.QuerySet):

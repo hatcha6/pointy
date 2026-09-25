@@ -837,6 +837,16 @@ class _CategoryRow extends StatelessWidget {
                           color: colors.mutedInk,
                         ),
                       ],
+                      if (category.isSystem) ...[
+                        const SizedBox(width: 6),
+                        Tooltip(
+                          message: l10n.categorySystemTooltip,
+                          child: PointyStatusPill(
+                            label: l10n.categorySystemBadge,
+                            icon: Icons.auto_mode,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   if (subtitleParts.isNotEmpty) ...[
@@ -891,14 +901,16 @@ class _CategoryRow extends StatelessWidget {
                     label: l10n.addSubcategoryAction,
                   ),
                 ),
-                PopupMenuItem(
-                  value: _CategoryRowAction.delete,
-                  child: _MenuRow(
-                    icon: Icons.delete_outline,
-                    label: l10n.deleteButton,
-                    danger: true,
+                // A kept category would only be made again by the next sync.
+                if (!category.isSystem)
+                  PopupMenuItem(
+                    value: _CategoryRowAction.delete,
+                    child: _MenuRow(
+                      icon: Icons.delete_outline,
+                      label: l10n.deleteButton,
+                      danger: true,
+                    ),
                   ),
-                ),
               ],
             ),
           ],

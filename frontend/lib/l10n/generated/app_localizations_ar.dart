@@ -7162,6 +7162,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get categoryInactiveBadge => 'غير نشط';
 
   @override
+  String get categorySystemBadge => 'تلقائي';
+
+  @override
+  String get categorySystemTooltip =>
+      'يُنشئ النظام هذا التصنيف ويُضيف إليه كروت المزوّد تلقائيًا، لذلك لا يمكن حذفه. يمكنك تعديله أو إزالته من الوصول السريع.';
+
+  @override
   String get categoryActionsTooltip => 'خيارات';
 
   @override

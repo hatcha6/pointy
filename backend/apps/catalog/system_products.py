@@ -12,6 +12,10 @@ included. The owning feature writes through the ORM and never meets this.
 
 One exception type, one stable code (``system_product``), so a client can say
 "managed by the system" instead of a generic permission error.
+
+A feature may own a *category* too (``ProductCategory.system_key``): the one a
+provider's shelf files its cards under. That lock is far narrower — see
+:func:`refuse_system_category`.
 """
 
 from __future__ import annotations
@@ -63,5 +67,35 @@ def refuse_system_products(product_ids) -> None:
                 "detail": SystemProductLocked.default_detail,
                 "code": SYSTEM_PRODUCT_CODE,
                 "product_ids": locked,
+            }
+        )
+
+
+SYSTEM_CATEGORY_CODE = "system_category"
+
+
+class SystemCategoryLocked(PermissionDenied):
+    default_detail = (
+        "This category is kept by the system and cannot be deleted. "
+        "Unpin it from quick access instead."
+    )
+    default_code = SYSTEM_CATEGORY_CODE
+
+
+def refuse_system_category(category) -> None:
+    """Raise when ``category`` is one a feature keeps. For deleting only.
+
+    Everything else about it is the shop's — its name, where it hangs in the
+    tree, whether it is active, whether it is pinned and where — because the
+    feature finds it by key and only ever adds its own products to it, so no
+    edit is undone by the next sync. A deletion would be: the feature would
+    make it again, pinned.
+    """
+    if category is not None and getattr(category, "is_system", False):
+        raise SystemCategoryLocked(
+            {
+                "detail": SystemCategoryLocked.default_detail,
+                "code": SYSTEM_CATEGORY_CODE,
+                "category_id": category.pk,
             }
         )

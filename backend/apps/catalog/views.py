@@ -89,7 +89,11 @@ from .serializers import (
 from .pricing import set_base_price
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
 from .sku_series import next_variant_sku
-from .system_products import refuse_system_product, refuse_system_products
+from .system_products import (
+    refuse_system_category,
+    refuse_system_product,
+    refuse_system_products,
+)
 from .services import (
     category_detail_prefetch,
     category_ids_with_descendants,
@@ -251,6 +255,9 @@ class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
+        # A category a feature keeps (a provider's shelf) would only be made
+        # again by its next sync; the shop unpins it instead.
+        refuse_system_category(instance)
         # Subcategories use on_delete=PROTECT; turn the resulting ProtectedError
         # into a clean 400 instead of a 500 so the client can explain it.
         try:

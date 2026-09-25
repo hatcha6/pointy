@@ -355,6 +355,7 @@ class _FakeCatalogRepository extends CatalogRepository {
       isActive: c.isActive,
       isQuickAccess: c.isQuickAccess,
       displayOrder: c.displayOrder,
+      isSystem: c.isSystem,
     );
   }
 }
@@ -369,6 +370,7 @@ class _Cat {
     this.isQuickAccess = false,
     this.displayOrder = 0,
     this.productCount = 0,
+    this.isSystem = false,
   });
 
   final int id;
@@ -379,6 +381,7 @@ class _Cat {
   bool isQuickAccess;
   int displayOrder;
   int productCount;
+  final bool isSystem;
 
   _Cat clone() => _Cat(
     id: id,
@@ -389,6 +392,7 @@ class _Cat {
     isQuickAccess: isQuickAccess,
     displayOrder: displayOrder,
     productCount: productCount,
+    isSystem: isSystem,
   );
 }
 
@@ -421,5 +425,14 @@ final List<_Cat> _seedCategories = [
     displayOrder: 2,
     productCount: 3,
     isActive: false,
+  ),
+  // What the Qareeb sync makes: pinned at the end of the strip, cards filed.
+  _Cat(
+    id: 10,
+    name: 'كروت قريب',
+    displayOrder: 3,
+    productCount: 14,
+    isQuickAccess: true,
+    isSystem: true,
   ),
 ];

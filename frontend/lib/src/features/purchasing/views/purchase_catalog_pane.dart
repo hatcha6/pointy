@@ -66,6 +66,8 @@ class PurchaseCatalogPane extends StatelessWidget {
         onSelectCategory: (category) => viewModel.applyQuery(
           viewModel.query.copyWith(categories: [category]),
         ),
+        // A provider's cards are never bought on a purchase order.
+        includeSystemCategories: false,
       ),
       suggestionStrip: PurchaseSuggestionStrip.maybeBuild(viewModel),
       statusLine: viewModel.scanStatus != PurchaseScanStatus.idle

@@ -176,6 +176,9 @@ class ProductCategorySerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source="parent.name", read_only=True)
     children_count = serializers.IntegerField(read_only=True)
     product_count = serializers.IntegerField(read_only=True)
+    # Kept by a feature (a provider's shelf of cards): the client marks it and
+    # offers no delete. Read-only — nobody declares a category a system one.
+    is_system = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ProductCategory
@@ -190,6 +193,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
             "is_active",
             "is_quick_access",
             "display_order",
+            "is_system",
             "created_at",
             "updated_at",
         ]
@@ -198,6 +202,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
             "updated_at",
             "children_count",
             "product_count",
+            "is_system",
         )
 
     def validate_name(self, value):

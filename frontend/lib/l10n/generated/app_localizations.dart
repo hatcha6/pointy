@@ -12517,6 +12517,18 @@ abstract class AppLocalizations {
   /// **'غير نشط'**
   String get categoryInactiveBadge;
 
+  /// Category management: badge on a category the system keeps (a provider's shelf of cards).
+  ///
+  /// In ar, this message translates to:
+  /// **'تلقائي'**
+  String get categorySystemBadge;
+
+  /// Category management: explains the automatic badge — kept filled by the provider sync, cannot be deleted, can be edited or unpinned.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُنشئ النظام هذا التصنيف ويُضيف إليه كروت المزوّد تلقائيًا، لذلك لا يمكن حذفه. يمكنك تعديله أو إزالته من الوصول السريع.'**
+  String get categorySystemTooltip;
+
   /// No description provided for @categoryActionsTooltip.
   ///
   /// In ar, this message translates to:

@@ -4321,6 +4321,14 @@
   "categorySearchEmptyState": "لا توجد تصنيفات مطابقة لبحثك.",
   "categoryEmptyHint": "أنشئ تصنيفك الأول لتنظيم منتجاتك.",
   "categoryInactiveBadge": "غير نشط",
+  "categorySystemBadge": "تلقائي",
+  "@categorySystemBadge": {
+    "description": "Category management: badge on a category the system keeps (a provider's shelf of cards)."
+  },
+  "categorySystemTooltip": "يُنشئ النظام هذا التصنيف ويُضيف إليه كروت المزوّد تلقائيًا، لذلك لا يمكن حذفه. يمكنك تعديله أو إزالته من الوصول السريع.",
+  "@categorySystemTooltip": {
+    "description": "Category management: explains the automatic badge — kept filled by the provider sync, cannot be deleted, can be edited or unpinned."
+  },
   "categoryActionsTooltip": "خيارات",
   "addSubcategoryAction": "إضافة تصنيف فرعي",
   "editCategoryTitle": "تعديل التصنيف",

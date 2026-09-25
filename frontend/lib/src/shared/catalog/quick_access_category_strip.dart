@@ -21,6 +21,7 @@ class QuickAccessCategoryStrip extends StatefulWidget {
     required this.allLabel,
     required this.onSelectAll,
     required this.onSelectCategory,
+    this.includeSystemCategories = true,
   });
 
   final CatalogRepository catalogRepository;
@@ -28,6 +29,11 @@ class QuickAccessCategoryStrip extends StatefulWidget {
   final String allLabel;
   final VoidCallback onSelectAll;
   final ValueChanged<ProductCategory> onSelectCategory;
+
+  /// Whether to offer the categories a feature keeps (a provider's shelf of
+  /// cards). The till sells those cards; a catalog that never lists system
+  /// products — purchasing — would only show an empty grid behind the chip.
+  final bool includeSystemCategories;
 
   @override
   State<QuickAccessCategoryStrip> createState() =>
@@ -49,7 +55,12 @@ class _QuickAccessCategoryStripState extends State<QuickAccessCategoryStrip> {
       return;
     }
     if (result case Ok<List<ProductCategory>>(value: final categories)) {
-      setState(() => _quickAccess = categories);
+      setState(
+        () => _quickAccess = [
+          for (final category in categories)
+            if (widget.includeSystemCategories || !category.isSystem) category,
+        ],
+      );
     }
   }
 

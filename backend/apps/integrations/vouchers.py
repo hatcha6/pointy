@@ -32,6 +32,10 @@ the cashier's search, tap and picker never wait on the provider at all.
 one brand again (:func:`refresh_brand`), single-flighted and shared for under
 a minute, so a card that sold out since the last sweep disappears while the
 cashier is still choosing.
+
+Every card product is also filed under one category per provider, pinned to
+the till's quick-access strip when it is first made, so the whole shelf is one
+tap away (see :mod:`.shelf_category`).
 """
 
 from __future__ import annotations
@@ -49,7 +53,7 @@ from django.utils.dateparse import parse_datetime
 from apps.catalog.models import Product, ProductAlias, ProductVariant
 from apps.core import caching
 
-from . import catalog
+from . import catalog, shelf_category
 from .models import IntegrationAccount, IntegrationVoucher, IntegrationVoucherBrand
 from .providers import provider_for
 from .providers.base import VoucherBrand, in_parallel
@@ -373,7 +377,23 @@ def _materialize_all(account, brands) -> int:
     )
     if changed:
         _forget_active_products()
-    return changed
+    return changed + _file_under_category(account)
+
+
+def _file_under_category(account) -> int:
+    """Keep the shelf's quick-access category filled (see ``shelf_category``).
+
+    Its own savepoint, and never an error: a chip that failed to fill must not
+    roll back the shelf the till sells from.
+    """
+    try:
+        with transaction.atomic():
+            return shelf_category.file_shelf(account)
+    except Exception:  # pragma: no cover - a nicety must not fail a sync
+        logger.warning(
+            "could not file %s cards under their category", account.provider, exc_info=True
+        )
+        return 0
 
 
 def _materialize(account, brand, vouchers) -> int:

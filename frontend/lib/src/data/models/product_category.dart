@@ -10,6 +10,7 @@ class ProductCategory {
     this.isActive = true,
     this.isQuickAccess = false,
     this.displayOrder = 0,
+    this.isSystem = false,
   });
 
   final int id;
@@ -27,6 +28,12 @@ class ProductCategory {
 
   /// Manual sort order, primarily used to arrange the quick-access strip.
   final int displayOrder;
+
+  /// Kept by a feature rather than made by the shop: a provider's cards are
+  /// filed here, and the category was pinned to quick access when it was made.
+  /// The shop may rename, move, switch off, unpin or reorder it, but not
+  /// delete it — the next sync would only make it again.
+  final bool isSystem;
 
   bool get isRoot => parentId == null;
 
@@ -57,6 +64,7 @@ class ProductCategory {
       isActive: isActive ?? this.isActive,
       isQuickAccess: isQuickAccess ?? this.isQuickAccess,
       displayOrder: displayOrder ?? this.displayOrder,
+      isSystem: isSystem,
     );
   }
 
@@ -72,6 +80,7 @@ class ProductCategory {
       isActive: (json['is_active'] as bool?) ?? true,
       isQuickAccess: (json['is_quick_access'] as bool?) ?? false,
       displayOrder: (json['display_order'] as num?)?.toInt() ?? 0,
+      isSystem: (json['is_system'] as bool?) ?? false,
     );
   }
 }
