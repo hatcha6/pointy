@@ -224,6 +224,37 @@ check "the heartbeat file carries what the collector reads" {
         ($state.distro_restarts -eq 2) -and ([datetime]$state.heartbeat_at -gt (Get-Date).AddMinutes(-1))
 }
 
+# --- is WSL there? ------------------------------------------------------------
+# wsl.exe speaks the Windows display language. The check must not depend on
+# the English label, only on the numbers every language prints.
+$script:VersionExit = 0
+$script:VersionSays = ""
+function Invoke-Wsl { param([string[]]$Arguments, [int]$TimeoutSec = 120)
+    return [pscustomobject]@{ ExitCode = $script:VersionExit; Output = $script:VersionSays } }
+
+check "a working WSL is recognised in English, in Arabic, and through UTF-16 NULs" {
+    $script:VersionExit = 0; $script:VersionSays = "WSL version: 2.3.26.0`nKernel version: 5.15.167.4-1`nWindows version: 10.0.19045.5131"
+    $english = (Test-WslReady) -and ((Get-WslVersion) -eq [version]"2.3.26")
+    $script:VersionSays = "إصدار النظام الفرعي: 2.5.10.0`nإصدار النواة: 6.6.87.2-1"
+    $arabic = (Test-WslReady) -and ((Get-WslVersion) -eq [version]"2.5.10")
+    $script:VersionSays = "W`0S`0L`0 `0v`0e`0r`0s`0i`0o`0n`0:`0 `02`0.`03`0.`02`06`0.`00`0"
+    $utf16 = (Test-WslReady) -and ((Get-WslVersion) -eq [version]"2.3.26")
+    $english -and $arabic -and $utf16
+}
+check "the inbox wsl.exe (usage text, non-zero exit) is not mistaken for a working one" {
+    $script:VersionExit = 1
+    $script:VersionSays = "Invalid command line option: --version`n`nUsage: wsl.exe [Argument] [Options...] [CommandLine]"
+    $usage = (-not (Test-WslReady)) -and ($null -eq (Get-WslVersion))
+    $script:VersionExit = 0; $script:VersionSays = ""
+    $silent = -not (Test-WslReady)
+    $script:VersionExit = 0
+    $usage -and $silent -and ((Get-WslVersionEvidence) -eq "wsl --version exited 0: ")
+}
+check "a failed readiness check logs what wsl --version said" {
+    $script:VersionExit = 1; $script:VersionSays = "Invalid command line option: --version`nUsage: ..."
+    (Get-WslVersionEvidence) -eq "wsl --version exited 1: Invalid command line option: --version"
+}
+
 # --- the boot task ----------------------------------------------------------
 # Task Scheduler's cmdlets do not exist off Windows; what is pinned here is
 # what the bootstrap ASKS of them, which is where the field bugs were.

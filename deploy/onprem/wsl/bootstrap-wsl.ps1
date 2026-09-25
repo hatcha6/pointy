@@ -992,19 +992,34 @@ function Enable-WindowsFeatures {
 # --status but has no --version, no systemd, and a per-session service a boot
 # task cannot reach; a machine with only that one needs the bundled MSI just
 # as a machine with no WSL at all does.
+#
+# Judged by the NUMBERS in the output, never by the label in front of them:
+# wsl.exe prints its messages in the Windows display language, and on an
+# Arabic till the line that reads "WSL version: 2.3.26.0" in English need not
+# contain the letters "WSL" at all. The inbox wsl.exe fails --version with
+# usage text, which has no version number in it.
 function Test-WslReady {
     $ver = Invoke-Wsl @("--version") -TimeoutSec 30
-    return ($ver.ExitCode -eq 0 -and (($ver.Output -replace "`0","") -match "WSL[^\d]*\d+\.\d+"))
+    return ($ver.ExitCode -eq 0 -and (($ver.Output -replace "`0","") -match '[0-9]+\.[0-9]+\.[0-9]+'))
 }
 
-# The running WSL's version, or $null when there is no modern wsl.exe.
+# The running WSL's version, or $null when there is no modern wsl.exe. The
+# first version number printed is WSL's own; the kernel's comes after it.
 function Get-WslVersion {
     $ver = Invoke-Wsl @("--version") -TimeoutSec 30
     if ($ver.ExitCode -ne 0) { return $null }
-    if (($ver.Output -replace "`0","") -match 'WSL[^\d]*(\d+)\.(\d+)\.(\d+)') {
-        return [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
+    if (($ver.Output -replace "`0","") -match '([0-9]+)\.([0-9]+)\.([0-9]+)') {
+        try { return [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])" } catch { return $null }
     }
     return $null
+}
+
+# What `wsl --version` actually said, for the log line that explains a failed
+# readiness check on site instead of leaving a technician to guess.
+function Get-WslVersionEvidence {
+    $ver = Invoke-Wsl @("--version") -TimeoutSec 30
+    $first = @((($ver.Output -replace "`0","") -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -First 1)
+    return "wsl --version exited $($ver.ExitCode): $(($first -join '').Trim())"
 }
 
 function Get-WslVersionLine {
@@ -1014,14 +1029,24 @@ function Get-WslVersionLine {
 }
 
 function Install-Wsl {
-    # Already working (a re-run, or an up-to-date machine)? Do nothing. Installing
-    # over a good WSL is how a working machine gets broken.
+    # A machine on which WSL already runs OUR distro has, by definition, a WSL
+    # that works: `wsl --list` just answered with it. Nothing below may touch
+    # that WSL, whatever a readiness probe makes of a localized, odd or slow
+    # `wsl --version`. Installing over a good WSL is how a working shop gets
+    # broken, and a probe's false alarm is how a working shop is refused an
+    # update.
+    if (Test-DistroExists) {
+        Write-Log "WSL already runs distro '${Distro}' on this machine ($(Get-WslVersionEvidence)); leaving WSL alone"
+        return
+    }
+    # Already working (a fresh machine that is up to date)? Do nothing.
     if (Test-WslReady) {
         Write-Log "WSL already present and working: $(Get-WslVersionLine)"
         $r = Invoke-Wsl @("--set-default-version", "2") -TimeoutSec 60
         if ($r.ExitCode -ne 0) { Write-Log "could not set WSL default version 2: $($r.Output.Trim())" "WARN" }
         return
     }
+    Write-Log "WSL is not ready ($(Get-WslVersionEvidence))" "WARN"
     if ((Invoke-Wsl @("--status") -TimeoutSec 30).ExitCode -eq 0) {
         Write-Log ("an older inbox wsl.exe is present (no --version). It cannot run systemd, so nothing inside the " +
                    "distro would start on boot; installing the bundled WSL over it.") "WARN"
@@ -1099,9 +1124,9 @@ function Install-Wsl {
         Die ("WSL is not installed and could not be updated online (exit ${lastCode}). Put the WSL MSI " +
              "(wsl.<version>.x64.msi) next to this script and re-run. ${lastOutput}")
     }
-    Die ("WSL still does not run after installing $($msi.Name) (msiexec exit ${lastCode}). " +
-         "The verbose MSI log is under ${LogDir}. If this machine has never had the " +
-         "virtualization features enabled, reboot once and re-run this script. ${lastOutput}")
+    Die ("WSL still does not run after installing $($msi.Name) (msiexec exit ${lastCode}; " +
+         "$(Get-WslVersionEvidence)). The verbose MSI log is under ${LogDir}. If this machine has never had " +
+         "the virtualization features enabled, reboot once and re-run this script. ${lastOutput}")
 }
 
 # Where WSL reads .wslconfig from: the profile of the user wsl.exe runs as.

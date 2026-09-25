@@ -54,6 +54,7 @@ $script:NativeLog = [System.Collections.ArrayList]::new()
 $script:MsiQueue  = [System.Collections.Queue]::new()   # exit codes msiexec returns, in order
 $script:WslReady  = $false                              # does a MODERN wsl.exe work right now?
 $script:InboxOnly = $false                              # ...or only the old inbox one (--status, no --version)?
+$script:DistroListed = $false                           # does `wsl --list` already show the Pointy distro?
 $script:MsiPresent= $true
 $script:UpdateRc  = 0
 $script:Slept     = 0
@@ -88,6 +89,7 @@ function Invoke-Wsl {
             return [pscustomobject]@{ ExitCode = 1; Output = "" }
         }
         "--status"  { return [pscustomobject]@{ ExitCode = ($(if ($script:WslReady -or $script:InboxOnly) { 0 } else { 1 })); Output = "" } }
+        "--list"    { return [pscustomobject]@{ ExitCode = 0; Output = $(if ($script:DistroListed) { "Pointy`n" } else { "" }) } }
         "--update"  { if ($script:UpdateRc -eq 0) { $script:WslReady = $script:MsiMakesItWork }
                       return [pscustomobject]@{ ExitCode = $script:UpdateRc; Output = "" } }
         default     { return [pscustomobject]@{ ExitCode = 0; Output = "" } }

@@ -64,6 +64,13 @@ Case -Name "genuinely-broken" -ExpectExit 1 `
 Case -Name "no-msi-no-internet" -ExpectExit 1 `
      -Expect @("ERROR:", "wsl.<version>.x64.msi")
 
+# A machine that already runs the Pointy distro has a working WSL, whatever a
+# readiness probe makes of its localized `wsl --version`. Never reinstall, never
+# refuse: that cost a shop two visits.
+Case -Name "distro-registered-probe-fails" -ExpectExit 0 `
+     -Expect @("already runs distro 'Pointy'", "MARKER: msiexec-calls=0", "MARKER: returned-normally") `
+     -Reject @("ERROR:", "still does not run")
+
 # The inbox Windows 10 wsl.exe answers --status but cannot run systemd, so a
 # shop "installed" on it never self-heals. It must get the bundled MSI exactly
 # like a machine with no WSL at all.

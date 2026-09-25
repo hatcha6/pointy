@@ -28,6 +28,12 @@ switch ($Name) {
     "no-msi-no-internet" {
         $script:MsiPresent = $false; $script:UpdateRc = 1; $script:MsiMakesItWork = $false
     }
+    "distro-registered-probe-fails" {
+        # THE SECOND BUG FROM THE SHOP. WSL ran the distro fine, `wsl --version`
+        # just did not read the way the probe expected (a localized wsl.exe,
+        # say), and the installer "reinstalled" WSL and then refused to go on.
+        $script:DistroListed = $true; $script:WslReady = $false; $script:MsiMakesItWork = $false
+    }
     "inbox-wsl-installs-msi" {
         # Windows 10's inbox wsl.exe: answers --status, has no --version, and
         # cannot run systemd. It used to count as "already working".
