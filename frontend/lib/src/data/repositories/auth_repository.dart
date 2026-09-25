@@ -9,6 +9,10 @@ class AuthRepository {
 
   final PosApiService _service;
 
+  /// Whether sign-in traffic is going through the relay right now — a
+  /// transport failure then means the internet path, not the shop's LAN.
+  bool get usesRelay => _service.usesRelay;
+
   Future<Result<PosUser>> login({
     required String username,
     required String password,

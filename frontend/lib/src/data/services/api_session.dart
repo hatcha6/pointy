@@ -58,11 +58,16 @@ class PosApiException implements Exception {
     required this.message,
     required this.statusCode,
     required this.responseBody,
+    this.fromRelay = false,
   });
 
   final String message;
   final int statusCode;
   final String responseBody;
+
+  /// True when the relay answered this itself and the request never reached
+  /// the shop's backend — see [relayErrorOf].
+  final bool fromRelay;
 
   Object? get decodedBody {
     try {
@@ -75,6 +80,38 @@ class PosApiException implements Exception {
   @override
   String toString() => message;
 }
+
+/// The `error` the relay answered with on its own, or null when [response]
+/// came from the shop's backend (or is not JSON at all).
+///
+/// The two speak differently, and the difference is the whole diagnosis. The
+/// relay writes `{"error": "..."}` for what it refuses before forwarding — a
+/// ticket it does not hold, a lapsed subscription, a connector that is not
+/// connected — while Django answers with `detail`. Without telling them apart
+/// a phone outside the shop reported every one of those as a wrong password.
+String? relayErrorOf(http.Response response) {
+  if (response.statusCode < 400) {
+    return null;
+  }
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(utf8.decode(response.bodyBytes));
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map || decoded.containsKey('detail')) {
+    return null;
+  }
+  final error = decoded['error'];
+  return error is String && error.trim().isNotEmpty ? error.trim() : null;
+}
+
+/// Whether the relay itself answered [response] — see [relayErrorOf].
+bool isRelayError(http.Response response) => relayErrorOf(response) != null;
+
+/// A 401 the relay answered: the ticket on the request is not one it holds.
+bool isRelayTicketRejection(http.Response response) =>
+    response.statusCode == 401 && isRelayError(response);
 
 /// One parsed Server-Sent Event: an `event:` name plus its raw `data:` payload.
 class SseEvent {
@@ -147,6 +184,19 @@ class PosApiSession {
   /// debounces this into a background re-discovery so the LAN target
   /// self-heals without an app restart.
   void Function()? onLocalTargetUnreachable;
+
+  /// Invoked when the relay refuses the ticket a request carried — a 401 of
+  /// the relay's own, never the backend's — before the request is given up on.
+  /// Returns whether the session now holds a ticket the relay should accept
+  /// (the coordinator mints one from the device's refresh token), in which
+  /// case the request is sent once more.
+  ///
+  /// The relay rejects before forwarding, so a repeat is safe for any request,
+  /// keyed or not. Until this existed a ticket the relay had lost — a restart,
+  /// an evicted Redis key, a phone clock ahead of the relay's — turned every
+  /// request into a 401 that read as "signed out", and the sign-in that
+  /// followed failed on the same 401, reported as a wrong password.
+  Future<bool> Function()? onRelayTicketRejected;
 
   /// LRU of (etag, body) per request URL for opt-in conditional GETs — the
   /// catalog/category/unit/modifier/notification list endpoints send ETags so
@@ -839,10 +889,24 @@ class PosApiSession {
     // Hence the local: it is assigned in the same synchronous step and cannot
     // be disturbed afterwards.
     var traceId = '';
-    Future<http.Response> attempt() {
+    Future<http.Response> attemptOnce() {
       _pendingTraceId = generateAnalyticsEventId();
       traceId = _pendingTraceId;
       return request().timeout(deadline);
+    }
+
+    // One send, plus one repeat when the relay refused the ticket it carried
+    // and a ticket it should accept has since been installed.
+    Future<http.Response> attempt() async {
+      final ticketUsed = _relayToken;
+      final response = await attemptOnce();
+      if (ticketUsed.isEmpty || !isRelayTicketRejection(response)) {
+        return response;
+      }
+      if (!await _recoverRelayTicket(ticketUsed)) {
+        return response;
+      }
+      return attemptOnce();
     }
 
     if (method != 'GET') {
@@ -934,6 +998,28 @@ class PosApiSession {
     }
   }
 
+  /// Whether a request that the relay refused with [ticketUsed] may be sent
+  /// again: a newer ticket is already installed (another request's recovery,
+  /// or a scheduled refresh, beat this one to it), or the coordinator mints one
+  /// now. Rejections of the same ticket coalesce on the coordinator's side.
+  Future<bool> _recoverRelayTicket(String ticketUsed) async {
+    if (_relayToken != ticketUsed) {
+      return usesRelay;
+    }
+    final recover = onRelayTicketRejected;
+    if (recover == null) {
+      return false;
+    }
+    try {
+      if (!await recover()) {
+        return false;
+      }
+    } on Object {
+      return false;
+    }
+    return usesRelay && _relayToken != ticketUsed;
+  }
+
   void _recordPerformance({
     required String method,
     required String path,
@@ -1002,6 +1088,7 @@ class PosApiSession {
         message: '$message ${response.statusCode}',
         statusCode: response.statusCode,
         responseBody: body(response),
+        fromRelay: isRelayError(response),
       );
     }
   }

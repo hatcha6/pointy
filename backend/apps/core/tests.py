@@ -1023,6 +1023,75 @@ class RelayBackendApiTests(TestCase):
         self.assertTrue(event.attributes["relay_enabled"])
         self.assertTrue(event.attributes["subscription_active"])
 
+    def test_sync_mirrors_the_configured_relay_addresses_onto_the_row(self):
+        # The row keeps the addresses the shop enrolled with. When the relay
+        # moves (a new platform environment, a custom domain) the deployment
+        # config changes but the row did not, and pairing kept handing phones
+        # the old public URL: remote access failed for every device at once
+        # while the shop itself, on the new address, was fine.
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://old-relay.example",
+            relay_connector_address="old-relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(
+                    reverse("relay-pairing"),
+                    {"device_id": "phone-1"},
+                    format="json",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["relay_public_api_url"], "https://relay.example")
+        installation.refresh_from_db()
+        self.assertEqual(installation.relay_public_api_url, "https://relay.example")
+        self.assertEqual(installation.relay_connector_address, "relay.example:443")
+
+    def test_sync_keeps_the_enrolled_addresses_when_none_are_configured(self):
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://enrolled.example",
+            relay_connector_address="enrolled.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay.config = mock.Mock(public_api_url="", connector_address="")
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(
+                    reverse("relay-installation"),
+                    {"sync": True},
+                    format="json",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        installation.refresh_from_db()
+        self.assertEqual(installation.relay_public_api_url, "https://enrolled.example")
+        self.assertEqual(installation.relay_connector_address, "enrolled.example:443")
+
     def test_pairing_returns_short_lived_ticket_when_subscription_is_active(self):
         installation = RelayInstallation.objects.create(
             installation_id="installation-1",

@@ -6,6 +6,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/auth_view_model.dart';
+import '../view_models/login_failure.dart';
+import 'login_failure_message.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
@@ -71,7 +73,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             usernameController: _usernameController,
                             passwordController: _passwordController,
                             isSubmitting: widget.viewModel.isSubmitting,
-                            hasError: widget.viewModel.hasError,
+                            failure: widget.viewModel.loginFailure,
+                            connectionProblem:
+                                widget.viewModel.connectionProblem,
                             onSubmit: _submit,
                           ),
                         ),
@@ -301,7 +305,8 @@ class _LoginForm extends StatelessWidget {
     required this.usernameController,
     required this.passwordController,
     required this.isSubmitting,
-    required this.hasError,
+    required this.failure,
+    required this.connectionProblem,
     required this.onSubmit,
   });
 
@@ -309,7 +314,14 @@ class _LoginForm extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController passwordController;
   final bool isSubmitting;
-  final bool hasError;
+
+  /// Why the last attempt failed; null before one, or after one succeeded.
+  final LoginFailure? failure;
+
+  /// The way to the server is known to be broken — said up front, so nobody
+  /// types a password that cannot get through and reads it as wrong.
+  final LoginFailure? connectionProblem;
+
   final VoidCallback onSubmit;
 
   @override
@@ -349,9 +361,16 @@ class _LoginForm extends StatelessWidget {
                   ? l10n.requiredField
                   : null,
             ),
-            if (hasError) ...[
+            if (failure != null) ...[
               SizedBox(height: spacing.sm),
-              PointyInlineMessage.error(message: l10n.loginError),
+              PointyInlineMessage.error(
+                message: loginFailureMessage(failure!, l10n),
+              ),
+            ] else if (connectionProblem != null) ...[
+              SizedBox(height: spacing.sm),
+              PointyInlineMessage.warning(
+                message: loginFailureMessage(connectionProblem!, l10n),
+              ),
             ],
             SizedBox(height: spacing.md),
             ResponsiveActionBar(

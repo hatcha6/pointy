@@ -207,6 +207,11 @@ class PointyAppDependencies {
     // debounced background re-discovery so the target self-heals.
     service.onLocalTargetUnreachable =
         connectionCoordinator.notifyLocalTargetUnreachable;
+    // The relay refusing the session's ticket is not a sign-out: the
+    // coordinator mints a fresh ticket from the device's refresh token and
+    // the request is sent again.
+    service.onRelayTicketRejected =
+        connectionCoordinator.refreshRelayTicketAfterRejection;
     clientUpdateService = ClientUpdateService(
       apiBaseUrl: () => service.baseUrl,
     );

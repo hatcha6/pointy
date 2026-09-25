@@ -1656,6 +1656,45 @@
   "loginButton": "دخول",
   "loggingInButton": "جار الدخول...",
   "loginError": "تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.",
+  "@loginError": {
+    "description": "Login screen: the backend refused the username/password pair."
+  },
+  "loginErrorAccountDisabled": "هذا الحساب معطّل. تواصل مع مدير المتجر.",
+  "@loginErrorAccountDisabled": {
+    "description": "Login screen: the account exists but is disabled."
+  },
+  "loginErrorTooManyAttempts": "محاولات كثيرة لتسجيل الدخول. انتظر دقيقة ثم حاول مجددًا.",
+  "@loginErrorTooManyAttempts": {
+    "description": "Login screen: the backend's sign-in throttle refused the attempt."
+  },
+  "loginErrorRelayRejected": "انتهت صلاحية ربط هذا الجهاز بالوصول عن بُعد. افتح التطبيق مرة على شبكة المتجر وسجّل الدخول لإعادة الربط.",
+  "@loginErrorRelayRejected": {
+    "description": "Login screen: the relay no longer accepts this device's ticket and a refresh failed; the device must pair again on the shop LAN."
+  },
+  "loginErrorRelaySubscriptionInactive": "الوصول عن بُعد غير مفعّل لهذا المتجر. الاشتراك غير نشط.",
+  "@loginErrorRelaySubscriptionInactive": {
+    "description": "Login screen: the relay refused because the shop's remote-access subscription is inactive."
+  },
+  "loginErrorRelayConnectorOffline": "خادم المتجر غير متصل بخدمة الوصول عن بُعد الآن. تأكد من تشغيل الخادم واتصاله بالإنترنت.",
+  "@loginErrorRelayConnectorOffline": {
+    "description": "Login screen: the relay is reachable but the shop's server is not connected to it."
+  },
+  "loginErrorRelayUnavailable": "تعذر الوصول إلى خادم المتجر عبر خدمة الوصول عن بُعد. حاول مجددًا بعد قليل.",
+  "@loginErrorRelayUnavailable": {
+    "description": "Login screen: the relay answered with a failure of its own (timeout, bad gateway, rate limit)."
+  },
+  "loginErrorRelayUnreachable": "تعذر الاتصال بخدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.",
+  "@loginErrorRelayUnreachable": {
+    "description": "Login screen: the relay itself could not be reached from this device."
+  },
+  "loginErrorServerUnreachable": "تعذر الوصول إلى خادم المتجر. تحقق من اتصال الجهاز بشبكة المتجر.",
+  "@loginErrorServerUnreachable": {
+    "description": "Login screen: the shop's server could not be reached on the LAN."
+  },
+  "loginErrorServer": "حدث خطأ في الخادم أثناء تسجيل الدخول. حاول مجددًا.",
+  "@loginErrorServer": {
+    "description": "Login screen: the backend answered, but not with a sign-in (a server error)."
+  },
   "managerRoleLabel": "مدير",
   "cashierRoleLabel": "كاشير",
   "usersManagementTitle": "إدارة المستخدمين",
