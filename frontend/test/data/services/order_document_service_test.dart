@@ -131,6 +131,93 @@ void main() {
     expect(labels, isNot(contains('جلسة الدرج')));
   });
 
+  test('a receipt roll pairs the date with the status, the cashier with '
+      'the drawer session', () {
+    const service = OrderDocumentService();
+    final template = service.saleInvoiceTemplate(
+      order: _saleOrder(
+        receiptNumber: 'R-11',
+        total: 50,
+        createdAt: DateTime(2026, 5, 20, 14, 5),
+        paymentStatus: 'paid',
+        cashierName: 'سالم الفيتوري',
+        registerSessionNumber: 'RS-7',
+      ),
+      shopSettings: _settings,
+    );
+
+    final byLabel = {for (final field in template.details) field.label: field};
+    // The date and the status speak for themselves, so the line carries the
+    // values alone.
+    expect(byLabel['تاريخ الإصدار']!.rollSide, OrderDocumentRollSide.start);
+    expect(byLabel['تاريخ الإصدار']!.rollText, isNull);
+    expect(byLabel['حالة الدفع']!.rollSide, OrderDocumentRollSide.end);
+    expect(byLabel['حالة الدفع']!.rollText, isNull);
+    // A bare name could be anyone's; the session reads as the till says it.
+    expect(byLabel['الكاشير']!.rollSide, OrderDocumentRollSide.start);
+    expect(byLabel['الكاشير']!.rollText, 'الكاشير: سالم الفيتوري');
+    expect(byLabel['جلسة الدرج']!.rollSide, OrderDocumentRollSide.end);
+    expect(byLabel['جلسة الدرج']!.rollText, 'جلسة RS-7');
+    // A pair only forms from neighbours.
+    final labels = template.details.map((field) => field.label).toList();
+    expect(labels.indexOf('حالة الدفع'), labels.indexOf('تاريخ الإصدار') + 1);
+    expect(labels.indexOf('جلسة الدرج'), labels.indexOf('الكاشير') + 1);
+    // The customer line leads with a short label; the page keeps its heading.
+    expect(template.recipientLabel, 'العميل:');
+    expect(template.recipientTitle, 'فاتورة إلى:');
+  });
+
+  test('a subtotal and a payment that only repeat the total say so', () {
+    const service = OrderDocumentService();
+    SalePayment cash(double amount) => SalePayment(
+      id: 1,
+      method: PaymentMethod.cash,
+      amount: amount,
+      commissionPercent: 0,
+      commissionAmount: 0,
+    );
+    Map<String, bool> restating(SaleOrder order) => {
+      for (final field
+          in service
+              .saleInvoiceTemplate(order: order, shopSettings: _settings)
+              .totals)
+        field.label: field.restatesTotal,
+    };
+
+    // No discount, settled in full: both merely repeat the total. Summed in
+    // floating point the payments land a hair off 30.30 — still the total.
+    expect(
+      restating(
+        _saleOrder(
+          receiptNumber: 'R-12',
+          subtotal: 30.3,
+          total: 30.3,
+          payments: [cash(10.1), cash(20.2)],
+        ),
+      ),
+      {'المجموع الفرعي': true, 'الإجمالي': false, 'المدفوع': true},
+    );
+    // A discount and a part-payment each tell the reader something new.
+    expect(
+      restating(
+        _saleOrder(
+          receiptNumber: 'R-13',
+          subtotal: 30,
+          discountTotal: 2,
+          total: 28,
+          payments: [cash(10)],
+        ),
+      ),
+      {
+        'المجموع الفرعي': false,
+        'الخصم': false,
+        'الإجمالي': false,
+        'المدفوع': false,
+        'المتبقي': false,
+      },
+    );
+  });
+
   test('the sale invoice issue date carries the time, not just the day', () {
     const service = OrderDocumentService();
     final template = service.saleInvoiceTemplate(
@@ -165,12 +252,14 @@ void main() {
       );
 
       expect(template.title, 'فاتورة عرض');
+      // The status follows the date, as on a sale, so a roll can print the
+      // two on one line.
       expect(template.details.map((field) => field.label), [
         'تاريخ الإصدار',
-        'صالح حتى',
         'حالة الدفع',
+        'صالح حتى',
       ]);
-      expect(template.details.last.value, 'عرض سعر');
+      expect(template.details[1].value, 'عرض سعر');
       // A quote owes nothing: no paid / balance-due rows in the totals.
       expect(
         template.totals.map((field) => field.label),
@@ -687,6 +776,35 @@ void main() {
       expect(_mediaBoxHeights(bytes).length, 1);
     });
 
+    test('the roll prints a settled sale\'s amount once; the page keeps the '
+        'subtotal and the payment', () async {
+      final order = _saleOrder(
+        receiptNumber: 'R-once',
+        subtotal: 28,
+        total: 28,
+        payments: const [
+          SalePayment(
+            id: 1,
+            method: PaymentMethod.cash,
+            amount: 28,
+            commissionPercent: 0,
+            commissionAmount: 0,
+          ),
+        ],
+      );
+      Future<int> timesPrinted(PdfPageSize size) async {
+        final bytes = await service.buildSaleInvoiceBytes(
+          order: order,
+          shopSettings: _settings,
+          pageSize: size,
+        );
+        return _textRuns(bytes).where((run) => run == '28.00').length;
+      }
+
+      expect(await timesPrinted(PdfPageSize.roll80), 1);
+      expect(await timesPrinted(PdfPageSize.a4), 3);
+    });
+
     test('purchase orders and proofs honor the receipt width too', () async {
       final poBytes = await service.buildPurchaseOrderBytes(
         order: _purchaseOrder(orderNumber: 'PO-1'),
@@ -711,6 +829,107 @@ void main() {
         expect(widths, isNotEmpty);
         expect(widths.every((w) => (w - mm(58)).abs() < 1), isTrue);
       }
+    });
+
+    group('with the real Arabic fonts', () {
+      // Whether two details share a line is a question of glyph widths, which
+      // the Helvetica test fonts cannot answer for Arabic.
+      const arabic = OrderDocumentService(fontLoader: _FileFontLoader());
+
+      Future<double> rollHeight(SaleOrder order, PdfPageSize size) async {
+        final bytes = await arabic.buildSaleInvoiceBytes(
+          order: order,
+          shopSettings: _settings,
+          pageSize: size,
+        );
+        return _mediaBoxHeights(bytes).single;
+      }
+
+      test('the drawer session costs no paper beside the cashier', () async {
+        final alone = await rollHeight(
+          _saleOrder(
+            receiptNumber: 'R-1',
+            total: 28,
+            cashierName: 'سالم الفيتوري',
+          ),
+          PdfPageSize.roll80,
+        );
+        final paired = await rollHeight(
+          _saleOrder(
+            receiptNumber: 'R-1',
+            total: 28,
+            cashierName: 'سالم الفيتوري',
+            registerSessionNumber: 'RS-1234',
+          ),
+          PdfPageSize.roll80,
+        );
+
+        expect(paired, lessThanOrEqualTo(alone));
+      });
+
+      test(
+        'a pair too wide for the roll takes a second line, never a clip',
+        () async {
+          const name = 'عبدالرحمن محمد الفيتوري';
+          final alone = await rollHeight(
+            _saleOrder(receiptNumber: 'R-1', total: 28, cashierName: name),
+            PdfPageSize.roll58,
+          );
+          final paired = await rollHeight(
+            _saleOrder(
+              receiptNumber: 'R-1',
+              total: 28,
+              cashierName: name,
+              registerSessionNumber: 'RS-1234',
+            ),
+            PdfPageSize.roll58,
+          );
+
+          expect(paired, greaterThan(alone));
+        },
+      );
+
+      test('the date costs no paper beside the payment status, even on '
+          '58 mm', () async {
+        final undated = await rollHeight(
+          _saleOrder(receiptNumber: 'R-1', total: 28, paymentStatus: 'paid'),
+          PdfPageSize.roll58,
+        );
+        final dated = await rollHeight(
+          _saleOrder(
+            receiptNumber: 'R-1',
+            total: 28,
+            paymentStatus: 'paid',
+            createdAt: DateTime(2026, 8, 18, 14, 30),
+          ),
+          PdfPageSize.roll58,
+        );
+
+        expect(dated, lessThanOrEqualTo(undated + 0.01));
+      });
+
+      test('the customer number and phone ride on the name\'s line', () async {
+        final nameOnly = await rollHeight(
+          _saleOrder(
+            receiptNumber: 'R-1',
+            total: 28,
+            customerName: 'أحمد المهدي',
+          ),
+          PdfPageSize.roll80,
+        );
+        final full = await rollHeight(
+          _saleOrder(
+            receiptNumber: 'R-1',
+            total: 28,
+            customerName: 'أحمد المهدي',
+            customerNumber: 'C-100',
+            customerPhone: '0912345678',
+          ),
+          PdfPageSize.roll80,
+        );
+
+        expect(full, lessThanOrEqualTo(nameOnly + 0.01));
+      });
     });
 
     // Opt-in: writes standard/compact receipt rolls at every thermal width so
@@ -798,6 +1017,32 @@ void main() {
   });
 }
 
+/// The literal text runs a PDF draws (`[(text)]TJ`), read out of its deflated
+/// content streams. Only meaningful with the Type1 test fonts, which write
+/// text as literal strings; an embedded TrueType font writes glyph ids.
+List<String> _textRuns(Uint8List bytes) {
+  final source = String.fromCharCodes(bytes);
+  final runs = <String>[];
+  for (final match in RegExp(r'stream\r?\n').allMatches(source)) {
+    final end = source.indexOf('endstream', match.end);
+    if (end < 0) {
+      continue;
+    }
+    final List<int> content;
+    try {
+      content = zlib.decode(bytes.sublist(match.end, end));
+    } on FormatException {
+      continue;
+    }
+    runs.addAll(
+      RegExp(
+        r'\[\((.*?)\)\]TJ',
+      ).allMatches(String.fromCharCodes(content)).map((run) => run.group(1)!),
+    );
+  }
+  return runs;
+}
+
 /// Widths (x1) of every `/MediaBox [x0 y0 x1 y1]` in the PDF bytes. The page
 /// dictionary is written inline (not object-streamed) by the `pdf` package, so
 /// the media box is greppable — enough to assert the rendered page geometry
@@ -830,6 +1075,7 @@ SaleOrder _saleOrder({
   List<SalePayment> payments = const [],
   List<SaleOrderLine> lines = const [],
   double subtotal = 0,
+  double discountTotal = 0,
   double total = 0,
   DateTime? createdAt,
   String publicInvoiceUrl = '',
@@ -852,6 +1098,7 @@ SaleOrder _saleOrder({
     lines: lines,
     payments: payments,
     subtotal: subtotal,
+    discountTotal: discountTotal,
     total: total,
     customerName: customerName,
     customerNumber: customerNumber,

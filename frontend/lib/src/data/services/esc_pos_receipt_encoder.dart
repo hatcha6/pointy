@@ -232,6 +232,8 @@ class EscPosReceiptEncoder {
     final createdAt = _formatDateTime(order['created_at']);
     final lines = _list(order['lines']);
     final publicInvoiceUrl = _string(order['public_invoice_url']);
+    // What this slip means: paid, partial, آجل, or a quotation.
+    final statusText = _saleStatusText(_string(order['payment_status']));
     // Who rang it up and on which drawer, so a slip handed back over the
     // counter traces to a person and a shift without opening the Z-Report.
     final cashierName = _string(_map(order['cashier'])['name']);
@@ -251,34 +253,25 @@ class EscPosReceiptEncoder {
     );
 
     bytes.addAll(generator.hr());
+    final headerStyles = PosStyles(align: PosAlign.right, codeTable: codeTable);
+    final headerWidth = _charsPerLine(endpoint.paperWidthMm);
     bytes.addAll(
-      _text(
+      _text(generator, '$documentTitle: $receiptNumber', styles: headerStyles),
+    );
+    // Short facts two to a line: the date across from the payment status,
+    // the cashier across from the drawer session.
+    bytes.addAll(
+      _pairedLine(generator, createdAt, statusText, headerWidth, headerStyles),
+    );
+    bytes.addAll(
+      _pairedLine(
         generator,
-        '$documentTitle: $receiptNumber',
-        styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
+        cashierName.isEmpty ? '' : 'الكاشير: $cashierName',
+        sessionNumber.isEmpty ? '' : 'جلسة $sessionNumber',
+        headerWidth,
+        headerStyles,
       ),
     );
-    if (createdAt.isNotEmpty) {
-      bytes.addAll(
-        _text(
-          generator,
-          createdAt,
-          styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
-        ),
-      );
-    }
-    for (final attribution in [
-      if (cashierName.isNotEmpty) 'الكاشير: $cashierName',
-      if (sessionNumber.isNotEmpty) 'جلسة الدرج: $sessionNumber',
-    ]) {
-      bytes.addAll(
-        _text(
-          generator,
-          attribution,
-          styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
-        ),
-      );
-    }
     bytes.addAll(generator.hr());
 
     // Compact receipts drop to Font B and fold each item onto a single row;
@@ -363,25 +356,10 @@ class EscPosReceiptEncoder {
       ),
     );
 
-    // Money status block: what this slip means. A quotation owes nothing, so it
-    // reads "عرض سعر" + its validity date; a sale shows paid/partial/unpaid and
-    // any remaining balance.
+    // Under the total, what is still open: a quotation's validity date, or a
+    // sale's remaining balance. (Its status sits up beside the date.)
     final saleType = _string(order['sale_type']);
     final isQuotation = saleType == 'quotation';
-    final statusText = _saleStatusText(_string(order['payment_status']));
-    if (statusText.isNotEmpty) {
-      bytes.addAll(
-        _text(
-          generator,
-          'الحالة: $statusText',
-          styles: PosStyles(
-            align: PosAlign.right,
-            bold: true,
-            codeTable: codeTable,
-          ),
-        ),
-      );
-    }
     if (isQuotation) {
       final validUntil = _formatDateOnly(order['valid_until']);
       if (validUntil.isNotEmpty) {
@@ -1255,6 +1233,43 @@ class EscPosReceiptEncoder {
     // Trailing dot marks the clip. Plain ASCII on purpose: '…' has no place in
     // CP864/CP1256 and would print as noise.
     return '${trimmedName.substring(0, room - 1).trimRight()}. $details';
+  }
+
+  /// Fewest columns kept between the two sides of a shared line, so they read
+  /// as two facts rather than one phrase.
+  static const int _sharedLineGap = 2;
+
+  /// [start] and [end] on one line where they fit side by side, a line each
+  /// where they don't. An empty side prints nothing, so a sale rung up on no
+  /// drawer grows no blank row.
+  List<int> _pairedLine(
+    Generator generator,
+    String start,
+    String end,
+    int width,
+    PosStyles styles,
+  ) {
+    final shared = start.isEmpty || end.isEmpty
+        ? null
+        : _sharedLine(start, end, width);
+    return [
+      for (final line in shared == null ? [start, end] : [shared])
+        if (line.isNotEmpty) ..._text(generator, line, styles: styles),
+    ];
+  }
+
+  /// One [width]-column line with [start] at the reading edge (the right, in
+  /// Arabic) and [end] padded across to the far edge:
+  /// `الكاشير: سالم          جلسة RS-7`.
+  ///
+  /// Null when the two cannot keep [_sharedLineGap] columns apart. Counts a
+  /// character as a column, as [_wrap] and [_compactItemRow] do.
+  String? _sharedLine(String start, String end, int width) {
+    final gap = width - start.length - end.length;
+    if (gap < _sharedLineGap) {
+      return null;
+    }
+    return '$start${' ' * gap}$end';
   }
 
   List<String> _wrap(String value, int width) {

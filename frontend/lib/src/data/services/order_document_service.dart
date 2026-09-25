@@ -395,6 +395,8 @@ class OrderDocumentService {
     );
     final balanceDue = _balanceDue(total: order.total, paid: paidTotal);
     final statusText = _saleStatusText(order, paidTotal, balanceDue);
+    final cashierName = order.cashierName?.trim() ?? '';
+    final sessionNumber = order.registerSessionNumber?.trim() ?? '';
     return OrderDocumentTemplate(
       title: isQuotation ? labels.quotationTitle : labels.saleInvoiceTitle,
       reference: _saleReference(order),
@@ -402,12 +404,16 @@ class OrderDocumentService {
       shopName: _shopName(shopSettings),
       shopHeaderLines: _shopHeaderLines(shopSettings),
       recipientTitle: labels.billTo,
+      recipientLabel: '${labels.customer}:',
       recipientLines: _nonBlankStrings([
         order.customerName,
         order.customerNumber,
         order.customerPhone,
         order.customerEmail,
       ]),
+      // On a receipt roll the date shares its line with the payment status
+      // and the cashier with the drawer session; the page keeps a labelled
+      // row each.
       details: [
         if (order.createdAt != null)
           // Date + time: cashiers reconcile receipts by the minute they were
@@ -416,48 +422,49 @@ class OrderDocumentService {
           OrderDocumentField(
             labels.issueDate,
             formatPdfDateTime(order.createdAt!),
+            rollSide: OrderDocumentRollSide.start,
           ),
-        // A quotation is valid until its expiry, not a money status; a sale
-        // shows its paid/partial/unpaid status. Either way the line is the
+        // A quotation is marked as a quote, not a money status; a sale shows
+        // its paid/partial/unpaid status. Either way the line is the
         // highlighted "what is this document" cue at the top of the details.
-        if (isQuotation) ...[
-          if (order.validUntil != null)
-            OrderDocumentField(
-              labels.quotationValidUntil,
-              formatPdfDate(order.validUntil!),
-              strong: true,
-              highlight: true,
-            ),
+        OrderDocumentField(
+          labels.paymentStatusLabel,
+          isQuotation ? labels.paymentStatusQuotation : statusText,
+          strong: true,
+          highlight: true,
+          rollSide: OrderDocumentRollSide.end,
+        ),
+        // A quotation is valid until its expiry.
+        if (isQuotation && order.validUntil != null)
           OrderDocumentField(
-            labels.paymentStatusLabel,
-            labels.paymentStatusQuotation,
+            labels.quotationValidUntil,
+            formatPdfDate(order.validUntil!),
             strong: true,
             highlight: true,
           ),
-        ] else ...[
+        // Keep the explicit balance-due row for credit/partial sales.
+        if (!isQuotation && balanceDue > 0)
           OrderDocumentField(
-            labels.paymentStatusLabel,
-            statusText,
+            labels.balanceDue,
+            _formatMoney(balanceDue),
             strong: true,
             highlight: true,
           ),
-          // Keep the explicit balance-due row for credit/partial sales.
-          if (balanceDue > 0)
-            OrderDocumentField(
-              labels.balanceDue,
-              _formatMoney(balanceDue),
-              strong: true,
-              highlight: true,
-            ),
-        ],
         // Who rang it up and on which drawer: the line that turns a printed
         // copy back into a person and a shift without opening the Z-Report.
-        if ((order.cashierName ?? '').trim().isNotEmpty)
-          OrderDocumentField(labels.cashier, order.cashierName!.trim()),
-        if ((order.registerSessionNumber ?? '').trim().isNotEmpty)
+        if (cashierName.isNotEmpty)
+          OrderDocumentField(
+            labels.cashier,
+            cashierName,
+            rollSide: OrderDocumentRollSide.start,
+            rollText: '${labels.cashier}: $cashierName',
+          ),
+        if (sessionNumber.isNotEmpty)
           OrderDocumentField(
             labels.registerSession,
-            order.registerSessionNumber!.trim(),
+            sessionNumber,
+            rollSide: OrderDocumentRollSide.end,
+            rollText: '${labels.registerSessionShort} $sessionNumber',
           ),
       ],
       itemsTable: OrderDocumentTable(
@@ -482,7 +489,11 @@ class OrderDocumentService {
         columnFlex: const [2.8, 0.9, 1.1, 1.1],
       ),
       totals: [
-        OrderDocumentField(labels.subtotal, _formatMoney(order.subtotal)),
+        OrderDocumentField(
+          labels.subtotal,
+          _formatMoney(order.subtotal),
+          restatesTotal: _sameMoney(order.subtotal, order.total),
+        ),
         if (order.discountTotal > 0)
           OrderDocumentField(
             labels.discount,
@@ -495,7 +506,11 @@ class OrderDocumentService {
         ),
         // A quote owes nothing, so it carries no paid/balance money framing.
         if (!isQuotation && paidTotal > 0)
-          OrderDocumentField(labels.paid, _formatMoney(paidTotal)),
+          OrderDocumentField(
+            labels.paid,
+            _formatMoney(paidTotal),
+            restatesTotal: _sameMoney(paidTotal, order.total),
+          ),
         if (!isQuotation && balanceDue > 0)
           OrderDocumentField(labels.balanceDue, _formatMoney(balanceDue)),
       ],
@@ -532,6 +547,7 @@ class OrderDocumentService {
       shopName: _shopName(shopSettings),
       shopHeaderLines: _shopHeaderLines(shopSettings),
       recipientTitle: labels.billFrom,
+      recipientLabel: '${labels.supplier}:',
       recipientLines: _nonBlankStrings([
         order.supplierName,
         order.supplierContactName,
@@ -583,7 +599,11 @@ class OrderDocumentService {
         columnFlex: const [2.8, 0.9, 1.1, 1.1],
       ),
       totals: [
-        OrderDocumentField(labels.subtotal, _formatMoney(order.subtotal)),
+        OrderDocumentField(
+          labels.subtotal,
+          _formatMoney(order.subtotal),
+          restatesTotal: _sameMoney(order.subtotal, order.total),
+        ),
         if (order.discountTotal > 0)
           OrderDocumentField(
             labels.discount,
@@ -600,7 +620,11 @@ class OrderDocumentService {
           strong: true,
         ),
         if (order.paidTotal > 0)
-          OrderDocumentField(labels.paid, _formatMoney(order.paidTotal)),
+          OrderDocumentField(
+            labels.paid,
+            _formatMoney(order.paidTotal),
+            restatesTotal: _sameMoney(order.paidTotal, order.total),
+          ),
       ],
       notes: _shopFooterNote(shopSettings),
     );
@@ -1042,6 +1066,7 @@ class OrderDocumentLabels {
     required this.customer,
     required this.supplier,
     required this.registerSession,
+    required this.registerSessionShort,
     required this.cashier,
     required this.status,
     required this.issueDate,
@@ -1115,6 +1140,7 @@ class OrderDocumentLabels {
       customer = 'العميل',
       supplier = 'المورد',
       registerSession = 'جلسة الدرج',
+      registerSessionShort = 'جلسة',
       cashier = 'الكاشير',
       status = 'الحالة',
       issueDate = 'تاريخ الإصدار',
@@ -1187,6 +1213,10 @@ class OrderDocumentLabels {
   final String customer;
   final String supplier;
   final String registerSession;
+
+  /// The session's name where it shares a roll line — "جلسة RS-7", as the
+  /// invoice list and the till already say it.
+  final String registerSessionShort;
   final String cashier;
   final String status;
   final String issueDate;
@@ -1293,6 +1323,7 @@ class OrderDocumentTemplate {
     required this.recipientLines,
     required this.details,
     required this.totals,
+    this.recipientLabel,
     this.itemsTable,
     this.notes,
     this.terms,
@@ -1304,6 +1335,11 @@ class OrderDocumentTemplate {
   final String shopName;
   final List<String> shopHeaderLines;
   final String recipientTitle;
+
+  /// The recipient's label where it leads the name on the same line — a
+  /// receipt roll's "العميل:" where the page heads a block "فاتورة إلى:".
+  /// Null reuses [recipientTitle].
+  final String? recipientLabel;
   final List<String> recipientLines;
   final List<OrderDocumentField> details;
 
@@ -1793,14 +1829,12 @@ class _ReceiptFrame {
 
     if (template.details.isNotEmpty) {
       children.add(pw.SizedBox(height: compact ? 2 : 3));
-      for (final field in template.details) {
-        children.add(_fieldRow(field));
-      }
+      children.addAll(_detailLines());
     }
 
     if (template.recipientLines.isNotEmpty) {
       children.add(_divider());
-      children.addAll(_recipient());
+      children.add(_recipient());
     }
 
     final items = _itemWidgets();
@@ -1812,7 +1846,11 @@ class _ReceiptFrame {
     if (template.totals.isNotEmpty) {
       children.add(_divider());
       for (final field in template.totals) {
-        children.add(_fieldRow(field));
+        // A subtotal with no discount, or a payment of exactly the total, is
+        // a line of paper that says nothing the total has not.
+        if (!field.restatesTotal) {
+          children.add(_fieldRow(field));
+        }
       }
     }
 
@@ -1925,29 +1963,81 @@ class _ReceiptFrame {
     ];
   }
 
-  List<pw.Widget> _recipient() {
-    final widgets = <pw.Widget>[
-      pw.Text(
-        template.recipientTitle,
-        style: const pw.TextStyle(fontSize: 8, color: _ink),
-      ),
-      pw.SizedBox(height: 2),
-      pw.Text(
-        template.recipientLines.first,
-        style: pw.TextStyle(
-          fontSize: 9,
-          fontWeight: pw.FontWeight.bold,
-          color: _ink,
+  /// The details top to bottom, two to a line where the template pairs them
+  /// (see [OrderDocumentRollSide]) and a labelled row each otherwise.
+  List<pw.Widget> _detailLines() {
+    final fields = template.details;
+    final lines = <pw.Widget>[];
+    for (var i = 0; i < fields.length; i++) {
+      final field = fields[i];
+      final next = i + 1 < fields.length ? fields[i + 1] : null;
+      if (field.rollSide == OrderDocumentRollSide.start &&
+          next?.rollSide == OrderDocumentRollSide.end) {
+        lines.add(_sharedLine(field, next!));
+        i++;
+      } else {
+        lines.add(_fieldRow(field));
+      }
+    }
+    return lines;
+  }
+
+  /// [start] at the reading edge and [end] across from it. A pair too wide
+  /// for the roll drops [end] to a second line rather than clip either one.
+  ///
+  /// The plain side is set in the detail size: the whole roll is one bold
+  /// face, so size is the only emphasis there is, and the smaller date is
+  /// what lets a date and a status share a 58 mm line.
+  pw.Widget _sharedLine(OrderDocumentField start, OrderDocumentField end) {
+    pw.Widget text(OrderDocumentField field) => pw.Text(
+      field.rollText ?? field.value,
+      style: field.strong || field.highlight
+          ? _fieldStyle(emphasised: true)
+          : pw.TextStyle(fontSize: _detailFont, color: _ink),
+    );
+    return pw.Padding(
+      padding: pw.EdgeInsets.symmetric(vertical: compact ? 1 : 2),
+      // Full width, or a paginated roll (whose pages hand their children a
+      // loose width) would shrink the line and leave nothing to spread.
+      child: pw.SizedBox(
+        width: double.infinity,
+        child: pw.Wrap(
+          alignment: pw.WrapAlignment.spaceBetween,
+          crossAxisAlignment: pw.WrapCrossAlignment.center,
+          spacing: 8,
+          children: [text(start), text(end)],
         ),
       ),
-    ];
-    for (final line in template.recipientLines.skip(1)) {
-      widgets.add(pw.SizedBox(height: 1));
-      widgets.add(
-        pw.Text(line, style: const pw.TextStyle(fontSize: 8, color: _ink)),
-      );
-    }
-    return widgets;
+    );
+  }
+
+  /// The recipient on the fewest lines the roll allows: the label, the name,
+  /// then any number or phone flowing after it, wrapping only when the width
+  /// runs out. Each part is its own text so a Latin customer number never
+  /// shares a bidi run with the Arabic beside it.
+  pw.Widget _recipient() {
+    final detail = pw.TextStyle(fontSize: _detailFont, color: _ink);
+    return pw.Wrap(
+      spacing: 6,
+      runSpacing: 1,
+      crossAxisAlignment: pw.WrapCrossAlignment.center,
+      children: [
+        pw.Text(
+          template.recipientLabel ?? template.recipientTitle,
+          style: detail,
+        ),
+        pw.Text(
+          template.recipientLines.first,
+          style: pw.TextStyle(
+            fontSize: _bodyFont,
+            fontWeight: pw.FontWeight.bold,
+            color: _ink,
+          ),
+        ),
+        for (final line in template.recipientLines.skip(1))
+          pw.Text(line, style: detail),
+      ],
+    );
   }
 
   /// The item rows as separate top-level widgets (with the inter-row spacing
@@ -2089,16 +2179,18 @@ class _ReceiptFrame {
     );
   }
 
+  pw.TextStyle _fieldStyle({required bool emphasised}) => pw.TextStyle(
+    fontSize: emphasised ? _emphasisFont : _bodyFont,
+    fontWeight: emphasised ? pw.FontWeight.bold : pw.FontWeight.normal,
+    color: _ink,
+  );
+
   pw.Widget _labelValueRow(
     String label,
     String value, {
     bool emphasised = false,
   }) {
-    final style = pw.TextStyle(
-      fontSize: emphasised ? _emphasisFont : _bodyFont,
-      fontWeight: emphasised ? pw.FontWeight.bold : pw.FontWeight.normal,
-      color: _ink,
-    );
+    final style = _fieldStyle(emphasised: emphasised);
     return pw.Padding(
       padding: pw.EdgeInsets.symmetric(vertical: compact ? 1 : 2),
       child: pw.Row(
@@ -2237,12 +2329,41 @@ class OrderDocumentField {
     this.value, {
     this.strong = false,
     this.highlight = false,
+    this.rollSide,
+    this.rollText,
+    this.restatesTotal = false,
   });
 
   final String label;
   final String value;
   final bool strong;
   final bool highlight;
+
+  /// Where a receipt roll prints this detail on a line it shares with a
+  /// neighbour. Null keeps the labelled row the page prints.
+  final OrderDocumentRollSide? rollSide;
+
+  /// What the detail reads on a shared line. Null prints the value alone,
+  /// which is right for anything that speaks for itself — a date, a payment
+  /// status.
+  final String? rollText;
+
+  /// A figure that only repeats the total: the subtotal of a sale with no
+  /// discount, the amount paid on one settled in full. A receipt roll leaves
+  /// it out; the page has the room and keeps it.
+  final bool restatesTotal;
+}
+
+/// Which side of a shared line a detail takes on a receipt roll, where two
+/// short details print across from each other instead of a labelled row each.
+/// A [start] detail pairs with an [end] detail listed right after it; either
+/// one without its partner falls back to its labelled row.
+enum OrderDocumentRollSide {
+  /// The reading edge: the right, in Arabic.
+  start,
+
+  /// The far edge, across from the [start] detail.
+  end,
 }
 
 /// Whether a payment proof records money coming in (a customer paying us — a
@@ -2341,7 +2462,9 @@ String? _shopFooterNote(ShopSettings? settings) {
 
 double _balanceDue({required double total, required double paid}) {
   final due = total - paid;
-  return due <= 0 ? 0 : due;
+  // Under half a cent is floating-point noise from summing the payments —
+  // 10.10 + 20.20 lands a hair short of 30.30 — not money owed.
+  return due < 0.005 ? 0 : due;
 }
 
 List<String> _nonBlankStrings(Iterable<Object?> values) {
@@ -2427,6 +2550,10 @@ List<String> _saleLineIdentifierLines(SaleOrderLine line) {
 
 String _formatMoney(double value) =>
     '${value.toStringAsFixed(2)} $currencySymbol';
+
+/// Whether two amounts print as the same figure. Compared as printed, so a
+/// sum of payments a hair off in floating point still counts as the total.
+bool _sameMoney(double a, double b) => _formatMoney(a) == _formatMoney(b);
 
 /// Whole quantities render bare ("2"); fractional keep up to three places with
 /// trailing zeros trimmed ("1.5"), so the invoice never shows "2.0".
