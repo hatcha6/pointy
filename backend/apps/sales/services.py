@@ -1007,6 +1007,25 @@ def validate_sale_variants_sellable(lines_data):
         )
 
 
+def system_lines_without_top_up(lines_data):
+    """The lines ringing up a system product with no top-up to sell it through.
+
+    A provider card always carries one — the line serializer builds it from
+    the variant — so in practice this names a recharge service product whose
+    payload never arrived.
+    """
+    return [
+        {
+            "product_id": line_data["variant"].product.pk,
+            "variant_id": line_data["variant"].pk,
+            "product_name": line_data["variant"].product.name,
+        }
+        for line_data in lines_data
+        if line_data["variant"].product.is_system
+        and not line_data.get("integration")
+    ]
+
+
 def validate_integration_lines_carry_their_top_up(lines_data):
     """Reject a sale of a recharge service product that tops nobody up.
 
@@ -1023,21 +1042,12 @@ def validate_integration_lines_carry_their_top_up(lines_data):
     invoice from before the release, a till that has not updated, a direct
     service call.
 
-    Deliberately NOT in ``CheckoutLineSerializer``: the discount preview
-    re-uses that serializer and drops the payload on purpose (it prices, it
-    does not sell), so a guard there would soft-fail every preview of a cart
-    with a top-up in it. This runs where a line becomes a sold line.
+    The discount preview refuses the same lines for its own reason (see
+    ``DiscountPreviewSerializer``): without the payload it has no price for
+    them either. Not in ``CheckoutLineSerializer``, which both share, so each
+    caller can say what it is refusing.
     """
-    blocked = [
-        {
-            "product_id": line_data["variant"].product.pk,
-            "variant_id": line_data["variant"].pk,
-            "product_name": line_data["variant"].product.name,
-        }
-        for line_data in lines_data
-        if line_data["variant"].product.is_system
-        and not line_data.get("integration")
-    ]
+    blocked = system_lines_without_top_up(lines_data)
     if blocked:
         raise serializers.ValidationError(
             {

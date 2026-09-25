@@ -1,7 +1,86 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/data/models/cart_line.dart';
+import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 
 void main() {
+  group('the preview prices the lines checkout will sell', () {
+    // Field report, 2026-09-25: a 45-dinar LNET top-up sat in the cart at 45
+    // while the net total read 0.00. The preview left the top-up behind, so
+    // the server priced the provider's service product at its standing zero;
+    // the payment sheet asked for nothing and checkout refused the tender.
+    final topUp = CartLine.create(
+      variant: const ProductVariant(
+        id: 1698,
+        productId: 1220,
+        sku: 'INTEG-LNET',
+        unitPrice: 45,
+        isService: true,
+      ),
+      quantity: 1,
+      integration: const CartLineIntegration(
+        provider: 'lnet',
+        subscriberRef: 'alhussainbasheir',
+        optionCode: 'topup:45',
+        optionLabel: '45 د.ل',
+        cost: 42.75,
+      ),
+    );
+    final handset = CartLine.create(
+      variant: const ProductVariant(
+        id: 990,
+        productId: 990,
+        sku: '2864',
+        unitPrice: 160,
+      ),
+      quantity: 1,
+      stockUnitId: 77,
+      stockUnitCode: '356789012345678',
+    );
+
+    Map<String, Object?> previewLine(CartLine line) {
+      final json = SaleDiscountPreviewDraft.fromCart(cart: [line]).toJson();
+      return (json['lines']! as List).single as Map<String, Object?>;
+    }
+
+    Map<String, Object?> checkoutLine(CartLine line) {
+      final json = SaleCheckoutDraft.fromCart(
+        cart: [line],
+        payments: const [],
+      ).toJson();
+      return (json['lines']! as List).single as Map<String, Object?>;
+    }
+
+    test('a top-up travels with its line', () {
+      final line = previewLine(topUp);
+
+      expect(line['integration'], topUp.integration!.toJson());
+      expect(line['integration'], checkoutLine(topUp)['integration']);
+    });
+
+    test('a serialized line names its article, which may carry its price', () {
+      expect(previewLine(handset)['stock_units'], [77]);
+      expect(
+        previewLine(handset)['stock_units'],
+        checkoutLine(handset)['stock_units'],
+      );
+    });
+
+    test('an ordinary line stays exactly as it was', () {
+      final plain = CartLine.create(
+        variant: const ProductVariant(
+          id: 5,
+          productId: 5,
+          sku: 'CABLE',
+          unitPrice: 20,
+        ),
+        quantity: 2,
+      );
+
+      expect(previewLine(plain), {'variant': 5, 'quantity': '2'});
+    });
+  });
+
   group('SaleLossLine.fromJson', () {
     test('accepts whole-number quantities encoded as decimal values', () {
       final line = SaleLossLine.fromJson(const {

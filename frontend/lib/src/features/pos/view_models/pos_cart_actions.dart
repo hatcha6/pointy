@@ -503,31 +503,38 @@ extension PosCartActions on PosViewModel {
       return;
     }
     final service = draft.serviceVariant;
-    _cart.add(
-      CartLine.create(
-        variant: ProductVariant(
-          id: service.id,
-          productId: service.productId,
-          sku: service.sku,
-          unitPrice: draft.price,
-          productName: service.name,
-          displayName: service.name,
-          fullName: service.name,
-          isService: true,
-          isDefault: true,
-        ),
-        quantity: 1,
-        integration: CartLineIntegration(
-          provider: integrationProviderKeyToJson(draft.provider),
-          subscriberRef: draft.subscriberRef,
-          optionCode: draft.offer.code,
-          optionLabel: draft.offer.label,
-          cost: draft.cost,
-          months: draft.offer.months,
-          packageId: draft.offer.packageId,
-          packageName: draft.offer.packageName,
-        ),
+    final line = CartLine.create(
+      variant: ProductVariant(
+        id: service.id,
+        productId: service.productId,
+        sku: service.sku,
+        unitPrice: draft.price,
+        productName: service.name,
+        displayName: service.name,
+        fullName: service.name,
+        isService: true,
+        isDefault: true,
       ),
+      quantity: 1,
+      integration: CartLineIntegration(
+        provider: integrationProviderKeyToJson(draft.provider),
+        subscriberRef: draft.subscriberRef,
+        optionCode: draft.offer.code,
+        optionLabel: draft.offer.label,
+        cost: draft.cost,
+        months: draft.offer.months,
+        packageId: draft.offer.packageId,
+        packageName: draft.offer.packageName,
+      ),
+    );
+    _cart.add(line);
+    // Every other way into the cart is recorded; this one was not, so a field
+    // export showed top-ups being deleted and checked out but never added.
+    _trackCartLineAdded(
+      line,
+      addedQuantity: 1,
+      previousQuantity: 0,
+      source: 'integration_recharge',
     );
     _touchActiveSaleSession();
     _notifyChanged();

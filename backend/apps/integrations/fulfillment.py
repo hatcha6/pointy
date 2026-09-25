@@ -86,6 +86,10 @@ def resolve_line_integration(payload: dict, variant):
 
     Raises ``serializers.ValidationError`` so a bad payload fails the checkout
     the same way any other bad line does.
+
+    Reads only. The discount preview prices every cart edit through this, so
+    anything it wrote would be written for carts that are never sold; what a
+    sale records is written by :func:`persist_fulfillment`, inside checkout.
     """
     provider = (payload.get("provider") or "").strip()
     spec = catalog.spec_for(provider)
@@ -131,20 +135,10 @@ def resolve_line_integration(payload: dict, variant):
                 {"integration": "A quoted cost is required."}
             )
 
-    subscriber_ref = (payload.get("subscriber_ref") or "").strip()
-    # The card gets a record on its first sale, so the invoice can name its
-    # customer later and so the shop accumulates a subscriber book it owns.
-    subscriber, _ = IntegrationSubscriber.objects.get_or_create(
-        account=account,
-        subscriber_ref=subscriber_ref,
-        defaults={"provider": provider},
-    )
-
     return {
         "account": account,
         "provider": provider,
-        "subscriber": subscriber,
-        "subscriber_ref": subscriber_ref,
+        "subscriber_ref": (payload.get("subscriber_ref") or "").strip(),
         "option_code": option_code,
         "option_label": (payload.get("option_label") or "").strip(),
         "months": int(payload.get("months") or 0),
@@ -180,7 +174,6 @@ def _resolve_voucher_line(provider: str, variant) -> dict:
     return {
         "account": account,
         "provider": provider,
-        "subscriber": None,
         # A card off a shelf belongs to nobody until it is scratched.
         "subscriber_ref": "",
         "option_code": voucher.code,
@@ -202,7 +195,7 @@ def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
         order_line=order_line,
         account=resolved["account"],
         provider=resolved["provider"],
-        subscriber=resolved.get("subscriber"),
+        subscriber=_subscriber_for(resolved),
         subscriber_ref=resolved["subscriber_ref"],
         option_code=resolved["option_code"],
         option_label=resolved["option_label"],
@@ -212,6 +205,24 @@ def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
         cost=resolved["cost"],
         status=IntegrationFulfillment.Status.PENDING,
     )
+
+
+def _subscriber_for(resolved: dict):
+    """The card's own record, created on its first sale.
+
+    So the invoice can name its customer later, and so the shop accumulates a
+    subscriber book it owns. ``None`` for a card off a shelf, which belongs to
+    nobody until it is scratched.
+    """
+    subscriber_ref = resolved["subscriber_ref"]
+    if not subscriber_ref:
+        return None
+    subscriber, _ = IntegrationSubscriber.objects.get_or_create(
+        account=resolved["account"],
+        subscriber_ref=subscriber_ref,
+        defaults={"provider": resolved["provider"]},
+    )
+    return subscriber
 
 
 def fulfillment_kind(fulfillment) -> str:

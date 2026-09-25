@@ -13,6 +13,8 @@ import 'package:pointy_frontend/src/core/storage/sqlite_key_value_store.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/analytics_event.dart';
 import 'package:pointy_frontend/src/data/models/cart_line.dart';
+import 'package:pointy_frontend/src/data/models/integration_card.dart';
+import 'package:pointy_frontend/src/data/models/integration_provider.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/modifier_group.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
@@ -270,53 +272,56 @@ void main() {
     await _settle();
   });
 
-  test('a provider card is one card to a line, never a bigger number', () async {
-    // Each card is its own purchase from the provider with its own PIN, so a
-    // second tap is a second line — and neither line's quantity can move.
-    final apiService = _FakePosApiService(
-      catalogPages: const {
-        1: [_coffeeVariant],
-      },
-    );
-    final viewModel = _viewModel(apiService);
-    addTearDown(viewModel.dispose);
+  test(
+    'a provider card is one card to a line, never a bigger number',
+    () async {
+      // Each card is its own purchase from the provider with its own PIN, so a
+      // second tap is a second line — and neither line's quantity can move.
+      final apiService = _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+      );
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
 
-    await viewModel.loadCurrentRegisterSession();
-    await viewModel.resumeRegisterSession();
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
 
-    const libyana = Product(
-      id: 30,
-      name: 'ليبيانا',
-      quantityOnHand: 0,
-      isService: true,
-      isSystem: true,
-      systemKind: ProductSystemKind.voucher,
-    );
-    final card = const ProductVariant(
-      id: 3005,
-      productId: 30,
-      productName: 'ليبيانا',
-      displayName: '5 دينار',
-      fullName: 'ليبيانا - 5 دينار',
-      sku: 'QRB-2789F02F',
-      unitPrice: 5,
-      isService: true,
-    ).copyWith(productDetail: libyana);
+      const libyana = Product(
+        id: 30,
+        name: 'ليبيانا',
+        quantityOnHand: 0,
+        isService: true,
+        isSystem: true,
+        systemKind: ProductSystemKind.voucher,
+      );
+      final card = const ProductVariant(
+        id: 3005,
+        productId: 30,
+        productName: 'ليبيانا',
+        displayName: '5 دينار',
+        fullName: 'ليبيانا - 5 دينار',
+        sku: 'QRB-2789F02F',
+        unitPrice: 5,
+        isService: true,
+      ).copyWith(productDetail: libyana);
 
-    viewModel.addVariant(card, source: 'variant_picker');
-    viewModel.addVariant(card, source: 'variant_picker');
+      viewModel.addVariant(card, source: 'variant_picker');
+      viewModel.addVariant(card, source: 'variant_picker');
 
-    expect(viewModel.cart, hasLength(2));
-    expect(viewModel.cart.every((line) => line.quantity == 1), isTrue);
-    expect(viewModel.cart.first.isVoucher, isTrue);
-    expect(viewModel.cart.first.allowsQuantityEdit, isFalse);
+      expect(viewModel.cart, hasLength(2));
+      expect(viewModel.cart.every((line) => line.quantity == 1), isTrue);
+      expect(viewModel.cart.first.isVoucher, isTrue);
+      expect(viewModel.cart.first.allowsQuantityEdit, isFalse);
 
-    viewModel.incrementCartLine(viewModel.cart.first.lineKey);
-    viewModel.setCartLinePrice(viewModel.cart.first.lineKey, 1);
-    expect(viewModel.cart.first.quantity, 1);
-    expect(viewModel.cart.first.unitPrice, 5);
-    await _settle();
-  });
+      viewModel.incrementCartLine(viewModel.cart.first.lineKey);
+      viewModel.setCartLinePrice(viewModel.cart.first.lineKey, 1);
+      expect(viewModel.cart.first.quantity, 1);
+      expect(viewModel.cart.first.unitPrice, 5);
+      await _settle();
+    },
+  );
 
   test('checkout sends the selected modifiers on the line', () async {
     final apiService = _FakePosApiService(
@@ -1385,6 +1390,74 @@ void main() {
       expect(viewModel.activeSaleSessionNumber, 1);
       expect(viewModel.cycleActiveSaleSession(forward: false), isTrue);
       expect(viewModel.activeSaleSessionNumber, 3);
+    });
+  });
+
+  group('a top-up in the cart', () {
+    // Field report, 2026-09-25: a 45-dinar LNET top-up sat in the cart at 45
+    // while the net total read 0.00, and the payment sheet asked for nothing.
+    // The server prices a top-up from the top-up itself; its service product
+    // stands at zero. This fake prices the way the server does.
+    SaleDiscountPreview serverPrices(SaleDiscountPreviewDraft draft) {
+      final total = draft.lines.fold<double>(
+        0,
+        (sum, line) =>
+            sum + (line.integration?.optionCode == 'topup:45' ? 45 : 0),
+      );
+      return SaleDiscountPreview(
+        subtotal: total,
+        discountTotal: 0,
+        total: total,
+        rulesActive: true,
+        rulesVersion: '7',
+      );
+    }
+
+    const topUp = IntegrationRechargeDraft(
+      provider: IntegrationProviderKey.lnet,
+      serviceVariant: IntegrationServiceVariant(
+        id: 1698,
+        productId: 1220,
+        sku: 'INTEG-LNET',
+        name: 'شحن اشتراك LNET',
+      ),
+      subscriberRef: 'alhussainbasheir',
+      offer: IntegrationOffer(
+        code: 'topup:45',
+        kind: 'topup',
+        label: '45 د.ل',
+        cost: 42.75,
+        price: 45,
+        faceValue: 45,
+      ),
+      price: 45,
+    );
+
+    test('is previewed with its top-up, so the total is what checkout '
+        'charges', () async {
+      final drafts = <SaleDiscountPreviewDraft>[];
+      final apiService = _FakePosApiService(
+        discountsVersion: '7',
+        onPreviewDiscounts: (draft) async {
+          drafts.add(draft);
+          return serverPrices(draft);
+        },
+      );
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+
+      viewModel.addIntegrationRecharge(topUp);
+      await _settle();
+
+      expect(drafts.last.lines.single.integration?.optionCode, 'topup:45');
+      expect(viewModel.subtotal, 45);
+      expect(viewModel.total, 45, reason: 'what the payment sheet asks for');
+
+      // Checkout forces a live preview; it must price the same line.
+      await viewModel.refreshDiscountPreview(forceServer: true);
+      expect(viewModel.total, 45);
     });
   });
 

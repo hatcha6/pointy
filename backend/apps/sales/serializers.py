@@ -62,6 +62,7 @@ from .services import (
     return_order_items,
     clamped_manual_discount,
     manual_discount_room,
+    system_lines_without_top_up,
     unapplied_coupon_codes,
     validate_manual_discount_allowed,
     validate_order_adjustment_allowed,
@@ -1808,6 +1809,26 @@ class DiscountPreviewSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
+        # A top-up is priced from its payload: the provider's quote plus the
+        # shop's markup. A line of the provider's service product WITHOUT one
+        # has no price here at all, and quoting the product's standing zero
+        # told a till that a 45-dinar recharge came to nothing — the payment
+        # sheet asked for 0.00, and checkout, which does get the payload and
+        # prices it at 45, refused the payment. Tills from before the fix
+        # still preview that way; refused, they fall back to their own line
+        # prices, which came from the same server's card lookup.
+        unpriced = system_lines_without_top_up(attrs["lines"])
+        if unpriced:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "A top-up line cannot be priced without its top-up "
+                        "details."
+                    ),
+                    "code": "top_up_details_missing",
+                    "variants": unpriced,
+                }
+            )
         coupon_codes = normalized_checkout_coupon_codes(attrs)
         # The same ceiling checkout enforces, refused at the same moment the
         # cashier types it rather than held back until they try to take money.

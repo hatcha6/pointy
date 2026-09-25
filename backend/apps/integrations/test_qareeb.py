@@ -947,6 +947,18 @@ class VoucherSaleTests(TestCase):
         self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.PENDING)
         self.assertEqual(response.data["lines"][0]["integration"]["provider"], "qareeb")
 
+    def test_a_card_previews_at_its_price_with_nothing_from_the_till(self):
+        # A system product like a top-up's, but its payload is built from the
+        # variant server-side — so the preview's refusal of a top-up that
+        # arrived without its details must not catch it.
+        response = self.client.post(
+            "/api/orders/discount-preview/",
+            {"lines": [{"variant": self.five.pk, "quantity": "1"}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["total"], "5.00")
+
     def test_a_card_is_sold_one_to_a_line(self):
         response = self.checkout(quantity="2")
         self.assertEqual(response.status_code, 400)

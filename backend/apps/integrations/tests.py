@@ -38,7 +38,6 @@ from apps.notifications.models import BusinessNotification
 from apps.notifications.services import sync_business_notifications
 from apps.inventory.models import StockMovement
 from apps.sales.models import Order, OrderLine, RegisterSession
-from apps.sales.serializers import DiscountPreviewSerializer
 from apps.sales.services import checkout_order
 from apps.treasury.models import MoneyAccount, MoneyTransfer
 from apps.treasury.position import treasury_position
@@ -1504,18 +1503,123 @@ class RechargeCheckoutTests(TestCase):
         )
         self.assertFalse(Order.objects.exists())
 
-    def test_the_discount_preview_still_prices_a_cart_holding_a_top_up(self):
-        # The preview re-uses the checkout LINE serializer and drops the
-        # integration payload on purpose — it prices, it does not sell. The
-        # guard above therefore lives in checkout, not in that serializer; a
-        # preview that 400s would silently stop the cashier's total updating
-        # every time a top-up is in the cart.
-        preview = DiscountPreviewSerializer(
-            data={
-                "lines": [{"variant": self.variant.pk, "quantity": "1"}],
-            }
+    def test_the_first_sale_to_a_card_opens_its_subscriber_record(self):
+        # Written by the sale, not by pricing: the discount preview prices
+        # every cart edit and must not leave a record behind for a cart that
+        # is never sold.
+        order = checkout_order(
+            register_session=self.session,
+            lines_data=[self._line()],
+            payments_data=[{"method": "cash", "amount": Decimal("30.00")}],
+            request=None,
         )
-        self.assertTrue(preview.is_valid(), preview.errors)
+        fulfillment = IntegrationFulfillment.objects.get(order_line__order=order)
+        self.assertEqual(fulfillment.subscriber.subscriber_ref, "210906803499")
+        self.assertEqual(fulfillment.subscriber.account, self.account)
+
+
+class TopUpDiscountPreviewTests(TestCase):
+    """The total a till shows for a top-up is the total checkout will charge.
+
+    Field report, Annaseem 2026-09-25: a 45-dinar LNET top-up sat in the cart
+    at 45 while the net total read 0.00, the payment sheet asked for nothing,
+    and checkout refused the tender nine times — "Payment total must cover the
+    order total". The preview had priced the provider's service product at
+    its standing zero, because the top-up never travelled with it.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        user = get_user_model().objects.create_user(username="till", password="x")
+        user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user)
+
+    def _preview(self, *lines):
+        return self.client.post(
+            "/api/orders/discount-preview/", {"lines": list(lines)}, format="json"
+        )
+
+    @staticmethod
+    def _lnet_line(amount=45):
+        return {
+            "variant": service_variant_for("lnet").pk,
+            "quantity": "1",
+            "integration": {
+                "provider": "lnet",
+                "subscriber_ref": "alhussainbasheir",
+                "option_code": f"topup:{amount}",
+                "option_label": f"{amount} LYD",
+                "cost": "0.00",
+            },
+        }
+
+    @staticmethod
+    def _hdbox_line():
+        return {
+            "variant": service_variant_for("hdbox").pk,
+            "quantity": "1",
+            "integration": {
+                "provider": "hdbox",
+                "subscriber_ref": "210906803499",
+                "option_code": "renew:1",
+                "option_label": "1 month",
+                "months": 1,
+                "cost": "25.00",
+            },
+        }
+
+    def test_an_lnet_top_up_previews_at_what_checkout_charges_for_it(self):
+        lnet_account()
+        response = self._preview(self._lnet_line())
+        self.assertEqual(response.status_code, 200, response.data)
+        # Face value, from the option code — not the zero on the product, and
+        # not the cost the till sent (which the server never believes).
+        self.assertEqual(response.data["subtotal"], "45.00")
+        self.assertEqual(response.data["total"], "45.00")
+
+    def test_an_hdbox_renewal_previews_at_cost_plus_the_shops_markup(self):
+        make_account(
+            markup_kind=IntegrationAccount.Markup.AMOUNT, markup_value=Decimal("5")
+        )
+        response = self._preview(self._hdbox_line())
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["total"], "30.00")
+
+    def test_a_top_up_previews_beside_ordinary_goods(self):
+        lnet_account()
+        goods = create_product_with_default_variant(
+            name="كابل", sku="CABLE-1", unit_price=Decimal("20.00"), barcode=""
+        ).default_variant
+        response = self._preview(
+            self._lnet_line(), {"variant": goods.pk, "quantity": "1"}
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["total"], "65.00")
+
+    def test_previewing_a_top_up_writes_nothing(self):
+        lnet_account()
+        self._preview(self._lnet_line())
+        self._preview(self._lnet_line(amount=30))
+        self.assertFalse(IntegrationSubscriber.objects.exists())
+        self.assertFalse(IntegrationFulfillment.objects.exists())
+
+    def test_a_top_up_without_its_details_is_refused_rather_than_priced_at_zero(self):
+        # What a till from before the fix sends. Refused, it falls back to its
+        # own line prices — which came from this server's card lookup — where
+        # a 200 at 0.00 is what sent the payment sheet asking for nothing.
+        lnet_account()
+        variant = service_variant_for("lnet")
+        response = self._preview({"variant": variant.pk, "quantity": "1"})
+        self.assertEqual(response.status_code, 400)
+        code = response.data["code"]
+        self.assertEqual(
+            str(code[0] if isinstance(code, list) else code),
+            "top_up_details_missing",
+        )
+        self.assertEqual(
+            int(response.data["variants"][0]["variant_id"]), variant.pk
+        )
 
 
 class OptionPricingTests(TestCase):

@@ -188,12 +188,19 @@ class SaleDiscountPreviewDraft {
             (line) => SaleCheckoutLineDraft(
               variantId: line.variant.id,
               quantity: line.quantity,
-              // Modifiers, the unit and a repriced line all affect price, so
-              // the discount preview must carry them to return a total the
-              // cashier can trust. (Notes don't.)
+              // Everything that sets a line's price travels, or the preview
+              // prices a different line from the one checkout sells and the
+              // payment sheet asks for the wrong amount: modifiers, the unit,
+              // a repriced line, the one article a serialized line names (it
+              // can carry its own price), and a top-up — whose service product
+              // stands at zero, so without it a 45-dinar recharge previewed
+              // at nothing and checkout refused the 0.00 tendered for it.
+              // (Notes and a pinned lot don't change the price.)
               modifiers: line.modifiers,
               unit: line.unitCode,
               manualUnitPrice: line.manualUnitPrice,
+              stockUnitId: line.stockUnitId,
+              integration: line.integration,
             ),
           )
           .toList(growable: false),
