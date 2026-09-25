@@ -326,8 +326,22 @@ String payrollAdjustmentTypeLabel(AppLocalizations l10n, String type) {
     'loan' => l10n.payrollAdjustmentLoan,
     'absence' => l10n.payrollAdjustmentAbsence,
     'penalty' => l10n.payrollAdjustmentPenalty,
+    'staff_purchase' => l10n.payrollAdjustmentStaffPurchase,
     _ => l10n.payrollAdjustmentOther,
   };
+}
+
+/// What to show beside an adjustment's amount: the invoice a staff purchase
+/// takes, otherwise whatever note the row carries.
+String payrollAdjustmentNote(
+  AppLocalizations l10n,
+  PayrollAdjustment adjustment,
+) {
+  final receiptNumber = adjustment.orderReceiptNumber.trim();
+  if (adjustment.isStaffPurchase && receiptNumber.isNotEmpty) {
+    return l10n.payrollStaffPurchaseInvoice(receiptNumber);
+  }
+  return adjustment.notes.trim();
 }
 
 String operationsCommissionBaseLabel(

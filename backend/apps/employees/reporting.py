@@ -55,13 +55,16 @@ def payroll_runs_for_period(start, end):
 
 
 def payroll_cost(start, end) -> Decimal:
-    """What the period's labour cost, paid or not."""
-    total = (
-        payroll_runs_for_period(start, end)
-        .filter(status__in=RECOGNISED_STATUSES)
-        .aggregate(total=_sum("net_total"))["total"]
-    )
-    return (total or ZERO).quantize(MONEY_PLACES)
+    """What the period's labour cost, paid or not.
+
+    Net pay plus whatever the runs kept back to settle staff purchases: a wage
+    paid partly in goods still cost the whole wage.
+    """
+    from .staff_purchases import staff_purchases_withheld
+
+    runs = payroll_runs_for_period(start, end).filter(status__in=RECOGNISED_STATUSES)
+    total = runs.aggregate(total=_sum("net_total"))["total"]
+    return ((total or ZERO) + staff_purchases_withheld(runs)).quantize(MONEY_PLACES)
 
 
 def payroll_paid(start, end) -> Decimal:
@@ -121,6 +124,10 @@ def wages_payable(as_of) -> Decimal:
     net of the instalment while ``loans_outstanding`` still held the loan in
     full would knock the instalment off the shop's worth on the day the wages
     went out, for a payment that changed nothing it owned.
+
+    Gross of staff purchases for the same reason: the invoice an employee's
+    shopping sits on stays a receivable until the run is paid, so until then
+    the wage that will settle it is owed in full.
     """
     cutoff = day_range_end(as_of)
     owed = (
@@ -134,7 +141,10 @@ def wages_payable(as_of) -> Decimal:
         loan__isnull=False,
         direction=PayrollAdjustment.Direction.DEDUCTION,
     ).aggregate(total=_sum("amount"))["total"]
-    return ((net or ZERO) + (withheld or ZERO)).quantize(MONEY_PLACES)
+    from .staff_purchases import staff_purchases_withheld
+
+    purchases = staff_purchases_withheld(owed)
+    return ((net or ZERO) + (withheld or ZERO) + purchases).quantize(MONEY_PLACES)
 
 
 def _sum(field):

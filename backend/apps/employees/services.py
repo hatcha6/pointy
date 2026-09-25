@@ -24,6 +24,11 @@ from .models import (
     PayrollLine,
     PayrollRun,
 )
+from .staff_purchases import (
+    ensure_staff_customer,
+    refresh_staff_purchase_deductions,
+    settle_staff_purchases,
+)
 
 
 MONEY_PLACES = Decimal("0.01")
@@ -59,9 +64,11 @@ def record_employee_event(
 
 def ensure_employee_for_user(user, *, created_by=None):
     """Create an Employee profile linked to ``user`` unless one already
-    exists, so every account holder shows up in payroll automatically."""
+    exists, so every account holder shows up in payroll automatically — and
+    with it their staff customer account, so they can buy on payroll."""
     existing = Employee.objects.filter(user=user).first()
     if existing is not None:
+        ensure_staff_customer(existing, created_by=created_by)
         return existing
 
     full_name = (user.get_full_name() or "").strip() or user.username
@@ -76,6 +83,7 @@ def ensure_employee_for_user(user, *, created_by=None):
             "auto_created": True,
         },
     )
+    ensure_staff_customer(employee, created_by=created_by)
     return employee
 
 
@@ -110,20 +118,26 @@ def save_payroll_run_with_lines(
                 [
                     PayrollAdjustment(payroll_line=line, **adjustment)
                     for adjustment in adjustments_data
+                    # Derived from the invoices below, never taken from the
+                    # client: an echoed row would come back without its invoice.
+                    if adjustment.get("adjustment_type")
+                    != PayrollAdjustment.AdjustmentType.STAFF_PURCHASE
                 ]
             )
             line.recalculate(save=True)
-
-    payroll_run.recalculate(save_lines=True)
-    payroll_run.save(
-        update_fields=[
-            "gross_total",
-            "additions_total",
-            "deductions_total",
-            "net_total",
-            "updated_at",
-        ]
-    )
+        # Re-derives the staff purchases and recalculates the whole run.
+        payroll_run = refresh_staff_purchase_deductions(payroll_run)
+    else:
+        payroll_run.recalculate(save_lines=True)
+        payroll_run.save(
+            update_fields=[
+                "gross_total",
+                "additions_total",
+                "deductions_total",
+                "net_total",
+                "updated_at",
+            ]
+        )
     record_employee_event(
         name=(
             "employees.payroll_run.created"
@@ -214,16 +228,9 @@ def draft_monthly_payroll_run(
             )
         line.recalculate(save=True)
 
-    payroll_run.recalculate(save_lines=True)
-    payroll_run.save(
-        update_fields=[
-            "gross_total",
-            "additions_total",
-            "deductions_total",
-            "net_total",
-            "updated_at",
-        ]
-    )
+    # Last, so staff purchases take only what the salary, commission and loan
+    # instalments leave. It recalculates the run's totals as well.
+    payroll_run = refresh_staff_purchase_deductions(payroll_run)
     record_employee_event(
         name="employees.payroll_run.monthly_draft_created",
         user=employee_created_by(request),
@@ -350,6 +357,11 @@ def _commissionable_sales_total(employee, period_start, period_end):
         register_session__owner_id=employee.user_id,
         created_at__date__gte=period_start,
         created_at__date__lte=period_end,
+    ).exclude(
+        # Goods sold to the staff themselves, on their own staff accounts, are
+        # not sales a commission rewards — or a cashier on commission would be
+        # paid a percentage of their own shopping.
+        customer__staff_employee__isnull=False,
     )
     total = orders.aggregate(total=Sum("total"))["total"] or Decimal("0.00")
     refunded = OrderAdjustment.objects.filter(order__in=orders).aggregate(
@@ -483,7 +495,11 @@ def approve_payroll_run(payroll_run, *, request=None):
         raise serializers.ValidationError(
             {"lines": "Payroll run must include at least one employee."}
         )
-    payroll_run.recalculate(save_lines=True)
+    # What the staff owe is taken as it stands now, not as it stood when the
+    # draft was made: an invoice settled at the till since drops out, and one
+    # bought since comes in. From here the run is fixed until it is paid. This
+    # is also the recalculation of every line that approving has always done.
+    payroll_run = refresh_staff_purchase_deductions(payroll_run)
     payroll_run.approved_at = timezone.now()
     payroll_run.approved_by = employee_created_by(request)
     payroll_run.save(
@@ -539,6 +555,12 @@ def mark_payroll_run_paid(payroll_run, *, payment_date=None, request=None):
             "paid_by",
             "updated_at",
         ]
+    )
+    # Before submitting: settling may shrink a deduction whose invoice was paid
+    # off at the till since approval, and the run's totals must be final
+    # before they freeze.
+    payroll_run = settle_staff_purchases(
+        payroll_run, actor=employee_created_by(request)
     )
     # Paying is what submits a run: it is the moment the money leaves and the
     # moment its figures stop being a proposal. From here it is frozen.

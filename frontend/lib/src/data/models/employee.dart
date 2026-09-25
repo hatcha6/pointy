@@ -698,6 +698,7 @@ class PayrollAdjustment {
     required this.adjustmentType,
     required this.amount,
     this.notes = '',
+    this.orderReceiptNumber = '',
   });
 
   final int id;
@@ -706,6 +707,15 @@ class PayrollAdjustment {
   final double amount;
   final String notes;
 
+  /// The staff-purchase invoice this deduction takes, by its printed number.
+  /// Empty for every other kind of adjustment.
+  final String orderReceiptNumber;
+
+  /// Something the employee bought on their staff account, taken from pay.
+  /// The server gives it way first when the rest of the line leaves less pay.
+  bool get isStaffPurchase =>
+      adjustmentType == 'staff_purchase' && direction == 'deduction';
+
   factory PayrollAdjustment.fromJson(Map<String, Object?> json) {
     return PayrollAdjustment(
       id: _intFromJson(json['id']),
@@ -713,6 +723,7 @@ class PayrollAdjustment {
       adjustmentType: json['adjustment_type']?.toString() ?? '',
       amount: _doubleFromJson(json['amount']),
       notes: json['notes']?.toString() ?? '',
+      orderReceiptNumber: json['order_receipt_number']?.toString() ?? '',
     );
   }
 }

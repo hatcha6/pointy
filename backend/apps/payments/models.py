@@ -10,7 +10,15 @@ from apps.sales.models import Order, RegisterSession
 
 
 class PaymentQuerySet(DocumentQuerySetMixin, models.QuerySet):
-    pass
+    def money_received(self):
+        """Payments that brought money in: every tender but a salary deduction.
+
+        A salary deduction settles a staff purchase out of the employee's wages
+        and puts nothing in a drawer or a bank, so a figure that means "what
+        customers paid us" leaves it out. Balances and statements do not — to an
+        invoice it is as much a payment as cash.
+        """
+        return self.exclude(method=Payment.Method.SALARY_DEDUCTION)
 
 
 class Payment(DocumentMixin, TimeStampedModel):
@@ -29,6 +37,23 @@ class Payment(DocumentMixin, TimeStampedModel):
         CASH = "cash", "Cash"
         CARD = "card", "Card"
         TRANSFER = "transfer", "Transfer"
+        # A staff purchase settled out of the employee's wages when their
+        # payroll run is paid (``apps.employees.staff_purchases``). No money
+        # moves: the wage paid out is smaller instead, so this lands in no
+        # drawer and no bank, and no till can tender it —
+        # ``ShopSettings.payment_method_enabled`` knows only the three above.
+        # Not "payroll": that word already names the wages-paid line of the
+        # money position and the reports, and money *in* must not read as
+        # money *out*.
+        SALARY_DEDUCTION = "salary_deduction", "Salary deduction"
+
+    #: What a till can take: every method but the one only payroll writes.
+    TILL_METHODS = (Method.CASH, Method.CARD, Method.TRANSFER)
+
+    @classmethod
+    def till_method_choices(cls):
+        """``TILL_METHODS`` as field choices, for every endpoint a till writes."""
+        return [(method.value, method.label) for method in cls.TILL_METHODS]
 
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="payments")
     method = models.CharField(max_length=16, choices=Method.choices)

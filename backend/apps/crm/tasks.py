@@ -95,6 +95,9 @@ def debt_reminder_sweep_task():
         .filter(customer__isnull=False)
         .exclude(customer__phone="")
         .exclude(customer__do_not_contact=True)
+        # A staff account's debt is taken from the next payroll run; nobody
+        # needs a text asking them to come in and pay it.
+        .exclude(customer__staff_employee__isnull=False)
     )
     sent = 0
     # chunk_size is required to combine iterator() with prefetch_related().

@@ -80,6 +80,7 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
   bool enableQuotations = true,
   bool enableCredit = true,
   DateTime? proposedDueDate,
+  bool isStaffAccount = false,
 }) {
   final width = MediaQuery.sizeOf(context).width;
   Widget childBuilder(BuildContext modalContext) {
@@ -103,6 +104,7 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
       enableQuotations: enableQuotations,
       enableCredit: enableCredit,
       proposedDueDate: proposedDueDate,
+      isStaffAccount: isStaffAccount,
       onCancel: () => Navigator.of(modalContext).pop(),
       onSubmit: (result) => Navigator.of(modalContext).pop(result),
     );
@@ -142,6 +144,7 @@ class PaymentSheet extends StatefulWidget {
     this.enableQuotations = true,
     this.enableCredit = true,
     this.proposedDueDate,
+    this.isStaffAccount = false,
     @visibleForTesting this.clock = DateTime.now,
   });
 
@@ -187,6 +190,11 @@ class PaymentSheet extends StatefulWidget {
   /// common case is one tap, and stays overridable. Null means no terms are
   /// configured, which is the same as an open tab.
   final DateTime? proposedDueDate;
+
+  /// Whether the attached customer is an employee's own staff account. Such a
+  /// sale is normally put on the account — what stays owed comes off the
+  /// employee's next payroll run — so the sheet opens on آجل and says so.
+  final bool isStaffAccount;
 
   /// Injectable time source so tests can drive scanner-burst timing.
   final DateTime Function() clock;
@@ -247,6 +255,14 @@ class _PaymentSheetState extends State<PaymentSheet> {
   @override
   void initState() {
     super.initState();
+    if (widget.isStaffAccount && widget.enableCredit) {
+      // Picking a staff account is how a cashier charges a purchase to
+      // payroll, so the sale starts on آجل with nothing tendered. Switching to
+      // a normal sale is still one tap for the one who pays cash.
+      _saleType = SaleType.credit;
+      _dueDate = widget.proposedDueDate;
+      return;
+    }
     final methods = _enabledMethods;
     if (methods.isNotEmpty) {
       _tenders.add(
@@ -638,6 +654,28 @@ class _PaymentSheetState extends State<PaymentSheet> {
               context,
             ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
           ),
+          if (widget.isStaffAccount) ...[
+            SizedBox(height: spacing.sm),
+            Row(
+              key: const ValueKey('staff_purchase_payroll_hint'),
+              children: [
+                Icon(
+                  Icons.badge_outlined,
+                  size: 18,
+                  color: colors.primaryStrong,
+                ),
+                SizedBox(width: spacing.sm),
+                Expanded(
+                  child: Text(
+                    l10n.staffPurchasePayrollHint,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.primaryStrong,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           SizedBox(height: spacing.md),
         ],
         ..._buildScanNotice(l10n, spacing),

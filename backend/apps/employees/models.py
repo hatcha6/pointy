@@ -63,6 +63,18 @@ class Employee(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # The employee's own account as a customer of the shop — what a cashier
+    # picks at the till when a member of staff takes goods home. Whatever that
+    # account owes on آجل invoices is deducted from the next payroll run (see
+    # ``apps.employees.staff_purchases``). Created with the employee, so every
+    # member of staff can buy on payroll without anyone setting it up.
+    customer = models.OneToOneField(
+        "customers.Customer",
+        on_delete=models.SET_NULL,
+        related_name="staff_employee",
+        blank=True,
+        null=True,
+    )
     emergency_contact_name = models.CharField(max_length=255, blank=True)
     emergency_contact_phone = models.CharField(max_length=64, blank=True)
     notes = models.TextField(blank=True)
@@ -702,12 +714,26 @@ class PayrollLine(TimeStampedModel):
         deductions = Decimal(self.absence_deduction_amount or "0.00") + Decimal(
             self.manual_deduction_amount or "0.00"
         )
+        staff_purchases = []
         if self.pk:
             for adjustment in self.adjustments.all():
-                if adjustment.direction == PayrollAdjustment.Direction.ADDITION:
+                if adjustment.is_staff_purchase_deduction:
+                    staff_purchases.append(adjustment)
+                elif adjustment.direction == PayrollAdjustment.Direction.ADDITION:
                     additions += adjustment.amount
                 else:
                     deductions += adjustment.amount
+        # Staff purchases come out of whatever pay is left, so they are the first
+        # thing to give way: an absence stamped from attendance, or a penalty
+        # typed after the draft, shrinks them rather than making the line
+        # negative. What they no longer cover stays owed on the invoice, and the
+        # next run takes it.
+        resized = _fit_staff_purchases(
+            staff_purchases, room=self.gross_amount + additions - deductions
+        )
+        deductions += sum(
+            (adjustment.amount for adjustment in staff_purchases), Decimal("0.00")
+        )
         self.additions_amount = additions.quantize(self.MONEY_PLACES)
         self.deductions_amount = deductions.quantize(self.MONEY_PLACES)
         self.net_amount = (
@@ -729,6 +755,34 @@ class PayrollLine(TimeStampedModel):
                     "updated_at",
                 ]
             )
+            for adjustment in resized:
+                if adjustment.amount > Decimal("0.00"):
+                    adjustment.save(update_fields=["amount", "updated_at"])
+                else:
+                    adjustment.delete()
+
+
+def _fit_staff_purchases(adjustments, *, room):
+    """Shrink staff-purchase deductions until they fit in ``room``.
+
+    The newest invoice gives way first: the deductions were allocated oldest
+    invoice first, and the oldest debt is the one worth settling. Mutates the
+    adjustments in place and returns the ones it changed, for the caller to
+    persist. A deduction cut to nothing is left at zero rather than removed
+    here, so the caller decides whether that is a delete.
+    """
+    excess = sum(
+        (adjustment.amount for adjustment in adjustments), Decimal("0.00")
+    ) - max(Decimal(room), Decimal("0.00"))
+    resized = []
+    for adjustment in sorted(adjustments, key=lambda row: row.pk or 0, reverse=True):
+        if excess <= Decimal("0.00"):
+            break
+        cut = min(adjustment.amount, excess)
+        adjustment.amount = (adjustment.amount - cut).quantize(PayrollLine.MONEY_PLACES)
+        excess -= cut
+        resized.append(adjustment)
+    return resized
 
 
 class PayrollAdjustment(TimeStampedModel):
@@ -745,6 +799,10 @@ class PayrollAdjustment(TimeStampedModel):
         LOAN = "loan", "Loan"
         ABSENCE = "absence", "Absence"
         PENALTY = "penalty", "Penalty"
+        # What the employee bought on آجل with their own staff account. Written
+        # by ``apps.employees.staff_purchases`` only — one row per invoice, so
+        # the run says which invoices it is taking — and never by hand.
+        STAFF_PURCHASE = "staff_purchase", "Staff purchase"
         OTHER = "other", "Other"
 
     payroll_line = models.ForeignKey(
@@ -766,6 +824,24 @@ class PayrollAdjustment(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # A staff-purchase deduction names the invoice it settles, the way a loan
+    # instalment names its loan.
+    order = models.ForeignKey(
+        "sales.Order",
+        on_delete=models.PROTECT,
+        related_name="payroll_adjustments",
+        blank=True,
+        null=True,
+    )
+    # The payment that settled ``order`` when the run was paid. Empty until
+    # then, and given back (cancelled) if the run is voided.
+    settlement_payment = models.OneToOneField(
+        "payments.Payment",
+        on_delete=models.PROTECT,
+        related_name="payroll_adjustment",
+        blank=True,
+        null=True,
+    )
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -773,6 +849,13 @@ class PayrollAdjustment(TimeStampedModel):
 
     def __str__(self):
         return f"{self.direction} {self.amount}"
+
+    @property
+    def is_staff_purchase_deduction(self):
+        return (
+            self.adjustment_type == self.AdjustmentType.STAFF_PURCHASE
+            and self.direction == self.Direction.DEDUCTION
+        )
 
 
 class EmployeeLoan(TimeStampedModel):

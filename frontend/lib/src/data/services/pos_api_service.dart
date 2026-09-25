@@ -1053,6 +1053,10 @@ class PosApiService {
     return _customers.fetchCustomer(customerId);
   }
 
+  Future<Customer> fetchStaffAccount() {
+    return _customers.fetchStaffAccount();
+  }
+
   Future<void> setCustomerConsent(
     int customerId, {
     bool? marketingOptedOut,

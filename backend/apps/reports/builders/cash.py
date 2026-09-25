@@ -27,7 +27,9 @@ from .scope import daily_totals, in_period, money_sum, payments, register_sessio
 
 
 def payment_methods(context):
-    period_payments = in_period(payments(context.user), context.period)
+    # What customers paid with — so not a salary deduction, which is a staff
+    # purchase settled out of wages and put no money anywhere.
+    period_payments = in_period(payments(context.user).money_received(), context.period)
     limit = context.row_limit("payment_methods")
     method_rows = bounded_queryset(
         period_payments.values("method")

@@ -28,6 +28,7 @@ from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import DiscountRedemption, DiscountRule
 from apps.employees.models import Employee, EmployeeLoan, PayrollRun
+from apps.employees.staff_purchases import staff_purchases_withheld
 from apps.expenses.models import Expense
 from apps.fraud.models import FraudFinding
 from apps.inventory.models import StockItem, StockMovement
@@ -330,7 +331,9 @@ def _sales_section(request, period):
 
 
 def _payments_section(request, period):
-    payments = _payments(request).filter(
+    # The mix of what customers paid with. A salary deduction paid with nothing:
+    # it settled a staff purchase out of wages.
+    payments = _payments(request).money_received().filter(
         created_at__gte=period["start"],
         created_at__lt=period["end"],
     )
@@ -590,9 +593,17 @@ def _payroll_section(period):
         pending_run_count=Count("id", filter=Q(status=PayrollRun.Status.APPROVED)),
     )
 
+    # Labour cost, the same figure as the profit report's
+    # (``apps.employees.reporting.payroll_cost``): what the runs kept back for
+    # staff purchases was wage too, paid in goods.
+    salary_expense = totals["salary_expense"] + staff_purchases_withheld(
+        payroll_runs.filter(in_period).filter(
+            status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID)
+        )
+    )
     return {
         "summary": {
-            "salary_expense": _money(totals["salary_expense"]),
+            "salary_expense": _money(salary_expense),
             "paid_total": _money(totals["paid_total"]),
             "pending_total": _money(totals["pending_total"]),
             "active_employee_count": Employee.objects.filter(

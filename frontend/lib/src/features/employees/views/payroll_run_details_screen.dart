@@ -754,11 +754,11 @@ class _PayrollLineTile extends StatelessWidget {
                             adjustment.adjustmentType,
                           ),
                         ),
-                        value: adjustment.notes.trim().isEmpty
+                        value: payrollAdjustmentNote(l10n, adjustment).isEmpty
                             ? formatMoney(adjustment.amount)
                             : l10n.payrollAdjustmentAmountWithNotes(
                                 formatMoney(adjustment.amount),
-                                adjustment.notes.trim(),
+                                payrollAdjustmentNote(l10n, adjustment),
                               ),
                       ),
                   ],

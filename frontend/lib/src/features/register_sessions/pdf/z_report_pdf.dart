@@ -352,6 +352,7 @@ class RegisterZReportPdfService {
       'cash' => 'نقدًا',
       'card' => 'بطاقة',
       'transfer' => 'تحويل',
+      'salary_deduction' => 'خصم من الراتب',
       _ => method,
     };
   }

@@ -10123,6 +10123,12 @@ abstract class AppLocalizations {
   /// **'تحويل'**
   String get paymentMethodTransfer;
 
+  /// No description provided for @paymentMethodSalaryDeduction.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم من الراتب'**
+  String get paymentMethodSalaryDeduction;
+
   /// No description provided for @requireCardReceiptSettingLabel.
   ///
   /// In ar, this message translates to:
@@ -16911,6 +16917,12 @@ abstract class AppLocalizations {
   /// **'تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.'**
   String get customerOutstandingBalanceCalloutBody;
 
+  /// No description provided for @staffAccountOutstandingBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب موظف: يُخصم المستحق تلقائيًا من راتبه في مسيّر الرواتب القادم، أقدم الفواتير أولًا. ويمكن تحصيله نقدًا الآن أيضًا.'**
+  String get staffAccountOutstandingBody;
+
   /// No description provided for @customerAccountPaymentTitle.
   ///
   /// In ar, this message translates to:
@@ -17126,6 +17138,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'عميل عابر'**
   String get walkInCustomerLabel;
+
+  /// No description provided for @staffAccountSelectAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'على حسابي (خصم من الراتب)'**
+  String get staffAccountSelectAction;
+
+  /// No description provided for @staffAccountLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح حسابك كموظف. حاول مرة أخرى.'**
+  String get staffAccountLoadError;
+
+  /// No description provided for @staffAccountBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب موظف'**
+  String get staffAccountBadge;
 
   /// No description provided for @noSupplierSelectedLabel.
   ///
@@ -17726,6 +17756,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.'**
   String get creditFullyOnAccountHint;
+
+  /// No description provided for @staffPurchasePayrollHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب موظف: المتبقّي يُخصم تلقائيًا من راتبه في مسيّر الرواتب القادم.'**
+  String get staffPurchasePayrollHint;
 
   /// No description provided for @creditDownPaymentHint.
   ///
@@ -22649,6 +22685,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جزاء'**
   String get payrollAdjustmentPenalty;
+
+  /// No description provided for @payrollAdjustmentStaffPurchase.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشتريات موظف'**
+  String get payrollAdjustmentStaffPurchase;
+
+  /// Payroll deduction row: the staff-purchase invoice it takes.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {receiptNumber}'**
+  String payrollStaffPurchaseInvoice(String receiptNumber);
 
   /// No description provided for @payrollAdjustmentOther.
   ///

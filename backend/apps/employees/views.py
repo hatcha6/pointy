@@ -38,6 +38,7 @@ from .services import (
     reject_employee_loan,
     void_payroll_run,
 )
+from .staff_purchases import ensure_staff_customer
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
@@ -113,6 +114,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         employee = serializer.save()
+        # Every employee can buy on payroll, whether or not they have a login.
+        ensure_staff_customer(employee, created_by=self.request.user)
         record_employee_event(
             name="employees.employee.created",
             user=self.request.user,
@@ -350,6 +353,8 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         "lines__employee",
         "lines__compensation_plan",
         "lines__adjustments",
+        # The receipt number a staff-purchase deduction names.
+        "lines__adjustments__order",
     )
     filterset_fields = ("status",)
     search_fields = ("run_number", "notes", "lines__employee__full_name")
@@ -511,8 +516,23 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
                 )
 
             if direction == PayrollAdjustment.Direction.DEDUCTION:
+                # Staff purchases give way to a deduction typed by hand
+                # (``PayrollLine.recalculate``), so what they take is room too.
+                staff_purchases = dict(
+                    PayrollAdjustment.objects.filter(
+                        payroll_line__in=lines,
+                        adjustment_type=PayrollAdjustment.AdjustmentType.STAFF_PURCHASE,
+                        direction=PayrollAdjustment.Direction.DEDUCTION,
+                    )
+                    .values("payroll_line_id")
+                    .order_by()
+                    .annotate(total=Sum("amount"))
+                    .values_list("payroll_line_id", "total")
+                )
                 negative_lines = [
-                    line for line in lines if line.net_amount < amount
+                    line
+                    for line in lines
+                    if line.net_amount + staff_purchases.get(line.pk, 0) < amount
                 ]
                 if negative_lines:
                     raise serializers.ValidationError(

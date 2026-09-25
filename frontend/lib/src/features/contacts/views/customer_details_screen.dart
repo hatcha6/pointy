@@ -644,6 +644,11 @@ class _CustomerHero extends StatelessWidget {
             label: l10n.marketingAllowedLabel,
             icon: Icons.campaign_outlined,
           ),
+        if (customer.isStaffAccount)
+          PointyHeroPill(
+            label: l10n.staffAccountBadge,
+            icon: Icons.work_outline,
+          ),
       ],
     );
   }
@@ -762,7 +767,11 @@ class _OutstandingBalanceCallout extends StatelessWidget {
           title: l10n.customerOutstandingBalanceCalloutTitle(
             formatMoney(viewModel.outstandingBalance),
           ),
-          message: l10n.customerOutstandingBalanceCalloutBody,
+          // A staff account's debt is taken from payroll; say so, so nobody
+          // chases a colleague for money their wages are about to settle.
+          message: viewModel.customer.isStaffAccount
+              ? l10n.staffAccountOutstandingBody
+              : l10n.customerOutstandingBalanceCalloutBody,
         ),
         if (viewModel.hasPaymentError) ...[
           SizedBox(height: spacing.sm),

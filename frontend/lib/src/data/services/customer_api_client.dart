@@ -39,6 +39,16 @@ class CustomerApiClient {
     );
   }
 
+  /// The signed-in user's own staff account, which the server makes the first
+  /// time it is asked for.
+  Future<Customer> fetchStaffAccount() async {
+    final response = await _session.get('customers/staff-account/');
+    _session.throwApiException(response, 'Staff account failed with status');
+    return Customer.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<void> setCustomerConsent(
     int customerId, {
     bool? marketingOptedOut,

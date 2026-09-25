@@ -26,6 +26,9 @@ class CustomerSerializer(serializers.ModelSerializer):
     # the arithmetic two implementations drift on, and the till must propose the
     # date the reports will later age against.
     effective_payment_terms = serializers.SerializerMethodField()
+    # Set when this is an employee's own account: what they buy on آجل is
+    # deducted from their next payroll run. Null for every ordinary customer.
+    staff_employee = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
@@ -44,6 +47,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             "is_active",
             "is_auto_created",
             "card_count",
+            "staff_employee",
             # Credit (آجل) ceiling.
             "credit_limit_policy",
             "credit_limit",
@@ -73,6 +77,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             "customer_number",
             "marketing_opted_out",
             "do_not_contact",
+            "staff_employee",
             "effective_credit_limit",
             "effective_payment_terms",
             "rfm_segment",
@@ -92,6 +97,13 @@ class CustomerSerializer(serializers.ModelSerializer):
 
     def get_marketing_opted_out(self, obj) -> bool:
         return bool(obj.marketing_opted_out_at)
+
+    def get_staff_employee(self, obj) -> int | None:
+        # A reverse one-to-one raises when there is no row; ``getattr`` reads
+        # that as "not a staff account". The viewset joins it, so a page of
+        # customers costs no query per row.
+        employee = getattr(obj, "staff_employee", None)
+        return employee.pk if employee is not None else None
 
     def get_effective_credit_limit(self, obj) -> str | None:
         from apps.customers.receivables import effective_credit_limit

@@ -2304,7 +2304,22 @@ def refund_method_for_order(order):
         from apps.payments.models import Payment
 
         return Payment.Method.CASH
-    return payment.method
+    return refund_tender(payment.method)
+
+
+def refund_tender(method):
+    """The tender a refund goes back through, for money taken by ``method``.
+
+    Every tender but one refunds through itself: a card sale back to the card,
+    cash from the drawer. A salary deduction cannot — there is no wage to hand
+    back at the counter — so what the employee's wages settled is given back in
+    cash, and the drawer that pays it out is the one that counts it.
+    """
+    from apps.payments.models import Payment
+
+    if method == Payment.Method.SALARY_DEDUCTION:
+        return Payment.Method.CASH
+    return method
 
 
 def adjustment_register_session(order, context_session):
@@ -2405,7 +2420,8 @@ def refund_tender_allocations(order, amount):
     for row in rows:
         net = money(row["total"] or Decimal("0.00"))
         if net > 0:
-            net_by_method[row["method"]] = net
+            method = refund_tender(row["method"])
+            net_by_method[method] = net_by_method.get(method, Decimal("0.00")) + net
 
     if not net_by_method:
         return [(refund_method_for_order(order), amount)]

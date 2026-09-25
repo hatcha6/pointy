@@ -80,6 +80,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
         "destroy": ("customers.delete_customer",),
         "merge": ("customers.change_customer", "customers.delete_customer"),
         "recompute_segments": ("customers.change_customer",),
+        # The till's "me": anyone who can ring up a sale may put it on their own
+        # staff account. It reads no one else's record, so it needs no customer
+        # permission and ignores ``allow_cashier_customer_access``.
+        "staff_account": ("sales.add_order",),
         # Map entry = managers/accountants. Cashiers reach record_payment via
         # CustomerEndpointPermission when ``allow_cashier_customer_access`` is on
         # (they have ``sales.add_order`` + their own open session, and the
@@ -123,6 +127,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
         queryset = (
             super()
             .get_queryset()
+            .select_related("staff_employee")
             .annotate(card_count=Count("cards"))
             .order_by("full_name", "customer_number")
         )
@@ -235,6 +240,18 @@ class CustomerViewSet(viewsets.ModelViewSet):
             {"status": "scheduled", "task_id": async_result.id},
             status=status.HTTP_202_ACCEPTED,
         )
+
+    @action(detail=False, methods=["get"], url_path="staff-account")
+    def staff_account(self, request):
+        """The signed-in user's own staff customer account, made if missing.
+
+        What the till selects when a member of staff buys something for
+        themselves; the invoice is then deducted from their next payroll run.
+        """
+        from apps.employees.staff_purchases import staff_customer_for_user
+
+        customer = staff_customer_for_user(request.user)
+        return Response(self.get_serializer(customer).data)
 
     @action(detail=True, methods=["post"], url_path="record-payment")
     def record_payment(self, request, pk=None):

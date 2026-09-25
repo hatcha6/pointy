@@ -284,6 +284,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "user",
             "user_username",
             "has_system_access",
+            # The staff customer account their purchases are rung up on.
+            "customer",
             "emergency_contact_name",
             "emergency_contact_phone",
             "notes",
@@ -296,6 +298,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "id",
             "user_username",
             "has_system_access",
+            "customer",
             "active_compensation_plan",
             "payroll_total",
             "created_at",
@@ -348,6 +351,13 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
 
 class PayrollAdjustmentSerializer(serializers.ModelSerializer):
+    # The staff-purchase invoice a deduction takes, by the number printed on it.
+    order_receipt_number = serializers.CharField(
+        source="order.receipt_number",
+        read_only=True,
+        default=None,
+    )
+
     class Meta:
         model = PayrollAdjustment
         fields = [
@@ -356,11 +366,22 @@ class PayrollAdjustmentSerializer(serializers.ModelSerializer):
             "adjustment_type",
             "amount",
             "loan",
+            "order",
+            "order_receipt_number",
+            "settlement_payment",
             "notes",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "loan", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "loan",
+            "order",
+            "order_receipt_number",
+            "settlement_payment",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class EmployeeLoanSerializer(serializers.ModelSerializer):
@@ -633,6 +654,15 @@ class PayrollRunBulkAdjustmentSerializer(serializers.Serializer):
 
     def validate_line_ids(self, value):
         return list(dict.fromkeys(value))
+
+    def validate_adjustment_type(self, value):
+        # Staff purchases are read off the employee's open invoices, one row per
+        # invoice; a hand-typed one would name no invoice and settle nothing.
+        if value == PayrollAdjustment.AdjustmentType.STAFF_PURCHASE:
+            raise serializers.ValidationError(
+                "Staff purchases are added from the employee's invoices automatically."
+            )
+        return value
 
     def validate(self, attrs):
         if (

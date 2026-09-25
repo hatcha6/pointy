@@ -52,6 +52,18 @@ def cancel_payment(payment, *, reason, request=None, register_session=None):
                 )
             }
         )
+    if payment.method == Payment.Method.SALARY_DEDUCTION:
+        # The wage it came out of was paid smaller. Cancelling only this row
+        # would reopen the invoice and leave the employee charged twice.
+        raise serializers.ValidationError(
+            {
+                "code": "salary_deduction_owned_by_payroll",
+                "detail": (
+                    "This invoice was settled from the employee's wages. Void "
+                    "the payroll run that took it to give it back."
+                ),
+            }
+        )
     # Read the invoice, do not trust the caller's copy of it: a payment handed
     # in from before its order was voided would otherwise carry a stale
     # lifecycle and walk straight past this guard.

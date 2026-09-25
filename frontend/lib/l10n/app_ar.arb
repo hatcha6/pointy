@@ -3490,6 +3490,7 @@
   "paymentMethodCash": "نقد",
   "paymentMethodCard": "بطاقة",
   "paymentMethodTransfer": "تحويل",
+  "paymentMethodSalaryDeduction": "خصم من الراتب",
   "requireCardReceiptSettingLabel": "إلزام مسح ومطابقة إيصال البطاقة",
   "requireCardReceiptSettingSubtitle": "يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.",
   "requireCustomerForCreditLabel": "طلب عميل للبيع الآجل وعروض الأسعار",
@@ -6022,6 +6023,7 @@
     }
   },
   "customerOutstandingBalanceCalloutBody": "تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.",
+  "staffAccountOutstandingBody": "حساب موظف: يُخصم المستحق تلقائيًا من راتبه في مسيّر الرواتب القادم، أقدم الفواتير أولًا. ويمكن تحصيله نقدًا الآن أيضًا.",
   "customerAccountPaymentTitle": "تسجيل دفعة على الحساب",
   "customerAccountPaymentAmountLabel": "المبلغ",
   "customerAccountPaymentOutstandingValue": "الرصيد المستحق: {amount}",
@@ -6130,6 +6132,9 @@
   "selectedCustomerLabel": "العميل",
   "selectedSupplierLabel": "المورد",
   "walkInCustomerLabel": "عميل عابر",
+  "staffAccountSelectAction": "على حسابي (خصم من الراتب)",
+  "staffAccountLoadError": "تعذّر فتح حسابك كموظف. حاول مرة أخرى.",
+  "staffAccountBadge": "حساب موظف",
   "noSupplierSelectedLabel": "لا يوجد مورد محدد",
   "purchaseSupplierRequiredHint": "اختر موردًا قبل إرسال أمر الشراء.",
   "chooseCustomerTitle": "اختيار العميل",
@@ -6315,6 +6320,7 @@
   "creditBalanceDueLabel": "المتبقّي على العميل",
   "creditDownPaymentTooHighError": "المبلغ المدفوع أكبر من الإجمالي.",
   "creditFullyOnAccountHint": "كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.",
+  "staffPurchasePayrollHint": "حساب موظف: المتبقّي يُخصم تلقائيًا من راتبه في مسيّر الرواتب القادم.",
   "creditDownPaymentHint": "المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.",
   "creditDueDateLabel": "تاريخ الاستحقاق",
   "creditDueDateUnset": "اختر تاريخًا (اختياري)",
@@ -8336,6 +8342,16 @@
   "payrollAdjustmentLoan": "خصم سلفة",
   "payrollAdjustmentAbsence": "غياب",
   "payrollAdjustmentPenalty": "جزاء",
+  "payrollAdjustmentStaffPurchase": "مشتريات موظف",
+  "payrollStaffPurchaseInvoice": "فاتورة {receiptNumber}",
+  "@payrollStaffPurchaseInvoice": {
+    "description": "Payroll deduction row: the staff-purchase invoice it takes.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
   "payrollAdjustmentOther": "تعديل آخر",
   "approvePayrollRunTooltip": "اعتماد مسير الرواتب",
   "markPayrollRunPaidTooltip": "تسجيل المسير كمدفوع",

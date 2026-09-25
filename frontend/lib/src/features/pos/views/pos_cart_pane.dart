@@ -7,6 +7,8 @@ import '../../../shared/barcode/scan_burst_guard.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../core/result.dart';
+import '../../../data/models/contact.dart';
 import '../../../data/models/integration_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
@@ -563,6 +565,7 @@ class PosCartPane extends StatelessWidget {
         hasCustomer: viewModel.selectedCustomer != null,
         requireCustomerForCredit: viewModel.requireCustomerForCredit,
         proposedDueDate: viewModel.proposedCreditDueDate,
+        isStaffAccount: viewModel.selectedCustomer?.isStaffAccount ?? false,
       ),
     );
   }
@@ -1150,6 +1153,8 @@ class _SaleSettingsDialog extends StatefulWidget {
 
 class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
   late var _selectedCustomer = widget.viewModel.selectedCustomer;
+  var _loadingStaffAccount = false;
+  var _staffAccountFailed = false;
   late final TextEditingController _controller = TextEditingController(
     text: widget.viewModel.couponCode,
   );
@@ -1185,9 +1190,11 @@ class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
                 anchor: TutorAnchor.contactSelectionTile,
                 child: ContactSelectionTile(
                   label: l10n.selectedCustomerLabel,
-                  value: _selectedCustomer?.fullName ?? '',
+                  value: _customerLabel(l10n),
                   placeholder: l10n.walkInCustomerLabel,
-                  icon: Icons.person_pin_circle_outlined,
+                  icon: _selectedCustomer?.isStaffAccount == true
+                      ? Icons.badge_outlined
+                      : Icons.person_pin_circle_outlined,
                   enabled: !widget.viewModel.isCheckingOut,
                   onSelect: _selectCustomer,
                   onClear: () => setState(() => _selectedCustomer = null),
@@ -1195,6 +1202,28 @@ class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
                   selectActionIcon: Icons.edit_outlined,
                 ),
               ),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  key: const ValueKey('sale_settings_staff_account_button'),
+                  onPressed:
+                      widget.viewModel.isCheckingOut || _loadingStaffAccount
+                      ? null
+                      : _selectStaffAccount,
+                  icon: _loadingStaffAccount
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: PointySpinner(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.badge_outlined),
+                  label: Text(l10n.staffAccountSelectAction),
+                ),
+              ),
+              if (_staffAccountFailed)
+                Text(
+                  l10n.staffAccountLoadError,
+                  style: TextStyle(color: context.pointyColors.danger),
+                ),
               const SizedBox(height: 12),
               TextField(
                 controller: _controller,
@@ -1243,6 +1272,16 @@ class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
     );
   }
 
+  String _customerLabel(AppLocalizations l10n) {
+    final customer = _selectedCustomer;
+    if (customer == null) {
+      return '';
+    }
+    return customer.isStaffAccount
+        ? '${customer.fullName} · ${l10n.staffAccountBadge}'
+        : customer.fullName;
+  }
+
   Future<void> _selectCustomer() async {
     final customer = await showCustomerPickerSheet(
       context: context,
@@ -1252,6 +1291,29 @@ class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
       return;
     }
     setState(() => _selectedCustomer = customer);
+  }
+
+  /// Puts the sale on the cashier's own staff account, so it comes off their
+  /// next payroll run. Needs no customer look-up permission: the server only
+  /// ever answers with the signed-in user's own account.
+  Future<void> _selectStaffAccount() async {
+    setState(() {
+      _loadingStaffAccount = true;
+      _staffAccountFailed = false;
+    });
+    final result = await widget.contactRepository.loadStaffAccount();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingStaffAccount = false;
+      switch (result) {
+        case Ok<Customer>(value: final customer):
+          _selectedCustomer = customer;
+        case Error<Customer>():
+          _staffAccountFailed = true;
+      }
+    });
   }
 
   void _apply() {

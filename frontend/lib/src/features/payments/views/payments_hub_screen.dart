@@ -725,6 +725,7 @@ String _customerMethodLabel(AppLocalizations l10n, PaymentMethod method) {
     PaymentMethod.cash => l10n.paymentMethodCash,
     PaymentMethod.card => l10n.paymentMethodCard,
     PaymentMethod.transfer => l10n.paymentMethodTransfer,
+    PaymentMethod.salaryDeduction => l10n.paymentMethodSalaryDeduction,
   };
 }
 
@@ -733,6 +734,7 @@ IconData _customerMethodIcon(PaymentMethod method) {
     PaymentMethod.cash => Icons.payments_outlined,
     PaymentMethod.card => Icons.credit_card_outlined,
     PaymentMethod.transfer => Icons.account_balance_outlined,
+    PaymentMethod.salaryDeduction => Icons.badge_outlined,
   };
 }
 

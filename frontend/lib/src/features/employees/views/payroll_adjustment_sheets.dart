@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -668,11 +670,18 @@ class _PayrollLineAdjustmentSheetState
   }
 
   double get _projectedDeductions {
-    return roundMoney(
-      _existingAdjustmentDeductions +
-          _absenceDeduction +
-          decimalValue(_manualDeductionController.text),
+    final fixed =
+        _existingAdjustmentDeductions +
+        _absenceDeduction +
+        decimalValue(_manualDeductionController.text);
+    // Staff purchases give way first: the server shrinks them rather than let
+    // the line go negative, and what they no longer cover stays owed on the
+    // invoice for the next run. So they count only up to the pay left over.
+    final room = math.max(
+      0.0,
+      widget.line.grossAmount + _projectedAdditions - fixed,
     );
+    return roundMoney(fixed + math.min(_existingStaffPurchaseDeductions, room));
   }
 
   double get _projectedNet {
@@ -689,7 +698,17 @@ class _PayrollLineAdjustmentSheetState
 
   double get _existingAdjustmentDeductions {
     return widget.line.adjustments
-        .where((adjustment) => adjustment.direction == 'deduction')
+        .where(
+          (adjustment) =>
+              adjustment.direction == 'deduction' &&
+              !adjustment.isStaffPurchase,
+        )
+        .fold<double>(0, (total, adjustment) => total + adjustment.amount);
+  }
+
+  double get _existingStaffPurchaseDeductions {
+    return widget.line.adjustments
+        .where((adjustment) => adjustment.isStaffPurchase)
         .fold<double>(0, (total, adjustment) => total + adjustment.amount);
   }
 

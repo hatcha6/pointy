@@ -36,6 +36,12 @@ class ContactRepository {
     return Result.guard(() => _service.fetchCustomer(customerId));
   }
 
+  /// The signed-in user's staff account: a purchase rung up on it comes off
+  /// their next payroll run.
+  Future<Result<Customer>> loadStaffAccount() async {
+    return Result.guard(_service.fetchStaffAccount);
+  }
+
   Future<Result<void>> setCustomerConsent(
     int customerId, {
     bool? marketingOptedOut,

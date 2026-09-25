@@ -300,6 +300,7 @@ def merge_customers(*, source: Customer, target: Customer) -> Customer:
     if source.pk == target.pk:
         raise ValueError("Cannot merge a customer into itself.")
 
+    _carry_staff_account(source=source, target=target)
     source.cards.update(customer=target)
     source.assets.update(customer=target)
     source.orders.update(customer=target)
@@ -311,6 +312,33 @@ def merge_customers(*, source: Customer, target: Customer) -> Customer:
 
     source.delete()
     return target
+
+
+def _carry_staff_account(*, source, target):
+    """Keep an employee's staff account when it is merged away.
+
+    Merging it into a duplicate of the same person moves the employee onto the
+    surviving record, so their purchases keep reaching payroll. Merging two
+    different employees' accounts would hand one person's purchases to the
+    other's wages, so it is refused.
+    """
+    from apps.employees.models import Employee
+    from rest_framework import serializers as drf_serializers
+
+    source_employee = Employee.objects.filter(customer=source).first()
+    if source_employee is None:
+        return
+    if Employee.objects.filter(customer=target).exists():
+        raise drf_serializers.ValidationError(
+            {
+                "source_id": (
+                    "Both customers are employees' staff accounts; merging them "
+                    "would charge one employee's purchases to the other."
+                )
+            }
+        )
+    source_employee.customer = target
+    source_employee.save(update_fields=["customer", "updated_at"])
 
 
 # ---------------------------------------------------------------------------

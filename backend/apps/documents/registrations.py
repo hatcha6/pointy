@@ -251,7 +251,12 @@ def _register_payroll_run():
         # that is the draft.
         has_draft_state=True,
         draft_effects=(),
-        submit_effects=("money_position", "employee_balances", "loan_instalments"),
+        submit_effects=(
+            "money_position",
+            "employee_balances",
+            "loan_instalments",
+            "staff_purchase_settlements",
+        ),
         corrections=(Correction.COUNTER,),
         mutable_after_submit=("notes",),
         derived_fields=("status", "voided_at", "voided_by"),

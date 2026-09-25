@@ -5776,6 +5776,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentMethodTransfer => 'تحويل';
 
   @override
+  String get paymentMethodSalaryDeduction => 'خصم من الراتب';
+
+  @override
   String get requireCardReceiptSettingLabel =>
       'إلزام مسح ومطابقة إيصال البطاقة';
 
@@ -9699,6 +9702,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.';
 
   @override
+  String get staffAccountOutstandingBody =>
+      'حساب موظف: يُخصم المستحق تلقائيًا من راتبه في مسيّر الرواتب القادم، أقدم الفواتير أولًا. ويمكن تحصيله نقدًا الآن أيضًا.';
+
+  @override
   String get customerAccountPaymentTitle => 'تسجيل دفعة على الحساب';
 
   @override
@@ -9874,6 +9881,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get walkInCustomerLabel => 'عميل عابر';
+
+  @override
+  String get staffAccountSelectAction => 'على حسابي (خصم من الراتب)';
+
+  @override
+  String get staffAccountLoadError => 'تعذّر فتح حسابك كموظف. حاول مرة أخرى.';
+
+  @override
+  String get staffAccountBadge => 'حساب موظف';
 
   @override
   String get noSupplierSelectedLabel => 'لا يوجد مورد محدد';
@@ -10234,6 +10250,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get creditFullyOnAccountHint =>
       'كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.';
+
+  @override
+  String get staffPurchasePayrollHint =>
+      'حساب موظف: المتبقّي يُخصم تلقائيًا من راتبه في مسيّر الرواتب القادم.';
 
   @override
   String get creditDownPaymentHint =>
@@ -13088,6 +13108,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get payrollAdjustmentPenalty => 'جزاء';
+
+  @override
+  String get payrollAdjustmentStaffPurchase => 'مشتريات موظف';
+
+  @override
+  String payrollStaffPurchaseInvoice(String receiptNumber) {
+    return 'فاتورة $receiptNumber';
+  }
 
   @override
   String get payrollAdjustmentOther => 'تعديل آخر';

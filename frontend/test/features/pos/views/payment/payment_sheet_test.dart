@@ -846,6 +846,76 @@ void main() {
     expect(_tenderMethod(tester, 0), PaymentMethod.card);
   });
 
+  testWidgets('a staff account opens on آجل and says payroll will take it', (
+    tester,
+  ) async {
+    final proposed = DateTime(2026, 10, 10);
+    PaymentSheetResult? submitted;
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      width: 1366,
+      height: 900,
+      hasCustomer: true,
+      requireCustomerForCredit: true,
+      isStaffAccount: true,
+      proposedDueDate: proposed,
+      onSubmit: (result) => submitted = result,
+    );
+
+    // No tap: picking the staff account was the instruction.
+    expect(
+      find.byKey(const ValueKey('staff_purchase_payroll_hint')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('payment_tender_amount_0')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(submitted?.saleType, SaleType.credit);
+    expect(submitted?.payments, isEmpty);
+    expect(submitted?.dueDate, proposed);
+  });
+
+  testWidgets('a staff member paying cash is one tap away', (tester) async {
+    PaymentSheetResult? submitted;
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      hasCustomer: true,
+      isStaffAccount: true,
+      onSubmit: (result) => submitted = result,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('sale_type_standard')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('staff_purchase_payroll_hint')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(submitted?.saleType, SaleType.standard);
+    expect(submitted?.payments.single.amount, 45);
+  });
+
+  testWidgets('an ordinary customer still opens on a normal sale', (
+    tester,
+  ) async {
+    await _pumpPaymentSheet(tester, total: 45, hasCustomer: true);
+
+    expect(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('staff_purchase_payroll_hint')),
+      findsNothing,
+    );
+  });
+
   testWidgets('credit/quotation segments hidden when shop disables them', (
     tester,
   ) async {
@@ -877,6 +947,7 @@ Future<void> _pumpPaymentSheet(
   bool enableQuotations = true,
   bool enableCredit = true,
   DateTime? proposedDueDate,
+  bool isStaffAccount = false,
   double height = 844,
   bool requireCardReceipt = false,
   List<String> trustedCardTerminalIds = const [],
@@ -929,6 +1000,7 @@ Future<void> _pumpPaymentSheet(
                 enableQuotations: enableQuotations,
                 enableCredit: enableCredit,
                 proposedDueDate: proposedDueDate,
+                isStaffAccount: isStaffAccount,
                 onSubmit: onSubmit ?? (_) {},
                 onCancel: () {},
               ),

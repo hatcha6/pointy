@@ -1478,7 +1478,9 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
               Wrap(
                 spacing: 8,
                 children: [
-                  for (final method in PaymentMethod.values)
+                  for (final method in PaymentMethod.values.where(
+                    (method) => method.isTillTender,
+                  ))
                     ChoiceChip(
                       label: Text(paymentMethodLabel(l10n, method)),
                       avatar: Icon(paymentMethodIcon(method), size: 18),

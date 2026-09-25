@@ -739,16 +739,24 @@ class SaleOrder {
 enum PaymentMethod {
   cash('cash'),
   card('card'),
-  transfer('transfer');
+  transfer('transfer'),
+
+  /// A staff purchase settled out of the employee's wages when their payroll
+  /// run was paid. Only ever read back: no till can tender it.
+  salaryDeduction('salary_deduction');
 
   const PaymentMethod(this.apiValue);
 
   final String apiValue;
 
+  /// Whether a cashier can take money this way at the counter.
+  bool get isTillTender => this != PaymentMethod.salaryDeduction;
+
   static PaymentMethod fromApiValue(Object? value) {
     return switch (value?.toString()) {
       'card' => PaymentMethod.card,
       'transfer' => PaymentMethod.transfer,
+      'salary_deduction' => PaymentMethod.salaryDeduction,
       _ => PaymentMethod.cash,
     };
   }

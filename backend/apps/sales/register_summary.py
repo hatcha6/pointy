@@ -370,7 +370,9 @@ def _payment_methods(session: RegisterSession, refund_by_method: dict):
         "net": Decimal("0.00"),
         "count": 0,
     }
-    for method, _label in Payment.Method.choices:
+    # A drawer's own tenders. A salary deduction never passes through a till —
+    # payroll settles it with no session at all — so it has no row here.
+    for method in Payment.TILL_METHODS:
         row = collected.get(method, {})
         gross = row.get("gross") or Decimal("0.00")
         commission = row.get("commission") or Decimal("0.00")

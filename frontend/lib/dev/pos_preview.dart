@@ -134,6 +134,9 @@ class _Router extends StatelessWidget {
         return const _UnitSheetSurface();
       case 'payment':
         return const _PaymentSurface();
+      case 'payment-staff':
+        // A cashier ringing up their own shopping on their staff account.
+        return const _PaymentSurface(staffAccount: true);
       case 'board':
         return const _DesignBoard();
       case 'pos':
@@ -584,7 +587,9 @@ class _UnitSheetSurfaceState extends State<_UnitSheetSurface> {
 // ---------------------------------------------------------------------------
 
 class _PaymentSurface extends StatefulWidget {
-  const _PaymentSurface();
+  const _PaymentSurface({this.staffAccount = false});
+
+  final bool staffAccount;
 
   @override
   State<_PaymentSurface> createState() => _PaymentSurfaceState();
@@ -637,6 +642,9 @@ class _PaymentSurfaceState extends State<_PaymentSurface> {
       showShareInvoiceToggle: true,
       shareInvoiceAfterPayment: _share,
       onShareInvoiceChanged: (value) => _share = value,
+      hasCustomer: widget.staffAccount,
+      requireCustomerForCredit: true,
+      isStaffAccount: widget.staffAccount,
     );
     if (!mounted) {
       return;
@@ -977,6 +985,25 @@ class _FakeShopSettingsRepository extends ShopSettingsRepository {
 
 class _FakeContactRepository extends ContactRepository {
   _FakeContactRepository() : super(PosApiService());
+
+  // The "on my account" button in the sale settings dialog.
+  @override
+  Future<Result<Customer>> loadStaffAccount() async {
+    return const Ok(
+      Customer(
+        id: 90,
+        customerNumber: 'C20260923000090',
+        fullName: 'سلمى الكاشير',
+        phone: '',
+        email: '',
+        gender: CustomerGender.unspecified,
+        marketingConsent: false,
+        notes: '',
+        isActive: true,
+        staffEmployeeId: 4,
+      ),
+    );
+  }
 }
 
 /// The supplier the purchasing preview is buying from.

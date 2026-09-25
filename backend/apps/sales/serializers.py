@@ -1255,7 +1255,7 @@ class CheckoutPaymentSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
         from apps.payments.models import Payment
 
-        self.fields["method"].choices = Payment.Method.choices
+        self.fields["method"].choices = Payment.till_method_choices()
 
 
 class CheckoutSerializer(serializers.Serializer):
@@ -1336,7 +1336,7 @@ class CheckoutSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
         from apps.payments.models import Payment
 
-        self.fields["payment_method"].choices = Payment.Method.choices
+        self.fields["payment_method"].choices = Payment.till_method_choices()
         self.fields["payment_method"].default = Payment.Method.CASH
 
     def validate(self, attrs):
@@ -1602,7 +1602,7 @@ class CustomerInvoicePaymentSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
         from apps.payments.models import Payment
 
-        self.fields["method"].choices = Payment.Method.choices
+        self.fields["method"].choices = Payment.till_method_choices()
 
     def save(self, **kwargs):
         return record_customer_payment(
@@ -1737,7 +1737,7 @@ class ConvertQuotationSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
         from apps.payments.models import Payment
 
-        self.fields["payment_method"].choices = Payment.Method.choices
+        self.fields["payment_method"].choices = Payment.till_method_choices()
 
     def validate(self, attrs):
         payments = attrs.get("payments")
@@ -2031,7 +2031,7 @@ class OrderExchangeInputSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
         from apps.payments.models import Payment
 
-        self.fields["settlement_method"].choices = Payment.Method.choices
+        self.fields["settlement_method"].choices = Payment.till_method_choices()
         self.fields["settlement_method"].default = Payment.Method.CASH
 
     def validate(self, attrs):

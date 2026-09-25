@@ -536,6 +536,7 @@ String _paymentMethodLabel(AppLocalizations l10n, String method) {
     'cash' => l10n.paymentMethodCash,
     'card' => l10n.paymentMethodCard,
     'transfer' => l10n.paymentMethodTransfer,
+    'salary_deduction' => l10n.paymentMethodSalaryDeduction,
     _ => method,
   };
 }

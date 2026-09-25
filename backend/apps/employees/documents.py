@@ -47,11 +47,18 @@ def reverse(payroll_run, *, at, actor, reason="", context=None):
     Voiding one used to be impossible once it was paid, so a run paid by
     mistake was permanent — the same shape as a supplier payment that could
     never be cancelled. What has to come back is what paying it did beyond
-    recording the money: every loan instalment it collected. The run's own
-    money effect needs nothing here, because the money position reads paid runs
-    and a retracted run is no longer one.
+    recording the money: every loan instalment it collected, and every staff
+    purchase it settled. The run's own money effect needs nothing here, because
+    the money position reads paid runs and a retracted run is no longer one.
     """
     from apps.employees.models import EmployeeLoan, EmployeeLoanPayment
+    from apps.employees.staff_purchases import reverse_staff_purchase_settlements
+
+    # First, because it is the part that can refuse — and nothing below should
+    # have run when it does.
+    reverse_staff_purchase_settlements(
+        payroll_run, at=at, actor=actor, reason=reason
+    )
 
     instalments = list(
         EmployeeLoanPayment.objects.select_related("loan").filter(

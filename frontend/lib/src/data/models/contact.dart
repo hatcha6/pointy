@@ -295,6 +295,7 @@ class Customer {
     this.paymentTermsDays,
     this.paymentTermsBasis,
     this.effectivePaymentTerms,
+    this.staffEmployeeId,
   });
 
   final int id;
@@ -361,6 +362,13 @@ class Customer {
   /// The terms that actually apply, resolved by the server.
   final ResolvedPaymentTerms? effectivePaymentTerms;
 
+  /// The employee this is the staff account of, or null for an ordinary
+  /// customer. What a staff account owes on آجل comes off the employee's next
+  /// payroll run, automatically.
+  final int? staffEmployeeId;
+
+  bool get isStaffAccount => staffEmployeeId != null;
+
   factory Customer.fromJson(Map<String, Object?> json) {
     return Customer(
       id: _intFromJson(json['id']),
@@ -406,6 +414,7 @@ class Customer {
       effectiveCreditLimit: json['effective_credit_limit'] == null
           ? null
           : _moneyFromJson(json['effective_credit_limit']),
+      staffEmployeeId: (json['staff_employee'] as num?)?.toInt(),
     );
   }
 
@@ -430,6 +439,8 @@ class Customer {
       'payment_terms_policy': paymentTermsPolicy.apiValue,
       'payment_terms_days': paymentTermsDays,
       'payment_terms_basis': paymentTermsBasis?.apiValue ?? '',
+      // Kept so a restored cart still knows it is ringing up a staff purchase.
+      'staff_employee': staffEmployeeId,
     };
   }
 }

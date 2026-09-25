@@ -131,12 +131,20 @@ class FactoryResetBehaviourTests(TestCase):
             for label in factory_reset.WIPED_MODELS
             if apps.get_model(*label.split("."))._default_manager.exists()
         ]
-        # Two rows are put back on purpose, and both are named here so that a
-        # third one appearing has to be a decision somebody wrote down: the
-        # placeholder supplier (a fresh install has it) and the surviving
-        # administrator's own employee record.
+        # Three rows are put back on purpose, and all are named here so that a
+        # fourth one appearing has to be a decision somebody wrote down: the
+        # placeholder supplier (a fresh install has it), the surviving
+        # administrator's own employee record, and the staff customer account
+        # every employee is made with.
         self.assertEqual(
-            still_populated, ["employees.employee", "purchasing.supplier"]
+            still_populated,
+            ["customers.customer", "employees.employee", "purchasing.supplier"],
+        )
+        from apps.customers.models import Customer
+        from apps.employees.models import Employee
+
+        self.assertEqual(
+            Customer.objects.get(), Employee.objects.get(user=self.admin).customer
         )
         from apps.purchasing.models import Supplier
 

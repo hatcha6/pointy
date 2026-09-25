@@ -191,12 +191,19 @@ def _cash_bridge_section(context, revenue):
     opening = _receivables_at(context, period.start_date - timedelta(days=1))
     closing = _receivables_at(context, period.end_date)
     movement = closing - opening
+    period_payments = in_period(payments(context.user), period)
     received = decimal_from(
-        in_period(payments(context.user), period).aggregate(
+        period_payments.money_received().aggregate(total=money_sum("amount"))["total"]
+    )
+    # Staff purchases settled out of wages clear a receivable without any cash
+    # arriving. Named on a line of their own, only when there are any, rather
+    # than passed off as cash received.
+    settled_from_wages = decimal_from(
+        period_payments.filter(method=Payment.Method.SALARY_DEDUCTION).aggregate(
             total=money_sum("amount")
         )["total"]
     )
-    residual = revenue - movement - received
+    residual = revenue - movement - received - settled_from_wages
 
     rows = [
         _line("revenue_recognised", money(revenue)),
@@ -204,8 +211,10 @@ def _cash_bridge_section(context, revenue):
         _line("closing_receivables", money(closing)),
         _line("movement_in_receivables", "-" + money(movement)),
         _line("cash_received_from_customers", money(received), is_total=True),
-        _line("unreconciled_difference", money(residual)),
     ]
+    if settled_from_wages:
+        rows.append(_line("settled_from_wages", money(settled_from_wages)))
+    rows.append(_line("unreconciled_difference", money(residual)))
     return report_section(
         "cash_bridge",
         [
