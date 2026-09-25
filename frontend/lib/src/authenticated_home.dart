@@ -262,6 +262,12 @@ class _AuthenticatedRoutes implements AppNavigation {
 
   @override
   void logout(BuildContext context) {
+    // A touchscreen can deliver one press twice; the second may land on a
+    // shell the first already tore down. The sign-out itself is single-flight
+    // (see AuthViewModel.logout), so a second press joins the first.
+    if (!context.mounted) {
+      return;
+    }
     commandPaletteRecents.clear();
     Navigator.of(context).popUntil((route) => route.isFirst);
     dependencies.authViewModel.logout();

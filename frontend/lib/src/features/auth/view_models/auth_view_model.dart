@@ -132,9 +132,11 @@ class AuthViewModel extends ChangeNotifier {
       case Ok<PosUser?>(value: final user):
         if (user == null) {
           // The session really is gone — disabled account, or signed out from
-          // elsewhere. That is a logout, and it has to take effect.
+          // elsewhere. That is a logout, and it has to take effect. The user
+          // goes with the status, never before it (see [logout]).
+          final status = await _resolveUnauthenticatedStatus();
           _currentUser = null;
-          _status = await _resolveUnauthenticatedStatus();
+          _status = status;
         } else {
           _currentUser = user;
         }
@@ -280,7 +282,21 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> logout() async {
+  Future<void>? _logoutInFlight;
+
+  /// Signs out. A call made while a sign-out is already running joins it.
+  ///
+  /// A till's touchscreen can deliver one press twice — the field saw the
+  /// logout button fire twice 40 ms apart — and two sign-outs interleaved used
+  /// to leave the app signed in with nobody signed in, which the auth gate
+  /// could not draw: the stack overflowed and the app restarted.
+  Future<void> logout() {
+    return _logoutInFlight ??= _logout().whenComplete(() {
+      _logoutInFlight = null;
+    });
+  }
+
+  Future<void> _logout() async {
     _isSubmitting = true;
     notifyListeners();
 
@@ -294,10 +310,13 @@ class AuthViewModel extends ChangeNotifier {
     await _authRepository.logout();
     _analyticsEngine?.setCurrentUser(null);
 
+    final status = await _resolveUnauthenticatedStatus();
+    // The user and the status change in the same step: a rebuild in between
+    // would find "authenticated" with no user to build the shell for.
     _isSubmitting = false;
     _currentUser = null;
     _requiresShopSetup = false;
-    _status = await _resolveUnauthenticatedStatus();
+    _status = status;
     notifyListeners();
   }
 }

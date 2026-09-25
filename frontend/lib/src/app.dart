@@ -273,11 +273,9 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
   Widget _buildAuthenticatedHome(BuildContext context) {
     final currentUser = _dependencies.authViewModel.currentUser;
     if (currentUser == null) {
-      return AuthGate(
-        viewModel: _dependencies.authViewModel,
-        analyticsEngine: _dependencies.analyticsEngine,
-        authenticatedBuilder: _buildAuthenticatedHome,
-      );
+      // Never another AuthGate: it would see this same state and call back
+      // here, and the recursion overflowed the stack (logout, 2026-09-25).
+      return const AuthCheckingScreen();
     }
 
     if (_dependencies.authViewModel.requiresShopSetup) {

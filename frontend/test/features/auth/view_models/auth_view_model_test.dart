@@ -74,6 +74,64 @@ void main() {
     expect(repo.onboardingProbeCount, 1);
   });
 
+  group('a logout pressed twice', () {
+    // Field report, 2026-09-25: a till's touchscreen fired the logout button
+    // twice, 40 ms apart. The second sign-out's first notification landed
+    // while the first had already cleared the user but not yet the status —
+    // "authenticated" with nobody signed in — and the auth gate, asked to
+    // build a shell for no one, recursed until the stack overflowed. The app
+    // restarted; it happened twice in one afternoon.
+    test('signs out once', () async {
+      final repo = _FakeAuthRepository(
+        currentUser: _user,
+        onboardingResults: [
+          const Ok(OnboardingStatus(requiresOnboarding: false)),
+        ],
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentUser();
+
+      await Future.wait([viewModel.logout(), viewModel.logout()]);
+
+      expect(repo.logoutCount, 1);
+      expect(repo.onboardingProbeCount, 1);
+      expect(viewModel.status, AuthStatus.unauthenticated);
+      expect(viewModel.currentUser, isNull);
+    });
+
+    test('is never signed in with nobody signed in', () async {
+      final probe = Completer<Result<OnboardingStatus>>();
+      final repo = _FakeAuthRepository(
+        currentUser: _user,
+        onboardingResults: const [],
+        onboardingGate: probe,
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentUser();
+      final seen = <(AuthStatus, bool)>[];
+      viewModel.addListener(
+        () => seen.add((viewModel.status, viewModel.currentUser != null)),
+      );
+
+      final first = viewModel.logout();
+      // The first sign-out is now waiting on the server, mid-way.
+      await Future<void>.delayed(Duration.zero);
+      final second = viewModel.logout();
+      probe.complete(const Ok(OnboardingStatus(requiresOnboarding: false)));
+      await Future.wait([first, second]);
+
+      expect(
+        seen.where(
+          (state) => state.$1 == AuthStatus.authenticated && !state.$2,
+        ),
+        isEmpty,
+      );
+      expect(viewModel.status, AuthStatus.unauthenticated);
+    });
+  });
+
   group('what a failed sign-in is reported as', () {
     // Every failure used to be one message — check the username and password
     // — including a relay that no longer held the phone's ticket. A cashier
@@ -318,9 +376,15 @@ class _FakeAuthRepository extends AuthRepository {
     this.currentUserResult,
     this.currentUserResults,
     this.loginResult,
+    this.onboardingGate,
   }) : super(PosApiService());
 
   final List<Result<OnboardingStatus>> onboardingResults;
+
+  /// When set, every onboarding probe waits on this instead of reading
+  /// [onboardingResults] — lets a test hold a sign-out mid-way.
+  final Completer<Result<OnboardingStatus>>? onboardingGate;
+  int logoutCount = 0;
   final PosUser? currentUser;
   final Result<PosUser?>? currentUserResult;
 
@@ -351,13 +415,21 @@ class _FakeAuthRepository extends AuthRepository {
 
   @override
   Future<Result<OnboardingStatus>> loadOnboardingStatus() async {
+    final gate = onboardingGate;
+    if (gate != null) {
+      onboardingProbeCount++;
+      return gate.future;
+    }
     final result = onboardingResults[onboardingProbeCount];
     onboardingProbeCount++;
     return result;
   }
 
   @override
-  Future<Result<void>> logout() async => const Ok(null);
+  Future<Result<void>> logout() async {
+    logoutCount++;
+    return const Ok(null);
+  }
 
   @override
   Future<Result<void>> forgetCurrentUser() async => const Ok(null);

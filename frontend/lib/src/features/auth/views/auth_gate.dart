@@ -43,8 +43,14 @@ class AuthGate extends StatelessWidget {
         return switch (status) {
           AuthStatus.checking => const TrackedScreen(
             name: 'auth_checking',
-            child: _AuthCheckingScreen(),
+            child: AuthCheckingScreen(),
           ),
+          // Signed in with nobody signed in: only ever a passing state, but
+          // one the signed-in shell cannot be built for. It used to be handed
+          // back to another gate, which saw the same state and did the same —
+          // a loop that overflowed the stack on a double-tapped logout.
+          AuthStatus.authenticated when viewModel.currentUser == null =>
+            const AuthCheckingScreen(),
           AuthStatus.setupRequired => TrackedScreen(
             name: 'onboarding',
             child: InitialAdminSetupScreen(viewModel: viewModel),
@@ -63,8 +69,9 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-class _AuthCheckingScreen extends StatelessWidget {
-  const _AuthCheckingScreen();
+/// The wait while the app works out who is signed in.
+class AuthCheckingScreen extends StatelessWidget {
+  const AuthCheckingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
