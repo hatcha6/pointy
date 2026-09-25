@@ -101,11 +101,20 @@ Future<List<Uri>> discoverBackendApiBaseUrls({
     try {
       final socket = await RawDatagramSocket.bind(bindAddress, 0);
       socket.broadcastEnabled = true;
-      socket.listen((event) {
-        if (event == RawSocketEvent.read) {
-          handle(socket);
-        }
-      });
+      socket.listen(
+        (event) {
+          if (event == RawSocketEvent.read) {
+            handle(socket);
+          }
+        },
+        // A datagram the OS refuses to send (no route: Wi-Fi off, an adapter
+        // that just went away) is reported here, a microtask after `send`
+        // returned, so the try around `send` never sees it. Unheard, it
+        // became an uncaught "Send failed (Network is unreachable)" logged as
+        // a critical error on every sweep (Android till, 2026-09-24). The
+        // sweep is best-effort by design: a lost probe is just a miss.
+        onError: (Object _) {},
+      );
       final destinations = <InternetAddress>[limitedBroadcast];
       final octets = ipv4Octets(bindAddress.address);
       if (octets != null && isUsableLanIpv4(octets)) {
