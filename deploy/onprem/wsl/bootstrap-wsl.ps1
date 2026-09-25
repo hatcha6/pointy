@@ -83,6 +83,10 @@ $DistroFailuresBeforeTerminate = 3
 # error. An absent distro and a WSL service that is mid-update look the same
 # to a caller that only counts names.
 $script:WslListError = ""
+# Run wsl.exe the classic way (PowerShell's own call operator, no timeout)
+# instead of the bounded way. Select-WslRunner turns this on, on a machine
+# where wsl.exe answers only the classic way.
+$script:UseClassicRunner = $false
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -200,6 +204,14 @@ function Invoke-NativeTimeout {
 
 function Invoke-Wsl {
     param([string[]]$Arguments, [int]$TimeoutSec = 120)
+    if ($script:UseClassicRunner) {
+        try {
+            $r = Invoke-Native -File "wsl.exe" -Arguments $Arguments
+            return [pscustomobject]@{ ExitCode = $r.ExitCode; TimedOut = $false; Output = $r.Output }
+        } catch {
+            return [pscustomobject]@{ ExitCode = -1; TimedOut = $false; Output = "could not run wsl.exe: $($_.Exception.Message)" }
+        }
+    }
     Invoke-NativeTimeout -File "wsl.exe" -Arguments $Arguments -TimeoutSec $TimeoutSec
 }
 
@@ -208,6 +220,27 @@ function Invoke-Guest {
     param([string]$Command, [int]$TimeoutSec = 120)
     $r = Invoke-Wsl @("-d", $Distro, "-u", "root", "--", "bash", "-lc", $Command) -TimeoutSec $TimeoutSec
     return [pscustomobject]@{ ExitCode = $r.ExitCode; Output = $r.Output.Trim() }
+}
+
+# Which way can THIS machine run wsl.exe? On one shop PC every bounded call
+# (a hidden child, pipes read by .NET) came back empty within a second, while
+# the classic call (PowerShell's call operator, the shared console) answered
+# as it always had. Rather than guess at the cause from a desk, try both,
+# prefer the bounded one, fall back to the classic one, and write down what
+# each returned. Cheap (one `wsl --version` each) and run once per start.
+function Select-WslRunner {
+    $script:UseClassicRunner = $false
+    $bounded = Invoke-NativeTimeout -File "wsl.exe" -Arguments @("--version") -TimeoutSec 30
+    if ($bounded.ExitCode -eq 0 -and (($bounded.Output -replace "`0", "") -match '[0-9]+\.[0-9]+\.[0-9]+')) { return }
+    $classic = $null
+    try { $classic = Invoke-Native -File "wsl.exe" -Arguments @("--version") } catch { return }
+    if ($classic.ExitCode -eq 0 -and (($classic.Output -replace "`0", "") -match '[0-9]+\.[0-9]+\.[0-9]+')) {
+        $script:UseClassicRunner = $true
+        $seen = @((($bounded.Output -replace "`0", "") -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -First 1)
+        Write-Log ("wsl.exe answers only when run the classic way on this machine (the bounded way: exit " +
+                   "$($bounded.ExitCode), '$(($seen -join '').Trim())'). Using the classic way from now on; " +
+                   "its calls have no timeout.") "WARN"
+    }
 }
 
 function Get-RegisteredDistros {
@@ -918,8 +951,10 @@ function Assert-Preflight {
     try {
         $free = (Get-PSDrive -Name $root).Free / 1GB
         if ($free -lt 20) {
-            Write-Log ("only {0:N1} GB free on {1}: - the distro, images and Postgres data all live " +
-                       "here and the virtual disk only ever grows. 20 GB+ recommended." -f $free, $root) "WARN"
+            # Parenthesised on purpose: -f binds tighter than +, and without
+            # the brackets a shop saw "{0:N1} GB free on {1}:" on its screen.
+            Write-Log (("only {0:N1} GB free on {1}: - the distro, images and Postgres data all live " +
+                        "here and the virtual disk only ever grows. 20 GB+ recommended.") -f $free, $root) "WARN"
         }
     } catch { }
 
@@ -1098,6 +1133,10 @@ function Install-Wsl {
         $r = Invoke-Wsl @("--update") -TimeoutSec 1800
         $lastCode = $r.ExitCode; $lastOutput = $r.Output.Trim()
     }
+
+    # A wsl.exe that was just installed is judged the same way as one that was
+    # already there: by whichever way of running it answers.
+    Select-WslRunner
 
     # THE decision. `wsl --update` reports non-zero when there is nothing to do,
     # and msiexec can report an odd code for an install that landed perfectly, so
@@ -1476,6 +1515,7 @@ if ($Boot) {
     if (-not (Test-Admin)) {
         Write-Log "not elevated: the distro can be started from here, but the LAN bridge and firewall cannot be changed" "WARN"
     }
+    Select-WslRunner
     if ($Once) {
         # One pass for an operator at the keyboard: start the distro if it is
         # down, re-point and prove the bridge, and make sure the supervisor
@@ -1494,6 +1534,7 @@ if ($Boot) {
 
 Write-Log "=== Pointy on-prem WSL bootstrap ==="
 Assert-Preflight
+Select-WslRunner
 Set-ServerPowerSettings
 Enable-WindowsFeatures
 Install-Wsl

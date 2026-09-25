@@ -255,6 +255,73 @@ check "a failed readiness check logs what wsl --version said" {
     (Get-WslVersionEvidence) -eq "wsl --version exited 1: Invalid command line option: --version"
 }
 
+# --- which way to run wsl.exe --------------------------------------------------
+# On one shop PC the bounded runner got nothing out of wsl.exe while the
+# classic call answered. The script must notice by itself, switch, and say so.
+$script:BoundedExit = 0; $script:BoundedSays = "WSL version: 2.3.26.0"
+$script:ClassicExit = 0; $script:ClassicSays = "WSL version: 2.3.26.0"
+$script:ClassicThrows = $false
+function Invoke-NativeTimeout { param([string]$File, [string[]]$Arguments, [int]$TimeoutSec = 120)
+    [void]$script:NativeLog.Add("bounded: $File $($Arguments -join ' ')")
+    return [pscustomobject]@{ ExitCode = $script:BoundedExit; TimedOut = $false; Output = $script:BoundedSays } }
+function Invoke-Native { param([string]$File, [string[]]$Arguments)
+    [void]$script:NativeLog.Add("classic: $File $($Arguments -join ' ')")
+    if ($script:ClassicThrows) { throw "The term 'wsl.exe' is not recognized" }
+    return [pscustomobject]@{ ExitCode = $script:ClassicExit; Output = $script:ClassicSays } }
+. (Get-RealFunction "Invoke-Wsl")
+
+check "a wsl.exe that answers the bounded way is run that way, quietly" {
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    $script:BoundedExit = 0; $script:BoundedSays = "WSL version: 2.3.26.0"
+    Select-WslRunner
+    $r = Invoke-Wsl @("--list", "--quiet")
+    (-not $script:UseClassicRunner) -and (called "bounded: wsl.exe --list --quiet") -and -not (called "classic:") -and
+        ($script:Log.Count -eq 0)
+}
+check "THE BUG FROM THE SHOP: bounded calls come back empty, the classic call answers - switch, and say what was seen" {
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    $script:BoundedExit = 0; $script:BoundedSays = ""
+    $script:ClassicExit = 0; $script:ClassicSays = "WSL version: 2.3.26.0`nKernel version: 5.15.167.4-1"
+    Select-WslRunner
+    $r = Invoke-Wsl @("--list", "--quiet")
+    $script:UseClassicRunner -and (logged "answers only when run the classic way") -and (logged "exit 0, ''") -and
+        (called "classic: wsl.exe --list --quiet") -and ($r.Output -eq "WSL version: 2.3.26.0`nKernel version: 5.15.167.4-1") -and
+        ($r.ExitCode -eq 0)
+}
+check "a bounded runner that cannot even start wsl.exe is replaced the same way" {
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    $script:BoundedExit = -1; $script:BoundedSays = "could not run wsl.exe: Access is denied"
+    $script:ClassicExit = 0; $script:ClassicSays = "WSL version: 2.3.26.0"
+    Select-WslRunner
+    $script:UseClassicRunner -and (logged "exit -1, 'could not run wsl.exe: Access is denied'")
+}
+check "no WSL at all (a fresh machine) keeps the bounded runner and says nothing" {
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    $script:BoundedExit = 1; $script:BoundedSays = ""
+    $script:ClassicThrows = $true
+    Select-WslRunner
+    $script:ClassicThrows = $false
+    $stillBoundedWhenMissing = -not $script:UseClassicRunner
+    $script:ClassicExit = 1; $script:ClassicSays = "Invalid command line option: --version"
+    Select-WslRunner
+    $stillBoundedWhenMissing -and (-not $script:UseClassicRunner) -and ($script:Log.Count -eq 0)
+}
+check "the classic runner's own failure to run wsl.exe is an answer, not a crash" {
+    $script:UseClassicRunner = $true; $script:ClassicThrows = $true
+    $r = Invoke-Wsl @("--version")
+    $script:ClassicThrows = $false; $script:UseClassicRunner = $false
+    ($r.ExitCode -eq -1) -and ($r.Output -like "could not run wsl.exe: *not recognized*")
+}
+check "a free-space warning prints its numbers, not its placeholders" {
+    # Pinned because a shop saw "{0:N1} GB free on {1}:" - the -f operator
+    # binds tighter than +, so the placeholders in the first half were never
+    # formatted.
+    $free = 12.34; $root = "C"
+    $text = (("only {0:N1} GB free on {1}: - the distro, images and Postgres data all live " +
+              "here and the virtual disk only ever grows. 20 GB+ recommended.") -f $free, $root)
+    ($text -like "only 12.3 GB free on C: *") -and ($text -notlike "*{0*")
+}
+
 # --- the boot task ----------------------------------------------------------
 # Task Scheduler's cmdlets do not exist off Windows; what is pinned here is
 # what the bootstrap ASKS of them, which is where the field bugs were.

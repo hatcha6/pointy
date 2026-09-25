@@ -46,6 +46,7 @@ $SupervisorStateFile = Join-Path $InstallRoot "supervisor-state.json"
 $ReconcileIntervalSec = 300
 $DistroFailuresBeforeTerminate = 3
 $script:WslListError = ""
+$script:UseClassicRunner = $false
 $PSCommandPath2 = "C:\ProgramData\Pointy\bootstrap-wsl.ps1"
 
 # --- the fakes -------------------------------------------------------------
