@@ -6227,6 +6227,100 @@
       }
     }
   },
+  "sessionIntegrationsTitle": "خدمات الشحن",
+  "@sessionIntegrationsTitle": {
+    "description": "Session summary section: top-ups and cards sold for outside providers (HD Box, LNET, Qareeb) and where their money went."
+  },
+  "sessionIntegrationsSoldLabel": "دفعه الزبائن",
+  "@sessionIntegrationsSoldLabel": {
+    "description": "What customers paid for a provider's services this shift (kept sales only)."
+  },
+  "sessionIntegrationsCostLabel": "حصة المزوّد من رصيد الوكالة",
+  "@sessionIntegrationsCostLabel": {
+    "description": "The provider's share of those sales — what the agency float pays for them."
+  },
+  "sessionIntegrationsMarginLabel": "ربح المتجر",
+  "@sessionIntegrationsMarginLabel": {
+    "description": "What the shop keeps: paid by customers minus the provider's share."
+  },
+  "sessionIntegrationsTotalsTitle": "كل المزوّدين",
+  "sessionIntegrationsBucketDelivered": "نُفِّذ",
+  "sessionIntegrationsBucketAwaiting": "لم يُنفَّذ بعد",
+  "sessionIntegrationsBucketRefunded": "مُرتجَع",
+  "sessionIntegrationsBucketPill": "{label} {count} · {amount}",
+  "@sessionIntegrationsBucketPill": {
+    "description": "A status pill on the session summary: bucket name, how many transactions, their amount.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionIntegrationsAwaitingNote": "{count, plural, =1{عملية واحدة بقيمة {amount} دفعها الزبون ولم ينفّذها المزوّد بعد.} =2{عمليتان بقيمة {amount} دفعهما الزبائن ولم ينفّذهما المزوّد بعد.} few{{count} عمليات بقيمة {amount} دفعها الزبائن ولم ينفّذها المزوّد بعد.} other{{count} عملية بقيمة {amount} دفعها الزبائن ولم ينفّذها المزوّد بعد.}}",
+  "@sessionIntegrationsAwaitingNote": {
+    "description": "Warning: customers paid for top-ups the provider has not performed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionIntegrationsUnknownNote": "{count, plural, =1{عملية واحدة أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.} =2{عمليتان أُرسلتا إلى المزوّد ولم تصلنا نتيجتهما. لا تُعد المحاولة — تحقّق منهما لدى المزوّد أولاً.} few{{count} عمليات أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.} other{{count} عملية أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.}}",
+  "@sessionIntegrationsUnknownNote": {
+    "description": "Warning: top-ups sent to the provider with no answer; retrying could charge twice.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sessionIntegrationsRefundedAfterDeliveryNote": "{count, plural, =1{أُرجع للزبون ثمن عملية واحدة بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} =2{أُرجع للزبائن ثمن عمليتين بعد أن نفّذهما المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} few{أُرجع للزبائن ثمن {count} عمليات بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} other{أُرجع للزبائن ثمن {count} عملية بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.}}",
+  "@sessionIntegrationsRefundedAfterDeliveryNote": {
+    "description": "Warning: sales refunded after the provider had performed them, so the float paid for nothing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionIntegrationsTransactionsToggle": "العمليات ({count})",
+  "@sessionIntegrationsTransactionsToggle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sessionIntegrationsRefundedAfterDelivery": "مُرتجَع بعد التنفيذ",
+  "sessionIntegrationsTransactionCost": "التكلفة {amount}",
+  "@sessionIntegrationsTransactionCost": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionIntegrationsRefundedValue": "أُرجع {amount}",
+  "@sessionIntegrationsRefundedValue": {
+    "description": "What went back to the customer for a refunded top-up.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "orderCardReceiptViewButton": "عرض إيصال الجهاز",
   "orderCardReceiptSheetTitle": "إيصال جهاز البطاقة",
   "orderCardReceiptOpenOriginal": "عرض الأصل من المصرف",

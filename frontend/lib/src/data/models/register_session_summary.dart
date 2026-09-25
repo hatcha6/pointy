@@ -1,3 +1,5 @@
+part 'register_session_integrations.dart';
+
 /// Full end-of-shift summary for a register session, across **all** payment
 /// methods plus a sales-by-category breakdown and cash reconciliation.
 ///
@@ -22,6 +24,7 @@ class RegisterSessionSummary {
     required this.cash,
     required this.expenses,
     required this.drawerPurchases,
+    this.integrations = SessionIntegrations.empty,
   });
 
   final int sessionId;
@@ -45,6 +48,9 @@ class RegisterSessionSummary {
   /// Already inside [SessionCashSummary.payOutTotal]; broken out so the shift
   /// review can tell stock buys from generic pay-outs.
   final SessionExpenseTotals drawerPurchases;
+
+  /// Top-ups and cards sold for outside providers, and where their money went.
+  final SessionIntegrations integrations;
 
   factory RegisterSessionSummary.fromJson(Map<String, Object?> json) {
     final session = _map(json['session']);
@@ -70,6 +76,7 @@ class RegisterSessionSummary {
       drawerPurchases: SessionExpenseTotals.fromJson(
         _map(json['drawer_purchases']),
       ),
+      integrations: SessionIntegrations.fromJson(_map(json['integrations'])),
     );
   }
 }

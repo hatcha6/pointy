@@ -38,7 +38,14 @@ class PointyPdfTable {
     pw.TextDirection tableDirection = pw.TextDirection.rtl,
     pw.TextDirection headerDirection = pw.TextDirection.rtl,
     pw.TableWidth tableWidth = pw.TableWidth.max,
+    // Tighter cells and a smaller type for a wide audit table — six or seven
+    // columns of card numbers and amounts wrap mid-value at the roomy default.
+    bool dense = false,
   }) {
+    final padding = dense
+        ? const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+        : const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+    final fontSize = dense ? 9.5 : 11.0;
     return PointyPdfTable(
       columns: columns,
       rows: rows,
@@ -58,15 +65,12 @@ class PointyPdfTable {
       oddRowDecoration: const pw.BoxDecoration(color: PointyPdfPalette.zebra),
       headerStyle: pw.TextStyle(
         color: PointyPdfPalette.white,
-        fontSize: 11,
+        fontSize: fontSize,
         fontWeight: pw.FontWeight.bold,
       ),
-      cellStyle: const pw.TextStyle(color: PointyPdfPalette.ink, fontSize: 11),
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      headerPadding: const pw.EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
+      cellStyle: pw.TextStyle(color: PointyPdfPalette.ink, fontSize: fontSize),
+      cellPadding: padding,
+      headerPadding: padding,
       tableDirection: tableDirection,
       headerDirection: headerDirection,
       tableWidth: tableWidth,

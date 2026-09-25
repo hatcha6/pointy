@@ -30,6 +30,7 @@ import '../services/print_transport.dart';
 import '../services/print_transports.dart';
 import '../services/repair_intake_printables.dart';
 import '../services/repair_ticket_document_service.dart';
+import '../services/z_report_integrations.dart';
 
 class PrintingRepository {
   PrintingRepository(
@@ -1152,6 +1153,8 @@ class PrintingRepository {
         },
     ];
 
+    final integrations = summary.integrations;
+
     final cashRows = <Map<String, Object?>>[
       {'label': 'النقد الافتتاحي', 'value': formatMoney(cash.openingCash)},
       {'label': 'مبيعات نقدية', 'value': formatMoney(cash.cashSalesTotal)},
@@ -1195,6 +1198,8 @@ class PrintingRepository {
               'value': formatMoney(summary.paymentTotals.net),
             },
           },
+          if (integrations.hasActivity)
+            zReportIntegrationThermalSection(integrations),
           {'title': 'المبيعات حسب الفئة', 'rows': categoryRows},
           {'title': 'تسوية النقد', 'rows': cashRows},
         ],

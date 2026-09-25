@@ -19,6 +19,11 @@ Attribution mirrors the model's drawer accounting:
 * **Cash reconciliation** reuses the ``RegisterSession`` model properties
   verbatim; the cash refund figure is the exact drawer hit (``cash_amount``),
   while the per-method refund rows group by ``refund_method`` over ``amount``.
+* **Provider services** (top-ups and cards resold for HD Box, LNET, Qareeb)
+  come from the orders the session issued, voids included, because a sale
+  refunded after the provider performed it is exactly the money a shift review
+  has to be able to see. ``apps.integrations.session_breakdown`` owns what
+  those lines mean.
 """
 
 from collections import OrderedDict
@@ -31,6 +36,7 @@ from django.db.models.fields.json import KeyTextTransform
 
 from apps.catalog.models import Product
 from apps.expenses.models import Expense
+from apps.integrations.session_breakdown import build_integration_breakdown
 from apps.payments.models import Payment
 
 from .models import (
@@ -135,6 +141,9 @@ def build_register_session_summary(session: RegisterSession) -> dict:
         "cash": _cash_reconciliation(session),
         "expenses": _expenses(session),
         "drawer_purchases": _drawer_purchases(session),
+        "integrations": build_integration_breakdown(
+            Order.objects.transactional().filter(register_session=session)
+        ),
     }
 
 

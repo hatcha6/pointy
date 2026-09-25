@@ -10063,6 +10063,101 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get sessionIntegrationsTitle => 'خدمات الشحن';
+
+  @override
+  String get sessionIntegrationsSoldLabel => 'دفعه الزبائن';
+
+  @override
+  String get sessionIntegrationsCostLabel => 'حصة المزوّد من رصيد الوكالة';
+
+  @override
+  String get sessionIntegrationsMarginLabel => 'ربح المتجر';
+
+  @override
+  String get sessionIntegrationsTotalsTitle => 'كل المزوّدين';
+
+  @override
+  String get sessionIntegrationsBucketDelivered => 'نُفِّذ';
+
+  @override
+  String get sessionIntegrationsBucketAwaiting => 'لم يُنفَّذ بعد';
+
+  @override
+  String get sessionIntegrationsBucketRefunded => 'مُرتجَع';
+
+  @override
+  String sessionIntegrationsBucketPill(String label, int count, String amount) {
+    return '$label $count · $amount';
+  }
+
+  @override
+  String sessionIntegrationsAwaitingNote(int count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count عملية بقيمة $amount دفعها الزبائن ولم ينفّذها المزوّد بعد.',
+      few: '$count عمليات بقيمة $amount دفعها الزبائن ولم ينفّذها المزوّد بعد.',
+      two: 'عمليتان بقيمة $amount دفعهما الزبائن ولم ينفّذهما المزوّد بعد.',
+      one: 'عملية واحدة بقيمة $amount دفعها الزبون ولم ينفّذها المزوّد بعد.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sessionIntegrationsUnknownNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count عملية أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.',
+      few:
+          '$count عمليات أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.',
+      two:
+          'عمليتان أُرسلتا إلى المزوّد ولم تصلنا نتيجتهما. لا تُعد المحاولة — تحقّق منهما لدى المزوّد أولاً.',
+      one:
+          'عملية واحدة أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sessionIntegrationsRefundedAfterDeliveryNote(int count, String cost) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'أُرجع للزبائن ثمن $count عملية بعد أن نفّذها المزوّد، فخرج $cost من رصيد الوكالة دون مقابل.',
+      few:
+          'أُرجع للزبائن ثمن $count عمليات بعد أن نفّذها المزوّد، فخرج $cost من رصيد الوكالة دون مقابل.',
+      two:
+          'أُرجع للزبائن ثمن عمليتين بعد أن نفّذهما المزوّد، فخرج $cost من رصيد الوكالة دون مقابل.',
+      one:
+          'أُرجع للزبون ثمن عملية واحدة بعد أن نفّذها المزوّد، فخرج $cost من رصيد الوكالة دون مقابل.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sessionIntegrationsTransactionsToggle(int count) {
+    return 'العمليات ($count)';
+  }
+
+  @override
+  String get sessionIntegrationsRefundedAfterDelivery => 'مُرتجَع بعد التنفيذ';
+
+  @override
+  String sessionIntegrationsTransactionCost(String amount) {
+    return 'التكلفة $amount';
+  }
+
+  @override
+  String sessionIntegrationsRefundedValue(String amount) {
+    return 'أُرجع $amount';
+  }
+
+  @override
   String get orderCardReceiptViewButton => 'عرض إيصال الجهاز';
 
   @override

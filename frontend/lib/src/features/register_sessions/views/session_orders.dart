@@ -16,6 +16,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'card_receipt_verification_section.dart';
 import 'sale_order_details_sheet.dart';
+import 'session_integrations_section.dart';
 
 class SessionOrders extends StatelessWidget {
   const SessionOrders({
@@ -139,6 +140,20 @@ class _SessionSummaryPanel extends StatelessWidget {
         // row above it, and reads as a footnote to it rather than a
         // separate subject.
         CardReceiptVerificationSection(totals: summary.cardReceipts),
+        // Draws nothing (and so takes no gap) for a shop that resells no
+        // provider's services.
+        if (summary.integrations.hasActivity) ...[
+          const SizedBox(height: 12),
+          SessionIntegrationsSection(
+            integrations: summary.integrations,
+            onOpenOrder: (transaction) => showSaleOrderDetailsSheetForId(
+              context,
+              transaction.orderId,
+              loadDetail: viewModel.loadOrderDetail,
+              onReprint: viewModel.requestReprint,
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         _CategoriesSection(summary: summary),
         const SizedBox(height: 12),

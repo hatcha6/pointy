@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/sale_order.dart';
 import '../../../shared/components/components.dart';
@@ -23,11 +24,37 @@ Future<void> showSaleOrderDetailsSheet(
     maxHeightFactor: 0.92,
     builder: (context) {
       return _SaleOrderDetailsSheetBody(
-        order: order,
+        orderId: order.id,
+        summary: order,
         loadDetail: loadDetail,
         onReprint: onReprint,
         onVoid: onVoid,
         onReturn: onReturn,
+      );
+    },
+  );
+}
+
+/// Opens the sale behind [orderId] when only its id is at hand — a row that
+/// is not itself an order, such as a provider top-up on the shift summary.
+///
+/// There is no summary to fall back on here, so a failed fetch says so and
+/// offers a retry instead of drawing an empty invoice with a zero total.
+Future<void> showSaleOrderDetailsSheetForId(
+  BuildContext context,
+  int orderId, {
+  required SaleOrderDetailLoader loadDetail,
+  Future<bool> Function(SaleOrder order)? onReprint,
+}) {
+  return showAdaptiveModalBottomSheet<void>(
+    context: context,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.92,
+    builder: (context) {
+      return _SaleOrderDetailsSheetBody(
+        orderId: orderId,
+        loadDetail: loadDetail,
+        onReprint: onReprint,
       );
     },
   );
@@ -39,14 +66,19 @@ Future<void> showSaleOrderDetailsSheet(
 /// only when a line still has something returnable on it.
 class _SaleOrderDetailsSheetBody extends StatefulWidget {
   const _SaleOrderDetailsSheetBody({
-    required this.order,
+    required this.orderId,
+    this.summary,
     this.loadDetail,
     this.onReprint,
     this.onVoid,
     this.onReturn,
   });
 
-  final SaleOrder order;
+  final int orderId;
+
+  /// What the opening row already knew, shown if the full sale cannot be
+  /// fetched. Null when the row was not an order at all.
+  final SaleOrder? summary;
   final SaleOrderDetailLoader? loadDetail;
   final Future<bool> Function(SaleOrder order)? onReprint;
   final Future<bool> Function(SaleOrder order, String reason)? onVoid;
@@ -59,7 +91,7 @@ class _SaleOrderDetailsSheetBody extends StatefulWidget {
 
 class _SaleOrderDetailsSheetBodyState
     extends State<_SaleOrderDetailsSheetBody> {
-  late SaleOrder _order = widget.order;
+  late SaleOrder? _order = widget.summary;
   late bool _isLoading = widget.loadDetail != null;
 
   @override
@@ -72,7 +104,7 @@ class _SaleOrderDetailsSheetBodyState
   }
 
   Future<void> _load(SaleOrderDetailLoader loadDetail) async {
-    final loaded = await loadDetail(widget.order.id);
+    final loaded = await loadDetail(widget.orderId);
     if (!mounted) {
       return;
     }
@@ -84,13 +116,35 @@ class _SaleOrderDetailsSheetBodyState
     });
   }
 
+  void _retry() {
+    final loadDetail = widget.loadDetail;
+    if (loadDetail == null) {
+      return;
+    }
+    setState(() => _isLoading = true);
+    _load(loadDetail);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const PointyLoadingArea();
     }
+    final order = _order;
+    if (order == null) {
+      final l10n = AppLocalizations.of(context)!;
+      return PointyErrorState(
+        title: l10n.invoiceDetailsLoadError,
+        icon: Icons.receipt_long_outlined,
+        action: OutlinedButton.icon(
+          onPressed: _retry,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
+      );
+    }
     return SaleOrderDetailsContent(
-      order: _order,
+      order: order,
       onReprint: widget.onReprint,
       onVoid: widget.onVoid,
       onReturn: widget.onReturn,

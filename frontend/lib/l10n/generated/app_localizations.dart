@@ -17427,6 +17427,102 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{دفعة واحدة ما زالت قيد التحقق} two{دفعتان ما زالتا قيد التحقق} few{{count} دفعات ما زالت قيد التحقق} other{{count} دفعة ما زالت قيد التحقق}}'**
   String sessionCardReceiptsPendingNote(int count);
 
+  /// Session summary section: top-ups and cards sold for outside providers (HD Box, LNET, Qareeb) and where their money went.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمات الشحن'**
+  String get sessionIntegrationsTitle;
+
+  /// What customers paid for a provider's services this shift (kept sales only).
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعه الزبائن'**
+  String get sessionIntegrationsSoldLabel;
+
+  /// The provider's share of those sales — what the agency float pays for them.
+  ///
+  /// In ar, this message translates to:
+  /// **'حصة المزوّد من رصيد الوكالة'**
+  String get sessionIntegrationsCostLabel;
+
+  /// What the shop keeps: paid by customers minus the provider's share.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربح المتجر'**
+  String get sessionIntegrationsMarginLabel;
+
+  /// No description provided for @sessionIntegrationsTotalsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المزوّدين'**
+  String get sessionIntegrationsTotalsTitle;
+
+  /// No description provided for @sessionIntegrationsBucketDelivered.
+  ///
+  /// In ar, this message translates to:
+  /// **'نُفِّذ'**
+  String get sessionIntegrationsBucketDelivered;
+
+  /// No description provided for @sessionIntegrationsBucketAwaiting.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُنفَّذ بعد'**
+  String get sessionIntegrationsBucketAwaiting;
+
+  /// No description provided for @sessionIntegrationsBucketRefunded.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُرتجَع'**
+  String get sessionIntegrationsBucketRefunded;
+
+  /// A status pill on the session summary: bucket name, how many transactions, their amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{label} {count} · {amount}'**
+  String sessionIntegrationsBucketPill(String label, int count, String amount);
+
+  /// Warning: customers paid for top-ups the provider has not performed.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية واحدة بقيمة {amount} دفعها الزبون ولم ينفّذها المزوّد بعد.} =2{عمليتان بقيمة {amount} دفعهما الزبائن ولم ينفّذهما المزوّد بعد.} few{{count} عمليات بقيمة {amount} دفعها الزبائن ولم ينفّذها المزوّد بعد.} other{{count} عملية بقيمة {amount} دفعها الزبائن ولم ينفّذها المزوّد بعد.}}'**
+  String sessionIntegrationsAwaitingNote(int count, String amount);
+
+  /// Warning: top-ups sent to the provider with no answer; retrying could charge twice.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية واحدة أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.} =2{عمليتان أُرسلتا إلى المزوّد ولم تصلنا نتيجتهما. لا تُعد المحاولة — تحقّق منهما لدى المزوّد أولاً.} few{{count} عمليات أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.} other{{count} عملية أُرسلت إلى المزوّد ولم تصلنا نتيجتها. لا تُعد المحاولة — تحقّق منها لدى المزوّد أولاً.}}'**
+  String sessionIntegrationsUnknownNote(int count);
+
+  /// Warning: sales refunded after the provider had performed them, so the float paid for nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{أُرجع للزبون ثمن عملية واحدة بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} =2{أُرجع للزبائن ثمن عمليتين بعد أن نفّذهما المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} few{أُرجع للزبائن ثمن {count} عمليات بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} other{أُرجع للزبائن ثمن {count} عملية بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.}}'**
+  String sessionIntegrationsRefundedAfterDeliveryNote(int count, String cost);
+
+  /// No description provided for @sessionIntegrationsTransactionsToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمليات ({count})'**
+  String sessionIntegrationsTransactionsToggle(int count);
+
+  /// No description provided for @sessionIntegrationsRefundedAfterDelivery.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُرتجَع بعد التنفيذ'**
+  String get sessionIntegrationsRefundedAfterDelivery;
+
+  /// No description provided for @sessionIntegrationsTransactionCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة {amount}'**
+  String sessionIntegrationsTransactionCost(String amount);
+
+  /// What went back to the customer for a refunded top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرجع {amount}'**
+  String sessionIntegrationsRefundedValue(String amount);
+
   /// No description provided for @orderCardReceiptViewButton.
   ///
   /// In ar, this message translates to:

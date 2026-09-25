@@ -143,6 +143,113 @@ void main() {
     expect(summary.expenses.count, 2);
   });
 
+  test('a summary from a server without provider services parses empty', () {
+    final summary = RegisterSessionSummary.fromJson(sampleJson());
+
+    expect(summary.integrations.hasActivity, isFalse);
+    expect(summary.integrations.transactions, isEmpty);
+    expect(summary.integrations.totals.sold, 0);
+  });
+
+  test('parses where each provider\'s money went', () {
+    final json = sampleJson()
+      ..['integrations'] = {
+        'providers': [
+          {
+            'provider': 'hdbox',
+            'count': 2,
+            'sold': '110.00',
+            'cost': '90.00',
+            'margin': '20.00',
+            'delivered': {'count': 1, 'amount': '30.00', 'cost': '25.00'},
+            'awaiting': {'count': 1, 'amount': '80.00', 'cost': '65.00'},
+            'unknown': {'count': 0, 'amount': '0.00', 'cost': '0.00'},
+            'refunded': {'count': 1, 'amount': '30.00', 'cost': '25.00'},
+            'refunded_after_delivery': {'count': 1, 'cost': '25.00'},
+          },
+        ],
+        'totals': {
+          'count': 2,
+          'sold': '110.00',
+          'cost': '90.00',
+          'margin': '20.00',
+          'delivered': {'count': 1, 'amount': '30.00', 'cost': '25.00'},
+          'awaiting': {'count': 1, 'amount': '80.00', 'cost': '65.00'},
+          'unknown': {'count': 0, 'amount': '0.00', 'cost': '0.00'},
+          'refunded': {'count': 1, 'amount': '30.00', 'cost': '25.00'},
+          'refunded_after_delivery': {'count': 1, 'cost': '25.00'},
+        },
+        'transactions': [
+          {
+            'id': 11,
+            'provider': 'hdbox',
+            'kind': 'recharge',
+            'order_id': 41,
+            'receipt_number': 'R-41',
+            'sold_at': '2026-06-24T09:12:00Z',
+            'subscriber_ref': '210906803499',
+            'subscriber_label': 'Ahmed',
+            'option_label': '1 month',
+            'price': '30.00',
+            'cost': '25.00',
+            'refunded_amount': '30.00',
+            'status': 'confirmed',
+            'bucket': 'refunded',
+            'error_code': '',
+            'provider_reference': '558032',
+          },
+          {
+            'id': 12,
+            'provider': 'hdbox',
+            'order_id': 42,
+            'price': '80.00',
+            'cost': '65.00',
+            'status': 'pending',
+            'bucket': 'awaiting',
+            'error_code': 'insufficient_float',
+          },
+        ],
+      };
+
+    final integrations = RegisterSessionSummary.fromJson(json).integrations;
+
+    expect(integrations.hasActivity, isTrue);
+    final hdbox = integrations.providers.single;
+    expect(hdbox.provider, 'hdbox');
+    expect(hdbox.sold, 110);
+    expect(hdbox.cost, 90);
+    expect(hdbox.margin, 20);
+    expect(hdbox.awaiting.amount, 80);
+    expect(hdbox.refundedAfterDelivery.count, 1);
+    expect(hdbox.refundedAfterDelivery.cost, 25);
+    // Kept sales plus the one given back.
+    expect(hdbox.transactionCount, 3);
+    expect(hdbox.needsAttention, isTrue);
+    expect(integrations.totals.provider, isEmpty);
+
+    final refunded = integrations.transactions.first;
+    expect(refunded.orderId, 41);
+    expect(refunded.soldAt, DateTime.utc(2026, 6, 24, 9, 12));
+    expect(refunded.bucket, SessionIntegrationBucket.refunded);
+    expect(refunded.refundedAmount, 30);
+    // The float paid for a sale the shop gave back.
+    expect(refunded.isRefundedAfterDelivery, isTrue);
+    expect(integrations.transactions.last.errorCode, 'insufficient_float');
+    expect(integrations.transactionsFor('hdbox'), hasLength(2));
+    expect(integrations.transactionsFor('lnet'), isEmpty);
+  });
+
+  test('an unfamiliar bucket code never reads as delivered', () {
+    expect(
+      SessionIntegrationBucket.fromJson('something_new'),
+      SessionIntegrationBucket.awaiting,
+    );
+    expect(
+      SessionIntegrationBucket.fromJson('delivered'),
+      SessionIntegrationBucket.delivered,
+    );
+  });
+
   test('leaves closing cash and variance null on an open session', () {
     final json = sampleJson();
     json['session'] = <String, Object?>{

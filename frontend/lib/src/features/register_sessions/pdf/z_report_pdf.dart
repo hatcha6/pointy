@@ -7,7 +7,9 @@ import 'package:printing/printing.dart';
 import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/services/z_report_integrations.dart';
 import '../../../shared/branding_assets.dart';
+import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/pdf/pdf.dart';
 
@@ -154,6 +156,10 @@ class RegisterZReportPdfService {
       _salesSection(summary),
       pw.SizedBox(height: 16),
       _paymentMethodsSection(summary),
+      if (summary.integrations.hasActivity) ...[
+        pw.SizedBox(height: 16),
+        ..._integrationsSection(summary.integrations),
+      ],
       pw.SizedBox(height: 16),
       _categoriesSection(summary),
       pw.SizedBox(height: 16),
@@ -270,6 +276,115 @@ class RegisterZReportPdfService {
         ).build(),
       ],
     );
+  }
+
+  /// Where the provider money went: each provider's takings split into its
+  /// share and the shop's, every way that money went astray, then every
+  /// transaction — the archive copy is where a disputed top-up is looked up
+  /// months later. Returned as separate widgets so the transaction table can
+  /// break across pages.
+  List<pw.Widget> _integrationsSection(SessionIntegrations integrations) {
+    const labels = ZReportIntegrationLabels.arabic();
+    List<String> moneyRow(String name, SessionIntegrationFigures figures) => [
+      name,
+      '${figures.transactionCount}',
+      formatMoney(figures.sold),
+      formatMoney(figures.cost),
+      formatMoney(figures.margin),
+    ];
+
+    // A table rather than "HD Box — لم يُنفّذ بعد (1)" lines: the pdf shaper
+    // scrambles a Latin brand and parentheses inside an Arabic label, so each
+    // part gets a cell of its own.
+    final problems = <List<String>>[
+      for (final figures in integrations.providers) ...[
+        for (final bucket in const [
+          SessionIntegrationBucket.unknown,
+          SessionIntegrationBucket.awaiting,
+          SessionIntegrationBucket.refunded,
+        ])
+          if (figures.bucket(bucket).count > 0)
+            [
+              labels.providerName(figures.provider),
+              labels.bucket(bucket),
+              '${figures.bucket(bucket).count}',
+              formatMoney(figures.bucket(bucket).amount),
+            ],
+        if (figures.refundedAfterDelivery.count > 0)
+          [
+            labels.providerName(figures.provider),
+            labels.floatLost,
+            '${figures.refundedAfterDelivery.count}',
+            formatMoney(figures.refundedAfterDelivery.cost),
+          ],
+      ],
+    ];
+
+    return [
+      PointyPdfSectionTitle(labels.title),
+      pw.SizedBox(height: 8),
+      PointyPdfTable.invoice(
+        columns: [
+          labels.provider,
+          labels.transactionCount,
+          labels.sold,
+          labels.cost,
+          labels.margin,
+        ],
+        columnFlex: const [1.6, 0.9, 1.2, 1.2, 1.1],
+        rows: [
+          for (final figures in integrations.providers)
+            moneyRow(labels.providerName(figures.provider), figures),
+          if (integrations.providers.length > 1)
+            moneyRow(labels.allProviders, integrations.totals),
+        ],
+      ).build(),
+      if (problems.isNotEmpty) ...[
+        pw.SizedBox(height: 8),
+        PointyPdfTable.invoice(
+          columns: [
+            labels.provider,
+            labels.status,
+            labels.transactionCount,
+            labels.amount,
+          ],
+          columnFlex: const [1.2, 2.6, 0.9, 1.2],
+          rows: problems,
+        ).build(),
+      ],
+      pw.SizedBox(height: 8),
+      // Each cell holds one direction: the sale's time goes under its receipt
+      // number and the provider under the service, on lines of their own.
+      PointyPdfTable.invoice(
+        dense: true,
+        columns: [
+          labels.receipt,
+          labels.service,
+          labels.subscriber,
+          labels.price,
+          labels.transactionCost,
+          labels.status,
+        ],
+        columnFlex: const [1.2, 1.9, 1.7, 1.45, 1.45, 1.5],
+        rows: [
+          for (final transaction in integrations.transactions)
+            [
+              [
+                transaction.receiptNumber,
+                if (transaction.soldAt != null) formatTime(transaction.soldAt!),
+              ].join('\n'),
+              [
+                if (transaction.optionLabel.isNotEmpty) transaction.optionLabel,
+                labels.providerName(transaction.provider),
+              ].join('\n'),
+              transaction.subscriberRef,
+              formatMoney(transaction.price),
+              formatMoney(transaction.cost),
+              labels.transactionStatus(transaction),
+            ],
+        ],
+      ).build(),
+    ];
   }
 
   pw.Widget _categoriesSection(RegisterSessionSummary summary) {
