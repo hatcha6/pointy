@@ -160,6 +160,7 @@ class AuthenticatedHome extends StatelessWidget {
         onOpenAlert: routes.openBusinessAlert,
         child: _BankRoutingLoader(
           routing: dependencies.bankRouting,
+          canReadAccounts: capabilities.canViewMoneyAccounts,
           child: home,
         ),
       ),
@@ -176,9 +177,19 @@ class AuthenticatedHome extends StatelessWidget {
 /// ``build`` because a build must not have side effects — the screen tracker
 /// taught that lesson once already.
 class _BankRoutingLoader extends StatefulWidget {
-  const _BankRoutingLoader({required this.routing, required this.child});
+  const _BankRoutingLoader({
+    required this.routing,
+    required this.canReadAccounts,
+    required this.child,
+  });
 
   final BankRouting routing;
+
+  /// Whether this user may read the shop's money accounts at all. A cashier
+  /// may not, and asking anyway cost a 403 on every sign-in (field export,
+  /// 2026-09-25) — worse, the refused load still counted as loaded, so a
+  /// manager signing in after a cashier never got the accounts either.
+  final bool canReadAccounts;
   final Widget child;
 
   @override
@@ -191,7 +202,9 @@ class _BankRoutingLoaderState extends State<_BankRoutingLoader> {
     super.initState();
     // Idempotent and cached; a failure is silence, and the app behaves as it
     // did before bank accounts existed.
-    unawaited(widget.routing.load());
+    if (widget.canReadAccounts) {
+      unawaited(widget.routing.load());
+    }
   }
 
   @override

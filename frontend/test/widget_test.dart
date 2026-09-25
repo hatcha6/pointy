@@ -203,6 +203,33 @@ void main() {
     expect(capabilities.canCreatePurchaseOrder, isFalse);
   });
 
+  test('taking payments does not mean reading the shop\'s accounts', () {
+    // The till asked for the bank accounts on every cashier sign-in and was
+    // refused every time (403, field export 2026-09-25): a cashier holds
+    // payments.view_payment but not treasury.view_moneyaccount.
+    final cashier = PosUser.fromJson(
+      _userJson(
+        role: 'cashier',
+        permissions: const ['payments.add_payment', 'payments.view_payment'],
+      ),
+    );
+    final accountant = PosUser.fromJson(
+      _userJson(
+        role: 'accountant',
+        permissions: const ['treasury.view_moneyaccount'],
+      ),
+    );
+
+    expect(
+      AuthorizationCapabilities.forUser(cashier).canViewMoneyAccounts,
+      isFalse,
+    );
+    expect(
+      AuthorizationCapabilities.forUser(accountant).canViewMoneyAccounts,
+      isTrue,
+    );
+  });
+
   test('discount permissions expose management capabilities', () {
     final cashier = PosUser.fromJson(
       _userJson(

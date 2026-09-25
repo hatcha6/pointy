@@ -90,6 +90,11 @@ enum AppCapability {
   viewExpenses,
   manageExpenses,
   viewPayments,
+
+  /// Reading the shop's money accounts: which banks card and transfer money
+  /// may land in. Distinct from [viewPayments] — a cashier takes payments all
+  /// day without being shown the shop's accounts.
+  viewMoneyAccounts,
   viewExchangeRates,
   viewAttendance,
   manageAttendance,
@@ -856,6 +861,12 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
         capabilities.add(AppCapability.viewPayments);
       }
+      if (_hasAny(user, const [
+        'view_moneyaccount',
+        'treasury.view_moneyaccount',
+      ])) {
+        capabilities.add(AppCapability.viewMoneyAccounts);
+      }
       // Reading a rate is not the same as trading in one: an accountant costing
       // imports holds this without any of the dashboard's revenue permissions,
       // so it grants the rates band and nothing else.
@@ -1045,6 +1056,7 @@ class AuthorizationCapabilities {
   bool get canViewExpenses => allows(AppCapability.viewExpenses);
   bool get canManageExpenses => allows(AppCapability.manageExpenses);
   bool get canViewPayments => allows(AppCapability.viewPayments);
+  bool get canViewMoneyAccounts => allows(AppCapability.viewMoneyAccounts);
   bool get canViewOperations => allows(AppCapability.viewOperations);
   bool get canCreateJobs => allows(AppCapability.createJobs);
   bool get canAssignJobs => allows(AppCapability.assignJobs);
