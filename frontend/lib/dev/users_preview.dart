@@ -224,6 +224,12 @@ class _FakeUserRepository extends UserRepository {
   }
 
   @override
+  Future<Result<PosUser>> loadUser(int id) async {
+    final map = _users.firstWhere((u) => (u['id'] as num).toInt() == id);
+    return Ok(PosUser.fromJson(map));
+  }
+
+  @override
   Future<Result<PosUser>> createUser(UserCreateDraft draft) async {
     final role = draft.role.toJson();
     final map = <String, Object?>{

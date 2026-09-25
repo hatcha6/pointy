@@ -47,15 +47,15 @@ class UserPermissionsScreen extends StatelessWidget {
   }
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
-    if (viewModel.isLoading && viewModel.catalog.isEmpty) {
+    if (viewModel.isLoading && !viewModel.isReady) {
       return const PointyLoadingArea();
     }
-    if (viewModel.hasError && viewModel.catalog.isEmpty) {
+    if (viewModel.hasError && !viewModel.isReady) {
       return PointyErrorState(
         title: l10n.permissionsLoadError,
         icon: Icons.lock_outline,
         action: FilledButton.icon(
-          onPressed: viewModel.loadCatalog,
+          onPressed: viewModel.load,
           icon: const Icon(Icons.sync),
           label: Text(l10n.retryButton),
         ),
@@ -135,7 +135,8 @@ class _SaveFooter extends StatelessWidget {
     return PointyStickyActionFooter(
       summary: viewModel.hasSaveError
           ? Text(
-              l10n.permissionsSaveError,
+              viewModel.saveFailure?.describe(l10n) ??
+                  l10n.permissionsSaveError,
               style: TextStyle(color: context.pointyColors.danger),
             )
           : null,

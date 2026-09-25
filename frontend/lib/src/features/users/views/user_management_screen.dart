@@ -233,8 +233,7 @@ class _UserManagementBody extends StatelessWidget {
                       onOpenDetails: () => onOpenUserDetails(user),
                       onEdit: () => onEditUser(user),
                       onManagePermissions: () => onManagePermissions(user),
-                      onToggleActive: () =>
-                          viewModel.updateUserActive(user, !user.isActive),
+                      onToggleActive: () => _toggleActive(context, l10n, user),
                     ),
                   ],
                   onTap: () => onOpenUserDetails(user),
@@ -243,6 +242,28 @@ class _UserManagementBody extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The row menu has no form to hold a refusal, so a toggle the server
+  /// rejects — an account the acting admin may not touch — says why here
+  /// instead of silently leaving the row as it was.
+  Future<void> _toggleActive(
+    BuildContext context,
+    AppLocalizations l10n,
+    PosUser user,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final saved = await viewModel.updateUserActive(user, !user.isActive);
+    if (saved) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          viewModel.saveFailure?.describe(l10n) ?? l10n.updateUserError,
+        ),
       ),
     );
   }
@@ -528,6 +549,7 @@ class _CreateUserFormState extends State<_CreateUserForm> {
   final _emailController = TextEditingController();
   UserRole _role = UserRole.cashier;
   bool _isActive = true;
+  String _submittedUsername = '';
 
   @override
   void dispose() {
@@ -581,7 +603,9 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                         enabled: !widget.viewModel.isSaving,
                         decoration: InputDecoration(
                           labelText: l10n.usernameLabel,
+                          errorText: _usernameServerError(l10n),
                         ),
+                        onChanged: (_) => setState(() {}),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
                             ? l10n.requiredField
@@ -622,7 +646,7 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                   if (widget.viewModel.hasSaveError) ...[
                     SizedBox(height: spacing.sm),
                     Text(
-                      l10n.createUserError,
+                      _saveErrorText(l10n),
                       style: TextStyle(color: context.pointyColors.danger),
                     ),
                   ],
@@ -656,14 +680,37 @@ class _CreateUserFormState extends State<_CreateUserForm> {
     );
   }
 
+  /// The server's objection to the username, pinned to the field while the
+  /// rejected name is still what it holds; typing anything else clears it.
+  String? _usernameServerError(AppLocalizations l10n) {
+    final failure = widget.viewModel.saveFailure;
+    if (failure == null ||
+        _usernameController.text.trim() != _submittedUsername) {
+      return null;
+    }
+    return failure.usernameMessage(l10n);
+  }
+
+  /// The refusal's own reason when it is not about the username (that one
+  /// lives on the field); the generic sentence otherwise.
+  String _saveErrorText(AppLocalizations l10n) {
+    final failure = widget.viewModel.saveFailure;
+    if (failure == null || failure.usernameMessage(l10n) != null) {
+      return l10n.createUserError;
+    }
+    return failure.describe(l10n) ?? l10n.createUserError;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
+    final username = _usernameController.text.trim();
+    _submittedUsername = username;
     final created = await widget.viewModel.createUser(
       UserCreateDraft(
-        username: _usernameController.text.trim(),
+        username: username,
         password: _passwordController.text,
         role: _role,
         displayName: _displayNameController.text.trim(),
@@ -820,7 +867,8 @@ class _EditUserFormState extends State<_EditUserForm> {
                   if (widget.viewModel.hasSaveError) ...[
                     SizedBox(height: spacing.sm),
                     Text(
-                      l10n.updateUserError,
+                      widget.viewModel.saveFailure?.describe(l10n) ??
+                          l10n.updateUserError,
                       style: TextStyle(color: context.pointyColors.danger),
                     ),
                   ],

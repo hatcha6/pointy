@@ -5124,6 +5124,30 @@ abstract class AppLocalizations {
   /// **'تعذر إنشاء المستخدم. راجع البيانات وحاول مرة أخرى.'**
   String get createUserError;
 
+  /// Shown when the server refuses a new or renamed account because another account already has that username.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم مستخدم من قبل. اختر اسمًا آخر.'**
+  String get usernameTakenError;
+
+  /// Shown when the acting admin holds fewer permissions than the role they tried to assign.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكنك إسناد هذا الدور لأنه يتضمن صلاحيات لا تملكها أنت.'**
+  String get userRoleNotAssignableError;
+
+  /// Shown when the acting admin tried to grant a permission they do not hold themselves.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك منح الصلاحيات التي تملكها أنت فقط.'**
+  String get userPermissionsNotGrantableError;
+
+  /// Shown when the acting admin tried to edit an account that holds permissions they lack.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكنك تعديل مستخدم يملك صلاحيات لا تملكها أنت.'**
+  String get userEditRicherAccountError;
+
   /// No description provided for @usersLoadError.
   ///
   /// In ar, this message translates to:

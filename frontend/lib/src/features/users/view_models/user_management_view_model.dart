@@ -5,6 +5,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/user_repository.dart';
+import '../user_save_failure.dart';
 
 class UserManagementViewModel extends ChangeNotifier {
   UserManagementViewModel(
@@ -23,6 +24,7 @@ class UserManagementViewModel extends ChangeNotifier {
   bool _isSaving = false;
   bool _hasError = false;
   bool _hasSaveError = false;
+  UserSaveFailure? _saveFailure;
   bool _hasMoreUsers = true;
   int _nextPage = 1;
   int? _totalCount;
@@ -35,6 +37,9 @@ class UserManagementViewModel extends ChangeNotifier {
   bool get isSaving => _isSaving;
   bool get hasError => _hasError;
   bool get hasSaveError => _hasSaveError;
+
+  /// Why the last create or update was refused, when the server said.
+  UserSaveFailure? get saveFailure => _saveFailure;
   bool get hasMoreUsers => _hasMoreUsers;
   String get searchQuery => _searchQuery;
   UserRole? get roleFilter => _roleFilter;
@@ -128,6 +133,7 @@ class UserManagementViewModel extends ChangeNotifier {
   Future<bool> createUser(UserCreateDraft draft) async {
     _isSaving = true;
     _hasSaveError = false;
+    _saveFailure = null;
     notifyListeners();
 
     final result = await _userRepository.createUser(draft);
@@ -139,8 +145,9 @@ class UserManagementViewModel extends ChangeNotifier {
         _trackUserCreated(user, draft);
         notifyListeners();
         return true;
-      case Error<PosUser>(exception: _):
+      case Error<PosUser>(exception: final exception):
         _hasSaveError = true;
+        _saveFailure = UserSaveFailure.fromError(exception);
         notifyListeners();
         return false;
     }
@@ -177,6 +184,7 @@ class UserManagementViewModel extends ChangeNotifier {
   }) async {
     _isSaving = true;
     _hasSaveError = false;
+    _saveFailure = null;
     notifyListeners();
 
     final result = await _userRepository.updateUser(id: user.id, draft: draft);
@@ -194,8 +202,9 @@ class UserManagementViewModel extends ChangeNotifier {
         );
         notifyListeners();
         return true;
-      case Error<PosUser>(exception: _):
+      case Error<PosUser>(exception: final exception):
         _hasSaveError = true;
+        _saveFailure = UserSaveFailure.fromError(exception);
         notifyListeners();
         return false;
     }

@@ -46,7 +46,10 @@ class UserApiClient {
 
   Future<PosUser> createUser(UserCreateDraft draft) async {
     final response = await _session.post('users/', body: draft.toJson());
-    _session.ensureSuccess(response, 'User create failed with status');
+    // throwApiException, not ensureSuccess: a refusal names its reason in the
+    // body (a taken username, a role or permission beyond the acting admin),
+    // and the sheets show that reason instead of one generic failure.
+    _session.throwApiException(response, 'User create failed with status');
     return PosUser.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -57,7 +60,7 @@ class UserApiClient {
     required UserUpdateDraft draft,
   }) async {
     final response = await _session.patch('users/$id/', body: draft.toJson());
-    _session.ensureSuccess(response, 'User update failed with status');
+    _session.throwApiException(response, 'User update failed with status');
     return PosUser.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );

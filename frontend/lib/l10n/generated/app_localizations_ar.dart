@@ -2955,6 +2955,22 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر إنشاء المستخدم. راجع البيانات وحاول مرة أخرى.';
 
   @override
+  String get usernameTakenError =>
+      'اسم المستخدم مستخدم من قبل. اختر اسمًا آخر.';
+
+  @override
+  String get userRoleNotAssignableError =>
+      'لا يمكنك إسناد هذا الدور لأنه يتضمن صلاحيات لا تملكها أنت.';
+
+  @override
+  String get userPermissionsNotGrantableError =>
+      'يمكنك منح الصلاحيات التي تملكها أنت فقط.';
+
+  @override
+  String get userEditRicherAccountError =>
+      'لا يمكنك تعديل مستخدم يملك صلاحيات لا تملكها أنت.';
+
+  @override
   String get usersLoadError => 'تعذر تحميل المستخدمين.';
 
   @override

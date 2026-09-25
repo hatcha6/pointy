@@ -26,7 +26,10 @@ void main() {
 
   Future<GlobalKey<NavigatorState>> pushScreen(WidgetTester tester) async {
     final viewModel = UserPermissionsViewModel(
-      _StubUserRepository(PosApiService(baseUrl: 'http://pointy.test/api')),
+      _StubUserRepository(
+        PosApiService(baseUrl: 'http://pointy.test/api'),
+        user,
+      ),
       user: user,
     );
     addTearDown(viewModel.dispose);
@@ -124,7 +127,12 @@ void main() {
 }
 
 class _StubUserRepository extends UserRepository {
-  _StubUserRepository(super.service);
+  _StubUserRepository(super.service, this.user);
+
+  final PosUser user;
+
+  @override
+  Future<Result<PosUser>> loadUser(int id) async => Ok(user);
 
   @override
   Future<Result<PermissionCatalog>> loadPermissionCatalog() async =>
