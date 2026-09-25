@@ -368,7 +368,14 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
   }
 
   void _finishMultipleScan() {
-    Navigator.of(context).pop(List.unmodifiable(_entries));
+    // Typed, not `List.unmodifiable(_entries)`: that constructor takes a bare
+    // Iterable, so with nothing to infer from it builds a List<dynamic> — and
+    // the sheet's route, typed for scan entries, threw on it. Every multi-scan
+    // "done" failed and the scanned items never reached the cart (Android
+    // till, 2026-09-24).
+    Navigator.of(
+      context,
+    ).pop(List<CameraVariantScanEntry>.unmodifiable(_entries));
   }
 }
 
