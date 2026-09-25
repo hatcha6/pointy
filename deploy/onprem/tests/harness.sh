@@ -271,6 +271,7 @@ make_bundle() {
     printf 'bundled %s from %s\n' "$f" "$version" >"${dir}/${f}"
   done
   printf 'bundled bootstrap from %s\n' "$version" >"${dir}/wsl/bootstrap-wsl.ps1"
+  printf 'bundled collector from %s\n' "$version" >"${dir}/wsl/collect-diagnostics.ps1"
   printf 'bundled timezones from %s\n' "$version" >"${dir}/wsl/timezone-map.txt"
   printf 'fake backend image %s\n' "$version" >"${dir}/images/pointy-backend.tar"
   printf 'fake relay image %s\n' "$version"   >"${dir}/images/pointy-relay.tar"

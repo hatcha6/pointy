@@ -64,10 +64,21 @@ Case -Name "genuinely-broken" -ExpectExit 1 `
 Case -Name "no-msi-no-internet" -ExpectExit 1 `
      -Expect @("ERROR:", "wsl.<version>.x64.msi")
 
+# The inbox Windows 10 wsl.exe answers --status but cannot run systemd, so a
+# shop "installed" on it never self-heals. It must get the bundled MSI exactly
+# like a machine with no WSL at all.
+Case -Name "inbox-wsl-installs-msi" -ExpectExit 0 `
+     -Expect @("older inbox wsl.exe", "MARKER: msiexec-calls=1", "MARKER: returned-normally") `
+     -Reject @("ERROR:")
+
 # The LAN bridge suite runs in-process (no `exit` paths), so it is its own file.
 Write-Host ""
 & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot "bridge.ps1")
 if ($LASTEXITCODE -ne 0) { $fail++; $failed += "LAN bridge" }
+
+Write-Host ""
+& (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot "supervise.ps1")
+if ($LASTEXITCODE -ne 0) { $fail++; $failed += "supervisor" }
 
 Write-Host ""
 & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot "diagnostics.ps1")

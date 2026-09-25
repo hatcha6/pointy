@@ -29,8 +29,9 @@
     * makes the distro's systemd journal survive a restart (capped at 256 MB),
     * registers PointyProbe, a task that appends one line a minute to
       %ProgramData%\Pointy\logs\probe.csv: is the distro running, is the WSL
-      VM up, does the stack answer, when did PointyWSL last run. It only asks
-      WSL for a list; it never starts the distro.
+      VM up, is the keep-alive client attached, does the stack answer, when
+      did PointyWSL last run. It only asks WSL for a list; it never starts
+      the distro.
 #>
 [CmdletBinding()]
 param(
@@ -370,12 +371,16 @@ try {
     }
 } catch { }
 
-$vmStarted = ""; $vmMb = ""; $clients = @(); $sessions = ""
+$vmStarted = ""; $vmMb = ""; $clients = @(); $sessions = ""; $anchors = ""
 try {
     $vm = @(Get-CimInstance Win32_Process -Filter "Name='vmmemWSL' OR Name='vmmem'")
     if ($vm.Count) { $vmStarted = $vm[0].CreationDate.ToString("s"); $vmMb = [int]($vm[0].WorkingSetSize / 1MB) }
     $clients = @(Get-CimInstance Win32_Process -Filter "Name='wsl.exe' OR Name='wslhost.exe'")
     $sessions = (@($clients | ForEach-Object { $_.SessionId }) | Sort-Object -Unique) -join " "
+    # The supervisor's keep-alive client: the one wsl.exe that must always be
+    # here, because WSL powers the distro off ~15 s after the last one exits.
+    $anchors = @($clients | Where-Object { "$($_.CommandLine)" -like "*--exec /bin/sleep infinity*" -and
+        "$($_.CommandLine)" -match "(^|\s)-d\s+$([regex]::Escape($Distro))(\s|$)" }).Count
 } catch { }
 
 $proxy = ""
@@ -403,7 +408,7 @@ try {
 } catch { }
 
 $row = @(
-    (Get-Date).ToString("s"), $boot, $distroState, $vmStarted, $vmMb, $clients.Count, $sessions,
+    (Get-Date).ToString("s"), $boot, $distroState, $vmStarted, $vmMb, $clients.Count, $sessions, $anchors,
     (Get-Http "http://127.0.0.1:8000/healthz-edge"), (Get-Http "http://127.0.0.1:8000/readyz/"),
     $proxy, $taskState, $taskRun, $taskResult, $console, $freeMb
 ) -join ","
@@ -415,7 +420,7 @@ if ((Test-Path $LogFile) -and ((Get-Item $LogFile).Length -gt 10MB)) {
 }
 if (-not (Test-Path $LogFile)) {
     Set-Content -Path $LogFile -Encoding UTF8 -Value ("time,windows_boot,distro,vm_started,vm_mb,wsl_clients," +
-        "wsl_client_sessions,edge_8000,ready_8000,portproxy_8000,task_state,task_last_run," +
+        "wsl_client_sessions,wsl_anchor,edge_8000,ready_8000,portproxy_8000,task_state,task_last_run," +
         "task_last_result,console_user,host_free_mb")
 }
 Add-Content -Path $LogFile -Encoding UTF8 -Value $row
@@ -495,6 +500,16 @@ function Test-SameAccount {
     param([string]$A, [string]$B)
     if (-not $A -or -not $B) { return $false }
     return ((($A -split '\\')[-1]) -ieq (($B -split '\\')[-1]))
+}
+
+# Is this wsl.exe the supervisor's keep-alive client? bootstrap-wsl.ps1 -Boot
+# holds `wsl.exe -d <distro> -u root --exec /bin/sleep infinity` open for as
+# long as Windows is up, because WSL powers a distro off ~15 s after the last
+# Windows-side client exits, whatever systemd inside is doing.
+function Test-AnchorCommandLine {
+    param([string]$CommandLine, [string]$DistroName)
+    return ($CommandLine -match "(^|\s)-d\s+$([regex]::Escape($DistroName))(\s|$)" -and
+            $CommandLine -like "*--exec /bin/sleep infinity*")
 }
 
 # Where an account's profile (and so its .wslconfig) really is. Not
@@ -723,6 +738,31 @@ $before = Get-DistroState
 $processesBefore = Get-WslProcesses
 $vmBefore = @($processesBefore | Where-Object { $_.Name -like "vmmem*" }) | Select-Object -First 1
 $clientsBefore = @($processesBefore | Where-Object { $_.Name -in @("wsl.exe", "wslhost.exe") })
+$anchorBefore = @($clientsBefore | Where-Object { Test-AnchorCommandLine "$($_.CommandLine)" $Distro })
+# The supervisor's heartbeat. bootstrap-wsl.ps1 -Boot runs from boot to
+# shutdown by design, so "PointyWSL has been running for a week" is healthy
+# exactly when this file is fresh.
+$SupervisorFile = Join-Path $InstallRoot "supervisor-state.json"
+$supervisor = $null
+$supervisorAge = $null
+$supervisorAlive = $false
+try {
+    if (Test-Path $SupervisorFile) {
+        $supervisor = Get-Content -Raw $SupervisorFile | ConvertFrom-Json
+        $supervisorAge = (Get-Date) - [datetime]$supervisor.heartbeat_at
+        if ($supervisor.supervisor_pid) {
+            $supervisorAlive = [bool](Get-Process -Id ([int]$supervisor.supervisor_pid) -ErrorAction SilentlyContinue)
+        }
+    }
+} catch { $supervisor = $null }
+$anchorText = "NOT attached"
+if ($anchorBefore.Count) { $anchorText = "attached (PID $($anchorBefore[0].ProcessId), session $($anchorBefore[0].SessionId))" }
+$supervisorText = "no heartbeat file ($SupervisorFile)"
+if ($supervisor) {
+    $aliveText = "gone"
+    if ($supervisorAlive) { $aliveText = "alive" }
+    $supervisorText = "PID $($supervisor.supervisor_pid) ($aliveText), heartbeat $(Format-Span $supervisorAge) ago, distro restarts $($supervisor.distro_restarts)"
+}
 $probes = [ordered]@{}
 foreach ($url in @("http://127.0.0.1:8000/healthz-edge", "http://127.0.0.1:8000/readyz/", "http://127.0.0.1:80/healthz-web")) {
     $probes[$url] = Get-HttpStatus $url
@@ -736,6 +776,8 @@ Save-Section "00-state-before.txt" {
     if ($vmBefore) { "WSL VM            : up since $($vmBefore.CreationDate) ($($vmBefore.Name), $([int]($vmBefore.WorkingSetSize / 1MB)) MB)" }
     else { "WSL VM            : NOT running (no vmmem process)" }
     "wsl.exe clients   : $($clientsBefore.Count) (sessions: $((@($clientsBefore | ForEach-Object { $_.SessionId }) | Sort-Object -Unique) -join ', '))"
+    "keep-alive client : $anchorText"
+    "supervisor        : $supervisorText"
     ""
     foreach ($url in $probes.Keys) { "{0,-44} -> {1}" -f $url, $probes[$url] }
 }
@@ -963,8 +1005,9 @@ foreach ($e in $taskEvents) { Add-Timeline $e.TimeCreated (Format-EventLine $e "
 Write-Step "Pointy's own Windows-side logs"
 $pointyDir = Join-Path $Work "pointy"
 New-Item -ItemType Directory -Force -Path $pointyDir | Out-Null
-foreach ($file in @($BootLog, (Join-Path $InstallRoot "bridge-state.json"), $ProbeLog,
-                    ($ProbeLog -replace '\.csv$', '.1.csv'), (Join-Path $InstallRoot "bootstrap-wsl.ps1"))) {
+foreach ($file in @($BootLog, ($BootLog -replace '\.log$', '.1.log'), (Join-Path $InstallRoot "bridge-state.json"),
+                    $SupervisorFile, $ProbeLog, ($ProbeLog -replace '\.csv$', '.1.csv'),
+                    (Join-Path $InstallRoot "bootstrap-wsl.ps1"))) {
     if (Test-Path $file) { Copy-Item -Force $file $pointyDir -ErrorAction SilentlyContinue }
 }
 Save-Section "pointy\install-root.txt" {
@@ -1017,8 +1060,8 @@ if (Test-Path $ProbeLog) {
         $last = $key
         try {
             $time = [datetime]::ParseExact($row.time, "s", [Globalization.CultureInfo]::InvariantCulture)
-            Add-Timeline $time ("{0:yyyy-MM-dd HH:mm:ss}  PROBE [Probe] distro={1} vm_started={2} edge={3} ready={4} wsl_clients={5} task_last_run={6} result={7}" -f
-                $time, $row.distro, $row.vm_started, $row.edge_8000, $row.ready_8000, $row.wsl_clients, $row.task_last_run, $row.task_last_result)
+            Add-Timeline $time ("{0:yyyy-MM-dd HH:mm:ss}  PROBE [Probe] distro={1} vm_started={2} edge={3} ready={4} wsl_clients={5} anchor={8} task_last_run={6} result={7}" -f
+                $time, $row.distro, $row.vm_started, $row.edge_8000, $row.ready_8000, $row.wsl_clients, $row.task_last_run, $row.task_last_result, $row.wsl_anchor)
         } catch { }
     }
 }
@@ -1093,9 +1136,24 @@ if (-not $pointyTask) {
     Add-Finding "!! The $TaskName task does not exist, so nothing starts the distro after a restart. Re-running bootstrap-wsl.ps1 registers it."
 } else {
     if ("$($pointyTask.State)" -eq "Disabled") { Add-Finding "!! The $TaskName task is DISABLED." }
-    if ("$($pointyTask.State)" -eq "Running" -and $taskInfo -and ((Get-Date) - $taskInfo.LastRunTime).TotalMinutes -gt 15) {
-        Add-Finding ("!! $TaskName has been running since $($taskInfo.LastRunTime). With MultipleInstances=IgnoreNew a run that " +
-                     "never ends blocks every later one. The stuck powershell.exe is in windows\processes.txt.")
+    if ("$($pointyTask.State)" -eq "Running") {
+        # Running is the design: -Boot supervises from boot to shutdown. It is
+        # a problem only when the supervisor has stopped cycling.
+        if (-not $supervisor) {
+            if ($taskInfo -and ((Get-Date) - $taskInfo.LastRunTime).TotalMinutes -gt 15) {
+                Add-Finding ("!! $TaskName has been running since $($taskInfo.LastRunTime) and has never written a heartbeat " +
+                             "($SupervisorFile). Either its bootstrap predates the supervisor and is stuck, or the supervisor " +
+                             "never finished its first cycle. The powershell.exe is in windows\processes.txt.")
+            }
+        } elseif ($supervisorAge.TotalMinutes -gt 11) {
+            Add-Finding ("!! $TaskName is running but its supervisor's heartbeat is $(Format-Span $supervisorAge) old " +
+                         "(last $($supervisor.heartbeat_at)). A supervisor that stops cycling neither restarts the distro nor " +
+                         "re-points the bridge. Its powershell.exe (PID $($supervisor.supervisor_pid)) is in windows\processes.txt.")
+        }
+    } elseif ($taskInfo -and $taskInfo.LastRunTime -ge $os.LastBootUpTime -and $uptime.TotalMinutes -gt 10) {
+        Add-Finding ("!! $TaskName is $($pointyTask.State), not Running. Its supervisor should run from boot to shutdown; " +
+                     "without it nothing holds the distro open or starts it again. Its last run ($($taskInfo.LastRunTime)) " +
+                     "ended: $(Format-TaskResult $taskInfo.LastTaskResult).")
     }
     if ($taskInfo -and $taskInfo.LastRunTime -lt $os.LastBootUpTime -and $uptime.TotalMinutes -gt 10) {
         Add-Finding "!! $TaskName has not run since Windows started at $($os.LastBootUpTime) ($(Format-Span $uptime) ago)."
@@ -1112,21 +1170,31 @@ if (-not $pointyTask) {
 if (-not $canGuest) {
     Add-Finding "!! This ran as $me, but the distro belongs to $owner. Log in as $owner and run it again; the Linux half was skipped."
 }
-if ($instanceIdle -ne "-1") {
-    $where = "the owner's .wslconfig"
-    if ($ownerWslConfig) { $where = $ownerWslConfig }
-    if ($wslVersionNumber -and $wslVersionNumber -ge [version]"2.5.4") {
-        Add-Finding ("!! $where does not set [general] instanceIdleTimeout=-1 (it is: $instanceIdle). WSL powers a distro off " +
-                     "~15 s after the last Windows-side wsl.exe/wslhost.exe exits - systemd inside does not count - so between " +
-                     "$TaskName runs the stack is down unless a WSL window is open. To stop it now: add the two lines " +
-                     "'[general]' and 'instanceIdleTimeout=-1' to that file, then run 'wsl --shutdown' once.")
-    } else {
-        $versionText = "(version unreadable)"
-        if ($wslVersionNumber) { $versionText = "$wslVersionNumber" }
-        Add-Finding ("!! WSL $versionText powers a distro off ~15 s after the last Windows-side wsl.exe/wslhost.exe " +
-                     "exits - systemd inside does not count - and only WSL 2.5.4+ can be told not to (instanceIdleTimeout). " +
-                     "Between $TaskName runs the stack is down unless a WSL window is open.")
+$where = "the owner's .wslconfig"
+if ($ownerWslConfig) { $where = $ownerWslConfig }
+$versionText = "(version unreadable)"
+if ($wslVersionNumber) { $versionText = "$wslVersionNumber" }
+$canIdleOff = ($wslVersionNumber -and $wslVersionNumber -ge [version]"2.5.4")
+if ($anchorBefore.Count -eq 0) {
+    # THE finding. WSL powers a distro off ~15 s after its last Windows-side
+    # client exits, and systemd inside does not count; the supervisor's
+    # keep-alive client is what stands between the shop and that timer.
+    $taskText = "not registered"
+    if ($pointyTask) { $taskText = "$($pointyTask.State)" }
+    Add-Finding ("!! No keep-alive client is attached to the distro (no 'wsl.exe -d $Distro -u root --exec /bin/sleep infinity'). " +
+                 "WSL powers a distro off ~15 s after its last Windows-side wsl.exe exits - systemd inside does not count - " +
+                 "so without one the stack is down unless a WSL window is open. bootstrap-wsl.ps1 -Boot holds that client " +
+                 "open; the $TaskName task is $taskText.")
+    if ($instanceIdle -ne "-1") {
+        if ($canIdleOff) {
+            Add-Finding ("!  As a fallback this WSL ($versionText) can also be told never to idle the distro off: add '[general]' " +
+                         "and 'instanceIdleTimeout=-1' to $where (it is: $instanceIdle), then run 'wsl --shutdown' once.")
+        } else {
+            Add-Finding "   WSL $versionText cannot be told not to idle the distro off (that needs 2.5.4+); only an attached client keeps it."
+        }
     }
+} elseif ($instanceIdle -ne "-1" -and $canIdleOff) {
+    Add-Finding "   [general] instanceIdleTimeout is not set in $where; not needed while the keep-alive client is attached (a newer bootstrap sets it)."
 }
 foreach ($key in @("sparseVhd", "autoMemoryReclaim")) {
     if ($null -ne (Get-WslConfigValue $wslConfigText "wsl2" $key)) {
@@ -1212,10 +1280,12 @@ Add-Line "WSL"
 Add-Line "  $wslVersion"
 Add-Line "  distro when collection started: $($before.State)   VM: $vmText"
 Add-Line "  wsl.exe clients attached: $($clientsBefore.Count)"
+Add-Line "  keep-alive client: $anchorText"
+Add-Line "  supervisor: $supervisorText"
 Add-Line "  [general] instanceIdleTimeout: $instanceIdle   ($ownerWslConfig)"
 Add-Line "TASK $TaskName"
 if ($pointyTask) {
-    Add-Line "  state $($pointyTask.State), runs as $($pointyTask.Principal.UserId) ($($pointyTask.Principal.LogonType))"
+    Add-Line "  state $($pointyTask.State) (Running is the design: -Boot supervises from boot to shutdown), runs as $($pointyTask.Principal.UserId) ($($pointyTask.Principal.LogonType))"
     if ($taskInfo) {
         Add-Line "  last run $($taskInfo.LastRunTime) -> $(Format-TaskResult $taskInfo.LastTaskResult)"
         Add-Line "  next run $($taskInfo.NextRunTime), missed runs $($taskInfo.NumberOfMissedRuns)"

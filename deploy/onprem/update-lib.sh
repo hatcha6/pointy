@@ -239,15 +239,18 @@ pu_install_file() {
 #
 # wsl/bootstrap-wsl.ps1 is here for a reason that is easy to miss: on a Windows
 # host it owns the LAN bridge (the netsh portproxy that lets the tills reach the
-# NAT'd WSL VM at all). If updates did not carry it, a shop would keep whatever
-# bootstrap it was installed with forever, and no fix to the bridge could ever
-# reach it. The distro rootfs is NOT adopted — it is a one-time install input,
-# it is enormous, and the distro it produced already exists.
+# NAT'd WSL VM at all) and the supervisor that keeps the distro alive. If
+# updates did not carry it, a shop would keep whatever bootstrap it was
+# installed with forever, and no fix to either could ever reach it. The
+# supervisor promotes the adopted copy to Windows by itself. The diagnostics
+# collector travels the same way. The distro rootfs is NOT adopted — it is a
+# one-time install input, it is enormous, and the distro it produced already
+# exists.
 POINTY_ADOPT_FILES="docker-compose.yml install.sh watchdog.sh
 register-autostart.sh update.sh update-agent.sh update-lib.sh
 discovery-responder.py migrate-fahd.sh
 disable-watchdog.sh
-wsl/bootstrap-wsl.ps1 wsl/timezone-map.txt
+wsl/bootstrap-wsl.ps1 wsl/collect-diagnostics.ps1 wsl/timezone-map.txt
 .env.example VERSION.txt INSTALL.md README.md"
 
 # Which strategy the release itself asks for. A release whose migrations cannot

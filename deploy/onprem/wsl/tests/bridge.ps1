@@ -18,7 +18,7 @@ Write-Host "# bootstrap-wsl.ps1 : LAN bridge"
 # addresses. `hostname -I` returns them in no guaranteed order, and forwarding
 # the LAN to a docker bridge address blackholes every till silently.
 $script:GuestOut = ""
-function Invoke-Guest { param([string]$Command)
+function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
     return [pscustomobject]@{ ExitCode = 0; Output = $script:GuestOut } }
 
 check "reads eth0's address" {
@@ -34,7 +34,7 @@ check "returns nothing rather than a guess when eth0 has no address" {
     $null -eq (Get-WslIp)
 }
 check "a failed guest command yields no address" {
-    function Invoke-Guest { param([string]$Command)
+    function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
         return [pscustomobject]@{ ExitCode = 1; Output = "" } }
     $null -eq (Get-WslIp)
 }
@@ -118,7 +118,7 @@ $script:Answers = @()
 $script:AnswersAfter = $null
 $script:Lan = @("192.168.1.10")
 $script:Listeners = @()
-function Invoke-Guest { param([string]$Command)
+function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
     if ($Command -like "curl *") {
         return [pscustomobject]@{ ExitCode = $(if ($script:GuestUp) { 0 } else { 7 }); Output = "" } }
     return [pscustomobject]@{ ExitCode = 0; Output = "" } }
@@ -180,9 +180,23 @@ New-Item -ItemType Directory -Force -Path $script:ProfileDir | Out-Null
 $env:USERPROFILE = $script:ProfileDir
 function Get-CimInstance { param($ClassName, $Namespace, $ErrorAction)
     return [pscustomobject]@{ TotalPhysicalMemory = 16GB } }
-function Invoke-Wsl { param([string[]]$Arguments)
-    return [pscustomobject]@{ ExitCode = 0; Output = "WSL version: 2.3.26.0" } }
+$script:WslVersionText = "WSL version: 2.3.26.0"
+function Invoke-Wsl { param([string[]]$Arguments, [int]$TimeoutSec = 120)
+    return [pscustomobject]@{ ExitCode = 0; Output = $script:WslVersionText } }
+# The file WSL reads is the owner's; here that is the temp profile above.
+function Get-OwnerProfileDir { return $env:USERPROFILE }
 $script:WslConfigPath = Join-Path $script:ProfileDir ".wslconfig"
+
+# Which [section] a key sits in, or "" when it is missing. WSL reads a key
+# only in its own section, so the section is part of what is pinned.
+function sectionOf([string]$Text, [string]$Key) {
+    $current = ""
+    foreach ($line in ($Text -split "`n")) {
+        if ($line -match '^\[(.+)\]$') { $current = $Matches[1]; continue }
+        if ($line -match "^$Key=") { return $current }
+    }
+    return ""
+}
 
 check "a fresh .wslconfig turns WSL's localhost relay off" {
     Remove-Item $script:WslConfigPath -ErrorAction SilentlyContinue
@@ -190,21 +204,45 @@ check "a fresh .wslconfig turns WSL's localhost relay off" {
     $text = Get-Content -Raw $script:WslConfigPath
     $changed -and ($text -match '(?m)^localhostForwarding=false$') -and ($text -notmatch 'localhostForwarding=true')
 }
+check "every key sits in the section WSL reads it from" {
+    # sparseVhd under [wsl2] is a warning on every wsl.exe call and nothing
+    # else; the vhdx keeps growing.
+    $text = Get-Content -Raw $script:WslConfigPath
+    ((sectionOf $text "localhostForwarding") -eq "wsl2") -and ((sectionOf $text "vmIdleTimeout") -eq "wsl2") -and
+        ((sectionOf $text "sparseVhd") -eq "experimental") -and ((sectionOf $text "autoMemoryReclaim") -eq "experimental")
+}
+check "instanceIdleTimeout is not written for a WSL that would only warn about it (2.3.26)" {
+    $text = Get-Content -Raw $script:WslConfigPath
+    $text -notmatch 'instanceIdleTimeout'
+}
 check "rewriting an identical .wslconfig reports no change (no needless WSL restart)" {
     -not (Write-WslConfig)
 }
+check "on WSL 2.5.4+ the distro itself is told never to idle off, under [general]" {
+    $script:WslVersionText = "WSL version: 2.5.10.0"
+    $changed = Write-WslConfig
+    $text = Get-Content -Raw $script:WslConfigPath
+    $script:WslVersionText = "WSL version: 2.3.26.0"
+    $changed -and ((sectionOf $text "instanceIdleTimeout") -eq "general") -and ($text -match '(?m)^instanceIdleTimeout=-1$')
+}
 check "an installed shop's generated .wslconfig is converged at boot" {
-    $old = "$WslConfigMarker`n[wsl2]`nmemory=8GB`nlocalhostForwarding=true`n"
+    $old = "$WslConfigMarker`n[wsl2]`nmemory=8GB`nlocalhostForwarding=true`nsparseVhd=true`n"
     [IO.File]::WriteAllText($script:WslConfigPath, $old)
     $script:Log.Clear()
-    Update-WslConfigForBridge
+    Update-GeneratedWslConfig
     $text = Get-Content -Raw $script:WslConfigPath
-    ($text -match '(?m)^localhostForwarding=false$') -and (logged "next time Windows restarts")
+    ($text -match '(?m)^localhostForwarding=false$') -and ((sectionOf $text "sparseVhd") -eq "experimental") -and
+        (logged "next time Windows restarts")
+}
+check "a converged .wslconfig is not rewritten (or logged) again on the next cycle" {
+    $script:Log.Clear()
+    Update-GeneratedWslConfig
+    -not (logged "wslconfig")
 }
 check "an operator's own .wslconfig is never rewritten" {
     $own = "[wsl2]`nmemory=12GB`nlocalhostForwarding=true`n"
     [IO.File]::WriteAllText($script:WslConfigPath, $own)
-    Update-WslConfigForBridge
+    Update-GeneratedWslConfig
     (Get-Content -Raw $script:WslConfigPath) -eq $own
 }
 Remove-Item -Recurse -Force $script:ProfileDir -ErrorAction SilentlyContinue
@@ -216,10 +254,14 @@ function Test-DistroExists { return $true }
 function Enable-IpHelper { }
 function Add-FirewallRule { param([string]$Name, [int]$Port) }
 function Write-FirewallWarnings { }
-function Invoke-Guest { param([string]$Command)
+$script:GuestStarts = $true
+function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
+    if ($Command -eq "true") {
+        return [pscustomobject]@{ ExitCode = $(if ($script:GuestStarts) { 0 } else { 1 }); Output = "" } }
     if ($Command -like "ip -4 *") {
         return [pscustomobject]@{ ExitCode = 0; Output = "2: eth0    inet 172.28.150.9/20 scope global eth0" } }
     return [pscustomobject]@{ ExitCode = 0; Output = "" } }
+function Update-GeneratedWslConfig { }
 
 check "a reboot's reconcile re-points both ports, proves them, and records it" {
     # netsh still points at the address the VM had before the reboot.
@@ -227,9 +269,9 @@ check "a reboot's reconcile re-points both ports, proves them, and records it" {
     $script:Answers = @("172.28.150.9", "127.0.0.1", "192.168.1.10"); $script:AnswersAfter = $null
     $script:Lan = @("192.168.1.10")
     $script:Log.Clear(); $script:NativeLog.Clear()
-    Invoke-BootReconcile
+    $r = Invoke-BootReconcile
     $state = Get-Content -Raw $StateFile | ConvertFrom-Json
-    (logged "LAN port 8000 -> 172.28.150.9:8000") -and (logged "LAN port 80 -> 172.28.150.9:80") -and
+    ($r -eq $true) -and (logged "LAN port 8000 -> 172.28.150.9:8000") -and (logged "LAN port 80 -> 172.28.150.9:80") -and
         (logged "tills reach it at http://192.168.1.10:8000") -and
         $state.verified -and ($state.wsl_ip -eq "172.28.150.9") -and (@($state.lan_ips) -join ",") -eq "192.168.1.10"
 }
@@ -237,9 +279,25 @@ check "a reconcile that cannot prove the path says so instead of 'nothing to do'
     $script:NetshOut = "0.0.0.0         8000        172.28.150.9    8000`n0.0.0.0         80          172.28.150.9    80"
     $script:Answers = @("172.28.150.9", "127.0.0.1")   # the LAN address never answers
     $script:Log.Clear(); $script:NativeLog.Clear()
-    Invoke-BootReconcile
+    Invoke-BootReconcile | Out-Null
     $state = Get-Content -Raw $StateFile | ConvertFrom-Json
     (-not $state.verified) -and (logged "not every hop answered") -and -not (logged "nothing to do")
+}
+check "a reconcile that cannot start the distro reports it and returns, rather than exiting the supervisor" {
+    # Under the old -Boot this was a Die. The supervisor runs this every
+    # cycle; one bad cycle must never end it.
+    $script:GuestStarts = $false
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    $r = Invoke-BootReconcile
+    $script:GuestStarts = $true
+    ($r -eq $false) -and (logged "ERROR: could not start distro 'Pointy'") -and -not (called "portproxy")
+}
+check "a reconcile for a distro this user cannot see says so and returns" {
+    function Test-DistroExists { return $false }
+    $script:Log.Clear()
+    $r = Invoke-BootReconcile
+    function Test-DistroExists { return $true }
+    ($r -eq $false) -and (logged "ERROR: distro 'Pointy' is not registered")
 }
 Remove-Item $StateFile -ErrorAction SilentlyContinue
 

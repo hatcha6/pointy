@@ -81,9 +81,23 @@ not the server, whose loopback would pass regardless:
 This is the only step that proves the whole chain. If 1-7 pass and this fails,
 it is the bridge or the firewall, not the stack.
 
-**9. It survives a reboot.** Reboot the box, log in to nothing, wait ~2 minutes,
-and run step 8 again from the other machine. This proves the scheduled task and
-the watchdog — the difference between an install and a demo.
+**9. It survives a reboot, a logoff and a `wsl --shutdown`.** Reboot the box,
+log in to nothing, wait ~2 minutes, and run step 8 again from the other
+machine. This proves the scheduled task, the supervisor and the watchdog — the
+difference between an install and a demo. Then, on the box:
+
+    Get-ScheduledTask PointyWSL | Select-Object State                 # Running - and it stays Running
+    Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" | Select-Object SessionId, CommandLine
+    Get-Content $env:ProgramData\Pointy\supervisor-state.json
+
+The keep-alive client (`--exec /bin/sleep infinity`) must be listed, in
+session 0, and the heartbeat must be under 5 minutes old. WSL powers a distro
+off 15 s after its last `wsl.exe` exits, whatever systemd inside is doing, so
+this client is the whole reason the server is up with nobody logged in. Now
+log in, run `wsl --shutdown`, log out, wait a minute, and run step 8 again: the
+supervisor must have started the distro again by itself, and `bootstrap.log`
+must show the "keep-alive client exited" line followed by a fresh bridge
+reconcile. This is the step that used to fail.
 
 ---
 
@@ -93,7 +107,8 @@ the watchdog — the difference between an install and a demo.
 |---|---|
 | PowerShell will not parse the script | confirm it still has a BOM: `Format-Hex .\wsl\bootstrap-wsl.ps1 \| Select -First 1` — first bytes `EF BB BF` |
 | WSL install "fails" instantly | re-run it; if it now passes, the retry window was too short — raise `$attempts` |
-| stack up, till cannot connect | read `bootstrap.log`: it names the failed hop and who holds the port. Then step 7, the firewall rule, then `-Boot` to re-point the bridge |
+| stack up, till cannot connect | read `bootstrap.log`: it names the failed hop and who holds the port. Then step 7, the firewall rule, then `-Boot -Once` to re-point the bridge |
+| the server is up only while a PowerShell window is open | the supervisor is not holding the distro: `Get-ScheduledTask PointyWSL` must say *Running* and `supervisor-state.json` must be fresh. `bootstrap.log` says why it is not (task never started, distro not visible to the task, ...) |
 | the server's own till works, no other device finds the server | WSL's localhost forwarding took the ports before the LAN forward. Restart Windows once (or re-run the installer), then check step 7 again |
 | the companion QR points at `127.0.0.1` | the till predates the fix that swaps loopback for the PC's LAN address; update the till app |
 | backend cannot reach the database | put it back on direct Postgres: `sed -i 's\|@pgbouncer:5432\|@postgres:5432\|' .env && docker compose --env-file .env -f docker-compose.yml up -d backend` |
