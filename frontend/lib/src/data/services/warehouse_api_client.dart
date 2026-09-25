@@ -57,7 +57,7 @@ class WarehouseApiClient {
   /// Where every unit of one product is sitting.
   Future<List<WarehouseStockRow>> fetchStockByWarehouse(int variantId) async {
     final response = await _session.get(
-      'stock-items/',
+      'stock/',
       query: <String, String>{'variant': '$variantId', 'page_size': '100'},
     );
     _session.ensureSuccess(response, 'Stock request failed with status');
@@ -125,7 +125,7 @@ class WarehouseApiClient {
     String search = '',
   }) async {
     final response = await _session.get(
-      'stock-items/',
+      'stock/',
       query: <String, String>{
         'warehouse': '$warehouseId',
         'page_size': '40',

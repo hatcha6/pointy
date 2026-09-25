@@ -27,6 +27,9 @@ class StockItemSerializer(serializers.ModelSerializer):
     variant_full_name = serializers.CharField(source="variant.full_name", read_only=True)
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+    # The product screen's stock-by-place breakdown gives each kind of place
+    # its own icon; it has always read this key, and nothing sent it.
+    warehouse_kind = serializers.CharField(source="warehouse.kind", read_only=True)
 
     quantity_on_hand = serializers.DecimalField(
         max_digits=12,
@@ -59,6 +62,7 @@ class StockItemSerializer(serializers.ModelSerializer):
             "warehouse",
             "warehouse_code",
             "warehouse_name",
+            "warehouse_kind",
             "quantity_on_hand",
             "quantity_committed",
             "quantity_expected",
