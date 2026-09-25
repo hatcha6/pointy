@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/data/models/employee.dart';
+import 'package:pointy_frontend/src/data/services/api_session.dart';
 import 'package:pointy_frontend/src/features/employees/views/employee_loan_review_actions.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
@@ -21,7 +22,13 @@ void main() {
     tester,
   ) async {
     var approvals = 0;
-    await _pumpActions(tester, onApprove: () => approvals++);
+    await _pumpActions(
+      tester,
+      onApprove: (_) async {
+        approvals++;
+        return null;
+      },
+    );
 
     await tester.tap(find.byKey(const ValueKey('loan_approve_4')));
     await tester.pumpAndSettle();
@@ -34,14 +41,73 @@ void main() {
     expect(find.textContaining('300'), findsOneWidget);
     expect(find.textContaining('50'), findsOneWidget);
 
-    await tester.tap(find.text('موافقة').last);
+    await tester.tap(find.byKey(const ValueKey('loan_approve_confirm')));
     await tester.pumpAndSettle();
     expect(approvals, 1);
   });
 
+  testWidgets('approving says where the money comes from', (tester) async {
+    final sources = <LoanDisbursement>[];
+    await _pumpActions(
+      tester,
+      onApprove: (disbursement) async {
+        sources.add(disbursement);
+        return null;
+      },
+    );
+
+    await tester.tap(find.byKey(const ValueKey('loan_approve_4')));
+    await tester.pumpAndSettle();
+    // The cash box unless told otherwise.
+    await tester.tap(find.byKey(const ValueKey('loan_source_drawer')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('loan_approve_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(sources.single.source, LoanDisbursementSource.drawer);
+    expect(sources.single.toJson(), {
+      'disbursement_method': 'cash',
+      'pay_from_register': true,
+    });
+    // Closed once approved.
+    expect(find.byKey(const ValueKey('loan_approve_confirm')), findsNothing);
+  });
+
+  testWidgets('a refusal is said in the dialog, which stays open', (
+    tester,
+  ) async {
+    await _pumpActions(
+      tester,
+      onApprove: (_) async => PosApiException(
+        message: 'refused',
+        statusCode: 400,
+        responseBody: '{"code": "register_session_required"}',
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('loan_approve_4')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('loan_source_drawer')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('loan_approve_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('افتح وردية أولًا، أو اصرف السلفة من الخزينة.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('loan_approve_confirm')), findsOneWidget);
+  });
+
   testWidgets('dismissing the approval question sends nothing', (tester) async {
     var approvals = 0;
-    await _pumpActions(tester, onApprove: () => approvals++);
+    await _pumpActions(
+      tester,
+      onApprove: (_) async {
+        approvals++;
+        return null;
+      },
+    );
 
     await tester.tap(find.byKey(const ValueKey('loan_approve_4')));
     await tester.pumpAndSettle();
@@ -106,7 +172,7 @@ void main() {
 Future<void> _pumpActions(
   WidgetTester tester, {
   bool isSaving = false,
-  VoidCallback? onApprove,
+  Future<Exception?> Function(LoanDisbursement disbursement)? onApprove,
   VoidCallback? onReject,
 }) async {
   await tester.pumpWidget(
@@ -122,7 +188,7 @@ Future<void> _pumpActions(
             child: EmployeeLoanReviewActions(
               loan: _loan,
               isSaving: isSaving,
-              onApprove: onApprove ?? () {},
+              onApprove: onApprove ?? (_) async => null,
               onReject: onReject ?? () {},
             ),
           ),

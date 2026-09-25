@@ -49,6 +49,10 @@ ASSET_LINES = (
     "cash_and_bank",
     "customer_receivables",
     "employee_loans",
+    # What employees owe on their accounts (``apps.balances``) — an advance
+    # carried over, a shortage they agreed to make good — beside their loans
+    # and not inside them: a loan has an instalment plan, a balance does not.
+    "employee_account_receivables",
     "provider_float",
     "supplier_credits",
     "consignor_advances",
@@ -57,6 +61,9 @@ ASSET_LINES = (
 LIABILITY_LINES = (
     "supplier_payables",
     "employee_payables",
+    # What the shop owes employees on their accounts, beside the wages it owes
+    # them: the next run pays both, but only one of them is this month's work.
+    "employee_account_payables",
     "consignor_payables",
     # Credit written onto customers' accounts — money the shop owes them and
     # has not yet spent against anything they owe (``apps.balances``). Its own
@@ -168,7 +175,10 @@ def balance_sheet(context):
 
 def _position(context, as_of, *, live=False):
     """Every line of the statement at the close of ``as_of``."""
+    from apps.balances.employees import balances_as_of
+
     money_position = treasury_position(as_of=as_of)
+    owed_by_staff, owed_to_staff = balances_as_of(as_of)
     totals = money_position["totals"]
     obligations = money_position["obligations"]
     day = context.at(as_of)
@@ -177,6 +187,7 @@ def _position(context, as_of, *, live=False):
         "cash_and_bank": totals["total"],
         "customer_receivables": decimal_from(receivables_total(day)["total"]),
         "employee_loans": loans_outstanding(as_of),
+        "employee_account_receivables": owed_by_staff,
         # The shop's money sitting with a resale provider. Kept off
         # ``cash_and_bank`` exactly as the money position keeps it off its
         # total — it cannot pay a wage — but it is the shop's all the same.
@@ -185,6 +196,7 @@ def _position(context, as_of, *, live=False):
         "consignor_advances": obligations["consignor_receivable"],
         "supplier_payables": decimal_from(payables_total(day)["total"]),
         "employee_payables": wages_payable(as_of),
+        "employee_account_payables": owed_to_staff,
         "consignor_payables": obligations["consignor_payable"],
         "customer_credits": customer_credits_total(as_of),
     }
@@ -194,21 +206,22 @@ def opening_balances_recorded(*, start, end):
     """What the opening balances dated inside ``start``..``end`` added to the
     shop's net position.
 
-    A customer who owes the shop, or a supplier who does, adds to it; a
-    customer or a supplier the shop owes takes from it. Only *opening*
-    balances: an adjustment is a real change in what the shop is owed or owes
-    — a service nobody invoiced, a compensation — and belongs in the result.
+    A customer, a supplier or an employee who owes the shop adds to it; one
+    the shop owes takes from it. Only *opening* balances: an adjustment is a
+    real change in what the shop is owed or owes — a service nobody invoiced,
+    a compensation, a bonus — and belongs in the result.
     """
     from apps.balances.models import (
         BalanceEntry,
         CustomerBalanceEntry,
+        EmployeeBalanceEntry,
         SupplierBalanceEntry,
     )
     from apps.core.money_dates import money_period
     from django.db.models import Sum
 
     total = ZERO
-    for model in (CustomerBalanceEntry, SupplierBalanceEntry):
+    for model in (CustomerBalanceEntry, SupplierBalanceEntry, EmployeeBalanceEntry):
         rows = (
             money_period(
                 model.objects.live().filter(kind=BalanceEntry.Kind.OPENING),

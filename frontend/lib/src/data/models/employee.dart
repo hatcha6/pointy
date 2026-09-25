@@ -1,3 +1,5 @@
+import 'balance_entry.dart';
+
 enum EmployeeStatus {
   active,
   onLeave,
@@ -318,6 +320,7 @@ class Employee {
     this.hasSystemAccess = false,
     this.activeCompensationPlan,
     this.payrollTotal = 0,
+    this.accountBalance,
   });
 
   final int id;
@@ -337,8 +340,13 @@ class Employee {
   final CompensationPlan? activeCompensationPlan;
   final double payrollTotal;
 
+  /// Both sides of the employee's account; null for a user who may not see
+  /// the balances.
+  final EmployeeAccountBalance? accountBalance;
+
   factory Employee.fromJson(Map<String, Object?> json) {
     final plan = json['active_compensation_plan'];
+    final balance = json['account_balance'];
     return Employee(
       id: _intFromJson(json['id']),
       employeeNumber: json['employee_number']?.toString() ?? '',
@@ -360,6 +368,42 @@ class Employee {
           ? CompensationPlan.fromJson(plan)
           : null,
       payrollTotal: _doubleFromJson(json['payroll_total']),
+      accountBalance: balance is Map<String, Object?>
+          ? EmployeeAccountBalance.fromJson(balance)
+          : null,
+    );
+  }
+}
+
+/// What an employee owes the shop and what it owes them on their account —
+/// each side on its own, because the next payroll run deducts the one and
+/// pays the other.
+class EmployeeAccountBalance {
+  const EmployeeAccountBalance({
+    this.owedByEmployee = 0,
+    this.owedToEmployee = 0,
+    this.scheduledDeduction = 0,
+    this.scheduledPayment = 0,
+    this.hasOpeningBalance = false,
+  });
+
+  final double owedByEmployee;
+  final double owedToEmployee;
+
+  /// What payroll runs drafted or approved, not yet paid, already carry.
+  final double scheduledDeduction;
+  final double scheduledPayment;
+  final bool hasOpeningBalance;
+
+  bool get isEmpty => owedByEmployee <= 0.005 && owedToEmployee <= 0.005;
+
+  factory EmployeeAccountBalance.fromJson(Map<String, Object?> json) {
+    return EmployeeAccountBalance(
+      owedByEmployee: _doubleFromJson(json['owed_by_employee']),
+      owedToEmployee: _doubleFromJson(json['owed_to_employee']),
+      scheduledDeduction: _doubleFromJson(json['scheduled_deduction']),
+      scheduledPayment: _doubleFromJson(json['scheduled_payment']),
+      hasOpeningBalance: json['has_opening_balance'] == true,
     );
   }
 }
@@ -406,6 +450,10 @@ class EmployeeLoan {
     this.paidAt,
     this.createdAt,
     this.updatedAt,
+    this.disbursedAt,
+    this.disbursementMethod = '',
+    this.moneyAccountName = '',
+    this.paidFromRegister = false,
   });
 
   final int id;
@@ -426,6 +474,17 @@ class EmployeeLoan {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  /// When the money was handed over — set on approval. Null for a loan
+  /// approved before disbursements were recorded.
+  final DateTime? disbursedAt;
+
+  /// `cash` or `transfer`; empty when not recorded.
+  final String disbursementMethod;
+  final String moneyAccountName;
+
+  /// The cash came out of the approver's own drawer.
+  final bool paidFromRegister;
+
   factory EmployeeLoan.fromJson(Map<String, Object?> json) {
     return EmployeeLoan(
       id: _intFromJson(json['id']),
@@ -445,7 +504,46 @@ class EmployeeLoan {
       paidAt: _dateFromJson(json['paid_at']),
       createdAt: _dateFromJson(json['created_at']),
       updatedAt: _dateFromJson(json['updated_at']),
+      disbursedAt: _dateFromJson(json['disbursed_at']),
+      disbursementMethod: json['disbursement_method']?.toString() ?? '',
+      moneyAccountName: json['money_account_name']?.toString() ?? '',
+      paidFromRegister: json['paid_from_register'] == true,
     );
+  }
+}
+
+/// Where a loan's money comes from when it is approved.
+enum LoanDisbursementSource {
+  /// The approver's own open drawer — a pay-out the shift report shows.
+  drawer,
+
+  /// The cash box, outside any drawer.
+  cashBox,
+
+  /// A bank transfer, from a named account or the default one.
+  bank,
+}
+
+class LoanDisbursement {
+  const LoanDisbursement({required this.source, this.moneyAccountId});
+
+  /// What a caller that says nothing gets: cash from the cash box.
+  static const cashBox = LoanDisbursement(
+    source: LoanDisbursementSource.cashBox,
+  );
+
+  final LoanDisbursementSource source;
+  final int? moneyAccountId;
+
+  Map<String, Object?> toJson() {
+    return {
+      'disbursement_method': source == LoanDisbursementSource.bank
+          ? 'transfer'
+          : 'cash',
+      'pay_from_register': source == LoanDisbursementSource.drawer,
+      if (source == LoanDisbursementSource.bank && moneyAccountId != null)
+        'money_account': moneyAccountId,
+    };
   }
 }
 
@@ -699,6 +797,7 @@ class PayrollAdjustment {
     required this.amount,
     this.notes = '',
     this.orderReceiptNumber = '',
+    this.balanceEntryNumber = '',
   });
 
   final int id;
@@ -711,10 +810,22 @@ class PayrollAdjustment {
   /// Empty for every other kind of adjustment.
   final String orderReceiptNumber;
 
+  /// The balance entry an `account_balance` row pays or deducts.
+  final String balanceEntryNumber;
+
   /// Something the employee bought on their staff account, taken from pay.
   /// The server gives it way first when the rest of the line leaves less pay.
   bool get isStaffPurchase =>
       adjustmentType == 'staff_purchase' && direction == 'deduction';
+
+  /// A balance on the employee's account — what they owe or are owed — paid
+  /// or deducted by the run. Derived by the server, never typed.
+  bool get isAccountBalance => adjustmentType == 'account_balance';
+
+  /// A debt the employee owes, taken out of whatever pay is left: it shrinks,
+  /// rather than making the line negative, when the pay does.
+  bool get isFittedDebt =>
+      isStaffPurchase || (isAccountBalance && direction == 'deduction');
 
   factory PayrollAdjustment.fromJson(Map<String, Object?> json) {
     return PayrollAdjustment(
@@ -724,6 +835,7 @@ class PayrollAdjustment {
       amount: _doubleFromJson(json['amount']),
       notes: json['notes']?.toString() ?? '',
       orderReceiptNumber: json['order_receipt_number']?.toString() ?? '',
+      balanceEntryNumber: json['balance_entry_number']?.toString() ?? '',
     );
   }
 }
@@ -762,6 +874,7 @@ class EmployeeDraft {
     this.employmentType = EmploymentType.fullTime,
     this.status = EmployeeStatus.active,
     this.userId,
+    this.openingBalance,
   });
 
   final String fullName;
@@ -774,6 +887,9 @@ class EmployeeDraft {
   final String hireDate;
   final int? userId;
 
+  /// What the employee arrives owing, or owed — written with them.
+  final OpeningBalanceDraft? openingBalance;
+
   Map<String, Object?> toJson() {
     return {
       'full_name': fullName,
@@ -785,6 +901,7 @@ class EmployeeDraft {
       'status': status.toJson(),
       'hire_date': hireDate,
       if (userId != null) 'user': userId,
+      if (openingBalance != null) 'opening_balance': openingBalance!.toJson(),
     };
   }
 }

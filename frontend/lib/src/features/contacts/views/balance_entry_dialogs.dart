@@ -61,6 +61,7 @@ class _BalanceEntryDialogState extends State<_BalanceEntryDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  final _limitController = TextEditingController();
   BalanceDirection _direction = BalanceDirection.theyOweUs;
   DateTime? _effectiveDate;
   bool _isSaving = false;
@@ -68,10 +69,17 @@ class _BalanceEntryDialogState extends State<_BalanceEntryDialog> {
 
   bool get _isOpening => widget.kind == BalanceEntryKind.opening;
 
+  /// An employee's debt comes off their wage, so it may say how much one
+  /// payroll run takes.
+  bool get _offersLimit =>
+      widget.party == BalanceParty.employee &&
+      _direction == BalanceDirection.theyOweUs;
+
   @override
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _limitController.dispose();
     super.dispose();
   }
 
@@ -108,6 +116,9 @@ class _BalanceEntryDialogState extends State<_BalanceEntryDialog> {
         amount: double.parse(_amountController.text.trim()),
         note: _noteController.text.trim(),
         effectiveDate: _effectiveDate,
+        payrollDeductionLimit: _offersLimit
+            ? parseDeductionLimit(_limitController.text)
+            : null,
       ),
     );
     if (!mounted) {
@@ -146,12 +157,14 @@ class _BalanceEntryDialogState extends State<_BalanceEntryDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  _isOpening
-                      ? l10n.balanceEntryOpeningHint
-                      : l10n.balanceEntryAdjustmentHint,
-                  style: textTheme.bodySmall,
-                ),
+                Text(switch ((widget.party, _isOpening)) {
+                  (BalanceParty.employee, true) =>
+                    l10n.balanceEntryEmployeeOpeningHint,
+                  (BalanceParty.employee, false) =>
+                    l10n.balanceEntryEmployeeAdjustmentHint,
+                  (_, true) => l10n.balanceEntryOpeningHint,
+                  (_, false) => l10n.balanceEntryAdjustmentHint,
+                }, style: textTheme.bodySmall),
                 SizedBox(height: spacing.md),
                 BalanceDirectionPicker(
                   key: const ValueKey('balance_entry_direction'),
@@ -179,6 +192,14 @@ class _BalanceEntryDialogState extends State<_BalanceEntryDialog> {
                   ),
                   validator: (value) => validateBalanceAmount(l10n, value),
                 ),
+                if (_offersLimit) ...[
+                  SizedBox(height: spacing.sm),
+                  DeductionLimitField(
+                    key: const ValueKey('balance_entry_limit'),
+                    controller: _limitController,
+                    enabled: !_isSaving,
+                  ),
+                ],
                 SizedBox(height: spacing.sm),
                 InkWell(
                   key: const ValueKey('balance_entry_date'),
@@ -358,12 +379,15 @@ class _CancelBalanceEntryDialogState extends State<_CancelBalanceEntryDialog> {
   }
 }
 
-/// Settles the party's credit side with cash: pays a customer what the shop
-/// owes them, or takes in what a supplier owes it. [available] is the most it
-/// can be. Resolves true once the money has been recorded.
+/// Settles one side of an account with cash: [settles] is the side — the
+/// shop paying what it owes (`weOweThem`: a customer's credit, an employee's
+/// dues) or taking in what is owed to it (`theyOweUs`: a supplier's credit,
+/// an employee's debt). [available] is the most it can be. Resolves true once
+/// the money has been recorded.
 Future<bool> showBalanceRefundDialog(
   BuildContext context, {
   required BalanceParty party,
+  required BalanceDirection settles,
   required double available,
   required Future<BalanceFailure?> Function(double amount, String note)
   onSubmit,
@@ -372,6 +396,7 @@ Future<bool> showBalanceRefundDialog(
     context: context,
     builder: (_) => _BalanceRefundDialog(
       party: party,
+      settles: settles,
       available: available,
       onSubmit: onSubmit,
     ),
@@ -382,11 +407,13 @@ Future<bool> showBalanceRefundDialog(
 class _BalanceRefundDialog extends StatefulWidget {
   const _BalanceRefundDialog({
     required this.party,
+    required this.settles,
     required this.available,
     required this.onSubmit,
   });
 
   final BalanceParty party;
+  final BalanceDirection settles;
   final double available;
   final Future<BalanceFailure?> Function(double amount, String note) onSubmit;
 
@@ -402,8 +429,6 @@ class _BalanceRefundDialogState extends State<_BalanceRefundDialog> {
   final _noteController = TextEditingController();
   bool _isSaving = false;
   String? _error;
-
-  bool get _isCustomer => widget.party == BalanceParty.customer;
 
   @override
   void dispose() {
@@ -447,11 +472,10 @@ class _BalanceRefundDialogState extends State<_BalanceRefundDialog> {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final textTheme = Theme.of(context).textTheme;
+    final words = BalanceCashWords.of(l10n, widget.party, widget.settles);
 
     return AlertDialog(
-      title: Text(
-        _isCustomer ? l10n.customerRefundTitle : l10n.supplierRefundTitle,
-      ),
+      title: Text(words.title),
       content: SizedBox(
         width: 420,
         child: Form(
@@ -461,12 +485,7 @@ class _BalanceRefundDialogState extends State<_BalanceRefundDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  _isCustomer
-                      ? l10n.customerRefundHint
-                      : l10n.supplierRefundHint,
-                  style: textTheme.bodySmall,
-                ),
+                Text(words.hint, style: textTheme.bodySmall),
                 SizedBox(height: spacing.md),
                 TextFormField(
                   key: const ValueKey('balance_refund_amount'),
@@ -534,9 +553,7 @@ class _BalanceRefundDialogState extends State<_BalanceRefundDialog> {
                   child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.payments_outlined),
-          label: Text(
-            _isCustomer ? l10n.customerRefundButton : l10n.supplierRefundButton,
-          ),
+          label: Text(words.button),
         ),
       ],
     );

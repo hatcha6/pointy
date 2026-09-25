@@ -235,7 +235,8 @@ device's serial or IMEI before it runs).
 
 ## Opening Balances and Account Adjustments
 
-A customer or supplier can carry a balance no invoice or purchase order could:
+A customer, supplier or employee can carry a balance no invoice, purchase order
+or payroll run could:
 an opening balance (`رصيد افتتاحي`, one per account, optionally set in the same
 form that creates the contact) and later adjustments (`تسوية رصيد`, a reason
 required), each either `عليه لنا` or `له علينا`. They live in `apps.balances`
@@ -252,9 +253,21 @@ the supplier's `record-payment` (oldest first across purchase orders and
 entries); what a supplier owes the shop is a supplier credit, applied to a
 purchase order or taken back in cash (`استلام المبلغ من المورد`). The balance
 sheet carries both sides and keeps opening balances out of the period's result;
-the profit report's cash bridge names what was settled from credit. Preview
-with `make frontend-balances-preview`
-(`?screen=customer|supplier|entry|refund|create`).
+the profit report's cash bridge names what was settled from credit.
+
+An employee's balance is settled by payroll: the next run pays what the shop
+owes them and deducts what they owe (oldest first, up to the pay left and an
+optional per-run limit), paying the run settles it and voiding the run gives
+it back; cash can settle either side through the user's own drawer. Opening
+balances stay out of labour cost; an adjustment counts as labour cost on the
+day it is recorded, and the wage a run pays is costed whole — what it withheld
+for a loan, a staff purchase or a balance added back, what it paid out for a
+balance left out. The balance sheet states both sides beside the loans and
+wages owed, and the payroll summary lists them per employee. Approving an
+employee loan records its money leaving — from the approver's drawer, the cash
+box, or a bank transfer — so the money position (`staff_loans`), the drawer and
+the balance sheet all see it. Preview with `make frontend-balances-preview`
+(`?screen=customer|supplier|entry|refund|create|employee|loan`).
 
 ## Learning Module
 

@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/employee.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -14,6 +15,7 @@ import '../../../shared/shell/shell.dart';
 import '../../attendance/view_models/attendance_view_model.dart';
 import '../../attendance/views/attendance_review_tab.dart';
 import '../view_models/employee_payroll_view_model.dart';
+import 'employee_account_screen.dart';
 import 'employee_loan_review_actions.dart';
 import 'payroll_forms.dart';
 import 'payroll_labels.dart';
@@ -30,6 +32,7 @@ class EmployeePayrollScreen extends StatelessWidget {
     required this.userRepository,
     required this.capabilities,
     required this.navigation,
+    this.contactRepository,
   });
 
   final EmployeePayrollViewModel viewModel;
@@ -37,6 +40,10 @@ class EmployeePayrollScreen extends StatelessWidget {
   final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
+
+  /// Carries the balance entries an employee's account shows. Without it the
+  /// rows open nothing.
+  final ContactRepository? contactRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +87,7 @@ class EmployeePayrollScreen extends StatelessWidget {
               attendanceViewModel: attendanceViewModel,
               userRepository: userRepository,
               capabilities: capabilities,
+              contactRepository: contactRepository,
             ),
           ),
         );
@@ -94,12 +102,14 @@ class _EmployeePayrollBody extends StatelessWidget {
     required this.attendanceViewModel,
     required this.userRepository,
     required this.capabilities,
+    this.contactRepository,
   });
 
   final EmployeePayrollViewModel viewModel;
   final AttendanceViewModel attendanceViewModel;
   final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
+  final ContactRepository? contactRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +154,7 @@ class _EmployeePayrollBody extends StatelessWidget {
                       viewModel: viewModel,
                       userRepository: userRepository,
                       capabilities: capabilities,
+                      contactRepository: contactRepository,
                     ),
                     _LoansTab(viewModel: viewModel, capabilities: capabilities),
                     if (showAttendance)
@@ -736,7 +747,8 @@ class _PendingLoanRow extends StatelessWidget {
           keyPrefix: 'pending_loan',
           loan: loan,
           isSaving: viewModel.isSaving,
-          onApprove: () => viewModel.approveLoan(loan),
+          onApprove: (disbursement) =>
+              viewModel.approveLoan(loan, disbursement: disbursement),
           onReject: () => viewModel.rejectLoan(loan),
         ),
       ],
@@ -749,11 +761,13 @@ class _EmployeesTab extends StatelessWidget {
     required this.viewModel,
     required this.userRepository,
     required this.capabilities,
+    this.contactRepository,
   });
 
   final EmployeePayrollViewModel viewModel;
   final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
+  final ContactRepository? contactRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -804,7 +818,13 @@ class _EmployeesTab extends StatelessWidget {
             framed: false,
             itemBuilder: (context, employee) {
               final plan = employee.activeCompensationPlan;
+              final balance = employee.accountBalance;
+              final repository = contactRepository;
               return PointyDataRow(
+                key: ValueKey('employee_row_${employee.id}'),
+                onTap: repository == null
+                    ? null
+                    : () => _openAccount(context, employee, repository),
                 leading: CircleAvatar(
                   child: Icon(
                     employee.hasSystemAccess
@@ -837,6 +857,15 @@ class _EmployeesTab extends StatelessWidget {
                         employee.userUsername,
                       ),
                       icon: Icons.verified_user_outlined,
+                    ),
+                  if (balance != null && !balance.isEmpty)
+                    PointyStatusPill(
+                      label: l10n.employeeAccountBalanceValue(
+                        formatMoney(balance.owedByEmployee),
+                        formatMoney(balance.owedToEmployee),
+                      ),
+                      icon: Icons.account_balance_wallet_outlined,
+                      color: context.pointyColors.warning,
                     ),
                 ],
                 actions: [
@@ -874,7 +903,25 @@ class _EmployeesTab extends StatelessWidget {
       builder: (sheetContext) => CreateEmployeeForm(
         viewModel: viewModel,
         userRepository: userRepository,
+        allowOpeningBalance: capabilities.canManageEmployeeBalances,
         onCreated: () => Navigator.of(sheetContext).pop(),
+      ),
+    );
+  }
+
+  void _openAccount(
+    BuildContext context,
+    Employee employee,
+    ContactRepository repository,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EmployeeAccountScreen(
+          viewModel: viewModel,
+          employee: employee,
+          contactRepository: repository,
+          capabilities: capabilities,
+        ),
       ),
     );
   }
@@ -949,19 +996,39 @@ class _LoansTab extends StatelessWidget {
               ),
               icon: Icons.event_repeat_outlined,
             ),
+            if (loan.disbursedAt != null)
+              PointyStatusPill(
+                label: _disbursementLabel(l10n, loan),
+                icon: loan.disbursementMethod == 'transfer'
+                    ? Icons.account_balance_outlined
+                    : Icons.payments_outlined,
+              ),
           ],
           actions: [
             if (canReview)
               EmployeeLoanReviewActions(
                 loan: loan,
                 isSaving: viewModel.isSaving,
-                onApprove: () => viewModel.approveLoan(loan),
+                onApprove: (disbursement) =>
+                    viewModel.approveLoan(loan, disbursement: disbursement),
                 onReject: () => viewModel.rejectLoan(loan),
               ),
           ],
         );
       },
     );
+  }
+
+  /// Where the loan's money came from when it was handed over.
+  String _disbursementLabel(AppLocalizations l10n, EmployeeLoan loan) {
+    if (loan.disbursementMethod == 'transfer') {
+      return loan.moneyAccountName.isEmpty
+          ? l10n.loanDisbursedBankDefault
+          : l10n.loanDisbursedBankValue(loan.moneyAccountName);
+    }
+    return loan.paidFromRegister
+        ? l10n.loanDisbursedDrawerValue
+        : l10n.loanDisbursedCashValue;
   }
 
   String _loanSubtitle(AppLocalizations l10n, EmployeeLoan loan) {

@@ -4,6 +4,9 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.balances.opening import OpeningBalanceField
+from apps.treasury.models import MoneyAccount
+
 from .models import (
     CompensationPlan,
     Employee,
@@ -12,7 +15,11 @@ from .models import (
     PayrollLine,
     PayrollRun,
 )
-from .services import request_employee_loan, save_payroll_run_with_lines
+from .services import (
+    DERIVED_ADJUSTMENT_TYPES,
+    request_employee_loan,
+    save_payroll_run_with_lines,
+)
 
 
 def money_string(value):
@@ -257,6 +264,33 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
         ).exclude(pk=plan.pk).update(is_active=False)
 
 
+class EmployeeOpeningBalanceField(OpeningBalanceField):
+    """The balance an employee arrives with — wages the old books still owed
+    them, an advance they had not repaid — and, for a debt, how much of it one
+    payroll run may take."""
+
+    payroll_deduction_limit = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+        allow_null=True,
+    )
+
+
+class _EmployeeListSerializer(serializers.ListSerializer):
+    """Reads every listed employee's account balance in one query."""
+
+    def to_representation(self, data):
+        from apps.balances.employees import positions_by_employee
+
+        rows = list(data.all() if hasattr(data, "all") else data)
+        self.child.context["_balance_positions"] = positions_by_employee(
+            [row.pk for row in rows]
+        )
+        return super().to_representation(rows)
+
+
 class EmployeeSerializer(serializers.ModelSerializer):
     user_username = serializers.CharField(source="user.username", read_only=True)
     has_system_access = serializers.BooleanField(read_only=True)
@@ -265,6 +299,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
         max_digits=12,
         decimal_places=2,
         read_only=True,
+    )
+    #: Both sides of the employee's account (``apps.balances``) — what they owe
+    #: the shop and what it owes them — and what the next unpaid runs already
+    #: carry. Shown to whoever may see the balances.
+    account_balance = serializers.SerializerMethodField()
+    # Written with the employee, in one transaction
+    # (``EmployeeViewSet.perform_create``).
+    opening_balance = EmployeeOpeningBalanceField(
+        permission="balances.add_employeebalanceentry"
     )
 
     class Meta:
@@ -291,6 +334,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "notes",
             "active_compensation_plan",
             "payroll_total",
+            "account_balance",
+            "opening_balance",
             "created_at",
             "updated_at",
         ]
@@ -301,11 +346,34 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "customer",
             "active_compensation_plan",
             "payroll_total",
+            "account_balance",
             "created_at",
             "updated_at",
         ]
         extra_kwargs = {
             "user": {"queryset": get_user_model().objects.all(), "required": False},
+        }
+        list_serializer_class = _EmployeeListSerializer
+
+    def get_account_balance(self, employee):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not user.has_perm("balances.view_employeebalanceentry"):
+            return None
+        from apps.balances.employees import EMPTY_POSITION, account_position
+
+        positions = self.context.get("_balance_positions")
+        if positions is not None:
+            position = positions.get(employee.pk, EMPTY_POSITION)
+        else:
+            position = account_position(employee)
+        return {
+            "owed_by_employee": money_string(position.owed_by_employee),
+            "owed_to_employee": money_string(position.owed_to_employee),
+            "net": money_string(position.net),
+            "scheduled_deduction": money_string(position.scheduled_deduction),
+            "scheduled_payment": money_string(position.scheduled_payment),
+            "has_opening_balance": position.has_opening,
         }
 
     def get_active_compensation_plan(self, employee):
@@ -357,6 +425,18 @@ class PayrollAdjustmentSerializer(serializers.ModelSerializer):
         read_only=True,
         default=None,
     )
+    # The balance entry an ``account_balance`` row pays or deducts, and whether
+    # it is the employee's opening balance or a later adjustment.
+    balance_entry_number = serializers.CharField(
+        source="balance_entry.number",
+        read_only=True,
+        default=None,
+    )
+    balance_entry_kind = serializers.CharField(
+        source="balance_entry.kind",
+        read_only=True,
+        default=None,
+    )
 
     class Meta:
         model = PayrollAdjustment
@@ -368,6 +448,9 @@ class PayrollAdjustmentSerializer(serializers.ModelSerializer):
             "loan",
             "order",
             "order_receipt_number",
+            "balance_entry",
+            "balance_entry_number",
+            "balance_entry_kind",
             "settlement_payment",
             "notes",
             "created_at",
@@ -378,6 +461,9 @@ class PayrollAdjustmentSerializer(serializers.ModelSerializer):
             "loan",
             "order",
             "order_receipt_number",
+            "balance_entry",
+            "balance_entry_number",
+            "balance_entry_kind",
             "settlement_payment",
             "created_at",
             "updated_at",
@@ -403,6 +489,18 @@ class EmployeeLoanSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
+    disbursed_by_username = serializers.CharField(
+        source="disbursed_by.username",
+        read_only=True,
+        default=None,
+    )
+    money_account_name = serializers.CharField(
+        source="money_account.name",
+        read_only=True,
+        default=None,
+    )
+    #: True when the cash came out of a drawer (the approver's own till).
+    paid_from_register = serializers.SerializerMethodField()
 
     class Meta:
         model = EmployeeLoan
@@ -424,6 +522,13 @@ class EmployeeLoanSerializer(serializers.ModelSerializer):
             "review_notes",
             "reviewed_at",
             "paid_at",
+            "disbursed_at",
+            "disbursed_by",
+            "disbursed_by_username",
+            "disbursement_method",
+            "money_account",
+            "money_account_name",
+            "paid_from_register",
             "created_at",
             "updated_at",
         ]
@@ -441,11 +546,39 @@ class EmployeeLoanSerializer(serializers.ModelSerializer):
             "review_notes",
             "reviewed_at",
             "paid_at",
+            "disbursed_at",
+            "disbursed_by",
+            "disbursed_by_username",
+            "disbursement_method",
+            "money_account",
+            "money_account_name",
+            "paid_from_register",
             "created_at",
             "updated_at",
         ]
 
+    def get_paid_from_register(self, loan) -> bool:
+        return loan.cash_movement_id is not None
+
     def validate(self, attrs):
+        loan = self.instance
+        if loan is not None and loan.status in (
+            EmployeeLoan.Status.APPROVED,
+            EmployeeLoan.Status.PAID,
+        ):
+            # The money has been handed over and the loan is being repaid:
+            # changing who owes it or how much would leave the cash that left,
+            # and the instalments already taken, with no loan to explain them.
+            for field in ("amount", "employee"):
+                if field in attrs and attrs[field] != getattr(loan, field):
+                    raise serializers.ValidationError(
+                        {
+                            field: (
+                                "This loan has been paid out; its amount and "
+                                "employee cannot change."
+                            )
+                        }
+                    )
         amount = Decimal(attrs.get("amount", getattr(self.instance, "amount", "0.00")))
         monthly_deduction = Decimal(
             attrs.get(
@@ -505,6 +638,21 @@ class EmployeeLoanReviewSerializer(serializers.Serializer):
         allow_blank=True,
         trim_whitespace=True,
     )
+
+
+class EmployeeLoanApproveSerializer(EmployeeLoanReviewSerializer):
+    """Approving a loan is handing it over, so it says where the money came
+    from. A client that sends none of this — one built before it existed —
+    has the loan paid in cash from the cash box."""
+
+    disbursement_method = serializers.ChoiceField(
+        choices=EmployeeLoan.DisbursementMethod.choices,
+        default=EmployeeLoan.DisbursementMethod.CASH,
+    )
+    money_account = serializers.PrimaryKeyRelatedField(
+        queryset=MoneyAccount.objects.all(), required=False, allow_null=True
+    )
+    pay_from_register = serializers.BooleanField(default=False)
 
 
 class PayrollLineSerializer(serializers.ModelSerializer):
@@ -656,11 +804,16 @@ class PayrollRunBulkAdjustmentSerializer(serializers.Serializer):
         return list(dict.fromkeys(value))
 
     def validate_adjustment_type(self, value):
-        # Staff purchases are read off the employee's open invoices, one row per
-        # invoice; a hand-typed one would name no invoice and settle nothing.
+        # Staff purchases are read off the employee's open invoices, and account
+        # balances off their balance entries, one row per document; a hand-typed
+        # one would name nothing and settle nothing.
         if value == PayrollAdjustment.AdjustmentType.STAFF_PURCHASE:
             raise serializers.ValidationError(
                 "Staff purchases are added from the employee's invoices automatically."
+            )
+        if value in DERIVED_ADJUSTMENT_TYPES:
+            raise serializers.ValidationError(
+                "Account balances are added from the employee's account automatically."
             )
         return value
 

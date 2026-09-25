@@ -129,12 +129,14 @@ class ContactRepository {
     );
   }
 
-  /// Settles a party's credit side with cash through the caller's open drawer.
+  /// Settles a balance with cash through the caller's open drawer. [settles]
+  /// names the side for an employee, whose account runs both ways.
   Future<Result<BalanceEntry>> refundBalance({
     required BalanceParty party,
     required int partyId,
     required double amount,
     String note = '',
+    BalanceDirection? settles,
     String? idempotencyKey,
   }) async {
     return Result.guard(
@@ -143,6 +145,7 @@ class ContactRepository {
         partyId: partyId,
         amount: amount,
         note: note,
+        settles: settles,
         idempotencyKey: idempotencyKey,
       ),
     );

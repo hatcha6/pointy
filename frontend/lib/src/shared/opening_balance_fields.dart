@@ -11,6 +11,9 @@ import 'responsive/responsive.dart';
 class OpeningBalanceController {
   final amountController = TextEditingController();
   final noteController = TextEditingController();
+
+  /// Employees only: how much of a debt one payroll run takes.
+  final limitController = TextEditingController();
   bool enabled = false;
   BalanceDirection direction = BalanceDirection.theyOweUs;
 
@@ -28,12 +31,16 @@ class OpeningBalanceController {
       direction: direction,
       amount: amount,
       note: noteController.text.trim(),
+      payrollDeductionLimit: direction == BalanceDirection.theyOweUs
+          ? parseDeductionLimit(limitController.text)
+          : null,
     );
   }
 
   void dispose() {
     amountController.dispose();
     noteController.dispose();
+    limitController.dispose();
   }
 }
 
@@ -101,6 +108,15 @@ class _OpeningBalanceFieldsState extends State<OpeningBalanceFields> {
             ),
             validator: (value) => validateBalanceAmount(l10n, value),
           ),
+          if (widget.party == BalanceParty.employee &&
+              _controller.direction == BalanceDirection.theyOweUs) ...[
+            SizedBox(height: spacing.sm),
+            DeductionLimitField(
+              key: const ValueKey('opening_balance_limit'),
+              controller: _controller.limitController,
+              enabled: widget.enabled,
+            ),
+          ],
           SizedBox(height: spacing.sm),
           TextFormField(
             key: const ValueKey('opening_balance_note'),
@@ -172,4 +188,53 @@ String? validateBalanceAmount(AppLocalizations l10n, String? value) {
     return l10n.balanceEntryAmountInvalid;
   }
   return null;
+}
+
+/// The most one payroll run deducts from an employee's debt. Optional: empty
+/// means as much as the pay can carry.
+class DeductionLimitField extends StatelessWidget {
+  const DeductionLimitField({
+    super.key,
+    required this.controller,
+    this.enabled = true,
+  });
+
+  final TextEditingController controller;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+      decoration: InputDecoration(
+        labelText: l10n.balanceDeductionLimitLabel,
+        helperText: l10n.balanceDeductionLimitHelper,
+        prefixIcon: const Icon(Icons.event_repeat_outlined),
+      ),
+      validator: (value) {
+        final text = (value ?? '').trim();
+        if (text.isEmpty) {
+          return null;
+        }
+        final amount = double.tryParse(text);
+        if (amount == null || amount <= 0) {
+          return l10n.balanceDeductionLimitInvalid;
+        }
+        return null;
+      },
+    );
+  }
+}
+
+/// The typed limit, or null when the field was left empty.
+double? parseDeductionLimit(String text) {
+  final amount = double.tryParse(text.trim());
+  if (amount == null || amount <= 0) {
+    return null;
+  }
+  return amount;
 }

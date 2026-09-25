@@ -62,6 +62,7 @@ INITIAL_SETUP_SHOP_ACTIVITY_MODELS = (
     # be the first thing an owner enters.
     ("balances", "customerbalanceentry"),
     ("balances", "supplierbalanceentry"),
+    ("balances", "employeebalanceentry"),
     ("purchasing", "purchaseorder"),
     ("inventory", "stockmovement"),
     ("inventory", "stockledgerentry"),
@@ -322,6 +323,11 @@ ACCOUNTANT_PERMISSION_CODES = (
     "balances.view_supplierbalanceentry",
     "balances.add_supplierbalanceentry",
     "balances.cancel_supplierbalanceentry",
+    # And on employees' accounts, which the accountant already runs payroll
+    # against: an opening balance carried in, a correction, cash settled.
+    "balances.view_employeebalanceentry",
+    "balances.add_employeebalanceentry",
+    "balances.cancel_employeebalanceentry",
 )
 # مشرف / assistant manager: shop-wide oversight plus the ability to run a till.
 # reports.view_reportrun is what flips full (shop-wide) visibility on — see

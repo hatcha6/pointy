@@ -21999,4 +21999,161 @@ class AppLocalizationsAr extends AppLocalizations {
   String paymentsHubBalanceEntryValue(String number) {
     return 'قيد رصيد $number';
   }
+
+  @override
+  String get employeeBalanceTheyOweUsHint =>
+      'مبلغ على الموظف للمحل — يُخصم من راتبه في مسير الرواتب القادم.';
+
+  @override
+  String get employeeBalanceWeOweThemHint =>
+      'مبلغ مستحق للموظف على المحل — يُصرف مع راتبه في مسير الرواتب القادم.';
+
+  @override
+  String get balanceDeductionLimitLabel =>
+      'أقصى خصم في كل مسير رواتب (اختياري)';
+
+  @override
+  String get balanceDeductionLimitHelper =>
+      'اتركه فارغًا ليُخصم ما يتسع له الراتب.';
+
+  @override
+  String get balanceDeductionLimitInvalid =>
+      'أدخل مبلغًا أكبر من صفر أو اترك الحقل فارغًا.';
+
+  @override
+  String balanceDeductionLimitValue(String amount) {
+    return 'يُخصم حتى $amount في كل مسير';
+  }
+
+  @override
+  String balanceScheduledValue(String amount) {
+    return 'مُدرج في مسير رواتب لم يُصرف: $amount';
+  }
+
+  @override
+  String get employeePayOutButton => 'صرف المستحقات نقدًا';
+
+  @override
+  String get employeeCollectButton => 'تحصيل من الموظف نقدًا';
+
+  @override
+  String get employeePayOutTitle => 'صرف مستحقات للموظف';
+
+  @override
+  String get employeeCollectTitle => 'تحصيل مبلغ من الموظف';
+
+  @override
+  String get employeePayOutHint =>
+      'يُصرف المبلغ نقدًا من درج ورديتك ويُخصم مما يستحقه الموظف، فلا يُصرف مرة أخرى مع راتبه. لا يمكن إلغاؤه بعد تسجيله.';
+
+  @override
+  String get employeeCollectHint =>
+      'يُستلم المبلغ نقدًا في درج ورديتك ويُخصم مما على الموظف، فلا يُخصم من راتبه مرة أخرى. لا يمكن إلغاؤه بعد تسجيله.';
+
+  @override
+  String get employeePayOutSaved => 'تم صرف المبلغ للموظف.';
+
+  @override
+  String get employeeCollectSaved => 'تم استلام المبلغ من الموظف.';
+
+  @override
+  String get balanceKindEmployeePaidOut => 'صرف مستحقات نقدًا';
+
+  @override
+  String get balanceKindEmployeeCollected => 'تحصيل نقدي من الموظف';
+
+  @override
+  String get employeeAccountTitle => 'حساب الموظف';
+
+  @override
+  String get employeeAccountOwedByLabel => 'على الموظف';
+
+  @override
+  String get employeeAccountOwedToLabel => 'مستحق للموظف';
+
+  @override
+  String employeeAccountNextPayrollValue(String deduction, String payment) {
+    return 'في مسير الرواتب القادم: خصم $deduction وإضافة $payment';
+  }
+
+  @override
+  String get employeeAccountHint =>
+      'ما على الموظف يُخصم من راتبه، وما هو مستحق له يُصرف معه، تلقائيًا في مسير الرواتب القادم.';
+
+  @override
+  String get employeeAccountOpenTooltip => 'حساب الموظف';
+
+  @override
+  String get employeeAccountLoadError => 'تعذر تحديث بيانات الموظف.';
+
+  @override
+  String employeeAccountBalanceValue(String owedBy, String owedTo) {
+    return 'على الموظف $owedBy • مستحق له $owedTo';
+  }
+
+  @override
+  String get payrollAdjustmentAccountBalance => 'رصيد حساب الموظف';
+
+  @override
+  String payrollAccountBalanceEntry(String number) {
+    return 'قيد $number';
+  }
+
+  @override
+  String get loanDisbursementSourceLabel => 'من أين يُصرف مبلغ السلفة؟';
+
+  @override
+  String get loanSourceDrawer => 'من درج ورديتي';
+
+  @override
+  String get loanSourceCashBox => 'من الخزينة نقدًا';
+
+  @override
+  String get loanSourceBank => 'تحويل مصرفي';
+
+  @override
+  String get loanSourceDrawerHint =>
+      'يُسجَّل سحبًا من درجك المفتوح ويظهر في تقرير الوردية.';
+
+  @override
+  String get loanSourceCashBoxHint => 'يُخصم من رصيد الخزينة النقدي.';
+
+  @override
+  String get loanSourceBankHint => 'يُخصم من رصيد الحساب المصرفي المختار.';
+
+  @override
+  String get loanApproveSessionRequiredError =>
+      'افتح وردية أولًا، أو اصرف السلفة من الخزينة.';
+
+  @override
+  String get loanApprovePermissionError =>
+      'لا تملك صلاحية الصرف من الدرج. اصرفها من الخزينة أو بتحويل مصرفي.';
+
+  @override
+  String get loanApproveError => 'تعذر اعتماد السلفة. حاول مجددًا.';
+
+  @override
+  String get loanDisbursedDrawerValue => 'صُرفت من الدرج';
+
+  @override
+  String get loanDisbursedCashValue => 'صُرفت من الخزينة';
+
+  @override
+  String loanDisbursedBankValue(String bank) {
+    return 'حُوّلت من $bank';
+  }
+
+  @override
+  String get loanDisbursedBankDefault => 'حُوّلت مصرفيًا';
+
+  @override
+  String get treasuryComponentStaffLoans => 'سلف الموظفين';
+
+  @override
+  String get balanceEntryEmployeeOpeningHint =>
+      'ما كان على الموظف أو له يوم بدء تسجيل حسابه هنا. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ولا يُحتسب ضمن تكلفة رواتب الفترة.';
+
+  @override
+  String get balanceEntryEmployeeAdjustmentHint =>
+      'مبلغ على الموظف أو له خارج مسير الرواتب — مكافأة، عجز، مصروف دفعه عن المحل. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ويُحتسب ضمن تكلفة الرواتب يوم تسجيله.';
 }

@@ -41,14 +41,16 @@ class BalanceApiClient {
     );
   }
 
-  /// Settles the party's credit side with cash through the caller's open
-  /// drawer: pays a customer what the shop owes them, or takes in what a
-  /// supplier owes it.
+  /// Settles a balance with cash through the caller's open drawer: pays a
+  /// customer what the shop owes them, takes in what a supplier owes it, or —
+  /// for an employee, whose account runs both ways — whichever side
+  /// [settles] names.
   Future<BalanceEntry> refund({
     required BalanceParty party,
     required int partyId,
     required double amount,
     String note = '',
+    BalanceDirection? settles,
     String? idempotencyKey,
   }) async {
     final response = await _session.post(
@@ -57,6 +59,7 @@ class BalanceApiClient {
         party.fieldName: partyId,
         'amount': amount.toStringAsFixed(2),
         if (note.trim().isNotEmpty) 'note': note.trim(),
+        'settles': ?settles?.apiValue,
       },
       idempotencyKey: idempotencyKey,
     );

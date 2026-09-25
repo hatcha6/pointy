@@ -62,6 +62,7 @@ void main() {
       'transfer_out',
       'consignor_payout',
       'integration_draw',
+      'staff_loans',
     ];
 
     for (final code in codes) {

@@ -6,8 +6,14 @@ from apps.documents.serializers import DocumentLifecycleFields
 from apps.treasury.models import MoneyAccount
 
 from . import customers as customer_balances
+from . import employees as employee_balances
 from . import suppliers as supplier_balances
-from .models import BalanceEntry, CustomerBalanceEntry, SupplierBalanceEntry
+from .models import (
+    BalanceEntry,
+    CustomerBalanceEntry,
+    EmployeeBalanceEntry,
+    SupplierBalanceEntry,
+)
 
 ZERO = Decimal("0.00")
 
@@ -49,6 +55,19 @@ class BalanceEntryInputSerializer(serializers.Serializer):
     )
 
 
+class EmployeeBalanceEntryInputSerializer(BalanceEntryInputSerializer):
+    """An employee's entry, which may say how much of a debt one payroll run
+    takes."""
+
+    payroll_deduction_limit = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+        allow_null=True,
+    )
+
+
 class RefundInputSerializer(serializers.Serializer):
     """A balance settled with cash through the actor's drawer."""
 
@@ -58,6 +77,14 @@ class RefundInputSerializer(serializers.Serializer):
     note = serializers.CharField(
         required=False, allow_blank=True, max_length=2000, trim_whitespace=True
     )
+
+
+class EmployeeSettlementInputSerializer(RefundInputSerializer):
+    """An employee's balance settled in cash — either side of it, so it says
+    which: ``we_owe_them`` pays the employee, ``they_owe_us`` takes their
+    money in."""
+
+    settles = serializers.ChoiceField(choices=BalanceEntry.Direction.choices)
 
 
 class _BalanceEntrySerializer(DocumentLifecycleFields, serializers.ModelSerializer):
@@ -149,6 +176,28 @@ class SupplierBalanceEntrySerializer(_BalanceEntrySerializer):
         read_only_fields = fields
 
 
+class EmployeeBalanceEntrySerializer(_BalanceEntrySerializer):
+    balances = employee_balances
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    #: What runs drafted or approved but not paid already carry of it — so the
+    #: screen can say "on the next payroll" before the money moves.
+    scheduled_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmployeeBalanceEntry
+        fields = [
+            *_BalanceEntrySerializer.ENTRY_FIELDS,
+            "employee",
+            "employee_name",
+            "payroll_deduction_limit",
+            "scheduled_amount",
+        ]
+        read_only_fields = fields
+
+    def get_scheduled_amount(self, entry) -> str:
+        return f"{employee_balances.scheduled_amount(entry):.2f}"
+
+
 class SupplierAccountPaymentSerializer(serializers.Serializer):
     """Pay a supplier against their account: split across what the shop owes
     them, oldest first (``apps.balances.suppliers.record_supplier_account_payment``)."""
@@ -200,6 +249,9 @@ class SupplierAccountPaymentSerializer(serializers.Serializer):
 __all__ = [
     "BalanceEntryInputSerializer",
     "CustomerBalanceEntrySerializer",
+    "EmployeeBalanceEntryInputSerializer",
+    "EmployeeBalanceEntrySerializer",
+    "EmployeeSettlementInputSerializer",
     "OpeningBalanceSerializer",
     "RefundInputSerializer",
     "SupplierAccountPaymentSerializer",

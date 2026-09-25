@@ -648,5 +648,41 @@ def _register_supplier_balance_entry():
     )
 
 
+def _register_employee_balance_entry():
+    from apps.balances import employees as balance_employees
+    from apps.balances.models import EmployeeBalanceEntry
+
+    registry.register(
+        key="employee_balance_entry",
+        label="قيد رصيد موظف",
+        model=EmployeeBalanceEntry,
+        number_field="number",
+        money_date_field="effective_date",
+        has_draft_state=False,
+        draft_effects=(),
+        submit_effects=("employee_balance",),
+        corrections=(Correction.COUNTER, Correction.ALLOW_AFTER_SUBMIT),
+        mutable_after_submit=("note",),
+        derived_fields=(),
+        # Cash set against it cannot be taken back, so neither can the entry.
+        # A paid payroll run that settled it is refused by the reversal, which
+        # also lifts it off any run not paid yet.
+        blocks_cancel=(("cash_settlements", "تسوية نقدية على هذا الرصيد"),),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "balances.add_employeebalanceentry",
+            Transition.CANCEL: "balances.cancel_employeebalanceentry",
+            Transition.EDIT: "balances.change_employeebalanceentry",
+        },
+        correction_window=None,
+        reverse=balance_employees.reverse_entry,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
 _register_customer_balance_entry()
 _register_supplier_balance_entry()
+_register_employee_balance_entry()

@@ -930,6 +930,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         userRepository: dependencies.userRepository,
         capabilities: capabilities,
         navigation: this,
+        contactRepository: dependencies.contactRepository,
       ),
     );
   }

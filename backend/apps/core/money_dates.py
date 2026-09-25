@@ -59,6 +59,11 @@ MONEY_DATE_FIELDS = {
     # owes, and that is what a period of receivables or payables slices by.
     "balances.CustomerBalanceEntry": "effective_date",
     "balances.SupplierBalanceEntry": "effective_date",
+    "balances.EmployeeBalanceEntry": "effective_date",
+    # A loan's money leaves when it is handed over, which is when it is
+    # approved; a loan approved before that was recorded has no date and is in
+    # no period.
+    "employees.EmployeeLoan": "disbursed_at",
 }
 
 

@@ -100,10 +100,20 @@ class EmployeeRepository {
   Future<Result<EmployeeLoan>> approveEmployeeLoan(
     int id, {
     String reviewNotes = '',
+    LoanDisbursement disbursement = LoanDisbursement.cashBox,
   }) {
     return Result.guard(
-      () => _service.approveEmployeeLoan(id, reviewNotes: reviewNotes),
+      () => _service.approveEmployeeLoan(
+        id,
+        reviewNotes: reviewNotes,
+        disbursement: disbursement,
+      ),
     );
+  }
+
+  /// One employee, with their account balance as it stands now.
+  Future<Result<Employee>> loadEmployee(int id) {
+    return Result.guard(() => _service.fetchEmployee(id));
   }
 
   Future<Result<EmployeeLoan>> rejectEmployeeLoan(

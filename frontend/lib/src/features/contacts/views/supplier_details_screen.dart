@@ -165,10 +165,10 @@ class SupplierDetailsView extends StatelessWidget {
                   canCancel: capabilities.canCancelSupplierBalances,
                   // The cash comes into a drawer, so it takes the drawer's
                   // own movement right as well.
-                  canRefund:
+                  canSettleInCash:
                       capabilities.canManageSupplierBalances &&
                       capabilities.canCreateRegisterCashMovement,
-                  refundableAmount: supplier.creditBalance,
+                  cashCollectable: supplier.creditBalance,
                   // An entry moves what the shop owes this supplier; the
                   // figures above are the server's, so re-read them.
                   onChanged: viewModel.loadSupplier,

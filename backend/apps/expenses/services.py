@@ -300,6 +300,11 @@ def _register_payout_rows(start_dt, end_dt):
         # Cash handed to a customer the shop owed it to (``apps.balances``
         # refund): settling a debt the shop had, not spending money.
         customer_balance_entry__isnull=True,
+        # The same for an employee paid what the shop owed on their account,
+        # and a loan paid out: the shop is owed a loan back, it did not spend
+        # it.
+        employee_balance_entry__isnull=True,
+        employee_loan__isnull=True,
     )
     return [
         _row(

@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.db.models import Count, DecimalField, OuterRef, Prefetch, Q, Subquery, Sum
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
@@ -21,6 +22,7 @@ from .models import (
 from .serializers import (
     CompensationPlanSerializer,
     EmployeeSerializer,
+    EmployeeLoanApproveSerializer,
     EmployeeLoanRequestSerializer,
     EmployeeLoanReviewSerializer,
     EmployeeLoanSerializer,
@@ -112,10 +114,25 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             )
         )
 
+    @transaction.atomic
     def perform_create(self, serializer):
+        from apps.balances.employees import create_employee_entry
+        from apps.balances.opening import write_opening_balance
+
+        opening = serializer.validated_data.pop("opening_balance", None)
         employee = serializer.save()
         # Every employee can buy on payroll, whether or not they have a login.
         ensure_staff_customer(employee, created_by=self.request.user)
+        if opening:
+            # In the same transaction: an employee is never created without the
+            # balance they were meant to arrive with.
+            write_opening_balance(
+                create_employee_entry,
+                opening,
+                request=self.request,
+                employee=employee,
+                payroll_deduction_limit=opening.get("payroll_deduction_limit"),
+            )
         record_employee_event(
             name="employees.employee.created",
             user=self.request.user,
@@ -129,6 +146,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        serializer.validated_data.pop("opening_balance", None)
         changed_fields = sorted(serializer.validated_data.keys())
         employee = serializer.save()
         record_employee_event(
@@ -147,7 +165,21 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         employee_id = instance.pk
         employee_number = instance.employee_number
-        instance.delete()
+        try:
+            instance.delete()
+        except ProtectedError as exc:
+            # Paid, loaned to or carrying a balance: the history hangs off the
+            # employee. Ending their employment is the change to make instead.
+            raise serializers.ValidationError(
+                {
+                    "code": "employee_has_history",
+                    "detail": (
+                        "This employee has payroll, loans or an account balance "
+                        "on record and cannot be deleted. Mark them as "
+                        "terminated instead."
+                    ),
+                }
+            ) from exc
         record_employee_event(
             name="employees.employee.deleted",
             user=self.request.user,
@@ -177,7 +209,12 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         queryset = (
             PayrollRun.objects.filter(lines__employee=employee)
             .annotate(line_count=Count("lines"))
-            .prefetch_related("lines__employee", "lines__compensation_plan", "lines__adjustments")
+            .prefetch_related(
+                "lines__employee",
+                "lines__compensation_plan",
+                "lines__adjustments__order",
+                "lines__adjustments__balance_entry",
+            )
             .order_by("-period_end", "-created_at")
             .distinct()
         )
@@ -246,7 +283,26 @@ class EmployeeLoanViewSet(viewsets.ModelViewSet):
     )
 
     def get_queryset(self):
-        return super().get_queryset().order_by("-created_at", "-id")
+        return (
+            super()
+            .get_queryset()
+            .select_related("disbursed_by", "money_account")
+            .order_by("-created_at", "-id")
+        )
+
+    def perform_destroy(self, instance):
+        if instance.status in (
+            EmployeeLoan.Status.APPROVED,
+            EmployeeLoan.Status.PAID,
+        ) or instance.disbursed_at is not None:
+            # Its money has been handed over; the loan is the record of why.
+            raise serializers.ValidationError(
+                {
+                    "code": "loan_disbursed",
+                    "detail": "This loan has been paid out and cannot be deleted.",
+                }
+            )
+        return super().perform_destroy(instance)
 
     def perform_create(self, serializer):
         loan = serializer.save(requested_by=self.request.user)
@@ -303,12 +359,16 @@ class EmployeeLoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
-        serializer = EmployeeLoanReviewSerializer(data=request.data)
+        serializer = EmployeeLoanApproveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
         loan = approve_employee_loan(
             self.get_object(),
             request=request,
-            review_notes=serializer.validated_data.get("review_notes", ""),
+            review_notes=data.get("review_notes", ""),
+            disbursement_method=data["disbursement_method"],
+            money_account=data.get("money_account"),
+            pay_from_register=data["pay_from_register"],
         )
         return Response(
             EmployeeLoanSerializer(loan, context=self.get_serializer_context()).data
@@ -353,8 +413,10 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         "lines__employee",
         "lines__compensation_plan",
         "lines__adjustments",
-        # The receipt number a staff-purchase deduction names.
+        # The receipt number a staff-purchase deduction names, and the balance
+        # entry an account-balance row pays or deducts.
         "lines__adjustments__order",
+        "lines__adjustments__balance_entry",
     )
     filterset_fields = ("status",)
     search_fields = ("run_number", "notes", "lines__employee__full_name")
@@ -516,12 +578,16 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
                 )
 
             if direction == PayrollAdjustment.Direction.DEDUCTION:
-                # Staff purchases give way to a deduction typed by hand
-                # (``PayrollLine.recalculate``), so what they take is room too.
+                # What the employee owes — staff purchases, a balance on their
+                # account — gives way to a deduction typed by hand
+                # (``PayrollLine.recalculate``), so what it takes is room too.
                 staff_purchases = dict(
                     PayrollAdjustment.objects.filter(
                         payroll_line__in=lines,
-                        adjustment_type=PayrollAdjustment.AdjustmentType.STAFF_PURCHASE,
+                        adjustment_type__in=(
+                            PayrollAdjustment.AdjustmentType.STAFF_PURCHASE,
+                            PayrollAdjustment.AdjustmentType.ACCOUNT_BALANCE,
+                        ),
                         direction=PayrollAdjustment.Direction.DEDUCTION,
                     )
                     .values("payroll_line_id")

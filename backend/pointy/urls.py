@@ -26,6 +26,7 @@ from apps.migration.views import (
 )
 from apps.balances.views import (
     CustomerBalanceEntryViewSet,
+    EmployeeBalanceEntryViewSet,
     SupplierBalanceEntryViewSet,
 )
 from apps.catalog.views import (
@@ -240,6 +241,11 @@ router.register(
     "supplier-balance-entries",
     SupplierBalanceEntryViewSet,
     basename="supplier-balance-entry",
+)
+router.register(
+    "employee-balance-entries",
+    EmployeeBalanceEntryViewSet,
+    basename="employee-balance-entry",
 )
 router.register("payment-cards", PaymentCardViewSet, basename="payment-card")
 router.register("discount-rules", DiscountRuleViewSet)

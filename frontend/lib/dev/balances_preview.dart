@@ -1,5 +1,5 @@
 // Dev-only preview harness for opening balances and balance adjustments on
-// customers' and suppliers' accounts.
+// customers', suppliers' and employees' accounts, and a loan's approval.
 //
 // Renders the real details screens against a fake HTTP backend, so the JSON
 // goes through the real parsing. Pick a surface with `?screen=`:
@@ -11,6 +11,9 @@
 //   entry     — the adjustment dialog, open on load.
 //   refund    — the customer refund dialog, open on load.
 //   create    — the create-customer form with its opening balance on offer.
+//   employee  — an employee's account: what they owe and are owed, the
+//               entries the next payroll run settles, and both cash actions.
+//   loan      — approving a loan, asking where its money comes from.
 //
 //   make frontend-balances-preview
 //
@@ -26,8 +29,10 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/data/models/balance_entry.dart';
 import 'package:pointy_frontend/src/data/models/contact.dart';
+import 'package:pointy_frontend/src/data/models/employee.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
@@ -35,6 +40,9 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/contacts/views/balance_entry_dialogs.dart';
 import 'package:pointy_frontend/src/features/contacts/views/customer_details_screen.dart';
 import 'package:pointy_frontend/src/features/contacts/views/supplier_details_screen.dart';
+import 'package:pointy_frontend/src/features/employees/view_models/employee_payroll_view_model.dart';
+import 'package:pointy_frontend/src/features/employees/views/employee_account_screen.dart';
+import 'package:pointy_frontend/src/features/employees/views/employee_loan_review_actions.dart';
 import 'package:pointy_frontend/src/shared/contact_picker_sheet.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
@@ -78,6 +86,16 @@ class _PreviewAppState extends State<_PreviewApp> {
       body = _supplierJson;
     } else if (path.endsWith('/supplier-balance-entries/')) {
       body = {'count': 2, 'next': null, 'results': _supplierEntries};
+    } else if (path.endsWith('/employees/9/')) {
+      body = _employeeJson;
+    } else if (path.endsWith('/employees/')) {
+      body = {
+        'count': 1,
+        'next': null,
+        'results': [_employeeJson],
+      };
+    } else if (path.endsWith('/employee-balance-entries/')) {
+      body = {'count': 3, 'next': null, 'results': _employeeEntries};
     }
     return http.Response(
       jsonEncode(body),
@@ -123,6 +141,7 @@ class _PreviewAppState extends State<_PreviewApp> {
           open: (context) => showBalanceRefundDialog(
             context,
             party: BalanceParty.customer,
+            settles: BalanceDirection.weOweThem,
             available: 35,
             onSubmit: (amount, note) async => null,
           ),
@@ -132,6 +151,19 @@ class _PreviewAppState extends State<_PreviewApp> {
             context: context,
             repository: _contacts,
             allowOpeningBalance: true,
+          ),
+        ),
+        'employee' => EmployeeAccountScreen(
+          viewModel: EmployeePayrollViewModel(EmployeeRepository(_service)),
+          employee: Employee.fromJson(_employeeJson),
+          contactRepository: _contacts,
+          capabilities: capabilities,
+        ),
+        'loan' => _OpenOnLoad(
+          open: (context) => showLoanApprovalDialog(
+            context,
+            loan: EmployeeLoan.fromJson(_loanJson),
+            onApprove: (_) async => null,
           ),
         ),
         _ => CustomerDetailsScreen(
@@ -306,3 +338,92 @@ const _supplierEntries = <Map<String, Object?>>[
     'doc_status': 'submitted',
   },
 ];
+
+const _employeeJson = <String, Object?>{
+  'id': 9,
+  'employee_number': 'E-0009',
+  'full_name': 'مريم الورفلي',
+  'job_title': 'كاشير',
+  'department': 'المبيعات',
+  'status': 'active',
+  'employment_type': 'full_time',
+  'hire_date': '2025-03-01',
+  'active_compensation_plan': {
+    'id': 1,
+    'employee': 9,
+    'pay_type': 'monthly_salary',
+    'salary_type': 'monthly_fixed',
+    'amount': '1200.00',
+    'commission_percent': '0.00',
+    'effective_from': '2025-03-01',
+    'is_active': true,
+  },
+  'account_balance': {
+    'owed_by_employee': '450.00',
+    'owed_to_employee': '75.00',
+    'net': '375.00',
+    'scheduled_deduction': '150.00',
+    'scheduled_payment': '75.00',
+    'has_opening_balance': true,
+  },
+};
+
+const _employeeEntries = <Map<String, Object?>>[
+  {
+    'id': 23,
+    'number': 'B20260905000023',
+    'kind': 'adjustment',
+    'direction': 'we_owe_them',
+    'amount': '75.00',
+    'settled_amount': '0.00',
+    'remaining_amount': '75.00',
+    'scheduled_amount': '75.00',
+    'effective_date': '2026-09-05',
+    'note': 'مكافأة جرد آخر الشهر',
+    'created_by_username': 'manager',
+    'can_cancel': true,
+    'doc_status': 'submitted',
+  },
+  {
+    'id': 22,
+    'number': 'B20260820000022',
+    'kind': 'refund',
+    'direction': 'we_owe_them',
+    'amount': '150.00',
+    'settled_amount': '150.00',
+    'remaining_amount': '0.00',
+    'effective_date': '2026-08-20',
+    'note': 'دفعت نقدًا',
+    'created_by_username': 'manager',
+    'can_cancel': false,
+    'doc_status': 'submitted',
+  },
+  {
+    'id': 21,
+    'number': 'B20260301000021',
+    'kind': 'opening',
+    'direction': 'they_owe_us',
+    'amount': '900.00',
+    'settled_amount': '450.00',
+    'remaining_amount': '450.00',
+    'scheduled_amount': '150.00',
+    'payroll_deduction_limit': '150.00',
+    'effective_date': '2026-03-01',
+    'note': 'سلفة من الدفتر القديم',
+    'created_by_username': 'manager',
+    'can_cancel': false,
+    'doc_status': 'submitted',
+  },
+];
+
+const _loanJson = <String, Object?>{
+  'id': 4,
+  'employee': 9,
+  'employee_name': 'مريم الورفلي',
+  'status': 'requested',
+  'amount': '600.00',
+  'monthly_deduction': '200.00',
+  'outstanding_balance': '0.00',
+  'deducted_amount': '0.00',
+  'purpose': 'مصاريف علاج',
+};

@@ -64,7 +64,12 @@ def clean_entry_input(*, kind, direction, amount, effective_date=None, note=""):
 
     today = latest_allowed_date()
     if effective_date is None:
-        effective_date = business_local_date()
+        # Undated means "now", on the clock the reports and the period lock
+        # slice by (``apps.core.money_dates``). The shop's own day runs two
+        # hours ahead of it after midnight, and an entry stamped with that day
+        # was missing from every "today" figure until the reports' day caught
+        # up — a statement printed at half past midnight left it off.
+        effective_date = timezone.localdate()
     elif isinstance(effective_date, datetime):
         effective_date = effective_date.date()
     if isinstance(effective_date, date) and effective_date > today:

@@ -28,7 +28,7 @@ from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import DiscountRedemption, DiscountRule
 from apps.employees.models import Employee, EmployeeLoan, PayrollRun
-from apps.employees.staff_purchases import staff_purchases_withheld
+from apps.employees.reporting import payroll_cost
 from apps.expenses.models import Expense
 from apps.fraud.models import FraudFinding
 from apps.inventory.models import StockItem, StockMovement
@@ -567,15 +567,6 @@ def _payroll_section(period):
     in_period = Q(period_end__gte=period_start, period_start__lte=period_end)
     # Collapse every payroll total and count the summary needs into one pass.
     totals = payroll_runs.aggregate(
-        salary_expense=Coalesce(
-            Sum(
-                "net_total",
-                filter=in_period
-                & Q(status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID)),
-            ),
-            Value(Decimal("0.00")),
-            output_field=MONEY_FIELD,
-        ),
         paid_total=Coalesce(
             Sum(
                 "net_total",
@@ -598,14 +589,10 @@ def _payroll_section(period):
         pending_run_count=Count("id", filter=Q(status=PayrollRun.Status.APPROVED)),
     )
 
-    # Labour cost, the same figure as the profit report's
-    # (``apps.employees.reporting.payroll_cost``): what the runs kept back for
-    # staff purchases was wage too, paid in goods.
-    salary_expense = totals["salary_expense"] + staff_purchases_withheld(
-        payroll_runs.filter(in_period).filter(
-            status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID)
-        )
-    )
+    # Labour cost, the same figure as the profit report's, from the one
+    # definition of it: what the runs kept back for staff purchases, loans and
+    # account balances was wage too, and a balance they paid out on top was not.
+    salary_expense = payroll_cost(period_start, period_end)
     return {
         "summary": {
             "salary_expense": _money(salary_expense),
@@ -666,21 +653,10 @@ def _profitability_section(request, period):
                 Value(Decimal("0.00")),
                 output_field=MONEY_FIELD,
             ),
-            accrued=Coalesce(
-                Sum(
-                    "net_total",
-                    filter=Q(
-                        status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID),
-                        period_end__gte=period_start,
-                        period_start__lte=period_end,
-                    ),
-                ),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            ),
         )
         payroll_paid = payroll_totals["paid"]
-        payroll_accrued = payroll_totals["accrued"]
+        # Accrued labour cost, from the one definition the profit report uses.
+        payroll_accrued = payroll_cost(period_start, period_end)
 
     payment_commissions = Decimal("0.00")
     if _can(request.user, "payments.view_payment"):

@@ -6,7 +6,7 @@ import '../data/services/api_error_detail.dart';
 import '../data/services/api_session.dart';
 
 /// "عليه لنا" / "له علينا" — the words a shop ledger has always used, the same
-/// for a customer and a supplier.
+/// for a customer, a supplier and an employee.
 String balanceDirectionLabel(
   AppLocalizations l10n,
   BalanceDirection direction,
@@ -32,7 +32,82 @@ String balanceDirectionHint(
       l10n.supplierBalanceTheyOweUsHint,
     (BalanceParty.supplier, BalanceDirection.weOweThem) =>
       l10n.supplierBalanceWeOweThemHint,
+    (BalanceParty.employee, BalanceDirection.theyOweUs) =>
+      l10n.employeeBalanceTheyOweUsHint,
+    (BalanceParty.employee, BalanceDirection.weOweThem) =>
+      l10n.employeeBalanceWeOweThemHint,
   };
+}
+
+/// What an entry's row is called. A cash settlement names the money moving
+/// — for an employee, whose account runs both ways, which way it moved.
+String balanceEntryTitle(
+  AppLocalizations l10n,
+  BalanceParty party,
+  BalanceEntry entry,
+) {
+  if (entry.isRefund) {
+    if (party == BalanceParty.employee) {
+      // A settlement is written the opposite way to what it settles: cash
+      // paid to the employee is a debit on their account.
+      return entry.direction == BalanceDirection.theyOweUs
+          ? l10n.balanceKindEmployeePaidOut
+          : l10n.balanceKindEmployeeCollected;
+    }
+    return balanceKindLabel(l10n, entry.kind);
+  }
+  return '${balanceKindLabel(l10n, entry.kind)} • '
+      '${balanceDirectionLabel(l10n, entry.direction)}';
+}
+
+/// The words for settling one side of an account in cash: [settles] is the
+/// side being settled — `weOweThem` pays the party, `theyOweUs` takes their
+/// money in.
+class BalanceCashWords {
+  const BalanceCashWords({
+    required this.button,
+    required this.title,
+    required this.hint,
+    required this.saved,
+  });
+
+  final String button;
+  final String title;
+  final String hint;
+  final String saved;
+
+  factory BalanceCashWords.of(
+    AppLocalizations l10n,
+    BalanceParty party,
+    BalanceDirection settles,
+  ) {
+    return switch ((party, settles)) {
+      (BalanceParty.employee, BalanceDirection.weOweThem) => BalanceCashWords(
+        button: l10n.employeePayOutButton,
+        title: l10n.employeePayOutTitle,
+        hint: l10n.employeePayOutHint,
+        saved: l10n.employeePayOutSaved,
+      ),
+      (BalanceParty.employee, BalanceDirection.theyOweUs) => BalanceCashWords(
+        button: l10n.employeeCollectButton,
+        title: l10n.employeeCollectTitle,
+        hint: l10n.employeeCollectHint,
+        saved: l10n.employeeCollectSaved,
+      ),
+      (BalanceParty.supplier, _) => BalanceCashWords(
+        button: l10n.supplierRefundButton,
+        title: l10n.supplierRefundTitle,
+        hint: l10n.supplierRefundHint,
+        saved: l10n.supplierRefundSaved,
+      ),
+      (BalanceParty.customer, _) => BalanceCashWords(
+        button: l10n.customerRefundButton,
+        title: l10n.customerRefundTitle,
+        hint: l10n.customerRefundHint,
+        saved: l10n.customerRefundSaved,
+      ),
+    };
+  }
 }
 
 IconData balanceDirectionIcon(BalanceDirection direction) {

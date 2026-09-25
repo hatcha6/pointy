@@ -694,9 +694,19 @@ class PosApiService {
     return _employees.requestEmployeeLoan(draft);
   }
 
-  Future<EmployeeLoan> approveEmployeeLoan(int id, {String reviewNotes = ''}) {
-    return _employees.approveEmployeeLoan(id, reviewNotes: reviewNotes);
+  Future<EmployeeLoan> approveEmployeeLoan(
+    int id, {
+    String reviewNotes = '',
+    LoanDisbursement disbursement = LoanDisbursement.cashBox,
+  }) {
+    return _employees.approveEmployeeLoan(
+      id,
+      reviewNotes: reviewNotes,
+      disbursement: disbursement,
+    );
   }
+
+  Future<Employee> fetchEmployee(int id) => _employees.fetchEmployee(id);
 
   Future<EmployeeLoan> rejectEmployeeLoan(int id, {String reviewNotes = ''}) {
     return _employees.rejectEmployeeLoan(id, reviewNotes: reviewNotes);
@@ -1125,6 +1135,7 @@ class PosApiService {
     required int partyId,
     required double amount,
     String note = '',
+    BalanceDirection? settles,
     String? idempotencyKey,
   }) {
     return _balances.refund(
@@ -1132,6 +1143,7 @@ class PosApiService {
       partyId: partyId,
       amount: amount,
       note: note,
+      settles: settles,
       idempotencyKey: idempotencyKey,
     );
   }

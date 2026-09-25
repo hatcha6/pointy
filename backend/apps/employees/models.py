@@ -715,23 +715,34 @@ class PayrollLine(TimeStampedModel):
             self.manual_deduction_amount or "0.00"
         )
         staff_purchases = []
+        balance_debts = []
         if self.pk:
             for adjustment in self.adjustments.all():
                 if adjustment.is_staff_purchase_deduction:
                     staff_purchases.append(adjustment)
+                elif adjustment.is_balance_deduction:
+                    balance_debts.append(adjustment)
                 elif adjustment.direction == PayrollAdjustment.Direction.ADDITION:
                     additions += adjustment.amount
                 else:
                     deductions += adjustment.amount
-        # Staff purchases come out of whatever pay is left, so they are the first
-        # thing to give way: an absence stamped from attendance, or a penalty
-        # typed after the draft, shrinks them rather than making the line
-        # negative. What they no longer cover stays owed on the invoice, and the
-        # next run takes it.
-        resized = _fit_staff_purchases(
-            staff_purchases, room=self.gross_amount + additions - deductions
+        #: The pay left once everything but the employee's debts is taken off —
+        #: what a debt deducted from this line can be taken out of.
+        self.room_for_debts = (self.gross_amount + additions - deductions).quantize(
+            self.MONEY_PLACES
         )
-        deductions += sum(
+        # What the employee owes comes out of whatever pay is left, so those
+        # deductions are the first to give way: an absence stamped from
+        # attendance, or a penalty typed after the draft, shrinks them rather
+        # than making the line negative. What they no longer cover stays owed,
+        # and the next run takes it. Staff purchases give way before a balance
+        # on the account (an opening balance, an adjustment) does.
+        resized = _fit_staff_purchases(balance_debts, room=self.room_for_debts)
+        taken = sum((adjustment.amount for adjustment in balance_debts), Decimal("0.00"))
+        resized += _fit_staff_purchases(
+            staff_purchases, room=self.room_for_debts - taken
+        )
+        deductions += taken + sum(
             (adjustment.amount for adjustment in staff_purchases), Decimal("0.00")
         )
         self.additions_amount = additions.quantize(self.MONEY_PLACES)
@@ -763,13 +774,14 @@ class PayrollLine(TimeStampedModel):
 
 
 def _fit_staff_purchases(adjustments, *, room):
-    """Shrink staff-purchase deductions until they fit in ``room``.
+    """Shrink debt deductions until they fit in ``room``.
 
-    The newest invoice gives way first: the deductions were allocated oldest
-    invoice first, and the oldest debt is the one worth settling. Mutates the
-    adjustments in place and returns the ones it changed, for the caller to
-    persist. A deduction cut to nothing is left at zero rather than removed
-    here, so the caller decides whether that is a delete.
+    Staff purchases and balances on the account alike. The newest debt gives
+    way first: the deductions were allocated oldest debt first, and the oldest
+    debt is the one worth settling. Mutates the adjustments in place and
+    returns the ones it changed, for the caller to persist. A deduction cut to
+    nothing is left at zero rather than removed here, so the caller decides
+    whether that is a delete.
     """
     excess = sum(
         (adjustment.amount for adjustment in adjustments), Decimal("0.00")
@@ -803,6 +815,11 @@ class PayrollAdjustment(TimeStampedModel):
         # by ``apps.employees.staff_purchases`` only — one row per invoice, so
         # the run says which invoices it is taking — and never by hand.
         STAFF_PURCHASE = "staff_purchase", "Staff purchase"
+        # A balance on the employee's account — an opening balance or an
+        # adjustment (``apps.balances``): paid with the wage when the shop owes
+        # it, deducted when the employee does. Written by
+        # ``apps.balances.employees`` only, one row per entry, never by hand.
+        ACCOUNT_BALANCE = "account_balance", "Account balance"
         OTHER = "other", "Other"
 
     payroll_line = models.ForeignKey(
@@ -833,6 +850,16 @@ class PayrollAdjustment(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # The balance entry an ``account_balance`` row pays or deducts, the way a
+    # loan instalment names its loan. Paying the run is what settles it; a
+    # voided run's rows settle nothing.
+    balance_entry = models.ForeignKey(
+        "balances.EmployeeBalanceEntry",
+        on_delete=models.PROTECT,
+        related_name="payroll_adjustments",
+        blank=True,
+        null=True,
+    )
     # The payment that settled ``order`` when the run was paid. Empty until
     # then, and given back (cancelled) if the run is voided.
     settlement_payment = models.OneToOneField(
@@ -857,6 +884,14 @@ class PayrollAdjustment(TimeStampedModel):
             and self.direction == self.Direction.DEDUCTION
         )
 
+    @property
+    def is_balance_deduction(self):
+        """A debt on the employee's account, taken out of the pay."""
+        return (
+            self.adjustment_type == self.AdjustmentType.ACCOUNT_BALANCE
+            and self.direction == self.Direction.DEDUCTION
+        )
+
 
 class EmployeeLoan(TimeStampedModel):
     MONEY_PLACES = Decimal("0.01")
@@ -867,6 +902,10 @@ class EmployeeLoan(TimeStampedModel):
         REJECTED = "rejected", "Rejected"
         CANCELLED = "cancelled", "Cancelled"
         PAID = "paid", "Paid"
+
+    class DisbursementMethod(models.TextChoices):
+        CASH = "cash", "Cash"
+        TRANSFER = "transfer", "Bank transfer"
 
     employee = models.ForeignKey(
         Employee,
@@ -913,6 +952,43 @@ class EmployeeLoan(TimeStampedModel):
     review_notes = models.TextField(blank=True)
     reviewed_at = models.DateTimeField(blank=True, null=True)
     paid_at = models.DateTimeField(blank=True, null=True)
+    # The money leaving the shop — recorded when the loan is approved, which is
+    # when it is handed over. Before this existed an approved loan left no
+    # trace in the money position: the loan was on the balance sheet as owed
+    # to the shop, and the cash that paid it was still counted in the box.
+    # Loans approved before then have none of these and stay as they were.
+    disbursed_at = models.DateTimeField(blank=True, null=True, db_index=True)
+    disbursed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="disbursed_employee_loans",
+        blank=True,
+        null=True,
+    )
+    disbursement_method = models.CharField(
+        max_length=16,
+        choices=DisbursementMethod.choices,
+        blank=True,
+    )
+    #: The bank a transfer left. Untagged, it is the default bank account's —
+    #: the rule every untagged bank row follows (``treasury.position``).
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.PROTECT,
+        related_name="employee_loans",
+        blank=True,
+        null=True,
+    )
+    #: The drawer pay-out, when the cash came out of the approver's own open
+    #: till. Linked so the drawer's count, the Z-report and the money position
+    #: see it once, as this loan, and the expenses ledger leaves it out.
+    cash_movement = models.OneToOneField(
+        "sales.RegisterCashMovement",
+        on_delete=models.PROTECT,
+        related_name="employee_loan",
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -935,6 +1011,10 @@ class EmployeeLoan(TimeStampedModel):
     @property
     def is_open(self):
         return self.status == self.Status.APPROVED and self.outstanding_balance > 0
+
+    @property
+    def is_disbursed(self):
+        return self.disbursed_at is not None
 
     def clean(self):
         if self.monthly_deduction > self.amount:

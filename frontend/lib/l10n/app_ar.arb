@@ -16375,5 +16375,217 @@
         "type": "String"
       }
     }
+  },
+  "employeeBalanceTheyOweUsHint": "مبلغ على الموظف للمحل — يُخصم من راتبه في مسير الرواتب القادم.",
+  "@employeeBalanceTheyOweUsHint": {
+    "description": "Direction hint: the employee owes the shop."
+  },
+  "employeeBalanceWeOweThemHint": "مبلغ مستحق للموظف على المحل — يُصرف مع راتبه في مسير الرواتب القادم.",
+  "@employeeBalanceWeOweThemHint": {
+    "description": "Direction hint: the shop owes the employee."
+  },
+  "balanceDeductionLimitLabel": "أقصى خصم في كل مسير رواتب (اختياري)",
+  "@balanceDeductionLimitLabel": {
+    "description": "Label: per-payroll-run deduction cap on an employee's debt."
+  },
+  "balanceDeductionLimitHelper": "اتركه فارغًا ليُخصم ما يتسع له الراتب.",
+  "@balanceDeductionLimitHelper": {
+    "description": "Helper under the deduction cap field."
+  },
+  "balanceDeductionLimitInvalid": "أدخل مبلغًا أكبر من صفر أو اترك الحقل فارغًا.",
+  "@balanceDeductionLimitInvalid": {
+    "description": "Validation: the deduction cap must be positive."
+  },
+  "balanceDeductionLimitValue": "يُخصم حتى {amount} في كل مسير",
+  "@balanceDeductionLimitValue": {
+    "description": "Entry row: the per-run deduction cap.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "balanceScheduledValue": "مُدرج في مسير رواتب لم يُصرف: {amount}",
+  "@balanceScheduledValue": {
+    "description": "Entry row: amount already on an unpaid payroll run.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "employeePayOutButton": "صرف المستحقات نقدًا",
+  "@employeePayOutButton": {
+    "description": "Button: pay an employee what the shop owes them, in cash."
+  },
+  "employeeCollectButton": "تحصيل من الموظف نقدًا",
+  "@employeeCollectButton": {
+    "description": "Button: take in cash an employee owes."
+  },
+  "employeePayOutTitle": "صرف مستحقات للموظف",
+  "@employeePayOutTitle": {
+    "description": "Dialog title: pay an employee in cash."
+  },
+  "employeeCollectTitle": "تحصيل مبلغ من الموظف",
+  "@employeeCollectTitle": {
+    "description": "Dialog title: collect cash from an employee."
+  },
+  "employeePayOutHint": "يُصرف المبلغ نقدًا من درج ورديتك ويُخصم مما يستحقه الموظف، فلا يُصرف مرة أخرى مع راتبه. لا يمكن إلغاؤه بعد تسجيله.",
+  "@employeePayOutHint": {
+    "description": "Dialog hint: paying an employee in cash."
+  },
+  "employeeCollectHint": "يُستلم المبلغ نقدًا في درج ورديتك ويُخصم مما على الموظف، فلا يُخصم من راتبه مرة أخرى. لا يمكن إلغاؤه بعد تسجيله.",
+  "@employeeCollectHint": {
+    "description": "Dialog hint: collecting cash from an employee."
+  },
+  "employeePayOutSaved": "تم صرف المبلغ للموظف.",
+  "@employeePayOutSaved": {
+    "description": "Snackbar after paying an employee."
+  },
+  "employeeCollectSaved": "تم استلام المبلغ من الموظف.",
+  "@employeeCollectSaved": {
+    "description": "Snackbar after collecting from an employee."
+  },
+  "balanceKindEmployeePaidOut": "صرف مستحقات نقدًا",
+  "@balanceKindEmployeePaidOut": {
+    "description": "Entry row title: cash paid to an employee."
+  },
+  "balanceKindEmployeeCollected": "تحصيل نقدي من الموظف",
+  "@balanceKindEmployeeCollected": {
+    "description": "Entry row title: cash taken in from an employee."
+  },
+  "employeeAccountTitle": "حساب الموظف",
+  "@employeeAccountTitle": {
+    "description": "Section title: the employee's account balances."
+  },
+  "employeeAccountOwedByLabel": "على الموظف",
+  "@employeeAccountOwedByLabel": {
+    "description": "Metric: what the employee owes the shop."
+  },
+  "employeeAccountOwedToLabel": "مستحق للموظف",
+  "@employeeAccountOwedToLabel": {
+    "description": "Metric: what the shop owes the employee."
+  },
+  "employeeAccountNextPayrollValue": "في مسير الرواتب القادم: خصم {deduction} وإضافة {payment}",
+  "@employeeAccountNextPayrollValue": {
+    "description": "Line: what unpaid payroll runs already carry.",
+    "placeholders": {
+      "deduction": {
+        "type": "String"
+      },
+      "payment": {
+        "type": "String"
+      }
+    }
+  },
+  "employeeAccountHint": "ما على الموظف يُخصم من راتبه، وما هو مستحق له يُصرف معه، تلقائيًا في مسير الرواتب القادم.",
+  "@employeeAccountHint": {
+    "description": "Explains how the employee account is settled."
+  },
+  "employeeAccountOpenTooltip": "حساب الموظف",
+  "@employeeAccountOpenTooltip": {
+    "description": "Tooltip: open the employee's account."
+  },
+  "employeeAccountLoadError": "تعذر تحديث بيانات الموظف.",
+  "@employeeAccountLoadError": {
+    "description": "Error reloading the employee."
+  },
+  "employeeAccountBalanceValue": "على الموظف {owedBy} • مستحق له {owedTo}",
+  "@employeeAccountBalanceValue": {
+    "description": "Employee row: both sides of the account.",
+    "placeholders": {
+      "owedBy": {
+        "type": "String"
+      },
+      "owedTo": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollAdjustmentAccountBalance": "رصيد حساب الموظف",
+  "@payrollAdjustmentAccountBalance": {
+    "description": "Payroll adjustment type: a balance on the employee's account."
+  },
+  "payrollAccountBalanceEntry": "قيد {number}",
+  "@payrollAccountBalanceEntry": {
+    "description": "Payroll adjustment note: the balance entry a row settles.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "loanDisbursementSourceLabel": "من أين يُصرف مبلغ السلفة؟",
+  "@loanDisbursementSourceLabel": {
+    "description": "Loan approval: where the money comes from."
+  },
+  "loanSourceDrawer": "من درج ورديتي",
+  "@loanSourceDrawer": {
+    "description": "Loan source: the approver's open drawer."
+  },
+  "loanSourceCashBox": "من الخزينة نقدًا",
+  "@loanSourceCashBox": {
+    "description": "Loan source: the cash box."
+  },
+  "loanSourceBank": "تحويل مصرفي",
+  "@loanSourceBank": {
+    "description": "Loan source: a bank transfer."
+  },
+  "loanSourceDrawerHint": "يُسجَّل سحبًا من درجك المفتوح ويظهر في تقرير الوردية.",
+  "@loanSourceDrawerHint": {
+    "description": "Loan source hint: drawer."
+  },
+  "loanSourceCashBoxHint": "يُخصم من رصيد الخزينة النقدي.",
+  "@loanSourceCashBoxHint": {
+    "description": "Loan source hint: cash box."
+  },
+  "loanSourceBankHint": "يُخصم من رصيد الحساب المصرفي المختار.",
+  "@loanSourceBankHint": {
+    "description": "Loan source hint: bank."
+  },
+  "loanApproveSessionRequiredError": "افتح وردية أولًا، أو اصرف السلفة من الخزينة.",
+  "@loanApproveSessionRequiredError": {
+    "description": "Error: paying a loan from a drawer needs an open shift."
+  },
+  "loanApprovePermissionError": "لا تملك صلاحية الصرف من الدرج. اصرفها من الخزينة أو بتحويل مصرفي.",
+  "@loanApprovePermissionError": {
+    "description": "Error: no permission to pay out of a drawer."
+  },
+  "loanApproveError": "تعذر اعتماد السلفة. حاول مجددًا.",
+  "@loanApproveError": {
+    "description": "Error: approving the loan failed."
+  },
+  "loanDisbursedDrawerValue": "صُرفت من الدرج",
+  "@loanDisbursedDrawerValue": {
+    "description": "Loan pill: paid from a drawer."
+  },
+  "loanDisbursedCashValue": "صُرفت من الخزينة",
+  "@loanDisbursedCashValue": {
+    "description": "Loan pill: paid from the cash box."
+  },
+  "loanDisbursedBankValue": "حُوّلت من {bank}",
+  "@loanDisbursedBankValue": {
+    "description": "Loan pill: transferred from a bank account.",
+    "placeholders": {
+      "bank": {
+        "type": "String"
+      }
+    }
+  },
+  "loanDisbursedBankDefault": "حُوّلت مصرفيًا",
+  "@loanDisbursedBankDefault": {
+    "description": "Loan pill: transferred, bank not named."
+  },
+  "treasuryComponentStaffLoans": "سلف الموظفين",
+  "@treasuryComponentStaffLoans": {
+    "description": "Treasury component: loans paid out to employees."
+  },
+  "balanceEntryEmployeeOpeningHint": "ما كان على الموظف أو له يوم بدء تسجيل حسابه هنا. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ولا يُحتسب ضمن تكلفة رواتب الفترة.",
+  "@balanceEntryEmployeeOpeningHint": {
+    "description": "Entry dialog hint: an employee's opening balance."
+  },
+  "balanceEntryEmployeeAdjustmentHint": "مبلغ على الموظف أو له خارج مسير الرواتب — مكافأة، عجز، مصروف دفعه عن المحل. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ويُحتسب ضمن تكلفة الرواتب يوم تسجيله.",
+  "@balanceEntryEmployeeAdjustmentHint": {
+    "description": "Entry dialog hint: an employee balance adjustment."
   }
 }

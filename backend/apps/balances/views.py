@@ -16,11 +16,15 @@ from apps.core.permissions import HasPointyPermission
 from apps.documents import services as document_services
 
 from . import customers as customer_balances
+from . import employees as employee_balances
 from . import suppliers as supplier_balances
-from .models import CustomerBalanceEntry, SupplierBalanceEntry
+from .models import CustomerBalanceEntry, EmployeeBalanceEntry, SupplierBalanceEntry
 from .serializers import (
     BalanceEntryInputSerializer,
     CustomerBalanceEntrySerializer,
+    EmployeeBalanceEntryInputSerializer,
+    EmployeeBalanceEntrySerializer,
+    EmployeeSettlementInputSerializer,
     RefundInputSerializer,
     SupplierBalanceEntrySerializer,
 )
@@ -33,9 +37,12 @@ class _BalanceEntryViewSet(
 ):
     permission_classes = [IsAuthenticated, HasPointyPermission]
     ordering_fields = ("effective_date", "created_at", "amount")
-    #: The party this entry belongs to: ``customer`` or ``supplier``.
+    #: The party this entry belongs to: ``customer``, ``supplier`` or
+    #: ``employee``.
     party_field = ""
     party_model = None
+    entry_input_serializer = BalanceEntryInputSerializer
+    refund_input_serializer = RefundInputSerializer
 
     def get_queryset(self):
         return (
@@ -56,7 +63,7 @@ class _BalanceEntryViewSet(
                 {self.party_field: "This field is required."}
             )
         party = get_object_or_404(self.party_model, pk=party_id)
-        payload = BalanceEntryInputSerializer(data=request.data)
+        payload = self.entry_input_serializer(data=request.data)
         payload.is_valid(raise_exception=True)
         entry = self.write_entry(party, payload.validated_data, request.user)
         return Response(
@@ -78,7 +85,7 @@ class _BalanceEntryViewSet(
                 {self.party_field: "This field is required."}
             )
         party = get_object_or_404(self.party_model, pk=party_id)
-        payload = RefundInputSerializer(data=request.data)
+        payload = self.refund_input_serializer(data=request.data)
         payload.is_valid(raise_exception=True)
         entry = self.write_refund(party, payload.validated_data, request.user)
         return Response(
@@ -176,4 +183,47 @@ class SupplierBalanceEntryViewSet(_BalanceEntryViewSet):
         )
 
 
-__all__ = ["CustomerBalanceEntryViewSet", "SupplierBalanceEntryViewSet"]
+class EmployeeBalanceEntryViewSet(_BalanceEntryViewSet):
+    """An employee's account: settled by the next payroll run, or in cash."""
+
+    serializer_class = EmployeeBalanceEntrySerializer
+    queryset = EmployeeBalanceEntry.objects.all()
+    balances = employee_balances
+    party_field = "employee"
+    entry_input_serializer = EmployeeBalanceEntryInputSerializer
+    refund_input_serializer = EmployeeSettlementInputSerializer
+    permission_map = {
+        "list": ("balances.view_employeebalanceentry",),
+        "retrieve": ("balances.view_employeebalanceentry",),
+        "create": ("balances.add_employeebalanceentry",),
+        # Cash moves through a drawer, either way.
+        "refund": (
+            "balances.add_employeebalanceentry",
+            "sales.add_registercashmovement",
+        ),
+        "cancel": ("balances.cancel_employeebalanceentry",),
+    }
+    filterset_fields = ("employee", "kind", "direction", "doc_status")
+
+    @property
+    def party_model(self):
+        from apps.employees.models import Employee
+
+        return Employee
+
+    def write_entry(self, employee, data, user):
+        return employee_balances.create_employee_entry(
+            employee=employee, actor=user, **data
+        )
+
+    def write_refund(self, employee, data, user):
+        return employee_balances.settle_employee_balance(
+            employee=employee, actor=user, **data
+        )
+
+
+__all__ = [
+    "CustomerBalanceEntryViewSet",
+    "EmployeeBalanceEntryViewSet",
+    "SupplierBalanceEntryViewSet",
+]

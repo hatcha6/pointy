@@ -12,9 +12,9 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/balance_entries_view_model.dart';
 import 'balance_entry_dialogs.dart';
 
-/// The opening balance and adjustments on one customer's or supplier's
-/// account — listed for anyone who may see them, written and withdrawn by
-/// whoever may — and the cash refund that settles a credit the other way.
+/// The opening balance and adjustments on one customer's, supplier's or
+/// employee's account — listed for anyone who may see them, written and
+/// withdrawn by whoever may — and the cash that settles a side of it.
 ///
 /// Owns its view model: the details screens only need to know when the
 /// account changed, which [onChanged] tells them.
@@ -26,8 +26,9 @@ class BalanceEntriesSection extends StatefulWidget {
     required this.partyId,
     required this.canManage,
     required this.canCancel,
-    this.canRefund = false,
-    this.refundableAmount = 0,
+    this.canSettleInCash = false,
+    this.cashPayable = 0,
+    this.cashCollectable = 0,
     this.onChanged,
   });
 
@@ -37,13 +38,17 @@ class BalanceEntriesSection extends StatefulWidget {
   final bool canManage;
   final bool canCancel;
 
-  /// Whether this user may settle the credit side in cash through a drawer.
-  final bool canRefund;
+  /// Whether this user may settle a side of the account in cash, through
+  /// their own drawer.
+  final bool canSettleInCash;
 
-  /// How much can be refunded right now: what the shop holds for a customer,
-  /// or what a supplier holds for the shop. Read by the host screen from its
-  /// own summary, which [onChanged] refreshes after every write.
-  final double refundableAmount;
+  /// What the shop can pay out now: a customer's credit, an employee's dues.
+  /// Read by the host screen from its own figures, which [onChanged]
+  /// refreshes after every write.
+  final double cashPayable;
+
+  /// What the shop can take in now: a supplier's credit, an employee's debt.
+  final double cashCollectable;
   final Future<void> Function()? onChanged;
 
   @override
@@ -77,20 +82,23 @@ class _BalanceEntriesSectionState extends State<BalanceEntriesSection> {
     }
   }
 
-  Future<void> _refund() async {
+  Future<void> _settle(BalanceDirection settles, double available) async {
     final l10n = AppLocalizations.of(context)!;
     final saved = await showBalanceRefundDialog(
       context,
       party: widget.party,
-      available: widget.refundableAmount,
-      onSubmit: (amount, note) => _viewModel.refund(amount, note: note),
+      settles: settles,
+      available: available,
+      onSubmit: (amount, note) => _viewModel.refund(
+        amount,
+        note: note,
+        // Only an employee's account runs both ways; for the others the side
+        // is the only one there is.
+        settles: widget.party == BalanceParty.employee ? settles : null,
+      ),
     );
     if (saved && mounted) {
-      _snack(
-        widget.party == BalanceParty.customer
-            ? l10n.customerRefundSaved
-            : l10n.supplierRefundSaved,
-      );
+      _snack(BalanceCashWords.of(l10n, widget.party, settles).saved);
     }
   }
 
@@ -122,14 +130,16 @@ class _BalanceEntriesSectionState extends State<BalanceEntriesSection> {
       builder: (context, _) {
         final viewModel = _viewModel;
         final busy = viewModel.isSaving || viewModel.isLoading;
-        final showRefund = widget.canRefund && widget.refundableAmount > 0.005;
+        final canPay = widget.canSettleInCash && widget.cashPayable > 0.005;
+        final canTakeIn =
+            widget.canSettleInCash && widget.cashCollectable > 0.005;
         return PointyDetailSection(
           title: l10n.balanceEntriesTitle,
           icon: Icons.account_balance_wallet_outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (widget.canManage || showRefund) ...[
+              if (widget.canManage || canPay || canTakeIn) ...[
                 Wrap(
                   spacing: spacing.sm,
                   runSpacing: spacing.sm,
@@ -154,15 +164,40 @@ class _BalanceEntriesSectionState extends State<BalanceEntriesSection> {
                         icon: const Icon(Icons.tune_outlined),
                         label: Text(l10n.addBalanceAdjustmentButton),
                       ),
-                    if (showRefund)
+                    if (canPay)
                       OutlinedButton.icon(
-                        key: const ValueKey('balance_refund_button'),
-                        onPressed: busy ? null : _refund,
+                        key: const ValueKey('balance_pay_out_button'),
+                        onPressed: busy
+                            ? null
+                            : () => _settle(
+                                BalanceDirection.weOweThem,
+                                widget.cashPayable,
+                              ),
                         icon: const Icon(Icons.payments_outlined),
                         label: Text(
-                          widget.party == BalanceParty.customer
-                              ? l10n.customerRefundButton
-                              : l10n.supplierRefundButton,
+                          BalanceCashWords.of(
+                            l10n,
+                            widget.party,
+                            BalanceDirection.weOweThem,
+                          ).button,
+                        ),
+                      ),
+                    if (canTakeIn)
+                      OutlinedButton.icon(
+                        key: const ValueKey('balance_take_in_button'),
+                        onPressed: busy
+                            ? null
+                            : () => _settle(
+                                BalanceDirection.theyOweUs,
+                                widget.cashCollectable,
+                              ),
+                        icon: const Icon(Icons.savings_outlined),
+                        label: Text(
+                          BalanceCashWords.of(
+                            l10n,
+                            widget.party,
+                            BalanceDirection.theyOweUs,
+                          ).button,
                         ),
                       ),
                   ],
@@ -171,6 +206,7 @@ class _BalanceEntriesSectionState extends State<BalanceEntriesSection> {
               ],
               _BalanceEntriesList(
                 viewModel: viewModel,
+                party: widget.party,
                 canCancel: widget.canCancel,
                 onCancel: _cancel,
               ),
@@ -185,11 +221,13 @@ class _BalanceEntriesSectionState extends State<BalanceEntriesSection> {
 class _BalanceEntriesList extends StatelessWidget {
   const _BalanceEntriesList({
     required this.viewModel,
+    required this.party,
     required this.canCancel,
     required this.onCancel,
   });
 
   final BalanceEntriesViewModel viewModel;
+  final BalanceParty party;
   final bool canCancel;
   final ValueChanged<BalanceEntry> onCancel;
 
@@ -216,6 +254,7 @@ class _BalanceEntriesList extends StatelessWidget {
         for (final entry in viewModel.entries) ...[
           _BalanceEntryRow(
             entry: entry,
+            party: party,
             onCancel: canCancel && entry.canCancel && !viewModel.isSaving
                 ? () => onCancel(entry)
                 : null,
@@ -241,9 +280,14 @@ class _BalanceEntriesList extends StatelessWidget {
 }
 
 class _BalanceEntryRow extends StatelessWidget {
-  const _BalanceEntryRow({required this.entry, this.onCancel});
+  const _BalanceEntryRow({
+    required this.entry,
+    required this.party,
+    this.onCancel,
+  });
 
   final BalanceEntry entry;
+  final BalanceParty party;
   final VoidCallback? onCancel;
 
   @override
@@ -269,10 +313,7 @@ class _BalanceEntryRow extends StatelessWidget {
       ),
       // A refund is cash that already changed hands, in whichever direction
       // its kind says; "they owe us" or "we owe them" would misdescribe it.
-      title: entry.isRefund
-          ? balanceKindLabel(l10n, entry.kind)
-          : '${balanceKindLabel(l10n, entry.kind)} • '
-                '${balanceDirectionLabel(l10n, entry.direction)}',
+      title: balanceEntryTitle(l10n, party, entry),
       subtitle: [
         entry.number,
         if (entry.effectiveDate != null)
@@ -284,6 +325,12 @@ class _BalanceEntryRow extends StatelessWidget {
           l10n.balanceEntrySettledValue(formatMoney(entry.settledAmount)),
           l10n.balanceEntryRemainingValue(formatMoney(entry.remainingAmount)),
         ],
+        if (!entry.isCancelled && entry.payrollDeductionLimit != null)
+          l10n.balanceDeductionLimitValue(
+            formatMoney(entry.payrollDeductionLimit!),
+          ),
+        if (!entry.isCancelled && entry.scheduledAmount > 0.005)
+          l10n.balanceScheduledValue(formatMoney(entry.scheduledAmount)),
         if (entry.createdByUsername.isNotEmpty)
           l10n.balanceEntryCreatedByValue(entry.createdByUsername),
         if (entry.isCancelled && entry.cancelReason.isNotEmpty)

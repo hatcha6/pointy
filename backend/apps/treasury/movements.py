@@ -30,6 +30,7 @@ from .position import (
     COMPONENT_INTEGRATION_DRAW,
     COMPONENT_PAYROLL,
     COMPONENT_SALES,
+    COMPONENT_STAFF_LOANS,
     COMPONENT_SUPPLIERS,
     COMPONENT_TRANSFER_IN,
     COMPONENT_TRANSFER_OUT,
@@ -37,6 +38,7 @@ from .position import (
     account_is_routed,
     bank_account_filter,
     claimed_by_live,
+    loan_disbursements,
 )
 
 # Same ceiling as the expense ledger: enough for a month of a busy shop, and
@@ -209,9 +211,10 @@ def _cash_rows(*, start, end):
     # beside the pay-in that brought the cash back.
     movements = _newest(
         money_period(
-            RegisterCashMovement.objects.exclude(claimed_by_live(Expense)).exclude(
-                claimed_by_live(SupplierPayment)
-            ),
+            RegisterCashMovement.objects.exclude(claimed_by_live(Expense))
+            .exclude(claimed_by_live(SupplierPayment))
+            # A loan's pay-out is listed as the loan, below.
+            .filter(employee_loan__isnull=True),
             start,
             end,
         )
@@ -227,6 +230,26 @@ def _cash_rows(*, start, end):
         )
 
     yield from _payroll_rows(start=start, end=end)
+    yield from _loan_rows("cash", start=start, end=end)
+
+
+def _loan_rows(method, *, start, end, account_filter=None):
+    from apps.core.money_dates import day_range_end, day_range_start
+
+    loans = loan_disbursements(
+        method,
+        day_range_start(start),
+        day_range_end(end),
+        account_filter=account_filter,
+    ).select_related("employee")
+    for loan in _newest(loans):
+        yield _row(
+            source=COMPONENT_STAFF_LOANS,
+            date=loan.disbursed_at.date(),
+            amount=-loan.amount,
+            description=loan.employee.display_name,
+            related_id=loan.pk,
+        )
 
 
 def _payroll_rows(*, start, end):
@@ -264,6 +287,7 @@ def _bank_rows(*, start, end, account, is_default):
         end=end,
         account_filter=owned,
     )
+    yield from _loan_rows("transfer", start=start, end=end, account_filter=owned)
 
 
 def _provider_rows(account, *, start, end):

@@ -29,6 +29,7 @@ String treasuryComponentLabel(AppLocalizations l10n, String code) {
     'transfer_out' => l10n.treasuryComponentTransferOut,
     'integration_draw' => l10n.treasuryComponentIntegrationDraw,
     'consignor_payout' => l10n.treasuryComponentConsignorPayout,
+    'staff_loans' => l10n.treasuryComponentStaffLoans,
     _ => code,
   };
 }
@@ -47,6 +48,7 @@ IconData treasuryComponentIcon(String code) {
     'transfer_out' => Icons.call_made,
     'integration_draw' => Icons.cell_tower_outlined,
     'consignor_payout' => Icons.handshake_outlined,
+    'staff_loans' => Icons.handshake_outlined,
     _ => Icons.circle_outlined,
   };
 }

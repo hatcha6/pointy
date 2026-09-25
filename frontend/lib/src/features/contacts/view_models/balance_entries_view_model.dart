@@ -147,9 +147,14 @@ class BalanceEntriesViewModel extends ChangeNotifier {
     return failure;
   }
 
-  /// Settles the party's credit side with cash through the caller's own open
-  /// drawer. Returns null on success, or why it was refused.
-  Future<BalanceFailure?> refund(double amount, {String note = ''}) async {
+  /// Settles a balance with cash through the caller's own open drawer — for an
+  /// employee, the side [settles] names. Returns null on success, or why it
+  /// was refused.
+  Future<BalanceFailure?> refund(
+    double amount, {
+    String note = '',
+    BalanceDirection? settles,
+  }) async {
     if (_isSaving) {
       return BalanceFailure.generic;
     }
@@ -160,6 +165,7 @@ class BalanceEntriesViewModel extends ChangeNotifier {
       'balance-refund',
       party.fieldName,
       partyId,
+      settles?.apiValue ?? '',
       amount.toStringAsFixed(2),
       note.trim(),
     ].join(':');
@@ -168,6 +174,7 @@ class BalanceEntriesViewModel extends ChangeNotifier {
       partyId: partyId,
       amount: amount,
       note: note,
+      settles: settles,
       idempotencyKey: _keyFor(signature),
     );
 

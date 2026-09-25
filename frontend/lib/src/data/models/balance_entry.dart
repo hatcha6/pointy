@@ -1,6 +1,6 @@
-/// Opening balances and adjustments on a customer's or a supplier's account —
-/// the debts no invoice or purchase order could carry. Mirrors
-/// `apps.balances` on the server.
+/// Opening balances and adjustments on a customer's, a supplier's or an
+/// employee's account — the debts no invoice, purchase order or payroll run
+/// could carry. Mirrors `apps.balances` on the server.
 library;
 
 /// Which way a balance runs, from the shop's side: the way an owner says it,
@@ -50,7 +50,11 @@ enum BalanceEntryKind {
 /// Whose account an entry sits on — it decides which endpoint carries it.
 enum BalanceParty {
   customer('customer', 'customer-balance-entries/'),
-  supplier('supplier', 'supplier-balance-entries/');
+  supplier('supplier', 'supplier-balance-entries/'),
+
+  /// Settled by payroll: the next run deducts what the employee owes and
+  /// pays what the shop owes them.
+  employee('employee', 'employee-balance-entries/');
 
   const BalanceParty(this.fieldName, this.path);
 
@@ -77,6 +81,8 @@ class BalanceEntry {
     this.cancelReason = '',
     this.cancelledAt,
     this.cancelledByUsername = '',
+    this.payrollDeductionLimit,
+    this.scheduledAmount = 0,
   });
 
   final int id;
@@ -101,6 +107,14 @@ class BalanceEntry {
   final DateTime? cancelledAt;
   final String cancelledByUsername;
 
+  /// Employees only: the most one payroll run deducts from this debt; null
+  /// means as much as the pay can carry.
+  final double? payrollDeductionLimit;
+
+  /// Employees only: what payroll runs drafted or approved, not yet paid,
+  /// already carry of it.
+  final double scheduledAmount;
+
   bool get isOpening => kind == BalanceEntryKind.opening;
   bool get isRefund => kind == BalanceEntryKind.refund;
 
@@ -122,6 +136,10 @@ class BalanceEntry {
       cancelReason: json['cancel_reason']?.toString() ?? '',
       cancelledAt: _dateFromJson(json['cancelled_at']),
       cancelledByUsername: json['cancelled_by_username']?.toString() ?? '',
+      payrollDeductionLimit: json['payroll_deduction_limit'] == null
+          ? null
+          : _moneyFromJson(json['payroll_deduction_limit']),
+      scheduledAmount: _moneyFromJson(json['scheduled_amount']),
     );
   }
 }
@@ -161,6 +179,7 @@ class BalanceEntryDraft {
     required this.amount,
     this.note = '',
     this.effectiveDate,
+    this.payrollDeductionLimit,
   });
 
   final BalanceEntryKind kind;
@@ -171,6 +190,9 @@ class BalanceEntryDraft {
   /// The day it applies from; null means today.
   final DateTime? effectiveDate;
 
+  /// Employees only, for a debt they owe: the most one payroll run takes.
+  final double? payrollDeductionLimit;
+
   Map<String, Object?> toJson() {
     return {
       'kind': kind.apiValue,
@@ -179,6 +201,8 @@ class BalanceEntryDraft {
       if (note.trim().isNotEmpty) 'note': note.trim(),
       if (effectiveDate != null)
         'effective_date': effectiveDate!.toIso8601String().split('T').first,
+      if (payrollDeductionLimit != null)
+        'payroll_deduction_limit': payrollDeductionLimit!.toStringAsFixed(2),
     };
   }
 }
@@ -191,12 +215,16 @@ class OpeningBalanceDraft {
     required this.amount,
     this.note = '',
     this.effectiveDate,
+    this.payrollDeductionLimit,
   });
 
   final BalanceDirection direction;
   final double amount;
   final String note;
   final DateTime? effectiveDate;
+
+  /// Employees only, for a debt they owe: the most one payroll run takes.
+  final double? payrollDeductionLimit;
 
   Map<String, Object?> toJson() {
     return {
@@ -205,6 +233,8 @@ class OpeningBalanceDraft {
       if (note.trim().isNotEmpty) 'note': note.trim(),
       if (effectiveDate != null)
         'effective_date': effectiveDate!.toIso8601String().split('T').first,
+      if (payrollDeductionLimit != null)
+        'payroll_deduction_limit': payrollDeductionLimit!.toStringAsFixed(2),
     };
   }
 }

@@ -262,6 +262,10 @@ const _moneyKeys = {
   'salary_expense',
   'paid_total',
   'pending_total',
+  'staff_owe_total',
+  'owed_to_staff_total',
+  'owed_by_employee',
+  'owed_to_employee',
   'gross_total',
   'additions_total',
   'deductions_total',
@@ -379,6 +383,7 @@ const _valueLabels = {
   'sales': 'مبيعات',
   'drawer_in': 'إيداع بالدرج',
   'drawer_out': 'سحب من الدرج',
+  'staff_loans': 'سلف الموظفين',
   'expenses': 'مصاريف',
   'suppliers': 'موردون',
   'payroll': 'رواتب',
@@ -439,6 +444,7 @@ const _labels = {
   'reorder_items': 'أصناف تحتاج إعادة طلب',
   'payroll_runs': 'مسيرات الرواتب',
   'employee_totals': 'إجماليات الموظفين',
+  'employee_account_balances': 'أرصدة حسابات الموظفين',
   'profit_statement': 'قائمة الأرباح',
   'cash_bridge': 'مطابقة الإيراد بالمقبوضات',
   'expense_categories': 'المصاريف حسب البند',
@@ -637,6 +643,10 @@ const _labels = {
   'deductions_total': 'الخصومات',
   'net_total': 'الصافي',
   'salary_expense': 'تكلفة الرواتب للفترة',
+  'staff_owe_total': 'على الموظفين في حساباتهم',
+  'owed_to_staff_total': 'مستحق للموظفين في حساباتهم',
+  'owed_by_employee': 'على الموظف',
+  'owed_to_employee': 'مستحق للموظف',
   'paid_total': 'الرواتب المصروفة',
   'pending_total': 'رواتب معتمدة غير مصروفة',
   'payroll_run_count': 'عدد المسيرات',
@@ -684,11 +694,13 @@ const _labels = {
   'cash_and_bank': 'النقدية في الخزينة والمصارف',
   'customer_receivables': 'ديون العملاء',
   'employee_loans': 'ديون الموظفين (السلف)',
+  'employee_account_receivables': 'أرصدة على الموظفين',
   'provider_float': 'أرصدة لدى مزودي الخدمات',
   'supplier_credits': 'إشعارات دائنة لدى الموردين',
   'consignor_advances': 'مستحق على أصحاب الأمانات',
   'supplier_payables': 'مستحقات الموردين',
   'employee_payables': 'رواتب مستحقة للموظفين',
+  'employee_account_payables': 'أرصدة مستحقة للموظفين',
   'consignor_payables': 'مستحقات أصحاب الأمانات',
   'customer_credits': 'أرصدة دائنة للعملاء (مستحقة لهم)',
   'total_assets': 'إجمالي الأصول (لنا)',
@@ -857,11 +869,16 @@ const _notes = {
   'refunds_net_in_payments': 'المبالغ المُعادة مطروحة من المدفوعات.',
   'payroll_is_period_cost':
       'تكلفة الرواتب هي تكلفة عمل الفترة (معتمدة أو مصروفة)، وليست ما صُرف '
-      'نقدًا خلالها.',
+      'نقدًا خلالها. تشمل الراتب كاملًا وإن خُصم منه قسط سلفة أو دين على '
+      'الموظف، ولا تشمل ما صُرف معه تسويةً لرصيد سابق. تسويات أرصدة الموظفين '
+      'تُحتسب يوم تسجيلها.',
   'payroll_cost_vs_paid':
       '«تكلفة الرواتب للفترة» تخص العمل المؤدَّى فيها؛ «الرواتب المصروفة» هي '
       'ما خرج من الصندوق خلالها. الرقمان مختلفان عمدًا.',
   'payroll_period_overlap': 'يُحتسب أي مسير تتقاطع فترته مع فترة التقرير.',
+  'payroll_account_balances':
+      'أرصدة حسابات الموظفين كما في نهاية الفترة: ما عليهم يُخصم من رواتبهم '
+      'وما لهم يُصرف معها في مسير الرواتب القادم.',
   'purchases_are_not_expense':
       'شراء البضاعة ليس مصروفًا — فهو يحوّل النقد إلى مخزون. يظهر أسفل '
       'الإجمالي للعلم فقط ولا يدخل في المصاريف التشغيلية.',

@@ -450,7 +450,11 @@ PERMISSION_CATALOG = [
             _perm("employees.view_employeeloan", "عرض السلف", "الاطلاع على سلف الموظفين."),
             _perm("employees.add_employeeloan", "تسجيل السلف", "تسجيل طلب سلفة لموظف."),
             _perm("employees.change_employeeloan", "تعديل السلف", "تعديل مبلغ السلفة وأقساطها."),
-            _perm("employees.approve_employeeloan", "اعتماد السلف", "اعتماد طلبات السلف."),
+            _perm(
+                "employees.approve_employeeloan",
+                "اعتماد السلف",
+                "اعتماد طلبات السلف، وتسجيل صرف مبلغها من الدرج أو الخزينة أو المصرف.",
+            ),
             _perm("employees.reject_employeeloan", "رفض السلف", "رفض طلبات السلف."),
             _perm("employees.delete_employeeloan", "حذف السلف", "حذف سلفة مسجّلة."),
             _perm("employees.view_payrollrun", "عرض الرواتب", "الاطلاع على مسيّرات الرواتب."),
@@ -460,6 +464,28 @@ PERMISSION_CATALOG = [
             _perm("employees.mark_payrollrun_paid", "صرف الرواتب", "تعليم مسيّرات الرواتب كمدفوعة."),
             _perm("employees.void_payrollrun", "إلغاء مسيّرات الرواتب", "إلغاء مسيّر رواتب وعكس أثره."),
             _perm("employees.delete_payrollrun", "حذف مسيّرات الرواتب", "حذف مسيّر رواتب."),
+            # A balance on an employee's account changes their next wage, so
+            # writing one is its own right — apart from editing their record.
+            _perm(
+                "balances.view_employeebalanceentry",
+                "عرض أرصدة الموظفين",
+                "الاطلاع على الأرصدة الافتتاحية والتسويات في حسابات الموظفين.",
+            ),
+            _perm(
+                "balances.add_employeebalanceentry",
+                "تسجيل رصيد أو تسوية لموظف",
+                "تسجيل مبلغ على الموظف أو له يُخصم من راتبه أو يُصرف معه، وتسويته نقدًا.",
+            ),
+            _perm(
+                "balances.change_employeebalanceentry",
+                "تعديل ملاحظة رصيد الموظف",
+                "تعديل ملاحظة قيد الرصيد فقط؛ المبلغ لا يُعدّل.",
+            ),
+            _perm(
+                "balances.cancel_employeebalanceentry",
+                "إلغاء رصيد موظف",
+                "إلغاء رصيد لم يُخصم أو يُصرف منه شيء في مسير رواتب مدفوع.",
+            ),
         ],
     },
     {

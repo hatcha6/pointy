@@ -1,4 +1,4 @@
-"""What a customer or a supplier owes, when no invoice can say so.
+"""What a customer, a supplier or an employee owes, when no document can say so.
 
 A receivable in this system is the sum of the آجل invoices nobody has settled,
 and a payable the sum of the unpaid purchase orders. That is the right rule and
@@ -35,6 +35,11 @@ How each direction is carried, and why they differ:
 * **A supplier who owes us** is a ``SupplierCredit`` — the note the shop already
   spends against purchase orders — so the purchase-order payment dialog offers
   it with no change at all.
+* **An employee, either way,** is settled by payroll: the next run pays what
+  the shop owes them and deducts what they owe it
+  (``employees.PayrollAdjustment.AdjustmentType.ACCOUNT_BALANCE``), and what is
+  left of an entry is derived from the paid runs and the cash settlements that
+  name it (:class:`EmployeeBalanceAllocation`), never stored.
 
 And a balance someone is owed can be settled with money, not only against the
 next invoice: a **refund** entry hands a customer the credit the shop holds
@@ -268,3 +273,93 @@ class SupplierBalanceEntry(BalanceEntry):
                 name="balances_supplier_open_idx",
             ),
         ]
+
+
+class EmployeeBalanceEntry(BalanceEntry):
+    """A balance on an employee's account, settled through payroll.
+
+    The next payroll run pays what the shop owes and deducts what the employee
+    owes (``apps.balances.employees.refresh_payroll_balance_adjustments``);
+    paying the run is what settles it, and voiding the run gives it back. Cash
+    can settle it too, through a drawer, like a customer's refund.
+    """
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.PROTECT,
+        related_name="balance_entries",
+    )
+    #: The most one payroll run deducts from a debt the employee owes; empty
+    #: means as much as the pay can carry. The instalment of a loan, for a
+    #: debt that is not one — a large opening balance against a small wage
+    #: would otherwise take a whole month's pay.
+    payroll_deduction_limit = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(MONEY)],
+    )
+    # A cash settlement's money moving through the drawer: out when the shop
+    # pays the employee what it owed them, in when the employee pays back.
+    cash_movement = models.OneToOneField(
+        "sales.RegisterCashMovement",
+        on_delete=models.PROTECT,
+        related_name="employee_balance_entry",
+        blank=True,
+        null=True,
+    )
+
+    objects = BalanceEntryQuerySet.as_manager()
+
+    class Meta(BalanceEntry.Meta):
+        verbose_name = "employee balance entry"
+        verbose_name_plural = "employee balance entries"
+        permissions = [
+            (
+                "cancel_employeebalanceentry",
+                "Cancel an opening balance or adjustment on an employee's account",
+            ),
+        ]
+        indexes = [
+            # "What is still open on this employee's account?" — asked for every
+            # line of every payroll run that is drafted, approved or paid.
+            models.Index(
+                fields=["employee", "direction", "doc_status"],
+                name="balances_employee_open_idx",
+            ),
+        ]
+
+
+class EmployeeBalanceAllocation(TimeStampedModel):
+    """Part of a cash settlement, set against one entry it settled.
+
+    A settlement is taken oldest entry first, and each row says how much of
+    it went to which entry — so an entry's remainder is a derivation (its
+    amount less its paid payroll deductions or additions and its cash
+    allocations), and "which debt did that cash pay?" has an answer. Never
+    edited or deleted: the settlement moved money and is final.
+    """
+
+    entry = models.ForeignKey(
+        EmployeeBalanceEntry,
+        on_delete=models.PROTECT,
+        related_name="cash_settlements",
+    )
+    #: The ``refund``-kind entry that carries the cash.
+    refund = models.ForeignKey(
+        EmployeeBalanceEntry,
+        on_delete=models.PROTECT,
+        related_name="allocations",
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(MONEY)],
+    )
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.amount} of {self.entry_id} by {self.refund_id}"

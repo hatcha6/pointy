@@ -21,9 +21,20 @@ class EmployeeApiClient {
     return EmployeePage.fromAny(_session.decodedBody(response));
   }
 
+  /// One employee, with their account balance as it stands now.
+  Future<Employee> fetchEmployee(int id) async {
+    final response = await _session.get('employees/$id/');
+    _session.throwApiException(response, 'Employee request failed with status');
+    return Employee.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<Employee> createEmployee(EmployeeDraft draft) async {
     final response = await _session.post('employees/', body: draft.toJson());
-    _session.ensureSuccess(response, 'Employee create failed with status');
+    // The body names what was refused — an opening balance the user may not
+    // record, a date in the future — so the form can say which field.
+    _session.throwApiException(response, 'Employee create failed with status');
     return Employee.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -186,17 +197,22 @@ class EmployeeApiClient {
     );
   }
 
+  /// Approves a loan and records where its money came from.
   Future<EmployeeLoan> approveEmployeeLoan(
     int id, {
     String reviewNotes = '',
+    LoanDisbursement disbursement = LoanDisbursement.cashBox,
   }) async {
     final response = await _session.post(
       'employee-loans/$id/approve/',
       body: {
         if (reviewNotes.trim().isNotEmpty) 'review_notes': reviewNotes.trim(),
+        ...disbursement.toJson(),
       },
     );
-    _session.ensureSuccess(
+    // Kept whole: a refusal says why (no open drawer, no right to pay out of
+    // one), and the approval dialog says it back.
+    _session.throwApiException(
       response,
       'Employee loan approval failed with status',
     );

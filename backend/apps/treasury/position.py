@@ -70,6 +70,11 @@ COMPONENT_CONSIGNOR_PAYOUT = "consignor_payout"
 # the very day somebody is deciding whether to top up (apps.integrations.
 # float_ledger holds the definition; this module only places it).
 COMPONENT_INTEGRATION_DRAW = "integration_draw"
+# Money lent to employees, paid out when the loan was approved. Its own code:
+# it is not spending — the shop is owed it back — and filing it under drawer
+# pay-outs or expenses would put money the shop still has a claim to among
+# money it has spent.
+COMPONENT_STAFF_LOANS = "staff_loans"
 
 # Which payment methods land in which kind of account. Method decides the
 # *kind* of account; ``money_account`` — when a row carries one — decides WHICH
@@ -146,14 +151,16 @@ def _cash_components(*, start, end):
             created_at__lt=end_dt,
         )
     )
-    # Standalone pay-outs only — one that paid an expense, a POS cash purchase
-    # or a consignor is already counted as that expense / supplier payment /
-    # consignor payout, while it stands (``claimed_by_live``).
+    # Standalone pay-outs only — one that paid an expense, a POS cash purchase,
+    # a consignor or an employee's loan is already counted as that expense /
+    # supplier payment / consignor payout / loan: the first three while they
+    # stand (``claimed_by_live``), a loan's always (``staff_loans``).
     drawer_out = _sum(
         RegisterCashMovement.objects.filter(
             movement_type=RegisterCashMovement.MovementType.PAY_OUT,
             created_at__gte=start_dt,
             created_at__lt=end_dt,
+            employee_loan__isnull=True,
         )
         .exclude(claimed_by_live(Expense))
         .exclude(claimed_by_live(SupplierPayment))
@@ -169,6 +176,7 @@ def _cash_components(*, start, end):
     suppliers = _supplier_outflow(CASH_METHODS, start_dt, end_dt)
     payroll = _payroll_outflow(start, end)
     consignors = _consignor_outflow("cash", start_dt, end_dt)
+    loans = _loan_outflow("cash", start_dt, end_dt)
 
     return [
         _component(COMPONENT_SALES, sales, direction="in"),
@@ -178,6 +186,7 @@ def _cash_components(*, start, end):
         _component(COMPONENT_SUPPLIERS, -suppliers, direction="out"),
         _component(COMPONENT_PAYROLL, -payroll, direction="out"),
         _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out"),
+        _component(COMPONENT_STAFF_LOANS, -loans, direction="out"),
     ]
 
 
@@ -245,11 +254,14 @@ def _bank_components(*, start, end, account, is_default):
         )
     )
 
+    loans = _loan_outflow("transfer", start_dt, end_dt, account_filter=owned)
+
     components = [
         _component(COMPONENT_SALES, sales, direction="in"),
         _component(COMPONENT_COMMISSION, -commission, direction="out"),
         _component(COMPONENT_SUPPLIERS, -suppliers, direction="out"),
         _component(COMPONENT_EXPENSES, -expenses, direction="out"),
+        _component(COMPONENT_STAFF_LOANS, -loans, direction="out"),
     ]
     if is_default:
         # Still untagged by nature: a consignor payout names the owner of the
@@ -260,6 +272,34 @@ def _bank_components(*, start, end, account, is_default):
             _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out")
         )
     return components
+
+
+def loan_disbursements(method, start_dt, end_dt, *, account_filter=None):
+    """Loans paid out to employees by ``method``, inside the window.
+
+    Dated when the money was handed over. A loan approved before disbursements
+    were recorded has none, and is not counted: its cash was never taken off
+    the books here, and inventing the day it left would move a balance the
+    owner has already counted.
+    """
+    from apps.employees.models import EmployeeLoan
+    from apps.employees.reporting import LENT_STATUSES
+
+    queryset = EmployeeLoan.objects.filter(
+        status__in=LENT_STATUSES,
+        disbursement_method=method,
+        disbursed_at__gte=start_dt,
+        disbursed_at__lt=end_dt,
+    )
+    if account_filter is not None:
+        queryset = queryset.filter(account_filter)
+    return queryset
+
+
+def _loan_outflow(method, start_dt, end_dt, *, account_filter=None):
+    return _sum(
+        loan_disbursements(method, start_dt, end_dt, account_filter=account_filter)
+    )
 
 
 def _consignor_outflow(method, start_dt, end_dt):

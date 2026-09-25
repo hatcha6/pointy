@@ -23,6 +23,17 @@ Two more figures live here for the balance sheet, which asks the staff side the
 question a position asks rather than a period: on a given evening, what did the
 staff owe the shop (loans still being repaid), and what did the shop owe the
 staff (wages approved and not yet handed over)?
+
+**A wage is the whole wage.** A run pays some of it in the form of a debt
+settled — a loan instalment, a staff purchase, a balance the employee owed on
+their account — and pays out with it, on top, what the shop owed them on their
+account. Neither changes what the labour cost: the first was earned and spent
+on the debt, the second was a debt already owed. So cost adds back everything a
+run withheld to settle something the employee owed, and leaves out what it
+paid to settle something the shop owed. Balance adjustments are counted on the
+day they are recorded instead (``apps.balances.employees``) — a bonus promised
+is a cost when it is promised — and opening balances never: they are what the
+books already were.
 """
 
 from decimal import Decimal
@@ -57,14 +68,48 @@ def payroll_runs_for_period(start, end):
 def payroll_cost(start, end) -> Decimal:
     """What the period's labour cost, paid or not.
 
-    Net pay plus whatever the runs kept back to settle staff purchases: a wage
-    paid partly in goods still cost the whole wage.
+    Net pay plus whatever the runs kept back to settle what the employees owed
+    — a wage paid partly in goods, or towards a loan, still cost the whole
+    wage — less what they paid out on top to settle what the shop owed on the
+    employees' accounts, plus the balance adjustments recorded in the period.
     """
-    from .staff_purchases import staff_purchases_withheld
+    from apps.balances.employees import adjustments_labour_cost
 
     runs = payroll_runs_for_period(start, end).filter(status__in=RECOGNISED_STATUSES)
     total = runs.aggregate(total=_sum("net_total"))["total"]
-    return ((total or ZERO) + staff_purchases_withheld(runs)).quantize(MONEY_PLACES)
+    return (
+        (total or ZERO)
+        + withheld_for_debts(runs)
+        - balances_paid_with_wages(runs)
+        + adjustments_labour_cost(start, end)
+    ).quantize(MONEY_PLACES)
+
+
+def withheld_for_debts(runs) -> Decimal:
+    """What ``runs`` kept back from wages to settle what employees owed: loan
+    instalments, staff purchases, and balances on their accounts."""
+    from apps.balances.employees import payroll_balance_totals
+
+    from .staff_purchases import staff_purchases_withheld
+
+    loans = PayrollAdjustment.objects.filter(
+        payroll_line__payroll_run__in=runs,
+        loan__isnull=False,
+        direction=PayrollAdjustment.Direction.DEDUCTION,
+    ).aggregate(total=_sum("amount"))["total"]
+    balances, _paid = payroll_balance_totals(runs)
+    return ((loans or ZERO) + staff_purchases_withheld(runs) + balances).quantize(
+        MONEY_PLACES
+    )
+
+
+def balances_paid_with_wages(runs) -> Decimal:
+    """What ``runs`` paid on top of the wage, settling what the shop owed on
+    employees' accounts."""
+    from apps.balances.employees import payroll_balance_totals
+
+    _withheld, paid = payroll_balance_totals(runs)
+    return paid
 
 
 def payroll_paid(start, end) -> Decimal:
@@ -127,7 +172,10 @@ def wages_payable(as_of) -> Decimal:
 
     Gross of staff purchases for the same reason: the invoice an employee's
     shopping sits on stays a receivable until the run is paid, so until then
-    the wage that will settle it is owed in full.
+    the wage that will settle it is owed in full. And the same again for a
+    balance on the employee's account, either way: until the run is paid the
+    balance is still on the account (``apps.balances.employees.balances_as_of``),
+    so the run's share of it is not counted here a second time.
     """
     cutoff = day_range_end(as_of)
     owed = (
@@ -136,15 +184,9 @@ def wages_payable(as_of) -> Decimal:
         .filter(Q(payment_date__isnull=True) | Q(payment_date__gt=as_of))
     )
     net = owed.aggregate(total=_sum("net_total"))["total"]
-    withheld = PayrollAdjustment.objects.filter(
-        payroll_line__payroll_run__in=owed,
-        loan__isnull=False,
-        direction=PayrollAdjustment.Direction.DEDUCTION,
-    ).aggregate(total=_sum("amount"))["total"]
-    from .staff_purchases import staff_purchases_withheld
-
-    purchases = staff_purchases_withheld(owed)
-    return ((net or ZERO) + (withheld or ZERO) + purchases).quantize(MONEY_PLACES)
+    return (
+        (net or ZERO) + withheld_for_debts(owed) - balances_paid_with_wages(owed)
+    ).quantize(MONEY_PLACES)
 
 
 def _sum(field):
@@ -154,10 +196,12 @@ def _sum(field):
 __all__ = [
     "LENT_STATUSES",
     "RECOGNISED_STATUSES",
+    "balances_paid_with_wages",
     "loans_outstanding",
     "payroll_cost",
     "payroll_paid",
     "payroll_pending",
     "payroll_runs_for_period",
     "wages_payable",
+    "withheld_for_debts",
 ]

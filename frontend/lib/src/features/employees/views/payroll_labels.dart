@@ -327,12 +327,14 @@ String payrollAdjustmentTypeLabel(AppLocalizations l10n, String type) {
     'absence' => l10n.payrollAdjustmentAbsence,
     'penalty' => l10n.payrollAdjustmentPenalty,
     'staff_purchase' => l10n.payrollAdjustmentStaffPurchase,
+    'account_balance' => l10n.payrollAdjustmentAccountBalance,
     _ => l10n.payrollAdjustmentOther,
   };
 }
 
 /// What to show beside an adjustment's amount: the invoice a staff purchase
-/// takes, otherwise whatever note the row carries.
+/// takes, the balance entry an account-balance row settles, otherwise whatever
+/// note the row carries.
 String payrollAdjustmentNote(
   AppLocalizations l10n,
   PayrollAdjustment adjustment,
@@ -340,6 +342,10 @@ String payrollAdjustmentNote(
   final receiptNumber = adjustment.orderReceiptNumber.trim();
   if (adjustment.isStaffPurchase && receiptNumber.isNotEmpty) {
     return l10n.payrollStaffPurchaseInvoice(receiptNumber);
+  }
+  final entryNumber = adjustment.balanceEntryNumber.trim();
+  if (adjustment.isAccountBalance && entryNumber.isNotEmpty) {
+    return l10n.payrollAccountBalanceEntry(entryNumber);
   }
   return adjustment.notes.trim();
 }

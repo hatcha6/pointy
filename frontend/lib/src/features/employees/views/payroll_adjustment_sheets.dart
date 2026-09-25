@@ -674,14 +674,15 @@ class _PayrollLineAdjustmentSheetState
         _existingAdjustmentDeductions +
         _absenceDeduction +
         decimalValue(_manualDeductionController.text);
-    // Staff purchases give way first: the server shrinks them rather than let
-    // the line go negative, and what they no longer cover stays owed on the
-    // invoice for the next run. So they count only up to the pay left over.
+    // What the employee owes — staff purchases, a balance on their account —
+    // gives way first: the server shrinks it rather than let the line go
+    // negative, and what it no longer covers stays owed for the next run. So
+    // it counts only up to the pay left over.
     final room = math.max(
       0.0,
       widget.line.grossAmount + _projectedAdditions - fixed,
     );
-    return roundMoney(fixed + math.min(_existingStaffPurchaseDeductions, room));
+    return roundMoney(fixed + math.min(_existingDebtDeductions, room));
   }
 
   double get _projectedNet {
@@ -700,15 +701,14 @@ class _PayrollLineAdjustmentSheetState
     return widget.line.adjustments
         .where(
           (adjustment) =>
-              adjustment.direction == 'deduction' &&
-              !adjustment.isStaffPurchase,
+              adjustment.direction == 'deduction' && !adjustment.isFittedDebt,
         )
         .fold<double>(0, (total, adjustment) => total + adjustment.amount);
   }
 
-  double get _existingStaffPurchaseDeductions {
+  double get _existingDebtDeductions {
     return widget.line.adjustments
-        .where((adjustment) => adjustment.isStaffPurchase)
+        .where((adjustment) => adjustment.isFittedDebt)
         .fold<double>(0, (total, adjustment) => total + adjustment.amount);
   }
 

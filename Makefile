@@ -378,7 +378,7 @@ frontend-navigation-preview: frontend-install ## Run the navigation drawer/rail 
 frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
 
-frontend-balances-preview: frontend-install ## Run the customer/supplier opening balance UI preview harness (?screen=customer|supplier|entry|refund|create).
+frontend-balances-preview: frontend-install ## Run the customer/supplier/employee balance UI preview harness (?screen=customer|supplier|entry|refund|create|employee|loan).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/balances_preview.dart
 
 frontend-reports-preview: frontend-install ## Run the reports screen UI preview harness (any report via ?report=) as a local web server.

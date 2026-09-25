@@ -37703,6 +37703,270 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'قيد رصيد {number}'**
   String paymentsHubBalanceEntryValue(String number);
+
+  /// Direction hint: the employee owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ على الموظف للمحل — يُخصم من راتبه في مسير الرواتب القادم.'**
+  String get employeeBalanceTheyOweUsHint;
+
+  /// Direction hint: the shop owes the employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ مستحق للموظف على المحل — يُصرف مع راتبه في مسير الرواتب القادم.'**
+  String get employeeBalanceWeOweThemHint;
+
+  /// Label: per-payroll-run deduction cap on an employee's debt.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقصى خصم في كل مسير رواتب (اختياري)'**
+  String get balanceDeductionLimitLabel;
+
+  /// Helper under the deduction cap field.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا ليُخصم ما يتسع له الراتب.'**
+  String get balanceDeductionLimitHelper;
+
+  /// Validation: the deduction cap must be positive.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر أو اترك الحقل فارغًا.'**
+  String get balanceDeductionLimitInvalid;
+
+  /// Entry row: the per-run deduction cap.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم حتى {amount} في كل مسير'**
+  String balanceDeductionLimitValue(String amount);
+
+  /// Entry row: amount already on an unpaid payroll run.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُدرج في مسير رواتب لم يُصرف: {amount}'**
+  String balanceScheduledValue(String amount);
+
+  /// Button: pay an employee what the shop owes them, in cash.
+  ///
+  /// In ar, this message translates to:
+  /// **'صرف المستحقات نقدًا'**
+  String get employeePayOutButton;
+
+  /// Button: take in cash an employee owes.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحصيل من الموظف نقدًا'**
+  String get employeeCollectButton;
+
+  /// Dialog title: pay an employee in cash.
+  ///
+  /// In ar, this message translates to:
+  /// **'صرف مستحقات للموظف'**
+  String get employeePayOutTitle;
+
+  /// Dialog title: collect cash from an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحصيل مبلغ من الموظف'**
+  String get employeeCollectTitle;
+
+  /// Dialog hint: paying an employee in cash.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُصرف المبلغ نقدًا من درج ورديتك ويُخصم مما يستحقه الموظف، فلا يُصرف مرة أخرى مع راتبه. لا يمكن إلغاؤه بعد تسجيله.'**
+  String get employeePayOutHint;
+
+  /// Dialog hint: collecting cash from an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُستلم المبلغ نقدًا في درج ورديتك ويُخصم مما على الموظف، فلا يُخصم من راتبه مرة أخرى. لا يمكن إلغاؤه بعد تسجيله.'**
+  String get employeeCollectHint;
+
+  /// Snackbar after paying an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم صرف المبلغ للموظف.'**
+  String get employeePayOutSaved;
+
+  /// Snackbar after collecting from an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم استلام المبلغ من الموظف.'**
+  String get employeeCollectSaved;
+
+  /// Entry row title: cash paid to an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'صرف مستحقات نقدًا'**
+  String get balanceKindEmployeePaidOut;
+
+  /// Entry row title: cash taken in from an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحصيل نقدي من الموظف'**
+  String get balanceKindEmployeeCollected;
+
+  /// Section title: the employee's account balances.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب الموظف'**
+  String get employeeAccountTitle;
+
+  /// Metric: what the employee owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'على الموظف'**
+  String get employeeAccountOwedByLabel;
+
+  /// Metric: what the shop owes the employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق للموظف'**
+  String get employeeAccountOwedToLabel;
+
+  /// Line: what unpaid payroll runs already carry.
+  ///
+  /// In ar, this message translates to:
+  /// **'في مسير الرواتب القادم: خصم {deduction} وإضافة {payment}'**
+  String employeeAccountNextPayrollValue(String deduction, String payment);
+
+  /// Explains how the employee account is settled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما على الموظف يُخصم من راتبه، وما هو مستحق له يُصرف معه، تلقائيًا في مسير الرواتب القادم.'**
+  String get employeeAccountHint;
+
+  /// Tooltip: open the employee's account.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب الموظف'**
+  String get employeeAccountOpenTooltip;
+
+  /// Error reloading the employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحديث بيانات الموظف.'**
+  String get employeeAccountLoadError;
+
+  /// Employee row: both sides of the account.
+  ///
+  /// In ar, this message translates to:
+  /// **'على الموظف {owedBy} • مستحق له {owedTo}'**
+  String employeeAccountBalanceValue(String owedBy, String owedTo);
+
+  /// Payroll adjustment type: a balance on the employee's account.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد حساب الموظف'**
+  String get payrollAdjustmentAccountBalance;
+
+  /// Payroll adjustment note: the balance entry a row settles.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد {number}'**
+  String payrollAccountBalanceEntry(String number);
+
+  /// Loan approval: where the money comes from.
+  ///
+  /// In ar, this message translates to:
+  /// **'من أين يُصرف مبلغ السلفة؟'**
+  String get loanDisbursementSourceLabel;
+
+  /// Loan source: the approver's open drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'من درج ورديتي'**
+  String get loanSourceDrawer;
+
+  /// Loan source: the cash box.
+  ///
+  /// In ar, this message translates to:
+  /// **'من الخزينة نقدًا'**
+  String get loanSourceCashBox;
+
+  /// Loan source: a bank transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل مصرفي'**
+  String get loanSourceBank;
+
+  /// Loan source hint: drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُسجَّل سحبًا من درجك المفتوح ويظهر في تقرير الوردية.'**
+  String get loanSourceDrawerHint;
+
+  /// Loan source hint: cash box.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم من رصيد الخزينة النقدي.'**
+  String get loanSourceCashBoxHint;
+
+  /// Loan source hint: bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم من رصيد الحساب المصرفي المختار.'**
+  String get loanSourceBankHint;
+
+  /// Error: paying a loan from a drawer needs an open shift.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح وردية أولًا، أو اصرف السلفة من الخزينة.'**
+  String get loanApproveSessionRequiredError;
+
+  /// Error: no permission to pay out of a drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تملك صلاحية الصرف من الدرج. اصرفها من الخزينة أو بتحويل مصرفي.'**
+  String get loanApprovePermissionError;
+
+  /// Error: approving the loan failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر اعتماد السلفة. حاول مجددًا.'**
+  String get loanApproveError;
+
+  /// Loan pill: paid from a drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرفت من الدرج'**
+  String get loanDisbursedDrawerValue;
+
+  /// Loan pill: paid from the cash box.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرفت من الخزينة'**
+  String get loanDisbursedCashValue;
+
+  /// Loan pill: transferred from a bank account.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُوّلت من {bank}'**
+  String loanDisbursedBankValue(String bank);
+
+  /// Loan pill: transferred, bank not named.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُوّلت مصرفيًا'**
+  String get loanDisbursedBankDefault;
+
+  /// Treasury component: loans paid out to employees.
+  ///
+  /// In ar, this message translates to:
+  /// **'سلف الموظفين'**
+  String get treasuryComponentStaffLoans;
+
+  /// Entry dialog hint: an employee's opening balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما كان على الموظف أو له يوم بدء تسجيل حسابه هنا. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ولا يُحتسب ضمن تكلفة رواتب الفترة.'**
+  String get balanceEntryEmployeeOpeningHint;
+
+  /// Entry dialog hint: an employee balance adjustment.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ على الموظف أو له خارج مسير الرواتب — مكافأة، عجز، مصروف دفعه عن المحل. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ويُحتسب ضمن تكلفة الرواتب يوم تسجيله.'**
+  String get balanceEntryEmployeeAdjustmentHint;
 }
 
 class _AppLocalizationsDelegate

@@ -90,11 +90,13 @@ WIPED_MODELS = (
     "attendance.attendanceday",
     "attendance.attendanceprofile",
     "attendance.attendancepunch",
-    # balances — opening balances and adjustments on customers' and suppliers'
-    # accounts, and the record of which credit settled which debt. They belong
-    # to the parties this wipes.
+    # balances — opening balances and adjustments on customers', suppliers' and
+    # employees' accounts, and the record of which credit or cash settled which
+    # debt. They belong to the parties this wipes.
     "balances.customerbalanceentry",
     "balances.customercreditapplication",
+    "balances.employeebalanceallocation",
+    "balances.employeebalanceentry",
     "balances.supplierbalanceentry",
     # catalog — the products themselves, their variants, units, barcodes,
     # aliases, recipes and modifier sets. The unit-of-measure and variant-option

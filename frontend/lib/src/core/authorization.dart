@@ -69,6 +69,12 @@ enum AppCapability {
   viewSupplierBalances,
   manageSupplierBalances,
   cancelSupplierBalances,
+
+  /// An employee's account: what they owe the shop and what it owes them,
+  /// settled by the next payroll run.
+  viewEmployeeBalances,
+  manageEmployeeBalances,
+  cancelEmployeeBalances,
   collectCustomerDebt,
   checkoutSale,
   startRegisterSession,
@@ -654,6 +660,28 @@ class AuthorizationCapabilities {
         capabilities
           ..add(AppCapability.viewSupplierBalances)
           ..add(AppCapability.cancelSupplierBalances);
+      }
+      if (_hasAny(user, const [
+        'view_employeebalanceentry',
+        'balances.view_employeebalanceentry',
+      ])) {
+        capabilities.add(AppCapability.viewEmployeeBalances);
+      }
+      if (_hasAny(user, const [
+        'add_employeebalanceentry',
+        'balances.add_employeebalanceentry',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewEmployeeBalances)
+          ..add(AppCapability.manageEmployeeBalances);
+      }
+      if (_hasAny(user, const [
+        'cancel_employeebalanceentry',
+        'balances.cancel_employeebalanceentry',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewEmployeeBalances)
+          ..add(AppCapability.cancelEmployeeBalances);
       }
       if (_hasAny(user, const [
         'view_registersession',
@@ -1312,6 +1340,12 @@ class AuthorizationCapabilities {
       allows(AppCapability.manageSupplierBalances);
   bool get canCancelSupplierBalances =>
       allows(AppCapability.cancelSupplierBalances);
+  bool get canViewEmployeeBalances =>
+      allows(AppCapability.viewEmployeeBalances);
+  bool get canManageEmployeeBalances =>
+      allows(AppCapability.manageEmployeeBalances);
+  bool get canCancelEmployeeBalances =>
+      allows(AppCapability.cancelEmployeeBalances);
   bool get canCheckoutSale => allows(AppCapability.checkoutSale);
   bool get canStartRegisterSession =>
       allows(AppCapability.startRegisterSession);

@@ -86,7 +86,7 @@ void main() {
     // A refund is cash that changed hands: its row names the kind alone.
     expect(find.text('رد مبلغ نقدًا'), findsOneWidget);
     // Nothing credit-side is refundable here.
-    expect(find.byKey(const ValueKey('balance_refund_button')), findsNothing);
+    expect(find.byKey(const ValueKey('balance_pay_out_button')), findsNothing);
   });
 
   testWidgets('a read-only user sees the list and nothing to press', (
@@ -111,7 +111,7 @@ void main() {
       find.byKey(const ValueKey('add_balance_adjustment_button')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('balance_refund_button')), findsNothing);
+    expect(find.byKey(const ValueKey('balance_pay_out_button')), findsNothing);
     expect(find.byKey(const ValueKey('cancel_balance_entry_2')), findsNothing);
   });
 
@@ -209,7 +209,7 @@ void main() {
       onChanged: () async => refreshed += 1,
     );
 
-    await tester.tap(find.byKey(const ValueKey('balance_refund_button')));
+    await tester.tap(find.byKey(const ValueKey('balance_pay_out_button')));
     await tester.pumpAndSettle();
 
     // Prefilled with everything that can be refunded.
@@ -257,7 +257,7 @@ void main() {
     );
 
     expect(find.text('استلام المبلغ من المورد'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('balance_refund_button')));
+    await tester.tap(find.byKey(const ValueKey('balance_take_in_button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('balance_refund_confirm')));
     await tester.pumpAndSettle();
@@ -387,8 +387,11 @@ Future<void> _pumpSection(
             partyId: 7,
             canManage: canManage,
             canCancel: canCancel,
-            canRefund: canRefund,
-            refundableAmount: refundableAmount,
+            canSettleInCash: canRefund,
+            cashPayable: party == BalanceParty.supplier ? 0 : refundableAmount,
+            cashCollectable: party == BalanceParty.supplier
+                ? refundableAmount
+                : 0,
             onChanged: onChanged,
           ),
         ),
@@ -412,6 +415,7 @@ class _FakeBalanceRepository extends ContactRepository {
   final List<BalanceEntryDraft> createdDrafts = [];
   final List<String?> createKeys = [];
   final List<(double, String)> refunds = [];
+  BalanceDirection? lastSettles;
   final List<(int, String)> cancelled = [];
 
   @override
@@ -455,8 +459,10 @@ class _FakeBalanceRepository extends ContactRepository {
     required int partyId,
     required double amount,
     String note = '',
+    BalanceDirection? settles,
     String? idempotencyKey,
   }) async {
+    lastSettles = settles;
     final failure = refundFailure;
     if (failure != null) {
       return Error(failure is Exception ? failure : Exception('$failure'));

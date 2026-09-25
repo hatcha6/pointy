@@ -174,10 +174,10 @@ class CustomerDetailsView extends StatelessWidget {
                   canCancel: capabilities!.canCancelCustomerBalances,
                   // The cash leaves a drawer, so it takes the drawer's own
                   // pay-out right as well.
-                  canRefund:
+                  canSettleInCash:
                       capabilities!.canManageCustomerBalances &&
                       capabilities!.canCreateRegisterCashMovement,
-                  refundableAmount: viewModel.creditBalance,
+                  cashPayable: viewModel.creditBalance,
                   // An entry moves what the customer owes and the credit they
                   // hold; the callouts above read the server's figures again.
                   onChanged: viewModel.loadSummary,

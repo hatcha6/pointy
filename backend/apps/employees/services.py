@@ -30,6 +30,24 @@ from .staff_purchases import (
     settle_staff_purchases,
 )
 
+#: Adjustments a run derives from what the employee owes or is owed, never
+#: taken from a client: an echoed row would come back without the invoice or
+#: the balance entry it settles.
+DERIVED_ADJUSTMENT_TYPES = (
+    PayrollAdjustment.AdjustmentType.STAFF_PURCHASE,
+    PayrollAdjustment.AdjustmentType.ACCOUNT_BALANCE,
+)
+
+
+def refresh_derived_adjustments(payroll_run):
+    """Re-derive everything a draft run pays or deducts for the employees'
+    accounts: their balances first, then their staff purchases out of what
+    that leaves. Returns the run, re-read with its new totals."""
+    from apps.balances.employees import refresh_payroll_balance_adjustments
+
+    refresh_payroll_balance_adjustments(payroll_run)
+    return refresh_staff_purchase_deductions(payroll_run)
+
 
 MONEY_PLACES = Decimal("0.01")
 
@@ -118,15 +136,13 @@ def save_payroll_run_with_lines(
                 [
                     PayrollAdjustment(payroll_line=line, **adjustment)
                     for adjustment in adjustments_data
-                    # Derived from the invoices below, never taken from the
-                    # client: an echoed row would come back without its invoice.
-                    if adjustment.get("adjustment_type")
-                    != PayrollAdjustment.AdjustmentType.STAFF_PURCHASE
+                    # Derived below, never taken from the client.
+                    if adjustment.get("adjustment_type") not in DERIVED_ADJUSTMENT_TYPES
                 ]
             )
             line.recalculate(save=True)
-        # Re-derives the staff purchases and recalculates the whole run.
-        payroll_run = refresh_staff_purchase_deductions(payroll_run)
+        # Re-derives the balances and staff purchases and recalculates the run.
+        payroll_run = refresh_derived_adjustments(payroll_run)
     else:
         payroll_run.recalculate(save_lines=True)
         payroll_run.save(
@@ -228,9 +244,9 @@ def draft_monthly_payroll_run(
             )
         line.recalculate(save=True)
 
-    # Last, so staff purchases take only what the salary, commission and loan
-    # instalments leave. It recalculates the run's totals as well.
-    payroll_run = refresh_staff_purchase_deductions(payroll_run)
+    # Last, so what the staff owe takes only what the salary, commission and
+    # loan instalments leave. It recalculates the run's totals as well.
+    payroll_run = refresh_derived_adjustments(payroll_run)
     record_employee_event(
         name="employees.payroll_run.monthly_draft_created",
         user=employee_created_by(request),
@@ -495,11 +511,12 @@ def approve_payroll_run(payroll_run, *, request=None):
         raise serializers.ValidationError(
             {"lines": "Payroll run must include at least one employee."}
         )
-    # What the staff owe is taken as it stands now, not as it stood when the
-    # draft was made: an invoice settled at the till since drops out, and one
-    # bought since comes in. From here the run is fixed until it is paid. This
-    # is also the recalculation of every line that approving has always done.
-    payroll_run = refresh_staff_purchase_deductions(payroll_run)
+    # What the staff owe, and are owed, is taken as it stands now, not as it
+    # stood when the draft was made: an invoice settled at the till since drops
+    # out, and one bought since comes in; so does a balance entered or settled
+    # in cash since. From here the run is fixed until it is paid. This is also
+    # the recalculation of every line that approving has always done.
+    payroll_run = refresh_derived_adjustments(payroll_run)
     payroll_run.approved_at = timezone.now()
     payroll_run.approved_by = employee_created_by(request)
     payroll_run.save(
@@ -557,8 +574,11 @@ def mark_payroll_run_paid(payroll_run, *, payment_date=None, request=None):
         ]
     )
     # Before submitting: settling may shrink a deduction whose invoice was paid
-    # off at the till since approval, and the run's totals must be final
-    # before they freeze.
+    # off at the till since approval — or a balance settled in cash since — and
+    # the run's totals must be final before they freeze.
+    from apps.balances.employees import settle_payroll_balance_adjustments
+
+    payroll_run = settle_payroll_balance_adjustments(payroll_run)
     payroll_run = settle_staff_purchases(
         payroll_run, actor=employee_created_by(request)
     )
@@ -710,17 +730,72 @@ def request_employee_loan(*, user, amount, monthly_deduction, purpose=""):
 
 
 @transaction.atomic
-def approve_employee_loan(loan, *, request=None, review_notes=""):
+def approve_employee_loan(
+    loan,
+    *,
+    request=None,
+    review_notes="",
+    disbursement_method=EmployeeLoan.DisbursementMethod.CASH,
+    money_account=None,
+    pay_from_register=False,
+):
+    """Approve a loan, and record the money handed over for it.
+
+    Approving is handing it over — the loan is owed to the shop from this
+    moment, so the money has left it from this moment too. It leaves in cash
+    (the approver's own drawer when ``pay_from_register``, the cash box
+    otherwise) or by transfer from a bank account; the money position, the
+    drawer count and the balance sheet all read it from here. Before this, an
+    approved loan appeared on the balance sheet as owed to the shop while the
+    cash that paid it was still counted in the box.
+    """
     loan = EmployeeLoan.objects.select_for_update().get(pk=loan.pk)
     if loan.status != EmployeeLoan.Status.REQUESTED:
         raise serializers.ValidationError(
             {"detail": "Only requested loans can be approved."}
         )
+    actor = employee_created_by(request)
+    disbursement_method = disbursement_method or EmployeeLoan.DisbursementMethod.CASH
+    if disbursement_method not in EmployeeLoan.DisbursementMethod.values:
+        raise serializers.ValidationError(
+            {"disbursement_method": "Choose cash or a bank transfer."}
+        )
+    if disbursement_method == EmployeeLoan.DisbursementMethod.CASH:
+        if money_account is not None:
+            # Cash is attributed to the cash box, the way every cash event is.
+            raise serializers.ValidationError(
+                {"money_account": "Only a bank transfer names an account."}
+            )
+    else:
+        if pay_from_register:
+            raise serializers.ValidationError(
+                {"pay_from_register": "Only cash is paid from a drawer."}
+            )
+        from apps.payments.serializers import validate_bank_money_account
+
+        validate_bank_money_account(money_account, "transfer")
+    now = timezone.now()
+    assert_period_open(
+        timezone.localdate(),
+        user=actor,
+        entity_type="employee_loan",
+        entity_id=loan.pk,
+        action="employees.loan.disburse",
+    )
+    movement = None
+    if pay_from_register:
+        movement = _loan_drawer_payout(loan, actor=actor)
+
     loan.status = EmployeeLoan.Status.APPROVED
     loan.outstanding_balance = loan.amount
-    loan.reviewed_by = employee_created_by(request)
-    loan.reviewed_at = timezone.now()
+    loan.reviewed_by = actor
+    loan.reviewed_at = now
     loan.review_notes = review_notes
+    loan.disbursed_at = now
+    loan.disbursed_by = actor
+    loan.disbursement_method = disbursement_method
+    loan.money_account = money_account
+    loan.cash_movement = movement
     loan.full_clean()
     loan.save(
         update_fields=[
@@ -729,6 +804,11 @@ def approve_employee_loan(loan, *, request=None, review_notes=""):
             "reviewed_by",
             "reviewed_at",
             "review_notes",
+            "disbursed_at",
+            "disbursed_by",
+            "disbursement_method",
+            "money_account",
+            "cash_movement",
             "updated_at",
         ]
     )
@@ -737,13 +817,51 @@ def approve_employee_loan(loan, *, request=None, review_notes=""):
         user=employee_created_by(request),
         entity_type="employee_loan",
         entity_id=loan.pk,
-        attributes={"employee": loan.employee_id, "status": loan.status},
+        attributes={
+            "employee": loan.employee_id,
+            "status": loan.status,
+            "disbursement_method": loan.disbursement_method,
+            "from_register": loan.cash_movement_id is not None,
+        },
         metrics={
             "amount": float(loan.amount),
             "monthly_deduction": float(loan.monthly_deduction),
         },
     )
     return loan
+
+
+def _loan_drawer_payout(loan, *, actor):
+    """The loan's cash leaving the approver's own open drawer.
+
+    Their own, never someone else's: the drawer it leaves is the one whose
+    count will be short by it. Taking cash out of a drawer is its own right,
+    the one every drawer pay-out asks for.
+    """
+    from rest_framework.exceptions import PermissionDenied
+
+    from apps.sales.models import RegisterCashMovement, RegisterSession
+
+    if actor is None or not actor.has_perm("sales.add_registercashmovement"):
+        raise PermissionDenied("You do not have permission to pay out of a drawer.")
+    session = RegisterSession.open_for(actor)
+    if session is None:
+        raise serializers.ValidationError(
+            {
+                "code": "register_session_required",
+                "detail": (
+                    "Cash moves through a drawer. Open a register session, or "
+                    "pay the loan from the cash box."
+                ),
+            }
+        )
+    return RegisterCashMovement.objects.create(
+        register_session=session,
+        movement_type=RegisterCashMovement.MovementType.PAY_OUT,
+        amount=loan.amount,
+        reason=f"سلفة للموظف {loan.employee.display_name}",
+        created_by=actor,
+    )
 
 
 @transaction.atomic

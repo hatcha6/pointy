@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/balance_entry.dart';
 import '../../../data/models/employee.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../shared/async_selection/async_selection.dart';
+import '../../../shared/balance_labels.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/opening_balance_fields.dart';
 import '../view_models/employee_payroll_view_model.dart';
 import 'payroll_labels.dart';
 
@@ -18,11 +21,16 @@ class CreateEmployeeForm extends StatefulWidget {
     required this.viewModel,
     required this.userRepository,
     required this.onCreated,
+    this.allowOpeningBalance = false,
   });
 
   final EmployeePayrollViewModel viewModel;
   final UserRepository userRepository;
   final VoidCallback onCreated;
+
+  /// Offers the balance the employee arrives with — only to a user who may
+  /// write one; the server checks again.
+  final bool allowOpeningBalance;
 
   @override
   State<CreateEmployeeForm> createState() => _CreateEmployeeFormState();
@@ -36,6 +44,9 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
   DateTime _hireDate = DateTime.now();
   EmploymentType _employmentType = EmploymentType.fullTime;
   AsyncSelectionOption<int>? _selectedUser;
+  final _openingFormKey = GlobalKey<FormState>();
+  final _openingBalance = OpeningBalanceController();
+  String? _openingError;
 
   @override
   void dispose() {
@@ -43,6 +54,7 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
     _jobController.dispose();
     _departmentController.dispose();
     _phoneController.dispose();
+    _openingBalance.dispose();
     super.dispose();
   }
 
@@ -111,6 +123,17 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
             }
           },
         ),
+        if (widget.allowOpeningBalance)
+          Form(
+            key: _openingFormKey,
+            child: OpeningBalanceFields(
+              controller: _openingBalance,
+              party: BalanceParty.employee,
+              enabled: !widget.viewModel.isSaving,
+            ),
+          ),
+        if (_openingError != null)
+          PointyInlineMessage.error(message: _openingError!),
         FilledButton.icon(
           onPressed: widget.viewModel.isSaving ? null : _submit,
           icon: const Icon(Icons.save_outlined),
@@ -121,10 +144,18 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       return;
     }
+    if (widget.allowOpeningBalance &&
+        _openingBalance.enabled &&
+        !(_openingFormKey.currentState?.validate() ?? true)) {
+      return;
+    }
+    setState(() => _openingError = null);
+    final opening = widget.allowOpeningBalance ? _openingBalance.draft : null;
     final saved = await widget.viewModel.createEmployee(
       EmployeeDraft(
         fullName: name,
@@ -134,10 +165,29 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
         hireDate: dateIso(_hireDate),
         employmentType: _employmentType,
         userId: _selectedUser?.id,
+        openingBalance: opening,
       ),
     );
-    if (saved && mounted) {
+    if (!mounted) {
+      return;
+    }
+    if (saved) {
       widget.onCreated();
+      return;
+    }
+    if (opening != null) {
+      // The employee and their balance are written together, so a refused
+      // balance refuses both — say which part to fix.
+      final failure = classifyBalanceFailure(widget.viewModel.lastCreateError);
+      if (failure != BalanceFailure.generic) {
+        setState(() {
+          _openingError = balanceFailureMessage(
+            l10n,
+            failure,
+            fallback: l10n.employeePayrollSaveError,
+          );
+        });
+      }
     }
   }
 

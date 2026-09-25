@@ -36,11 +36,12 @@ from .models import MoneyAccount, MoneyTransfer
 from .movements import account_movements
 from .position import treasury_position
 
-# Three aggregates per bank account: sales+commission in one pass over
-# ``Payment``, supplier payments, and expenses. Consignor payouts and payroll
-# carry no account, so they stay with the default and are not paid for again
-# per account.
-QUERIES_PER_BANK_ACCOUNT = 3
+# Four aggregates per bank account: sales+commission in one pass over
+# ``Payment``, supplier payments, expenses, and employee loans paid by transfer
+# (which name their account, like the other three). Consignor payouts and
+# payroll carry no account, so they stay with the default and are not paid for
+# again per account.
+QUERIES_PER_BANK_ACCOUNT = 4
 
 BASE_ROWS = 6
 
@@ -139,8 +140,9 @@ class TreasuryQueryScalingTests(TestCase):
         different months cannot share a range — so the guard is no longer "flat"
         but "a small constant per account, and never a query per ROW".
 
-        Three is the budget: the payments aggregate (sales and commission in
-        one pass), the supplier-payments aggregate and the expenses aggregate.
+        Four is the budget: the payments aggregate (sales and commission in
+        one pass), the supplier-payments aggregate, the expenses aggregate and
+        the aggregate of employee loans transferred from the account.
         Anything more means a per-account lookup crept back in — a
         ``select_related`` that was dropped, or a last-count fetch that stopped
         being batched.
@@ -152,7 +154,7 @@ class TreasuryQueryScalingTests(TestCase):
         self.assertEqual(
             self._position_queries(),
             baseline + 4 * QUERIES_PER_BANK_ACCOUNT,
-            "A bank account costs more than its two aggregates — something is "
+            "A bank account costs more than its own aggregates — something is "
             "being looked up per account instead of batched across them.",
         )
 

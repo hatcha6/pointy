@@ -1,5 +1,8 @@
 """What the staff cost, and what was paid to whom."""
 
+from decimal import Decimal
+
+from apps.balances.employees import balances_as_of_by_employee
 from apps.employees.models import Employee, PayrollLine
 from apps.employees.reporting import (
     payroll_cost,
@@ -17,6 +20,8 @@ from ..sections import (
     report_section,
 )
 from .scope import money_sum
+
+ZERO = Decimal("0.00")
 
 
 def payroll_summary(context):
@@ -69,6 +74,12 @@ def payroll_summary(context):
     # reported as the same one under two names, and the definitions now live in
     # apps.employees.reporting so this report and the profit report cannot
     # disagree about either.
+    # What is on the staff's accounts at the period's close (``apps.balances``)
+    # — owed to the shop, and owed by it — each side on its own: the next run
+    # deducts the one and pays the other, so a net figure would hide both.
+    balances = balances_as_of_by_employee(end)
+    owed_by_staff = sum((row[0] for row in balances.values()), ZERO)
+    owed_to_staff = sum((row[1] for row in balances.values()), ZERO)
     figures = {
         "salary_expense": money(payroll_cost(start, end)),
         "paid_total": money(payroll_paid(start, end)),
@@ -77,7 +88,26 @@ def payroll_summary(context):
         "active_employee_count": Employee.objects.filter(
             status=Employee.Status.ACTIVE
         ).count(),
+        "staff_owe_total": money(owed_by_staff),
+        "owed_to_staff_total": money(owed_to_staff),
     }
+    names = dict(
+        Employee.objects.filter(pk__in=balances.keys()).values_list(
+            "pk", "full_name"
+        )
+    )
+    balance_rows = sorted(
+        (
+            {
+                "employee_name": names.get(employee_id, ""),
+                "owed_by_employee": money(owed_by),
+                "owed_to_employee": money(owed_to),
+            }
+            for employee_id, (owed_by, owed_to) in balances.items()
+        ),
+        key=lambda row: row["employee_name"],
+    )
+    balance_limit = context.row_limit("employee_account_balances")
     return {
         "summary": figures,
         "sections": [
@@ -111,10 +141,22 @@ def payroll_summary(context):
                 total_count=bounded_employees.total_count,
                 limit=bounded_employees.limit,
             ),
+            report_section(
+                "employee_account_balances",
+                [
+                    Column("employee_name"),
+                    Column("owed_by_employee", ColumnType.MONEY, total=True),
+                    Column("owed_to_employee", ColumnType.MONEY, total=True),
+                ],
+                balance_rows[:balance_limit],
+                total_count=len(balance_rows),
+                limit=balance_limit,
+            ),
         ],
         "notes": [
             note("payroll_cost_vs_paid"),
             note("payroll_period_overlap"),
+            *([note("payroll_account_balances")] if balances else []),
         ],
     }
 

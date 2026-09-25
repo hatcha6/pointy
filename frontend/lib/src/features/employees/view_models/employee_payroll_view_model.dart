@@ -39,6 +39,37 @@ class EmployeePayrollViewModel extends ChangeNotifier {
   int _nextLoanPage = 1;
 
   List<Employee> get employees => List.unmodifiable(_employees);
+
+  /// The loaded employee with this id, if any.
+  Employee? employeeById(int id) {
+    for (final employee in _employees) {
+      if (employee.id == id) {
+        return employee;
+      }
+    }
+    return null;
+  }
+
+  /// Reads one employee again — their account balance moves with every entry
+  /// and every paid run — and puts the fresh copy in the list.
+  Future<Employee?> refreshEmployee(int id) async {
+    final result = await _repository.loadEmployee(id);
+    switch (result) {
+      case Ok<Employee>(value: final employee):
+        _employees = [
+          for (final existing in _employees)
+            if (existing.id == employee.id) employee else existing,
+        ];
+        if (!_employees.any((existing) => existing.id == employee.id)) {
+          _employees = [employee, ..._employees];
+        }
+        notifyListeners();
+        return employee;
+      case Error<Employee>():
+        return null;
+    }
+  }
+
   List<PayrollRun> get payrollRuns => List.unmodifiable(_payrollRuns);
   List<EmployeeLoan> get loans => List.unmodifiable(_loans);
   bool get isLoadingEmployees => _isLoadingEmployees;
@@ -208,7 +239,13 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Why the last employee create was refused — the form names an opening
+  /// balance the server turned down rather than showing a generic failure.
+  Exception? get lastCreateError => _lastCreateError;
+  Exception? _lastCreateError;
+
   Future<bool> createEmployee(EmployeeDraft draft) async {
+    _lastCreateError = null;
     return _save(() async {
       final result = await _repository.createEmployee(draft);
       switch (result) {
@@ -221,7 +258,8 @@ class EmployeePayrollViewModel extends ChangeNotifier {
             {'status': employee.status.toJson()},
           );
           return true;
-        case Error<Employee>():
+        case Error<Employee>(:final exception):
+          _lastCreateError = exception;
           return false;
       }
     });
@@ -315,12 +353,24 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     }, eventName: 'employees.management.payroll_run.paid');
   }
 
-  Future<bool> approveLoan(EmployeeLoan loan) {
-    return _updateLoan(
-      loan,
-      () => _repository.approveEmployeeLoan(loan.id),
-      eventName: 'employees.management.loan.approved',
-    );
+  /// Approves [loan] and records where its money came from. Returns null on
+  /// success, or the refusal — the approval dialog says it back.
+  Future<Exception?> approveLoan(
+    EmployeeLoan loan, {
+    LoanDisbursement disbursement = LoanDisbursement.cashBox,
+  }) async {
+    Exception? failure;
+    await _updateLoan(loan, () async {
+      final result = await _repository.approveEmployeeLoan(
+        loan.id,
+        disbursement: disbursement,
+      );
+      if (result case Error<EmployeeLoan>(:final exception)) {
+        failure = exception;
+      }
+      return result;
+    }, eventName: 'employees.management.loan.approved');
+    return failure;
   }
 
   Future<bool> rejectLoan(EmployeeLoan loan) {
