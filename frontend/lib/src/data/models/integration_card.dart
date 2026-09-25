@@ -416,6 +416,8 @@ class IntegrationPurchaseEntry {
     this.packageName = '',
     this.operatorName = '',
     this.isOurs = false,
+    this.amount,
+    this.status = '',
   });
 
   final String reference;
@@ -423,6 +425,15 @@ class IntegrationPurchaseEntry {
   final int months;
   final DateTime? at;
   final String packageName;
+
+  /// Stored value only (LNET): what the customer paid onto the line. A
+  /// cashier reads a line's history in the 45 handed over, not the 42.75 the
+  /// agency float was charged, so this is shown in place of [cost].
+  final double? amount;
+
+  /// The provider's own state for it (`verified`, `cancelled`…); blank where
+  /// its log keeps none.
+  final String status;
 
   /// The agency that sold it — often not this shop.
   final String operatorName;
@@ -440,6 +451,8 @@ class IntegrationPurchaseEntry {
       packageName: json['package_name']?.toString() ?? '',
       operatorName: json['operator_name']?.toString() ?? '',
       isOurs: json['is_ours'] == true,
+      amount: _toDouble(json['amount']),
+      status: json['status']?.toString() ?? '',
     );
   }
 }

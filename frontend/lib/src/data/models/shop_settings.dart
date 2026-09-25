@@ -74,6 +74,7 @@ class ShopSettings {
     this.enablePurchaseSuggestions = true,
     this.connectedIntegrations = const [],
     this.lookupIntegrations,
+    this.paymentReportIntegrations = const [],
     this.enableSurveillance = false,
     this.surveillancePreRollSeconds = 20,
     this.surveillancePostRollSeconds = 40,
@@ -200,6 +201,12 @@ class ShopSettings {
   /// What the till's top-up button offers.
   List<String> get tillRechargeIntegrations =>
       lookupIntegrations ?? connectedIntegrations;
+
+  /// The connected providers that keep an account-wide payments report
+  /// (LNET), so a top-up somebody did on their website can be found and
+  /// recorded as the sale it was. Empty from a backend that predates it —
+  /// which could not record one either.
+  final List<String> paymentReportIntegrations;
 
   /// Whether the shop resells anything at all — what hides the till's top-up
   /// button in a shop that does not.
@@ -385,6 +392,10 @@ class ShopSettings {
                 .map((value) => value.toString())
                 .toList(growable: false)
           : null,
+      paymentReportIntegrations:
+          (json['payment_report_integrations'] as List<Object?>? ?? const [])
+              .map((value) => value.toString())
+              .toList(growable: false),
       enableSurveillance: _boolFromJson(json['enable_surveillance'], false),
       surveillancePreRollSeconds: _intFromJson(
         json['surveillance_pre_roll_seconds'],

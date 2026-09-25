@@ -94,6 +94,13 @@ PERMISSION_CATALOG = [
             _perm("sales.add_registersession", "فتح ورديات الصندوق", "بدء واستئناف ورديات الصندوق."),
             _perm("sales.change_registersession", "إغلاق ورديات الصندوق", "إغلاق الورديات وتسويتها."),
             _perm("sales.add_registercashmovement", "حركات نقدية للصندوق", "تسجيل إيداع وسحب نقدي من الصندوق."),
+            # Writes a sale into another cashier's open shift, which is why it
+            # is a manager's by default and granted to anyone else only here.
+            _perm(
+                "integrations.record_portal_payment",
+                "تسجيل شحنات موقع المزوّد كمبيعات",
+                "تحويل شحنات تمّت على موقع المزوّد (مثل LNET) إلى فواتير في وردية صندوق مفتوحة.",
+            ),
         ],
     },
     {

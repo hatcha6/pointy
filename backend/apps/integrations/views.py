@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 from apps.core.permissions import HasPointyPermission
 
 from . import catalog
+from . import payment_report
 from . import recharge
 from .models import IntegrationAccount, IntegrationFulfillment, IntegrationSearch
 from .providers import provider_for
@@ -614,7 +615,15 @@ class IntegrationHistoryView(APIView):
             entries = [status_payload(entry) for entry in result.statuses]
         else:
             kind = "purchases"
-            result = driver.purchase_history(card_no, limit=limit, offset=offset)
+            if payment_report.supports_payment_report(account):
+                # The provider keeps ONE report for the whole agency, ten rows
+                # a page, so a line's history is not something it can page
+                # for us: the report is mirrored, and the line read from that.
+                result = payment_report.line_history(
+                    account, card_no, limit=limit, offset=offset
+                )
+            else:
+                result = driver.purchase_history(card_no, limit=limit, offset=offset)
             entries = [purchase_payload(entry) for entry in result.purchases]
 
         return Response(

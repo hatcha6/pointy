@@ -41,7 +41,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .fulfillment import fulfillment_kind
-from .models import IntegrationAccount, IntegrationFulfillment
+from .models import IntegrationAccount, IntegrationFulfillment, ProviderPayment
 from .providers import provider_for
 from .services import probe_account
 
@@ -244,9 +244,13 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
                 entry = _best_match(row, ours, claimed, window=_voucher_window(row))
 
             if entry is not None:
-                _confirm(row, entry, now=now)
                 claimed.add(entry.reference)
-                settled["confirmed"] += 1
+                if _confirm(row, entry, now=now):
+                    settled["confirmed"] += 1
+                    continue
+                # Another sale holds that payment now. Two sales, one
+                # payment: nothing a sweep may settle — a person must look.
+                settled["unknown"].append(_fulfillment_brief(row))
                 continue
 
             if not row.provider_reference and history.covers(row.submitted_at):
@@ -270,9 +274,32 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
     return settled
 
 
-def _confirm(row, entry, *, now) -> None:
-    """Write a provider entry onto a fulfillment as proof it was performed."""
+def _confirm(row, entry, *, now) -> bool:
+    """Write a provider entry onto a fulfillment as proof it was performed.
+
+    Returns ``False``, writing nothing, when some other live fulfillment
+    already holds the entry's reference. The ``claimed`` sets the callers keep
+    are read once per card and cannot see a claim made since — a manager
+    recording that very payment as a sale from the payments report
+    (:mod:`apps.integrations.portal_sales`), say. So the check is made again
+    here, under the same report-row lock that path takes: whichever of the
+    two gets there second finds the other's claim and stands down, and one
+    payment can never settle two sales.
+    """
     with transaction.atomic():
+        ProviderPayment.objects.select_for_update().filter(
+            account_id=row.account_id, reference=entry.reference
+        ).first()
+        taken = (
+            IntegrationFulfillment.objects.filter(
+                account_id=row.account_id, provider_reference=entry.reference
+            )
+            .exclude(pk=row.pk)
+            .exclude(status=IntegrationFulfillment.Status.CANCELLED)
+            .exists()
+        )
+        if taken:
+            return False
         row.status = IntegrationFulfillment.Status.CONFIRMED
         row.provider_reference = entry.reference[:64]
         row.confirmed_at = entry.at or now
@@ -301,6 +328,7 @@ def _confirm(row, entry, *, now) -> None:
                 "updated_at",
             ]
         )
+    return True
 
 
 def _match_card(rows, purchases, *, since, now) -> tuple[int, list]:
@@ -323,12 +351,16 @@ def _match_card(rows, purchases, *, since, now) -> tuple[int, list]:
 
     confirmed = 0
     for row in rows:
-        candidate = _best_match(row, ours, claimed)
-        if candidate is None:
-            continue
-        _confirm(row, candidate, now=now)
-        claimed.add(candidate.reference)
-        confirmed += 1
+        while True:
+            candidate = _best_match(row, ours, claimed)
+            if candidate is None:
+                break
+            claimed.add(candidate.reference)
+            # False when somebody claimed it since ``claimed`` was read; the
+            # next candidate, if any, is still this sale's to have.
+            if _confirm(row, candidate, now=now):
+                confirmed += 1
+                break
 
     off_book = [
         {

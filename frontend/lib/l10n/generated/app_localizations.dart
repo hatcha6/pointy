@@ -36569,6 +36569,522 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'كرت يُزامَن من المزوّد تلقائياً: الاسم والفئات والأسعار والتوفّر كلها من المزوّد، ولا يمكن لأحد تعديله.'**
   String get systemProductVoucherNotice;
+
+  /// Website payments screen: title. provider = LNET.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحنات موقع {provider}'**
+  String portalPaymentsTitle(String provider);
+
+  /// Register sessions app bar: opens the provider-website payments screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحنات موقع {provider}'**
+  String portalPaymentsOpenAction(String provider);
+
+  /// Website payments screen: one-paragraph explanation at the top.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحنات تمّت على موقع {provider} مباشرة ولم تُسجَّل في النظام. سجّل كلاً منها كفاتورة في الوردية التي استلمت نقودها، فيتطابق الصندوق ويُخصم رصيد {provider} مرة واحدة.'**
+  String portalPaymentsIntro(String provider);
+
+  /// Website payments screen: date picker tooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار اليوم'**
+  String get portalPaymentsPickDateTooltip;
+
+  /// Website payments screen: the date chip when the chosen day is today.
+  ///
+  /// In ar, this message translates to:
+  /// **'اليوم'**
+  String get portalPaymentsToday;
+
+  /// Website payments screen: when the provider's report was last read.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر قراءة من {provider}: {time}'**
+  String portalPaymentsReadAt(String provider, String time);
+
+  /// Website payments screen: the provider could not be read just now.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال بموقع {provider} الآن. هذه آخر شحنات قُرئت منه، وقد لا تكون كاملة.'**
+  String portalPaymentsReadFailed(String provider);
+
+  /// Website payments screen: the day is not known to be complete.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد لا تشمل القائمة كل شحنات هذا اليوم: لم يُقرأ تقرير {provider} حتى بدايته بعد.'**
+  String portalPaymentsIncomplete(String provider);
+
+  /// Website payments screen: summary count of unrecorded payments.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا شحنات غير مسجّلة} one{شحنة واحدة غير مسجّلة} two{شحنتان غير مسجّلتين} few{{count} شحنات غير مسجّلة} other{{count} شحنة غير مسجّلة}}'**
+  String portalPaymentsSummaryUnrecorded(int count);
+
+  /// Website payments screen: summary count of payments that may belong to a waiting sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{شحنة قد تخص فاتورة معلّقة} two{شحنتان قد تخصان فواتير معلّقة} few{{count} شحنات قد تخص فواتير معلّقة} other{{count} شحنة قد تخص فواتير معلّقة}}'**
+  String portalPaymentsSummaryPending(int count);
+
+  /// Website payments screen: filter showing only payments that still need an invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير المسجّلة'**
+  String get portalPaymentsFilterUnrecorded;
+
+  /// Website payments screen: filter showing every payment of the day.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get portalPaymentsFilterAll;
+
+  /// Website payments screen: empty state title (filter = unrecorded).
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد شحنات غير مسجّلة'**
+  String get portalPaymentsEmptyTitle;
+
+  /// Website payments screen: empty state body (filter = unrecorded).
+  ///
+  /// In ar, this message translates to:
+  /// **'كل شحنات هذا اليوم على موقع {provider} مسجّلة في النظام.'**
+  String portalPaymentsEmptyBody(String provider);
+
+  /// Website payments screen: empty state title (filter = all).
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد شحنات في هذا اليوم'**
+  String get portalPaymentsEmptyDayTitle;
+
+  /// Website payments screen: loading failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل شحنات الموقع'**
+  String get portalPaymentsLoadError;
+
+  /// Website payment state: a sale already accounts for it.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسجّلة'**
+  String get portalPaymentsStateRecorded;
+
+  /// Website payment state: it was recorded and the invoice was voided; may be recorded again.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغيت فاتورتها'**
+  String get portalPaymentsStateReleased;
+
+  /// Website payment state: a sale waiting for its top-up could be this payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد تخص فاتورة معلّقة'**
+  String get portalPaymentsStatePendingSale;
+
+  /// Website payment state: a finished payment with no sale behind it.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مسجّلة'**
+  String get portalPaymentsStateUnrecorded;
+
+  /// Website payment state: the provider does not call it done.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مكتملة لدى المزوّد'**
+  String get portalPaymentsStateNotVerified;
+
+  /// Website payment state: made by another login under the agency.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحساب آخر'**
+  String get portalPaymentsStateOtherOperator;
+
+  /// Website payment state: not a plain top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مدعومة'**
+  String get portalPaymentsStateUnsupported;
+
+  /// Website payment state: a code this build does not know.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معروفة'**
+  String get portalPaymentsStateUnknown;
+
+  /// Provider payment status: pending.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد الإتمام'**
+  String get portalPaymentsProviderStatusPending;
+
+  /// Provider payment status: cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get portalPaymentsProviderStatusCancelled;
+
+  /// Provider payment status: a cancellation was requested.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلب إلغاء'**
+  String get portalPaymentsProviderStatusCancelRequest;
+
+  /// Provider payment status: a cancellation was refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء مرفوض'**
+  String get portalPaymentsProviderStatusRejected;
+
+  /// Provider payment status: verified.
+  ///
+  /// In ar, this message translates to:
+  /// **'مؤكدة'**
+  String get portalPaymentsProviderStatusVerified;
+
+  /// Website payment row: the invoice that accounts for it, and whose drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {receipt} · {cashier}'**
+  String portalPaymentsRecordedIn(String receipt, String cashier);
+
+  /// Website payment: why a non-verified payment cannot be recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يعدّ المزوّد هذه الشحنة مكتملة ({status})، لذلك لا تُسجَّل كبيع.'**
+  String portalPaymentsWhyNotVerified(String status);
+
+  /// Website payment: why another login's payment cannot be recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمّت هذه الشحنة بحساب آخر ({operator})، وقد لا يكون رصيده رصيد هذا المحل، لذلك لا تُسجَّل من هنا.'**
+  String portalPaymentsWhyOtherOperator(String operator);
+
+  /// Website payment: why an unusual payment cannot be recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه ليست شحنة رصيد عادية (مثل بيانات إضافية)، لذلك لا تُسجَّل من هنا.'**
+  String get portalPaymentsWhyUnsupported;
+
+  /// Record sheet: title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الشحنة كفاتورة'**
+  String get portalPaymentsRecordTitle;
+
+  /// Record sheet: the provider's serial for the payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم العملية {serial}'**
+  String portalPaymentsSerial(String serial);
+
+  /// Record sheet: label for the invoice total.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة الفاتورة'**
+  String get portalPaymentsInvoiceTotal;
+
+  /// Record sheet: what the provider float paid for it.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم من رصيد {provider}: {amount}'**
+  String portalPaymentsFloatCost(String provider, String amount);
+
+  /// Record sheet: section label for choosing the register session.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوردية التي استلمت النقود'**
+  String get portalPaymentsSessionLabel;
+
+  /// Record sheet: one register session.
+  ///
+  /// In ar, this message translates to:
+  /// **'{number} · {cashier}'**
+  String portalPaymentsSessionTitle(String number, String cashier);
+
+  /// Record sheet: an open session and when it opened.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوحة منذ {time}'**
+  String portalPaymentsSessionOpenSince(String time);
+
+  /// Record sheet: a closed session and when it closed.
+  ///
+  /// In ar, this message translates to:
+  /// **'مغلقة {time}'**
+  String portalPaymentsSessionClosedAt(String time);
+
+  /// Record sheet: a closed session's counted overage.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة {amount}'**
+  String portalPaymentsSessionOver(String amount);
+
+  /// Record sheet: a closed session's counted shortage.
+  ///
+  /// In ar, this message translates to:
+  /// **'عجز {amount}'**
+  String portalPaymentsSessionShort(String amount);
+
+  /// Record sheet: a closed session that counted exactly.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطابقة'**
+  String get portalPaymentsSessionBalanced;
+
+  /// Record sheet: badge on a session that was open when the payment was made.
+  ///
+  /// In ar, this message translates to:
+  /// **'كانت مفتوحة وقت الشحنة'**
+  String get portalPaymentsSessionWasOpen;
+
+  /// Record sheet: a session closed before the payment was made (not selectable).
+  ///
+  /// In ar, this message translates to:
+  /// **'أُغلقت قبل وقت الشحنة'**
+  String get portalPaymentsSessionClosedBefore;
+
+  /// Record sheet: no register session to record into.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد وردية يمكن التسجيل فيها لهذا اليوم.'**
+  String get portalPaymentsSessionNone;
+
+  /// Record sheet: warning when recording into a closed session.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الوردية مغلقة: ستُضاف الفاتورة إليها ويتغيّر ملخصها وفرق صندوقها وتقرير Z الخاص بها.'**
+  String get portalPaymentsClosedSessionWarning;
+
+  /// Record sheet: warning when the session opened after the payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'فُتحت هذه الوردية بعد وقت الشحنة. اخترها فقط إن كانت النقود قد انتقلت إلى صندوقها.'**
+  String get portalPaymentsOpenedAfterWarning;
+
+  /// Record sheet: section label for paid vs credit.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الفاتورة'**
+  String get portalPaymentsSaleTypeLabel;
+
+  /// Record sheet: a paid invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعة'**
+  String get portalPaymentsSaleTypePaid;
+
+  /// Record sheet: a credit invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'آجل'**
+  String get portalPaymentsSaleTypeCredit;
+
+  /// Record sheet: down payment on a credit invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوع الآن (اختياري)'**
+  String get portalPaymentsAmountPaidLabel;
+
+  /// Record sheet: the down payment is not below the total.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجب أن يكون المدفوع أقل من قيمة الفاتورة.'**
+  String get portalPaymentsAmountPaidError;
+
+  /// Record sheet: customer field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'العميل'**
+  String get portalPaymentsCustomerLabel;
+
+  /// Record sheet: no customer chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون عميل'**
+  String get portalPaymentsCustomerNone;
+
+  /// Record sheet: button to choose a customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار عميل'**
+  String get portalPaymentsCustomerPick;
+
+  /// Record sheet: button to clear the chosen customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة العميل'**
+  String get portalPaymentsCustomerClear;
+
+  /// Record sheet: a credit invoice needs a customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفاتورة الآجلة تتطلب اختيار عميل.'**
+  String get portalPaymentsCustomerRequired;
+
+  /// Record sheet: scan the card terminal slip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح إيصال البطاقة'**
+  String get portalPaymentsCardReceiptScan;
+
+  /// Record sheet: the card slip was validated.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التحقق من إيصال البطاقة'**
+  String get portalPaymentsCardReceiptScanned;
+
+  /// Record sheet: the shop requires a card slip.
+  ///
+  /// In ar, this message translates to:
+  /// **'يشترط المحل إيصال البطاقة لتسجيل دفعة بالبطاقة.'**
+  String get portalPaymentsCardReceiptRequired;
+
+  /// Record sheet: a waiting sale could be this payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد تكون هذه الشحنة هي نفسها شحنة فاتورة سابقة لم تُنفَّذ'**
+  String get portalPaymentsPendingTitle;
+
+  /// Record sheet: explains linking vs recording a new invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن كانت كذلك فاربطها بتلك الفاتورة؛ فالعميل دفع مرة واحدة. تسجيلها كفاتورة جديدة يحسب المبلغ مرتين.'**
+  String get portalPaymentsPendingBody;
+
+  /// Record sheet: one waiting sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {receipt} · {time}'**
+  String portalPaymentsPendingCandidate(String receipt, String time);
+
+  /// Record sheet: link the payment to that waiting sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'هي نفسها — اربطها'**
+  String get portalPaymentsLinkAction;
+
+  /// Record sheet: confirm it is a different top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه شحنة مختلفة — سجّلها كفاتورة جديدة'**
+  String get portalPaymentsDifferentTopUp;
+
+  /// Record sheet: confirm button.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الفاتورة'**
+  String get portalPaymentsRecordAction;
+
+  /// Snack: a website payment was recorded as an invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّلت الفاتورة {receipt}'**
+  String portalPaymentsRecorded(String receipt);
+
+  /// Snack: a website payment was linked to a waiting sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'رُبطت الشحنة بالفاتورة {receipt}'**
+  String portalPaymentsLinked(String receipt);
+
+  /// Website payment row: open the invoice that accounts for it.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الفاتورة'**
+  String get portalPaymentsOpenInvoice;
+
+  /// Refusal: already recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الشحنة مسجّلة مسبقاً في فاتورة أخرى.'**
+  String get portalPaymentsErrorAlreadyRecorded;
+
+  /// Refusal: a waiting sale could be this payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'توجد فاتورة معلّقة قد تكون لهذه الشحنة. اربطها بها، أو أكّد أنها شحنة مختلفة.'**
+  String get portalPaymentsErrorPendingSale;
+
+  /// Refusal: the provider no longer calls it done.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يعد المزوّد يعدّ هذه الشحنة مكتملة.'**
+  String get portalPaymentsErrorNotVerified;
+
+  /// Refusal: the payment is not in the live report.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر العثور على الشحنة في تقرير المزوّد الآن، فلم يُسجَّل شيء.'**
+  String get portalPaymentsErrorNotConfirmed;
+
+  /// Refusal: the provider could not be read to verify.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال بموقع المزوّد للتحقق من الشحنة، فلم يُسجَّل شيء. حاول مرة أخرى.'**
+  String get portalPaymentsErrorProviderUnavailable;
+
+  /// Refusal: register session not found.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوردية غير موجودة.'**
+  String get portalPaymentsErrorSessionNotFound;
+
+  /// Refusal: the session closed before the payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُغلقت هذه الوردية قبل وقت الشحنة، فلا يمكن أن تكون نقودها في جردها.'**
+  String get portalPaymentsErrorClosedBefore;
+
+  /// Refusal: the books are closed.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفترة المحاسبية لهذا التاريخ مغلقة.'**
+  String get portalPaymentsErrorPeriodLocked;
+
+  /// Refusal: the invoice total moved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّرت قيمة الفاتورة إلى {total}. راجعها ثم أعد المحاولة.'**
+  String portalPaymentsErrorPriceChanged(String total);
+
+  /// Refusal: invalid down payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوع يجب أن يكون أقل من قيمة الفاتورة.'**
+  String get portalPaymentsErrorAmountPaid;
+
+  /// Refusal: payment method required.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر طريقة الدفع.'**
+  String get portalPaymentsErrorMethodRequired;
+
+  /// Refusal: the chosen waiting sale does not match.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الفاتورة لا تطابق الشحنة.'**
+  String get portalPaymentsErrorNotThisSale;
+
+  /// Refusal: the checkout refused the sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض النظام إصدار الفاتورة. تحقّق من طريقة الدفع وإيصال البطاقة وحدّ الآجل للعميل.'**
+  String get portalPaymentsErrorSaleRefused;
+
+  /// Refusal: any other failure.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إتمام العملية. حاول مرة أخرى.'**
+  String get portalPaymentsErrorGeneric;
+
+  /// Recharge history row title for a stored-value top-up (LNET).
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن رصيد'**
+  String get rechargeHistoryTopUp;
 }
 
 class _AppLocalizationsDelegate

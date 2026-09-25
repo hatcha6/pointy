@@ -1141,7 +1141,17 @@ def checkout_order(
     due_date_supplied=False,
     reserve_stock=False,
     request=None,
+    payment_context=None,
 ):
+    """Issue a sale: lines, stock, payments and the document, all or nothing.
+
+    ``payment_context`` is merged into every tender's ``PaymentSerializer``
+    context. The till never passes it. It exists for a sale issued into a
+    register session its caller does not own — a manager recording a payment
+    made on a provider's website into the cashier's drawer that took the
+    cash (:mod:`apps.integrations.portal_sales`) — which needs the same
+    ``allow_cross_owner`` an account collection already uses.
+    """
     from apps.payments.serializers import PaymentSerializer
 
     settings = ShopSettings.load()
@@ -1265,6 +1275,7 @@ def checkout_order(
                 context={
                     "request": request,
                     "stock_already_recorded": True,
+                    **(payment_context or {}),
                 },
             )
             payment_serializer.is_valid(raise_exception=True)

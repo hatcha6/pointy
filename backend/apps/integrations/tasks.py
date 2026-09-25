@@ -70,6 +70,19 @@ def sync_voucher_catalogs_task(self):
             pass
 
 
+@shared_task(bind=True, name="integrations.sync_payment_reports")
+def sync_payment_reports_task(self):
+    """Half-hourly: keep each provider's payments report mirrored.
+
+    What the till's history for an LNET line and a manager's "payments made on
+    the website" both read. Not retried: the next run is half an hour away and
+    walks the same report; each account keeps to itself under its own lock.
+    """
+    from .payment_report import sweep_all
+
+    return sweep_all()
+
+
 @shared_task(bind=True, name="integrations.sync_voucher_catalog")
 def sync_voucher_catalog_task(self, account_id):
     """A whole shelf, now — for an account that was just connected or verified.

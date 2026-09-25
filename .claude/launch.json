@@ -340,6 +340,14 @@
       "port": 8080
     },
     {
+      "name": "portal-payments-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-portal-payments-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "printers-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

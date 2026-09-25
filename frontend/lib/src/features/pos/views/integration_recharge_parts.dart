@@ -588,6 +588,11 @@ class _PurchaseRow extends StatelessWidget {
     final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
     final theme = Theme.of(context);
+    // Only a state worth reading aloud: a finished top-up says nothing.
+    final statusLabel = entry.status.isEmpty || entry.status == 'verified'
+        ? null
+        : (integrationPaymentStatusLabel(entry.status, l10n) ?? entry.status);
+    final isUndone = entry.status == 'cancelled';
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: spacing.xs),
@@ -610,13 +615,18 @@ class _PurchaseRow extends StatelessWidget {
                 Text(
                   entry.months > 0
                       ? l10n.rechargeMonths(entry.months)
-                      : entry.packageName,
+                      // A stored-value top-up has no months and, in LNET's
+                      // report, no package either: name what it was.
+                      : (entry.packageName.isNotEmpty
+                            ? entry.packageName
+                            : l10n.rechargeHistoryTopUp),
                   style: theme.textTheme.bodyMedium,
                 ),
                 Text(
                   '${entry.isOurs ? l10n.rechargeHistoryOurs : l10n.rechargeHistoryOther}'
                   '${entry.operatorName.isEmpty ? '' : ' · ${entry.operatorName}'}'
-                  '${entry.at == null ? '' : ' · ${formatShortDate(entry.at!)}'}',
+                  '${entry.at == null ? '' : ' · ${formatShortDate(entry.at!)}'}'
+                  '${statusLabel == null ? '' : ' · $statusLabel'}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colors.mutedInk,
                   ),
@@ -624,11 +634,14 @@ class _PurchaseRow extends StatelessWidget {
               ],
             ),
           ),
-          if (entry.cost != null)
+          if ((entry.amount ?? entry.cost) != null)
             Text(
-              formatMoney(entry.cost!),
+              formatMoney(entry.amount ?? entry.cost!),
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
+                // A cancelled top-up stays in the history, struck through:
+                // it happened, and it was undone.
+                decoration: isUndone ? TextDecoration.lineThrough : null,
               ),
             ),
         ],

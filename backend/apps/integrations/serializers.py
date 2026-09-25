@@ -242,6 +242,14 @@ def purchase_payload(entry) -> dict:
         # Whether *this* shop sold it. The whole point of showing the log at
         # the till: everything else on the list is a competitor's sale.
         "is_ours": entry.is_ours,
+        # Stored value only (LNET): what the customer paid onto the line, as
+        # opposed to ``cost``, the float's share of it. Null for a provider
+        # that sells months.
+        "amount": entry.amount,
+        # The provider's own state for it, as a stable code; blank where its
+        # log keeps none. A cancelled top-up is still history, but not one a
+        # cashier should read as done.
+        "status": entry.status,
     }
 
 

@@ -87,6 +87,11 @@ from .base import (
     ERROR_UNEXPECTED,
     ERROR_UNREACHABLE,
     HISTORY_PURCHASES,
+    PAYMENT_CANCEL_REJECTED,
+    PAYMENT_CANCEL_REQUESTED,
+    PAYMENT_CANCELLED,
+    PAYMENT_PENDING,
+    PAYMENT_VERIFIED,
     RECHARGE_TOPUP,
     CardInfo,
     HistoryResult,
@@ -95,11 +100,13 @@ from .base import (
     OfferResult,
     OpenAmount,
     OptionQuote,
+    PaymentReportPage,
     ProbeResult,
     ProfileResult,
     PurchaseEntry,
     RechargeOption,
     RechargeResult,
+    ReportPayment,
     SubscriberProfile,
     in_parallel,
     register,
@@ -113,6 +120,12 @@ RECHARGE_VIEW_PATH = "/admin/settings/users/recharge/"
 VALIDATE_PATH = "/admin/settings/users/validatePaymentAJAX/"
 COMMIT_PATH = "/admin/settings/users/rechargeOperatorPaymentAJAX"
 PAYMENTS_PATH = "/admin/reports/payments"
+#: Every page of the report after the first, by row offset. The captured pager
+#: links ``index/all/10`` and ``index/all/20`` for pages two and three and
+#: ``index/all/9390`` for the last: TEN ROWS A PAGE, over the agency's whole
+#: life. Reading only the first page therefore sees roughly the last day of
+#: trade, which is why a line's history read that way was nearly always empty.
+PAYMENTS_PAGE_PATH = "/admin/reports/payments/index/all/"
 
 #: The float pays this much per dinar of face value when nothing else is set —
 #: a 5% agency commission. The *owner-facing* form of this is a percentage and
@@ -278,6 +291,26 @@ class LnetProvider(IntegrationProvider):
         return OptionQuote(
             cost=OpenAmount(minimum=Decimal("1"), cost_ratio=ratio).cost_of(amount),
             face_value=amount,
+        )
+
+    def option_for_payment(self, amount) -> RechargeOption | None:
+        """The top-up a payment of ``amount`` was: ``topup:<amount>``.
+
+        The same code, label and cost the till's own amount picker produces
+        for that figure, so a payment recorded from the report and one sold at
+        the till are the same line, priced by the same rule.
+        """
+        value = _quantize(amount)
+        if value is None or value <= 0:
+            return None
+        return RechargeOption(
+            code=_topup_code(value),
+            kind=RECHARGE_TOPUP,
+            label=_amount_label(value),
+            cost=OpenAmount(minimum=Decimal("1"), cost_ratio=self._cost_ratio).cost_of(
+                value
+            ),
+            face_value=value,
         )
 
     # --- plumbing ----------------------------------------------------------
@@ -743,6 +776,8 @@ class LnetProvider(IntegrationProvider):
                 # Every row in this report was made by this login; the column
                 # exists because a reseller can have staff logins under it.
                 is_ours=not mine or row.operator_name.casefold() == mine,
+                amount=_quantize(row.amount),
+                status=_payment_status(row.status),
             )
             for row in rows[offset : offset + limit]
         )
@@ -751,6 +786,71 @@ class LnetProvider(IntegrationProvider):
             total=len(rows),
             purchases=entries,
             complete_since=complete_since,
+        )
+
+    def payment_report_page(self, *, offset: int = 0) -> PaymentReportPage:
+        """One page of the agency's payments report — every line, newest first.
+
+        The first page is the report's own address; the rest are reached the
+        way its pager reaches them. Where the next page starts is read off
+        that same pager rather than assumed, so a portal that prints twenty
+        rows tomorrow is followed rather than skipped through.
+
+        A page with no payments table at all is not an empty report: an empty
+        report still prints its header. That is our parser gone blind, and it
+        is reported as such instead of as "nothing happened today".
+        """
+        session, token, code, detail = self._login()
+        if session is None:
+            return PaymentReportPage(
+                ok=False, offset=offset, error_code=code, error_detail=detail
+            )
+
+        path = PAYMENTS_PATH if offset <= 0 else f"{PAYMENTS_PAGE_PATH}{offset}"
+        response, code, detail = self._get(path)
+        if response is None:
+            return PaymentReportPage(
+                ok=False, offset=offset, error_code=code, error_detail=detail
+            )
+
+        self._note(STEP_PARSE)
+        html = response.text or ""
+        if not _has_payments_table(html):
+            self._observe(shape_ok=False)
+            return PaymentReportPage(
+                ok=False,
+                offset=offset,
+                error_code=ERROR_UNEXPECTED,
+                error_detail="payments report did not render",
+            )
+        rows = _parse_payment_rows(html)
+        if any(row.at is None for row in rows):
+            # A row whose date we cannot read cannot be placed in the day it
+            # belongs to, and a reader walking the report by date would stop
+            # in the wrong place. Their date format changed; say so.
+            self._observe(shape_ok=False)
+        ratio = self._cost_ratio
+        return PaymentReportPage(
+            ok=True,
+            offset=max(offset, 0),
+            next_offset=_next_payments_offset(html, max(offset, 0)),
+            payments=tuple(
+                ReportPayment(
+                    reference=row.serial,
+                    at=row.at,
+                    amount=_quantize(row.amount),
+                    cost=row.cost_for(ratio),
+                    balance_after=_quantize(row.balance_after),
+                    subscriber_ref=row.customer_name,
+                    operator_name=row.operator_name,
+                    status=_payment_status(row.status),
+                    status_label=row.status,
+                    payment_type=row.payment_type,
+                    extra=row.extra_gb,
+                    comment=row.comment,
+                )
+                for row in rows
+            ),
         )
 
     # --- the write path ----------------------------------------------------
@@ -973,7 +1073,8 @@ class _PaymentRow:
     """One row of the agency's payments report."""
 
     __slots__ = ("serial", "at", "amount", "balance_after", "customer_name",
-                 "operator_name", "status")
+                 "operator_name", "status", "payment_type", "extra_gb",
+                 "comment")
 
     def __init__(self, **kwargs):
         for name in self.__slots__:
@@ -1118,9 +1219,69 @@ def _parse_payment_rows(html: str) -> list[_PaymentRow]:
                 customer_name=columns.get("customer name", ""),
                 operator_name=columns.get("recharged by", ""),
                 status=columns.get("status", ""),
+                payment_type=columns.get("payment type", ""),
+                extra_gb=columns.get("extra gb", ""),
+                comment=columns.get("comment", ""),
             )
         )
     return found
+
+
+def _has_payments_table(html: str) -> bool:
+    """Did this page render the payments table at all, rows or none?
+
+    The same question ``_has_user_table`` asks of a search: a report with no
+    payments still prints its header, so a missing header is a changed page,
+    never a quiet day.
+    """
+    body = _strip_comments(html)
+    for row in _ROW_RE.findall(body):
+        cells = [_cell_text(th).casefold() for th in _TH_RE.findall(row)]
+        if "s/n" in cells and "final balance" in cells:
+            return True
+    return False
+
+
+_PAGER_OFFSET_RE = re.compile(r"/reports/payments/index/all/(\d+)", re.I)
+
+
+def _next_payments_offset(html: str, offset: int) -> int | None:
+    """Where the report's own pager says the page after ``offset`` starts.
+
+    The nearest pager link past the current offset — which is what its "next"
+    arrow points at on every captured page — or ``None`` on the last page.
+    Read from the links rather than computed, so no page size of ours can
+    step over rows the portal printed.
+    """
+    offsets = {int(value) for value in _PAGER_OFFSET_RE.findall(html or "")}
+    later = [value for value in offsets if value > offset]
+    return min(later) if later else None
+
+
+#: The report's status words, mapped to the stable codes in ``base``. Keys are
+#: the ``status-…`` filters its own tabs link to, which is also how a row
+#: prints its status ("verified" on every captured row).
+_PAYMENT_STATUSES = {
+    "verified": PAYMENT_VERIFIED,
+    "pending": PAYMENT_PENDING,
+    "cancelled": PAYMENT_CANCELLED,
+    "canceled": PAYMENT_CANCELLED,
+    "cancel_request": PAYMENT_CANCEL_REQUESTED,
+    "cancellation request": PAYMENT_CANCEL_REQUESTED,
+    "rejected": PAYMENT_CANCEL_REJECTED,
+    "cancelled rejected": PAYMENT_CANCEL_REJECTED,
+}
+
+
+def _payment_status(text: str) -> str:
+    """A report row's status as a stable code, or the word itself, lowercased.
+
+    An unfamiliar word is passed through rather than guessed at: everything
+    downstream treats only ``verified`` as a payment that happened, so a new
+    state can never be read as a settled one by accident.
+    """
+    word = _cell_text(text).casefold()
+    return _PAYMENT_STATUSES.get(word, word[:32])
 
 
 def _search_modes_for(term: str, lead: str = "") -> tuple[str, ...]:

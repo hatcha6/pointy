@@ -669,6 +669,15 @@ CELERY_BEAT_SCHEDULE = {
         "task": "integrations.sync_voucher_catalogs",
         "schedule": timedelta(minutes=5),
     },
+    # Half-hourly: mirror each provider's account-wide payments report (LNET).
+    # It prints ten rows a page over the agency's whole life, so read live it
+    # only ever showed the last day — this is what a line's history at the
+    # till and a manager's "payments made on the website" read instead. A
+    # young mirror is also walked deeper, towards three months, now and then.
+    "integrations.sync-payment-reports": {
+        "task": "integrations.sync_payment_reports",
+        "schedule": crontab(minute="5,35"),
+    },
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",
         "schedule": crontab(minute=10, hour=0, day_of_month="1"),

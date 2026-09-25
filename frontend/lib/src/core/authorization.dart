@@ -71,6 +71,13 @@ enum AppCapability {
   useIntegrations,
   recordIntegrationTopUp,
 
+  /// Records a top-up somebody did on a provider's own website (LNET) as the
+  /// sale it was, into a register session's drawer. It writes into another
+  /// cashier's shift, so it is a manager's by default and granted to anyone
+  /// else on purpose — together with the right to issue a sale, which
+  /// recording one does.
+  recordPortalPayments,
+
   /// Sees what a product cost while selling it. The single most sensitive
   /// number a shop has — what the owner pays a supplier — so it is off for a
   /// cashier by default and granted per person. Even once granted the till
@@ -650,6 +657,15 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.recordIntegrationTopUp);
       }
+      // Both, as the backend demands both: recording a website payment
+      // issues an invoice, and issuing one is sales.add_order's to do.
+      if (_hasAny(user, const [
+            'record_portal_payment',
+            'integrations.record_portal_payment',
+          ]) &&
+          _hasAny(user, const ['add_order', 'sales.add_order'])) {
+        capabilities.add(AppCapability.recordPortalPayments);
+      }
       // Cost at the till, and repricing a line there. Two rights on purpose:
       // knowing what a thing cost and deciding what it sells for are held by
       // different people in most shops.
@@ -1047,6 +1063,8 @@ class AuthorizationCapabilities {
   bool get canUseIntegrations => allows(AppCapability.useIntegrations);
   bool get canRecordIntegrationTopUp =>
       allows(AppCapability.recordIntegrationTopUp);
+  bool get canRecordPortalPayments =>
+      allows(AppCapability.recordPortalPayments);
   bool get canViewConversations => allows(AppCapability.viewConversations);
   bool get canViewTillCost => allows(AppCapability.viewTillCost);
   bool get canOverrideLinePrice => allows(AppCapability.overrideLinePrice);

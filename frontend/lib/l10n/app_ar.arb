@@ -15468,5 +15468,479 @@
   "systemProductVoucherNotice": "كرت يُزامَن من المزوّد تلقائياً: الاسم والفئات والأسعار والتوفّر كلها من المزوّد، ولا يمكن لأحد تعديله.",
   "@systemProductVoucherNotice": {
     "description": "Product details: notice on a provider card product."
+  },
+  "portalPaymentsTitle": "شحنات موقع {provider}",
+  "@portalPaymentsTitle": {
+    "description": "Website payments screen: title. provider = LNET.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsOpenAction": "شحنات موقع {provider}",
+  "@portalPaymentsOpenAction": {
+    "description": "Register sessions app bar: opens the provider-website payments screen.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsIntro": "شحنات تمّت على موقع {provider} مباشرة ولم تُسجَّل في النظام. سجّل كلاً منها كفاتورة في الوردية التي استلمت نقودها، فيتطابق الصندوق ويُخصم رصيد {provider} مرة واحدة.",
+  "@portalPaymentsIntro": {
+    "description": "Website payments screen: one-paragraph explanation at the top.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsPickDateTooltip": "اختيار اليوم",
+  "@portalPaymentsPickDateTooltip": {
+    "description": "Website payments screen: date picker tooltip."
+  },
+  "portalPaymentsToday": "اليوم",
+  "@portalPaymentsToday": {
+    "description": "Website payments screen: the date chip when the chosen day is today."
+  },
+  "portalPaymentsReadAt": "آخر قراءة من {provider}: {time}",
+  "@portalPaymentsReadAt": {
+    "description": "Website payments screen: when the provider's report was last read.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsReadFailed": "تعذّر الاتصال بموقع {provider} الآن. هذه آخر شحنات قُرئت منه، وقد لا تكون كاملة.",
+  "@portalPaymentsReadFailed": {
+    "description": "Website payments screen: the provider could not be read just now.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsIncomplete": "قد لا تشمل القائمة كل شحنات هذا اليوم: لم يُقرأ تقرير {provider} حتى بدايته بعد.",
+  "@portalPaymentsIncomplete": {
+    "description": "Website payments screen: the day is not known to be complete.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsSummaryUnrecorded": "{count, plural, =0{لا شحنات غير مسجّلة} one{شحنة واحدة غير مسجّلة} two{شحنتان غير مسجّلتين} few{{count} شحنات غير مسجّلة} other{{count} شحنة غير مسجّلة}}",
+  "@portalPaymentsSummaryUnrecorded": {
+    "description": "Website payments screen: summary count of unrecorded payments.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "portalPaymentsSummaryPending": "{count, plural, one{شحنة قد تخص فاتورة معلّقة} two{شحنتان قد تخصان فواتير معلّقة} few{{count} شحنات قد تخص فواتير معلّقة} other{{count} شحنة قد تخص فواتير معلّقة}}",
+  "@portalPaymentsSummaryPending": {
+    "description": "Website payments screen: summary count of payments that may belong to a waiting sale.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "portalPaymentsFilterUnrecorded": "غير المسجّلة",
+  "@portalPaymentsFilterUnrecorded": {
+    "description": "Website payments screen: filter showing only payments that still need an invoice."
+  },
+  "portalPaymentsFilterAll": "الكل",
+  "@portalPaymentsFilterAll": {
+    "description": "Website payments screen: filter showing every payment of the day."
+  },
+  "portalPaymentsEmptyTitle": "لا توجد شحنات غير مسجّلة",
+  "@portalPaymentsEmptyTitle": {
+    "description": "Website payments screen: empty state title (filter = unrecorded)."
+  },
+  "portalPaymentsEmptyBody": "كل شحنات هذا اليوم على موقع {provider} مسجّلة في النظام.",
+  "@portalPaymentsEmptyBody": {
+    "description": "Website payments screen: empty state body (filter = unrecorded).",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsEmptyDayTitle": "لا توجد شحنات في هذا اليوم",
+  "@portalPaymentsEmptyDayTitle": {
+    "description": "Website payments screen: empty state title (filter = all)."
+  },
+  "portalPaymentsLoadError": "تعذّر تحميل شحنات الموقع",
+  "@portalPaymentsLoadError": {
+    "description": "Website payments screen: loading failed."
+  },
+  "portalPaymentsStateRecorded": "مسجّلة",
+  "@portalPaymentsStateRecorded": {
+    "description": "Website payment state: a sale already accounts for it."
+  },
+  "portalPaymentsStateReleased": "أُلغيت فاتورتها",
+  "@portalPaymentsStateReleased": {
+    "description": "Website payment state: it was recorded and the invoice was voided; may be recorded again."
+  },
+  "portalPaymentsStatePendingSale": "قد تخص فاتورة معلّقة",
+  "@portalPaymentsStatePendingSale": {
+    "description": "Website payment state: a sale waiting for its top-up could be this payment."
+  },
+  "portalPaymentsStateUnrecorded": "غير مسجّلة",
+  "@portalPaymentsStateUnrecorded": {
+    "description": "Website payment state: a finished payment with no sale behind it."
+  },
+  "portalPaymentsStateNotVerified": "غير مكتملة لدى المزوّد",
+  "@portalPaymentsStateNotVerified": {
+    "description": "Website payment state: the provider does not call it done."
+  },
+  "portalPaymentsStateOtherOperator": "بحساب آخر",
+  "@portalPaymentsStateOtherOperator": {
+    "description": "Website payment state: made by another login under the agency."
+  },
+  "portalPaymentsStateUnsupported": "غير مدعومة",
+  "@portalPaymentsStateUnsupported": {
+    "description": "Website payment state: not a plain top-up."
+  },
+  "portalPaymentsStateUnknown": "غير معروفة",
+  "@portalPaymentsStateUnknown": {
+    "description": "Website payment state: a code this build does not know."
+  },
+  "portalPaymentsProviderStatusPending": "قيد الإتمام",
+  "@portalPaymentsProviderStatusPending": {
+    "description": "Provider payment status: pending."
+  },
+  "portalPaymentsProviderStatusCancelled": "ملغاة",
+  "@portalPaymentsProviderStatusCancelled": {
+    "description": "Provider payment status: cancelled."
+  },
+  "portalPaymentsProviderStatusCancelRequest": "طلب إلغاء",
+  "@portalPaymentsProviderStatusCancelRequest": {
+    "description": "Provider payment status: a cancellation was requested."
+  },
+  "portalPaymentsProviderStatusRejected": "إلغاء مرفوض",
+  "@portalPaymentsProviderStatusRejected": {
+    "description": "Provider payment status: a cancellation was refused."
+  },
+  "portalPaymentsProviderStatusVerified": "مؤكدة",
+  "@portalPaymentsProviderStatusVerified": {
+    "description": "Provider payment status: verified."
+  },
+  "portalPaymentsRecordedIn": "فاتورة {receipt} · {cashier}",
+  "@portalPaymentsRecordedIn": {
+    "description": "Website payment row: the invoice that accounts for it, and whose drawer.",
+    "placeholders": {
+      "receipt": {
+        "type": "String"
+      },
+      "cashier": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsWhyNotVerified": "لا يعدّ المزوّد هذه الشحنة مكتملة ({status})، لذلك لا تُسجَّل كبيع.",
+  "@portalPaymentsWhyNotVerified": {
+    "description": "Website payment: why a non-verified payment cannot be recorded.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsWhyOtherOperator": "تمّت هذه الشحنة بحساب آخر ({operator})، وقد لا يكون رصيده رصيد هذا المحل، لذلك لا تُسجَّل من هنا.",
+  "@portalPaymentsWhyOtherOperator": {
+    "description": "Website payment: why another login's payment cannot be recorded.",
+    "placeholders": {
+      "operator": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsWhyUnsupported": "هذه ليست شحنة رصيد عادية (مثل بيانات إضافية)، لذلك لا تُسجَّل من هنا.",
+  "@portalPaymentsWhyUnsupported": {
+    "description": "Website payment: why an unusual payment cannot be recorded."
+  },
+  "portalPaymentsRecordTitle": "تسجيل الشحنة كفاتورة",
+  "@portalPaymentsRecordTitle": {
+    "description": "Record sheet: title."
+  },
+  "portalPaymentsSerial": "رقم العملية {serial}",
+  "@portalPaymentsSerial": {
+    "description": "Record sheet: the provider's serial for the payment.",
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsInvoiceTotal": "قيمة الفاتورة",
+  "@portalPaymentsInvoiceTotal": {
+    "description": "Record sheet: label for the invoice total."
+  },
+  "portalPaymentsFloatCost": "يُخصم من رصيد {provider}: {amount}",
+  "@portalPaymentsFloatCost": {
+    "description": "Record sheet: what the provider float paid for it.",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsSessionLabel": "الوردية التي استلمت النقود",
+  "@portalPaymentsSessionLabel": {
+    "description": "Record sheet: section label for choosing the register session."
+  },
+  "portalPaymentsSessionTitle": "{number} · {cashier}",
+  "@portalPaymentsSessionTitle": {
+    "description": "Record sheet: one register session.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      },
+      "cashier": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsSessionOpenSince": "مفتوحة منذ {time}",
+  "@portalPaymentsSessionOpenSince": {
+    "description": "Record sheet: an open session and when it opened.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsSessionClosedAt": "مغلقة {time}",
+  "@portalPaymentsSessionClosedAt": {
+    "description": "Record sheet: a closed session and when it closed.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsSessionOver": "زيادة {amount}",
+  "@portalPaymentsSessionOver": {
+    "description": "Record sheet: a closed session's counted overage.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsSessionShort": "عجز {amount}",
+  "@portalPaymentsSessionShort": {
+    "description": "Record sheet: a closed session's counted shortage.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsSessionBalanced": "مطابقة",
+  "@portalPaymentsSessionBalanced": {
+    "description": "Record sheet: a closed session that counted exactly."
+  },
+  "portalPaymentsSessionWasOpen": "كانت مفتوحة وقت الشحنة",
+  "@portalPaymentsSessionWasOpen": {
+    "description": "Record sheet: badge on a session that was open when the payment was made."
+  },
+  "portalPaymentsSessionClosedBefore": "أُغلقت قبل وقت الشحنة",
+  "@portalPaymentsSessionClosedBefore": {
+    "description": "Record sheet: a session closed before the payment was made (not selectable)."
+  },
+  "portalPaymentsSessionNone": "لا توجد وردية يمكن التسجيل فيها لهذا اليوم.",
+  "@portalPaymentsSessionNone": {
+    "description": "Record sheet: no register session to record into."
+  },
+  "portalPaymentsClosedSessionWarning": "هذه الوردية مغلقة: ستُضاف الفاتورة إليها ويتغيّر ملخصها وفرق صندوقها وتقرير Z الخاص بها.",
+  "@portalPaymentsClosedSessionWarning": {
+    "description": "Record sheet: warning when recording into a closed session."
+  },
+  "portalPaymentsOpenedAfterWarning": "فُتحت هذه الوردية بعد وقت الشحنة. اخترها فقط إن كانت النقود قد انتقلت إلى صندوقها.",
+  "@portalPaymentsOpenedAfterWarning": {
+    "description": "Record sheet: warning when the session opened after the payment."
+  },
+  "portalPaymentsSaleTypeLabel": "نوع الفاتورة",
+  "@portalPaymentsSaleTypeLabel": {
+    "description": "Record sheet: section label for paid vs credit."
+  },
+  "portalPaymentsSaleTypePaid": "مدفوعة",
+  "@portalPaymentsSaleTypePaid": {
+    "description": "Record sheet: a paid invoice."
+  },
+  "portalPaymentsSaleTypeCredit": "آجل",
+  "@portalPaymentsSaleTypeCredit": {
+    "description": "Record sheet: a credit invoice."
+  },
+  "portalPaymentsAmountPaidLabel": "المدفوع الآن (اختياري)",
+  "@portalPaymentsAmountPaidLabel": {
+    "description": "Record sheet: down payment on a credit invoice."
+  },
+  "portalPaymentsAmountPaidError": "يجب أن يكون المدفوع أقل من قيمة الفاتورة.",
+  "@portalPaymentsAmountPaidError": {
+    "description": "Record sheet: the down payment is not below the total."
+  },
+  "portalPaymentsCustomerLabel": "العميل",
+  "@portalPaymentsCustomerLabel": {
+    "description": "Record sheet: customer field label."
+  },
+  "portalPaymentsCustomerNone": "بدون عميل",
+  "@portalPaymentsCustomerNone": {
+    "description": "Record sheet: no customer chosen."
+  },
+  "portalPaymentsCustomerPick": "اختيار عميل",
+  "@portalPaymentsCustomerPick": {
+    "description": "Record sheet: button to choose a customer."
+  },
+  "portalPaymentsCustomerClear": "إزالة العميل",
+  "@portalPaymentsCustomerClear": {
+    "description": "Record sheet: button to clear the chosen customer."
+  },
+  "portalPaymentsCustomerRequired": "الفاتورة الآجلة تتطلب اختيار عميل.",
+  "@portalPaymentsCustomerRequired": {
+    "description": "Record sheet: a credit invoice needs a customer."
+  },
+  "portalPaymentsCardReceiptScan": "مسح إيصال البطاقة",
+  "@portalPaymentsCardReceiptScan": {
+    "description": "Record sheet: scan the card terminal slip."
+  },
+  "portalPaymentsCardReceiptScanned": "تم التحقق من إيصال البطاقة",
+  "@portalPaymentsCardReceiptScanned": {
+    "description": "Record sheet: the card slip was validated."
+  },
+  "portalPaymentsCardReceiptRequired": "يشترط المحل إيصال البطاقة لتسجيل دفعة بالبطاقة.",
+  "@portalPaymentsCardReceiptRequired": {
+    "description": "Record sheet: the shop requires a card slip."
+  },
+  "portalPaymentsPendingTitle": "قد تكون هذه الشحنة هي نفسها شحنة فاتورة سابقة لم تُنفَّذ",
+  "@portalPaymentsPendingTitle": {
+    "description": "Record sheet: a waiting sale could be this payment."
+  },
+  "portalPaymentsPendingBody": "إن كانت كذلك فاربطها بتلك الفاتورة؛ فالعميل دفع مرة واحدة. تسجيلها كفاتورة جديدة يحسب المبلغ مرتين.",
+  "@portalPaymentsPendingBody": {
+    "description": "Record sheet: explains linking vs recording a new invoice."
+  },
+  "portalPaymentsPendingCandidate": "فاتورة {receipt} · {time}",
+  "@portalPaymentsPendingCandidate": {
+    "description": "Record sheet: one waiting sale.",
+    "placeholders": {
+      "receipt": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsLinkAction": "هي نفسها — اربطها",
+  "@portalPaymentsLinkAction": {
+    "description": "Record sheet: link the payment to that waiting sale."
+  },
+  "portalPaymentsDifferentTopUp": "هذه شحنة مختلفة — سجّلها كفاتورة جديدة",
+  "@portalPaymentsDifferentTopUp": {
+    "description": "Record sheet: confirm it is a different top-up."
+  },
+  "portalPaymentsRecordAction": "تسجيل الفاتورة",
+  "@portalPaymentsRecordAction": {
+    "description": "Record sheet: confirm button."
+  },
+  "portalPaymentsRecorded": "سُجّلت الفاتورة {receipt}",
+  "@portalPaymentsRecorded": {
+    "description": "Snack: a website payment was recorded as an invoice.",
+    "placeholders": {
+      "receipt": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsLinked": "رُبطت الشحنة بالفاتورة {receipt}",
+  "@portalPaymentsLinked": {
+    "description": "Snack: a website payment was linked to a waiting sale.",
+    "placeholders": {
+      "receipt": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsOpenInvoice": "فتح الفاتورة",
+  "@portalPaymentsOpenInvoice": {
+    "description": "Website payment row: open the invoice that accounts for it."
+  },
+  "portalPaymentsErrorAlreadyRecorded": "هذه الشحنة مسجّلة مسبقاً في فاتورة أخرى.",
+  "@portalPaymentsErrorAlreadyRecorded": {
+    "description": "Refusal: already recorded."
+  },
+  "portalPaymentsErrorPendingSale": "توجد فاتورة معلّقة قد تكون لهذه الشحنة. اربطها بها، أو أكّد أنها شحنة مختلفة.",
+  "@portalPaymentsErrorPendingSale": {
+    "description": "Refusal: a waiting sale could be this payment."
+  },
+  "portalPaymentsErrorNotVerified": "لم يعد المزوّد يعدّ هذه الشحنة مكتملة.",
+  "@portalPaymentsErrorNotVerified": {
+    "description": "Refusal: the provider no longer calls it done."
+  },
+  "portalPaymentsErrorNotConfirmed": "تعذّر العثور على الشحنة في تقرير المزوّد الآن، فلم يُسجَّل شيء.",
+  "@portalPaymentsErrorNotConfirmed": {
+    "description": "Refusal: the payment is not in the live report."
+  },
+  "portalPaymentsErrorProviderUnavailable": "تعذّر الاتصال بموقع المزوّد للتحقق من الشحنة، فلم يُسجَّل شيء. حاول مرة أخرى.",
+  "@portalPaymentsErrorProviderUnavailable": {
+    "description": "Refusal: the provider could not be read to verify."
+  },
+  "portalPaymentsErrorSessionNotFound": "الوردية غير موجودة.",
+  "@portalPaymentsErrorSessionNotFound": {
+    "description": "Refusal: register session not found."
+  },
+  "portalPaymentsErrorClosedBefore": "أُغلقت هذه الوردية قبل وقت الشحنة، فلا يمكن أن تكون نقودها في جردها.",
+  "@portalPaymentsErrorClosedBefore": {
+    "description": "Refusal: the session closed before the payment."
+  },
+  "portalPaymentsErrorPeriodLocked": "الفترة المحاسبية لهذا التاريخ مغلقة.",
+  "@portalPaymentsErrorPeriodLocked": {
+    "description": "Refusal: the books are closed."
+  },
+  "portalPaymentsErrorPriceChanged": "تغيّرت قيمة الفاتورة إلى {total}. راجعها ثم أعد المحاولة.",
+  "@portalPaymentsErrorPriceChanged": {
+    "description": "Refusal: the invoice total moved.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "portalPaymentsErrorAmountPaid": "المدفوع يجب أن يكون أقل من قيمة الفاتورة.",
+  "@portalPaymentsErrorAmountPaid": {
+    "description": "Refusal: invalid down payment."
+  },
+  "portalPaymentsErrorMethodRequired": "اختر طريقة الدفع.",
+  "@portalPaymentsErrorMethodRequired": {
+    "description": "Refusal: payment method required."
+  },
+  "portalPaymentsErrorNotThisSale": "هذه الفاتورة لا تطابق الشحنة.",
+  "@portalPaymentsErrorNotThisSale": {
+    "description": "Refusal: the chosen waiting sale does not match."
+  },
+  "portalPaymentsErrorSaleRefused": "رفض النظام إصدار الفاتورة. تحقّق من طريقة الدفع وإيصال البطاقة وحدّ الآجل للعميل.",
+  "@portalPaymentsErrorSaleRefused": {
+    "description": "Refusal: the checkout refused the sale."
+  },
+  "portalPaymentsErrorGeneric": "تعذّر إتمام العملية. حاول مرة أخرى.",
+  "@portalPaymentsErrorGeneric": {
+    "description": "Refusal: any other failure."
+  },
+  "rechargeHistoryTopUp": "شحن رصيد",
+  "@rechargeHistoryTopUp": {
+    "description": "Recharge history row title for a stored-value top-up (LNET)."
   }
 }

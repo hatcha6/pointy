@@ -121,6 +121,7 @@ import '../models/conversation.dart';
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
+import '../models/portal_payment.dart';
 import '../models/voucher_availability.dart';
 import '../models/messaging_gateway.dart';
 import 'crm_api_client.dart';
@@ -2353,6 +2354,32 @@ class PosApiService {
     int? orderId,
     int? fulfillmentId,
   }) => _integrations.charge(orderId: orderId, fulfillmentId: fulfillmentId);
+
+  Future<PortalPaymentsDay> fetchPortalPayments(
+    String providerKey, {
+    DateTime? date,
+    bool refresh = true,
+  }) => _integrations.fetchPortalPayments(
+    providerKey,
+    date: date,
+    refresh: refresh,
+  );
+
+  Future<PortalPaymentOrder> recordPortalPayment(
+    String providerKey,
+    String reference,
+    PortalPaymentRecordDraft draft,
+  ) => _integrations.recordPortalPayment(providerKey, reference, draft);
+
+  Future<PortalPaymentOrder> linkPortalPayment(
+    String providerKey,
+    String reference, {
+    required int fulfillmentId,
+  }) => _integrations.linkPortalPayment(
+    providerKey,
+    reference,
+    fulfillmentId: fulfillmentId,
+  );
 
   Future<IntegrationHistoryPage> fetchIntegrationHistory({
     required String providerKey,

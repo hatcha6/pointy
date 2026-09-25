@@ -89,6 +89,15 @@ class IntegrationAccount(SecretStorageMixin, TimeStampedModel):
         null=True,
     )
 
+    # --- the mirrored payments report (apps.integrations.payment_report) ---
+    #: When the mirror was last read down to where the read before it ended,
+    #: by our clock — the instant up to which it holds every payment.
+    payments_synced_at = models.DateTimeField(blank=True, null=True)
+    #: From when the mirror is gap-free, up to ``payments_synced_at``. A read
+    #: that could not reach back to the previous one starts this over rather
+    #: than claiming a stretch nobody read.
+    payments_covered_since = models.DateTimeField(blank=True, null=True)
+
     class Meta:
         ordering = ["provider"]
         permissions = [
@@ -102,6 +111,15 @@ class IntegrationAccount(SecretStorageMixin, TimeStampedModel):
             (
                 "record_integration_topup",
                 "Can record money paid into a provider float",
+            ),
+            # Turning a payment somebody made on the provider's own website
+            # into an invoice in a cashier's drawer. It writes a sale into
+            # SOMEONE ELSE'S register session, which is a manager's call —
+            # granted to managers with the rest of this app, and grantable to
+            # anyone else only on purpose.
+            (
+                "record_portal_payment",
+                "Can record a payment made on the provider's website as a sale",
             ),
         ]
 
@@ -326,6 +344,13 @@ class IntegrationFulfillment(TimeStampedModel):
     #: one failure a shop can fix itself instead of "something went wrong".
     last_error_code = models.CharField(max_length=32, blank=True)
     last_error = models.TextField(blank=True)
+    #: Performed on the provider's own website rather than by Pointy: a top-up
+    #: the till could not sell, done by hand, and recorded here afterwards
+    #: from the provider's payments report (apps.integrations.portal_sales).
+    #: Pointy never sent it and nothing may ever send it. ``db_default``
+    #: because an older backend still serving during a live update inserts
+    #: fulfillments without naming this column.
+    performed_outside = models.BooleanField(default=False, db_default=False)
 
     class Meta:
         ordering = ["-created_at"]
@@ -673,3 +698,78 @@ class IntegrationVoucher(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.brand.name} {self.label}"
+
+
+class ProviderPayment(TimeStampedModel):
+    """One payment in a provider's own account-wide report, as last read.
+
+    LNET's payments report is the only record of a top-up the shop did on the
+    provider's website instead of at the till — and it prints TEN ROWS A PAGE
+    over the agency's whole life (the captured account had ~9,400), newest
+    first. Read live, it answers "roughly the last day" and nothing older,
+    which is why the till's history for an LNET line was always empty. So it
+    is mirrored here a page at a time (:mod:`apps.integrations.payment_report`)
+    and everything that asks about an LNET payment reads this table.
+
+    A copy, not the truth: the provider stays the authority. A mirrored row is
+    trusted for display. Anything that moves money on the strength of one —
+    recording it as a sale (:mod:`apps.integrations.portal_sales`) — reads it
+    live again first.
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="payments"
+    )
+    provider = models.CharField(max_length=32, choices=catalog.PROVIDER_CHOICES)
+    #: The provider's own id for the payment — LNET's S/N, the serial its
+    #: support asks for and the one a fulfillment stores as its reference.
+    reference = models.CharField(max_length=64)
+    paid_at = models.DateTimeField(blank=True, null=True)
+    #: Face value paid onto the line.
+    amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    #: What the float paid for it, at the commission in force when the row was
+    #: first read. Kept rather than recomputed: a later change to the owner's
+    #: commission setting does not reach back into payments already made.
+    cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    #: The float straight after this payment, as the provider printed it.
+    balance_after = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
+    #: The line that was paid (LNET: the username), exactly as printed.
+    subscriber_ref = models.CharField(max_length=64, blank=True)
+    #: ``subscriber_ref`` casefolded, for the exact, case-blind match every
+    #: lookup by line needs. Its own column so that match can use an index.
+    subscriber_key = models.CharField(max_length=64, blank=True)
+    operator_name = models.CharField(max_length=120, blank=True)
+    #: A stable ``PAYMENT_*`` code where the provider's word is known.
+    status = models.CharField(max_length=32, blank=True)
+    status_label = models.CharField(max_length=64, blank=True)
+    payment_type = models.CharField(max_length=32, blank=True)
+    extra = models.CharField(max_length=32, blank=True)
+    comment = models.CharField(max_length=255, blank=True)
+    #: When a read of the report last printed this row. A row a live re-read
+    #: did not reach is a row nothing may act on.
+    last_seen_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-paid_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "reference"],
+                name="integrations_unique_provider_payment",
+            )
+        ]
+        indexes = [
+            # A day of the report, and a line's history: the only two ways
+            # this table is read.
+            models.Index(
+                fields=["account", "-paid_at"], name="integ_payment_recent_idx"
+            ),
+            models.Index(
+                fields=["account", "subscriber_key", "-paid_at"],
+                name="integ_payment_line_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.provider}:{self.reference}"

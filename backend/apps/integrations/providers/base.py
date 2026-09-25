@@ -154,6 +154,82 @@ class PurchaseEntry:
     #: voucher's PIN and serial. It is how a card whose checkout reply was
     #: lost still reaches its customer once reconciliation finds it.
     printed: dict = field(default_factory=dict)
+    #: What the customer paid onto the line, when the provider sells stored
+    #: value (LNET). Distinct from ``cost``, which is the float's share of it:
+    #: a cashier reading a line's history thinks in the 45 the customer handed
+    #: over, not the 42.75 the agency was charged.
+    amount: Decimal | None = None
+    #: The provider's own state for the purchase, as a stable code (see
+    #: ``PAYMENT_*``). Blank where the log keeps none.
+    status: str = ""
+
+
+# --- a payment's state in a provider's report (stable codes) ----------------
+#: Performed: the line was credited and the float paid for it.
+PAYMENT_VERIFIED = "verified"
+#: Written but not finished — LNET's first write credits the customer and only
+#: its second debits the float; a payment left between them sits here.
+PAYMENT_PENDING = "pending"
+PAYMENT_CANCELLED = "cancelled"
+#: Somebody asked the provider to cancel it and the provider has not answered.
+PAYMENT_CANCEL_REQUESTED = "cancel_request"
+#: A cancellation the provider refused. Read literally, the payment stands —
+#: but that reading was never observed, so nothing treats it as settled.
+PAYMENT_CANCEL_REJECTED = "rejected"
+
+
+@dataclass(frozen=True)
+class ReportPayment:
+    """One row of a provider's account-wide payments report.
+
+    Everything the agency paid, whoever at the agency paid it and through
+    whichever door — the till or the provider's own website. That is what
+    makes the report worth reading: a top-up done on the website has no other
+    record anywhere.
+    """
+
+    reference: str
+    at: datetime | None = None
+    #: Face value paid onto the line.
+    amount: Decimal | None = None
+    #: What the float paid for it — face value less the agency's commission.
+    cost: Decimal | None = None
+    #: The float as it stood straight after this payment.
+    balance_after: Decimal | None = None
+    #: The line that was paid, in the provider's own vocabulary (LNET: the
+    #: username), exactly as a fulfillment stores it.
+    subscriber_ref: str = ""
+    operator_name: str = ""
+    #: A ``PAYMENT_*`` code when the provider's word is one we know; otherwise
+    #: the word itself, lowercased, so an unfamiliar state is never mistaken
+    #: for a settled one.
+    status: str = ""
+    #: The provider's own word for it, as printed.
+    status_label: str = ""
+    #: How the AGENCY settled with the provider (LNET: Cash or Cheque). Says
+    #: nothing about how the customer paid the shop.
+    payment_type: str = ""
+    #: Anything bought on top of the plain top-up (LNET's "Extra Gb"). Blank
+    #: or zero for an ordinary one.
+    extra: str = ""
+    comment: str = ""
+
+
+@dataclass(frozen=True)
+class PaymentReportPage:
+    """One page of :class:`ReportPayment` rows, newest first.
+
+    ``next_offset`` is where the provider's own pager says the next page
+    starts, and ``None`` on the last page — so a reader walks the report the
+    way the provider pages it rather than trusting a page size of ours.
+    """
+
+    ok: bool
+    payments: tuple[ReportPayment, ...] = ()
+    offset: int = 0
+    next_offset: int | None = None
+    error_code: str = ""
+    error_detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -512,6 +588,16 @@ class IntegrationProvider:
         """
         return None
 
+    def option_for_payment(self, amount) -> "RechargeOption | None":
+        """The option a payment of ``amount`` in this provider's report bought.
+
+        How a top-up somebody did on the provider's own website is rung up
+        afterwards as the very line the till would have sold for it. Pure
+        arithmetic like :meth:`quote` — no network, never raises. ``None``
+        means payments from this provider cannot be recorded that way.
+        """
+        return None
+
     def probe(self) -> ProbeResult:
         """Authenticate and report the agency float. Must never raise."""
         raise NotImplementedError
@@ -535,6 +621,14 @@ class IntegrationProvider:
     def status_history(self, card_no: str, *, limit: int = 10, offset: int = 0):
         """A page of state changes, newest first. Must never raise."""
         return HistoryResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def payment_report_page(self, *, offset: int = 0) -> PaymentReportPage:
+        """One page of the account-wide payments report. Must never raise.
+
+        Only for a provider that declares ``CAPABILITY_PAYMENT_REPORT``; see
+        :mod:`apps.integrations.payment_report` for what reads it.
+        """
+        return PaymentReportPage(ok=False, error_code=ERROR_UNAVAILABLE)
 
     def offers(self, card_no: str, *, resolved: "CardInfo | None" = None) -> OfferResult:
         """What can be bought for this card, priced as of now. Must never raise.

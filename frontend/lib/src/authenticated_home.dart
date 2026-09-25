@@ -7,6 +7,9 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'app_dependencies.dart';
 import 'core/result.dart';
+import 'data/models/integration_provider.dart';
+import 'shared/contact_picker_sheet.dart';
+import 'features/settings/views/integration_presentation.dart';
 import 'core/authorization.dart';
 import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
@@ -77,6 +80,8 @@ import 'features/purchasing/views/purchase_order_list_screen.dart';
 import 'features/purchasing/views/purchasing_screen.dart';
 import 'features/stock_count/views/stock_count_sessions_screen.dart';
 import 'features/register_sessions/view_models/register_session_history_view_model.dart';
+import 'features/portal_payments/view_models/portal_payments_view_model.dart';
+import 'features/portal_payments/views/portal_payments_screen.dart';
 import 'features/register_sessions/views/register_session_history_screen.dart';
 import 'features/reports/pdf/report_document_builder.dart';
 import 'features/reports/pdf/report_pdf.dart';
@@ -651,8 +656,61 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         initialSessionId: initialSessionId,
+        // Only for someone who may record one, in a shop connected to a
+        // provider that keeps a payments report (LNET) — everyone else never
+        // sees the action.
+        portalPaymentProviders: capabilities.canRecordPortalPayments
+            ? dependencies.posViewModel.paymentReportIntegrations
+            : const [],
+        onOpenPortalPayments: capabilities.canRecordPortalPayments
+            ? (provider) => _openPortalPayments(routeContext, provider)
+            : null,
       ),
     );
+  }
+
+  /// Top-ups done on [providerKey]'s own website, to be recorded as the sales
+  /// they were. The view model outlives the route's rebuilds and goes with it.
+  Future<void> _openPortalPayments(
+    BuildContext routeContext,
+    String providerKey,
+  ) async {
+    final l10n = AppLocalizations.of(routeContext)!;
+    final viewModel = PortalPaymentsViewModel(
+      dependencies.integrationsRepository,
+      providerKey: providerKey,
+    );
+    try {
+      await push(
+        routeContext,
+        (context) => _screen(
+          'portal_payments',
+          PortalPaymentsScreen(
+            viewModel: viewModel,
+            providerName: integrationProviderName(
+              integrationProviderKeyFromJson(providerKey),
+              l10n,
+            ),
+            pickCustomer: (context) => showCustomerPickerSheet(
+              context: context,
+              repository: dependencies.contactRepository,
+            ),
+            loadTrustedTerminalIds:
+                dependencies.shopSettingsRepository.loadTrustedCardTerminalIds,
+            loadOrderDetail: capabilities.allows(AppCapability.viewInvoices)
+                ? (orderId) async {
+                    final result = await dependencies.saleRepository.loadOrder(
+                      orderId,
+                    );
+                    return result is Ok<SaleOrder> ? result.value : null;
+                  }
+                : null,
+          ),
+        ),
+      );
+    } finally {
+      viewModel.dispose();
+    }
   }
 
   Widget invoicesRouteBuilder(BuildContext routeContext) {

@@ -2,6 +2,7 @@ import '../../core/result.dart';
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
+import '../models/portal_payment.dart';
 import '../models/voucher_availability.dart';
 import '../services/pos_api_service.dart';
 
@@ -142,6 +143,47 @@ class IntegrationsRepository {
         providerKey: providerKey,
         search: search,
         cursor: cursor,
+      ),
+    );
+  }
+
+  /// One shop-local day of payments made on the provider's own website.
+  Future<Result<PortalPaymentsDay>> loadPortalPayments(
+    String providerKey, {
+    DateTime? date,
+    bool refresh = true,
+  }) {
+    return Result.guard(
+      () => _service.fetchPortalPayments(
+        providerKey,
+        date: date,
+        refresh: refresh,
+      ),
+    );
+  }
+
+  /// Issue the invoice for one website payment; a refusal comes back as a
+  /// [PortalPaymentRefusal] carrying the server's code.
+  Future<Result<PortalPaymentOrder>> recordPortalPayment(
+    String providerKey,
+    String reference,
+    PortalPaymentRecordDraft draft,
+  ) {
+    return Result.guard(
+      () => _service.recordPortalPayment(providerKey, reference, draft),
+    );
+  }
+
+  Future<Result<PortalPaymentOrder>> linkPortalPayment(
+    String providerKey,
+    String reference, {
+    required int fulfillmentId,
+  }) {
+    return Result.guard(
+      () => _service.linkPortalPayment(
+        providerKey,
+        reference,
+        fulfillmentId: fulfillmentId,
       ),
     );
   }

@@ -21295,4 +21295,345 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get systemProductVoucherNotice =>
       'كرت يُزامَن من المزوّد تلقائياً: الاسم والفئات والأسعار والتوفّر كلها من المزوّد، ولا يمكن لأحد تعديله.';
+
+  @override
+  String portalPaymentsTitle(String provider) {
+    return 'شحنات موقع $provider';
+  }
+
+  @override
+  String portalPaymentsOpenAction(String provider) {
+    return 'شحنات موقع $provider';
+  }
+
+  @override
+  String portalPaymentsIntro(String provider) {
+    return 'شحنات تمّت على موقع $provider مباشرة ولم تُسجَّل في النظام. سجّل كلاً منها كفاتورة في الوردية التي استلمت نقودها، فيتطابق الصندوق ويُخصم رصيد $provider مرة واحدة.';
+  }
+
+  @override
+  String get portalPaymentsPickDateTooltip => 'اختيار اليوم';
+
+  @override
+  String get portalPaymentsToday => 'اليوم';
+
+  @override
+  String portalPaymentsReadAt(String provider, String time) {
+    return 'آخر قراءة من $provider: $time';
+  }
+
+  @override
+  String portalPaymentsReadFailed(String provider) {
+    return 'تعذّر الاتصال بموقع $provider الآن. هذه آخر شحنات قُرئت منه، وقد لا تكون كاملة.';
+  }
+
+  @override
+  String portalPaymentsIncomplete(String provider) {
+    return 'قد لا تشمل القائمة كل شحنات هذا اليوم: لم يُقرأ تقرير $provider حتى بدايته بعد.';
+  }
+
+  @override
+  String portalPaymentsSummaryUnrecorded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شحنة غير مسجّلة',
+      few: '$count شحنات غير مسجّلة',
+      two: 'شحنتان غير مسجّلتين',
+      one: 'شحنة واحدة غير مسجّلة',
+      zero: 'لا شحنات غير مسجّلة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String portalPaymentsSummaryPending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شحنة قد تخص فواتير معلّقة',
+      few: '$count شحنات قد تخص فواتير معلّقة',
+      two: 'شحنتان قد تخصان فواتير معلّقة',
+      one: 'شحنة قد تخص فاتورة معلّقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get portalPaymentsFilterUnrecorded => 'غير المسجّلة';
+
+  @override
+  String get portalPaymentsFilterAll => 'الكل';
+
+  @override
+  String get portalPaymentsEmptyTitle => 'لا توجد شحنات غير مسجّلة';
+
+  @override
+  String portalPaymentsEmptyBody(String provider) {
+    return 'كل شحنات هذا اليوم على موقع $provider مسجّلة في النظام.';
+  }
+
+  @override
+  String get portalPaymentsEmptyDayTitle => 'لا توجد شحنات في هذا اليوم';
+
+  @override
+  String get portalPaymentsLoadError => 'تعذّر تحميل شحنات الموقع';
+
+  @override
+  String get portalPaymentsStateRecorded => 'مسجّلة';
+
+  @override
+  String get portalPaymentsStateReleased => 'أُلغيت فاتورتها';
+
+  @override
+  String get portalPaymentsStatePendingSale => 'قد تخص فاتورة معلّقة';
+
+  @override
+  String get portalPaymentsStateUnrecorded => 'غير مسجّلة';
+
+  @override
+  String get portalPaymentsStateNotVerified => 'غير مكتملة لدى المزوّد';
+
+  @override
+  String get portalPaymentsStateOtherOperator => 'بحساب آخر';
+
+  @override
+  String get portalPaymentsStateUnsupported => 'غير مدعومة';
+
+  @override
+  String get portalPaymentsStateUnknown => 'غير معروفة';
+
+  @override
+  String get portalPaymentsProviderStatusPending => 'قيد الإتمام';
+
+  @override
+  String get portalPaymentsProviderStatusCancelled => 'ملغاة';
+
+  @override
+  String get portalPaymentsProviderStatusCancelRequest => 'طلب إلغاء';
+
+  @override
+  String get portalPaymentsProviderStatusRejected => 'إلغاء مرفوض';
+
+  @override
+  String get portalPaymentsProviderStatusVerified => 'مؤكدة';
+
+  @override
+  String portalPaymentsRecordedIn(String receipt, String cashier) {
+    return 'فاتورة $receipt · $cashier';
+  }
+
+  @override
+  String portalPaymentsWhyNotVerified(String status) {
+    return 'لا يعدّ المزوّد هذه الشحنة مكتملة ($status)، لذلك لا تُسجَّل كبيع.';
+  }
+
+  @override
+  String portalPaymentsWhyOtherOperator(String operator) {
+    return 'تمّت هذه الشحنة بحساب آخر ($operator)، وقد لا يكون رصيده رصيد هذا المحل، لذلك لا تُسجَّل من هنا.';
+  }
+
+  @override
+  String get portalPaymentsWhyUnsupported =>
+      'هذه ليست شحنة رصيد عادية (مثل بيانات إضافية)، لذلك لا تُسجَّل من هنا.';
+
+  @override
+  String get portalPaymentsRecordTitle => 'تسجيل الشحنة كفاتورة';
+
+  @override
+  String portalPaymentsSerial(String serial) {
+    return 'رقم العملية $serial';
+  }
+
+  @override
+  String get portalPaymentsInvoiceTotal => 'قيمة الفاتورة';
+
+  @override
+  String portalPaymentsFloatCost(String provider, String amount) {
+    return 'يُخصم من رصيد $provider: $amount';
+  }
+
+  @override
+  String get portalPaymentsSessionLabel => 'الوردية التي استلمت النقود';
+
+  @override
+  String portalPaymentsSessionTitle(String number, String cashier) {
+    return '$number · $cashier';
+  }
+
+  @override
+  String portalPaymentsSessionOpenSince(String time) {
+    return 'مفتوحة منذ $time';
+  }
+
+  @override
+  String portalPaymentsSessionClosedAt(String time) {
+    return 'مغلقة $time';
+  }
+
+  @override
+  String portalPaymentsSessionOver(String amount) {
+    return 'زيادة $amount';
+  }
+
+  @override
+  String portalPaymentsSessionShort(String amount) {
+    return 'عجز $amount';
+  }
+
+  @override
+  String get portalPaymentsSessionBalanced => 'مطابقة';
+
+  @override
+  String get portalPaymentsSessionWasOpen => 'كانت مفتوحة وقت الشحنة';
+
+  @override
+  String get portalPaymentsSessionClosedBefore => 'أُغلقت قبل وقت الشحنة';
+
+  @override
+  String get portalPaymentsSessionNone =>
+      'لا توجد وردية يمكن التسجيل فيها لهذا اليوم.';
+
+  @override
+  String get portalPaymentsClosedSessionWarning =>
+      'هذه الوردية مغلقة: ستُضاف الفاتورة إليها ويتغيّر ملخصها وفرق صندوقها وتقرير Z الخاص بها.';
+
+  @override
+  String get portalPaymentsOpenedAfterWarning =>
+      'فُتحت هذه الوردية بعد وقت الشحنة. اخترها فقط إن كانت النقود قد انتقلت إلى صندوقها.';
+
+  @override
+  String get portalPaymentsSaleTypeLabel => 'نوع الفاتورة';
+
+  @override
+  String get portalPaymentsSaleTypePaid => 'مدفوعة';
+
+  @override
+  String get portalPaymentsSaleTypeCredit => 'آجل';
+
+  @override
+  String get portalPaymentsAmountPaidLabel => 'المدفوع الآن (اختياري)';
+
+  @override
+  String get portalPaymentsAmountPaidError =>
+      'يجب أن يكون المدفوع أقل من قيمة الفاتورة.';
+
+  @override
+  String get portalPaymentsCustomerLabel => 'العميل';
+
+  @override
+  String get portalPaymentsCustomerNone => 'بدون عميل';
+
+  @override
+  String get portalPaymentsCustomerPick => 'اختيار عميل';
+
+  @override
+  String get portalPaymentsCustomerClear => 'إزالة العميل';
+
+  @override
+  String get portalPaymentsCustomerRequired =>
+      'الفاتورة الآجلة تتطلب اختيار عميل.';
+
+  @override
+  String get portalPaymentsCardReceiptScan => 'مسح إيصال البطاقة';
+
+  @override
+  String get portalPaymentsCardReceiptScanned => 'تم التحقق من إيصال البطاقة';
+
+  @override
+  String get portalPaymentsCardReceiptRequired =>
+      'يشترط المحل إيصال البطاقة لتسجيل دفعة بالبطاقة.';
+
+  @override
+  String get portalPaymentsPendingTitle =>
+      'قد تكون هذه الشحنة هي نفسها شحنة فاتورة سابقة لم تُنفَّذ';
+
+  @override
+  String get portalPaymentsPendingBody =>
+      'إن كانت كذلك فاربطها بتلك الفاتورة؛ فالعميل دفع مرة واحدة. تسجيلها كفاتورة جديدة يحسب المبلغ مرتين.';
+
+  @override
+  String portalPaymentsPendingCandidate(String receipt, String time) {
+    return 'فاتورة $receipt · $time';
+  }
+
+  @override
+  String get portalPaymentsLinkAction => 'هي نفسها — اربطها';
+
+  @override
+  String get portalPaymentsDifferentTopUp =>
+      'هذه شحنة مختلفة — سجّلها كفاتورة جديدة';
+
+  @override
+  String get portalPaymentsRecordAction => 'تسجيل الفاتورة';
+
+  @override
+  String portalPaymentsRecorded(String receipt) {
+    return 'سُجّلت الفاتورة $receipt';
+  }
+
+  @override
+  String portalPaymentsLinked(String receipt) {
+    return 'رُبطت الشحنة بالفاتورة $receipt';
+  }
+
+  @override
+  String get portalPaymentsOpenInvoice => 'فتح الفاتورة';
+
+  @override
+  String get portalPaymentsErrorAlreadyRecorded =>
+      'هذه الشحنة مسجّلة مسبقاً في فاتورة أخرى.';
+
+  @override
+  String get portalPaymentsErrorPendingSale =>
+      'توجد فاتورة معلّقة قد تكون لهذه الشحنة. اربطها بها، أو أكّد أنها شحنة مختلفة.';
+
+  @override
+  String get portalPaymentsErrorNotVerified =>
+      'لم يعد المزوّد يعدّ هذه الشحنة مكتملة.';
+
+  @override
+  String get portalPaymentsErrorNotConfirmed =>
+      'تعذّر العثور على الشحنة في تقرير المزوّد الآن، فلم يُسجَّل شيء.';
+
+  @override
+  String get portalPaymentsErrorProviderUnavailable =>
+      'تعذّر الاتصال بموقع المزوّد للتحقق من الشحنة، فلم يُسجَّل شيء. حاول مرة أخرى.';
+
+  @override
+  String get portalPaymentsErrorSessionNotFound => 'الوردية غير موجودة.';
+
+  @override
+  String get portalPaymentsErrorClosedBefore =>
+      'أُغلقت هذه الوردية قبل وقت الشحنة، فلا يمكن أن تكون نقودها في جردها.';
+
+  @override
+  String get portalPaymentsErrorPeriodLocked =>
+      'الفترة المحاسبية لهذا التاريخ مغلقة.';
+
+  @override
+  String portalPaymentsErrorPriceChanged(String total) {
+    return 'تغيّرت قيمة الفاتورة إلى $total. راجعها ثم أعد المحاولة.';
+  }
+
+  @override
+  String get portalPaymentsErrorAmountPaid =>
+      'المدفوع يجب أن يكون أقل من قيمة الفاتورة.';
+
+  @override
+  String get portalPaymentsErrorMethodRequired => 'اختر طريقة الدفع.';
+
+  @override
+  String get portalPaymentsErrorNotThisSale => 'هذه الفاتورة لا تطابق الشحنة.';
+
+  @override
+  String get portalPaymentsErrorSaleRefused =>
+      'رفض النظام إصدار الفاتورة. تحقّق من طريقة الدفع وإيصال البطاقة وحدّ الآجل للعميل.';
+
+  @override
+  String get portalPaymentsErrorGeneric =>
+      'تعذّر إتمام العملية. حاول مرة أخرى.';
+
+  @override
+  String get rechargeHistoryTopUp => 'شحن رصيد';
 }

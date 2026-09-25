@@ -64,6 +64,8 @@ OP_VOUCHER_BRAND = "voucher_brand"
 OP_VERIFY = "verify"
 #: Reading which identities a login may act as.
 OP_PROFILES = "profiles"
+#: Reading one page of the agency's account-wide payments report.
+OP_PAYMENTS = "payments"
 
 #: The methods worth a row. ``recharge`` is the money one and is treated apart.
 OPERATIONS = {
@@ -72,6 +74,7 @@ OPERATIONS = {
     "offers": OP_OFFERS,
     "subscriber_profile": OP_PROFILE,
     "purchase_history": OP_HISTORY,
+    "payment_report_page": OP_PAYMENTS,
     "recharge": OP_RECHARGE,
     "voucher_catalog": OP_VOUCHERS,
     "voucher_brand": OP_VOUCHER_BRAND,

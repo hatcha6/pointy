@@ -328,6 +328,11 @@ class PosViewModel extends ChangeNotifier {
   List<String> get rechargeIntegrations =>
       _checkoutSettings?.tillRechargeIntegrations ?? const [];
 
+  /// The providers whose own website payments can be listed and recorded as
+  /// sales (LNET). What puts that screen beside the register sessions.
+  List<String> get paymentReportIntegrations =>
+      _checkoutSettings?.paymentReportIntegrations ?? const [];
+
   Uint8List? _checkoutShopLogoBytes;
   bool _isLoading = false;
   bool _isLoadingMore = false;

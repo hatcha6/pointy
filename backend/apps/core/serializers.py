@@ -432,6 +432,10 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
     # connected — its float is topped up from Expenses like any other — but
     # has no top-up screen: its cards are products in the catalog.
     lookup_integrations = serializers.SerializerMethodField()
+    # The subset whose own website payments can be listed and recorded as
+    # sales — providers that keep an account-wide payments report (LNET). What
+    # puts "payments made on the website" beside the register sessions.
+    payment_report_integrations = serializers.SerializerMethodField()
 
     def _connected_accounts(self):
         cached = getattr(self, "_connected_integration_accounts", None)
@@ -459,6 +463,16 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             for account in self._connected_accounts()
             if account.spec is not None
             and provider_catalog.CAPABILITY_LOOKUP in account.spec.capabilities
+        ]
+
+    def get_payment_report_integrations(self, settings) -> list:
+        from apps.integrations import catalog as provider_catalog
+
+        return [
+            account.provider
+            for account in self._connected_accounts()
+            if account.spec is not None
+            and provider_catalog.CAPABILITY_PAYMENT_REPORT in account.spec.capabilities
         ]
 
     def get_default_payment_terms(self, settings) -> dict:
@@ -642,6 +656,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "default_payment_terms",
             "connected_integrations",
             "lookup_integrations",
+            "payment_report_integrations",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
             # Ceiling on the discount a cashier may take off one invoice at the
@@ -708,6 +723,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "default_payment_terms",
             "connected_integrations",
             "lookup_integrations",
+            "payment_report_integrations",
             "updated_at",
         ]
 

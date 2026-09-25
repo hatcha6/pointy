@@ -7,6 +7,11 @@ so there is nothing for a ModelViewSet to be a viewset *of*.
 
 from django.urls import path
 
+from .portal_views import (
+    IntegrationPortalPaymentLinkView,
+    IntegrationPortalPaymentRecordView,
+    IntegrationPortalPaymentsView,
+)
 from .views import (
     IntegrationAccountView,
     IntegrationCardView,
@@ -72,6 +77,23 @@ urlpatterns = [
         "<str:provider>/history/",
         IntegrationHistoryView.as_view(),
         name="integrations-history",
+    ),
+    # Manager-facing: payments made on the provider's own website, and turning
+    # one into the invoice the till could not issue at the time.
+    path(
+        "<str:provider>/portal-payments/",
+        IntegrationPortalPaymentsView.as_view(),
+        name="integrations-portal-payments",
+    ),
+    path(
+        "<str:provider>/portal-payments/<str:reference>/record/",
+        IntegrationPortalPaymentRecordView.as_view(),
+        name="integrations-portal-payment-record",
+    ),
+    path(
+        "<str:provider>/portal-payments/<str:reference>/link/",
+        IntegrationPortalPaymentLinkView.as_view(),
+        name="integrations-portal-payment-link",
     ),
     # Shop Settings: trusting this Pointy as a device the provider knows.
     path(

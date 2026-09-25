@@ -50,6 +50,12 @@ CAPABILITY_VOUCHERS = "vouchers"
 #: One login, several identities: a person and the shops they work for, each
 #: with its own wallet. The owner picks which one Pointy buys as.
 CAPABILITY_PROFILES = "profiles"
+#: Keeps one account-wide report of every payment the agency made, readable a
+#: page at a time. It is the only record of a top-up somebody did on the
+#: provider's own website instead of at the till, so it is what lets such a
+#: payment be found and recorded as the sale it was. LNET has one; HD Box keeps
+#: its logs per card, which cannot be listed.
+CAPABILITY_PAYMENT_REPORT = "payment_report"
 
 # --- credential field keys (stable codes) -----------------------------------
 FIELD_BASE_URL = "base_url"
@@ -243,7 +249,12 @@ HDBOX = ProviderSpec(
 LNET = ProviderSpec(
     key="lnet",
     availability=AVAILABILITY_AVAILABLE,
-    capabilities=(CAPABILITY_BALANCE, CAPABILITY_LOOKUP, CAPABILITY_RECHARGE),
+    capabilities=(
+        CAPABILITY_BALANCE,
+        CAPABILITY_LOOKUP,
+        CAPABILITY_RECHARGE,
+        CAPABILITY_PAYMENT_REPORT,
+    ),
     fields=_CREDENTIALS,
     secret_fields=_SECRETS,
     default_base_url="https://billing.lnet.ly/lnet-billing/public",

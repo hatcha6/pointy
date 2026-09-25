@@ -1,6 +1,9 @@
+import 'package:http/http.dart' as http;
+
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
+import '../models/portal_payment.dart';
 import '../models/voucher_availability.dart';
 import 'api_session.dart';
 
@@ -317,6 +320,81 @@ class IntegrationsApiClient {
     return VoucherAvailability.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  // --- payments made on the provider's own website ---------------------------
+  /// One shop-local day of the provider's payments report, and where each
+  /// payment stands in Pointy. [refresh] false answers from the server's copy
+  /// without reading the provider first — for a reload right after a write.
+  Future<PortalPaymentsDay> fetchPortalPayments(
+    String providerKey, {
+    DateTime? date,
+    bool refresh = true,
+  }) async {
+    final response = await _session.get(
+      'integrations/$providerKey/portal-payments/',
+      query: {
+        if (date != null) 'date': _isoDate(date),
+        if (!refresh) 'refresh': '0',
+      },
+    );
+    _throwPortalRefusal(response, 'Loading website payments failed');
+    return PortalPaymentsDay.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Issue the invoice for one website payment. Throws [PortalPaymentRefusal]
+  /// with the server's stable code when it will not.
+  Future<PortalPaymentOrder> recordPortalPayment(
+    String providerKey,
+    String reference,
+    PortalPaymentRecordDraft draft,
+  ) async {
+    final response = await _session.post(
+      'integrations/$providerKey/portal-payments/'
+      '${Uri.encodeComponent(reference)}/record/',
+      body: draft.toJson(),
+    );
+    _throwPortalRefusal(response, 'Recording the website payment failed');
+    final decoded = _session.decodedBody(response) as Map<String, Object?>;
+    return PortalPaymentOrder.fromJson(
+      decoded['order'] as Map<String, Object?>? ?? const {},
+    );
+  }
+
+  /// This website payment IS the top-up the sale behind [fulfillmentId] was
+  /// waiting for. Settles that sale; issues nothing new.
+  Future<PortalPaymentOrder> linkPortalPayment(
+    String providerKey,
+    String reference, {
+    required int fulfillmentId,
+  }) async {
+    final response = await _session.post(
+      'integrations/$providerKey/portal-payments/'
+      '${Uri.encodeComponent(reference)}/link/',
+      body: {'fulfillment': fulfillmentId},
+    );
+    _throwPortalRefusal(response, 'Linking the website payment failed');
+    final decoded = _session.decodedBody(response) as Map<String, Object?>;
+    return PortalPaymentOrder.fromJson(
+      decoded['order'] as Map<String, Object?>? ?? const {},
+    );
+  }
+
+  /// A refusal the server explained with a code, else the ordinary failure.
+  void _throwPortalRefusal(http.Response response, String message) {
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    final refusal = PortalPaymentRefusal.fromBody(
+      _session.decodedBodyOrNull(response),
+    );
+    if (refusal != null) throw refusal;
+    _session.throwApiException(response, message);
+  }
+
+  static String _isoDate(DateTime date) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${date.year}-${two(date.month)}-${two(date.day)}';
   }
 
   /// Name the person behind a card — the half the provider will not tell us.

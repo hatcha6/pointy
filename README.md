@@ -599,6 +599,43 @@ Preview with `make frontend-recharge-preview`
 (`?screen=expired|active|expiring|empty-history|notfound|idle|first-use`, and for
 LNET `lnet-lines|lnet-single|lnet-expired|lnet-low-float|lnet-notfound|lnet-idle`).
 
+### LNET: top-ups done on the provider's website
+
+LNET keeps one account-wide payments report — every payment the agency made,
+from the till or from billing.lnet.ly — printed **ten rows a page over the
+agency's whole life**. `apps/integrations/payment_report.py` mirrors it into
+`ProviderPayment` (half-hourly, `integrations.sync-payment-reports`, deepening a
+young mirror towards three months) and records how far the copy is known to be
+whole, so a screen can say "every payment of the day" only when it is true.
+The till's history for an LNET line reads that mirror; read live it only ever
+reached about a day back, which is why it was always empty.
+
+When the till cannot sell a top-up and a cashier does it on the website instead,
+a manager records it afterwards from **Register sessions → شحنات موقع LNET**
+(`apps/integrations/portal_sales.py`, permission
+`integrations.record_portal_payment` + `sales.add_order`): pick the payment, the
+register session whose drawer took the cash (open, or already closed — that is
+where an afternoon of website top-ups ends up), and how the customer paid (cash,
+card, transfer, or آجل with a customer). It issues the invoice the till would
+have issued, through the same checkout, and:
+
+- **sends nothing to LNET** — the fulfillment is born `confirmed`, so the
+  at-most-once guard has nothing it could ever charge;
+- **re-reads LNET live first** and refuses a payment that is no longer
+  verified or no longer printed;
+- records **one sale per payment**, under a row lock shared with
+  reconciliation, and refuses a payment a till sale already accounts for;
+- **draws the LNET float exactly once**, dated when LNET drew it, so the
+  treasury's LNET balance and the float-drift warning agree with LNET's own;
+- refuses a closed session that was counted before the payment existed, and a
+  period the books are closed through;
+- when a Pointy sale is still waiting for that very top-up, offers to **link**
+  the payment to it instead of counting the customer twice.
+
+`GET /api/integrations/<key>/portal-payments/?date=`, `POST
+.../portal-payments/<serial>/record/` and `.../link/`. Preview with
+`make frontend-portal-payments-preview` (`?screen=list|sheet|pending|history`).
+
 ### Qareeb: cards on the till's shelf
 
 Qareeb sells prepaid cards, not top-ups against a subscriber, so it has **no

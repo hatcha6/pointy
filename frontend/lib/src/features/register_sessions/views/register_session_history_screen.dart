@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/integration_provider.dart';
 import '../../../data/models/register_session.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
@@ -11,6 +12,7 @@ import '../../../shared/authorization_guards.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../settings/views/integration_presentation.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'register_session_list.dart';
 import 'session_orders.dart';
@@ -23,12 +25,22 @@ class RegisterSessionHistoryScreen extends StatefulWidget {
     required this.capabilities,
     required this.navigation,
     this.initialSessionId,
+    this.portalPaymentProviders = const [],
+    this.onOpenPortalPayments,
   });
 
   final RegisterSessionHistoryViewModel viewModel;
   final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
+
+  /// Providers whose own website payments can be recorded as sales here (by
+  /// backend key). Each draws an action; empty, or with no handler, draws none.
+  final List<String> portalPaymentProviders;
+
+  /// Opens one provider's website payments. Awaited, so the shifts reload on
+  /// the way back: recording one changes a shift's sales and its variance.
+  final Future<void> Function(String providerKey)? onOpenPortalPayments;
 
   /// Selected on open, fetching the shift when it is older than the first page
   /// of history. Set when the screen is reached from an invoice's drawer-session
@@ -69,6 +81,15 @@ class _RegisterSessionHistoryScreenState
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.registerSessionHistoryTitle),
             actions: [
+              if (widget.onOpenPortalPayments != null)
+                for (final provider in widget.portalPaymentProviders)
+                  _PortalPaymentsAction(
+                    providerName: integrationProviderName(
+                      integrationProviderKeyFromJson(provider),
+                      l10n,
+                    ),
+                    onPressed: () => _openPortalPayments(provider),
+                  ),
               RegisterSessionsGuard(
                 capabilities: widget.capabilities,
                 fallback: const SizedBox.shrink(),
@@ -90,6 +111,46 @@ class _RegisterSessionHistoryScreenState
           ),
         );
       },
+    );
+  }
+
+  Future<void> _openPortalPayments(String provider) async {
+    final open = widget.onOpenPortalPayments;
+    if (open == null) return;
+    await open(provider);
+    if (mounted) await viewModel.loadSessions();
+  }
+}
+
+/// "Top-ups done on the provider's website": a labelled button where the bar
+/// has room, an icon with the same words as its tooltip where it does not.
+class _PortalPaymentsAction extends StatelessWidget {
+  const _PortalPaymentsAction({
+    required this.providerName,
+    required this.onPressed,
+  });
+
+  final String providerName;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final label = l10n.portalPaymentsOpenAction(providerName);
+    const icon = Icon(Icons.travel_explore_outlined);
+    if (MediaQuery.sizeOf(context).width < AppBreakpoints.tabletMin) {
+      return IconButton(
+        key: const ValueKey('open_portal_payments'),
+        tooltip: label,
+        onPressed: onPressed,
+        icon: icon,
+      );
+    }
+    return TextButton.icon(
+      key: const ValueKey('open_portal_payments'),
+      onPressed: onPressed,
+      icon: icon,
+      label: Text(label),
     );
   }
 }

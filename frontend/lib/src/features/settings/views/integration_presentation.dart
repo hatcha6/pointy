@@ -22,6 +22,20 @@ String integrationProviderName(
   };
 }
 
+/// A payment's state in a provider's own report (`verified`, `cancelled`…),
+/// or null for one this build has no words for. Shared by the till's line
+/// history and the screen that records website payments as sales.
+String? integrationPaymentStatusLabel(String code, AppLocalizations l10n) {
+  return switch (code) {
+    'verified' => l10n.portalPaymentsProviderStatusVerified,
+    'pending' => l10n.portalPaymentsProviderStatusPending,
+    'cancelled' => l10n.portalPaymentsProviderStatusCancelled,
+    'cancel_request' => l10n.portalPaymentsProviderStatusCancelRequest,
+    'rejected' => l10n.portalPaymentsProviderStatusRejected,
+    _ => null,
+  };
+}
+
 String integrationProviderTagline(
   IntegrationProviderKey key,
   AppLocalizations l10n,

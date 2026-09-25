@@ -159,6 +159,11 @@ WIPED_MODELS = (
     # products go with the catalog; the next sweep reads the shelf again.
     "integrations.integrationvoucher",
     "integrations.integrationvoucherbrand",
+    # The provider's own payments report as last mirrored — the agency's
+    # trade, read back. The next sweep reads it again from the top; the
+    # account's claim to have covered it is cleared with it (see
+    # perform_factory_reset).
+    "integrations.providerpayment",
     # inventory — all of it: quantities, ledgers, counts, transfers, batches,
     # serial units, consignment. The warehouses themselves are configuration.
     "inventory.consignmentagreement",
@@ -526,6 +531,16 @@ def perform_factory_reset(*, admin, connection=None) -> ResetSummary:
         from apps.attachments.models import Attachment
 
         Attachment.objects.exclude(role=Attachment.Role.SHOP_LOGO).delete()
+
+        # The provider accounts stay, but their stamps saying "the mirrored
+        # payments report is whole from here to there" described rows that
+        # are gone. Left in place, the next read would believe a stretch it
+        # never read again.
+        from apps.integrations.models import IntegrationAccount
+
+        IntegrationAccount.objects.update(
+            payments_synced_at=None, payments_covered_since=None
+        )
 
         _reseed(admin=admin)
 

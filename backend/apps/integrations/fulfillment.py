@@ -190,7 +190,30 @@ def _resolve_voucher_line(provider: str, variant) -> dict:
 
 
 def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
-    """Record, beside the line that sold it, what the provider still owes."""
+    """Record, beside the line that sold it, what the provider still owes.
+
+    Ordinarily nothing yet: the row is born ``pending`` and the till performs
+    it through the at-most-once guard. The one exception is a line recorded
+    from the provider's own payments report (:mod:`apps.integrations.
+    portal_sales`) — a top-up somebody already did on the provider's website.
+    That arrives with ``resolved["performed"]``, which only server code can
+    attach (no till payload carries it: :class:`IntegrationLineSerializer`
+    drops what it does not declare), and is born ``confirmed``. It is never
+    pending, not even inside its own transaction, so no reader anywhere can
+    catch it in a state the guard would charge.
+    """
+    performed = resolved.get("performed") or {}
+    extra = {}
+    if performed:
+        extra = {
+            "status": IntegrationFulfillment.Status.CONFIRMED,
+            "provider_reference": str(performed["reference"])[:64],
+            # When the provider did it, not when we wrote it down: the float
+            # was drawn then, and ``float_ledger.drawn`` dates it by this.
+            "confirmed_at": performed["at"],
+            "provider_receipt": dict(performed.get("receipt") or {}),
+            "performed_outside": True,
+        }
     return IntegrationFulfillment.objects.create(
         order_line=order_line,
         account=resolved["account"],
@@ -203,7 +226,7 @@ def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
         package_id=resolved["package_id"],
         package_name=resolved["package_name"],
         cost=resolved["cost"],
-        status=IntegrationFulfillment.Status.PENDING,
+        **{"status": IntegrationFulfillment.Status.PENDING, **extra},
     )
 
 
