@@ -32,6 +32,7 @@ class RelayPairingResponseSerializer(serializers.Serializer):
     shop_name = serializers.CharField(allow_blank=True)
     relay_public_api_url = serializers.URLField(allow_blank=True)
     relay_token = serializers.CharField(allow_blank=True)
+    issued_at = serializers.DateTimeField(allow_null=True)
     expires_at = serializers.DateTimeField(allow_null=True)
     relay_refresh_token = serializers.CharField(allow_blank=True)
     refresh_expires_at = serializers.DateTimeField(allow_null=True)

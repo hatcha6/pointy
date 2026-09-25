@@ -170,6 +170,7 @@ class FakeRelayControlClient:
             "installation_id": "installation-1",
             "device_id": device_id,
             "device_name": device_name,
+            "issued_at": timezone.now(),
             "expires_at": timezone.now() + timedelta(minutes=15),
             "refresh_token": "ptrf1.installation-1.refresh-secret",
             "refresh_expires_at": timezone.now() + timedelta(days=7),
@@ -1126,6 +1127,9 @@ class RelayBackendApiTests(TestCase):
             "ptrf1.installation-1.refresh-secret",
         )
         self.assertEqual(response.data["relay_public_api_url"], "https://relay.example")
+        # The relay's own issue time reaches the phone, so it can read the
+        # expiries in its own clock.
+        self.assertIsNotNone(response.data["issued_at"])
         self.assertEqual(
             fake_relay.issued_ticket_request,
             {

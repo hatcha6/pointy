@@ -143,6 +143,67 @@ void main() {
       },
     );
 
+    // The first probe found no way to the server; the next reached it and
+    // was answered with a server error. The warning belongs to the probe
+    // that recorded it, not to the screen forever after.
+    test('a stale connectivity warning does not outlive its probe', () async {
+      final repo = _FakeAuthRepository(
+        currentUserResults: [
+          Error(_Unreachable()),
+          const Error(
+            PosApiException(
+              message: 'Current user request failed with status 500',
+              statusCode: 500,
+              responseBody: '',
+            ),
+          ),
+        ],
+        onboardingResults: [
+          Error(_Unreachable()),
+          Error(_Unreachable()),
+          Error(_Unreachable()),
+          const Ok(OnboardingStatus(requiresOnboarding: false)),
+        ],
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadCurrentUser();
+      expect(viewModel.connectionProblem, LoginFailure.serverUnreachable);
+
+      await viewModel.loadCurrentUser();
+
+      expect(viewModel.status, AuthStatus.unauthenticated);
+      expect(viewModel.connectionProblem, isNull);
+    });
+
+    test('a refused password ends an earlier connection problem', () async {
+      final repo = _FakeAuthRepository(
+        currentUserResults: [Error(_Unreachable())],
+        onboardingResults: [
+          Error(_Unreachable()),
+          Error(_Unreachable()),
+          Error(_Unreachable()),
+        ],
+        loginResult: const Error(
+          PosApiException(
+            message: 'Login failed with status 400',
+            statusCode: 400,
+            responseBody: '{"detail":["Invalid username or password."]}',
+          ),
+        ),
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentUser();
+      expect(viewModel.connectionProblem, LoginFailure.serverUnreachable);
+
+      expect(await viewModel.login(username: 'owner', password: 'pw'), isFalse);
+
+      expect(viewModel.loginFailure, LoginFailure.invalidCredentials);
+      expect(viewModel.connectionProblem, isNull);
+    });
+
     test('a server that answers again clears the problem', () async {
       final repo = _FakeAuthRepository(
         currentUserResult: Error(_Unreachable()),
@@ -255,18 +316,32 @@ class _FakeAuthRepository extends AuthRepository {
     required this.onboardingResults,
     this.currentUser,
     this.currentUserResult,
+    this.currentUserResults,
     this.loginResult,
   }) : super(PosApiService());
 
   final List<Result<OnboardingStatus>> onboardingResults;
   final PosUser? currentUser;
   final Result<PosUser?>? currentUserResult;
+
+  /// One answer per probe, in order; the last one repeats.
+  final List<Result<PosUser?>>? currentUserResults;
   final Result<PosUser>? loginResult;
   int onboardingProbeCount = 0;
+  int currentUserProbeCount = 0;
 
   @override
-  Future<Result<PosUser?>> loadCurrentUser() async =>
-      currentUserResult ?? Ok(currentUser);
+  Future<Result<PosUser?>> loadCurrentUser() async {
+    final sequence = currentUserResults;
+    if (sequence != null && sequence.isNotEmpty) {
+      final index = currentUserProbeCount < sequence.length
+          ? currentUserProbeCount
+          : sequence.length - 1;
+      currentUserProbeCount++;
+      return sequence[index];
+    }
+    return currentUserResult ?? Ok(currentUser);
+  }
 
   @override
   Future<Result<PosUser>> login({

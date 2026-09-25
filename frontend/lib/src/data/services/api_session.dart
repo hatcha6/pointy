@@ -109,6 +109,21 @@ String? relayErrorOf(http.Response response) {
 /// Whether the relay itself answered [response] — see [relayErrorOf].
 bool isRelayError(http.Response response) => relayErrorOf(response) != null;
 
+/// What came of asking for a new ticket after the relay refused one.
+enum RelayTicketRecovery {
+  /// A fresh ticket is installed; the request may be sent again.
+  refreshed,
+
+  /// The relay answered the device's refresh with 402: the shop's
+  /// remote-access subscription is off. That is the answer to the request
+  /// too, and no ticket minted now would change it.
+  subscriptionInactive,
+
+  /// No ticket could be had — the relay was unreachable, or it no longer
+  /// knows the device. The request keeps the refusal it got.
+  failed,
+}
+
 /// A 401 the relay answered: the ticket on the request is not one it holds.
 bool isRelayTicketRejection(http.Response response) =>
     response.statusCode == 401 && isRelayError(response);
@@ -187,7 +202,7 @@ class PosApiSession {
 
   /// Invoked when the relay refuses the ticket a request carried — a 401 of
   /// the relay's own, never the backend's — before the request is given up on.
-  /// Returns whether the session now holds a ticket the relay should accept
+  /// Answers whether the session now holds a ticket the relay should accept
   /// (the coordinator mints one from the device's refresh token), in which
   /// case the request is sent once more.
   ///
@@ -196,7 +211,7 @@ class PosApiSession {
   /// an evicted Redis key, a phone clock ahead of the relay's — turned every
   /// request into a 401 that read as "signed out", and the sign-in that
   /// followed failed on the same 401, reported as a wrong password.
-  Future<bool> Function()? onRelayTicketRejected;
+  Future<RelayTicketRecovery> Function()? onRelayTicketRejected;
 
   /// LRU of (etag, body) per request URL for opt-in conditional GETs — the
   /// catalog/category/unit/modifier/notification list endpoints send ETags so
@@ -903,10 +918,12 @@ class PosApiSession {
       if (ticketUsed.isEmpty || !isRelayTicketRejection(response)) {
         return response;
       }
-      if (!await _recoverRelayTicket(ticketUsed)) {
-        return response;
-      }
-      return attemptOnce();
+      return switch (await _recoverRelayTicket(ticketUsed)) {
+        RelayTicketRecovery.refreshed => attemptOnce(),
+        RelayTicketRecovery.subscriptionInactive =>
+          _relaySubscriptionInactiveAnswer(response),
+        RelayTicketRecovery.failed => response,
+      };
     }
 
     if (method != 'GET') {
@@ -1002,22 +1019,40 @@ class PosApiSession {
   /// again: a newer ticket is already installed (another request's recovery,
   /// or a scheduled refresh, beat this one to it), or the coordinator mints one
   /// now. Rejections of the same ticket coalesce on the coordinator's side.
-  Future<bool> _recoverRelayTicket(String ticketUsed) async {
+  Future<RelayTicketRecovery> _recoverRelayTicket(String ticketUsed) async {
     if (_relayToken != ticketUsed) {
-      return usesRelay;
+      return usesRelay
+          ? RelayTicketRecovery.refreshed
+          : RelayTicketRecovery.failed;
     }
     final recover = onRelayTicketRejected;
     if (recover == null) {
-      return false;
+      return RelayTicketRecovery.failed;
     }
+    final RelayTicketRecovery recovery;
     try {
-      if (!await recover()) {
-        return false;
-      }
+      recovery = await recover();
     } on Object {
-      return false;
+      return RelayTicketRecovery.failed;
     }
-    return usesRelay && _relayToken != ticketUsed;
+    if (recovery == RelayTicketRecovery.refreshed &&
+        !(usesRelay && _relayToken != ticketUsed)) {
+      return RelayTicketRecovery.failed;
+    }
+    return recovery;
+  }
+
+  /// The relay's answer to the device's refresh — a lapsed subscription —
+  /// handed back as the answer to the request that asked for it. It is what
+  /// the relay says to a ticket it knows on that installation, and it is
+  /// what the screen has to explain: not a lost ticket, not a password.
+  http.Response _relaySubscriptionInactiveAnswer(http.Response rejected) {
+    return http.Response(
+      jsonEncode({'error': 'relay subscription inactive'}),
+      402,
+      headers: {'content-type': 'application/json'},
+      request: rejected.request,
+    );
   }
 
   void _recordPerformance({

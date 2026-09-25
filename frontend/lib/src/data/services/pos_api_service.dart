@@ -306,7 +306,7 @@ class PosApiService {
   /// Fires when the relay refuses the session's ticket, before the request
   /// is given up on; answers whether a fresh ticket is now installed. See
   /// [PosApiSession.onRelayTicketRejected].
-  set onRelayTicketRejected(Future<bool> Function()? callback) {
+  set onRelayTicketRejected(Future<RelayTicketRecovery> Function()? callback) {
     _session.onRelayTicketRejected = callback;
   }
 

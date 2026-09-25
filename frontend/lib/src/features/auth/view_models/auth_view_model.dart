@@ -70,9 +70,11 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> loadCurrentUser({bool forgetRememberedUser = false}) async {
     _status = AuthStatus.checking;
     _hasError = false;
-    // A new probe is a new situation: whatever the last sign-in attempt ran
-    // into (a server that has since come back, say) is not it.
+    // A new probe is a new situation: whatever the last attempt ran into (a
+    // server that has since come back, say) is not it. The probe below
+    // records its own finding, if the way to the server is still broken.
     _loginFailure = null;
+    _connectionProblem = null;
     notifyListeners();
 
     if (forgetRememberedUser) {
@@ -230,9 +232,9 @@ class AuthViewModel extends ChangeNotifier {
         _status = AuthStatus.unauthenticated;
         _hasError = true;
         _loginFailure = failure;
-        if (failure.isConnectionProblem) {
-          _connectionProblem = failure;
-        }
+        // A refused password, a throttle, a server error: the server was
+        // reached, so any earlier connection problem is over.
+        _connectionProblem = failure.isConnectionProblem ? failure : null;
         unawaited(
           _analyticsEngine?.trackUsage(
                 AnalyticsEventName.authLoginFailed,

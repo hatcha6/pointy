@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_frontend/src/data/models/connection_profile.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
+import 'package:pointy_frontend/src/data/services/api_session.dart';
 import 'package:pointy_frontend/src/data/services/backend_discovery_service.dart';
 import 'package:pointy_frontend/src/data/services/connection_coordinator.dart';
 import 'package:pointy_frontend/src/data/services/connection_status_controller.dart';
@@ -994,7 +995,11 @@ void main() {
           coordinator.refreshRelayTicketAfterRejection(),
         ]);
 
-        expect(answers, [true, true, true]);
+        expect(answers, [
+          RelayTicketRecovery.refreshed,
+          RelayTicketRecovery.refreshed,
+          RelayTicketRecovery.refreshed,
+        ]);
         expect(refreshRequests, 1);
         final profile = await storage.loadProfile();
         expect(profile?.relayToken, 'ptt1.installation-1.new');
@@ -1047,7 +1052,10 @@ void main() {
         final coordinator = buildOnRelay(client, service: service);
         addTearDown(coordinator.dispose);
 
-        expect(await coordinator.refreshRelayTicketAfterRejection(), isFalse);
+        expect(
+          await coordinator.refreshRelayTicketAfterRejection(),
+          RelayTicketRecovery.failed,
+        );
 
         final profile = await storage.loadProfile();
         expect(profile?.relayToken, isEmpty);
@@ -1076,7 +1084,10 @@ void main() {
         final coordinator = buildOnRelay(client, service: service);
         addTearDown(coordinator.dispose);
 
-        expect(await coordinator.refreshRelayTicketAfterRejection(), isFalse);
+        expect(
+          await coordinator.refreshRelayTicketAfterRejection(),
+          RelayTicketRecovery.failed,
+        );
 
         final profile = await storage.loadProfile();
         expect(
@@ -1086,6 +1097,43 @@ void main() {
         expect(profile?.relayToken, 'ptt1.installation-1.paired');
       },
     );
+
+    // The relay answers a lapsed subscription before spending the token, so
+    // the device keeps its way back in for when the subscription returns —
+    // and the answer is remembered, so the burst of refused requests that
+    // follows is not a burst of exchanges.
+    test('a subscription the relay says is off keeps the credentials and is '
+        'remembered', () async {
+      var refreshRequests = 0;
+      final client = MockClient((request) async {
+        if (request.url.path == '/v1/relay-ticket-refresh') {
+          refreshRequests++;
+          return http.Response(
+            jsonEncode({'error': 'relay subscription inactive'}),
+            402,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('', 404);
+      });
+      final service = PosApiService(client: client, baseUrl: _relayApi);
+      final coordinator = buildOnRelay(client, service: service);
+      addTearDown(coordinator.dispose);
+
+      expect(
+        await coordinator.refreshRelayTicketAfterRejection(),
+        RelayTicketRecovery.subscriptionInactive,
+      );
+      expect(
+        await coordinator.refreshRelayTicketAfterRejection(),
+        RelayTicketRecovery.subscriptionInactive,
+      );
+
+      expect(refreshRequests, 1, reason: 'the second answer came from memory');
+      final profile = await storage.loadProfile();
+      expect(profile?.relayRefreshToken, 'ptrf1.installation-1.refresh');
+      expect(profile?.relayToken, 'ptt1.installation-1.old');
+    });
 
     test(
       'a relay that cannot be reached keeps the credentials for next time',
@@ -1097,7 +1145,10 @@ void main() {
         final coordinator = buildOnRelay(client, service: service);
         addTearDown(coordinator.dispose);
 
-        expect(await coordinator.refreshRelayTicketAfterRejection(), isFalse);
+        expect(
+          await coordinator.refreshRelayTicketAfterRejection(),
+          RelayTicketRecovery.failed,
+        );
 
         final profile = await storage.loadProfile();
         expect(profile?.relayRefreshToken, 'ptrf1.installation-1.refresh');
@@ -1264,6 +1315,73 @@ void main() {
         await _eventually(() => pairings >= 2, 'the next attempt');
       },
     );
+
+    // The phone's clock runs twelve minutes ahead of the relay's. Read as
+    // absolute timestamps the fresh 15-minute ticket has three minutes left
+    // and is due at once; read against the relay's own issue time it has
+    // its full fifteen.
+    test("reads the expiry in the device's own clock", () async {
+      final storage = MemoryConnectionProfileStorage(
+        deviceId: 'device-1',
+        profile: const ConnectionProfile(
+          localApiBaseUrl: _lanApi,
+          relayApiBaseUrl: _relayApi,
+          relayToken: '',
+          installationId: 'installation-1',
+          shopName: 'متجر آمن',
+        ),
+      );
+      final relayNow = DateTime.now().toUtc().subtract(
+        const Duration(minutes: 12),
+      );
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/relay/pairing/') {
+          return _jsonResponse({
+            'remote_access_supported': true,
+            'installation_id': 'installation-1',
+            'shop_name': 'متجر آمن',
+            'relay_public_api_url': 'https://relay.test',
+            'relay_token': 'ptt1.installation-1.new',
+            'issued_at': relayNow.toIso8601String(),
+            'expires_at': relayNow
+                .add(const Duration(minutes: 15))
+                .toIso8601String(),
+            'relay_refresh_token': 'ptrf1.installation-1.refresh',
+            'refresh_expires_at': relayNow
+                .add(const Duration(days: 7))
+                .toIso8601String(),
+            'reason': '',
+          });
+        }
+        fail('only pairing was expected, not ${request.url}');
+      });
+      final service = PosApiService(client: client, baseUrl: _lanApi);
+      final coordinator = ConnectionCoordinator(
+        service: service,
+        discovery: BackendDiscoveryService(
+          client: client,
+          defaultApiBaseUrl: _lanApi,
+          udpDiscovery: _noUdp,
+          subnetSweep: _noSweep,
+        ),
+        storage: storage,
+        relayTicketRefreshClient: RelayTicketRefreshClient(client: client),
+      );
+      addTearDown(coordinator.dispose);
+
+      await coordinator.pairAuthenticatedDevice();
+
+      final profile = await storage.loadProfile();
+      final now = DateTime.now().toUtc();
+      final expiresIn = profile!.relayTokenExpiresAt!.difference(now);
+      expect(expiresIn.inSeconds, closeTo(15 * 60, 10));
+      expect(
+        profile.shouldRefreshRelayTicketAt(now, const Duration(minutes: 5)),
+        isFalse,
+      );
+      final refreshExpiresIn = profile.relayRefreshExpiresAt!.difference(now);
+      expect(refreshExpiresIn.inMinutes, closeTo(7 * 24 * 60, 1));
+    });
 
     test('does not keep asking a shop that has no remote access', () async {
       final storage = MemoryConnectionProfileStorage(

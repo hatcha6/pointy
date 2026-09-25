@@ -14,7 +14,14 @@ class RelayTicketRefreshException implements Exception {
   final int statusCode;
   final String body;
 
-  bool get isCredentialRejected => statusCode == 401 || statusCode == 402;
+  /// The relay does not know this token — spent, expired, or never issued.
+  /// Nothing minted from it will be accepted again.
+  bool get isCredentialRejected => statusCode == 401;
+
+  /// The token is fine; the shop's remote-access subscription is not. The
+  /// relay answers this before spending the token, so the device keeps its
+  /// way back in for when the subscription is restored.
+  bool get isSubscriptionInactive => statusCode == 402;
 
   @override
   String toString() => 'Relay ticket refresh failed with status $statusCode';
@@ -69,6 +76,7 @@ class RelayTicketRefreshClient {
       'shop_name': '',
       'relay_public_api_url': _relayPublicApiUrl(relayApiBaseUrl),
       'relay_token': payload['token'],
+      'issued_at': payload['issued_at'],
       'expires_at': payload['expires_at'],
       'relay_refresh_token': payload['refresh_token'],
       'refresh_expires_at': payload['refresh_expires_at'],

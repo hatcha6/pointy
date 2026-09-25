@@ -7,6 +7,7 @@ class RelayPairing {
     required this.relayToken,
     required this.reason,
     this.relayRefreshToken = '',
+    this.issuedAt,
     this.expiresAt,
     this.refreshExpiresAt,
   });
@@ -18,6 +19,11 @@ class RelayPairing {
   final String relayToken;
   final String reason;
   final String relayRefreshToken;
+
+  /// The relay's own clock when the ticket was issued, so this device can
+  /// measure how far its clock is from the relay's. Null from a relay or
+  /// backend that predates it.
+  final DateTime? issuedAt;
   final DateTime? expiresAt;
   final DateTime? refreshExpiresAt;
 
@@ -34,6 +40,7 @@ class RelayPairing {
       relayToken: json['relay_token']?.toString() ?? '',
       reason: json['reason']?.toString() ?? '',
       relayRefreshToken: json['relay_refresh_token']?.toString() ?? '',
+      issuedAt: _dateTimeFromJson(json['issued_at']),
       expiresAt: _dateTimeFromJson(json['expires_at']),
       refreshExpiresAt: _dateTimeFromJson(json['refresh_expires_at']),
     );

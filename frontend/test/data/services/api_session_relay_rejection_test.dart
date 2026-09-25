@@ -59,7 +59,7 @@ void main() {
             baseUrl: _relay,
             relayToken: 'ptt1.new',
           );
-          return true;
+          return RelayTicketRecovery.refreshed;
         };
 
         final response = await session.get('products/');
@@ -81,7 +81,7 @@ void main() {
           baseUrl: _relay,
           relayToken: 'ptt1.new',
         );
-        return true;
+        return RelayTicketRecovery.refreshed;
       };
 
       final response = await session.post(
@@ -96,12 +96,29 @@ void main() {
     test('is given up on when no new ticket could be minted', () async {
       final tickets = <String?>[];
       final session = _sessionOnRelay(ticketsSeen: tickets);
-      session.onRelayTicketRejected = () async => false;
+      session.onRelayTicketRejected = () async => RelayTicketRecovery.failed;
 
       final response = await session.get('products/');
 
       expect(response.statusCode, 401);
       expect(relayErrorOf(response), 'relay token rejected');
+      expect(tickets, ['ptt1.old']);
+    });
+
+    // The relay refused the ticket, and then refused the device's refresh
+    // for a lapsed subscription. That second answer is the true one: the
+    // request is answered with it, so the screen can name the subscription
+    // rather than a lost ticket.
+    test('a subscription found lapsed at the refresh is the answer', () async {
+      final tickets = <String?>[];
+      final session = _sessionOnRelay(ticketsSeen: tickets);
+      session.onRelayTicketRejected = () async =>
+          RelayTicketRecovery.subscriptionInactive;
+
+      final response = await session.get('products/');
+
+      expect(response.statusCode, 402);
+      expect(relayErrorOf(response), 'relay subscription inactive');
       expect(tickets, ['ptt1.old']);
     });
 
@@ -140,7 +157,7 @@ void main() {
         var refreshes = 0;
         session.onRelayTicketRejected = () async {
           refreshes++;
-          return true;
+          return RelayTicketRecovery.refreshed;
         };
 
         final response = await session.get('products/');
@@ -160,7 +177,7 @@ void main() {
       var refreshes = 0;
       session.onRelayTicketRejected = () async {
         refreshes++;
-        return true;
+        return RelayTicketRecovery.refreshed;
       };
 
       final response = await session.get('auth/me/');
@@ -185,7 +202,7 @@ void main() {
         var refreshes = 0;
         session.onRelayTicketRejected = () async {
           refreshes++;
-          return true;
+          return RelayTicketRecovery.refreshed;
         };
 
         final response = await session.get('products/');
@@ -207,7 +224,7 @@ void main() {
               )
               ..onRelayTicketRejected = () async {
                 refreshes++;
-                return true;
+                return RelayTicketRecovery.refreshed;
               };
 
         final response = await session.get('products/');
