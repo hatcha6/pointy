@@ -61,6 +61,9 @@ class UserSaveFailure {
   /// Another account already has this username.
   bool get isUsernameTaken => _mentions('username', 'already');
 
+  /// The name breaks Django's username rule — in practice, a space in it.
+  bool get isUsernameInvalid => _mentions('username', 'valid username');
+
   /// The role carries permissions the acting admin does not hold.
   bool get isRoleBeyondActor => _mentions('role', 'hold yourself');
 
@@ -80,6 +83,9 @@ class UserSaveFailure {
   String? describe(AppLocalizations l10n) {
     if (isUsernameTaken) {
       return l10n.usernameTakenError;
+    }
+    if (isUsernameInvalid) {
+      return l10n.usernameInvalidError;
     }
     if (isRoleBeyondActor) {
       return l10n.userRoleNotAssignableError;
@@ -101,6 +107,9 @@ class UserSaveFailure {
   String? usernameMessage(AppLocalizations l10n) {
     if (isUsernameTaken) {
       return l10n.usernameTakenError;
+    }
+    if (isUsernameInvalid) {
+      return l10n.usernameInvalidError;
     }
     return fieldMessages['username'];
   }

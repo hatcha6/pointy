@@ -12,6 +12,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../users/username_rules.dart';
 import '../view_models/user_settings_view_model.dart';
 
 class UserSettingsScreen extends StatefulWidget {
@@ -277,7 +278,7 @@ class _ProfileFormState extends State<_ProfileForm> {
                 textInputAction: TextInputAction.next,
                 validator: (value) => (value ?? '').trim().isEmpty
                     ? l10n.requiredFieldError
-                    : null,
+                    : usernameFormatError(l10n, value),
               ),
               TextFormField(
                 controller: _emailController,

@@ -2959,6 +2959,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'اسم المستخدم مستخدم من قبل. اختر اسمًا آخر.';
 
   @override
+  String get usernameInvalidError =>
+      'اسم المستخدم كلمة واحدة بلا مسافات: حروف وأرقام، ويقبل من الرموز ‎. @ + - _‎ فقط.';
+
+  @override
   String get userRoleNotAssignableError =>
       'لا يمكنك إسناد هذا الدور لأنه يتضمن صلاحيات لا تملكها أنت.';
 

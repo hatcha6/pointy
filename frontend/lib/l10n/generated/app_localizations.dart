@@ -5130,6 +5130,12 @@ abstract class AppLocalizations {
   /// **'اسم المستخدم مستخدم من قبل. اختر اسمًا آخر.'**
   String get usernameTakenError;
 
+  /// Shown on the username field when it contains a space or a symbol the server's username rule refuses (letters, digits and . @ + - _ only).
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم كلمة واحدة بلا مسافات: حروف وأرقام، ويقبل من الرموز ‎. @ + - _‎ فقط.'**
+  String get usernameInvalidError;
+
   /// Shown when the acting admin holds fewer permissions than the role they tried to assign.
   ///
   /// In ar, this message translates to:

@@ -6,6 +6,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../users/username_rules.dart';
 import '../view_models/auth_view_model.dart';
 
 class InitialAdminSetupScreen extends StatefulWidget {
@@ -209,7 +210,7 @@ class _SetupForm extends StatelessWidget {
             ),
             validator: (value) => value == null || value.trim().isEmpty
                 ? l10n.requiredField
-                : null,
+                : usernameFormatError(l10n, value),
           ),
           SizedBox(height: spacing.sm),
           ResponsiveFormGrid(

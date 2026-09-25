@@ -11,6 +11,7 @@ import '../../../shared/query_controls/debounced_search_field.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../role_presentation.dart';
+import '../username_rules.dart';
 import '../view_models/user_management_view_model.dart';
 
 /// Opens the per-user permission editor for [user]; resolves to true if the
@@ -609,7 +610,7 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                         validator: (value) =>
                             value == null || value.trim().isEmpty
                             ? l10n.requiredField
-                            : null,
+                            : usernameFormatError(l10n, value),
                       ),
                       PointyPasswordField(
                         controller: _passwordController,

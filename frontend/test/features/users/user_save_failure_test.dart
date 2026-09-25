@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/data/services/api_session.dart';
 import 'package:pointy_frontend/src/features/users/user_save_failure.dart';
+import 'package:pointy_frontend/src/features/users/username_rules.dart';
 
 /// One generic line used to stand in for every refusal, which is how a
 /// username that was already taken came to be reported as "creating a
@@ -28,6 +29,29 @@ void main() {
     expect(failure.isUsernameTaken, isTrue);
     expect(failure.describe(l10n), l10n.usernameTakenError);
     expect(failure.usernameMessage(l10n), l10n.usernameTakenError);
+  });
+
+  test('a username the server\'s rule refuses is explained in Arabic', () {
+    // Field export, 2026-09-24: five refusals in twenty seconds, each shown
+    // as Django's English sentence to an admin reading Arabic.
+    final failure = UserSaveFailure.fromError(
+      refusal(
+        '{"username": ["Enter a valid username. This value may contain only '
+        'letters, numbers, and @/./+/-/_ characters."]}',
+      ),
+    )!;
+
+    expect(failure.isUsernameInvalid, isTrue);
+    expect(failure.isUsernameTaken, isFalse);
+    expect(failure.describe(l10n), l10n.usernameInvalidError);
+    expect(failure.usernameMessage(l10n), l10n.usernameInvalidError);
+  });
+
+  test('a space in a username is caught before anything is sent', () {
+    expect(usernameFormatError(l10n, 'محمد علي'), l10n.usernameInvalidError);
+    expect(usernameFormatError(l10n, ' محمد '), isNull);
+    expect(usernameFormatError(l10n, 'mohamed.ali_2'), isNull);
+    expect(usernameFormatError(l10n, ''), isNull);
   });
 
   test('a role beyond the acting admin explains the guard', () {
