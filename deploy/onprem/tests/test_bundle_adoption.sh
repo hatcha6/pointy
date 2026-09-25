@@ -172,6 +172,7 @@ test_adopt_creates_the_wsl_subdirectory_for_an_older_deployment() {
   make_bundle "${PU_TEST_DIR}/b" 1.1.0
   pu_adopt_bundle "${PU_TEST_DIR}/b" 1.1.0
   assert_file_contains wsl/bootstrap-wsl.ps1 'from 1.1.0'
+  assert_file_contains wsl/collect-diagnostics.ps1 'from 1.1.0'
   assert_file_contains wsl/timezone-map.txt 'from 1.1.0'
 }
 

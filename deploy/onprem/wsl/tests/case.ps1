@@ -28,6 +28,12 @@ switch ($Name) {
     "no-msi-no-internet" {
         $script:MsiPresent = $false; $script:UpdateRc = 1; $script:MsiMakesItWork = $false
     }
+    "inbox-wsl-installs-msi" {
+        # Windows 10's inbox wsl.exe: answers --status, has no --version, and
+        # cannot run systemd. It used to count as "already working".
+        $script:InboxOnly = $true; $script:WslReady = $false
+        $script:MsiQueue.Enqueue(0); $script:MsiMakesItWork = $true
+    }
     default { throw "unknown scenario $Name" }
 }
 if ($Name -eq "odd-exit-code-but-wsl-works") {

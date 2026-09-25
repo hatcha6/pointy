@@ -203,9 +203,12 @@ database password and the Django secret key.
   every 5 minutes. It runs `docker compose up -d` to recreate any removed or
   stopped container and restarts any container left "unhealthy" (which the
   restart policy alone will not do). On Windows a single scheduled task,
-  `PointyWSL`, starts the distro on the same cadence so systemd is there to run
-  that timer — and it needs **no** interactive logon, unlike the Docker Desktop
-  install it replaces. See INSTALL.md > Resilience.
+  `PointyWSL`, runs a supervisor from boot to shutdown that holds the distro
+  open (WSL powers a distro off ~15 s after its last Windows-side client
+  exits, and systemd inside does not count), starts it again within seconds if
+  it stops, and keeps the LAN bridge pointed at it — with **no** interactive
+  logon, unlike the Docker Desktop install it replaces. See INSTALL.md >
+  Resilience.
 - **Long task hangs:** Celery enforces soft/hard time limits
   (`CELERY_TASK_*_TIME_LIMIT`) so a stuck task cannot pin a worker forever;
   backup/restore are exempted with their own higher limits.
