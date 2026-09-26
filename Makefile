@@ -136,7 +136,7 @@ ENDURANCE_WORKERS ?= 4
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
-	onprem-test onprem-rehearsal onprem-rehearsal-clean upgrade-rehearsal upgrade-check \
+	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
 
 help: ## Show available commands.
@@ -685,6 +685,9 @@ onprem-rehearsal: docker-check ## Rehearse real updates against real Docker (ins
 
 onprem-rehearsal-clean: ## Reclaim the rehearsal's cached images, bundles and any leftover shops.
 	bash deploy/onprem/tests/rehearsal/run-rehearsal.sh clean
+
+onprem-move-test: docker-check ## Export a shop with move-server.sh and import it on a second machine (two throwaway Docker-in-Docker containers).
+	bash deploy/onprem/tests/move-server-roundtrip.sh
 
 upgrade-rehearsal: postgres-ready ## Upgrade a POPULATED shop from the last release to this one (UPGRADE_FROM/UPGRADE_TO).
 	$(VENV)/bin/python scripts/rehearse_upgrade.py $(UPGRADE_FROM) $(UPGRADE_TO)

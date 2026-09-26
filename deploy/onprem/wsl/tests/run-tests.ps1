@@ -85,6 +85,10 @@ Write-Host ""
 if ($LASTEXITCODE -ne 0) { $fail++; $failed += "diagnostics" }
 
 Write-Host ""
+& (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot "keeper.ps1")
+if ($LASTEXITCODE -ne 0) { $fail++; $failed += "keeper" }
+
+Write-Host ""
 if ($fail -gt 0) {
     Write-Host ("# bootstrap-wsl: {0} passed, {1} failed -> {2}" -f $pass, $fail, ($failed -join ", ")) -ForegroundColor Red
     exit 1

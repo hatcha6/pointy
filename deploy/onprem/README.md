@@ -171,6 +171,46 @@ manual backups, and scheduled backups all see the same paths.
 For stronger recovery guarantees, pair Pointy's app backup with PostgreSQL
 physical/base backups and WAL archiving.
 
+## Moving A Server To Another Machine
+
+`move-server.sh` moves a whole installation: the deploy folder with its `.env`,
+every Docker volume (the database, and with it the installation ID, plus media,
+backups and the relay connector's certificate) and the exact images. The new
+machine comes up as the same installation, and tills find it again by its
+installation ID. Use it to take a shop off WSL onto a Linux box, or to replace a
+dead server.
+
+```sh
+# Old server, at closing time. It STOPS the stack for good; --restart = rehearsal.
+sudo bash move-server.sh export /media/usb/PointyMove
+# New machine (Linux Mint 21/22, Ubuntu 22.04/24.04, Debian 12), same drive attached:
+sudo bash /media/usb/PointyMove/move-server.sh import /media/usb/PointyMove
+```
+
+On a WSL shop, run the export from Windows instead: `wsl\keep-pointy-running.ps1
+-ExportTo D:\PointyMove`. Archives are written in 1 GB pieces, so a FAT32 stick
+works. The import installs Docker from Docker's own apt repository, because
+`get.docker.com` refuses Linux Mint. It rewrites WSL-only backup drive paths
+(`/mnt/<letter>`) and names each one it changed. `make onprem-move-test` runs the
+whole move between two throwaway Docker-in-Docker machines.
+
+## WSL Stopgap: Keeping The Server Up From The Signed-In Session
+
+WSL powers the distro off about 15 s after its last Windows-side `wsl.exe`
+exits, and the session-0 `PointyWSL` boot task has not been reliable in the
+field. `wsl\keep-pointy-running.ps1 -Install` (elevated, as the Windows user that
+installed Pointy) replaces it with a minimised "Pointy server" window that opens
+at every sign-in:
+
+- It holds the distro open, and restarts it when WSL stops it.
+- It asks the distro's watchdog to bring the stack up.
+- It re-points the LAN forward at the VM, and checks the path a till takes
+  every minute.
+
+It needs Windows to sign in automatically. `-Uninstall` puts the boot task back.
+This is a bridge for shops that are moving to Linux, not a supported way to run
+a server.
+
 ## Security
 
 The stack runs unprivileged and read-only wherever it can: non-root users,
