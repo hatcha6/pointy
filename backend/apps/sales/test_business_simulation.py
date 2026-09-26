@@ -87,6 +87,15 @@ class BusinessSimulationTests(TestCase):
         self.assertGreaterEqual(sim.expense_retraction_assertions, 1)
         self.assertGreaterEqual(sim.supplier_payment_retraction_assertions, 1)
         self.assertGreaterEqual(sim.stock_count_retraction_assertions, 1)
+        # And for a customer's payment given back, whose one action has four
+        # outcomes that land on different figures: a credit invoice owed again
+        # (the customer's account), a cash sale refusing to be left unpaid and
+        # a payment refusing to be handed back twice (nothing may move), and a
+        # payment moved to another tender (the drawers, not the sale).
+        self.assertGreaterEqual(sim.customer_payment_cancel_assertions, 1)
+        self.assertGreaterEqual(sim.cash_sale_cancel_refusals, 1)
+        self.assertGreaterEqual(sim.given_back_refusals, 1)
+        self.assertGreaterEqual(sim.payment_replacement_assertions, 1)
         # And for the cap that keeps a line's discount inside the line's own
         # rounding regime. The engine's cap and the order line's subtotal agree
         # everywhere except on a line the discounts consumed ENTIRELY whose

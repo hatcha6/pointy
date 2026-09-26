@@ -1886,6 +1886,10 @@ def record_customer_account_payment(
         Order.objects.open_credit()
         .filter(customer=customer)
         .select_for_update()
+        # Read under the lock, once, rather than per invoice twice over (the
+        # total below, then each portion). Each payment is then recorded against
+        # a freshly locked copy, so no status is ever computed off this cache.
+        .with_balance_relations()
         .order_by("created_at", "id")
     )
     outstanding = sum((invoice.balance_due for invoice in invoices), Decimal("0.00"))
@@ -2583,6 +2587,11 @@ def create_order_adjustment(
             commission_amount=commission_amount,
             external_reference=f"{adjustment.adjustment_type}:{adjustment.pk}",
         )
+    # On a job's invoice the money comes back and the parts stay with the job:
+    # what the loop above put on the shelf for them leaves again.
+    from apps.operations.invoice_returns import keep_job_parts
+
+    keep_job_parts(adjustment)
     return adjustment
 
 

@@ -109,7 +109,9 @@ const moneyPaySupplierLesson = TutorLesson(
   title: 'دفع مستحقات مورّد',
   summary: 'سدّد أمر شراء وصلت بضاعته كاملة، وسجّل الدفعة على المورّد.',
   seed: SandboxSeed.groceryBackOfficeWithDelivery,
-  capability: AppCapability.accessPurchasing,
+  // Not purchasing access: a buyer runs the order but, by default, does not
+  // pay for it, and the button this lesson points at is not theirs.
+  capability: AppCapability.recordSupplierPayment,
   guideId: 'purchasing.pay_supplier',
   requires: ['purchasing.receive'],
   steps: [

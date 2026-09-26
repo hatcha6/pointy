@@ -109,9 +109,9 @@ def _open_invoices_by_customer(customer_ids):
     invoices = (
         Order.objects.open_credit()
         .filter(customer_id__in=customer_ids, doc_status=DocumentStatus.SUBMITTED)
-        # ``balance_due`` sums payments in Python; prefetched, it costs one query
-        # for the whole run rather than one per invoice.
-        .prefetch_related("payments")
+        # ``balance_due`` sums payments and returns in Python; prefetched, it
+        # costs two queries for the whole run rather than two per invoice.
+        .with_balance_relations()
         .order_by("created_at", "id")
     )
     by_customer = defaultdict(list)
@@ -277,6 +277,10 @@ def settle_staff_purchases(payroll_run, *, actor=None):
         invoice.pk: invoice
         for invoice in Order.objects.select_for_update()
         .filter(pk__in={adjustment.order_id for adjustment in adjustments} - {None})
+        # The returns ``balance_due`` counts, read once for every invoice. Not
+        # the payments: each invoice takes one below and then has its status
+        # recomputed off this same object, which must see the new row.
+        .prefetch_related("adjustments")
         .order_by("pk")
     }
     shrunk = False

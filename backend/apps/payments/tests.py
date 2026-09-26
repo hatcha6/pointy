@@ -106,6 +106,71 @@ class PaymentAuthorizationTests(TestCase):
         self.assertIn("amount", response.data)
         self.assertEqual(Payment.objects.filter(order=self.cashier_order).count(), 1)
 
+    def test_payment_create_refuses_a_negative_amount(self):
+        # Money goes back by cancelling a payment or through a return, and both
+        # leave a trail. A bare negative row left none: the invoice owed again
+        # and the cash box dropped, with nothing to say why.
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        response = client.post(
+            reverse("payment-list"),
+            {
+                "order": self.cashier_order.pk,
+                "method": Payment.Method.CASH,
+                "amount": "-5.00",
+                "external_reference": "cancel:1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("amount", response.data)
+        self.assertEqual(Payment.objects.filter(order=self.cashier_order).count(), 1)
+        self.assertEqual(self.cashier_order.amount_paid, Decimal("4.00"))
+
+    def test_payment_create_refuses_a_zero_amount(self):
+        # A zero payment settles nothing; it is only a row someone must explain.
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        response = client.post(
+            reverse("payment-list"),
+            {
+                "order": self.cashier_order.pk,
+                "method": Payment.Method.CASH,
+                "amount": "0.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("amount", response.data)
+        self.assertEqual(Payment.objects.filter(order=self.cashier_order).count(), 1)
+
+    def test_a_refund_row_still_takes_a_reference_by_patch(self):
+        # Only a NEW payment has to be positive. An update re-reads the stored
+        # amount, and a refund row's is negative by design: the evidence the
+        # card-receipt flow attaches afterwards must keep reaching it.
+        refund = Payment.objects.create(
+            order=self.cashier_order,
+            method=Payment.Method.CASH,
+            amount=Decimal("-4.00"),
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.patch(
+            reverse("payment-detail", args=[refund.pk]),
+            {"external_reference": "REFUND-1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        refund.refresh_from_db()
+        self.assertEqual(refund.external_reference, "REFUND-1")
+        self.assertEqual(refund.amount, Decimal("-4.00"))
+
     def test_payment_create_replay_with_idempotency_key_returns_same_payment(self):
         client = APIClient()
         client.force_authenticate(user=self.cashier)

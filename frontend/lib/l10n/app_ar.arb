@@ -2348,7 +2348,10 @@
   "productIsServiceTitle": "منتج خدمي",
   "productIsServiceDescription": "خدمة أو رسوم تُباع دون أي مخزون.",
   "jobsEmptyTitle": "لا توجد مهام بعد",
-  "jobsEmptyMessage": "المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.",
+  "jobsEmptyMessage": "المهمة هي أي عمل تتابعه خطوة بخطوة حتى يكتمل. أنشئ أول مهمة وسيظهر مسارها هنا.",
+  "jobsLaneEmptyMessage": "لا توجد مهام مفتوحة هنا الآن.",
+  "jobsNoWorkTypesTitle": "لا يوجد نوع عمل مفعّل",
+  "jobsNoWorkTypesMessage": "لم يُفعَّل التصليح ولا الإنتاج ولا المطبخ لهذا المحل. يفعّلها المدير من الإعدادات ← العمليات.",
   "newJobButton": "مهمة جديدة",
   "jobSearchHint": "ابحث برقم المهمة أو اسم الزبون أو رقم الجهاز",
   "jobFilterAll": "الكل",
@@ -2404,7 +2407,11 @@
       }
     }
   },
-  "jobManagerOnlyMoveHint": "الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.",
+  "jobMoveToStageHint": "اختر المرحلة التي وصل إليها العمل فعلًا — للأمام بأكثر من خطوة، أو للخلف إذا احتاج الجهاز إعادة.",
+  "jobStageCurrentBadge": "المرحلة الحالية",
+  "jobChangeStageButton": "تغيير المرحلة",
+  "jobMoveNeedsApprovalMessage": "هذه النقلة تتجاوز مرحلة موافقة الزبون. سجّل السعر الذي وافق عليه لتكمل.",
+  "jobOpenAction": "فتح المهمة",
   "jobCustomerSection": "الزبون",
   "jobNoCustomer": "بدون زبون",
   "jobAssetSection": "الجهاز",
@@ -2419,6 +2426,7 @@
   "materialConsumedBadge": "خُصمت من المخزون",
   "materialPendingBadge": "بانتظار الخصم",
   "materialReversedBadge": "أُرجعت للمخزون",
+  "materialRefundedBadge": "استُرد ثمنها",
   "reverseMaterialAction": "إرجاع للمخزون",
   "reverseMaterialConfirmTitle": "إرجاع القطعة للمخزون؟",
   "reverseMaterialConfirmMessage": "ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.",
@@ -2494,6 +2502,8 @@
   "intakeCustomerPhoneLabel": "رقم الهاتف",
   "intakeCustomerRequired": "اختر زبونًا للمتابعة.",
   "intakeCustomerCreateError": "تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.",
+  "intakeCustomerCreateForbidden": "لا تملك صلاحية إضافة العملاء. اطلبها من المدير، أو اختر زبونًا مسجلًا.",
+  "intakeNewCustomerNotAllowed": "إضافة زبون جديد تحتاج صلاحية «إضافة العملاء». اختر زبونًا مسجلًا، أو اطلب الصلاحية من المدير.",
   "intakeSelectAssetHint": "اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.",
   "intakeNewAssetButton": "جهاز جديد",
   "intakeSkipAssetButton": "متابعة بدون جهاز",
@@ -2616,7 +2626,16 @@
   "assetNewJobButton": "مهمة جديدة لهذا الجهاز",
   "assetIdentitySectionTitle": "بيانات التعريف",
   "jobServicesSectionTitle": "الخدمات والأعمال",
-  "jobAddServiceButton": "إضافة خدمة",
+  "jobAddLaborButton": "إضافة أجور",
+  "jobLaborDialogTitle": "أجور عمل",
+  "jobLaborDescriptionLabel": "وصف العمل",
+  "jobLaborNoteLabel": "ملاحظة (اختياري)",
+  "jobLaborDescriptionHint": "مثال: تبديل شاشة",
+  "jobLaborDescriptionRequired": "اكتب ما هو العمل.",
+  "jobLaborPriceLabel": "السعر",
+  "jobLaborPriceRequired": "أدخل سعرًا صحيحًا.",
+  "jobLaborPickServiceButton": "أو اختر خدمة من الكتالوج",
+  "jobLaborAddConfirm": "إضافة",
   "jobServicesTotalLabel": "إجمالي الخدمات",
   "jobRemoveServiceTooltip": "حذف الخدمة",
   "jobNoServicesMessage": "لم تُضف أي خدمة بعد (كشف، تركيب، صيانة…).",
@@ -2898,6 +2917,7 @@
   "productionOutputSection": "ناتج الإنتاج",
   "productionReceivedBadge": "أُضيف للمخزون",
   "productionNoRecipesMessage": "أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.",
+  "productionRecipesLoadError": "تعذّر تحميل الوصفات. قد لا تملك صلاحية عرضها.",
   "recipesTitle": "الوصفات",
   "recipesSubtitle": "حدد مكونات كل منتج تنتجه ليُخصم المخزون ويُحسب الناتج تلقائيًا",
   "recipesEmptyMessage": "الوصفة تخبر النظام بمكونات كل منتج تنتجه — مثل الدقيق والخميرة لرغيف الخبز — ليخصم المخزون ويضيف الناتج تلقائيًا.",
@@ -10961,6 +10981,10 @@
   "@treasuryEmptyMessage": {
     "description": "Empty state message for the money position screen."
   },
+  "treasuryEmptyReadOnlyMessage": "لم يُضَف أي حساب بعد. إضافة صندوق نقدي أو حساب مصرفي تحتاج صلاحية «إضافة حسابات» — اطلبها من المدير.",
+  "@treasuryEmptyReadOnlyMessage": {
+    "description": "Empty state message for someone who may read the money position but not add accounts to it. Names the permission as the permissions editor labels it."
+  },
   "treasuryErrorTitle": "تعذر تحميل الأرصدة",
   "@treasuryErrorTitle": {
     "description": "Error state title for the money position screen."
@@ -11053,6 +11077,14 @@
   "treasuryComponentTransferOut": "تحويلات صادرة",
   "@treasuryComponentTransferOut": {
     "description": "Breakdown line: transfers out of this account."
+  },
+  "treasuryComponentIntegrationDraw": "سحب مزوّد الخدمة",
+  "@treasuryComponentIntegrationDraw": {
+    "description": "Breakdown line and movement row on a provider float (LNET, HD Box): what the provider has drawn from the float for the top-ups it performed. Same wording as the reports' integration_draw label."
+  },
+  "treasuryComponentConsignorPayout": "مدفوعات أصحاب الأمانات",
+  "@treasuryComponentConsignorPayout": {
+    "description": "Breakdown line: money handed to the owners of consigned goods the shop sold for them. Same wording as the reports' consignor_payout label."
   },
   "treasuryPayrollAssumptionNote": "الرواتب محسوبة نقدًا. إن كنت تدفعها تحويلًا، سجّل تحويلًا من المصرف إلى الخزينة.",
   "@treasuryPayrollAssumptionNote": {
@@ -12304,6 +12336,15 @@
       }
     }
   },
+  "warehousesEmptyBodyReadOnly": "كل المخزون في {name}.",
+  "@warehousesEmptyBodyReadOnly": {
+    "description": "The one-place callout for someone who may not add a place, so it states the fact without inviting them to add one.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "warehousesAddAction": "إضافة مكان",
   "warehouseEditTitle": "تعديل المكان",
   "warehouseCreateTitle": "مكان جديد",
@@ -12375,10 +12416,13 @@
       }
     }
   },
-  "registerWarehouseManagerOnly": "تغيير مكان الصندوق يحتاج صلاحية مدير.",
   "warehousesSectionTitle": "المخازن والأماكن",
   "warehousesSectionSubtitle": "أين يوجد مخزونك، ومن أين يبيع كل صندوق",
   "transfersTitle": "التحويلات",
+  "transfersDrawerLabel": "تحويلات البضاعة",
+  "@transfersDrawerLabel": {
+    "description": "Navigation drawer, rail and command palette entry for stock transfers between the shop's places. Says «البضاعة» because the treasury also records money transfers."
+  },
   "transfersSectionTitle": "تحويل بضاعة",
   "transfersSectionSubtitle": "نقل مخزون بين أماكن المحل",
   "transfersNewAction": "تحويل جديد",

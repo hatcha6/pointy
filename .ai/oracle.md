@@ -702,3 +702,33 @@ hunk adding a new function opens with an unchanged ``@transaction.atomic``
 context line, the decorator has changed owner. Prefer appending after the end of
 the function you are working near, and check that the diff contains no
 decorator lines you did not intend to move.
+
+## 2026-09-26 - Every return was under the ceiling when it was priced
+
+**Learning:** The 2026-08-20 fix divides a partial supplier return by whichever
+count is larger, ordered or arrived — but it reads that count *when the return
+is made*, and one line can be short at one return and over-shipped by the next.
+Ordered 34 (106.31 billed); the 29 that arrived went back at 29/34 of the line
+(90.68); the last 5 then came with 2 surplus, and six of those seven went at a
+thirty-sixth of the line each (17.72): 108.40 credited on a line billed 106.31,
+and the seventh pack priced below zero, so it could never go back. Each return
+was right by its own formula at its own moment; the partial branch simply never
+looked at what the line had already credited. Every per-return equality passed
+— the port reproduced the backend's arithmetic faithfully — and only the
+independent ceiling assertion caught it. The partial branch now credits a share
+of what is still unclaimed, spread over the units still returnable: the old
+figure on a line's first return, and never past the ceiling (which also closes
+the sub-cent path, where each tiny share rounded up past it). The price: a
+line's second and later partial returns can land a cent from the old figure (5
+of 235 partial returns across 40 seeds), because the rounding residue now moves
+between returns instead of all landing on the last.
+
+**Action:** "partial ≤ ceiling, Σ partials == ceiling" has to be tested across
+a *history*, not at one instant. For a capped proportional formula, list what
+feeds its slope that can change between two of its events — here, a receipt
+landing between two returns — and write the test in which it does; the
+single-receipt test that pinned 2026-08-20 could not see this. And when an
+invariant assertion fires while every equality around it passes, the port is
+faithfully reproducing a wrong formula: fix the backend, move the port with it,
+and put the worked example in `self_test_arithmetic` so the next port drift
+fails there instead of deep in a run.

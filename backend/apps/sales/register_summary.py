@@ -15,7 +15,8 @@ Attribution mirrors the model's drawer accounting:
 * **Payment methods** come from the payments the session *collected*
   (``Payment.register_session``) — the same basis as
   ``RegisterSession.cash_sales_total`` — so a debt invoice settled in a later
-  shift lands in the collecting drawer.
+  shift lands in the collecting drawer, and a payment cancelled in a later
+  shift comes off the drawer that handed it back.
 * **Cash reconciliation** reuses the ``RegisterSession`` model properties
   verbatim; the cash refund figure is the exact drawer hit (``cash_amount``),
   while the per-method refund rows group by ``refund_method`` over ``amount``.
@@ -355,13 +356,16 @@ def _card_receipt_verification(session: RegisterSession) -> dict:
 
 def _payment_methods(session: RegisterSession, refund_by_method: dict):
     """Per-method collected / commission / refund / net, one row per method in
-    a stable order. Gross counts positive tenders only (mirrors
-    ``cash_sales_total``); refunds group by ``refund_method`` so the per-method
-    figures sum to the overall refund total."""
+    a stable order. Gross is the drawer's takings by that method — tenders
+    taken, less payments it gave back by cancelling them — the same rows as
+    ``cash_sales_total``, so the cash row and the cash reconciliation agree;
+    refunds group by ``refund_method`` so the per-method figures sum to the
+    overall refund total."""
     collected = {
         row["method"]: row
         for row in (
-            Payment.objects.filter(register_session=session, amount__gt=0)
+            Payment.objects.takings()
+            .filter(register_session=session)
             .values("method")
             .annotate(
                 gross=Sum("amount"),

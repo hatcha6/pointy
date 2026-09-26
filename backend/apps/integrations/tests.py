@@ -31,6 +31,7 @@ from apps.core.roles import (
 )
 from apps.analytics import buffer as analytics_buffer
 from apps.analytics import context as analytics_context
+from apps.core.money_dates import day_range_start
 from apps.core.timeutils import business_timezone
 from apps.customers.models import Customer
 from apps.expenses.models import Expense
@@ -40,7 +41,8 @@ from apps.inventory.models import StockMovement
 from apps.sales.models import Order, OrderLine, RegisterSession
 from apps.sales.services import checkout_order
 from apps.treasury.models import MoneyAccount, MoneyTransfer
-from apps.treasury.position import treasury_position
+from apps.treasury.movements import account_movements
+from apps.treasury.position import treasury_position, treasury_statement
 
 import json
 
@@ -1906,19 +1908,20 @@ class FloatLedgerTests(TestCase):
             name="الصندوق", kind=MoneyAccount.Kind.CASH, is_default=True
         )
 
-    def _fulfilment(self, cost, *, status, when=None):
+    def _fulfilment(self, cost, *, status, when=None, account=None):
+        account = account or self.account
         order = Order.objects.create()
         line = OrderLine.objects.create(
             order=order,
-            variant=service_variant_for("hdbox"),
+            variant=service_variant_for(account.provider),
             quantity=Decimal("1"),
             unit_price=Decimal(cost),
             unit_cost=Decimal(cost),
         )
         return IntegrationFulfillment.objects.create(
             order_line=line,
-            account=self.account,
-            provider="hdbox",
+            account=account,
+            provider=account.provider,
             subscriber_ref="1",
             option_code="renew:12",
             cost=Decimal(cost),
@@ -1979,6 +1982,79 @@ class FloatLedgerTests(TestCase):
         self.assertIn("integration_draw", codes)
         self.assertIn("transfer_in", codes)
 
+    def _drawn_on_two_earlier_days(self):
+        """1,000 topped up a week ago, then 220 drawn three days ago, 80 yesterday.
+
+        The top-up is written down today, so the float's account opens today
+        and every draw predates it — a late entry, or LNET's website payments
+        recorded after the fact.
+        """
+        today = timezone.localdate()
+        float_ledger.record_top_up(
+            self.account,
+            amount=Decimal("1000.00"),
+            moved_at=today - timedelta(days=7),
+        )
+        for cost, days_ago in (("220.00", 3), ("80.00", 1)):
+            noon = day_range_start(today - timedelta(days=days_ago)) + timedelta(
+                hours=12
+            )
+            self._fulfilment(
+                cost, status=IntegrationFulfillment.Status.CONFIRMED, when=noon
+            )
+        return today
+
+    def _float_row(self, rows):
+        return next(
+            row for row in rows if row["account"].pk == self.account.money_account_id
+        )
+
+    def test_a_draw_from_an_earlier_day_stays_drawn(self):
+        """Draws "up to a day" with no start were read as "from today", so
+        every earlier draw came back into the float, and a past day's balance
+        had none taken off at all."""
+        today = self._drawn_on_two_earlier_days()
+
+        row = self._float_row(treasury_position()["accounts"])
+        self.assertEqual(row["expected_balance"], Decimal("700.00"))
+        self.assertEqual(
+            float_ledger.expected_balance(self.account), Decimal("700.00")
+        )
+
+        # As of an earlier day, only the draws up to it — and the float
+        # ledger gives the same figure for that day (it used to raise).
+        two_days_ago = today - timedelta(days=2)
+        row = self._float_row(treasury_position(as_of=two_days_ago)["accounts"])
+        self.assertEqual(row["expected_balance"], Decimal("780.00"))
+        self.assertEqual(
+            float_ledger.expected_balance(self.account, end=two_days_ago),
+            Decimal("780.00"),
+        )
+        self.assertEqual(
+            float_ledger.drawn(self.account, end=today - timedelta(days=4)),
+            Decimal("0.00"),
+        )
+
+    def test_a_statement_moves_the_float_by_the_draws_in_its_window(self):
+        today = self._drawn_on_two_earlier_days()
+
+        statement = treasury_statement(start=today - timedelta(days=2), end=today)
+        row = self._float_row(statement["accounts"])
+        # The earlier draw is in the opening balance, the one inside the
+        # window is a movement, and the closing balance is the position's.
+        self.assertEqual(row["opening_balance"], Decimal("780.00"))
+        self.assertEqual(
+            [(part["code"], part["amount"]) for part in row["components"]],
+            [("integration_draw", Decimal("-80.00"))],
+        )
+        self.assertEqual(row["closing_balance"], Decimal("700.00"))
+        self.assertEqual(
+            row["closing_balance"],
+            self._float_row(treasury_position(as_of=today)["accounts"])[
+                "expected_balance"
+            ],
+        )
+
     def test_a_top_up_moves_money_out_of_spendable_and_into_the_float(self):
         """Two different totals, and the difference is the point.
 
@@ -2001,6 +2077,132 @@ class FloatLedgerTests(TestCase):
             after["total"] + after["provider_float"],
             before["total"] + before["provider_float"],
         )
+
+    def _a_week_of_draws(self):
+        """1,000 in a week ago; 220, 80 and 45 drawn three days ago, yesterday
+        and today; 65 sold but not yet performed; and another provider's
+        float that drew 30 today."""
+        today = timezone.localdate()
+        float_ledger.record_top_up(
+            self.account, amount=Decimal("1000.00"), moved_at=today - timedelta(days=7)
+        )
+        draws = {
+            days_ago: self._fulfilment(
+                cost,
+                status=IntegrationFulfillment.Status.CONFIRMED,
+                when=timezone.now() - timedelta(days=days_ago),
+            )
+            for cost, days_ago in (("220.00", 3), ("80.00", 1), ("45.00", 0))
+        }
+        self._fulfilment("65.00", status=IntegrationFulfillment.Status.PENDING)
+        other = make_account(provider="lnet", username="agency-two")
+        float_ledger.record_top_up(other, amount=Decimal("100.00"))
+        elsewhere = self._fulfilment(
+            "30.00",
+            status=IntegrationFulfillment.Status.CONFIRMED,
+            when=timezone.now(),
+            account=other,
+        )
+        return today, draws, elsewhere
+
+    def _draw_rows(self, money_account, start, end):
+        rows = account_movements(money_account, start=start, end=end)["rows"]
+        return [row for row in rows if row["source"] == "integration_draw"]
+
+    def test_a_floats_drill_down_lists_the_draws_its_balance_subtracts(self):
+        """The draw line in a float's breakdown had no rows under it: the
+        drill-down listed the top-ups and nothing the provider took."""
+        today, draws, elsewhere = self._a_week_of_draws()
+        week_ago = today - timedelta(days=7)
+        money_account = self.account.money_account
+        # A card off the shelf has no card number, only its label.
+        IntegrationFulfillment.objects.filter(pk=draws[0].pk).update(
+            subscriber_ref="", option_label="كرت 45"
+        )
+
+        # This float's performed draws: not the pending sale, not the other
+        # provider's draw — that one is listed on its own float.
+        self.assertEqual(
+            {row["related_id"] for row in self._draw_rows(money_account, week_ago, today)},
+            {draw.pk for draw in draws.values()},
+        )
+        other_float = elsewhere.account.money_account
+        self.assertEqual(
+            [row["related_id"] for row in self._draw_rows(other_float, today, today)],
+            [elsewhere.pk],
+        )
+
+        three_days_ago = today - timedelta(days=3)
+        [row] = self._draw_rows(money_account, three_days_ago, three_days_ago)
+        self.assertEqual(row["date"], three_days_ago)
+        self.assertEqual(row["amount"], Decimal("-220.00"))
+        self.assertEqual(row["direction"], "out")
+        self.assertEqual(row["description"], "1 · renew:12")
+        self.assertEqual(row["related_id"], draws[3].pk)
+        [voucher] = self._draw_rows(money_account, today, today)
+        self.assertEqual(voucher["description"], "كرت 45")
+
+        # Beside the top-up, the rows are the whole balance.
+        rows = account_movements(money_account, start=week_ago, end=today)["rows"]
+        position = next(
+            row
+            for row in treasury_position()["accounts"]
+            if row["account"].pk == money_account.pk
+        )
+        self.assertEqual(
+            sum((row["amount"] for row in rows), Decimal("0.00")),
+            position["expected_balance"],
+        )
+
+    def test_a_floats_draw_rows_sum_to_what_the_ledger_drew_in_any_window(self):
+        today, _, _ = self._a_week_of_draws()
+        money_account = self.account.money_account
+
+        for days_back, days_to in ((7, 0), (2, 0), (3, 3), (1, 1), (6, 4)):
+            start = today - timedelta(days=days_back)
+            end = today - timedelta(days=days_to)
+            with self.subTest(start=start, end=end):
+                rows = self._draw_rows(money_account, start, end)
+                self.assertEqual(
+                    sum((row["amount"] for row in rows), Decimal("0.00")),
+                    -float_ledger.drawn(self.account, start=start, end=end),
+                )
+                self.assertTrue(all(start <= row["date"] <= end for row in rows))
+
+    def test_a_float_with_no_integration_behind_it_lists_only_its_transfers(self):
+        today = timezone.localdate()
+        orphan = MoneyAccount.objects.create(
+            name="رصيد قديم", kind=MoneyAccount.Kind.PROVIDER
+        )
+        MoneyTransfer.objects.create(
+            from_account=self.cash, to_account=orphan, amount=Decimal("50.00")
+        )
+        self._fulfilment(
+            "20.00", status=IntegrationFulfillment.Status.CONFIRMED, when=timezone.now()
+        )
+
+        rows = account_movements(orphan, start=today, end=today)["rows"]
+
+        self.assertEqual([row["source"] for row in rows], ["transfer_in"])
+
+    def test_a_float_with_more_draws_than_fit_says_its_list_was_cut(self):
+        today = timezone.localdate()
+        float_ledger.record_top_up(
+            self.account, amount=Decimal("100.00"), moved_at=today - timedelta(days=1)
+        )
+        for _ in range(3):
+            self._fulfilment(
+                "5.00", status=IntegrationFulfillment.Status.CONFIRMED, when=timezone.now()
+            )
+
+        with mock.patch("apps.treasury.movements.MOVEMENT_ROW_LIMIT", 2):
+            result = account_movements(
+                self.account.money_account, start=today, end=today
+            )
+
+        # The draws alone overflow it, so the sentinel row must come from them.
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertTrue(result["truncated"])
 
 
 class FloatApiTests(TestCase):

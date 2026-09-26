@@ -27,6 +27,8 @@ String treasuryComponentLabel(AppLocalizations l10n, String code) {
     'commission' => l10n.treasuryComponentCommission,
     'transfer_in' => l10n.treasuryComponentTransferIn,
     'transfer_out' => l10n.treasuryComponentTransferOut,
+    'integration_draw' => l10n.treasuryComponentIntegrationDraw,
+    'consignor_payout' => l10n.treasuryComponentConsignorPayout,
     _ => code,
   };
 }
@@ -43,6 +45,8 @@ IconData treasuryComponentIcon(String code) {
     'commission' => Icons.percent,
     'transfer_in' => Icons.call_received,
     'transfer_out' => Icons.call_made,
+    'integration_draw' => Icons.cell_tower_outlined,
+    'consignor_payout' => Icons.handshake_outlined,
     _ => Icons.circle_outlined,
   };
 }

@@ -6,10 +6,12 @@
 //
 //   flutter run -d web-server --web-port 8080 -t lib/dev/operations_preview.dart
 //
-// Screens: board | board-empty | history | details | details-done | asset-types
-//          | intake | recipes | assets | assets-empty | asset-details
+// Screens: board | board-empty | board-lanes | board-none | history | details
+//          | details-done | asset-types | intake | intake-no-customers
+//          | recipes | assets | assets-empty | asset-details
 //          | details-decision | details-declined | details-handed-back
 //          | decline-sheet | repair-ticket-settings | repair-ticket-terms
+//          | labor | stage-picker
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -27,7 +29,6 @@ import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/workflow.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
-import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/operations_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/assets/view_models/asset_details_view_model.dart';
@@ -46,6 +47,8 @@ import 'package:pointy_frontend/src/features/operations/views/job_decline_sheet.
 import 'package:pointy_frontend/src/features/operations/views/job_details_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_history_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_intake_wizard.dart';
+import 'package:pointy_frontend/src/features/operations/views/job_labor_dialog.dart';
+import 'package:pointy_frontend/src/features/operations/views/job_stage_move.dart';
 import 'package:pointy_frontend/src/features/operations/views/jobs_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/recipes_page.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
@@ -102,6 +105,16 @@ class _Router extends StatelessWidget {
     switch (_screen()) {
       case 'board-empty':
         return _board(jobs: const []);
+      case 'board-lanes':
+        return _board(templates: [_kitchenTemplate, _repairTemplate]);
+      case 'board-none':
+        return _board(templates: const []);
+      case 'labor':
+        return const _DetailsDialogHost(openLabor: true);
+      case 'stage-picker':
+        return const _DetailsDialogHost(openLabor: false);
+      case 'intake-no-customers':
+        return _intake(canCreateCustomers: false);
       case 'history':
         return _history();
       case 'assets':
@@ -161,6 +174,49 @@ class _DeclineSheetHostState extends State<_DeclineSheetHost> {
 
   @override
   Widget build(BuildContext context) => _details(_approvalJob);
+}
+
+/// Opens the labour dialog ([openLabor]) or the stage picker on load, over a
+/// job in progress, for a screenshot.
+class _DetailsDialogHost extends StatefulWidget {
+  const _DetailsDialogHost({required this.openLabor});
+
+  final bool openLabor;
+
+  @override
+  State<_DetailsDialogHost> createState() => _DetailsDialogHostState();
+}
+
+class _DetailsDialogHostState extends State<_DetailsDialogHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (widget.openLabor) {
+        unawaited(
+          showDialog<JobServiceDraft>(
+            context: context,
+            builder: (_) =>
+                JobLaborDialog(catalogRepository: _FakeCatalogRepository()),
+          ),
+        );
+      } else {
+        unawaited(
+          showJobStagePicker(
+            context,
+            stages: _repairStages,
+            currentStageId: _richJob.currentStage,
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => _details(_richJob);
 }
 
 /// The repair receipt settings as the operations settings page shows them,
@@ -231,10 +287,10 @@ class _RepairTicketSettingsHostState extends State<_RepairTicketSettingsHost> {
   }
 }
 
-Widget _board({List<OperationsJob>? jobs}) {
+Widget _board({List<OperationsJob>? jobs, List<WorkflowTemplate>? templates}) {
   final repo = _FakeOperationsRepository(
     jobs: jobs ?? [..._boardJobs, _declinedJob],
-    templates: _templates,
+    templates: templates ?? _templates,
     boms: _boms,
   );
   final vm = JobsBoardViewModel(repo);
@@ -332,11 +388,10 @@ Widget _details(OperationsJob job) {
     currentUser: _managerUser,
     catalogRepository: _FakeCatalogRepository(),
     operationsRepository: repo,
-    employeeRepository: _FakeEmployeeRepository(),
   );
 }
 
-Widget _intake() {
+Widget _intake({bool canCreateCustomers = true}) {
   final repo = _FakeOperationsRepository(
     jobs: _boardJobs,
     templates: _templates,
@@ -344,6 +399,7 @@ Widget _intake() {
   );
   return JobIntakeWizard(
     template: _repairTemplate,
+    canCreateCustomers: canCreateCustomers,
     boardViewModel: JobsBoardViewModel(repo),
     contactRepository: _FakeContactRepository(),
     operationsRepository: repo,
@@ -539,10 +595,6 @@ class _FakeCatalogRepository extends CatalogRepository {
 
 class _FakeContactRepository extends ContactRepository {
   _FakeContactRepository() : super(PosApiService());
-}
-
-class _FakeEmployeeRepository extends EmployeeRepository {
-  _FakeEmployeeRepository() : super(PosApiService());
 }
 
 // ---------------------------------------------------------------------------
@@ -763,6 +815,22 @@ final WorkflowTemplate _repairTemplate = WorkflowTemplate(
 
 final List<WorkflowTemplate> _templates = [_repairTemplate];
 
+/// A second lane, for the board of a shop that runs two kinds of work.
+final WorkflowTemplate _kitchenTemplate = WorkflowTemplate(
+  id: 2,
+  name: 'طلب مطبخ',
+  jobType: OperationsJobType.kitchen,
+  isActive: true,
+  isSystem: true,
+  jobCount: 0,
+  stages: [
+    _stage(21, 'received', 'وصل الطلب', 0, initial: true),
+    _stage(22, 'preparing', 'قيد التحضير', 1, consumes: true),
+    _stage(23, 'ready', 'جاهز', 2),
+    _stage(24, 'served', 'تم التقديم', 3, terminal: true),
+  ],
+);
+
 OperationsJob _job({
   required int id,
   required String jobNumber,
@@ -807,6 +875,7 @@ OperationsJob _job({
     currentStage: currentStage,
     currentStageDetails: _repairStages.firstWhere((s) => s.id == currentStage),
     nextStage: nextStage,
+    workflowStages: _repairStages,
     status: status,
     customerName: customerName,
     customerPhone: customerPhone,
@@ -919,8 +988,19 @@ final OperationsJob _richJob = _job(
   approvedPrice: 180,
   dueAt: DateTime(2026, 6, 16, 17, 0),
   materialsTotal: 120,
-  servicesTotal: 60,
+  servicesTotal: 110,
   services: const [
+    JobServiceLine(
+      id: 3,
+      variant: 92,
+      productName: 'أجور خدمة وصيانة',
+      variantName: '',
+      quantity: 1,
+      unitPrice: 50,
+      lineTotal: 50,
+      note: 'تبديل شاشة ولاصق',
+      isLabor: true,
+    ),
     JobServiceLine(
       id: 1,
       variant: 90,

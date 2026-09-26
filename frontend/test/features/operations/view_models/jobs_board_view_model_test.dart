@@ -8,7 +8,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/jobs_board_view_model.dart';
 
 void main() {
-  test('loadAll seeds templates, boms, and jobs', () async {
+  test('loadAll seeds templates and jobs', () async {
     final repo = _FakeOperationsRepository();
     final vm = JobsBoardViewModel(repo);
     addTearDown(vm.dispose);
@@ -19,6 +19,36 @@ void main() {
     expect(vm.hasLoadError, isFalse);
     expect(repo.loadJobsCount, 1);
   });
+
+  test(
+    'the board never asks for recipes, so a refusal cannot fail it',
+    () async {
+      // Field export, 2026-09-25: the board loaded the recipe list on every
+      // open, a cashier may not read it, and the 403 marked the whole board
+      // failed — an empty board said "failed to load jobs" at every phone shop.
+      final repo = _FakeOperationsRepository(templates: _twoTemplates)
+        ..bomsForbidden = true;
+      final vm = JobsBoardViewModel(repo);
+      addTearDown(vm.dispose);
+
+      await vm.loadAll();
+
+      expect(repo.loadBomsCount, 0);
+      expect(vm.hasLoadError, isFalse);
+    },
+  );
+
+  test(
+    'recipes load only for a production batch, and a refusal is null',
+    () async {
+      final repo = _FakeOperationsRepository()..bomsForbidden = true;
+      final vm = JobsBoardViewModel(repo);
+      addTearDown(vm.dispose);
+
+      expect(await vm.loadActiveRecipes(), isNull);
+      expect(repo.loadBomsCount, 1);
+    },
+  );
 
   test('the board only ever asks for open work', () async {
     // Finished jobs live on the history screen. If the board could be widened
@@ -36,27 +66,34 @@ void main() {
     expect(repo.lastStatus, OperationsJobStatus.open);
   });
 
-  test('the selected template defaults to the first enabled one', () async {
-    final repo = _FakeOperationsRepository(templates: _twoTemplates);
-    final vm = JobsBoardViewModel(repo);
-    addTearDown(vm.dispose);
-    await vm.loadAll();
+  test(
+    'every live lane is on the board and a switched-off one is not',
+    () async {
+      // No switcher: a shop running two kinds of work sees both lanes, and a
+      // lane the shop turned off is simply not there.
+      final repo = _FakeOperationsRepository(templates: _twoTemplates);
+      final vm = JobsBoardViewModel(repo);
+      addTearDown(vm.dispose);
+      await vm.loadAll();
 
-    expect(vm.selectedTemplate?.id, 1);
+      expect(vm.enabledTemplates.map((template) => template.id), [1, 2]);
+    },
+  );
 
-    vm.selectedTemplateId = 2;
-    expect(vm.selectedTemplate?.id, 2);
-  });
+  test('recipes matter only to a kitchen or a production line', () async {
+    final repairOnly = JobsBoardViewModel(
+      _FakeOperationsRepository(templates: [_template(1, 'تصليح')]),
+    );
+    final withKitchen = JobsBoardViewModel(
+      _FakeOperationsRepository(templates: _twoTemplates),
+    );
+    addTearDown(repairOnly.dispose);
+    addTearDown(withKitchen.dispose);
+    await repairOnly.loadAll();
+    await withKitchen.loadAll();
 
-  test('a disabled template is never the selected board', () async {
-    // A shop that turns a lane off should not find the board showing it.
-    final repo = _FakeOperationsRepository(templates: _twoTemplates);
-    final vm = JobsBoardViewModel(repo);
-    addTearDown(vm.dispose);
-    await vm.loadAll();
-
-    vm.selectedTemplateId = 3; // the inactive one
-    expect(vm.selectedTemplate?.id, 1);
+    expect(repairOnly.usesRecipes, isFalse);
+    expect(withKitchen.usesRecipes, isTrue);
   });
 
   test('currentUserId reloads only while assignedToMe is on', () async {
@@ -100,7 +137,6 @@ void main() {
     final vm = JobsBoardViewModel(repo);
     addTearDown(vm.dispose);
     await vm.loadAll();
-    vm.jobTypeFilter = OperationsJobType.repair;
     vm.assignedToMe = true;
     vm.searchQuery = 'أحمد';
     repo.loadJobsCount = 0;
@@ -108,7 +144,6 @@ void main() {
     vm.clearFilters();
 
     expect(vm.assignedToMe, isFalse);
-    expect(vm.jobTypeFilter, isNull);
     expect(vm.searchQuery, isEmpty);
     expect(vm.hasActiveFilters, isFalse);
     // Resetting the fields through their setters would have fired a query each
@@ -131,11 +166,16 @@ void main() {
   });
 }
 
-WorkflowTemplate _template(int id, String name, {bool isActive = true}) {
+WorkflowTemplate _template(
+  int id,
+  String name, {
+  bool isActive = true,
+  OperationsJobType jobType = OperationsJobType.repair,
+}) {
   return WorkflowTemplate(
     id: id,
     name: name,
-    jobType: OperationsJobType.repair,
+    jobType: jobType,
     isActive: isActive,
     isSystem: true,
     jobCount: 0,
@@ -145,7 +185,7 @@ WorkflowTemplate _template(int id, String name, {bool isActive = true}) {
 
 final List<WorkflowTemplate> _twoTemplates = [
   _template(1, 'تصليح'),
-  _template(2, 'مطبخ'),
+  _template(2, 'مطبخ', jobType: OperationsJobType.kitchen),
   _template(3, 'قديم', isActive: false),
 ];
 
@@ -154,6 +194,8 @@ class _FakeOperationsRepository extends OperationsRepository {
     : super(PosApiService());
 
   final List<WorkflowTemplate> templates;
+  bool bomsForbidden = false;
+  int loadBomsCount = 0;
   int loadJobsCount = 0;
   OperationsJobStatus? lastStatus;
   int? lastAssignedTo;
@@ -168,6 +210,16 @@ class _FakeOperationsRepository extends OperationsRepository {
 
   @override
   Future<Result<List<BillOfMaterials>>> loadAllBoms({bool? isActive}) async {
+    loadBomsCount++;
+    if (bomsForbidden) {
+      return Error(
+        PosApiException(
+          message: 'forbidden',
+          statusCode: 403,
+          responseBody: '{"detail":"You do not have permission."}',
+        ),
+      );
+    }
     return const Ok([]);
   }
 

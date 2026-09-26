@@ -11,7 +11,6 @@ import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
-import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/operations_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/job_details_view_model.dart';
@@ -316,7 +315,6 @@ Future<void> _pumpJob(
         currentUser: user,
         catalogRepository: catalog ?? CatalogRepository(PosApiService()),
         operationsRepository: repo,
-        employeeRepository: EmployeeRepository(PosApiService()),
       ),
     ),
   );

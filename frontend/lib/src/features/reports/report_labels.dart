@@ -286,6 +286,8 @@ const _moneyKeys = {
   'closing_balance',
   'invoiced_total',
   'received_total',
+  'returned_total',
+  'refunded_total',
   'opening_total',
   'movement_total',
   'closing_total',
@@ -609,6 +611,8 @@ const _labels = {
   'oldest_days': 'أقدم عمر (يوم)',
   'entry_count': 'عدد الحركات',
   'received_total': 'المحصَّل',
+  'returned_total': 'المرتجعات',
+  'refunded_total': 'المبالغ المردودة',
   'not_yet_due': 'لم يحلّ أجلها',
   'd0_30': 'حتى ٣٠ يومًا',
   'd31_60': '٣١ – ٦٠ يومًا',
@@ -877,7 +881,7 @@ const _notes = {
 
   // -- receivables and payables --------------------------------------------
   'receivable_is_open_credit':
-      'الذمم المدينة هي الفواتير الآجلة القائمة ناقصًا ما سُدِّد منها.',
+      'الذمم المدينة هي الفواتير الآجلة القائمة ناقصًا ما سُدِّد منها وما أُرجع.',
   'aged_from_due_or_invoice_date':
       'حُسبت الأعمار من تاريخ الاستحقاق إن وُجد، وإلا فمن تاريخ الفاتورة.',
   'not_yet_due_excluded_from_ages':
@@ -890,7 +894,8 @@ const _notes = {
   'payables_as_of': 'الأرصدة كما هي بتاريخ {date}.',
   'statement_running_balance':
       'الرصيد تراكمي: رصيد أول المدة + الحركات = رصيد آخر المدة.',
-  'statement_credit_only': 'يشمل الكشف الفواتير الآجلة ودفعاتها فقط.',
+  'statement_credit_only':
+      'يشمل الكشف الفواتير الآجلة ودفعاتها ومرتجعاتها فقط.',
   'supplier_credit_is_owed': 'الرصيد الدائن يعني مبلغًا مستحقًا للمورد.',
   'purchase_is_stock_not_expense':
       'المشتريات تُضاف إلى المخزون ولا تُعد مصروفًا.',

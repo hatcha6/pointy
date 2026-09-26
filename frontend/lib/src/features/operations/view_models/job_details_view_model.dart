@@ -4,8 +4,10 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/employee.dart';
 import '../../../data/models/job_refusal.dart';
 import '../../../data/models/operations_job.dart';
+import '../../../data/models/workflow.dart';
 import '../../../data/repositories/operations_repository.dart';
 import 'job_print_actions.dart';
 
@@ -98,6 +100,37 @@ class JobDetailsViewModel extends ChangeNotifier {
       eventName: 'operations.job.transitioned',
     );
     return updated != null;
+  }
+
+  /// A move from the job screen, reported the way the shared stage-move flow
+  /// wants it: whether it happened, and the refusal when there is one.
+  Future<JobMoveAttempt> moveTo(
+    WorkflowStage stage, {
+    String handedOverTo = '',
+  }) async {
+    final moved = await transition(stage.id, handedOverTo: handedOverTo);
+    return (moved: moved, refusal: _lastRefusal);
+  }
+
+  /// Records the price the customer agreed to, without moving the job — for a
+  /// jump that passes the approval stage, which then moves it itself.
+  Future<bool> recordApprovedPrice(double price) async {
+    final saved = await _mutate(
+      () => _repository.updateJob(jobId, {
+        'approved_price': price.toStringAsFixed(2),
+      }),
+      eventName: 'operations.job.quote_approved',
+    );
+    return saved != null;
+  }
+
+  /// Who the job can be given to, or null when the list cannot be read.
+  Future<List<Employee>?> loadAssignees() async {
+    final result = await _repository.loadJobAssignees();
+    return switch (result) {
+      Ok<List<Employee>>(:final value) => value,
+      Error<List<Employee>>() => null,
+    };
   }
 
   Future<bool> addService(JobServiceDraft draft) async {

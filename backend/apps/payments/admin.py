@@ -16,3 +16,6 @@ class PaymentAdmin(admin.ModelAdmin):
     )
     list_filter = ("method",)
     search_fields = ("order__receipt_number", "external_reference")
+    # Written by the cancellation alone; as a form field it would also render a
+    # select over every payment the shop has ever taken.
+    readonly_fields = ("reverses",)

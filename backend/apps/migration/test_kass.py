@@ -20,23 +20,35 @@ import tempfile
 from decimal import Decimal
 from pathlib import Path
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.catalog.models import Product, ProductCategory, ProductVariant
+from apps.core.models import ShopSettings
+from apps.core.roles import CASHIER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
 from apps.customers.receivables import outstanding_balance
+from apps.documents.reconciliation import reconcile_lifecycles
+from apps.documents.statuses import DocumentStatus
 from apps.employees.models import CompensationPlan, Employee, PayrollRun
 from apps.expenses.models import Expense
 from apps.inventory.models import StockItem, StockLedgerEntry, StockValuationBin
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier
-from apps.sales.models import Order, OrderAdjustment
+from apps.sales.models import Order, OrderAdjustment, RegisterSession
 from apps.treasury.models import MoneyAccount
 
-from . import storage
+from . import canonical, storage
 from .connectors import get_connector
 from .connectors.base import ExtractContext
 from .connectors.kass import OPENING_PRODUCT_NAME
+from .identity import IdentityResolver
+from .loaders.sales import PaymentLoader
 from .models import MigrationIssue, MigrationRun, MigrationSource
 from .preparation import identify as identification
 from .preparation import mysqldump, pipeline
@@ -702,6 +714,91 @@ class KassImportTests(KassTestBase):
         self.assertEqual(order.sale_type, Order.SaleType.CREDIT)
         self.assertEqual(order.balance_due, Decimal("30.00"))
 
+    def test_an_aajil_sale_is_issued_while_it_is_still_owed(self):
+        """Issued the day the old system wrote it, not left a draft until it is
+        paid in full. A draft's payments cannot be cancelled, and its last
+        collection has to submit it into that backdated month, which a closed
+        period refuses."""
+        for number, written in (("970000002", "2026-02-03"), ("970000003", "2026-02-04")):
+            with self.subTest(number):
+                order = Order.objects.get(receipt_number=number)
+                self.assertEqual(order.status, Order.Status.OPEN)
+                self.assertEqual(order.doc_status, DocumentStatus.SUBMITTED)
+                self.assertEqual(order.submitted_at, order.created_at)
+                self.assertEqual(
+                    timezone.localtime(order.submitted_at).date().isoformat(), written
+                )
+        # Nothing else is left half-issued either, the opening-balance invoices
+        # included.
+        self.assertFalse(Order.objects.filter(doc_status=DocumentStatus.DRAFT).exists())
+
+    def test_a_receipt_that_squares_an_aajil_sale_leaves_it_paid_and_issued(self):
+        """``PaymentLoader._settle`` closes an invoice with a bare status write,
+        which is whole only because the invoice was issued on import. Closed as
+        a draft, it was a paid sale whose void would give nothing back."""
+        resolver = IdentityResolver(self.source, self.run, dry_run=False)
+        PaymentLoader().load(
+            canonical.CanonicalPayment(
+                source_key="k-settle", sale_source_key="sale-credit", amount=Decimal("30")
+            ),
+            resolver,
+            dry_run=False,
+        )
+        order = Order.objects.get(receipt_number="970000002")
+        self.assertEqual(order.status, Order.Status.PAID)
+        self.assertEqual(order.doc_status, DocumentStatus.SUBMITTED)
+
+    def test_a_draft_an_older_import_left_is_issued_on_upgrade(self):
+        """And its balance can then be collected though its month is closed.
+        Left a draft, the last collection had to submit it dated to that month,
+        which a cashier cannot override, so the whole collection rolled back."""
+        order = Order.objects.get(receipt_number="970000003")
+        customer = order.customer
+        # What the older importer left behind.
+        Order.objects.filter(pk=order.pk).update(
+            doc_status=DocumentStatus.DRAFT, submitted_at=None
+        )
+        settings_row = ShopSettings.load()
+        settings_row.books_locked_through = timezone.localtime(order.created_at).date()
+        settings_row.save(update_fields=["books_locked_through"])
+        cashier = self.cashier_at_the_till()
+
+        def collect_the_rest():
+            # خالد owes this invoice and nothing else.
+            return cashier.post(
+                reverse("customer-record-payment", args=[customer.pk]),
+                {"method": "cash", "amount": "60.00"},
+                format="json",
+            )
+
+        self.assertEqual(collect_the_rest().status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(outstanding_balance(customer), Decimal("60.00"))
+
+        reconcile_lifecycles()
+
+        order.refresh_from_db()
+        self.assertEqual(order.doc_status, DocumentStatus.SUBMITTED)
+        self.assertEqual(order.submitted_at, order.created_at)
+        self.assertEqual(reconcile_lifecycles(), 0)
+        collected = collect_the_rest()
+        self.assertEqual(collected.status_code, status.HTTP_200_OK, collected.data)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PAID)
+        self.assertEqual(outstanding_balance(customer), Decimal("0.00"))
+
+    def cashier_at_the_till(self):
+        """A cashier with a drawer open, and no power to override a closed
+        period."""
+        ensure_role_groups()
+        user = get_user_model().objects.create_user(username="kass-cashier", password="pass")
+        user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        RegisterSession.objects.create(
+            owner=user, owner_key=f"user:{user.pk}", status=RegisterSession.Status.OPEN
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
     def test_what_each_customer_owes_matches_the_old_system(self):
         """The number the shop will be looking for on day one.
 
@@ -733,6 +830,17 @@ class KassImportTests(KassTestBase):
         self.assertEqual(adjustment.amount, Decimal("15.00"))
         # Written as a negative payment, the way a live refund is.
         self.assertEqual(order.payments.filter(amount__lt=0).count(), 1)
+
+    def test_the_refund_is_dated_with_its_return(self):
+        """Not with the day of the import. A report as of any day in between
+        saw the goods come back and not the money go out, and read the
+        customer as owing their own refund."""
+        order = Order.objects.get(receipt_number="970000001")
+        adjustment = OrderAdjustment.objects.get(order=order)
+        refund = order.payments.get(amount__lt=0)
+        self.assertEqual(refund.paid_at, adjustment.created_at)
+        self.assertEqual(refund.paid_at.year, 2026)
+        self.assertEqual((refund.paid_at.month, refund.paid_at.day), (2, 6))
 
     def test_a_return_bigger_than_its_invoice_is_capped_and_reported(self):
         """Crediting two against an invoice that sold one would refund money

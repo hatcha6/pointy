@@ -343,10 +343,11 @@ class Job(TimeStampedModel):
 
         The order is the single source of truth (``amount_paid`` /
         ``balance_due`` already net refunds), so this can never drift from what
-        the customer actually owes.
+        the customer actually owes. A void invoice is no invoice: its balance
+        is nothing because its money went back, not because it was paid.
         """
         order = self.order
-        if order is None:
+        if order is None or order.status == order.Status.VOID:
             return "not_invoiced"
         if order.balance_due <= Decimal("0.00"):
             return "settled"

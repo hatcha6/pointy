@@ -11,9 +11,10 @@ from .models import CardTerminal, Payment
 from .serializers import (
     CardTerminalSerializer,
     PaymentLedgerSerializer,
+    PaymentReplacementSerializer,
     PaymentSerializer,
 )
-from .services import cancel_payment
+from .services import cancel_payment, replace_payment
 
 
 def payment_owner_key(request):
@@ -30,9 +31,11 @@ class PaymentViewSet(
     # No ``destroy``: deleting a payment made a settled invoice unpaid again
     # with nothing left to say it had ever been paid. Undoing one is the
     # ``cancel`` action below, which gives the money back through an opposing
-    # payment and leaves a trail. ``update`` survives for the card-receipt
-    # evidence a terminal produces after the fact; the money fields on a
-    # submitted payment are frozen at the model layer either way.
+    # payment and leaves a trail; one taken through the wrong tender is put
+    # right by ``replace``, without its invoice ever being unpaid. ``update``
+    # survives for the card-receipt evidence a terminal produces after the
+    # fact; the money fields on a submitted payment are frozen at the model
+    # layer either way.
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
@@ -42,6 +45,9 @@ class PaymentViewSet(
         "update": ("payments.change_payment",),
         "partial_update": ("payments.change_payment",),
         "cancel": ("payments.delete_payment",),
+        # Gives one payment back and takes another in its place, so it needs
+        # the right to do both.
+        "replace": ("payments.delete_payment", "payments.add_payment"),
     }
     # ``order__customer`` and ``created_by`` join the order/customer needed for
     # the read (ledger) projection; select them eagerly to avoid N+1 in the hub.
@@ -89,6 +95,32 @@ class PaymentViewSet(
         payment.refresh_from_db()
         serializer = PaymentLedgerSerializer(payment, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"])
+    def replace(self, request, pk=None):
+        return run_idempotent_request(request, lambda: self._replace(request))
+
+    def _replace(self, request):
+        payment = self.get_object()
+        serializer = PaymentReplacementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        replacements = replace_payment(
+            payment,
+            tenders=serializer.validated_data["payments"],
+            reason=serializer.validated_data["reason"],
+            request=request,
+        )
+        payment.refresh_from_db()
+        context = {"request": request}
+        return Response(
+            {
+                "replaced": PaymentLedgerSerializer(payment, context=context).data,
+                "payments": PaymentLedgerSerializer(
+                    replacements, many=True, context=context
+                ).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def get_queryset(self):
         queryset = super().get_queryset()

@@ -218,6 +218,70 @@ void main() {
     );
   });
 
+  group('a sale that came back', () {
+    const service = OrderDocumentService();
+    SalePayment cash(double amount) => SalePayment(
+      id: 1,
+      method: PaymentMethod.cash,
+      amount: amount,
+      commissionPercent: 0,
+      commissionAmount: 0,
+    );
+    String status(OrderDocumentTemplate template) => template.details
+        .firstWhere((field) => field.label == 'حالة الدفع')
+        .value;
+
+    test('in part, settled in full, prints nothing left to pay', () {
+      // Two at 5.00, paid 10.00, one handed back. The refund is a negative
+      // payment, so the payments net 5.00 while the total stays 10.00 — and
+      // the server counts the return towards what was settled: nothing owed.
+      final template = service.saleInvoiceTemplate(
+        order: _saleOrder(
+          receiptNumber: 'R-returned',
+          subtotal: 10,
+          total: 10,
+          saleType: SaleType.credit,
+          payments: [cash(10), cash(-5)],
+          amountPaid: 5,
+          balanceDue: 0,
+          paymentStatus: 'paid',
+        ),
+        shopSettings: _settings,
+      );
+
+      expect(
+        template.details.map((field) => field.label),
+        isNot(contains('المتبقي')),
+      );
+      expect(
+        template.totals.map((field) => field.label),
+        isNot(contains('المتبقي')),
+      );
+      expect(status(template), 'مدفوعة بالكامل');
+    });
+
+    test('whole prints as void, never as paid in full', () {
+      final template = service.saleInvoiceTemplate(
+        order: _saleOrder(
+          receiptNumber: 'R-void',
+          subtotal: 10,
+          total: 10,
+          payments: [cash(10), cash(-10)],
+          amountPaid: 0,
+          balanceDue: 0,
+          paymentStatus: 'void',
+        ),
+        shopSettings: _settings,
+      );
+
+      expect(status(template), 'ملغاة');
+      expect(
+        template.totals.map((field) => field.label),
+        isNot(anyOf(contains('المدفوع'), contains('المتبقي'))),
+      );
+    });
+  });
+
   test('the sale invoice issue date carries the time, not just the day', () {
     const service = OrderDocumentService();
     final template = service.saleInvoiceTemplate(
@@ -1086,7 +1150,14 @@ SaleOrder _saleOrder({
   String? cashierName,
   int? registerSession,
   String? registerSessionNumber,
+  double? amountPaid,
+  double? balanceDue,
 }) {
+  // Unless a test says otherwise, what the server sends for an order with no
+  // returns: the payments net, and the rest of the total still owed.
+  final paid =
+      amountPaid ?? payments.fold<double>(0, (sum, p) => sum + p.amount);
+  final owed = balanceDue ?? (total - paid < 0.005 ? 0.0 : total - paid);
   return SaleOrder(
     id: 1,
     receiptNumber: receiptNumber,
@@ -1109,6 +1180,8 @@ SaleOrder _saleOrder({
     saleType: saleType,
     paymentStatus: paymentStatus,
     validUntil: validUntil,
+    amountPaid: paid,
+    balanceDue: owed,
   );
 }
 

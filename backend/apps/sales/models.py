@@ -130,12 +130,14 @@ class RegisterSession(TimeStampedModel):
         # register_session), not the session that issued the order. Under accrual
         # a credit (debt) order stays OPEN while still collecting a cash
         # down-payment, and a debt may be settled in a later shift — so we no
-        # longer gate on order status.
-        total = Payment.objects.filter(
-            register_session=self,
-            method=Payment.Method.CASH,
-            amount__gt=0,
-        ).aggregate(total=Sum("amount"))["total"]
+        # longer gate on order status. Net of cash this drawer handed back by
+        # cancelling a payment, which can take it below zero; never of refunds,
+        # which arrive through ``cash_refund_total`` (see ``takings``).
+        total = (
+            Payment.objects.takings()
+            .filter(register_session=self, method=Payment.Method.CASH)
+            .aggregate(total=Sum("amount"))["total"]
+        )
         return (total or Decimal("0.00")).quantize(Decimal("0.01"))
 
     @property
@@ -307,6 +309,23 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
     def quotations(self):
         return self.filter(sale_type=Order.SaleType.QUOTATION)
 
+    def with_balance_relations(self):
+        """Load what ``Order.balance_due`` reads, once for the whole set.
+
+        The balance nets payments *and* returns (``raw_balance_due``), each
+        summed in Python so a prefetch is reused — and each a query per order
+        without one. Every caller that reads the balance of many orders comes
+        through here, so the relations it needs are named once.
+
+        Not for an order that is about to take a payment and then have its
+        status recomputed: ``progress_status`` reads ``amount_paid`` off the
+        same object, and a prefetched ``payments`` would not have the new row.
+        The serializer querysets, and those that reach an order through a
+        relation (the job board, the consignment payables), name them
+        themselves.
+        """
+        return self.prefetch_related("payments", "adjustments")
+
     def with_list_serializer_relations(self):
         """Load everything ``OrderListSerializer`` reads, in a fixed query count.
 
@@ -351,6 +370,9 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
             # details screen names the account each tender landed in and draws
             # its mark, which without this is a query per payment row.
             Prefetch("payments", queryset=_payments_with_their_bank()),
+            # ``balance_due``/``payment_status`` count what came back towards
+            # what was settled — a query per row without this.
+            "adjustments",
             "applied_discounts",
             "exchanges__replacement_order",
             "exchanges__created_by",
@@ -620,7 +642,8 @@ class Order(DocumentMixin, TimeStampedModel):
     def amount_paid(self):
         # Sum in Python so a prefetched ``payments`` is reused instead of a
         # per-order aggregate when serialising lists of orders. Includes any
-        # negative (refund) payments so the balance reflects net cash received.
+        # negative (refund) payments, so this is the net cash the sale holds —
+        # not what is left to pay, which also counts returns (see below).
         total = sum(
             (payment.amount for payment in self.payments.all()),
             Decimal("0.00"),
@@ -629,7 +652,20 @@ class Order(DocumentMixin, TimeStampedModel):
 
     @property
     def raw_balance_due(self):
-        return (self.total - self.amount_paid).quantize(Decimal("0.01"))
+        """What is left to pay: the total less what the customer has settled.
+
+        Not ``total − amount_paid``. A return hands money back as a negative
+        payment while ``total`` stays where it was, so that difference reads
+        every part-returned sale as owing exactly its refund — and the shop
+        would collect again for goods it has taken back. What came back counts
+        towards the settlement, the same way it does for the paid/open status,
+        and from the same definition (``documents.settled_amount``). Callers
+        reading this over many orders prefetch ``payments`` and
+        ``adjustments`` (``OrderQuerySet.with_balance_relations``).
+        """
+        from apps.sales.documents import settled_amount
+
+        return (self.total - settled_amount(self)).quantize(Decimal("0.01"))
 
     @property
     def balance_due(self):
@@ -668,9 +704,21 @@ class Order(DocumentMixin, TimeStampedModel):
     def payment_status(self):
         if self.sale_type == self.SaleType.QUOTATION:
             return "quotation"
-        if self.balance_due == Decimal("0.00"):
+        if self.status == self.Status.VOID:
+            # Given back whole, so it owes nothing — which the arithmetic below
+            # would call "paid", and a reprint would print as a sale that stood.
+            return "void"
+        from apps.sales.documents import settled_amount
+
+        # The balance's own arithmetic, read once. "Paid" is exactly
+        # ``balance_due == 0`` — a part-returned sale settled in full is paid,
+        # not forever "partial" — and "unpaid" is exactly a balance of the
+        # whole total: goods that came back settle their share even when none
+        # of the customer's money is left in.
+        settled = settled_amount(self)
+        if settled >= self.total:
             return "paid"
-        if self.amount_paid > 0:
+        if settled > 0:
             return "partial"
         return "unpaid"
 
@@ -1478,11 +1526,8 @@ def prime_register_session_cash_totals(sessions):
     cash_sales = {
         row["register_session_id"]: row["total"] or zero
         for row in (
-            Payment.objects.filter(
-                register_session_id__in=ids,
-                method=Payment.Method.CASH,
-                amount__gt=0,
-            )
+            Payment.objects.takings()
+            .filter(register_session_id__in=ids, method=Payment.Method.CASH)
             .values("register_session_id")
             .annotate(total=Sum("amount"))
         )

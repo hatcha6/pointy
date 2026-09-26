@@ -6,6 +6,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/device_settings.dart';
 import '../../../data/repositories/price_checker_repository.dart';
 import '../../../data/services/auto_start_service.dart';
+import '../../../data/services/client_update_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -20,6 +21,7 @@ import 'camera_wedge_settings_panel.dart';
 import '../../price_checker/views/price_checker_settings_panel.dart';
 import '../../printing/view_models/printing_settings_view_model.dart';
 import '../../printing/views/printers_panel.dart';
+import '../../settings/views/app_updates_page.dart';
 
 class DeviceSettingsScreen extends StatelessWidget {
   const DeviceSettingsScreen({
@@ -28,6 +30,7 @@ class DeviceSettingsScreen extends StatelessWidget {
     required this.printingSettingsViewModel,
     required this.priceCheckerController,
     required this.priceCheckerRepository,
+    required this.clientUpdateService,
     required this.capabilities,
     required this.navigation,
     this.onCameraWedgeChanged,
@@ -40,6 +43,7 @@ class DeviceSettingsScreen extends StatelessWidget {
   final PrintingSettingsViewModel printingSettingsViewModel;
   final PriceCheckerModeController priceCheckerController;
   final PriceCheckerRepository priceCheckerRepository;
+  final ClientUpdateService clientUpdateService;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -92,6 +96,7 @@ class DeviceSettingsScreen extends StatelessWidget {
                   capabilities: capabilities,
                   priceCheckerController: priceCheckerController,
                   priceCheckerRepository: priceCheckerRepository,
+                  clientUpdateService: clientUpdateService,
                   onCameraWedgeChanged: onCameraWedgeChanged,
                 ),
               ),
@@ -109,6 +114,7 @@ class _DeviceSettingsBody extends StatelessWidget {
     required this.printingSettingsViewModel,
     required this.priceCheckerController,
     required this.priceCheckerRepository,
+    required this.clientUpdateService,
     required this.capabilities,
     this.onCameraWedgeChanged,
   });
@@ -122,6 +128,10 @@ class _DeviceSettingsBody extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final PriceCheckerModeController priceCheckerController;
   final PriceCheckerRepository priceCheckerRepository;
+
+  /// Here rather than in shop settings: an update replaces the app on this
+  /// machine only, and device settings is what the person at the till can open.
+  final ClientUpdateService clientUpdateService;
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +147,25 @@ class _DeviceSettingsBody extends StatelessWidget {
     return ListView(
       padding: spacing.pagePadding,
       children: [
+        AdaptiveMaxWidth(
+          width: AppContentWidth.form,
+          child: PointySettingsSection(
+            children: [
+              PointySettingsTile(
+                icon: Icons.system_update_outlined,
+                title: l10n.clientUpdatesTitle,
+                subtitle: l10n.clientUpdatesSubtitle,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        AppUpdatesPage(service: clientUpdateService),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: spacing.lg),
         AdaptiveMaxWidth(
           width: AppContentWidth.form,
           child: PointyDetailSection(

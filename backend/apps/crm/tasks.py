@@ -89,9 +89,9 @@ def debt_reminder_sweep_task():
         # defers the nudge until the term the shop agreed to.
         Order.objects.due_on_or_before(today)
         .select_related("customer")
-        # Prefetch payments so each order's balance_due (which sums payments in
-        # Python) doesn't fire its own query — avoids an N+1 across the sweep.
-        .prefetch_related("payments")
+        # Prefetch so each order's balance_due (which sums payments and returns
+        # in Python) doesn't fire its own queries — avoids an N+1 across the sweep.
+        .with_balance_relations()
         .filter(customer__isnull=False)
         .exclude(customer__phone="")
         .exclude(customer__do_not_contact=True)

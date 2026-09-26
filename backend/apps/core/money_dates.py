@@ -77,17 +77,25 @@ def money_period(queryset, start, end):
     Works for both date and datetime columns: a date column is compared
     inclusively, a datetime column against the half-open interval that covers
     the same local days, so the two never disagree about a midnight.
+
+    ``None`` leaves that side open: ``money_period(qs, None, end)`` is
+    everything up to and including ``end``, which is what a balance needs. It
+    must not reach ``day_range_start``, whose "today when omitted" turned that
+    call into "today to ``end``" on a timestamp column (and an error on a date
+    column), so the treasury subtracted only today's provider-float draws.
     """
     model = queryset.model
     field = money_date_field(model)
-    if _is_date_field(model, field):
-        return queryset.filter(**{f"{field}__gte": start, f"{field}__lte": end})
-    return queryset.filter(
-        **{
-            f"{field}__gte": day_range_start(start),
-            f"{field}__lt": day_range_end(end),
-        }
-    )
+    date_column = _is_date_field(model, field)
+    bounds = {}
+    if start is not None:
+        bounds[f"{field}__gte"] = start if date_column else day_range_start(start)
+    if end is not None:
+        if date_column:
+            bounds[f"{field}__lte"] = end
+        else:
+            bounds[f"{field}__lt"] = day_range_end(end)
+    return queryset.filter(**bounds)
 
 
 def _is_date_field(model, field_name) -> bool:

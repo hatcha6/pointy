@@ -61,6 +61,27 @@ void main() {
     });
   }
 
+  test('a customer statement words every figure and line it sends', () {
+    // One figure per kind of line: invoices, the goods that came back, the
+    // money collected and the money handed back again.
+    for (final figure in [
+      'opening_balance',
+      'invoiced_total',
+      'returned_total',
+      'received_total',
+      'refunded_total',
+      'closing_balance',
+    ]) {
+      expect(reportLabel(figure), isNot('بيان'), reason: figure);
+      expect(reportValue(figure, '5.00'), contains('5.00'), reason: figure);
+      expect(reportValue(figure, '5.00'), isNot('5.00'), reason: figure);
+    }
+    expect(reportLabel('returned_total'), 'المرتجعات');
+    expect(reportLabel('refunded_total'), 'المبالغ المردودة');
+    expect(reportValue('kind', 'return', columnType: 'choice'), 'مرتجع');
+    expect(reportValue('kind', 'refund', columnType: 'choice'), 'ردّ مبلغ');
+  });
+
   test('an article ledger names each movement and its direction', () {
     expect(
       reportValue('voucher_type', 'purchase_receipt', columnType: 'label'),

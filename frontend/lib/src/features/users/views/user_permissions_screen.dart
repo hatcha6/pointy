@@ -290,11 +290,17 @@ class _PermissionRow extends StatelessWidget {
 IconData _groupIcon(String key) {
   return switch (key) {
     'catalog' => Icons.sell_outlined,
+    'product_setup' => Icons.straighten_outlined,
+    'recipes' => Icons.menu_book_outlined,
+    'scales' => Icons.scale_outlined,
     'inventory' => Icons.inventory_2_outlined,
+    'warehouses' => Icons.warehouse_outlined,
     'sales' => Icons.point_of_sale_outlined,
     'payments' => Icons.payments_outlined,
+    'treasury' => Icons.account_balance_outlined,
     'purchasing' => Icons.local_shipping_outlined,
     'contacts' => Icons.people_alt_outlined,
+    'assets' => Icons.devices_other_outlined,
     'discounts' => Icons.local_offer_outlined,
     'expenses' => Icons.account_balance_wallet_outlined,
     'operations' => Icons.handyman_outlined,
@@ -303,7 +309,15 @@ IconData _groupIcon(String key) {
     'attendance' => Icons.how_to_reg_outlined,
     'fraud' => Icons.shield_outlined,
     'settings' => Icons.settings_outlined,
+    'printing' => Icons.print_outlined,
+    'print_setup' => Icons.receipt_long_outlined,
+    'integrations' => Icons.extension_outlined,
+    'fx' => Icons.currency_exchange_outlined,
     'users' => Icons.manage_accounts_outlined,
+    'messaging' => Icons.sms_outlined,
+    'surveillance' => Icons.videocam_outlined,
+    'files' => Icons.attach_file,
+    'migration' => Icons.cloud_sync_outlined,
     _ => Icons.lock_outline,
   };
 }

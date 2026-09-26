@@ -73,10 +73,11 @@ class HalfCentLineDiscountRegimeTests(TestCase):
         return rule
 
     def _checkout(self, lines_data, paid):
+        # A free cart takes no tender, as at the till: a zero payment is refused.
         return checkout_order(
             register_session=self.session,
             lines_data=lines_data,
-            payments_data=[{"method": "cash", "amount": paid}],
+            payments_data=[{"method": "cash", "amount": paid}] if paid > 0 else [],
         )
 
     def test_a_fully_discounted_half_cent_line_is_not_over_discounted(self):

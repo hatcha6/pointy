@@ -7,7 +7,6 @@ import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/operations_job.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
-import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/operations_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/job_details_view_model.dart';
@@ -32,6 +31,8 @@ const _cashier = PosUser(
   displayName: 'كاشير',
   role: UserRole.cashier,
   isActive: true,
+  // What the cashier role carries for the repair counter.
+  permissions: {'operations.view_job', 'operations.change_job'},
 );
 
 Map<String, Object?> _stage(int id, String code, String name, int order) => {
@@ -187,7 +188,6 @@ Future<_FakeOperationsRepository> _pump(
         currentUser: user,
         catalogRepository: CatalogRepository(PosApiService()),
         operationsRepository: repository,
-        employeeRepository: EmployeeRepository(PosApiService()),
       ),
     ),
   );

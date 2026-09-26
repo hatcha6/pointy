@@ -537,7 +537,11 @@ class OrderRec:
     total: Decimal
     sum_positive: Decimal = ZERO  # cumulative positive payments
     amount_paid: Decimal = ZERO  # all payments incl. negative refunds
+    refunded: Decimal = ZERO  # cumulative value of returns + voids (_apply_refund)
     paid_by_method: dict = field(default_factory=lambda: defaultdict(lambda: ZERO))
+    # Every tender taken and not yet given back, as ``(method, amount)`` in the
+    # order they were taken: what the cancel and replace operations may pick.
+    live_payments: list = field(default_factory=list)
     # The method of the order's FIRST payment, mirroring production's
     # ``refund_method_for_order`` (``order.payments.order_by("created_at").first()``,
     # cash when the order was never paid). A refund whose tenders have all been
@@ -552,7 +556,9 @@ class OrderRec:
 
     @property
     def balance_due(self) -> Decimal:
-        return max(self.total - self.amount_paid, ZERO)
+        # What came back settles its share of the sale: its refund is inside
+        # ``amount_paid`` as a negative row, and the total never drops.
+        return max(self.total - self.refunded - self.amount_paid, ZERO)
 
     @property
     def total_cost(self) -> Decimal:
@@ -745,18 +751,6 @@ class PoLineRec:
         return max(self.recv_accepted - self.adjusted_packs, 0)
 
     @property
-    def unit_span(self) -> int:
-        """The number of units the returnable value is spread across.
-
-        The ordered count normally, because each ordered unit is worth the same
-        share of the line whether it arrived or not — but an over-shipped line
-        caps its returnable value at what was billed, so that capped value has
-        to be divided by the units that actually arrived instead. Divide by the
-        ordered count there and each arrived unit is priced above its share.
-        """
-        return max(self.quantity, self.recv_accepted)
-
-    @property
     def returnable_value(self) -> Decimal:
         """The most this line can ever credit back, all returns added up: the
         arrived units' share of what the order billed, capped at the whole
@@ -775,11 +769,29 @@ class PoLineRec:
         Two branches, mirroring the two questions being asked. The last units
         off the line settle up: they claim whatever of ``returnable_value``
         earlier returns left behind, so repeated partial returns always add to
-        exactly that value. Anything earlier takes its proportional share.
+        exactly that value. Anything earlier takes its share of what is still
+        unclaimed, spread over the packs still here to go back.
+
+        Not a fixed slice of the line. An over-shipment spreads the billed value
+        over more units than were ordered, and a line can be short when some of
+        it goes back and over-shipped by the next return: the packs sent back
+        while it was short went at the larger slice, so a fixed slice for the
+        rest credits past ``returnable_value``.
         """
         if packs >= self.adjustable:
             return even2(self.returnable_value - self.adjusted_value)
-        return even2(self.net_line_total * Decimal(packs) / Decimal(self.unit_span))
+        if self.quantity <= 0:
+            return ZERO
+        ordered = Decimal(self.quantity)
+        arrived = Decimal(min(self.recv_accepted, self.quantity))
+        # Kept multiplied by the ordered count and divided once, in the
+        # backend's order, so a half-cent tie breaks the same way on both sides.
+        unclaimed_scaled = self.net_line_total * arrived - self.adjusted_value * ordered
+        if unclaimed_scaled <= ZERO:
+            return ZERO
+        return even2(
+            unclaimed_scaled * Decimal(packs) / (ordered * Decimal(self.adjustable))
+        )
 
 
 @dataclass
@@ -1173,6 +1185,15 @@ class Simulation:
         self.expense_retraction_assertions = 0
         self.supplier_payment_retraction_assertions = 0
         self.stock_count_retraction_assertions = 0
+        # And for a customer's payment given back, where one action has four
+        # outcomes: a credit invoice owed again, a cash sale refusing to be
+        # left unpaid, a payment a return already dipped into refusing to be
+        # handed back twice, and a payment moved to another tender without the
+        # sale moving at all.
+        self.customer_payment_cancel_assertions = 0
+        self.cash_sale_cancel_refusals = 0
+        self.given_back_refusals = 0
+        self.payment_replacement_assertions = 0
         # How much the cost-basis assertions actually got to say. A sale of a
         # never-purchased variant costs 0.00, which every wrong implementation
         # also produces, so a run that only ever saw those has proved nothing
@@ -1274,6 +1295,7 @@ class Simulation:
         order.sum_positive = even2(order.sum_positive + amount)
         order.amount_paid = even2(order.amount_paid + amount)
         order.paid_by_method[method] = even2(order.paid_by_method[method] + amount)
+        order.live_payments.append((method, amount))
         # Cash is attributed to the COLLECTING (current) session, which is the
         # accrual-vs-cash split: an آجل invoice issued in an earlier session but
         # settled now puts the revenue in the issuing session and the cash in the
@@ -2922,6 +2944,7 @@ class Simulation:
         for method, alloc in allocations:
             rec.paid_by_method[method] = even2(rec.paid_by_method[method] - alloc)
             rec.amount_paid = even2(rec.amount_paid - alloc)
+        rec.refunded = even2(rec.refunded + total)
         self.oracle.adjustments_log.append(
             (self.current_session_id, primary_method, even2(total), even2(cash_amount))
         )
@@ -2947,9 +2970,31 @@ class Simulation:
                 self.oracle.value_receipt(
                     line.variant_id, base, Decimal(line.unit_cost) / factor
                 )
+        job = self._job_billed_on(rec)
+        if job is not None:
+            # A job's invoice gives the money back, not the parts: what the loop
+            # above put on the shelf for them leaves again, and they stay
+            # consumed by the job (``apps.operations.invoice_returns``). Every
+            # stock line on a job's invoice is one of its parts.
+            for line, qty, _ in per_line_refund:
+                if line.tracks_stock:
+                    base = q3(Decimal(qty) * line.unit_factor)
+                    self.oracle.on_hand[line.variant_id] = q3(
+                        self.oracle.on_hand[line.variant_id] - base
+                    )
+                    self.oracle.value_issue(line.variant_id, base)
         if all(line.returnable_qty <= ZERO for line in rec.lines):
             rec.voided = True
+            if job is not None:
+                # Given back whole, it no longer stands: the job lets go of it.
+                job.order_id = None
         return refund
+
+    def _job_billed_on(self, order: OrderRec):
+        for job in self.oracle.jobs.values():
+            if job.order_id == order.order_id:
+                return job
+        return None
 
     def _line_refund_discount(self, line: LineRec, qty) -> Decimal:
         if line.discount_total <= ZERO:
@@ -2997,9 +3042,22 @@ class Simulation:
         candidates = self._refundable_orders()
         if not candidates:
             return False
+        # A carton going back has to credit its pieces' cost, and only a costed
+        # line sold in a pack can show whether it does. Left to chance a run can
+        # go by without returning one: the default seed stopped reaching one
+        # when the payment operations joined the mix. Until one has come back,
+        # prefer an order that has such a line, and make sure it is sent back.
+        wanted = self.multi_unit_costed_refund_assertions == 0
+        if wanted:
+            preferred = [rec for rec in candidates if self._costed_pack_lines(rec)]
+            if preferred:
+                candidates = preferred
         rec = self.rng.choice(candidates)
         returnable = [line for line in rec.lines if line.returnable_qty > ZERO]
         chosen = self.rng.sample(returnable, self.rng.randint(1, len(returnable)))
+        packs = self._costed_pack_lines(rec) if wanted else []
+        if packs and not any(line in chosen for line in packs):
+            chosen.append(packs[0])
         refund_lines = []
         api_lines = []
         for line in chosen:
@@ -3024,6 +3082,17 @@ class Simulation:
             self._assert_variant(line.variant_id)
         self._assert_session(self.current_session_id)
         return True
+
+    @staticmethod
+    def _costed_pack_lines(rec: OrderRec) -> list:
+        """Lines still returnable that were sold in a pack and carry a cost."""
+        return [
+            line
+            for line in rec.lines
+            if line.returnable_qty >= Decimal("1")
+            and line.unit_factor != Decimal("1")
+            and line.unit_cost > ZERO
+        ]
 
     def op_exchange(self) -> bool:
         """Swap goods from a past order for different goods, in one operation.
@@ -3925,6 +3994,168 @@ class Simulation:
         self._assert_supplier_ap(supplier_id)
         return True
 
+    def op_cancel_customer_payment(self) -> bool:
+        """Give back a payment a customer made, through the endpoint.
+
+        Three outcomes, each decided from the oracle's own records before the
+        backend is asked. A credit invoice is simply owed again. A cash sale
+        refuses to be left unpaid. And no payment is handed back once a return
+        has already refunded part of it, whatever the sale. A refusal must
+        leave every figure exactly where it was.
+        """
+        candidates = self._live_payment_candidates()
+        if not candidates:
+            return False
+        # Left to chance, a run of a few hundred operations can miss an outcome
+        # entirely: a tender a return has already dipped into is rare, and on
+        # some seeds so is a cash sale reaching this op before a credit invoice
+        # does. Until every outcome has been seen, prefer one that has not.
+        seen = {
+            "payment_already_given_back": self.given_back_refusals,
+            "cash_sale_payment_not_cancellable": self.cash_sale_cancel_refusals,
+            None: self.customer_payment_cancel_assertions,
+        }
+        unseen = [
+            candidate
+            for candidate in candidates
+            if not seen[self._cancel_outcome(candidate[0], candidate[2], candidate[3])]
+        ]
+        rec, index, method, amount = self.rng.choice(unseen or candidates)
+        outcome = self._cancel_outcome(rec, method, amount)
+        response = self.client.post(
+            f"/api/payments/{self._backend_payment_id(rec, method, amount)}/cancel/",
+            {"reason": "sim retraction"},
+            format="json",
+        )
+        if outcome is not None:
+            self._assert_refused(response, outcome, rec)
+            if outcome == "payment_already_given_back":
+                self.given_back_refusals += 1
+            else:
+                self.cash_sale_cancel_refusals += 1
+            return True
+        if response.status_code != 200:
+            self.fail(
+                f"payment cancel failed: {response.status_code} "
+                f"{response_body(response)}"
+            )
+        self._give_back(rec, index, method, amount)
+        self.customer_payment_cancel_assertions += 1
+        self._assert_customer_payment_effects(rec)
+        return True
+
+    def op_replace_customer_payment(self) -> bool:
+        """Take a payment through another tender: the cashier pressed cash and
+        the customer paid by card. The sale must not move, and the drawers must
+        stop expecting what they never held."""
+        candidates = [
+            candidate
+            for candidate in self._live_payment_candidates()
+            if candidate[3] <= candidate[0].paid_by_method[candidate[2]]
+        ]
+        if not candidates:
+            return False
+        rec, index, method, amount = self.rng.choice(candidates)
+        others = [other for other in self.PAYMENT_METHODS if other != method]
+        tenders = (
+            self.split_amount(amount, others)
+            if self.rng.random() < 0.3
+            else [(self.rng.choice(others), amount)]
+        )
+        response = self.client.post(
+            f"/api/payments/{self._backend_payment_id(rec, method, amount)}/replace/",
+            {
+                "reason": "sim tender",
+                "payments": [
+                    {"method": tender, "amount": str(value)} for tender, value in tenders
+                ],
+            },
+            format="json",
+        )
+        if response.status_code != 200:
+            self.fail(
+                f"payment replace failed: {response.status_code} "
+                f"{response_body(response)}"
+            )
+        self._give_back(rec, index, method, amount)
+        for tender, value in tenders:
+            self.record_order_payment(rec, tender, value)
+        self.payment_replacement_assertions += 1
+        self._assert_customer_payment_effects(rec)
+        return True
+
+    def _cancel_outcome(self, rec: OrderRec, method: str, amount: Decimal):
+        """The refusal code giving this tender back must meet, or ``None`` when
+        it goes through. Read from the oracle's records alone: what the tender
+        still holds on this order, and what the sale was settled by."""
+        if amount > rec.paid_by_method[method]:
+            return "payment_already_given_back"
+        if (
+            rec.sale_type == Order.SaleType.STANDARD
+            and even2(rec.sum_positive - amount) < rec.total
+        ):
+            return "cash_sale_payment_not_cancellable"
+        return None
+
+    def _live_payment_candidates(self):
+        """``(rec, index, method, amount)`` for every tender this run took and
+        has not given back, on a sale that still stands."""
+        return [
+            (rec, index, method, amount)
+            for rec in self.oracle.orders.values()
+            if not rec.voided and rec.sale_type != Order.SaleType.QUOTATION
+            for index, (method, amount) in enumerate(rec.live_payments)
+        ]
+
+    def _backend_payment_id(self, rec: OrderRec, method: str, amount: Decimal) -> int:
+        """The row behind a tender the oracle took, found by what the oracle
+        knows of it: its order, its tender and its amount. This is identity
+        only; every figure expected afterwards is the oracle's own."""
+        from apps.documents.statuses import DocumentStatus
+        from apps.payments.models import Payment
+
+        payment = (
+            Payment.objects.filter(
+                order_id=rec.order_id,
+                method=method,
+                amount=amount,
+                doc_status=DocumentStatus.SUBMITTED,
+            )
+            .order_by("id")
+            .first()
+        )
+        if payment is None:
+            self.fail(
+                f"order#{rec.order_id}: no live {method} payment of {amount} "
+                "to give back"
+            )
+        return payment.pk
+
+    def _give_back(self, rec: OrderRec, index: int, method: str, amount: Decimal):
+        """Mirror a cancellation: the opposing row, in the drawer open now."""
+        del rec.live_payments[index]
+        rec.sum_positive = even2(rec.sum_positive - amount)
+        rec.amount_paid = even2(rec.amount_paid - amount)
+        rec.paid_by_method[method] = even2(rec.paid_by_method[method] - amount)
+        self.log_payment(self.current_session_id, method, -amount)
+
+    def _assert_refused(self, response, code: str, rec: OrderRec):
+        body = response_body(response)
+        if response.status_code != 400 or not isinstance(body, dict) or body.get(
+            "code"
+        ) != code:
+            self.fail(
+                f"order#{rec.order_id}: expected the payment to be refused with "
+                f"{code}, got {response.status_code} {body}"
+            )
+        self._assert_customer_payment_effects(rec)
+
+    def _assert_customer_payment_effects(self, rec: OrderRec):
+        self._assert_order(rec)
+        self._assert_session(self.current_session_id)
+        if rec.customer_id is not None:
+            self._assert_customer(rec.customer_id)
+
     def op_undo_stock_count(self) -> bool:
         """Undo an applied count: every movement it made, put back.
 
@@ -4092,6 +4323,11 @@ class Simulation:
             (self.op_stock_count, 3),
             (self.op_cancel_expense, 3),
             (self.op_cancel_supplier_payment, 3),
+            # Weighted for three outcomes per run, not one: at 3 a run of 300
+            # operations cancelled only once often enough (about one seed in
+            # fifteen) that a guard in the entry-point test went unmet.
+            (self.op_cancel_customer_payment, 5),
+            (self.op_replace_customer_payment, 3),
             (self.op_undo_stock_count, 2),
             (self.op_cycle_register, 2),
             (self.op_attempt_oversell, 2),
@@ -5300,6 +5536,38 @@ def self_test_arithmetic():
     # commission (HALF_EVEN).
     check("commission.card", commission_amount(Decimal("1.5"), Decimal("100")), Decimal("1.50"))
     check("commission.cash", commission_amount(Decimal("0"), Decimal("50")), Decimal("0.00"))
+
+    # supplier return credit, on the worked examples that
+    # apps.purchasing.test_adjustment_returnable_basis pins for the backend.
+    def po_line(ordered, net, arrived):
+        return PoLineRec(
+            line_id=0, variant_id=0, quantity=ordered, unit_factor=Decimal("1"),
+            unit_cost=ZERO, net_line_total=Decimal(net), recv_accepted=arrived,
+        )
+
+    def sent_back(line, packs, amount):
+        line.adjusted_packs += packs
+        line.adjusted_value = even2(line.adjusted_value + amount)
+
+    # Short: 29.00 for 3, 2 arrived. One of them is a third of the line.
+    line = po_line(3, "29.00", 2)
+    check("po_return.short.partial", line.return_credit(1), Decimal("9.67"))
+    sent_back(line, 1, Decimal("9.67"))
+    check("po_return.short.last", line.return_credit(1), Decimal("9.66"))
+    # Over-shipped: 100.00 for 10, 12 arrived. A twelfth each; the last settles.
+    line = po_line(10, "100.00", 12)
+    check("po_return.over.partial", line.return_credit(11), Decimal("91.67"))
+    sent_back(line, 11, Decimal("91.67"))
+    check("po_return.over.last", line.return_credit(1), Decimal("8.33"))
+    # Short, then over-shipped: 106.31 for 34. The 29 that arrived went back,
+    # then 7 more came, 2 of them surplus: those 7 share the 15.63 still owed.
+    line = po_line(34, "106.31", 29)
+    check("po_return.short_over.first", line.return_credit(29), Decimal("90.68"))
+    sent_back(line, 29, Decimal("90.68"))
+    line.recv_accepted = 36
+    check("po_return.short_over.partial", line.return_credit(6), Decimal("13.40"))
+    sent_back(line, 6, Decimal("13.40"))
+    check("po_return.short_over.last", line.return_credit(1), Decimal("2.23"))
 
 
 # ---------------------------------------------------------------------------

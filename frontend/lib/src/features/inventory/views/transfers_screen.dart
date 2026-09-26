@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/stock_transfer.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/repositories/warehouse_repository.dart';
+import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -27,10 +29,17 @@ class TransfersScreen extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.repository,
+    required this.capabilities,
     this.trackedStockRepository,
+    this.navigation,
   });
 
   final TransfersViewModel viewModel;
+
+  /// Writing a transfer, sending (or cancelling) it and receiving it are
+  /// separate rights, usually held by different people at the two ends of the
+  /// road. Each button appears only for somebody the server will let press it.
+  final AuthorizationCapabilities capabilities;
 
   /// Handed to the composer so its product picker can ask what the source
   /// actually holds.
@@ -39,6 +48,12 @@ class TransfersScreen extends StatefulWidget {
   /// Only for picking which handsets are in the van. Optional: a shop whose
   /// products are all counted by number never opens that sheet.
   final TrackedStockRepository? trackedStockRepository;
+
+  /// Set when the screen is opened as a destination — the drawer, the rail or
+  /// ⌘K — which is how the people who send and receive goods reach it: they
+  /// hold the transfer rights, not shop settings. Null when shop settings
+  /// pushes it, and the screen then keeps its back button.
+  final AppNavigation? navigation;
 
   @override
   State<TransfersScreen> createState() => _TransfersScreenState();
@@ -61,8 +76,18 @@ class _TransfersScreenState extends State<TransfersScreen> {
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
+        final navigation = widget.navigation;
         return PointyScaffold(
+          drawer: navigation == null
+              ? null
+              : AppNavigationDrawer(
+                  selectedDestination: AppNavigationDestination.stockTransfers,
+                  navigation: navigation,
+                ),
           appBar: PointyAppBar(
+            leading: navigation == null
+                ? null
+                : const PointyNavigationMenuButton(),
             title: Text(l10n.transfersTitle),
             isLoading: viewModel.isLoading || viewModel.isMutating,
             actions: [
@@ -73,7 +98,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
               ),
             ],
           ),
-          floatingActionButton: viewModel.canTransfer
+          floatingActionButton: _canCompose
               ? FloatingActionButton.extended(
                   onPressed: viewModel.isMutating
                       ? null
@@ -88,8 +113,16 @@ class _TransfersScreenState extends State<TransfersScreen> {
     );
   }
 
+  /// A new transfer needs the right to write one and a second place to send
+  /// it to — the first is the person's, the second is the shop's.
+  bool get _canCompose =>
+      widget.capabilities.canCreateStockTransfer &&
+      widget.viewModel.canTransfer;
+
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     final viewModel = widget.viewModel;
+    final canDispatch = widget.capabilities.canDispatchStockTransfer;
+    final canReceive = widget.capabilities.canReceiveStockTransfer;
     final spacing = AdaptiveSpacing.of(context);
 
     if (viewModel.isLoading && viewModel.isEmpty) {
@@ -111,7 +144,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
         icon: Icons.swap_horiz,
         title: l10n.transfersEmptyTitle,
         message: l10n.transfersEmptyBody,
-        action: viewModel.canTransfer
+        action: _canCompose
             ? FilledButton.icon(
                 onPressed: () => _compose(context),
                 icon: const Icon(Icons.add),
@@ -135,9 +168,15 @@ class _TransfersScreenState extends State<TransfersScreen> {
                 builder: (transfer) => _TransferCard(
                   transfer: transfer,
                   isBusy: viewModel.isMutating,
-                  primaryLabel: l10n.transferReceiveAction,
-                  onPrimary: () => _receive(context, transfer),
-                  onCancel: () => _cancel(context, transfer),
+                  primaryLabel: canReceive ? l10n.transferReceiveAction : null,
+                  onPrimary: canReceive
+                      ? () => _receive(context, transfer)
+                      : null,
+                  // Cancelling moves the goods back to the source, and the
+                  // server checks the sending right for it.
+                  onCancel: canDispatch
+                      ? () => _cancel(context, transfer)
+                      : null,
                 ),
               ),
               _Group(
@@ -146,8 +185,10 @@ class _TransfersScreenState extends State<TransfersScreen> {
                 builder: (transfer) => _TransferCard(
                   transfer: transfer,
                   isBusy: viewModel.isMutating,
-                  primaryLabel: l10n.transferSendAction,
-                  onPrimary: () => _send(context, transfer),
+                  primaryLabel: canDispatch ? l10n.transferSendAction : null,
+                  onPrimary: canDispatch
+                      ? () => _send(context, transfer)
+                      : null,
                   onCancel: null,
                 ),
               ),
@@ -176,6 +217,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
       context,
       places: widget.viewModel.places,
       repository: widget.repository,
+      canSendNow: widget.capabilities.canDispatchStockTransfer,
     );
     if (outcome == null) return;
     final error = await widget.viewModel.create(

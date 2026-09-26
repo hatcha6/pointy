@@ -16,7 +16,8 @@ original tender (``sales.services.record_adjustment``), so summing
 ``OrderAdjustment.cash_amount`` on top would deduct every refund twice. In the
 same spirit, a drawer pay-out that paid an expense or a POS cash purchase is
 also an ``Expense`` / ``SupplierPayment`` row, so only *standalone* pay-outs are
-counted here — the rule ``expenses.services`` already follows.
+counted here — and a pay-out stands alone again once the document it paid is
+cancelled, since the cancellation's pay-in is counted too (``claimed_by_live``).
 
 **Silent assumptions.** Two flows have no payment method in the data at all:
 payroll and payment-processor commissions. Rather than hide the guess, both are
@@ -28,7 +29,7 @@ total they cannot see inside.
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import DecimalField, Q, Sum, Value
+from django.db.models import DecimalField, Exists, OuterRef, Q, Sum, Value
 from django.utils import timezone
 from django.db.models.functions import Coalesce
 
@@ -93,6 +94,23 @@ def _sum(queryset, field="amount"):
     )["total"] or ZERO
 
 
+def claimed_by_live(document_model):
+    """Whether a live ``document_model`` counts this drawer movement as its own.
+
+    A pay-out that paid an expense, a POS cash purchase or a consignor *is*
+    that document, and is counted as it — for as long as the document stands.
+    Cancelling one stops it counting (``.live()``) and brings the cash back into
+    a drawer as a pay-in of its own; from then on its pay-out is a plain pay-out
+    again, so the two net to nothing, each on the day the cash really moved.
+    Left claimed by the cancelled document, that pay-in would be money arriving
+    from nowhere, and the box would read richer by every amount ever cancelled.
+
+    The expense ledger keeps the plain "linked or not" rule on purpose: it asks
+    what the shop spent, and a cancelled expense's pay-out never was spending.
+    """
+    return Exists(document_model.objects.live().filter(cash_movement=OuterRef("pk")))
+
+
 def _component(code, amount, *, direction):
     """One named line of the arithmetic behind a balance.
 
@@ -109,6 +127,8 @@ def _component(code, amount, *, direction):
 
 def _cash_components(*, start, end):
     """The money that moves through a cash box."""
+    from apps.inventory.models import ConsignorPayout
+
     start_dt, end_dt = day_range_start(start), day_range_end(end)
 
     # Signed: refunds are negative Payment rows, so this is already net.
@@ -128,16 +148,16 @@ def _cash_components(*, start, end):
     )
     # Standalone pay-outs only — one that paid an expense, a POS cash purchase
     # or a consignor is already counted as that expense / supplier payment /
-    # consignor payout.
+    # consignor payout, while it stands (``claimed_by_live``).
     drawer_out = _sum(
         RegisterCashMovement.objects.filter(
             movement_type=RegisterCashMovement.MovementType.PAY_OUT,
             created_at__gte=start_dt,
             created_at__lt=end_dt,
-            expense__isnull=True,
-            supplier_payment__isnull=True,
-            consignor_payouts__isnull=True,
         )
+        .exclude(claimed_by_live(Expense))
+        .exclude(claimed_by_live(SupplierPayment))
+        .exclude(claimed_by_live(ConsignorPayout))
     )
     expenses = _sum(
         Expense.objects.live().filter(
@@ -349,14 +369,21 @@ def _transfer_components(account, *, incoming, outgoing):
     ]
 
 
-def _provider_components(money_account, *, end):
-    """What a provider has drawn out of its float, for one float account."""
+def _provider_components(money_account, *, end, start=None):
+    """What a provider has drawn out of its float, for one float account.
+
+    Every draw up to ``end``, not only those since ``opening_at`` as for a
+    bank. A float's account is created on the day its first top-up is written
+    down, and that top-up may be dated earlier and followed by draws (a payment
+    on LNET's website is dated when LNET took it); ``float_ledger`` counts
+    those, so this row must too. ``start`` narrows to a window, for a statement.
+    """
     from apps.integrations import float_ledger
 
     integration = getattr(money_account, "integration_account", None)
     if integration is None:
         return []
-    drawn = float_ledger.drawn(integration, end=end)
+    drawn = float_ledger.drawn(integration, start=start, end=end)
     return [_component(COMPONENT_INTEGRATION_DRAW, -drawn, direction="out")]
 
 
@@ -522,7 +549,7 @@ def treasury_statement(*, start, end):
 
     Costs one position pass for the opening balances plus the same per-account
     passes ``treasury_position`` makes: one for the cash box, two aggregates
-    per bank account.
+    per bank account, one per provider float.
     """
     accounts = list(MoneyAccount.objects.filter(is_active=True))
     if not accounts:
@@ -539,14 +566,17 @@ def treasury_statement(*, start, end):
         movements[cash_default.pk] = _cash_components(start=start, end=end)
     bank_default = defaults.get(MoneyAccount.Kind.BANK)
     for account in accounts:
-        if account.kind != MoneyAccount.Kind.BANK:
-            continue
-        movements[account.pk] = _bank_components(
-            start=start,
-            end=end,
-            account=account,
-            is_default=bank_default is not None and bank_default.pk == account.pk,
-        )
+        if account.kind == MoneyAccount.Kind.PROVIDER:
+            # Only the window's draws: the earlier ones are in the opening
+            # balance already, and without these the closing one left them out.
+            movements[account.pk] = _provider_components(account, start=start, end=end)
+        elif account.kind == MoneyAccount.Kind.BANK:
+            movements[account.pk] = _bank_components(
+                start=start,
+                end=end,
+                account=account,
+                is_default=bank_default is not None and bank_default.pk == account.pk,
+            )
 
     incoming, outgoing = _transfer_totals(start=start, end=end)
     last_counts = _last_counts(accounts)

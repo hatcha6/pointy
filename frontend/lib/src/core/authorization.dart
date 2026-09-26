@@ -40,7 +40,19 @@ enum AppCapability {
   adjustPurchaseOrder,
   cancelPurchaseOrder,
   deletePurchaseOrder,
+
+  /// Pays a supplier against a purchase order. Not [accessPurchasing]: a buyer
+  /// runs an order from draft to delivery without, in most shops, being the
+  /// one who hands over the money — the purchasing agent role can read the
+  /// payments and not record one, so the button would only ever refuse.
+  recordSupplierPayment,
   manageContacts,
+
+  /// Registers a new customer — at the repair counter, or to put a sale on
+  /// their name. Deliberately NOT [manageContacts]: creating a record shows
+  /// nothing about anybody else, while the contact book lists every customer
+  /// with what they owe, and the customer dashboard adds it all up.
+  createCustomers,
   collectCustomerDebt,
   checkoutSale,
   startRegisterSession,
@@ -96,17 +108,41 @@ enum AppCapability {
   sendCampaigns,
   viewExpenses,
   manageExpenses,
+
+  /// The categories every expense is filed under. Their own permissions, not
+  /// [manageExpenses]: recording expenses does not make someone the keeper of
+  /// the list the whole shop files against.
+  createExpenseCategory,
+  changeExpenseCategory,
+  deleteExpenseCategory,
   viewPayments,
 
   /// Reading the shop's money accounts: which banks card and transfer money
   /// may land in. Distinct from [viewPayments] — a cashier takes payments all
   /// day without being shown the shop's accounts.
   viewMoneyAccounts,
+
+  /// The treasury's writes, one per permission the server checks. An auditor
+  /// reads every account, transfer and count without holding any of these.
+  createMoneyAccount,
+  changeMoneyAccount,
+
+  /// Moving money between the shop's accounts, and across its boundary —
+  /// adding funds and withdrawing are the same transfer with one side left
+  /// empty, so they ride the same permission.
+  recordMoneyTransfer,
+  recordMoneyCount,
   viewExchangeRates,
   viewAttendance,
   manageAttendance,
   viewOperations,
   createJobs,
+
+  /// Works a job: moves it between stages, puts it on hold, and charges
+  /// labour and services on it. The server checks `operations.change_job` for
+  /// all of these, so offering them to someone who can only view jobs would
+  /// be a row of buttons that each refuse.
+  changeJobs,
   assignJobs,
   reopenJobs,
   releaseUnpaidJobs,
@@ -125,6 +161,28 @@ enum AppCapability {
   createStockMovement,
   countStock,
   applyStockCount,
+
+  /// The places a shop keeps stock. Seeing the list and each change to it are
+  /// separate rights on the server, so they are separate here: somebody who
+  /// may look at the store room has no business renaming or deleting it.
+  viewWarehouses,
+  createWarehouse,
+  changeWarehouse,
+  deleteWarehouse,
+
+  /// Which place this till sells from (`sales.change_registerprofile`). Every
+  /// till may read its own; changing it moves where every later sale is taken
+  /// from.
+  changeRegisterWarehouse,
+
+  /// Moving stock between those places. Sending and receiving are split
+  /// because they happen at the two ends of the road, and the person who
+  /// loads the van is rarely the one who unloads it. Cancelling rides on
+  /// sending: the server checks `dispatch_stocktransfer` for both.
+  viewStockTransfers,
+  createStockTransfer,
+  dispatchStockTransfer,
+  receiveStockTransfer,
 
   /// The two lists a shop that identifies its stock works from. Separate
   /// capabilities, because a pharmacy needs lots and a phone shop needs
@@ -274,6 +332,25 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewCatalogManagement)
           ..add(AppCapability.changeProductVariant);
       }
+      // Units of measure and scale-label rules are managed from the catalog
+      // screen's own toolbar, so holding either has to open that screen —
+      // otherwise the grant is a right with no way to use it.
+      if (_hasAny(user, const [
+        'add_unitofmeasure',
+        'change_unitofmeasure',
+        'delete_unitofmeasure',
+        'add_scalebarcoderule',
+        'change_scalebarcoderule',
+        'delete_scalebarcoderule',
+        'catalog.add_unitofmeasure',
+        'catalog.change_unitofmeasure',
+        'catalog.delete_unitofmeasure',
+        'catalog.add_scalebarcoderule',
+        'catalog.change_scalebarcoderule',
+        'catalog.delete_scalebarcoderule',
+      ])) {
+        capabilities.add(AppCapability.viewCatalogManagement);
+      }
       if (_hasAny(user, const [
         'view_stockitem',
         'view_stockmovement',
@@ -358,6 +435,62 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.applyStockCount);
       }
+      // Warehouses. The page is the list, and the server answers the list for
+      // view_warehouse alone, so only that opens it: adding, editing or
+      // deleting a place grants its own button, never the page to put it on.
+      if (_hasAny(user, const ['view_warehouse', 'inventory.view_warehouse'])) {
+        capabilities.add(AppCapability.viewWarehouses);
+      }
+      if (_hasAny(user, const ['add_warehouse', 'inventory.add_warehouse'])) {
+        capabilities.add(AppCapability.createWarehouse);
+      }
+      if (_hasAny(user, const [
+        'change_warehouse',
+        'inventory.change_warehouse',
+      ])) {
+        capabilities.add(AppCapability.changeWarehouse);
+      }
+      if (_hasAny(user, const [
+        'delete_warehouse',
+        'inventory.delete_warehouse',
+      ])) {
+        capabilities.add(AppCapability.deleteWarehouse);
+      }
+      if (_hasAny(user, const [
+        'change_registerprofile',
+        'sales.change_registerprofile',
+      ])) {
+        capabilities.add(AppCapability.changeRegisterWarehouse);
+      }
+      if (_hasAny(user, const [
+        'view_stocktransfer',
+        'inventory.view_stocktransfer',
+      ])) {
+        capabilities.add(AppCapability.viewStockTransfers);
+      }
+      // Both, as the composer needs both: it offers only what the source
+      // actually holds, and that list is the stock endpoint, which answers to
+      // view_stockitem. Without it every search is refused and the picker
+      // reads as a place with nothing in it.
+      if (_hasAny(user, const [
+            'add_stocktransfer',
+            'inventory.add_stocktransfer',
+          ]) &&
+          _hasAny(user, const ['view_stockitem', 'inventory.view_stockitem'])) {
+        capabilities.add(AppCapability.createStockTransfer);
+      }
+      if (_hasAny(user, const [
+        'dispatch_stocktransfer',
+        'inventory.dispatch_stocktransfer',
+      ])) {
+        capabilities.add(AppCapability.dispatchStockTransfer);
+      }
+      if (_hasAny(user, const [
+        'receive_stocktransfer',
+        'inventory.receive_stocktransfer',
+      ])) {
+        capabilities.add(AppCapability.receiveStockTransfer);
+      }
       if (_hasAny(user, const [
         'view_purchaseorder',
         'change_purchaseorder',
@@ -428,28 +561,37 @@ class AuthorizationCapabilities {
           ..add(AppCapability.accessPurchasing)
           ..add(AppCapability.deletePurchaseOrder);
       }
+      // Money leaving the shop, so it rides its own right rather than access
+      // to purchasing. It opens no screen: without reading purchase orders
+      // there is no order to pay.
+      if (_hasAny(user, const [
+        'add_supplierpayment',
+        'purchasing.add_supplierpayment',
+      ])) {
+        capabilities.add(AppCapability.recordSupplierPayment);
+      }
+      // Reading the contact book: every customer and supplier, and what each
+      // one owes. Only the permission to *view* them opens it — and the
+      // customer dashboard that totals those balances.
       if (_hasAny(user, const [
         'view_customer',
-        'add_customer',
-        'change_customer',
-        'delete_customer',
         'customers.view_customer',
-        'customers.add_customer',
-        'customers.change_customer',
-        'customers.delete_customer',
         'view_supplier',
-        'add_supplier',
-        'change_supplier',
-        'delete_supplier',
         'purchasing.view_supplier',
-        'purchasing.add_supplier',
-        'purchasing.change_supplier',
-        'purchasing.delete_supplier',
       ])) {
         capabilities
           ..add(AppCapability.viewDashboard)
           ..add(AppCapability.viewCustomerDashboard)
           ..add(AppCapability.manageContacts);
+      }
+      // Registering a customer is not reading the book. A cashier given "add
+      // customers" so the repair counter can take in a walk-in's phone used to
+      // land on a dashboard of every customer's balance at the next sign-in
+      // (field export, 2026-09-25). Adding, editing or deleting records grants
+      // no screen of its own: without the view permission there is nothing to
+      // edit or delete from.
+      if (_hasAny(user, const ['add_customer', 'customers.add_customer'])) {
+        capabilities.add(AppCapability.createCustomers);
       }
       if (_hasAny(user, const [
         'view_registersession',
@@ -617,7 +759,13 @@ class AuthorizationCapabilities {
       }
       if (_hasAny(user, const [
         'view_pricecheckerdevice',
+        'add_pricecheckerdevice',
+        'change_pricecheckerdevice',
+        'delete_pricecheckerdevice',
         'price_checker.view_pricecheckerdevice',
+        'price_checker.add_pricecheckerdevice',
+        'price_checker.change_pricecheckerdevice',
+        'price_checker.delete_pricecheckerdevice',
       ])) {
         capabilities.add(AppCapability.managePriceCheckers);
       }
@@ -704,16 +852,30 @@ class AuthorizationCapabilities {
         capabilities.add(AppCapability.exportCameraFootage);
       }
       if (_hasAny(user, const [
+        'add_recorder',
         'change_recorder',
+        'delete_recorder',
+        'surveillance.add_recorder',
         'surveillance.change_recorder',
+        'surveillance.delete_recorder',
       ])) {
         capabilities
           ..add(AppCapability.viewCameras)
           ..add(AppCapability.manageCameras);
       }
       // Sending prices to a scale changes what the shop's stickers say, so it
-      // rides its own right rather than the general settings one.
-      if (_hasAny(user, const ['push_scale', 'scales.push_scale'])) {
+      // rides its own right rather than the general settings one. Setting a
+      // scale up opens the same screen.
+      if (_hasAny(user, const [
+        'push_scale',
+        'add_scale',
+        'change_scale',
+        'delete_scale',
+        'scales.push_scale',
+        'scales.add_scale',
+        'scales.change_scale',
+        'scales.delete_scale',
+      ])) {
         capabilities.add(AppCapability.manageScales);
       }
       if (_hasAny(user, const [
@@ -759,6 +921,11 @@ class AuthorizationCapabilities {
         capabilities
           ..add(AppCapability.viewOperations)
           ..add(AppCapability.createJobs);
+      }
+      if (_hasAny(user, const ['change_job', 'operations.change_job'])) {
+        capabilities
+          ..add(AppCapability.viewOperations)
+          ..add(AppCapability.changeJobs);
       }
       if (_hasAny(user, const ['assign_job', 'operations.assign_job'])) {
         capabilities
@@ -806,8 +973,12 @@ class AuthorizationCapabilities {
         capabilities.add(AppCapability.viewRecipes);
       }
       if (_hasAny(user, const [
+        'add_billofmaterials',
         'change_billofmaterials',
+        'delete_billofmaterials',
+        'catalog.add_billofmaterials',
         'catalog.change_billofmaterials',
+        'catalog.delete_billofmaterials',
       ])) {
         capabilities
           ..add(AppCapability.viewRecipes)
@@ -871,9 +1042,11 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const ['view_expense', 'expenses.view_expense'])) {
         capabilities.add(AppCapability.viewExpenses);
       }
-      // The Payments hub (الخزينة) needs to see both money-IN (customer
-      // payments) and money-OUT (supplier payments); gate it on the customer
-      // payment view perm, the primary money ledger.
+      // The payments ledger shows both money-IN (customer payments) and
+      // money-OUT (supplier payments); gate it on the customer payment view
+      // perm, the primary money ledger. It does not open الخزينة — that is the
+      // money position, on viewMoneyAccounts below — because every cashier
+      // holds this one for the till.
       if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
         capabilities.add(AppCapability.viewPayments);
       }
@@ -882,6 +1055,29 @@ class AuthorizationCapabilities {
         'treasury.view_moneyaccount',
       ])) {
         capabilities.add(AppCapability.viewMoneyAccounts);
+      }
+      // Each treasury button asks for exactly what the server will. None of
+      // them opens the screen: its balances need the view permission above.
+      if (_hasAny(user, const [
+        'add_moneyaccount',
+        'treasury.add_moneyaccount',
+      ])) {
+        capabilities.add(AppCapability.createMoneyAccount);
+      }
+      if (_hasAny(user, const [
+        'change_moneyaccount',
+        'treasury.change_moneyaccount',
+      ])) {
+        capabilities.add(AppCapability.changeMoneyAccount);
+      }
+      if (_hasAny(user, const [
+        'add_moneytransfer',
+        'treasury.add_moneytransfer',
+      ])) {
+        capabilities.add(AppCapability.recordMoneyTransfer);
+      }
+      if (_hasAny(user, const ['add_moneycount', 'treasury.add_moneycount'])) {
+        capabilities.add(AppCapability.recordMoneyCount);
       }
       // Reading a rate is not the same as trading in one: an accountant costing
       // imports holds this without any of the dashboard's revenue permissions,
@@ -900,6 +1096,24 @@ class AuthorizationCapabilities {
         capabilities
           ..add(AppCapability.viewExpenses)
           ..add(AppCapability.manageExpenses);
+      }
+      if (_hasAny(user, const [
+        'add_expensecategory',
+        'expenses.add_expensecategory',
+      ])) {
+        capabilities.add(AppCapability.createExpenseCategory);
+      }
+      if (_hasAny(user, const [
+        'change_expensecategory',
+        'expenses.change_expensecategory',
+      ])) {
+        capabilities.add(AppCapability.changeExpenseCategory);
+      }
+      if (_hasAny(user, const [
+        'delete_expensecategory',
+        'expenses.delete_expensecategory',
+      ])) {
+        capabilities.add(AppCapability.deleteExpenseCategory);
       }
       if (_hasAny(user, const [
         'change_fraudfinding',
@@ -1020,7 +1234,10 @@ class AuthorizationCapabilities {
   bool get canAdjustPurchaseOrder => allows(AppCapability.adjustPurchaseOrder);
   bool get canCancelPurchaseOrder => allows(AppCapability.cancelPurchaseOrder);
   bool get canDeletePurchaseOrder => allows(AppCapability.deletePurchaseOrder);
+  bool get canRecordSupplierPayment =>
+      allows(AppCapability.recordSupplierPayment);
   bool get canManageContacts => allows(AppCapability.manageContacts);
+  bool get canCreateCustomers => allows(AppCapability.createCustomers);
   bool get canCheckoutSale => allows(AppCapability.checkoutSale);
   bool get canStartRegisterSession =>
       allows(AppCapability.startRegisterSession);
@@ -1073,10 +1290,21 @@ class AuthorizationCapabilities {
   bool get canSendCampaigns => allows(AppCapability.sendCampaigns);
   bool get canViewExpenses => allows(AppCapability.viewExpenses);
   bool get canManageExpenses => allows(AppCapability.manageExpenses);
+  bool get canCreateExpenseCategory =>
+      allows(AppCapability.createExpenseCategory);
+  bool get canChangeExpenseCategory =>
+      allows(AppCapability.changeExpenseCategory);
+  bool get canDeleteExpenseCategory =>
+      allows(AppCapability.deleteExpenseCategory);
   bool get canViewPayments => allows(AppCapability.viewPayments);
   bool get canViewMoneyAccounts => allows(AppCapability.viewMoneyAccounts);
+  bool get canCreateMoneyAccount => allows(AppCapability.createMoneyAccount);
+  bool get canChangeMoneyAccount => allows(AppCapability.changeMoneyAccount);
+  bool get canRecordMoneyTransfer => allows(AppCapability.recordMoneyTransfer);
+  bool get canRecordMoneyCount => allows(AppCapability.recordMoneyCount);
   bool get canViewOperations => allows(AppCapability.viewOperations);
   bool get canCreateJobs => allows(AppCapability.createJobs);
+  bool get canChangeJobs => allows(AppCapability.changeJobs);
   bool get canAssignJobs => allows(AppCapability.assignJobs);
   bool get canReopenJobs => allows(AppCapability.reopenJobs);
   bool get canReleaseUnpaidJobs => allows(AppCapability.releaseUnpaidJobs);
@@ -1114,6 +1342,18 @@ class AuthorizationCapabilities {
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
   bool get canCountStock => allows(AppCapability.countStock);
   bool get canApplyStockCount => allows(AppCapability.applyStockCount);
+  bool get canViewWarehouses => allows(AppCapability.viewWarehouses);
+  bool get canCreateWarehouse => allows(AppCapability.createWarehouse);
+  bool get canChangeWarehouse => allows(AppCapability.changeWarehouse);
+  bool get canDeleteWarehouse => allows(AppCapability.deleteWarehouse);
+  bool get canChangeRegisterWarehouse =>
+      allows(AppCapability.changeRegisterWarehouse);
+  bool get canViewStockTransfers => allows(AppCapability.viewStockTransfers);
+  bool get canCreateStockTransfer => allows(AppCapability.createStockTransfer);
+  bool get canDispatchStockTransfer =>
+      allows(AppCapability.dispatchStockTransfer);
+  bool get canReceiveStockTransfer =>
+      allows(AppCapability.receiveStockTransfer);
 
   AuthorizedAction? actionFor(
     AppCapability capability,

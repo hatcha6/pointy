@@ -78,7 +78,7 @@ def build_user_activity(user):
             _sale_order_data(order)
             for order in sales_orders.exclude(sale_type=Order.SaleType.CREDIT)
             .select_related("customer", "register_session")
-            .prefetch_related("payments")
+            .with_balance_relations()
             .order_by("-created_at")[:RECENT_LIMIT]
         ],
         "recent_credit_sales": [
@@ -87,7 +87,7 @@ def build_user_activity(user):
                 "customer",
                 "register_session",
             )
-            .prefetch_related("payments")
+            .with_balance_relations()
             .order_by("-created_at")[:RECENT_LIMIT]
         ],
         "recent_purchase_orders": [
@@ -148,7 +148,7 @@ def _sales_summary(orders, adjustments, credit_orders):
     outstanding = sum(
         (
             order.balance_due
-            for order in credit_orders.open_credit().prefetch_related("payments")
+            for order in credit_orders.open_credit().with_balance_relations()
         ),
         Decimal("0.00"),
     )
@@ -317,8 +317,8 @@ def _sale_order_data(order):
         "receipt_number": order.receipt_number,
         "status": order.status,
         "sale_type": order.sale_type,
-        # Only meaningful on a credit row, but cheap on every row (``payments``
-        # is prefetched) and it keeps one shape for both lists.
+        # Only meaningful on a credit row, but cheap on every row (payments
+        # and returns are prefetched) and it keeps one shape for both lists.
         "amount_paid": _money(order.amount_paid),
         "balance_due": _money(order.balance_due),
         "payment_status": order.payment_status,

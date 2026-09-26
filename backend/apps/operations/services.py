@@ -175,17 +175,31 @@ def _job_is_settled(job):
     an oversight. An invoice with a balance and no customer to chase is exactly
     the case this guard exists to catch.
     """
+    from apps.sales.models import Order
+
     order = job.order
-    if order is None:
+    # A void invoice settles nothing: its money went back. A job lets go of one
+    # the moment it is voided (``invoice_returns``); this is for one an older
+    # backend voided before that could happen.
+    if order is None or order.status == Order.Status.VOID:
         return not job_has_anything_to_bill(job)
     if order.balance_due <= Decimal("0.00"):
         return True
-    from apps.sales.models import Order
-
     return order.sale_type == Order.SaleType.CREDIT and order.customer_id is not None
 
 
 def _validate_transition(job, to_stage, user, *, force_release=False):
+    """Check a move to ``to_stage`` and say what it does.
+
+    Any stage may be the target, in either direction, for anyone allowed to
+    change the job. A counter that has to click through three stages to record
+    a phone that is already fixed stops recording it, and a board nobody keeps
+    current is worse than no board. What a jump cannot do is get round a gate:
+    every stage it passes is checked as if the job had walked through it.
+
+    Returns ``(moved_forward, entered)`` — ``entered`` being every stage the job
+    arrives in or passes through, in order, whose side effects the move owes.
+    """
     if job.is_locked:
         raise serializers.ValidationError(
             {"detail": "Completed or cancelled jobs cannot change stage."}
@@ -202,29 +216,32 @@ def _validate_transition(job, to_stage, user, *, force_release=False):
     order_index = {stage.pk: index for index, stage in enumerate(stages)}
     current_index = order_index[current.pk]
     target_index = order_index[to_stage.pk]
+    moved_forward = target_index > current_index
+    # Going back is a correction — the test failed, the part was the wrong one
+    # — and owes nothing but the stage it lands on.
+    entered = (
+        stages[current_index + 1 : target_index + 1] if moved_forward else [to_stage]
+    )
 
-    # The next sequential stage is the everyday move; anything else (going
-    # back, or skipping ahead) is a manager-only correction.
-    is_next_step = target_index == current_index + 1
-    if not is_next_step and not user_is_manager(user):
-        raise serializers.ValidationError(
-            {"detail": "Only a manager can move a job backwards or skip stages."}
-        )
-
-    # Leaving an approval gate forwards requires the customer-approved price.
-    if (
-        target_index > current_index
-        and current.requires_customer_approval
-        and job.approved_price is None
+    # Leaving an approval gate forwards requires the customer-approved price —
+    # and so does jumping over one, or the gate is one click wide.
+    left_behind = stages[current_index:target_index] if moved_forward else []
+    if job.approved_price is None and any(
+        stage.requires_customer_approval for stage in left_behind
     ):
         raise serializers.ValidationError(
-            {"detail": "Record the customer-approved price before moving forward."}
+            {
+                "detail": "Record the customer-approved price before moving forward.",
+                "code": "approval_required",
+            }
         )
 
     # Entering a settlement gate requires the money to be dealt with. This is
     # the guard that stops a phone or a car leaving the shop unpaid — the whole
     # reason the customer comes back at all.
-    if to_stage.requires_settlement and not _job_is_settled(job):
+    if any(stage.requires_settlement for stage in entered) and not _job_is_settled(
+        job
+    ):
         if not force_release:
             raise serializers.ValidationError(
                 {
@@ -239,7 +256,7 @@ def _validate_transition(job, to_stage, user, *, force_release=False):
             raise serializers.ValidationError(
                 {"detail": "Only a manager can release a job that is not settled."}
             )
-    return target_index > current_index
+    return moved_forward, entered
 
 
 @transaction.atomic
@@ -267,7 +284,7 @@ def transition_job(
         raise serializers.ValidationError(
             {"note": "Say why this job is being released unsettled."}
         )
-    moved_forward = _validate_transition(
+    moved_forward, entered = _validate_transition(
         job,
         to_stage,
         user,
@@ -275,18 +292,22 @@ def transition_job(
     )
     from_stage = job.current_stage
     released_unsettled = (
-        to_stage.requires_settlement and force_release and not _job_is_settled(job)
+        any(stage.requires_settlement for stage in entered)
+        and force_release
+        and not _job_is_settled(job)
     )
 
     job.current_stage = to_stage
     update_fields = ["current_stage", "updated_at"]
 
-    if to_stage.consumes_materials:
+    # A jump owes everything the stages it passed would have done: materials
+    # used in a skipped "repairing" stage were still used.
+    if any(stage.consumes_materials for stage in entered):
         consume_pending_materials(job, request=request)
-    if to_stage.produces_output:
+    if any(stage.produces_output for stage in entered):
         receive_finished_goods(job, request=request)
         update_fields += ["output_unit_cost", "output_received_at"]
-    if to_stage.releases_custody and job.handed_over_at is None:
+    if any(stage.releases_custody for stage in entered) and job.handed_over_at is None:
         job.handed_over_at = timezone.now()
         job.handed_over_to = handed_over_to
         update_fields += ["handed_over_at", "handed_over_to"]
@@ -336,9 +357,12 @@ def transition_job(
             "from_stage": from_stage.code,
             "to_stage": to_stage.code,
             "moved_forward": moved_forward,
+            # How many stages a forward jump went straight past, so "who skips
+            # the testing stage" is a question the trail can answer.
+            "skipped_stages": max(len(entered) - 1, 0) if moved_forward else 0,
             "is_terminal": to_stage.is_terminal,
             "note_present": bool(note),
-            "released_custody": to_stage.releases_custody,
+            "released_custody": any(stage.releases_custody for stage in entered),
             "released_unsettled": released_unsettled,
         },
     )
@@ -793,6 +817,13 @@ def add_job_material(*, job, variant, quantity, request=None, consume_now=True):
         raise serializers.ValidationError(
             {"detail": "Completed or cancelled jobs cannot use materials."}
         )
+    # A repair stays open after it is paid for — the phone is still on the
+    # shelf — but its bill is closed. A part fitted now would leave stock and
+    # never be charged for.
+    if job.order_id is not None:
+        raise serializers.ValidationError(
+            {"detail": "Invoiced jobs cannot take new materials."}
+        )
     if variant.product.is_service:
         raise serializers.ValidationError(
             {"variant": "Service products cannot be consumed as materials."}
@@ -811,18 +842,46 @@ def add_job_material(*, job, variant, quantity, request=None, consume_now=True):
 
 
 @transaction.atomic
-def add_job_service(*, job, variant, quantity=None, note="", request=None):
+def add_job_service(
+    *,
+    job,
+    variant=None,
+    quantity=None,
+    note="",
+    unit_price=None,
+    request=None,
+):
     """Put priced work on a job: a diagnosis fee, an oil change, a screen swap.
 
     The mirror of :func:`add_job_material` for the other half of a repair bill.
     Service variants hold no stock, so there is nothing to consume, reserve or
     reverse — the line simply exists until it is billed or removed.
+
+    Without a ``variant`` the line is labour typed at the counter — "screen
+    replacement, 50" — billed under the shop's one labour service. A repair
+    shop cannot be expected to put every job it will ever do in the catalog
+    before it can charge for one. ``unit_price`` overrides the catalog price on
+    either kind: the same service costs more on one handset than another.
     """
     if job.is_locked:
         raise serializers.ValidationError(
             {"detail": "Completed or cancelled jobs cannot take new services."}
         )
-    if not variant.product.is_service:
+    if job.order_id is not None:
+        raise serializers.ValidationError(
+            {"detail": "Invoiced jobs cannot take new services."}
+        )
+    if variant is None:
+        if not note.strip():
+            raise serializers.ValidationError(
+                {"note": "Say what the labour was for."}
+            )
+        if unit_price is None:
+            raise serializers.ValidationError(
+                {"unit_price": "Labour needs a price."}
+            )
+        variant = _labor_variant()
+    elif not variant.product.is_service:
         raise serializers.ValidationError(
             {"variant": "Only service products can be added as job services."}
         )
@@ -830,8 +889,8 @@ def add_job_service(*, job, variant, quantity=None, note="", request=None):
         job=job,
         variant=variant,
         quantity=material_quantity(quantity if quantity is not None else 1),
-        unit_price=variant.unit_price,
-        note=note,
+        unit_price=variant.unit_price if unit_price is None else money(unit_price),
+        note=note.strip(),
         added_by=request_user(request),
     )
 
@@ -923,9 +982,14 @@ def reverse_job_material(*, job, material, request=None):
         raise serializers.ValidationError(
             {"detail": "Material does not belong to this job."}
         )
-    if job.order_id is not None:
+    # A part the invoice still charges for comes off the invoice first. Once its
+    # line has been returned in full the customer has had the money back, and
+    # the part is the job's to keep fitted or to put back on the shelf.
+    from .invoice_returns import material_is_billed
+
+    if job.order_id is not None and material_is_billed(material):
         raise serializers.ValidationError(
-            {"detail": "Invoiced jobs cannot return materials."}
+            {"detail": "Invoiced jobs cannot return materials the invoice still charges for."}
         )
     if material.reversed_at is not None:
         raise serializers.ValidationError({"detail": "Material already reversed."})
@@ -1352,6 +1416,8 @@ def invoice_job(
     on its stage; a kitchen or production job has nothing left to give back, so
     paying for it ends it, exactly as before.
     """
+    from apps.documents import services as document_services
+    from apps.documents.statuses import DocumentStatus
     from apps.payments.serializers import PaymentSerializer
     from apps.sales.models import Order, OrderLine
     from apps.sales.services import mark_order_paid, validate_customer_credit_limit
@@ -1452,6 +1518,9 @@ def invoice_job(
             quantity=service.quantity,
             unit_price=service.unit_price,
             unit_cost=Decimal("0.00"),
+            # Labour typed at the counter bills under one generic service; the
+            # words that say what it was for travel with the line.
+            notes=service.note[:255],
         )
     if labor_total > 0:
         OrderLine.objects.create(
@@ -1545,6 +1614,13 @@ def invoice_job(
     if order.status != Order.Status.PAID and order.balance_due <= Decimal("0.00"):
         mark_order_paid(order, request=request, stock_already_recorded=True)
         order.refresh_from_db()
+    # Issued here, last, as checkout issues a sale. A settled invoice submitted
+    # itself through ``mark_order_paid``; an آجل one with a balance arrives
+    # still a draft. Left one, its payments could not be cancelled, and its last
+    # collection would submit it then, dated to a month the period lock may by
+    # then have closed.
+    if order.doc_status == DocumentStatus.DRAFT:
+        order = document_services.submit(order, request=request)
 
     job.order = order
     job.save(update_fields=["order", "updated_at"])

@@ -1,14 +1,23 @@
 """What a payment means to the document lifecycle.
 
 A payment is undone by its opposite, not by being deleted: the refund path has
-always written a negative payment row per tender so that every ledger, every
-drawer and every balance nets out on its own. Cancelling one takes the same
-shape, which is why nothing that sums payments had to learn a new rule.
+always written a negative payment row per tender so that every ledger and every
+balance nets out on its own. Cancelling one takes the same shape.
+
+The drawer is the one sum that had to learn the difference. It leaves a
+refund's negative rows out — a refund reaches it through the return's
+``cash_amount`` — so it has to be told which negative rows are cancellations,
+and ``reverses`` is how.
 """
 
 from django.utils import timezone
 
 from apps.payments.models import Payment
+
+#: What a counter payment's reference says, for the people reading a ledger.
+#: The drawer never reads it (see ``Payment.reverses``); the catch-up in
+#: ``reconciliation`` does, for counter rows written before the link existed.
+COUNTER_REFERENCE_PREFIX = "cancel:"
 
 
 def reverse(payment, *, at, actor, reason="", context=None):
@@ -30,7 +39,8 @@ def reverse(payment, *, at, actor, reason="", context=None):
         amount=-payment.amount,
         commission_percent=commission_percent,
         commission_amount=commission_amount,
-        external_reference=f"cancel:{payment.pk}",
+        external_reference=f"{COUNTER_REFERENCE_PREFIX}{payment.pk}",
+        reverses=payment,
         register_session=(
             context.get("register_session") or payment.register_session
         ),
@@ -43,4 +53,4 @@ def reverse(payment, *, at, actor, reason="", context=None):
     return counter
 
 
-__all__ = ["reverse"]
+__all__ = ["COUNTER_REFERENCE_PREFIX", "reverse"]

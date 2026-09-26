@@ -27,6 +27,7 @@ from .position import (
     COMPONENT_DRAWER_IN,
     COMPONENT_DRAWER_OUT,
     COMPONENT_EXPENSES,
+    COMPONENT_INTEGRATION_DRAW,
     COMPONENT_PAYROLL,
     COMPONENT_SALES,
     COMPONENT_SUPPLIERS,
@@ -35,6 +36,7 @@ from .position import (
     NON_CASH_SUPPLIER_METHODS,
     account_is_routed,
     bank_account_filter,
+    claimed_by_live,
 )
 
 # Same ceiling as the expense ledger: enough for a month of a busy shop, and
@@ -85,6 +87,8 @@ def account_movements(account, *, start, end):
         )
     elif is_routed and account.kind == MoneyAccount.Kind.CASH:
         rows.extend(_cash_rows(start=start, end=end))
+    elif account.kind == MoneyAccount.Kind.PROVIDER:
+        rows.extend(_provider_rows(account, start=start, end=end))
 
     rows.sort(key=lambda row: (row["date"], row["source"]), reverse=True)
     truncated = len(rows) > MOVEMENT_ROW_LIMIT
@@ -200,11 +204,13 @@ def _cash_rows(*, start, end):
     )
     yield from _supplier_rows(CASH_METHODS, start=start, end=end)
 
+    # Same rule as the balance: an expense's or a purchase's pay-out is shown
+    # as that row while it stands, and as a pay-out of its own once cancelled —
+    # beside the pay-in that brought the cash back.
     movements = _newest(
         money_period(
-            RegisterCashMovement.objects.filter(
-                expense__isnull=True,
-                supplier_payment__isnull=True,
+            RegisterCashMovement.objects.exclude(claimed_by_live(Expense)).exclude(
+                claimed_by_live(SupplierPayment)
             ),
             start,
             end,
@@ -258,6 +264,34 @@ def _bank_rows(*, start, end, account, is_default):
         end=end,
         account_filter=owned,
     )
+
+
+def _provider_rows(account, *, start, end):
+    """What the provider drew from a float: one row per top-up it performed.
+
+    Read from ``float_ledger.draws``, the rows its ``drawn`` sums, so these and
+    the ``integration_draw`` component cannot describe different money. A float
+    with no integration account behind it has no draws to list.
+    """
+    from apps.integrations import float_ledger
+
+    integration = getattr(account, "integration_account", None)
+    if integration is None:
+        return
+    fulfillments = _newest(float_ledger.draws(integration, start=start, end=end))
+    for fulfillment in fulfillments:
+        # A voucher off the shelf has no card number, only its label.
+        what = fulfillment.option_label or fulfillment.option_code
+        yield _row(
+            source=COMPONENT_INTEGRATION_DRAW,
+            date=fulfillment.confirmed_at.date(),
+            amount=-fulfillment.cost,
+            description=" · ".join(
+                part for part in (fulfillment.subscriber_ref, what) if part
+            ),
+            reference=fulfillment.provider_reference,
+            related_id=fulfillment.pk,
+        )
 
 
 __all__ = ["MOVEMENT_ROW_LIMIT", "account_movements"]

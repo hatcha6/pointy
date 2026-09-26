@@ -388,6 +388,10 @@ class ShopSettingsView(views.APIView):
             for field, previous in before.items()
             if getattr(settings, field) != previous
         ]
+        from apps.operations.modes import MODE_FIELDS, sync_builtin_workflows
+
+        if set(changed_fields) & set(MODE_FIELDS.values()):
+            sync_builtin_workflows(settings, fields=changed_fields)
         record_domain_event(
             name="settings.shop.updated",
             event_type=AnalyticsEvent.EventType.AUDIT,
@@ -471,6 +475,12 @@ class ShopSetupView(views.APIView):
             if field in data:
                 setattr(settings, field, data[field])
         settings.save()
+        # The preset decided which kinds of work this shop does; the jobs board
+        # should offer exactly those. A phone shop gets a repair board, not a
+        # kitchen and a production line it will never use.
+        from apps.operations.modes import sync_builtin_workflows
+
+        sync_builtin_workflows(settings)
 
         record_domain_event(
             name="settings.shop.setup_completed",

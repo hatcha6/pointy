@@ -863,7 +863,9 @@ def _sales_notifications(now):
     # pay-ins, pay-outs) — computing it per closed session used to cost
     # 1 + 4N queries over all-time history. The same filtered sums as
     # correlated subqueries decide "has variance" in one query; each relation
-    # gets its own subquery because joining them would fan out the sums.
+    # gets its own subquery because joining them would fan out the sums. The
+    # payments are the drawer's own ``takings()`` — the rows the property sums
+    # — or a shift that handed a cancelled payment back reads as short.
     def _session_sum(queryset, field="amount"):
         return Coalesce(
             Subquery(
@@ -882,10 +884,9 @@ def _sales_notifications(now):
         )
         .annotate(
             variance_cash_sales=_session_sum(
-                Payment.objects.filter(
+                Payment.objects.takings().filter(
                     register_session=OuterRef("pk"),
                     method=Payment.Method.CASH,
-                    amount__gt=0,
                 )
             ),
             variance_refunds=_session_sum(

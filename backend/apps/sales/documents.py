@@ -51,18 +51,34 @@ def progress_status(order) -> str:
     if refunded and _fully_returned(order):
         return Order.Status.VOID
 
-    # "Paid" is about the sale having been settled, not about what is in the
-    # drawer now: a refund is recorded as a negative payment, so a part-returned
-    # sale's balance climbs back above zero even though the customer settled it
-    # in full and was given part of it back. What was refunded therefore counts
-    # towards what was paid — which is exactly the high-water mark the assigned
-    # status used to hold by never being written again.
-    settled = order.amount_paid + sum(refunded, Decimal("0.00"))
     return (
         Order.Status.PAID
-        if settled >= order.total
+        if settled_amount(order, refunded=refunded) >= order.total
         else Order.Status.OPEN
     )
+
+
+def settled_amount(order, *, refunded=None, paid=None) -> Decimal:
+    """What the customer has settled towards this sale.
+
+    "Paid" is about the sale having been settled, not about what is in the
+    drawer now: a refund is recorded as a negative payment, so a part-returned
+    sale's balance climbs back above zero even though the customer settled it
+    in full and was given part of it back. What was refunded therefore counts
+    towards what was paid — which is exactly the high-water mark the assigned
+    status used to hold by never being written again.
+
+    ``refunded`` is the order's adjustment amounts, for a caller that has
+    already read them. ``paid`` replaces ``amount_paid`` for a caller that
+    counts the payments itself — one taking a payment that replaces another.
+    """
+    if refunded is None:
+        # Summed in Python, like ``amount_paid``, so a list that prefetched
+        # ``adjustments`` reuses them instead of asking once per row.
+        refunded = (adjustment.amount for adjustment in order.adjustments.all())
+    if paid is None:
+        paid = order.amount_paid
+    return paid + sum(refunded, Decimal("0.00"))
 
 
 def recompute_progress(order) -> None:
@@ -71,6 +87,12 @@ def recompute_progress(order) -> None:
         return
     order.status = status
     order.save(update_fields=["status", "updated_at"])
+    if status == Order.Status.VOID:
+        # Voided, or returned in full: a job this was the invoice of is billed
+        # no longer (``apps.operations.invoice_returns``).
+        from apps.operations.invoice_returns import unbill_jobs_of_voided_invoice
+
+        unbill_jobs_of_voided_invoice(order)
 
 
 def reverse(order, *, at, actor, reason="", context=None):
@@ -126,4 +148,5 @@ __all__ = [
     "progress_status",
     "recompute_progress",
     "reverse",
+    "settled_amount",
 ]

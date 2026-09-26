@@ -242,7 +242,7 @@ const purchasingGuides = <LearningGuide>[
     level: LearningLevel.beginner,
     kind: LearningKind.walkthrough,
     minutes: 3,
-    capability: AppCapability.accessPurchasing,
+    capability: AppCapability.recordSupplierPayment,
     keywords: ['supplier payment', 'دفعة مورد', 'سداد', 'دفع', 'مستحقات'],
     related: [
       'purchasing.lifecycle',

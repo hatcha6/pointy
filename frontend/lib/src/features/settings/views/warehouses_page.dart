@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/warehouse.dart';
+import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -16,9 +18,25 @@ import '../view_models/warehouses_view_model.dart';
 /// the page opens saying so plainly rather than presenting an empty-looking
 /// list, and adding a second room is an offer, never a prompt.
 class WarehousesPage extends StatefulWidget {
-  const WarehousesPage({super.key, required this.viewModel});
+  const WarehousesPage({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+    this.navigation,
+  });
 
   final WarehousesViewModel viewModel;
+
+  /// Adding, editing and deleting a place, and moving this till to another,
+  /// are four separate rights on the server. Each button appears only for its
+  /// own, so nobody is offered a change that would come back refused.
+  final AuthorizationCapabilities capabilities;
+
+  /// Set when the page is opened as a destination — the drawer, the rail or
+  /// ⌘K — which is how the stock roles reach it: they hold the view right, not
+  /// shop settings. Null when shop settings pushes it, and the page then keeps
+  /// its back button to the settings it came from.
+  final AppNavigation? navigation;
 
   @override
   State<WarehousesPage> createState() => _WarehousesPageState();
@@ -41,18 +59,29 @@ class _WarehousesPageState extends State<WarehousesPage> {
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
+        final navigation = widget.navigation;
         return PointyScaffold(
+          drawer: navigation == null
+              ? null
+              : AppNavigationDrawer(
+                  selectedDestination: AppNavigationDestination.warehouses,
+                  navigation: navigation,
+                ),
           appBar: PointyAppBar(
+            leading: navigation == null
+                ? null
+                : const PointyNavigationMenuButton(),
             title: Text(l10n.warehousesTitle),
             isLoading: viewModel.isLoading || viewModel.isMutating,
             actions: [
-              IconButton(
-                tooltip: l10n.warehousesAddAction,
-                onPressed: viewModel.isMutating
-                    ? null
-                    : () => _openEditor(context),
-                icon: const Icon(Icons.add),
-              ),
+              if (widget.capabilities.canCreateWarehouse)
+                IconButton(
+                  tooltip: l10n.warehousesAddAction,
+                  onPressed: viewModel.isMutating
+                      ? null
+                      : () => _openEditor(context),
+                  icon: const Icon(Icons.add),
+                ),
               IconButton(
                 tooltip: l10n.refreshShopSettingsTooltip,
                 onPressed: viewModel.isLoading ? null : viewModel.load,
@@ -68,6 +97,7 @@ class _WarehousesPageState extends State<WarehousesPage> {
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     final viewModel = widget.viewModel;
+    final capabilities = widget.capabilities;
     final spacing = AdaptiveSpacing.of(context);
 
     if (viewModel.isLoading && viewModel.warehouses.isEmpty) {
@@ -96,6 +126,7 @@ class _WarehousesPageState extends State<WarehousesPage> {
               if (viewModel.hasOnlyOnePlace) ...[
                 _OnePlaceCallout(
                   name: viewModel.defaultWarehouse?.name ?? '',
+                  canAdd: capabilities.canCreateWarehouse,
                   onAdd: viewModel.isMutating
                       ? null
                       : () => _openEditor(context),
@@ -109,10 +140,14 @@ class _WarehousesPageState extends State<WarehousesPage> {
                       warehouse: warehouse,
                       isBusy: viewModel.isMutating,
                       isThisTill:
-                          viewModel.registerProfile?.warehouseId == warehouse.id,
-                      onEdit: () =>
-                          _openEditor(context, warehouse: warehouse),
-                      onDelete: warehouse.canDelete
+                          viewModel.registerProfile?.warehouseId ==
+                          warehouse.id,
+                      onEdit: capabilities.canChangeWarehouse
+                          ? () => _openEditor(context, warehouse: warehouse)
+                          : null,
+                      onDelete: !capabilities.canDeleteWarehouse
+                          ? null
+                          : warehouse.canDelete
                           ? () => _confirmDelete(context, warehouse)
                           : () => _explainBlockers(context, warehouse),
                     ),
@@ -121,7 +156,9 @@ class _WarehousesPageState extends State<WarehousesPage> {
               SizedBox(height: spacing.lg),
               _ThisTillCard(
                 viewModel: viewModel,
-                onChange: () => _pickTillWarehouse(context),
+                onChange: capabilities.canChangeRegisterWarehouse
+                    ? () => _pickTillWarehouse(context)
+                    : null,
               ),
             ],
           ),
@@ -257,9 +294,17 @@ IconData _iconFor(WarehouseKind kind) {
 /// The state nearly every shop is in. Says so in a sentence rather than
 /// presenting a one-row list that looks like something is missing.
 class _OnePlaceCallout extends StatelessWidget {
-  const _OnePlaceCallout({required this.name, required this.onAdd});
+  const _OnePlaceCallout({
+    required this.name,
+    required this.canAdd,
+    required this.onAdd,
+  });
 
   final String name;
+
+  /// Without the right to add a place the callout states the fact and stops:
+  /// "add a store room" is advice this person cannot take.
+  final bool canAdd;
   final VoidCallback? onAdd;
 
   @override
@@ -268,12 +313,16 @@ class _OnePlaceCallout extends StatelessWidget {
     return PointyDetailCallout(
       icon: Icons.storefront_outlined,
       title: l10n.warehousesEmptyTitle,
-      message: l10n.warehousesEmptyBody(name),
-      trailing: TextButton.icon(
-        onPressed: onAdd,
-        icon: const Icon(Icons.add),
-        label: Text(l10n.warehousesAddAction),
-      ),
+      message: canAdd
+          ? l10n.warehousesEmptyBody(name)
+          : l10n.warehousesEmptyBodyReadOnly(name),
+      trailing: canAdd
+          ? TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.warehousesAddAction),
+            )
+          : null,
     );
   }
 }
@@ -290,8 +339,10 @@ class _WarehouseTile extends StatelessWidget {
   final Warehouse warehouse;
   final bool isBusy;
   final bool isThisTill;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+
+  /// Null hides the button: each is a separate right on the server.
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -323,25 +374,32 @@ class _WarehouseTile extends StatelessWidget {
         ],
       ),
       subtitle: Text(subtitle.join(' · ')),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: l10n.editButton,
-            onPressed: isBusy ? null : onEdit,
-            icon: const Icon(Icons.edit_outlined),
-          ),
-          IconButton(
-            tooltip: l10n.deleteButton,
-            // Never disabled: a locked place explains itself when tapped,
-            // which is more use than a greyed-out button that says nothing.
-            onPressed: isBusy ? null : onDelete,
-            icon: Icon(
-              warehouse.canDelete ? Icons.delete_outline : Icons.lock_outline,
+      trailing: onEdit == null && onDelete == null
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onEdit != null)
+                  IconButton(
+                    tooltip: l10n.editButton,
+                    onPressed: isBusy ? null : onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: l10n.deleteButton,
+                    // Never disabled: a locked place explains itself when
+                    // tapped, which is more use than a greyed-out button that
+                    // says nothing.
+                    onPressed: isBusy ? null : onDelete,
+                    icon: Icon(
+                      warehouse.canDelete
+                          ? Icons.delete_outline
+                          : Icons.lock_outline,
+                    ),
+                  ),
+              ],
             ),
-          ),
-        ],
-      ),
       onTap: isBusy ? null : onEdit,
     );
   }
@@ -362,7 +420,10 @@ class _ThisTillCard extends StatelessWidget {
   const _ThisTillCard({required this.viewModel, required this.onChange});
 
   final WarehousesViewModel viewModel;
-  final VoidCallback onChange;
+
+  /// Null for somebody who may not move this till: the card still says where
+  /// it sells from, which anyone may know, and offers no change.
+  final VoidCallback? onChange;
 
   @override
   Widget build(BuildContext context) {
@@ -383,10 +444,12 @@ class _ThisTillCard extends StatelessWidget {
                 : l10n.registerWarehouseUnassigned,
           ),
           subtitle: Text(l10n.registerWarehouseBody),
-          trailing: TextButton(
-            onPressed: viewModel.isMutating ? null : onChange,
-            child: Text(l10n.registerWarehouseChangeAction),
-          ),
+          trailing: onChange == null
+              ? null
+              : TextButton(
+                  onPressed: viewModel.isMutating ? null : onChange,
+                  child: Text(l10n.registerWarehouseChangeAction),
+                ),
         ),
       ],
     );
@@ -491,8 +554,7 @@ class _WarehouseEditorDialogState extends State<_WarehouseEditorDialog> {
                       child: Text(kind.label(l10n)),
                     ),
               ],
-              onChanged: (value) =>
-                  setState(() => _kind = value ?? _kind),
+              onChanged: (value) => setState(() => _kind = value ?? _kind),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<WarehouseOversellPolicy>(
@@ -514,8 +576,7 @@ class _WarehouseEditorDialogState extends State<_WarehouseEditorDialog> {
                   child: Text(l10n.warehouseOversellRefuse),
                 ),
               ],
-              onChanged: (value) =>
-                  setState(() => _policy = value ?? _policy),
+              onChanged: (value) => setState(() => _policy = value ?? _policy),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

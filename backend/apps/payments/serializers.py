@@ -4,7 +4,9 @@ from rest_framework import serializers
 
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
+from apps.sales.documents import settled_amount
 from apps.sales.models import Order
+from apps.sales.serializers import CheckoutPaymentSerializer
 from apps.treasury.models import MoneyAccount
 from . import terminals
 from .card_receipts import (
@@ -101,6 +103,23 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Payment method is disabled.")
         return method
 
+    def validate_amount(self, amount):
+        # Money only comes IN here. It goes back by cancelling a payment
+        # (``services.cancel_payment``) or through a return or void
+        # (``create_order_adjustment``), both server-side and both leaving a
+        # trail. A negative row posted here left none: the invoice owed again
+        # and the cash box dropped with nothing to say why. Zero settles nothing.
+        #
+        # New payments only. An update re-reads the stored amount, which a
+        # refund row carries negative by design, and the money fields of an
+        # existing payment are frozen at the model layer anyway.
+        if self.instance is None and amount <= 0:
+            raise serializers.ValidationError(
+                "Amount must be positive. Money goes back by cancelling a "
+                "payment or through a return."
+            )
+        return amount
+
     def validate_order(self, order):
         request = self.context.get("request")
         # Account-level AR collection is intentionally cross-owner — a cashier may
@@ -188,30 +207,47 @@ class PaymentSerializer(serializers.ModelSerializer):
                 )
         if "money_account" in attrs:
             validate_bank_money_account(attrs["money_account"], method)
+        # Only an update reaches here with a non-positive amount: a refund or
+        # cancellation row's, re-read from the instance. ``validate_amount``
+        # refuses a new one.
         if order is None or amount is None or amount <= 0:
             return attrs
 
-        existing_payments = order.payments.all()
-        if self.instance is not None:
-            existing_payments = existing_payments.exclude(pk=self.instance.pk)
-        paid_total = sum(existing_payments.values_list("amount", flat=True))
-        if paid_total + amount > order.total:
+        if self._settled(order) + amount > order.total:
             raise serializers.ValidationError(
                 {"amount": "Payment total cannot exceed the order total."}
             )
         return attrs
+
+    def _settled(self, order):
+        """What the order was settled by before this payment.
+
+        ``settled_amount``: its payments plus what returns refunded. A refund
+        is a negative payment, so payments alone would let a part-returned sale
+        be paid for twice, and would keep one that is square from turning paid.
+        Two rows are left out: this payment's own, when it is being edited, and
+        one it is taken to replace (``services.replace_payment``). That one is
+        given back straight afterwards and until then would count twice.
+        """
+        payments = order.payments.all()
+        for other in (self.instance, self.context.get("replacing")):
+            if other is not None:
+                payments = payments.exclude(pk=other.pk)
+        return settled_amount(
+            order,
+            paid=sum(payments.values_list("amount", flat=True), Decimal("0.00")),
+        )
 
     @transaction.atomic
     def create(self, validated_data):
         order = Order.objects.select_for_update().get(pk=validated_data["order"].pk)
         validated_data["order"] = order
         amount = validated_data["amount"]
-        if amount > 0:
-            paid_total = sum(order.payments.values_list("amount", flat=True))
-            if paid_total + amount > order.total:
-                raise serializers.ValidationError(
-                    {"amount": "Payment total cannot exceed the order total."}
-                )
+        settled = self._settled(order)
+        if settled + amount > order.total:
+            raise serializers.ValidationError(
+                {"amount": "Payment total cannot exceed the order total."}
+            )
 
         # A slip that names its terminal names its bank: the shop said once,
         # in settings, which account each machine settles into, and the cashier
@@ -262,9 +298,9 @@ class PaymentSerializer(serializers.ModelSerializer):
             from .verification import schedule_receipt_verification
 
             schedule_receipt_verification(payment)
-        if amount > 0 and order.status != Order.Status.PAID:
-            paid_total = (paid_total + amount).quantize(Decimal("0.01"))
-            if paid_total >= order.total:
+        if order.status != Order.Status.PAID:
+            settled = (settled + amount).quantize(Decimal("0.01"))
+            if settled >= order.total:
                 from apps.sales.services import mark_order_paid
 
                 mark_order_paid(
@@ -323,6 +359,18 @@ class PaymentLedgerSerializer(serializers.ModelSerializer):
     def get_customer_name(self, payment):
         customer = payment.order.customer if payment.order_id else None
         return customer.full_name if customer is not None else None
+
+
+class PaymentReplacementSerializer(serializers.Serializer):
+    """What a payment is taken through instead (``services.replace_payment``).
+
+    Each tender has the shape a till sends at checkout, so a replacement card
+    carries its receipt and its bank account exactly as the original sale's
+    would have.
+    """
+
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+    payments = CheckoutPaymentSerializer(many=True, allow_empty=False)
 
 
 class CardTerminalSerializer(serializers.ModelSerializer):

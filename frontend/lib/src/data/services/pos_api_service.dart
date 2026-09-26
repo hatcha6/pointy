@@ -1615,6 +1615,10 @@ class PosApiService {
     return _operations.updateJob(jobId, changes);
   }
 
+  Future<List<Employee>> fetchJobAssignees() {
+    return _operations.fetchJobAssignees();
+  }
+
   Future<OperationsJob> assignJob(int jobId, int? employeeId) {
     return _operations.assignJob(jobId, employeeId);
   }

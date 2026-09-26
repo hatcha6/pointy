@@ -174,30 +174,67 @@ const inventoryGuides = <LearningGuide>[
       ),
     ],
   ),
+  // Two guides, not one: the places and the transfers between them are two
+  // screens behind two view rights, and a guide opens exactly one of them.
   LearningGuide(
     id: 'inventory.warehouses',
-    title: 'الأماكن والتحويلات بينها',
-    summary: 'محل ومخزن وفرع: من أين يبيع كل صندوق وكيف تنقل البضاعة.',
+    title: 'الأماكن ومن أين يبيع كل صندوق',
+    summary: 'معرض ومخزن وسيارة: لكل مكان رصيده، ولكل صندوق مكان يبيع منه.',
     track: LearningTrack.inventory,
     level: LearningLevel.advanced,
-    kind: LearningKind.walkthrough,
-    minutes: 3,
-    capability: AppCapability.viewStock,
-    keywords: ['warehouse', 'transfer', 'مخزن', 'تحويل', 'فرع', 'مكان'],
-    related: ['inventory.stock_basics', 'register.open'],
+    kind: LearningKind.concept,
+    minutes: 2,
+    capability: AppCapability.viewWarehouses,
+    keywords: ['warehouse', 'location', 'مخزن', 'مستودع', 'فرع', 'مكان'],
+    related: ['inventory.transfers', 'inventory.stock_basics', 'register.open'],
+    opens: AppNavigationDestination.warehouses,
     sections: [
       LearningSection(
         title: 'الأماكن',
         blocks: [
           LearningParagraph(
-            'يمكن للمتجر أن يكون له أكثر من مكان، ولكل صندوق مكان يبيع منه. '
-            'مبيعاته تُخصم من رصيد ذلك المكان، والجرد والتقارير تتبعه. تغيير '
-            'مكان صندوق يحتاج صلاحية مدير.',
+            'يمكن للمتجر أن يكون له أكثر من مكان: المعرض، ومخزن خلفي، وسيارة '
+            'توزيع. لكل مكان رصيده، ورصيد المحل مجموعها. وأغلب المحلات لها '
+            'مكان واحد لا تحتاج غيره.',
           ),
         ],
       ),
       LearningSection(
-        title: 'التحويل',
+        title: 'من أين يبيع كل صندوق',
+        blocks: [
+          LearningParagraph(
+            'لكل صندوق مكان يبيع منه: مبيعاته تُخصم من رصيد ذلك المكان، والجرد '
+            'والتقارير تتبعه. والصندوق الذي لم يُحدَّد له مكان يبيع من المكان '
+            'الافتراضي للمحل.',
+          ),
+          LearningNote(
+            tone: LearningNoteTone.info,
+            title: 'لكل تغيير صلاحيته',
+            message:
+                'رؤية الأماكن لا تسمح بتغييرها. إضافة مكان، وتعديله، وحذفه، '
+                'وتغيير المكان الذي يبيع منه الصندوق: أربع صلاحيات منفصلة يمنحها '
+                'المدير لمن يشاء من مجموعة «المخازن والتحويلات»، ومن لا يملك '
+                'إحداها لا يرى زرّها.',
+          ),
+        ],
+      ),
+    ],
+  ),
+  LearningGuide(
+    id: 'inventory.transfers',
+    title: 'تحويل البضاعة بين الأماكن',
+    summary: 'أرسل من مكان واستلم في آخر، والبضاعة بينهما «في الطريق».',
+    track: LearningTrack.inventory,
+    level: LearningLevel.advanced,
+    kind: LearningKind.walkthrough,
+    minutes: 3,
+    capability: AppCapability.viewStockTransfers,
+    keywords: ['transfer', 'stock transfer', 'تحويل', 'نقل', 'في الطريق'],
+    related: ['inventory.warehouses', 'inventory.stock_basics'],
+    opens: AppNavigationDestination.stockTransfers,
+    sections: [
+      LearningSection(
+        title: 'الخطوات',
         blocks: [
           LearningSteps([
             LearningStep('أنشئ تحويلًا جديدًا وحدّد «من» و«إلى».'),
@@ -217,6 +254,31 @@ const inventoryGuides = <LearningGuide>[
             message:
                 'البضاعة المرسَلة ليست في المخزنين معًا ولا في لا مكان: هي في '
                 'الطريق، ولذلك يظهر الفرق حين لا يصل كل ما أُرسل.',
+          ),
+        ],
+      ),
+      LearningSection(
+        title: 'من يفعل ماذا',
+        blocks: [
+          LearningDefinitions([
+            LearningDefinition(
+              'إنشاء التحويل',
+              'تحضير المسودة، ويحتاج معه «عرض المخزون» لأن البرنامج يعرض ما في '
+                  'المصدر فقط. ومن لا يملك الإرسال يحفظها مسودة ليرسلها غيره.',
+            ),
+            LearningDefinition(
+              'الإرسال',
+              'يُخرج البضاعة من المكان المرسِل. وبالصلاحية نفسها يُلغى تحويل في '
+                  'الطريق، فتعود البضاعة إلى مصدرها.',
+            ),
+            LearningDefinition(
+              'الاستلام',
+              'يُدخل ما وصل فعلًا إلى المكان المستلِم.',
+            ),
+          ]),
+          LearningParagraph(
+            'ثلاث صلاحيات منفصلة، لأن من يحمّل السيارة نادرًا ما يكون من '
+            'يفرّغها. ومن يملك عرض التحويلات وحده يراها ولا يظهر له زرّ.',
           ),
         ],
       ),

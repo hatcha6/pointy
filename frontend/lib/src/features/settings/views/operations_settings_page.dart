@@ -73,6 +73,9 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
       }
       unawaited(widget.workflowsViewModel.loadTemplates());
       unawaited(widget.assetTypesViewModel.load());
+      // Only to know whether the shop has menu options at all: the kitchen
+      // block below is hidden from a shop that neither cooks nor uses them.
+      unawaited(widget.modifierGroupsViewModel.load());
       if (widget.shopSettingsViewModel.settings == null) {
         unawaited(widget.shopSettingsViewModel.loadSettings());
       }
@@ -86,6 +89,7 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
         widget.shopSettingsViewModel,
         widget.workflowsViewModel,
         widget.assetTypesViewModel,
+        widget.modifierGroupsViewModel,
       ]),
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
@@ -179,45 +183,58 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                               onSave: _saveDraft,
                             ),
                           ],
-                          SizedBox(height: spacing.lg),
-                          PointySectionHeader(
-                            title: l10n.kitchenPrintingSectionTitle,
-                            subtitle: l10n.kitchenPrintingSectionHint,
-                            leading: const Icon(Icons.print_outlined),
-                          ),
-                          SizedBox(height: spacing.sm),
-                          PointySettingsSection(
-                            children: [
-                              SwitchListTile(
-                                secondary: const Icon(
-                                  Icons.receipt_long_outlined,
+                          // Kitchen chits, prep stations and menu options are a
+                          // kitchen's; a phone shop never sees them. A shop that
+                          // already prints chits, or already sells with menu
+                          // options, keeps the way to change them.
+                          if (settings.enableKitchenOperations ||
+                              settings.autoPrintKitchenTickets ||
+                              widget
+                                  .modifierGroupsViewModel
+                                  .groups
+                                  .isNotEmpty) ...[
+                            SizedBox(height: spacing.lg),
+                            PointySectionHeader(
+                              title: l10n.kitchenPrintingSectionTitle,
+                              subtitle: l10n.kitchenPrintingSectionHint,
+                              leading: const Icon(Icons.print_outlined),
+                            ),
+                            SizedBox(height: spacing.sm),
+                            PointySettingsSection(
+                              children: [
+                                SwitchListTile(
+                                  secondary: const Icon(
+                                    Icons.receipt_long_outlined,
+                                  ),
+                                  title: Text(
+                                    l10n.autoPrintKitchenTicketsTitle,
+                                  ),
+                                  subtitle: Text(
+                                    l10n.autoPrintKitchenTicketsDescription,
+                                  ),
+                                  value: settings.autoPrintKitchenTickets,
+                                  onChanged: isBusy
+                                      ? null
+                                      : (value) => _saveSettings(
+                                          settings,
+                                          autoPrintKitchenTickets: value,
+                                        ),
                                 ),
-                                title: Text(l10n.autoPrintKitchenTicketsTitle),
-                                subtitle: Text(
-                                  l10n.autoPrintKitchenTicketsDescription,
+                                PointySettingsTile(
+                                  icon: Icons.dinner_dining_outlined,
+                                  title: l10n.prepStationsSectionTitle,
+                                  subtitle: l10n.prepStationsSectionSubtitle,
+                                  onTap: isBusy ? null : _openPrepStations,
                                 ),
-                                value: settings.autoPrintKitchenTickets,
-                                onChanged: isBusy
-                                    ? null
-                                    : (value) => _saveSettings(
-                                        settings,
-                                        autoPrintKitchenTickets: value,
-                                      ),
-                              ),
-                              PointySettingsTile(
-                                icon: Icons.dinner_dining_outlined,
-                                title: l10n.prepStationsSectionTitle,
-                                subtitle: l10n.prepStationsSectionSubtitle,
-                                onTap: isBusy ? null : _openPrepStations,
-                              ),
-                              PointySettingsTile(
-                                icon: Icons.tune_outlined,
-                                title: l10n.modifierGroupsSectionTitle,
-                                subtitle: l10n.modifierGroupsSectionSubtitle,
-                                onTap: isBusy ? null : _openModifierGroups,
-                              ),
-                            ],
-                          ),
+                                PointySettingsTile(
+                                  icon: Icons.tune_outlined,
+                                  title: l10n.modifierGroupsSectionTitle,
+                                  subtitle: l10n.modifierGroupsSectionSubtitle,
+                                  onTap: isBusy ? null : _openModifierGroups,
+                                ),
+                              ],
+                            ),
+                          ],
                           SizedBox(height: spacing.lg),
                           PointySectionHeader(
                             title: l10n.workflowsTitle,
@@ -304,20 +321,11 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
     if (!saved || !mounted) {
       return;
     }
-    // Keep the matching built-in workflow in sync so the jobs board only
-    // offers the work types the shop actually uses.
-    final template = widget.workflowsViewModel.templates
-        .where((template) => template.isSystem && template.jobType == jobType)
-        .firstOrNull;
-    if (template == null || template.isActive == enabled) {
-      return;
-    }
-    final synced = await widget.workflowsViewModel.save(
-      _templateDraft(template, isActive: enabled),
-    );
-    if (!synced && mounted) {
-      _showError();
-    }
+    // The server turns the matching built-in workflow on or off with the
+    // switch — the setup wizard's preset goes through the same place — so the
+    // jobs board offers exactly the kinds of work switched on here. Reload to
+    // show what it did.
+    await widget.workflowsViewModel.loadTemplates();
   }
 
   Future<bool> _saveSettings(
@@ -350,37 +358,6 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
       _showError();
     }
     return saved;
-  }
-
-  WorkflowTemplateDraft _templateDraft(
-    WorkflowTemplate template, {
-    bool? isActive,
-    List<WorkflowStageDraft>? stages,
-  }) {
-    return WorkflowTemplateDraft(
-      id: template.id,
-      name: template.name,
-      jobType: template.jobType,
-      isActive: isActive ?? template.isActive,
-      stages:
-          stages ??
-          [
-            for (final stage in template.stages)
-              WorkflowStageDraft(
-                id: stage.id,
-                code: stage.code,
-                name: stage.name,
-                displayOrder: stage.displayOrder,
-                isInitial: stage.isInitial,
-                isTerminal: stage.isTerminal,
-                requiresCustomerApproval: stage.requiresCustomerApproval,
-                requiresSettlement: stage.requiresSettlement,
-                releasesCustody: stage.releasesCustody,
-                consumesMaterials: stage.consumesMaterials,
-                producesOutput: stage.producesOutput,
-              ),
-          ],
-    );
   }
 
   void _openPrepStations() {

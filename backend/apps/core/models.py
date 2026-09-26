@@ -576,6 +576,7 @@ SHOP_TYPE_PRESETS = {
     ShopSettings.ShopType.GROCERY: {
         "enable_kitchen_operations": False,
         "enable_repair_operations": False,
+        "enable_production_operations": False,
         "allow_overselling": False,
         "prevent_selling_at_loss": True,
         "low_stock_threshold": 10,
@@ -586,6 +587,7 @@ SHOP_TYPE_PRESETS = {
     ShopSettings.ShopType.PHARMACY: {
         "enable_kitchen_operations": False,
         "enable_repair_operations": False,
+        "enable_production_operations": False,
         "allow_overselling": False,
         "prevent_selling_at_loss": True,
         "enable_batch_tracking": True,
@@ -597,6 +599,10 @@ SHOP_TYPE_PRESETS = {
         "enable_repair_operations": True,
         "enable_job_tracking": True,
         "enable_kitchen_operations": False,
+        # Said out loud rather than left to the model default: every switch a
+        # preset names is one the jobs board follows, and a phone shop being
+        # offered "production batches" is how this was found.
+        "enable_production_operations": False,
         "enable_serialized_inventory": True,
     },
     # A workshop is a repair shop whose items are cars: same job engine, same
@@ -618,6 +624,7 @@ SHOP_TYPE_PRESETS = {
     ShopSettings.ShopType.RETAIL: {
         "enable_kitchen_operations": False,
         "enable_repair_operations": False,
+        "enable_production_operations": False,
         "allow_overselling": False,
         "prevent_selling_at_loss": True,
     },

@@ -212,6 +212,42 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['stock count', 'stocktake', 'جرد'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.warehouses,
+          icon: Icons.warehouse_outlined,
+          selectedIcon: Icons.warehouse,
+          label: l10n.warehousesDrawerLabel,
+          keywords: const [
+            'warehouses',
+            'locations',
+            'places',
+            'store room',
+            'branch',
+            'مخزن',
+            'مستودع',
+            'أماكن',
+            'مكان',
+            'معرض',
+            'فرع',
+          ],
+        ),
+        NavCatalogEntry(
+          destination: AppNavigationDestination.stockTransfers,
+          // Not the swap arrows the transfers page itself uses: returns and
+          // exchange already wear them, and the collapsed rail is icons only.
+          icon: Icons.local_shipping_outlined,
+          selectedIcon: Icons.local_shipping,
+          label: l10n.transfersDrawerLabel,
+          keywords: const [
+            'transfers',
+            'stock transfer',
+            'move stock',
+            'تحويل',
+            'تحويلات',
+            'نقل',
+            'نقل بضاعة',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.stockUnits,
           icon: Icons.qr_code_2_outlined,
           selectedIcon: Icons.qr_code_2,

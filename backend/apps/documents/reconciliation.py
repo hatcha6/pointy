@@ -16,9 +16,14 @@ It runs on ``post_migrate``, which fires again when the managed container is
 rebuilt on the new image after the flip — by which time the window has closed
 and every stale row is visible. Idempotent, indexed, and empty on a fresh
 install.
+
+One repair is not confined to that minute: the آجل invoices an older backend
+left as drafts whenever it issued one outside checkout — from a job, or from a
+data import (``_submit_credit_invoices``).
 """
 
 from django.db import connection
+from django.db.models import F
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
 
@@ -55,11 +60,39 @@ def _reconcile_sales() -> int:
     if not has_lifecycle_column(Order):
         return 0
     drafts = Order.objects.filter(doc_status=DocumentStatus.DRAFT)
-    return drafts.filter(status=Order.Status.PAID).update(
-        doc_status=DocumentStatus.SUBMITTED
-    ) + drafts.filter(status=Order.Status.VOID).update(
-        doc_status=DocumentStatus.CANCELLED
+    return (
+        drafts.filter(status=Order.Status.PAID).update(
+            doc_status=DocumentStatus.SUBMITTED
+        )
+        + drafts.filter(status=Order.Status.VOID).update(
+            doc_status=DocumentStatus.CANCELLED
+        )
+        + _submit_credit_invoices(drafts)
     )
+
+
+def _submit_credit_invoices(drafts) -> int:
+    """آجل invoices an older backend left as drafts.
+
+    Two doors issued one without submitting it: ``invoice_job``, and the data
+    import, which also backdates what it loads. Either way it stayed a draft
+    until it was paid in full: its payments could not be cancelled, and the last
+    one had to submit it against its own month, period lock and all. Nothing
+    issues a credit sale as a draft on purpose — checkout submits before it
+    returns, and the order API only creates standard sales — so every one that
+    exists was issued, and was issued when it was created: the rule
+    ``sales/0027_backfill_order_lifecycle`` applied to the rows before it.
+
+    Written directly rather than through ``document_services.submit``, whose
+    period lock refuses a caller with no user, and these are by now in months a
+    shop may have closed. No figure in those months moves: sales and
+    receivables count an open آجل invoice whatever its ``doc_status``.
+    """
+    from apps.sales.models import Order
+
+    return drafts.filter(
+        status=Order.Status.OPEN, sale_type=Order.SaleType.CREDIT
+    ).update(doc_status=DocumentStatus.SUBMITTED, submitted_at=F("created_at"))
 
 
 def _reconcile_purchase_orders() -> int:

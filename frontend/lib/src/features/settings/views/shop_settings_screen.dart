@@ -187,7 +187,10 @@ class ShopSettingsScreen extends StatelessWidget {
               messagingViewModel: messagingViewModel,
               integrationsViewModel: integrationsViewModel,
               clientUpdateService: clientUpdateService,
+              capabilities: capabilities,
               canManageSalesChannels: capabilities.canManageSalesChannels,
+              canViewWarehouses: capabilities.canViewWarehouses,
+              canViewStockTransfers: capabilities.canViewStockTransfers,
               canManagePriceCheckers: capabilities.canManagePriceCheckers,
               canManageCameras: capabilities.canManageCameras,
               canManageScales: capabilities.canManageScales,
@@ -228,7 +231,10 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.messagingViewModel,
     required this.integrationsViewModel,
     required this.clientUpdateService,
+    required this.capabilities,
     required this.canManageSalesChannels,
+    required this.canViewWarehouses,
+    required this.canViewStockTransfers,
     required this.canManagePriceCheckers,
     required this.canManageCameras,
     required this.canManageScales,
@@ -271,7 +277,13 @@ class _ShopSettingsBody extends StatelessWidget {
   final MessagingSettingsViewModel messagingViewModel;
   final IntegrationsViewModel integrationsViewModel;
   final ClientUpdateService clientUpdateService;
+
+  /// Handed on to the warehouse and transfer pages, whose buttons each answer
+  /// to a different permission.
+  final AuthorizationCapabilities capabilities;
   final bool canManageSalesChannels;
+  final bool canViewWarehouses;
+  final bool canViewStockTransfers;
   final bool canManagePriceCheckers;
   final bool canManageCameras;
   final bool canManageScales;
@@ -330,7 +342,10 @@ class _ShopSettingsBody extends StatelessWidget {
       messagingViewModel: messagingViewModel,
       integrationsViewModel: integrationsViewModel,
       clientUpdateService: clientUpdateService,
+      capabilities: capabilities,
       canManageSalesChannels: canManageSalesChannels,
+      canViewWarehouses: canViewWarehouses,
+      canViewStockTransfers: canViewStockTransfers,
       canManagePriceCheckers: canManagePriceCheckers,
       canManageCameras: canManageCameras,
       canManageScales: canManageScales,
@@ -368,7 +383,10 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.messagingViewModel,
     required this.integrationsViewModel,
     required this.clientUpdateService,
+    required this.capabilities,
     required this.canManageSalesChannels,
+    required this.canViewWarehouses,
+    required this.canViewStockTransfers,
     required this.canManagePriceCheckers,
     required this.canManageCameras,
     required this.canManageScales,
@@ -412,7 +430,13 @@ class _ShopSettingsForm extends StatefulWidget {
   final MessagingSettingsViewModel messagingViewModel;
   final IntegrationsViewModel integrationsViewModel;
   final ClientUpdateService clientUpdateService;
+
+  /// Handed on to the warehouse and transfer pages, whose buttons each answer
+  /// to a different permission.
+  final AuthorizationCapabilities capabilities;
   final bool canManageSalesChannels;
+  final bool canViewWarehouses;
+  final bool canViewStockTransfers;
   final bool canManagePriceCheckers;
   final bool canManageCameras;
   final bool canManageScales;
@@ -758,18 +782,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                     PointySettingsSection(
                       children: [
                         PointySettingsTile(
-                          icon: Icons.system_update_outlined,
-                          title: l10n.clientUpdatesTitle,
-                          subtitle: l10n.clientUpdatesSubtitle,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => AppUpdatesPage(
-                                service: widget.clientUpdateService,
-                              ),
-                            ),
-                          ),
-                        ),
-                        PointySettingsTile(
                           icon: Icons.qr_code_2_outlined,
                           title: l10n.getAppsTitle,
                           subtitle: l10n.getAppsSubtitle,
@@ -881,7 +893,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                 ? null
                                 : () => _openSalesChannels(context),
                           ),
-                        if (widget.canManageSalesChannels)
+                        // A second way in, on purpose. The stock group of the
+                        // navigation is the first: the stock roles hold these
+                        // view rights and never reach this screen. The tiles
+                        // stay for whoever sets the shop up from here, and
+                        // answer to the same capabilities as the destinations.
+                        if (widget.canViewWarehouses)
                           PointySettingsTile(
                             icon: Icons.warehouse_outlined,
                             title: l10n.warehousesSectionTitle,
@@ -890,7 +907,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                 ? null
                                 : () => _openWarehouses(context),
                           ),
-                        if (widget.canManageSalesChannels)
+                        if (widget.canViewStockTransfers)
                           PointySettingsTile(
                             icon: Icons.swap_horiz,
                             title: l10n.transfersSectionTitle,
@@ -1800,8 +1817,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   Future<void> _openWarehouses(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (routeContext) =>
-            WarehousesPage(viewModel: widget.warehousesViewModel),
+        builder: (routeContext) => WarehousesPage(
+          viewModel: widget.warehousesViewModel,
+          capabilities: widget.capabilities,
+        ),
       ),
     );
   }
@@ -1812,6 +1831,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         builder: (routeContext) => TransfersScreen(
           viewModel: widget.transfersViewModel,
           repository: widget.warehouseRepository,
+          capabilities: widget.capabilities,
           trackedStockRepository: widget.trackedStockRepository,
         ),
       ),

@@ -48,7 +48,20 @@ def _sum(queryset, field="cost"):
 
 
 def drawn(account, *, start=None, end=None) -> Decimal:
-    """What the provider has taken from this float, confirmed only."""
+    """What the provider has taken from this float, confirmed only.
+
+    With only ``end``, every draw up to that day: a balance is cumulative.
+    ``start`` narrows it to a window, which is what a statement needs.
+    """
+    return _sum(draws(account, start=start, end=end))
+
+
+def draws(account, *, start=None, end=None):
+    """The fulfillments ``drawn`` sums, for a caller that lists them.
+
+    The treasury's drill-down shows these as a float's draw rows. Taking them
+    from here is what keeps those rows and the balance's draw line one set.
+    """
     from .models import IntegrationFulfillment
 
     rows = IntegrationFulfillment.objects.filter(
@@ -56,7 +69,7 @@ def drawn(account, *, start=None, end=None) -> Decimal:
     )
     if start is not None or end is not None:
         rows = money_period(rows, start, end)
-    return _sum(rows)
+    return rows
 
 
 def committed(account) -> Decimal:

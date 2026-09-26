@@ -174,10 +174,18 @@ CASHIER_PERMISSION_CODES = (
     "operations.assign_job",
     "operations.add_jobasset",
     "operations.view_jobasset",
+    # At a repair counter the cashier is the one who writes the parts onto the
+    # job: the screen fitted is sold the same way it would be over the till, and
+    # it leaves stock through the same audited movement.
+    "operations.add_jobmaterial",
     "operations.view_jobmaterial",
     "operations.view_jobstageevent",
     "operations.view_workflowtemplate",
     "operations.view_workflowstage",
+    # NOT customers.add_customer, though repair intake wants it: the frozen
+    # compat/win8 till build still opens the customer-balances dashboard for
+    # anyone holding it, and those tills run against this backend. It stays a
+    # per-user grant until that build is retired.
     "customers.add_asset",
     # Front-desk staff take items in, so they also correct a mistyped IMEI and
     # record a device that changed hands. Withholding this would mean a manager

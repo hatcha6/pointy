@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../core/result.dart';
 import '../../../data/models/bill_of_materials.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/models/pos_user.dart';
@@ -25,6 +24,7 @@ import '../view_models/jobs_board_view_model.dart';
 import '../view_models/recipes_view_model.dart';
 import 'job_awaiting_hand_back_strip.dart';
 import 'job_intake_wizard.dart';
+import 'job_stage_move.dart';
 import 'operations_ui.dart';
 import 'recipes_page.dart';
 
@@ -122,7 +122,9 @@ class _JobsScreenState extends State<JobsScreen> {
                 onPressed: widget.onOpenHistory,
                 icon: const Icon(Icons.history),
               ),
-              if (widget.capabilities.canManageRecipes)
+              // Recipes are how a kitchen or a production line knows what
+              // goes into what; a repair shop has neither.
+              if (widget.capabilities.canManageRecipes && viewModel.usesRecipes)
                 IconButton(
                   tooltip: l10n.recipesTitle,
                   onPressed: _openRecipes,
@@ -208,6 +210,18 @@ class _JobsScreenState extends State<JobsScreen> {
 
   Widget _buildJobsArea(BuildContext context, AppLocalizations l10n) {
     final viewModel = widget.viewModel;
+    final lanes = viewModel.enabledTemplates;
+
+    // The shop runs no kind of work at all — its type has none, or every
+    // switch is off. Say where they are switched on, rather than showing an
+    // empty board with no way to start a job.
+    if (lanes.isEmpty && !viewModel.isLoading) {
+      return PointyEmptyState(
+        icon: Icons.handyman_outlined,
+        title: l10n.jobsNoWorkTypesTitle,
+        message: l10n.jobsNoWorkTypesMessage,
+      );
+    }
 
     if (viewModel.jobs.isEmpty && !viewModel.isLoading) {
       // The board is filtered several ways, so a blank result is far more often
@@ -222,9 +236,7 @@ class _JobsScreenState extends State<JobsScreen> {
         emptyTitle: l10n.jobsEmptyTitle,
         emptyMessage: l10n.jobsEmptyMessage,
         onClear: _clearFilters,
-        emptyAction:
-            widget.capabilities.canCreateJobs &&
-                viewModel.enabledTemplates.isNotEmpty
+        emptyAction: widget.capabilities.canCreateJobs && lanes.isNotEmpty
             ? FilledButton.icon(
                 onPressed: _openNewJobMenu,
                 icon: const Icon(Icons.add),
@@ -233,23 +245,72 @@ class _JobsScreenState extends State<JobsScreen> {
             : null,
       );
     }
-
-    final template = viewModel.selectedTemplate;
-    if (template == null) {
+    if (lanes.isEmpty) {
       return const SizedBox.shrink();
     }
+
     // One board, at every width. A kanban read across a workshop wall and a
     // kanban scrolled sideways on a phone are the same mental model — columns
     // are the work, and moving right is progress — so the layout does not
     // change shape underneath someone who learned it on the other device.
-    return _KanbanBoard(
-      template: template,
-      jobsByStage: viewModel.jobsByStage(template),
-      advancingJobIds: _advancingJobIds,
-      onOpenJob: widget.onOpenJob,
-      onAdvance: _advanceJob,
+    if (lanes.length == 1) {
+      return _KanbanBoard(
+        template: lanes.single,
+        jobsByStage: viewModel.jobsByStage(lanes.single),
+        advancingJobIds: _advancingJobIds,
+        onOpenJob: widget.onOpenJob,
+        onMove: widget.capabilities.canChangeJobs ? _moveJob : null,
+      );
+    }
+    // A shop that runs more than one kind of work sees every lane, stacked,
+    // each a full board of its own — nothing hidden behind a switcher.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = AdaptiveSpacing.of(context);
+        final laneHeight = (constraints.maxHeight * 0.8).clamp(360.0, 720.0);
+        return ListView(
+          padding: EdgeInsets.symmetric(vertical: spacing.sm),
+          children: [
+            for (final lane in lanes) ...[
+              _LaneHeader(template: lane, count: _jobCountIn(lane)),
+              // A lane with nothing in it is one line, not a board's worth of
+              // empty columns pushing the busy lane off the screen.
+              if (_jobCountIn(lane) == 0)
+                Padding(
+                  padding: EdgeInsetsDirectional.fromSTEB(
+                    spacing.pageHorizontal,
+                    spacing.xs,
+                    spacing.pageHorizontal,
+                    spacing.sm,
+                  ),
+                  child: Text(
+                    l10n.jobsLaneEmptyMessage,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.pointyColors.mutedInk,
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: laneHeight,
+                  child: _KanbanBoard(
+                    template: lane,
+                    jobsByStage: viewModel.jobsByStage(lane),
+                    advancingJobIds: _advancingJobIds,
+                    onOpenJob: widget.onOpenJob,
+                    onMove: widget.capabilities.canChangeJobs ? _moveJob : null,
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
     );
   }
+
+  int _jobCountIn(WorkflowTemplate lane) => widget.viewModel.jobs
+      .where((job) => job.workflowTemplate == lane.id)
+      .length;
 
   Future<void> _openRecipes() async {
     await Navigator.of(context).push(
@@ -283,34 +344,82 @@ class _JobsScreenState extends State<JobsScreen> {
     widget.viewModel.clearFilters();
   }
 
-  Future<void> _advanceJob(OperationsJob job) async {
+  /// Moves [job] to [target] — the next stage from the card's button, or any
+  /// stage from its "move to" sheet.
+  Future<void> _moveJob(
+    OperationsJob job,
+    WorkflowTemplate template,
+    WorkflowStage target,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final nextStage = job.nextStage;
-    if (nextStage == null) {
-      return;
-    }
-    setState(() => _advancingJobIds.add(job.id));
-    final result = await widget.operationsRepository.transitionJob(
-      job.id,
-      toStage: nextStage.id,
-      idempotencyKey:
-          'job-advance-${job.id}-${DateTime.now().microsecondsSinceEpoch}',
+    final outcome = await runJobStageMove(
+      context,
+      job: job,
+      stages: template.stages,
+      target: target,
+      recordApprovedPrice: (price) =>
+          widget.viewModel.recordApprovedPrice(job, price),
+      // The card spins only while the server is being asked — not while the
+      // counter is still answering a question about it.
+      moveTo: (stage, collector) async {
+        setState(() => _advancingJobIds.add(job.id));
+        try {
+          return await widget.viewModel.moveJob(
+            job,
+            stage,
+            handedOverTo: collector,
+          );
+        } finally {
+          if (mounted) {
+            setState(() => _advancingJobIds.remove(job.id));
+          }
+        }
+      },
     );
     if (!mounted) {
       return;
     }
-    setState(() => _advancingJobIds.remove(job.id));
-    switch (result) {
-      case Ok<OperationsJob>():
+    switch (outcome.result) {
+      case JobMoveResult.moved:
         messenger.showSnackBar(
-          SnackBar(content: Text(l10n.jobStageChangedMessage(nextStage.name))),
+          SnackBar(content: Text(l10n.jobStageChangedMessage(target.name))),
         );
-        await widget.viewModel.loadJobs();
-      case Error<OperationsJob>():
+      case JobMoveResult.unsettled:
+        await _explainUnsettledHandover(job);
+      case JobMoveResult.failed:
         messenger.showSnackBar(
           SnackBar(content: Text(l10n.operationsActionError)),
         );
+      case JobMoveResult.cancelled:
+        break;
+    }
+  }
+
+  /// The board cannot take the money; the job screen can. So a handover the
+  /// server refused for want of payment is explained here, with the way on.
+  Future<void> _explainUnsettledHandover(OperationsJob job) async {
+    final l10n = AppLocalizations.of(context)!;
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.lock_outline),
+        title: Text(l10n.jobHandoverBlockedTitle),
+        content: Text(l10n.jobHandoverBlockedMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.jobOpenAction),
+          ),
+        ],
+      ),
+    );
+    if (open == true && mounted) {
+      widget.onOpenJob(job);
     }
   }
 
@@ -372,6 +481,7 @@ class _JobsScreenState extends State<JobsScreen> {
           MaterialPageRoute(
             builder: (_) => JobIntakeWizard(
               template: template,
+              canCreateCustomers: widget.capabilities.canCreateCustomers,
               boardViewModel: widget.viewModel,
               contactRepository: widget.contactRepository,
               operationsRepository: widget.operationsRepository,
@@ -389,9 +499,17 @@ class _JobsScreenState extends State<JobsScreen> {
   Future<void> _openProductionDialog(WorkflowTemplate template) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final boms = widget.viewModel.boms
-        .where((bom) => bom.isActive)
-        .toList(growable: false);
+    final recipes = await widget.viewModel.loadActiveRecipes();
+    if (!mounted) {
+      return;
+    }
+    if (recipes == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.productionRecipesLoadError)),
+      );
+      return;
+    }
+    final boms = recipes.where((bom) => bom.isActive).toList(growable: false);
     if (boms.isEmpty) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.productionNoRecipesMessage)),
@@ -438,10 +556,9 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
-    final types = {
-      for (final template in viewModel.enabledTemplates) template.jobType,
-    };
 
+    // No lane or job-type chips: the board shows the kinds of work the shop
+    // runs, all of them, and a phone shop runs one.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -454,59 +571,49 @@ class _FilterBar extends StatelessWidget {
           ),
           onChanged: onSearchChanged,
         ),
-        // A shop running two lanes picks which board it is looking at; a shop
-        // running one never sees this.
-        if (viewModel.enabledTemplates.length > 1) ...[
-          SizedBox(height: spacing.sm),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final template in viewModel.enabledTemplates)
-                  Padding(
-                    padding: EdgeInsetsDirectional.only(end: spacing.xs),
-                    child: ChoiceChip(
-                      avatar: Icon(jobTypeIcon(template.jobType), size: 18),
-                      label: Text(template.name),
-                      selected: viewModel.selectedTemplate?.id == template.id,
-                      onSelected: (_) =>
-                          viewModel.selectedTemplateId = template.id,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
         SizedBox(height: spacing.sm),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              FilterChip(
-                avatar: const Icon(Icons.person_outline, size: 18),
-                label: Text(l10n.jobFilterMine),
-                selected: viewModel.assignedToMe,
-                onSelected: (selected) {
-                  viewModel.assignedToMe = selected;
-                },
-              ),
-              if (types.length > 1)
-                for (final type in types)
-                  Padding(
-                    padding: EdgeInsetsDirectional.only(start: spacing.xs),
-                    child: FilterChip(
-                      avatar: Icon(jobTypeIcon(type), size: 18),
-                      label: Text(jobTypeLabel(l10n, type)),
-                      selected: viewModel.jobTypeFilter == type,
-                      onSelected: (selected) {
-                        viewModel.jobTypeFilter = selected ? type : null;
-                      },
-                    ),
-                  ),
-            ],
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: FilterChip(
+            avatar: const Icon(Icons.person_outline, size: 18),
+            label: Text(l10n.jobFilterMine),
+            selected: viewModel.assignedToMe,
+            onSelected: (selected) {
+              viewModel.assignedToMe = selected;
+            },
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The title of one lane when a shop runs more than one kind of work.
+class _LaneHeader extends StatelessWidget {
+  const _LaneHeader({required this.template, required this.count});
+
+  final WorkflowTemplate template;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        spacing.pageHorizontal,
+        spacing.md,
+        spacing.pageHorizontal,
+        0,
+      ),
+      child: Row(
+        children: [
+          OperationsIconBadge(icon: jobTypeIcon(template.jobType), size: 32),
+          SizedBox(width: spacing.sm),
+          Expanded(
+            child: _StageHeader(name: template.name, count: count),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -554,13 +661,20 @@ class _JobCard extends StatelessWidget {
     required this.isBusy,
     required this.onTap,
     required this.onAdvance,
+    required this.onChooseStage,
   });
 
   final OperationsJob job;
   final ({int index, int total})? stagePosition;
   final bool isBusy;
   final VoidCallback onTap;
+
+  /// The everyday move: on to the next stage. Null for someone who can only
+  /// look at the board.
   final VoidCallback? onAdvance;
+
+  /// Any other stage — ahead past work already done, or back to the bench.
+  final VoidCallback? onChooseStage;
 
   @override
   Widget build(BuildContext context) {
@@ -698,14 +812,31 @@ class _JobCard extends StatelessWidget {
                     ],
                   ),
                 ],
-                if (onAdvance != null && job.nextStage != null) ...[
+                if (onAdvance != null || onChooseStage != null) ...[
                   SizedBox(height: spacing.sm),
-                  _AdvanceButton(
-                    label: job.nextStageReleasesCustody
-                        ? l10n.jobHandoverButton
-                        : job.nextStage!.name,
-                    isBusy: isBusy,
-                    onPressed: onAdvance,
+                  Row(
+                    children: [
+                      if (onAdvance != null && job.nextStage != null)
+                        Expanded(
+                          child: _AdvanceButton(
+                            label: job.nextStageReleasesCustody
+                                ? l10n.jobHandoverButton
+                                : job.nextStage!.name,
+                            isBusy: isBusy,
+                            onPressed: onAdvance,
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                      if (onChooseStage != null) ...[
+                        SizedBox(width: spacing.xs),
+                        IconButton.outlined(
+                          tooltip: l10n.jobMoveToStageAction,
+                          onPressed: isBusy ? null : onChooseStage,
+                          icon: const Icon(Icons.swap_horiz),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ],
@@ -781,19 +912,27 @@ class _KanbanBoard extends StatelessWidget {
     required this.jobsByStage,
     required this.advancingJobIds,
     required this.onOpenJob,
-    required this.onAdvance,
+    required this.onMove,
   });
 
   final WorkflowTemplate template;
   final Map<int, List<OperationsJob>> jobsByStage;
   final Set<int> advancingJobIds;
   final ValueChanged<OperationsJob> onOpenJob;
-  final Future<void> Function(OperationsJob job) onAdvance;
+
+  /// Moves a job to a stage; null when this person cannot move jobs.
+  final Future<void> Function(
+    OperationsJob job,
+    WorkflowTemplate template,
+    WorkflowStage target,
+  )?
+  onMove;
 
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    final move = onMove;
     // On a workshop screen the columns sit side by side; on a phone one column
     // owns most of the width with a deliberate sliver of the next showing, so
     // it reads as a board that scrolls rather than a list that ends. A fixed
@@ -806,8 +945,12 @@ class _KanbanBoard extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: spacing.pagePadding,
+      // Every column is as tall as the board and scrolls on its own, so the
+      // tenth phone waiting in "received" is a scroll away rather than drawn
+      // off the bottom of the screen — and the board's sideways scrollbar
+      // stays where the eye expects it.
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final stage in template.stages)
             Container(
@@ -829,24 +972,55 @@ class _KanbanBoard extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: spacing.xs),
-                  for (final job in jobsByStage[stage.id] ?? const []) ...[
-                    _JobCard(
-                      job: job,
-                      stagePosition: jobStagePosition(job, [template]),
-                      isBusy: advancingJobIds.contains(job.id),
-                      onTap: () => onOpenJob(job),
-                      onAdvance: job.nextStage == null
-                          ? null
-                          : () => onAdvance(job),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final job
+                            in jobsByStage[stage.id] ?? const <OperationsJob>[])
+                          Padding(
+                            padding: EdgeInsets.only(bottom: spacing.sm),
+                            child: _JobCard(
+                              job: job,
+                              stagePosition: jobStagePosition(job, [template]),
+                              isBusy: advancingJobIds.contains(job.id),
+                              onTap: () => onOpenJob(job),
+                              onAdvance: move == null || job.nextStage == null
+                                  ? null
+                                  : () => move(job, template, job.nextStage!),
+                              onChooseStage: move == null
+                                  ? null
+                                  : () => _chooseStage(context, job, move),
+                            ),
+                          ),
+                      ],
                     ),
-                    SizedBox(height: spacing.sm),
-                  ],
+                  ),
                 ],
               ),
             ),
         ],
       ),
     );
+  }
+
+  Future<void> _chooseStage(
+    BuildContext context,
+    OperationsJob job,
+    Future<void> Function(
+      OperationsJob job,
+      WorkflowTemplate template,
+      WorkflowStage target,
+    )
+    move,
+  ) async {
+    final target = await showJobStagePicker(
+      context,
+      stages: template.stages,
+      currentStageId: job.currentStage,
+    );
+    if (target != null && context.mounted) {
+      await move(job, template, target);
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../l10n/generated/app_localizations.dart';
+import '../../../core/authorization.dart';
 import '../../../data/models/money_position.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -19,6 +20,7 @@ import 'treasury_ui.dart';
 Future<void> showMoneyAccountDetailsSheet(
   BuildContext context, {
   required MoneyPositionViewModel viewModel,
+  required AuthorizationCapabilities capabilities,
   required int accountId,
 }) {
   viewModel.loadMovements(accountId);
@@ -26,18 +28,23 @@ Future<void> showMoneyAccountDetailsSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (sheetContext) =>
-        _MoneyAccountDetailsSheet(viewModel: viewModel, accountId: accountId),
+    builder: (sheetContext) => _MoneyAccountDetailsSheet(
+      viewModel: viewModel,
+      capabilities: capabilities,
+      accountId: accountId,
+    ),
   );
 }
 
 class _MoneyAccountDetailsSheet extends StatelessWidget {
   const _MoneyAccountDetailsSheet({
     required this.viewModel,
+    required this.capabilities,
     required this.accountId,
   });
 
   final MoneyPositionViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
   final int accountId;
 
   @override
@@ -63,8 +70,11 @@ class _MoneyAccountDetailsSheet extends StatelessWidget {
               children: [
                 _Header(entry: entry),
                 SizedBox(height: spacing.md),
-                _Actions(viewModel: viewModel, entry: entry),
-                SizedBox(height: spacing.lg),
+                _Actions(
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                  entry: entry,
+                ),
                 if (entry.lastCount != null) ...[
                   _LastCountCallout(count: entry.lastCount!),
                   SizedBox(height: spacing.lg),
@@ -124,9 +134,14 @@ class _Header extends StatelessWidget {
 }
 
 class _Actions extends StatelessWidget {
-  const _Actions({required this.viewModel, required this.entry});
+  const _Actions({
+    required this.viewModel,
+    required this.capabilities,
+    required this.entry,
+  });
 
   final MoneyPositionViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
   final MoneyAccountPosition entry;
 
   @override
@@ -139,13 +154,10 @@ class _Actions extends StatelessWidget {
     final hasBankDetails =
         account.iban.isNotEmpty || account.accountNumber.isNotEmpty;
 
-    // Wrapped, not squeezed into one row: these are four actions on a phone,
-    // and four labels across is four labels nobody can read.
-    return Wrap(
-      spacing: spacing.sm,
-      runSpacing: spacing.sm,
-      children: [
+    final actions = <Widget>[
+      if (capabilities.canRecordMoneyCount)
         FilledButton.icon(
+          key: const ValueKey('treasury_details_count_button'),
           onPressed: busy
               ? null
               : () => showMoneyCountSheet(
@@ -156,7 +168,9 @@ class _Actions extends StatelessWidget {
           icon: const Icon(Icons.fact_check_outlined),
           label: Text(l10n.treasuryActionCount),
         ),
+      if (capabilities.canRecordMoneyTransfer)
         OutlinedButton.icon(
+          key: const ValueKey('treasury_details_transfer_button'),
           onPressed: busy
               ? null
               : () => showMoneyTransferSheet(
@@ -167,17 +181,19 @@ class _Actions extends StatelessWidget {
           icon: const Icon(Icons.move_down),
           label: Text(l10n.treasuryActionTransfer),
         ),
-        // Where the bank details a customer transfers to are shown — and
-        // where they are typed in, which is why editing lives here beside
-        // them rather than as an icon on the card.
-        if (hasBankDetails)
-          OutlinedButton.icon(
-            key: const ValueKey('treasury_details_bank_button'),
-            onPressed: () =>
-                showBankAccountDetailsSheet(context, account: account),
-            icon: const Icon(Icons.qr_code_2_outlined),
-            label: Text(l10n.treasuryBankDetailsButton),
-          ),
+      // Where the bank details a customer transfers to are shown — and
+      // where they are typed in, which is why editing lives here beside
+      // them rather than as an icon on the card. Showing them is reading,
+      // so it is everyone's who can open this sheet.
+      if (hasBankDetails)
+        OutlinedButton.icon(
+          key: const ValueKey('treasury_details_bank_button'),
+          onPressed: () =>
+              showBankAccountDetailsSheet(context, account: account),
+          icon: const Icon(Icons.qr_code_2_outlined),
+          label: Text(l10n.treasuryBankDetailsButton),
+        ),
+      if (capabilities.canChangeMoneyAccount)
         OutlinedButton.icon(
           key: const ValueKey('treasury_details_edit_button'),
           onPressed: busy
@@ -190,7 +206,22 @@ class _Actions extends StatelessWidget {
           icon: const Icon(Icons.edit_outlined),
           label: Text(l10n.treasuryAccountEditTooltip),
         ),
-      ],
+    ];
+    // Someone who may only read the account opens this sheet for the
+    // arithmetic below, not for an empty row and the gap it leaves.
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Wrapped, not squeezed into one row: these are four actions on a phone,
+    // and four labels across is four labels nobody can read.
+    return Padding(
+      padding: EdgeInsets.only(bottom: spacing.lg),
+      child: Wrap(
+        spacing: spacing.sm,
+        runSpacing: spacing.sm,
+        children: actions,
+      ),
     );
   }
 }

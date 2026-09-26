@@ -95,7 +95,9 @@ Map<String, Object?> _payload({
     'document_title': 'RECEIPT',
     'total_label': 'TOTAL',
     'total': '12.00',
-    'balance_due': paymentStatus == 'paid' ? '0.00' : '12.00',
+    'balance_due': const {'paid', 'void'}.contains(paymentStatus)
+        ? '0.00'
+        : '12.00',
     'payment_status': paymentStatus,
     'created_at': '2026-09-15T09:00:00Z',
     'cashier': {'id': 4, 'name': cashier},
@@ -144,6 +146,15 @@ void main() {
     expect(dated, startsWith('2026/09/'));
     expect(dated, endsWith('مدفوعة بالكامل'));
     expect(dated.length, 48);
+  });
+
+  test('a voided sale prints as void, never as paid in full', () async {
+    // Given back whole it owes nothing, which the balance alone would call
+    // paid — and a reprint would pass for a sale that stood.
+    final lines = await slip(_payload(paymentStatus: 'void'));
+
+    expect(lines.where((line) => line.contains('ملغاة')), hasLength(1));
+    expect(lines.where((line) => line.contains('مدفوعة')), isEmpty);
   });
 
   test('the status is printed once, up with the date, not under the '

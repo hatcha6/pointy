@@ -181,6 +181,9 @@ def build_receipt_payload(order):
             # A line a provider performs prints what it did beneath it.
             "lines__integration_fulfillment",
         )
+        # Paid, balance and payment status each sum payments and returns;
+        # loaded once here, not once per figure.
+        .with_balance_relations()
         .get(pk=order.pk)
     )
     applied_discounts = order_applied_discounts(order)

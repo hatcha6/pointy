@@ -1280,7 +1280,7 @@ def customer_insights(*, user, mode="top", days=90, limit=10):
                 orders_qs.open_credit()
                 .exclude(customer__isnull=True)
                 .select_related("customer")
-                .prefetch_related("payments")
+                .with_balance_relations()
             )
             balances = {}
             for o in rows:
@@ -1418,7 +1418,7 @@ def project_forecast(*, user):
             return err
         receivable_total = Decimal("0")
         receivable_count = 0
-        for o in receivables_qs.open_credit().prefetch_related("payments"):
+        for o in receivables_qs.open_credit().with_balance_relations():
             bal = o.balance_due
             if bal > 0:
                 receivable_total += bal

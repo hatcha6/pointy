@@ -11,7 +11,11 @@ Two decisions worth stating, because both change the numbers:
 **What counts as a receivable.** A credit invoice that is still open, less what
 has been paid against it. Deliberately *not* "any order whose payments are less
 than its total": a voided sale keeps its total and carries a reversing negative
-payment, so that definition reads every refunded sale as a debt.
+payment, so that definition reads every refunded sale as a debt. A *part*-
+returned invoice has the same shape on a smaller scale — the money handed back
+is a negative payment and the total never drops — so what came back is taken
+off as well: owed is the total less returns less net payments, exactly as
+``Order.balance_due`` has it.
 
 **How it ages.** From the due date where the invoice records one, and from the
 invoice date where it does not — the same ``COALESCE`` the payables side has
@@ -48,7 +52,7 @@ from django.db.models.functions import Coalesce, TruncDate
 
 from apps.core.money_dates import day_range_end
 from apps.payments.models import Payment
-from apps.sales.models import Order
+from apps.sales.models import Order, OrderAdjustment
 
 from ..sections import (
     Column,
@@ -143,8 +147,8 @@ def _customer_balances(as_of, context, *, detail=True):
 
     One query. The per-invoice balances are folded into per-customer
     accumulators in Python rather than a second GROUP BY, because the balance
-    is ``total − payments`` and the payment sum is a correlated subquery: asking
-    the database to group by customer *and* carry that subquery makes it group
+    is ``total − returns − payments`` and both sums are correlated subqueries:
+    asking the database to group by customer *and* carry them makes it group
     by the invoice's own primary key, which is a different report. Memory stays
     proportional to the number of customers, not invoices.
     """
@@ -208,15 +212,24 @@ def _customer_balances(as_of, context, *, detail=True):
     ], totals
 
 
+def _per_invoice_sum(queryset):
+    """``Σ amount`` of ``queryset``'s rows for the invoice in the outer query."""
+    return Coalesce(
+        Subquery(
+            queryset.filter(order=OuterRef("pk"))
+            .order_by()
+            .values("order")
+            .annotate(total=Sum("amount"))
+            .values("total")[:1],
+            output_field=MONEY,
+        ),
+        Value(ZERO),
+        output_field=MONEY,
+    )
+
+
 def _outstanding_invoices(as_of):
     cutoff = day_range_end(as_of)
-    paid = (
-        Payment.objects.filter(order=OuterRef("pk"), paid_at__lt=cutoff)
-        .order_by()
-        .values("order")
-        .annotate(total=Sum("amount"))
-        .values("total")[:1]
-    )
     return (
         Order.objects.filter(
             sale_type=Order.SaleType.CREDIT,
@@ -224,8 +237,12 @@ def _outstanding_invoices(as_of):
         )
         .exclude(status=Order.Status.VOID)
         .annotate(
-            paid_amount=Coalesce(
-                Subquery(paid, output_field=MONEY), Value(ZERO), output_field=MONEY
+            paid_amount=_per_invoice_sum(Payment.objects.filter(paid_at__lt=cutoff)),
+            # What came back by the same moment. Its money went back as a
+            # negative payment, already inside ``paid_amount``, so without this
+            # every part-returned invoice ages as owing its refund.
+            returned_amount=_per_invoice_sum(
+                OrderAdjustment.objects.filter(created_at__lt=cutoff)
             ),
             invoice_date=TruncDate("created_at"),
             # The date this invoice is aged against. Mirrors the payables side
@@ -233,7 +250,7 @@ def _outstanding_invoices(as_of):
             # the ledger answer "how old is this" the same way.
             reference_date=Coalesce("due_date", TruncDate("created_at")),
         )
-        .annotate(balance=F("total") - F("paid_amount"))
+        .annotate(balance=F("total") - F("returned_amount") - F("paid_amount"))
         .filter(balance__gt=0)
         .values(
             "customer_id",
@@ -304,15 +321,24 @@ def customer_statement(context):
             }
         )
 
-    invoiced = sum((entry["debit"] for entry in entries), ZERO)
-    received = sum((entry["credit"] for entry in entries), ZERO)
+    # Each figure is one kind of line, never a column total: the debit column
+    # also carries refunds and the credit column returns, and summed whole
+    # they would put money handed back under «إجمالي الفواتير» and goods taken
+    # back under «المحصَّل». So opening + invoiced − returned − received +
+    # refunded = closing, and every term says what it is.
+    by_kind = {kind: {"debit": ZERO, "credit": ZERO} for kind in _STATEMENT_KIND_ORDER}
+    for entry in entries:
+        by_kind[entry["kind"]]["debit"] += entry["debit"]
+        by_kind[entry["kind"]]["credit"] += entry["credit"]
     bounded = bounded_rows(rows, limit=context.row_limit("statement_entries"))
 
     figures = {
         "customer_name": customer.full_name,
         "opening_balance": money(opening),
-        "invoiced_total": money(invoiced),
-        "received_total": money(received),
+        "invoiced_total": money(by_kind["invoice"]["debit"]),
+        "returned_total": money(by_kind["return"]["credit"]),
+        "received_total": money(by_kind["payment"]["credit"]),
+        "refunded_total": money(by_kind["refund"]["debit"]),
         "closing_balance": money(balance),
         "entry_count": len(entries),
     }
@@ -340,7 +366,10 @@ def customer_statement(context):
                 bounded.rows,
                 total_count=bounded.total_count,
                 limit=bounded.limit,
-                totals={"debit": money(invoiced), "credit": money(received)},
+                totals={
+                    "debit": money(sum((entry["debit"] for entry in entries), ZERO)),
+                    "credit": money(sum((entry["credit"] for entry in entries), ZERO)),
+                },
             ),
         ],
         "notes": [
@@ -362,12 +391,27 @@ def _customer_balance_at(customer, when):
         .exclude(status=Order.Status.VOID)
         .aggregate(total=Coalesce(Sum("total"), Value(ZERO), output_field=MONEY))
     )["total"]
+    returned = _statement_returns(customer).filter(created_at__lt=cutoff).aggregate(
+        total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY)
+    )["total"]
     paid = Payment.objects.filter(
         order__customer=customer,
         order__sale_type=Order.SaleType.CREDIT,
         paid_at__lt=cutoff,
     ).aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY))["total"]
-    return decimal_from(invoiced) - decimal_from(paid)
+    return decimal_from(invoiced) - decimal_from(returned) - decimal_from(paid)
+
+
+def _statement_returns(customer):
+    """The returns that credit this customer's account.
+
+    Only against the invoices the statement shows. A voided invoice is left
+    off whole — no debit, and so no credit either — while its payments and
+    refunds still appear and cancel each other out.
+    """
+    return OrderAdjustment.objects.filter(
+        order__customer=customer, order__sale_type=Order.SaleType.CREDIT
+    ).exclude(order__status=Order.Status.VOID)
 
 
 def _statement_entries(customer, period):
@@ -422,8 +466,39 @@ def _statement_entries(customer, period):
             }
         )
 
-    entries.sort(key=lambda entry: (entry["date"], entry["kind"], entry["document"]))
+    # The credit note: the goods that came back, which is what the refund
+    # above is paying out. Without it a return reads as the customer owing
+    # its own refund.
+    returns = in_period(_statement_returns(customer), period).values(
+        "order__receipt_number", "created_at", "amount"
+    )
+    for returned in returns:
+        entries.append(
+            {
+                "date": returned["created_at"].date(),
+                "document": returned["order__receipt_number"],
+                "kind": "return",
+                "debit": ZERO,
+                "credit": decimal_from(returned["amount"]),
+                "due_date": None,
+            }
+        )
+
+    entries.sort(
+        key=lambda entry: (
+            entry["date"],
+            _STATEMENT_KIND_ORDER[entry["kind"]],
+            entry["document"],
+        )
+    )
     return entries
+
+
+# Same-day order: a return's credit note before the refund that pays it out —
+# the order the two are written in — so the refund line reads as settling a
+# credit the reader has just seen. The other three keep the alphabetical order
+# they have always had.
+_STATEMENT_KIND_ORDER = {"invoice": 0, "payment": 1, "return": 2, "refund": 3}
 
 
 __all__ = ["customer_statement", "receivables_aging", "receivables_total"]

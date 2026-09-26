@@ -48,6 +48,7 @@ class AdjustmentReturnableBasisTests(TestCase):
         cancelled=0,
         over_receipt=0,
         extra_discount=Decimal("0.00"),
+        unit_cost=UNIT_COST,
     ):
         product = create_product_with_default_variant(
             sku=sku, barcode="", name=f"صنف {sku}", unit_price=Decimal("25.00")
@@ -56,12 +57,21 @@ class AdjustmentReturnableBasisTests(TestCase):
             supplier=self.supplier, extra_discount_amount=extra_discount
         )
         order.lines.create(
-            variant=product.default_variant, quantity=ordered, unit_cost=UNIT_COST
+            variant=product.default_variant, quantity=ordered, unit_cost=unit_cost
         )
         order.recalculate()
         order.save()
         submit_purchase_order(order)
         order.refresh_from_db()
+        return self._receive(
+            order,
+            accepted=accepted,
+            damaged=damaged,
+            cancelled=cancelled,
+            over_receipt=over_receipt,
+        )
+
+    def _receive(self, order, *, accepted, damaged=0, cancelled=0, over_receipt=0):
         receive_purchase_order(
             order,
             lines_data=[
@@ -273,3 +283,68 @@ class AdjustmentReturnableBasisTests(TestCase):
         self.assertEqual(
             purchase_adjustment_line_amount(line, Decimal("3")), Decimal("30.00")
         )
+
+    # -- returns either side of an over-shipment -------------------------
+    #
+    # The fix above read the larger count at the moment of each return, and one
+    # line can be short first and over-shipped later. Units sent back while it
+    # was short went at a tenth of the line apiece; once the surplus landed the
+    # rest were priced at a twelfth, with no look at what had already been
+    # credited, so a partial return passed the ceiling again. The
+    # business-simulation oracle found it: ordered 34, the 29 that arrived went
+    # back, 7 more came (2 of them surplus), and returning 6 of those put
+    # 108.40 of credit on a line billed 106.31.
+
+    def _return(self, order, quantity):
+        return adjust_purchase_order_items(
+            purchase_order=order,
+            adjustment_type=PurchaseOrderAdjustment.AdjustmentType.RETURN,
+            lines=[(order.lines.get(), Decimal(quantity))],
+            reason="تالف",
+            settlement_method=PurchaseOrderAdjustment.SettlementMethod.SUPPLIER_CREDIT,
+        )
+
+    def test_return_made_before_an_over_shipment_stays_within_what_was_billed(self):
+        # Ordered 10 at 10.00 = 100.00 billed. 8 arrive, and all 8 go back.
+        order, _ = self._received_line(sku="EARLY", ordered=10, accepted=8)
+        credited = self._return(order, 8).outbound_amount
+        self.assertEqual(credited, Decimal("80.00"))
+
+        # The last 2 ordered arrive with 2 the order never asked for: 4 are on
+        # hand, and 20.00 is all the supplier can still owe for them.
+        order, line = self._receive(order, accepted=4, over_receipt=2)
+        self.assertEqual(line.adjustable_quantity, Decimal("4"))
+
+        # A twelfth of the line apiece is 25.00 for three of them: 105.00 in all.
+        credited += self._return(order, 3).outbound_amount
+        self.assertLessEqual(credited, Decimal("100.00"))
+
+        # The fourth still goes back for a positive amount — past the ceiling
+        # it was priced below zero and refused — and the returns settle at
+        # exactly what the order billed.
+        credited += self._return(order, 1).outbound_amount
+        self.assertEqual(credited, Decimal("100.00"))
+        self.supplier.refresh_from_db()
+        self.assertEqual(self.supplier.credit_balance, Decimal("100.00"))
+
+    def test_short_then_over_shipped_line_credits_exactly_what_it_billed(self):
+        # The oracle's line: 34 ordered at 3.13 less 0.11 off the order, 106.31.
+        order, line = self._received_line(
+            sku="SHORTOVER",
+            ordered=34,
+            accepted=24,
+            unit_cost=Decimal("3.13"),
+            extra_discount=Decimal("0.11"),
+        )
+        self.assertEqual(line.net_line_total, Decimal("106.31"))
+        order, _ = self._receive(order, accepted=5)
+        self.assertEqual(self._return(order, 29).outbound_amount, Decimal("90.68"))
+        order, _ = self._receive(order, accepted=7, over_receipt=2)
+
+        # What is left, 15.63, shared by the 7 still on hand. A thirty-sixth of
+        # the line apiece was 17.72 here.
+        partial = self._return(order, 6).outbound_amount
+        self.assertEqual(partial, Decimal("13.40"))
+        last = self._return(order, 1).outbound_amount
+        self.assertEqual(last, Decimal("2.23"))
+        self.assertEqual(Decimal("90.68") + partial + last, Decimal("106.31"))

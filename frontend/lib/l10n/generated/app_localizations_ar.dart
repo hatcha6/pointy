@@ -3802,7 +3802,17 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get jobsEmptyMessage =>
-      'المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.';
+      'المهمة هي أي عمل تتابعه خطوة بخطوة حتى يكتمل. أنشئ أول مهمة وسيظهر مسارها هنا.';
+
+  @override
+  String get jobsLaneEmptyMessage => 'لا توجد مهام مفتوحة هنا الآن.';
+
+  @override
+  String get jobsNoWorkTypesTitle => 'لا يوجد نوع عمل مفعّل';
+
+  @override
+  String get jobsNoWorkTypesMessage =>
+      'لم يُفعَّل التصليح ولا الإنتاج ولا المطبخ لهذا المحل. يفعّلها المدير من الإعدادات ← العمليات.';
 
   @override
   String get newJobButton => 'مهمة جديدة';
@@ -3895,8 +3905,21 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get jobManagerOnlyMoveHint =>
-      'الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.';
+  String get jobMoveToStageHint =>
+      'اختر المرحلة التي وصل إليها العمل فعلًا — للأمام بأكثر من خطوة، أو للخلف إذا احتاج الجهاز إعادة.';
+
+  @override
+  String get jobStageCurrentBadge => 'المرحلة الحالية';
+
+  @override
+  String get jobChangeStageButton => 'تغيير المرحلة';
+
+  @override
+  String get jobMoveNeedsApprovalMessage =>
+      'هذه النقلة تتجاوز مرحلة موافقة الزبون. سجّل السعر الذي وافق عليه لتكمل.';
+
+  @override
+  String get jobOpenAction => 'فتح المهمة';
 
   @override
   String get jobCustomerSection => 'الزبون';
@@ -3940,6 +3963,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get materialReversedBadge => 'أُرجعت للمخزون';
+
+  @override
+  String get materialRefundedBadge => 'استُرد ثمنها';
 
   @override
   String get reverseMaterialAction => 'إرجاع للمخزون';
@@ -4084,6 +4110,14 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get intakeCustomerCreateError =>
       'تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.';
+
+  @override
+  String get intakeCustomerCreateForbidden =>
+      'لا تملك صلاحية إضافة العملاء. اطلبها من المدير، أو اختر زبونًا مسجلًا.';
+
+  @override
+  String get intakeNewCustomerNotAllowed =>
+      'إضافة زبون جديد تحتاج صلاحية «إضافة العملاء». اختر زبونًا مسجلًا، أو اطلب الصلاحية من المدير.';
 
   @override
   String get intakeSelectAssetHint =>
@@ -4364,7 +4398,34 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobServicesSectionTitle => 'الخدمات والأعمال';
 
   @override
-  String get jobAddServiceButton => 'إضافة خدمة';
+  String get jobAddLaborButton => 'إضافة أجور';
+
+  @override
+  String get jobLaborDialogTitle => 'أجور عمل';
+
+  @override
+  String get jobLaborDescriptionLabel => 'وصف العمل';
+
+  @override
+  String get jobLaborNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get jobLaborDescriptionHint => 'مثال: تبديل شاشة';
+
+  @override
+  String get jobLaborDescriptionRequired => 'اكتب ما هو العمل.';
+
+  @override
+  String get jobLaborPriceLabel => 'السعر';
+
+  @override
+  String get jobLaborPriceRequired => 'أدخل سعرًا صحيحًا.';
+
+  @override
+  String get jobLaborPickServiceButton => 'أو اختر خدمة من الكتالوج';
+
+  @override
+  String get jobLaborAddConfirm => 'إضافة';
 
   @override
   String get jobServicesTotalLabel => 'إجمالي الخدمات';
@@ -4859,6 +4920,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get productionNoRecipesMessage =>
       'أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.';
+
+  @override
+  String get productionRecipesLoadError =>
+      'تعذّر تحميل الوصفات. قد لا تملك صلاحية عرضها.';
 
   @override
   String get recipesTitle => 'الوصفات';
@@ -17115,6 +17180,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'أضف صندوقًا نقديًا أو حسابًا مصرفيًا لتتابع أموال المحل.';
 
   @override
+  String get treasuryEmptyReadOnlyMessage =>
+      'لم يُضَف أي حساب بعد. إضافة صندوق نقدي أو حساب مصرفي تحتاج صلاحية «إضافة حسابات» — اطلبها من المدير.';
+
+  @override
   String get treasuryErrorTitle => 'تعذر تحميل الأرصدة';
 
   @override
@@ -17182,6 +17251,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get treasuryComponentTransferOut => 'تحويلات صادرة';
+
+  @override
+  String get treasuryComponentIntegrationDraw => 'سحب مزوّد الخدمة';
+
+  @override
+  String get treasuryComponentConsignorPayout => 'مدفوعات أصحاب الأمانات';
 
   @override
   String get treasuryPayrollAssumptionNote =>
@@ -18246,6 +18321,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String warehousesEmptyBodyReadOnly(String name) {
+    return 'كل المخزون في $name.';
+  }
+
+  @override
   String get warehousesAddAction => 'إضافة مكان';
 
   @override
@@ -18368,10 +18448,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get registerWarehouseManagerOnly =>
-      'تغيير مكان الصندوق يحتاج صلاحية مدير.';
-
-  @override
   String get warehousesSectionTitle => 'المخازن والأماكن';
 
   @override
@@ -18380,6 +18456,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get transfersTitle => 'التحويلات';
+
+  @override
+  String get transfersDrawerLabel => 'تحويلات البضاعة';
 
   @override
   String get transfersSectionTitle => 'تحويل بضاعة';

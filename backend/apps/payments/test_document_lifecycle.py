@@ -16,6 +16,7 @@ from rest_framework.test import APIClient
 
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
+from apps.customers.models import Customer
 from apps.documents import trail
 from apps.documents.errors import DocumentFrozen
 from apps.documents.models import DocumentEvent
@@ -47,15 +48,24 @@ class PaymentLifecycleTests(TestCase):
             owner_key=f"user:{self.user.pk}",
             opening_cash=Decimal("0.00"),
         )
+        self.customer = Customer.objects.create(full_name="زبون الآجل")
 
-    def _sale(self, quantity=2, method="cash"):
+    def _sale(self, quantity=2, method="cash", sale_type=Order.SaleType.STANDARD):
         return checkout_order(
             register_session=self.session,
             lines_data=[{"variant": self.variant, "quantity": Decimal(quantity)}],
             payments_data=[
                 {"method": method, "amount": Decimal("5.00") * Decimal(quantity)}
             ],
+            sale_type=sale_type,
+            customer=self.customer if sale_type == Order.SaleType.CREDIT else None,
         )
+
+    def _credit_invoice(self, quantity=2, method="cash"):
+        """An آجل invoice paid at issue. A cash sale's payment cannot be
+        cancelled out from under it (``test_cancel_and_replace``), so the
+        payment these tests give back is one taken against a debt."""
+        return self._sale(quantity=quantity, method=method, sale_type=Order.SaleType.CREDIT)
 
     def _payment(self, order):
         return order.payments.order_by("id").first()
@@ -91,7 +101,7 @@ class PaymentLifecycleTests(TestCase):
     # --- undoing one ----------------------------------------------------
 
     def test_cancelling_gives_the_money_back_as_an_opposing_payment(self):
-        order = self._sale(quantity=2)
+        order = self._credit_invoice(quantity=2)
         payment = self._payment(order)
 
         cancel_payment(payment, reason="حُصِّلت مرتين", register_session=self.session)
@@ -105,7 +115,7 @@ class PaymentLifecycleTests(TestCase):
         self.assertEqual(order.status, Order.Status.OPEN)
 
     def test_the_refund_leaves_the_drawer_that_is_open_now(self):
-        order = self._sale(quantity=1)
+        order = self._credit_invoice(quantity=1)
         payment = self._payment(order)
         later = RegisterSession.objects.create(
             owner=self.user,
@@ -120,7 +130,7 @@ class PaymentLifecycleTests(TestCase):
         self.assertEqual(counter.register_session_id, later.pk)
 
     def test_cash_needs_an_open_drawer_to_go_back_into(self):
-        order = self._sale(quantity=1)
+        order = self._credit_invoice(quantity=1)
         payment = self._payment(order)
         self.session.status = RegisterSession.Status.CLOSED
         self.session.save(update_fields=["status"])
@@ -150,7 +160,7 @@ class PaymentLifecycleTests(TestCase):
             cancel_payment(payment, reason="مرة أخرى", register_session=self.session)
 
     def test_the_cancellation_is_recorded(self):
-        order = self._sale(quantity=1)
+        order = self._credit_invoice(quantity=1)
         payment = self._payment(order)
         cancel_payment(payment, reason="خطأ إدخال", register_session=self.session)
         event = trail.history(payment).first()
@@ -169,7 +179,7 @@ class PaymentLifecycleTests(TestCase):
         self.assertTrue(Payment.objects.filter(pk=payment.pk).exists())
 
     def test_the_cancel_action_replaces_it(self):
-        order = self._sale(quantity=1)
+        order = self._credit_invoice(quantity=1)
         payment = self._payment(order)
         response = self.client.post(
             reverse("payment-cancel", args=[payment.pk]),

@@ -662,7 +662,7 @@ class DiscountCheckoutInvariantTests(TestCase):
     def test_full_value_fixed_amount_checkout_clamps_total_to_zero(self):
         # A fixed-amount coupon worth more than the cart is capped at subtotal
         # by the engine AND clamped again by Order.recalculate, so the order
-        # total is exactly 0.00 with a fully-zero cash payment.
+        # total is exactly 0.00 and there is nothing to tender.
         DiscountRule.objects.create(
             name="Whole cart off",
             channel=DiscountRule.Channel.SALES,
@@ -690,7 +690,7 @@ class DiscountCheckoutInvariantTests(TestCase):
         order = checkout_order(
             register_session=self.session,
             lines_data=lines_data,
-            payments_data=[{"method": "cash", "amount": Decimal("0.00")}],
+            payments_data=[],
             discount_result=discount_result,
         )
 

@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../models/bill_of_materials.dart';
 import '../models/customer_asset.dart';
+import '../models/employee.dart';
 import '../models/operations_job.dart';
 import '../models/workflow.dart';
 import '../services/pos_api_service.dart';
@@ -112,6 +113,12 @@ class OperationsRepository {
     Map<String, Object?> changes,
   ) async {
     return Result.guard(() => _service.updateJob(jobId, changes));
+  }
+
+  /// Who a job can be given to. Readable by whoever may assign jobs, unlike
+  /// the employee register itself.
+  Future<Result<List<Employee>>> loadJobAssignees() async {
+    return Result.guard(_service.fetchJobAssignees);
   }
 
   Future<Result<OperationsJob>> assignJob(int jobId, int? employeeId) async {

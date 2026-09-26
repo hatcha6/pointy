@@ -101,7 +101,16 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
-        final canManage = widget.capabilities.canManageExpenses;
+        final capabilities = widget.capabilities;
+        final canManage = capabilities.canManageExpenses;
+        // Whoever files expenses may look at the list they file under; whoever
+        // was granted a category right needs the page to use it. The page
+        // itself offers each of them only what they hold.
+        final canOpenCategories =
+            canManage ||
+            capabilities.canCreateExpenseCategory ||
+            capabilities.canChangeExpenseCategory ||
+            capabilities.canDeleteExpenseCategory;
 
         return PointyScaffold(
           drawer: AppNavigationDrawer(
@@ -141,7 +150,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     ),
                   ),
                 ),
-              if (canManage)
+              if (canOpenCategories)
                 IconButton(
                   tooltip: l10n.expenseCategoriesSectionTitle,
                   onPressed: viewModel.isMutating
@@ -284,8 +293,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   Future<void> _openCategories(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            ExpenseCategoriesPage(viewModel: widget.categoriesViewModel),
+        builder: (_) => ExpenseCategoriesPage(
+          viewModel: widget.categoriesViewModel,
+          capabilities: widget.capabilities,
+        ),
       ),
     );
     // Categories drive the editor dropdown — refresh so new ones show up.

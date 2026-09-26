@@ -22,9 +22,11 @@ from .serializers import (
     AssetTransferSerializer,
     AssetTypeSerializer,
     BillOfMaterialsSerializer,
+    JobAssigneeSerializer,
     JobAssignSerializer,
     JobCreateSerializer,
     JobDeclineSerializer,
+    JobDetailSerializer,
     JobHandBackSerializer,
     JobHoldSerializer,
     JobInvoiceSerializer,
@@ -73,8 +75,16 @@ class JobViewSet(
         "partial_update": ("operations.change_job",),
         "transition": ("operations.change_job",),
         "assign": ("operations.assign_job",),
+        # Whoever assigns work picks from this list, so it rides the same
+        # permission rather than the HR one the employees endpoint needs.
+        "assignees": ("operations.assign_job",),
         "add_material": ("operations.add_jobmaterial",),
-        "reverse_material": ("operations.change_jobmaterial",),
+        # Putting a part back is the undo of fitting it: whoever may add parts
+        # may take back the one they fitted by mistake. The grantable
+        # "manage job materials" permission is add_jobmaterial alone, and a
+        # reverse button that 403s for the people it is offered to is worse
+        # than none.
+        "reverse_material": ("operations.add_jobmaterial",),
         "add_service": ("operations.change_job",),
         "remove_service": ("operations.change_job",),
         "hold": ("operations.change_job",),
@@ -110,6 +120,12 @@ class JobViewSet(
             # prefetch is reused). Un-prefetched that is a query per row on the
             # board — the exact shape the job-list scaling test guards.
             "order__payments",
+            # ``order_balance_due`` also counts what came back (returns).
+            "order__adjustments",
+            # A part's ``is_billed`` pairs it with its invoice line and asks how
+            # much of that line came back (``invoice_returns.billed_parts``).
+            "order__lines__variant__product",
+            "order__lines__adjustment_lines",
             "job_assets__asset__customer",
             "materials__variant__product",
             "services__variant__product",
@@ -158,6 +174,13 @@ class JobViewSet(
         "symptoms",
     )
     ordering_fields = ("created_at", "updated_at", "due_at", "priority")
+
+    def get_serializer_class(self):
+        # A single job carries its whole workflow, so the job screen can move it
+        # to any stage; the board's list does not repeat it on every card.
+        if self.action in ("retrieve", "update", "partial_update"):
+            return JobDetailSerializer
+        return super().get_serializer_class()
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -220,9 +243,17 @@ class JobViewSet(
 
         job = self.get_queryset().get(pk=job.pk)
         return Response(
-            JobSerializer(job, context={"request": request}).data,
+            JobDetailSerializer(job, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=False, methods=["get"])
+    def assignees(self, request):
+        """The people a job can be given to: active employees, by name."""
+        employees = Employee.objects.filter(status=Employee.Status.ACTIVE).order_by(
+            "full_name", "employee_number"
+        )
+        return Response(JobAssigneeSerializer(employees, many=True).data)
 
     @action(detail=True, methods=["post"])
     def transition(self, request, pk=None):
@@ -300,9 +331,10 @@ class JobViewSet(
         serializer.is_valid(raise_exception=True)
         add_job_service(
             job=job,
-            variant=serializer.validated_data["variant"],
+            variant=serializer.validated_data.get("variant"),
             quantity=serializer.validated_data.get("quantity"),
             note=serializer.validated_data.get("note", ""),
+            unit_price=serializer.validated_data.get("unit_price"),
             request=request,
         )
         return self._refreshed(request, job.pk)
@@ -417,7 +449,7 @@ class JobViewSet(
 
     def _refreshed(self, request, job_id):
         job = self.get_queryset().get(pk=job_id)
-        return Response(JobSerializer(job, context={"request": request}).data)
+        return Response(JobDetailSerializer(job, context={"request": request}).data)
 
 
 class AssetViewSet(viewsets.ModelViewSet):

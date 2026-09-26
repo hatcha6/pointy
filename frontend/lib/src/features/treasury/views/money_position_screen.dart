@@ -70,15 +70,16 @@ class _MoneyPositionScreenState extends State<MoneyPositionScreen> {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.treasuryTitle),
             actions: [
-              IconButton(
-                key: const ValueKey('treasury_add_account_button'),
-                tooltip: l10n.treasuryActionAddAccount,
-                onPressed: () => showMoneyAccountEditorSheet(
-                  context,
-                  viewModel: widget.viewModel,
+              if (widget.capabilities.canCreateMoneyAccount)
+                IconButton(
+                  key: const ValueKey('treasury_add_account_button'),
+                  tooltip: l10n.treasuryActionAddAccount,
+                  onPressed: () => showMoneyAccountEditorSheet(
+                    context,
+                    viewModel: widget.viewModel,
+                  ),
+                  icon: const Icon(Icons.add_card_outlined),
                 ),
-                icon: const Icon(Icons.add_card_outlined),
-              ),
               if (widget.onOpenPaymentsLedger != null)
                 IconButton(
                   tooltip: l10n.treasuryLedgerLink,
@@ -94,9 +95,10 @@ class _MoneyPositionScreenState extends State<MoneyPositionScreen> {
           ),
           body: AuthorizationGuard(
             capabilities: widget.capabilities,
-            capability: AppCapability.viewPayments,
+            capability: AppCapability.viewMoneyAccounts,
             child: _MoneyPositionBody(
               viewModel: widget.viewModel,
+              capabilities: widget.capabilities,
               onOpenPaymentsLedger: widget.onOpenPaymentsLedger,
             ),
           ),
@@ -109,10 +111,12 @@ class _MoneyPositionScreenState extends State<MoneyPositionScreen> {
 class _MoneyPositionBody extends StatelessWidget {
   const _MoneyPositionBody({
     required this.viewModel,
+    required this.capabilities,
     this.onOpenPaymentsLedger,
   });
 
   final MoneyPositionViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
   final VoidCallback? onOpenPaymentsLedger;
 
   @override
@@ -134,16 +138,23 @@ class _MoneyPositionBody extends StatelessWidget {
       );
     }
     if (viewModel.accounts.isEmpty) {
+      final canAddAccount = capabilities.canCreateMoneyAccount;
       return PointyEmptyState(
         icon: Icons.account_balance_wallet_outlined,
         title: l10n.treasuryEmptyTitle,
-        message: l10n.treasuryEmptyMessage,
-        action: FilledButton.icon(
-          onPressed: () =>
-              showMoneyAccountEditorSheet(context, viewModel: viewModel),
-          icon: const Icon(Icons.add),
-          label: Text(l10n.treasuryActionAddAccount),
-        ),
+        // Someone who may only read the treasury is told what adding an
+        // account takes, rather than asked to add one with no way to.
+        message: canAddAccount
+            ? l10n.treasuryEmptyMessage
+            : l10n.treasuryEmptyReadOnlyMessage,
+        action: canAddAccount
+            ? FilledButton.icon(
+                onPressed: () =>
+                    showMoneyAccountEditorSheet(context, viewModel: viewModel),
+                icon: const Icon(Icons.add),
+                label: Text(l10n.treasuryActionAddAccount),
+              )
+            : null,
       );
     }
 
@@ -168,8 +179,7 @@ class _MoneyPositionBody extends StatelessWidget {
             SizedBox(height: spacing.md),
           ],
           ..._callouts(context, l10n, totals),
-          _QuickActions(viewModel: viewModel),
-          SizedBox(height: spacing.lg),
+          _QuickActions(viewModel: viewModel, capabilities: capabilities),
           if (cash.isNotEmpty) ...[
             PointySectionHeader(title: l10n.treasurySectionCash),
             SizedBox(height: spacing.sm),
@@ -251,6 +261,7 @@ class _MoneyPositionBody extends StatelessWidget {
           onTap: () => showMoneyAccountDetailsSheet(
             context,
             viewModel: viewModel,
+            capabilities: capabilities,
             accountId: entry.account.id,
           ),
         ),
@@ -327,9 +338,10 @@ class _TotalsHero extends StatelessWidget {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.viewModel});
+  const _QuickActions({required this.viewModel, required this.capabilities});
 
   final MoneyPositionViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -337,12 +349,10 @@ class _QuickActions extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final busy = viewModel.isSubmitting;
 
-    // Four actions, wrapped rather than squeezed into one row: on a phone
-    // four buttons across are four unreadable labels.
-    return Wrap(
-      spacing: spacing.sm,
-      runSpacing: spacing.sm,
-      children: [
+    final actions = <Widget>[
+      // Adding funds, depositing and withdrawing are one write — a transfer,
+      // with a side left empty when the money crosses the shop's boundary.
+      if (capabilities.canRecordMoneyTransfer) ...[
         FilledButton.icon(
           key: const ValueKey('treasury_add_funds_button'),
           onPressed: busy
@@ -374,6 +384,8 @@ class _QuickActions extends StatelessWidget {
           icon: const Icon(Icons.arrow_outward),
           label: Text(l10n.treasuryActionWithdraw),
         ),
+      ],
+      if (capabilities.canRecordMoneyCount)
         OutlinedButton.icon(
           onPressed: busy
               ? null
@@ -381,7 +393,22 @@ class _QuickActions extends StatelessWidget {
           icon: const Icon(Icons.fact_check_outlined),
           label: Text(l10n.treasuryActionCount),
         ),
-      ],
+    ];
+    // An auditor reads every figure here and may move none of it: no row,
+    // and no gap where the row would have been.
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Four actions, wrapped rather than squeezed into one row: on a phone
+    // four buttons across are four unreadable labels.
+    return Padding(
+      padding: EdgeInsets.only(bottom: spacing.lg),
+      child: Wrap(
+        spacing: spacing.sm,
+        runSpacing: spacing.sm,
+        children: actions,
+      ),
     );
   }
 }

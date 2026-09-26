@@ -20,6 +20,8 @@ enum AppNavigationDestination {
   catalog,
   categories,
   stockCount,
+  warehouses,
+  stockTransfers,
   stockUnits,
   stockBatches,
   consignmentPayables,
@@ -62,6 +64,11 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.catalog => AppCapability.viewCatalogManagement,
     AppNavigationDestination.categories => AppCapability.manageCategories,
     AppNavigationDestination.stockCount => AppCapability.countStock,
+    // Their own view rights, never shop settings: the stock roles hold these
+    // and not core.change_shopsettings, and a settings tile was the only way
+    // in, so they were granted two screens they could not reach.
+    AppNavigationDestination.warehouses => AppCapability.viewWarehouses,
+    AppNavigationDestination.stockTransfers => AppCapability.viewStockTransfers,
     AppNavigationDestination.stockUnits => AppCapability.viewStockUnits,
     AppNavigationDestination.stockBatches => AppCapability.viewStockBatches,
     AppNavigationDestination.consignmentPayables =>
@@ -71,7 +78,11 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.cameras => AppCapability.watchCamerasLive,
     AppNavigationDestination.employees => AppCapability.viewEmployees,
     AppNavigationDestination.expenses => AppCapability.viewExpenses,
-    AppNavigationDestination.payments => AppCapability.viewPayments,
+    // الخزينة opens the money position, which the server serves on
+    // treasury.view_moneyaccount. Taking payments is not reading the shop's
+    // money: every cashier holds view_payment for the till, and gating on it
+    // showed them an entry that could only refuse them.
+    AppNavigationDestination.payments => AppCapability.viewMoneyAccounts,
     AppNavigationDestination.discounts => AppCapability.viewDiscountRules,
     AppNavigationDestination.reports => AppCapability.viewReports,
     AppNavigationDestination.activityLog => AppCapability.viewActivityLog,

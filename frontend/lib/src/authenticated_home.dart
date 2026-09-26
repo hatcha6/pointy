@@ -96,6 +96,7 @@ import 'features/inventory/view_models/transfers_view_model.dart';
 import 'features/inventory/views/consignment_payables_screen.dart';
 import 'features/inventory/views/stock_batches_screen.dart';
 import 'features/inventory/views/stock_units_screen.dart';
+import 'features/inventory/views/transfers_screen.dart';
 import 'features/settings/view_models/warehouses_view_model.dart';
 import 'features/settings/view_models/factory_reset_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
@@ -105,6 +106,7 @@ import 'features/settings/view_models/exchange_rates_view_model.dart';
 import 'features/settings/view_models/subscription_status_view_model.dart';
 import 'features/settings/views/exchange_rates_page.dart';
 import 'features/settings/views/shop_settings_screen.dart';
+import 'features/settings/views/warehouses_page.dart';
 import 'features/user_settings/views/user_settings_screen.dart';
 import 'features/users/view_models/user_management_view_model.dart';
 import 'features/users/view_models/user_details_view_model.dart';
@@ -346,6 +348,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.catalog => catalogRouteBuilder,
       AppNavigationDestination.categories => categoryRouteBuilder,
       AppNavigationDestination.stockCount => stockCountRouteBuilder,
+      AppNavigationDestination.warehouses => warehousesRouteBuilder,
+      AppNavigationDestination.stockTransfers => stockTransfersRouteBuilder,
       AppNavigationDestination.stockUnits => stockUnitsRouteBuilder,
       AppNavigationDestination.stockBatches => stockBatchesRouteBuilder,
       AppNavigationDestination.consignmentPayables =>
@@ -534,7 +538,6 @@ class _AuthenticatedRoutes implements AppNavigation {
           currentUser: currentUser,
           catalogRepository: dependencies.catalogRepository,
           operationsRepository: dependencies.operationsRepository,
-          employeeRepository: dependencies.employeeRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
         ),
       ),
@@ -1023,7 +1026,13 @@ class _AuthenticatedRoutes implements AppNavigation {
         viewModel: MoneyPositionViewModel(dependencies.treasuryRepository),
         capabilities: capabilities,
         navigation: this,
-        onOpenPaymentsLedger: () => _openPaymentsLedger(routeContext),
+        // The route opens on the treasury permission, the ledger reads
+        // payments: someone granted one without the other gets no link to a
+        // screen that would turn them away.
+        onOpenPaymentsLedger: capabilities.actionFor(
+          AppCapability.viewPayments,
+          () => _openPaymentsLedger(routeContext),
+        ),
       ),
     );
   }
@@ -1203,6 +1212,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         printingSettingsViewModel: dependencies.printingSettingsViewModel,
         priceCheckerController: dependencies.priceCheckerModeController,
         priceCheckerRepository: dependencies.priceCheckerRepository,
+        clientUpdateService: dependencies.clientUpdateService,
         capabilities: capabilities,
         navigation: this,
         // Flipping the switch starts or stops the camera immediately, rather
@@ -1297,6 +1307,33 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         trackedStockRepository: dependencies.trackedStockRepository,
+      ),
+    );
+  }
+
+  /// Shop settings still opens this page as a sub-page for whoever keeps the
+  /// settings; this is the way in for everyone else who may see the places.
+  Widget warehousesRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'warehouses',
+      WarehousesPage(
+        viewModel: WarehousesViewModel(dependencies.warehouseRepository),
+        capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  /// As [warehousesRouteBuilder], for the transfers between those places.
+  Widget stockTransfersRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'stock_transfers',
+      TransfersScreen(
+        viewModel: TransfersViewModel(dependencies.warehouseRepository),
+        repository: dependencies.warehouseRepository,
+        capabilities: capabilities,
+        trackedStockRepository: dependencies.trackedStockRepository,
+        navigation: this,
       ),
     );
   }
@@ -2330,7 +2367,6 @@ class _AuthenticatedRoutes implements AppNavigation {
           currentUser: currentUser,
           catalogRepository: dependencies.catalogRepository,
           operationsRepository: dependencies.operationsRepository,
-          employeeRepository: dependencies.employeeRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
         ),
       ),

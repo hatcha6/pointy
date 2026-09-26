@@ -5,6 +5,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/bill_of_materials.dart';
+import '../../../data/models/job_refusal.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/models/workflow.dart';
 import '../../../data/repositories/operations_repository.dart';
@@ -27,9 +28,6 @@ class JobsBoardViewModel extends ChangeNotifier {
   List<OperationsJob> _jobs = const [];
   List<OperationsJob> _awaitingHandBack = const [];
   List<WorkflowTemplate> _templates = const [];
-  List<BillOfMaterials> _boms = const [];
-  OperationsJobType? _jobTypeFilter;
-  int? _selectedTemplateId;
   String _searchQuery = '';
   bool _assignedToMe = false;
   int? _currentUserId;
@@ -45,8 +43,6 @@ class JobsBoardViewModel extends ChangeNotifier {
   /// where the counter looks for what the shop is holding.
   List<OperationsJob> get awaitingHandBack => _awaitingHandBack;
   List<WorkflowTemplate> get templates => _templates;
-  List<BillOfMaterials> get boms => _boms;
-  OperationsJobType? get jobTypeFilter => _jobTypeFilter;
   String get searchQuery => _searchQuery;
   bool get assignedToMe => _assignedToMe;
   int? get currentUserId => _currentUserId;
@@ -55,34 +51,23 @@ class JobsBoardViewModel extends ChangeNotifier {
   bool get hasLoadError => _hasLoadError;
   bool get hasMutationError => _hasMutationError;
 
+  /// The kinds of work this shop runs, one board lane each.
+  ///
+  /// Which workflows are live is the shop's choice — its type at setup, its
+  /// switches in the operations settings — and the server keeps the built-in
+  /// ones in step with it. The board shows every live one and offers no
+  /// switcher: a phone shop has one lane, and the rare shop with two sees
+  /// both rather than having one hidden behind a chip.
   List<WorkflowTemplate> get enabledTemplates =>
       _templates.where((template) => template.isActive).toList(growable: false);
 
-  /// The workflow the board is currently showing.
-  ///
-  /// A shop running more than one lane (a café with a kitchen *and* a repair
-  /// counter) gets a switcher rather than two boards stacked on one screen —
-  /// a kanban only reads as a kanban when one set of columns owns the width.
-  WorkflowTemplate? get selectedTemplate {
-    final templates = enabledTemplates;
-    if (templates.isEmpty) {
-      return null;
-    }
-    for (final template in templates) {
-      if (template.id == _selectedTemplateId) {
-        return template;
-      }
-    }
-    return templates.first;
-  }
-
-  set selectedTemplateId(int? value) {
-    if (_selectedTemplateId == value) {
-      return;
-    }
-    _selectedTemplateId = value;
-    notifyListeners();
-  }
+  /// Whether any live lane works from recipes — production batches, or a
+  /// kitchen cooking made-to-order dishes. A repair shop has no use for them.
+  bool get usesRecipes => enabledTemplates.any(
+    (template) =>
+        template.jobType == OperationsJobType.production ||
+        template.jobType == OperationsJobType.kitchen,
+  );
 
   /// Whether the technician has narrowed the board away from its default view.
   ///
@@ -91,7 +76,7 @@ class JobsBoardViewModel extends ChangeNotifier {
   /// the work. The default "open only" status is excluded too — counting it
   /// would tell a brand-new shop with no jobs at all to clear filters that are
   /// hiding nothing.
-  bool get hasActiveFilters => _assignedToMe || _jobTypeFilter != null;
+  bool get hasActiveFilters => _assignedToMe;
 
   /// Restores the default view in one round trip.
   ///
@@ -102,18 +87,8 @@ class JobsBoardViewModel extends ChangeNotifier {
     if (!hasActiveFilters && _searchQuery.isEmpty) {
       return;
     }
-    _jobTypeFilter = null;
     _assignedToMe = false;
     _searchQuery = '';
-    notifyListeners();
-    loadJobs();
-  }
-
-  set jobTypeFilter(OperationsJobType? value) {
-    if (_jobTypeFilter == value) {
-      return;
-    }
-    _jobTypeFilter = value;
     notifyListeners();
     loadJobs();
   }
@@ -159,13 +134,11 @@ class JobsBoardViewModel extends ChangeNotifier {
         _hasLoadError = true;
     }
 
-    final bomsResult = await _repository.loadAllBoms();
-    switch (bomsResult) {
-      case Ok<List<BillOfMaterials>>():
-        _boms = bomsResult.value;
-      case Error<List<BillOfMaterials>>():
-        _hasLoadError = true;
-    }
+    // Recipes are NOT loaded here. Only a production batch needs them, and
+    // the list is behind a permission a repair counter's cashier does not
+    // hold: asking for it on every board load 403'd, and the refusal marked
+    // the whole board failed — an empty board read "failed to load jobs" to
+    // every cashier at a phone shop (field export, 2026-09-25).
 
     final jobsResult = await _loadAllJobs();
     switch (jobsResult) {
@@ -208,6 +181,50 @@ class JobsBoardViewModel extends ChangeNotifier {
     if (result case Ok<List<OperationsJob>>(value: final jobs)) {
       _awaitingHandBack = jobs;
     }
+  }
+
+  /// The live recipes for a new production batch, or null when they cannot
+  /// be read — including by someone the recipes are not shown to.
+  Future<List<BillOfMaterials>?> loadActiveRecipes() async {
+    final result = await _repository.loadAllBoms(isActive: true);
+    return switch (result) {
+      Ok<List<BillOfMaterials>>(:final value) => value,
+      Error<List<BillOfMaterials>>() => null,
+    };
+  }
+
+  /// Moves [job] to [stage] from the board, then refreshes it.
+  Future<JobMoveAttempt> moveJob(
+    OperationsJob job,
+    WorkflowStage stage, {
+    String handedOverTo = '',
+  }) async {
+    final result = await _repository.transitionJob(
+      job.id,
+      toStage: stage.id,
+      handedOverTo: handedOverTo,
+      idempotencyKey: 'operations-job:${generateAnalyticsEventId()}',
+    );
+    switch (result) {
+      case Ok<OperationsJob>():
+        _trackJobEvent('operations.job.transitioned', result.value);
+        await loadJobs();
+        return (moved: true, refusal: null);
+      case Error<OperationsJob>():
+        return (
+          moved: false,
+          refusal: jobRefusalFromException(result.exception),
+        );
+    }
+  }
+
+  /// Records the price the customer agreed to, for a move that passes the
+  /// approval stage.
+  Future<bool> recordApprovedPrice(OperationsJob job, double price) async {
+    final result = await _repository.updateJob(job.id, {
+      'approved_price': price.toStringAsFixed(2),
+    });
+    return result is Ok<OperationsJob>;
   }
 
   Future<OperationsJob?> createJob(OperationsJobDraft draft) async {
@@ -271,7 +288,6 @@ class JobsBoardViewModel extends ChangeNotifier {
   Future<Result<List<OperationsJob>>> _loadAllJobs() {
     return _repository.loadAllJobs(
       status: _boardStatus,
-      jobType: _jobTypeFilter,
       assignedTo: _assignedToMe ? _currentUserId : null,
       search: _searchQuery,
     );

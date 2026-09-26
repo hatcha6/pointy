@@ -141,6 +141,7 @@ class _DetailsHostState extends State<_DetailsHost> {
       await showMoneyAccountDetailsSheet(
         context,
         viewModel: _viewModel,
+        capabilities: _navigation.capabilities,
         accountId: 1,
       );
     });

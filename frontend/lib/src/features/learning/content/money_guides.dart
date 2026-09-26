@@ -547,7 +547,7 @@ const moneyGuides = <LearningGuide>[
     level: LearningLevel.intermediate,
     kind: LearningKind.walkthrough,
     minutes: 3,
-    capability: AppCapability.viewPayments,
+    capability: AppCapability.viewMoneyAccounts,
     keywords: ['payments', 'hub', 'خزينة', 'مدفوعات', 'مقبوضات'],
     related: [
       'money.collect_debt',
@@ -580,7 +580,7 @@ const moneyGuides = <LearningGuide>[
     level: LearningLevel.advanced,
     kind: LearningKind.concept,
     minutes: 3,
-    capability: AppCapability.viewPayments,
+    capability: AppCapability.viewMoneyAccounts,
     keywords: ['treasury', 'cash position', 'خزينة', 'رصيد', 'بنك', 'نقد'],
     related: ['register.close', 'money.payments_hub', 'reports.reports'],
     sections: [

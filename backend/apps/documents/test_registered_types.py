@@ -42,6 +42,10 @@ SYSTEM_WRITE_CALLERS = {
     "apps/holidays/management/commands/backfill_special_days.py": (
         "tags rows that predate the snapshot the tag is"
     ),
+    "apps/payments/reconciliation.py": (
+        "links a cancellation's counter payment that an older backend wrote "
+        "without the link during a live update"
+    ),
 }
 
 

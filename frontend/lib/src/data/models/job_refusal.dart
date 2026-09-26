@@ -16,6 +16,10 @@ enum JobRefusalKind {
   /// The invoice total is above [approvedPrice].
   overApprovedPrice,
 
+  /// The move leaves — or jumps over — the stage where the customer approves
+  /// the price, and no approved price is recorded yet.
+  approvalRequired,
+
   unknown,
 }
 
@@ -50,6 +54,7 @@ JobRefusal? jobRefusalFromException(Object error) {
   final kind = switch (decoded['code']?.toString()) {
     'settlement_required' => JobRefusalKind.settlementRequired,
     'over_approved_price' => JobRefusalKind.overApprovedPrice,
+    'approval_required' => JobRefusalKind.approvalRequired,
     _ => JobRefusalKind.unknown,
   };
   if (kind == JobRefusalKind.unknown) {
@@ -62,3 +67,7 @@ JobRefusal? jobRefusalFromException(Object error) {
     invoiceTotal: decoded['invoice_total']?.toString() ?? '',
   );
 }
+
+/// One attempted stage move: whether it happened, and — when the server said
+/// no for a reason the screen can act on — why.
+typedef JobMoveAttempt = ({bool moved, JobRefusal? refusal});

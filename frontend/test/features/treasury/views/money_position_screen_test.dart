@@ -11,6 +11,7 @@ import 'package:pointy_frontend/src/features/treasury/views/money_position_scree
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
 import '../../../shared/fake_app_navigation.dart';
+import '../../../shared/role_fixtures.dart';
 
 /// الخزينة answers one question — how much should be in the box and the bank,
 /// and does reality agree. These tests hold it to that: the total is stated,
@@ -86,11 +87,107 @@ void main() {
     expect(find.text('لا توجد حسابات بعد'), findsOneWidget);
     expect(find.text('0.00 د.ل'), findsNothing);
   });
+
+  group('each write is offered only to someone the server will let do it', () {
+    // The auditor role reads every account, transfer and count, and holds
+    // none of the writes. Before, the screen offered it all of them.
+    testWidgets('an auditor reads the money and is offered none of it', (
+      tester,
+    ) async {
+      await _pumpPosition(
+        tester,
+        position: _position(),
+        user: userWithRole(UserRole.auditor, auditorPermissions),
+      );
+
+      expect(find.text('1250.00 د.ل'), findsOneWidget);
+      expect(find.byTooltip('حساب جديد'), findsNothing);
+      for (final action in ['إضافة رصيد', 'إيداع في المصرف', 'سحب', 'جرد']) {
+        expect(find.text(action), findsNothing, reason: action);
+      }
+
+      // The drill-down is reading, so it still opens — without its buttons.
+      await tester.tap(find.text('500.00 د.ل'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('من أين جاء هذا الرصيد'), findsOneWidget);
+      expect(_sheetButton('count'), findsNothing);
+      expect(_sheetButton('transfer'), findsNothing);
+      expect(_sheetButton('edit'), findsNothing);
+    });
+
+    testWidgets('each button follows its own permission', (tester) async {
+      await _pumpPosition(
+        tester,
+        position: _position(),
+        user: userWithRole(UserRole.auditor, {
+          ...auditorPermissions,
+          'treasury.add_moneycount',
+        }),
+      );
+
+      expect(find.text('جرد'), findsOneWidget);
+      expect(find.text('إضافة رصيد'), findsNothing);
+      expect(find.text('إيداع في المصرف'), findsNothing);
+      expect(find.text('سحب'), findsNothing);
+
+      await tester.tap(find.text('500.00 د.ل'));
+      await tester.pumpAndSettle();
+
+      expect(_sheetButton('count'), findsOneWidget);
+      expect(_sheetButton('transfer'), findsNothing);
+      expect(_sheetButton('edit'), findsNothing);
+    });
+
+    testWidgets('the accountant keeps every button', (tester) async {
+      await _pumpPosition(
+        tester,
+        position: _position(),
+        user: userWithRole(UserRole.accountant, accountantPermissions),
+      );
+
+      expect(find.byTooltip('حساب جديد'), findsOneWidget);
+      for (final action in ['إضافة رصيد', 'إيداع في المصرف', 'سحب', 'جرد']) {
+        expect(find.text(action), findsOneWidget, reason: action);
+      }
+
+      await tester.tap(find.text('500.00 د.ل'));
+      await tester.pumpAndSettle();
+
+      expect(_sheetButton('count'), findsOneWidget);
+      expect(_sheetButton('transfer'), findsOneWidget);
+      expect(_sheetButton('edit'), findsOneWidget);
+    });
+
+    testWidgets('an empty treasury does not ask an auditor to add to it', (
+      tester,
+    ) async {
+      await _pumpPosition(
+        tester,
+        position: const MoneyPosition(
+          accounts: [],
+          totals: MoneyPositionTotals(),
+        ),
+        user: userWithRole(UserRole.auditor, auditorPermissions),
+      );
+
+      expect(find.text('لا توجد حسابات بعد'), findsOneWidget);
+      expect(find.textContaining('«إضافة حسابات»'), findsOneWidget);
+      expect(find.text('حساب جديد'), findsNothing);
+      expect(find.byTooltip('حساب جديد'), findsNothing);
+    });
+  });
 }
+
+/// A button in the account sheet. By key, because the screen behind the sheet
+/// carries buttons with the same words.
+Finder _sheetButton(String action) =>
+    find.byKey(ValueKey('treasury_details_${action}_button'));
 
 Future<MoneyPositionViewModel> _pumpPosition(
   WidgetTester tester, {
   required MoneyPosition position,
+  PosUser? user,
 }) async {
   await tester.binding.setSurfaceSize(const Size(1100, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -99,7 +196,7 @@ Future<MoneyPositionViewModel> _pumpPosition(
   final viewModel = MoneyPositionViewModel(repository);
   addTearDown(viewModel.dispose);
 
-  final navigation = FakeAppNavigation(currentUser: _manager());
+  final navigation = FakeAppNavigation(currentUser: user ?? _manager());
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('ar'),

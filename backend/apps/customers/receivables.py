@@ -48,7 +48,7 @@ def outstanding_balance(customer, exclude_order_id=None) -> Decimal:
         orders = orders.exclude(pk=exclude_order_id)
     return _money(
         sum(
-            (order.balance_due for order in orders.prefetch_related("payments")),
+            (order.balance_due for order in orders.with_balance_relations()),
             Decimal("0.00"),
         )
     )

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/expense_category.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -11,9 +12,18 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/expense_categories_view_model.dart';
 
 class ExpenseCategoriesPage extends StatefulWidget {
-  const ExpenseCategoriesPage({super.key, required this.viewModel});
+  const ExpenseCategoriesPage({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final ExpenseCategoriesViewModel viewModel;
+
+  /// Adding, renaming and deleting a category are three permissions of their
+  /// own, separate from recording expenses — so someone who can open this
+  /// page may still hold none of them.
+  final AuthorizationCapabilities capabilities;
 
   @override
   State<ExpenseCategoriesPage> createState() => _ExpenseCategoriesPageState();
@@ -44,13 +54,14 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
             title: Text(l10n.expenseCategoriesSectionTitle),
             isLoading: viewModel.isLoading || viewModel.isMutating,
             actions: [
-              IconButton(
-                tooltip: l10n.expenseCategoryAddButton,
-                onPressed: viewModel.isMutating
-                    ? null
-                    : () => _openEditor(context),
-                icon: const Icon(Icons.add),
-              ),
+              if (widget.capabilities.canCreateExpenseCategory)
+                IconButton(
+                  tooltip: l10n.expenseCategoryAddButton,
+                  onPressed: viewModel.isMutating
+                      ? null
+                      : () => _openEditor(context),
+                  icon: const Icon(Icons.add),
+                ),
               IconButton(
                 tooltip: l10n.refreshShopSettingsTooltip,
                 onPressed: viewModel.isLoading ? null : viewModel.load,
@@ -84,15 +95,18 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
       );
     }
 
+    final capabilities = widget.capabilities;
     if (viewModel.categories.isEmpty) {
       return PointyEmptyState(
         icon: Icons.sell_outlined,
         title: l10n.expenseCategoriesEmptyMessage,
-        action: FilledButton.icon(
-          onPressed: () => _openEditor(context),
-          icon: const Icon(Icons.add),
-          label: Text(l10n.expenseCategoryAddButton),
-        ),
+        action: capabilities.canCreateExpenseCategory
+            ? FilledButton.icon(
+                onPressed: () => _openEditor(context),
+                icon: const Icon(Icons.add),
+                label: Text(l10n.expenseCategoryAddButton),
+              )
+            : null,
       );
     }
 
@@ -107,8 +121,12 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
                 _ExpenseCategoryTile(
                   category: category,
                   isBusy: viewModel.isMutating,
-                  onEdit: () => _openEditor(context, category: category),
-                  onDelete: () => _confirmDelete(context, category),
+                  onEdit: capabilities.canChangeExpenseCategory
+                      ? () => _openEditor(context, category: category)
+                      : null,
+                  onDelete: capabilities.canDeleteExpenseCategory
+                      ? () => _confirmDelete(context, category)
+                      : null,
                 ),
             ],
           ),
@@ -180,20 +198,25 @@ class _ExpenseCategoryTile extends StatelessWidget {
   const _ExpenseCategoryTile({
     required this.category,
     required this.isBusy,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   final ExpenseCategory category;
   final bool isBusy;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+
+  /// Null when this person may not do it. The row then reads as a plain line
+  /// rather than a tap that ends in a refusal.
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final onEdit = this.onEdit;
+    final onDelete = this.onDelete;
     return ListTile(
       leading: const Icon(Icons.sell_outlined),
       title: Row(
@@ -215,21 +238,25 @@ class _ExpenseCategoryTile extends StatelessWidget {
           ],
         ],
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: l10n.editButton,
-            onPressed: isBusy ? null : onEdit,
-            icon: const Icon(Icons.edit_outlined),
-          ),
-          IconButton(
-            tooltip: l10n.deleteButton,
-            onPressed: isBusy ? null : onDelete,
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
-      ),
+      trailing: onEdit == null && onDelete == null
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onEdit != null)
+                  IconButton(
+                    tooltip: l10n.editButton,
+                    onPressed: isBusy ? null : onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: l10n.deleteButton,
+                    onPressed: isBusy ? null : onDelete,
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+              ],
+            ),
       onTap: isBusy ? null : onEdit,
     );
   }

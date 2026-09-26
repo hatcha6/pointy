@@ -16,15 +16,23 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import ACCOUNTANT_GROUP, ensure_role_groups
+from apps.customers.models import Customer
+from apps.documents import services as document_services
 from apps.expenses.models import Expense, ExpenseCategory
-from apps.expenses.services import create_expense
+from apps.expenses.services import cancel_expense, create_expense
+from apps.inventory.models import ConsignorPayout, StockItem
 from apps.payments.models import Payment
+from apps.payments.services import cancel_payment
 from apps.purchasing.models import Supplier, SupplierPayment
+from apps.purchasing.services import cancel_supplier_payment
 from apps.sales.models import Order, RegisterCashMovement, RegisterSession
+from apps.sales.services import checkout_order
 from apps.treasury.models import MoneyAccount, MoneyTransfer
 from apps.treasury.movements import account_movements
 from apps.treasury.position import (
+    COMPONENT_DRAWER_IN,
     COMPONENT_DRAWER_OUT,
     COMPONENT_EXPENSES,
     COMPONENT_SALES,
@@ -192,6 +200,119 @@ class DoubleCountingTests(TreasuryTestCase):
             reason="سلفة",
         )
         self.assertEqual(self.balance_of(self.cash), money("85.00"))
+
+
+class RetractionTests(TreasuryTestCase):
+    """A cancelled document leaves the box where it was before it existed.
+
+    The drawer-paid ones are the trap. Cancelling an expense, a POS cash
+    purchase or a consignor payout stops it counting (``.live()``) *and* brings
+    the cash back into a drawer as a pay-in of its own. Unless the pay-out it had
+    claimed counts again as a plain pay-out, that pay-in is money arriving from
+    nowhere, and the box ends up richer by exactly the amount cancelled.
+    """
+
+    def _pay_out(self, amount):
+        return RegisterCashMovement.objects.create(
+            register_session=self.session,
+            movement_type=RegisterCashMovement.MovementType.PAY_OUT,
+            amount=Decimal(amount),
+            reason="من الدرج",
+        )
+
+    def assert_back_where_it_was(self):
+        self.assertEqual(self.balance_of(self.cash), money("100.00"))
+        # The rows behind the balance must tell the same story.
+        rows = account_movements(
+            self.cash, start=self.today - timedelta(days=1), end=self.today
+        )["rows"]
+        self.assertEqual(
+            sum((row["amount"] for row in rows), Decimal("0.00")), money("0.00")
+        )
+
+    def test_a_cancelled_drawer_expense(self):
+        category, _ = ExpenseCategory.objects.get_or_create(name="إيجار")
+        expense = create_expense(
+            user=self.user,
+            pay_from_register=True,
+            category=category,
+            description="كهرباء",
+            amount=Decimal("30.00"),
+            payment_method=Expense.PaymentMethod.CASH,
+        )
+
+        cancel_expense(expense, reason="خطأ", register_session=self.session)
+
+        self.assert_back_where_it_was()
+        # Out when it left, back in when it returned — both really happened.
+        self.assertEqual(self.component(self.cash, COMPONENT_DRAWER_OUT), money("-30.00"))
+        self.assertEqual(self.component(self.cash, COMPONENT_DRAWER_IN), money("30.00"))
+        self.assertEqual(self.component(self.cash, COMPONENT_EXPENSES), money("0.00"))
+
+    def test_a_cancelled_pos_cash_purchase(self):
+        payment = SupplierPayment.objects.create(
+            supplier=Supplier.objects.create(name="مورد"),
+            amount=Decimal("8.00"),
+            method=SupplierPayment.Method.CASH,
+            register_session=self.session,
+            cash_movement=self._pay_out("8.00"),
+        )
+        self.assertEqual(self.balance_of(self.cash), money("92.00"))
+
+        cancel_supplier_payment(payment, reason="خطأ", register_session=self.session)
+
+        self.assert_back_where_it_was()
+
+    def test_a_cancelled_consignor_payout(self):
+        payout = ConsignorPayout.objects.create(
+            consignor=Customer.objects.create(full_name="سالم", phone="0912345670"),
+            amount=Decimal("12.00"),
+            method=ConsignorPayout.Method.CASH,
+            register_session=self.session,
+            cash_movement=self._pay_out("12.00"),
+        )
+        self.assertEqual(self.balance_of(self.cash), money("88.00"))
+
+        document_services.cancel(payout, reason="خطأ")
+
+        self.assert_back_where_it_was()
+
+    def test_a_cancelled_cash_payment(self):
+        """A counter payment nets the one it gives back all by itself."""
+        variant = create_product_with_default_variant(
+            name="قطعة", sku="TR-1", barcode="", unit_price=Decimal("5.00")
+        ).default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=Decimal("5"))
+        # An آجل invoice paid in cash: a cash sale's payment cannot be cancelled
+        # out from under it, so the money given back is money taken on a debt.
+        order = checkout_order(
+            register_session=self.session,
+            lines_data=[{"variant": variant, "quantity": Decimal("1")}],
+            payments_data=[{"method": "cash", "amount": Decimal("5.00")}],
+            sale_type=Order.SaleType.CREDIT,
+            customer=Customer.objects.create(full_name="زبون الخزينة"),
+        )
+
+        cancel_payment(
+            order.payments.get(), reason="خطأ", register_session=self.session
+        )
+
+        self.assert_back_where_it_was()
+
+    def test_a_drawer_expense_that_stands_is_still_counted_once(self):
+        """The rule the pay-out exclusion exists for does not loosen."""
+        category, _ = ExpenseCategory.objects.get_or_create(name="إيجار")
+        create_expense(
+            user=self.user,
+            pay_from_register=True,
+            category=category,
+            description="كهرباء",
+            amount=Decimal("30.00"),
+            payment_method=Expense.PaymentMethod.CASH,
+        )
+
+        self.assertEqual(self.balance_of(self.cash), money("70.00"))
+        self.assertEqual(self.component(self.cash, COMPONENT_DRAWER_OUT), money("0.00"))
 
 
 class TransferTests(TreasuryTestCase):

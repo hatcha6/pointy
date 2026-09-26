@@ -389,11 +389,11 @@ class OrderDocumentService {
     ShopSettings? shopSettings,
   }) {
     final isQuotation = order.saleType == SaleType.quotation;
-    final paidTotal = order.payments.fold<double>(
-      0,
-      (sum, payment) => sum + payment.amount,
-    );
-    final balanceDue = _balanceDue(total: order.total, paid: paidTotal);
+    // The server's figures, as the purchase template reads its own. Summing
+    // the payments here printed a part-returned sale as owing its refund: the
+    // refund is a negative payment, and the total never drops.
+    final paidTotal = order.amountPaid;
+    final balanceDue = order.balanceDue;
     final statusText = _saleStatusText(order, paidTotal, balanceDue);
     final cashierName = order.cashierName?.trim() ?? '';
     final sessionNumber = order.registerSessionNumber?.trim() ?? '';
@@ -1102,6 +1102,7 @@ class OrderDocumentLabels {
     required this.paymentStatusPartial,
     required this.paymentStatusUnpaid,
     required this.paymentStatusQuotation,
+    required this.paymentStatusVoid,
     required this.quotationTitle,
     required this.quotationValidUntil,
     required this.quotationNotice,
@@ -1176,6 +1177,7 @@ class OrderDocumentLabels {
       paymentStatusPartial = 'مدفوعة جزئيًا',
       paymentStatusUnpaid = 'آجل — غير مدفوعة',
       paymentStatusQuotation = 'عرض سعر',
+      paymentStatusVoid = 'ملغاة',
       quotationTitle = 'فاتورة عرض',
       quotationValidUntil = 'صالح حتى',
       quotationNotice =
@@ -1252,6 +1254,7 @@ class OrderDocumentLabels {
   final String paymentStatusPartial;
   final String paymentStatusUnpaid;
   final String paymentStatusQuotation;
+  final String paymentStatusVoid;
   final String quotationTitle;
   final String quotationValidUntil;
   final String quotationNotice;
@@ -1271,13 +1274,14 @@ class OrderDocumentLabels {
   final String proofBalanceAfter;
 
   /// Localized money-status line for a printed sale, keyed on the server's
-  /// `payment_status` (`paid` | `partial` | `unpaid` | `quotation`).
+  /// `payment_status` (`paid` | `partial` | `unpaid` | `quotation` | `void`).
   String paymentStatusText(String paymentStatus) {
     return switch (paymentStatus) {
       'paid' => paymentStatusPaid,
       'partial' => paymentStatusPartial,
       'unpaid' => paymentStatusUnpaid,
       'quotation' => paymentStatusQuotation,
+      'void' => paymentStatusVoid,
       _ => emptyValue,
     };
   }
@@ -2458,13 +2462,6 @@ List<String> _shopHeaderLines(ShopSettings? settings) {
 String? _shopFooterNote(ShopSettings? settings) {
   final footer = settings?.receiptFooter.trim() ?? '';
   return footer.isEmpty ? null : footer;
-}
-
-double _balanceDue({required double total, required double paid}) {
-  final due = total - paid;
-  // Under half a cent is floating-point noise from summing the payments —
-  // 10.10 + 20.20 lands a hair short of 30.30 — not money owed.
-  return due < 0.005 ? 0 : due;
 }
 
 List<String> _nonBlankStrings(Iterable<Object?> values) {

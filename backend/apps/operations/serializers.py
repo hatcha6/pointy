@@ -15,6 +15,7 @@ from .models import (
     WorkflowStage,
     WorkflowTemplate,
 )
+from .services import LABOR_PRODUCT_SKU
 
 
 def _user_display_name(user) -> str:
@@ -354,6 +355,9 @@ class JobMaterialSerializer(serializers.ModelSerializer):
     unit = serializers.CharField(source="variant.product.unit", read_only=True)
     is_consumed = serializers.BooleanField(read_only=True)
     line_total = serializers.SerializerMethodField()
+    # Charged on the job's live invoice. A part refunded there stays fitted
+    # and consumed, but is the job's to put back on the shelf.
+    is_billed = serializers.SerializerMethodField()
 
     class Meta:
         model = JobMaterial
@@ -368,6 +372,7 @@ class JobMaterialSerializer(serializers.ModelSerializer):
             "unit_price",
             "line_total",
             "is_consumed",
+            "is_billed",
             "consumed_at",
             "reversed_at",
             "created_at",
@@ -384,6 +389,11 @@ class JobMaterialSerializer(serializers.ModelSerializer):
             (material.unit_price * material.quantity).quantize(Decimal("0.01"))
         )
 
+    def get_is_billed(self, material) -> bool:
+        from .invoice_returns import material_is_billed
+
+        return material_is_billed(material)
+
 
 class JobServiceSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(
@@ -392,6 +402,9 @@ class JobServiceSerializer(serializers.ModelSerializer):
     )
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_total = serializers.SerializerMethodField()
+    # Labour typed at the counter: its note is what it was, not a remark on a
+    # catalog service, so the screens lead with it.
+    is_labor = serializers.SerializerMethodField()
 
     class Meta:
         model = JobService
@@ -404,12 +417,16 @@ class JobServiceSerializer(serializers.ModelSerializer):
             "unit_price",
             "line_total",
             "note",
+            "is_labor",
             "created_at",
         ]
         read_only_fields = ("unit_price",)
 
     def get_line_total(self, service) -> str:
         return str(service.line_total)
+
+    def get_is_labor(self, service) -> bool:
+        return service.variant.sku == LABOR_PRODUCT_SKU
 
 
 class JobAssetSerializer(serializers.ModelSerializer):
@@ -613,6 +630,41 @@ class JobSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class JobDetailSerializer(JobSerializer):
+    """One job, with every stage of its workflow.
+
+    The job screen lets the counter move a job to any stage, so it needs the
+    whole list — not just the next one. Only the single-job responses carry
+    it: the board already has the workflows, and repeating seven stages on
+    every card of a busy board would be paid for on every refresh.
+    """
+
+    workflow_stages = WorkflowStageSerializer(
+        source="workflow_template.stages",
+        many=True,
+        read_only=True,
+    )
+
+    class Meta(JobSerializer.Meta):
+        fields = [*JobSerializer.Meta.fields, "workflow_stages"]
+
+
+class JobAssigneeSerializer(serializers.ModelSerializer):
+    """Who a job can be given to — a name and a title, nothing from HR.
+
+    Assigning work is counter work; reading the employee register (pay plans,
+    phone numbers, hire dates) is not, so the picker gets its own narrow list
+    instead of the employees endpoint.
+    """
+
+    full_name = serializers.CharField(source="display_name", read_only=True)
+
+    class Meta:
+        model = Employee
+        fields = ["id", "full_name", "job_title", "status"]
+        read_only_fields = fields
+
+
 class JobCreateSerializer(serializers.Serializer):
     workflow_template = serializers.PrimaryKeyRelatedField(
         queryset=WorkflowTemplate.objects.filter(is_active=True),
@@ -736,8 +788,13 @@ class JobHandBackSerializer(serializers.Serializer):
 
 
 class JobServiceCreateSerializer(serializers.Serializer):
+    # Optional: without one, the line is labour described in ``note`` and
+    # priced in ``unit_price``, billed under the shop's labour service.
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.active(),
+        required=False,
+        allow_null=True,
+        default=None,
     )
     quantity = serializers.DecimalField(
         max_digits=10,
@@ -752,6 +809,28 @@ class JobServiceCreateSerializer(serializers.Serializer):
         default="",
         max_length=200,
     )
+    # The price agreed for this job, when it is not the catalog's.
+    unit_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+
+    def validate(self, attrs):
+        if attrs.get("variant") is None:
+            if not attrs.get("note", "").strip():
+                raise serializers.ValidationError(
+                    {"note": "Say what the labour was for."}
+                )
+            price = attrs.get("unit_price")
+            if price is None or price <= 0:
+                raise serializers.ValidationError(
+                    {"unit_price": "Labour needs a price above zero."}
+                )
+        return attrs
 
 
 class JobMaterialCreateSerializer(serializers.Serializer):

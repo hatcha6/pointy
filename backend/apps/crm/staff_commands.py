@@ -78,8 +78,8 @@ def _outstanding_debt() -> Decimal:
     from apps.sales.models import Order
 
     total = Decimal("0")
-    # Prefetch payments so balance_due (summed in Python) doesn't N+1 per order.
-    for order in Order.objects.open_credit().prefetch_related("payments"):
+    # Prefetch so balance_due (summed in Python) doesn't N+1 per order.
+    for order in Order.objects.open_credit().with_balance_relations():
         total += order.balance_due
     return total
 

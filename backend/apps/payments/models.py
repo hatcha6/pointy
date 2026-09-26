@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
@@ -19,6 +20,23 @@ class PaymentQuerySet(DocumentQuerySetMixin, models.QuerySet):
         invoice it is as much a payment as cash.
         """
         return self.exclude(method=Payment.Method.SALARY_DEDUCTION)
+
+    def takings(self):
+        """What a till took, net of what it gave back by cancelling a payment.
+
+        Every tender taken, plus every cancellation's counter payment — the
+        drawer that hands the money back over the counter is the one that
+        wrote it (``documents.reverse``), so that is the drawer it comes out of.
+
+        Not a refund's negative rows. A return reaches the drawer once already,
+        through ``OrderAdjustment.cash_amount``, and migration ``0007`` gave
+        historical refund rows their order's session, so summing every signed
+        row would take each refund out twice. A counter payment is told apart
+        by ``reverses``, never by its reference: whoever takes a payment can
+        type any reference, and a drawer that trusted one could be emptied by
+        typing.
+        """
+        return self.filter(Q(amount__gt=0) | Q(reverses__isnull=False))
 
 
 class Payment(DocumentMixin, TimeStampedModel):
@@ -66,6 +84,18 @@ class Payment(DocumentMixin, TimeStampedModel):
     )
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     external_reference = models.CharField(max_length=128, blank=True)
+    # Set on a cancellation's counter payment only, to the payment it gives
+    # back. One writer (``documents.reverse``), frozen from birth and offered to
+    # no serializer, because it is what puts that money back through a drawer
+    # (``PaymentQuerySet.takings``). The ``cancel:<pk>`` reference says the same
+    # thing for people to read, but it is free text and stays editable.
+    reverses = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="reversals",
+        blank=True,
+        null=True,
+    )
     card_receipt_data = models.JSONField(default=dict, blank=True)
     # Set when a card payment's receipt is captured: links the payment to the
     # deduped PaymentCard (and, through it, a customer). Nullable so cash/transfer

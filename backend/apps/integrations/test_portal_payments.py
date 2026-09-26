@@ -164,10 +164,39 @@ def _forget_sweep_state(account):
         cache.delete(key)
 
 
-class _PortalCase(TestCase):
+class _NoonCase(TestCase):
+    """Every test runs at noon in the shop, whatever the time really is.
+
+    The tests date a payment minutes or hours back from "now" and then ask for
+    the shop's day of it. Run just after midnight, a payment 40 minutes back
+    is yesterday's while a drawer opened now is today's, and the day's listing
+    rightly keeps them apart; around UTC midnight the same happens to anything
+    read by the UTC day. Noon, shop time, is hours from either midnight.
+
+    The clock is moved, not stopped: a live re-read proves it saw a payment
+    again by stamping it later than the read began. Only calls through
+    ``timezone.now`` move — a field declared ``default=timezone.now``
+    (``Payment.paid_at``) still reads the real clock.
+    """
+
+    def setUp(self):
+        super().setUp()
+        wall = timezone.now
+        started = wall()
+        noon = datetime.combine(
+            business_local_date(started), time(12), tzinfo=business_timezone()
+        )
+        offset = noon - started
+        clock = mock.patch.object(timezone, "now", lambda: wall() + offset)
+        clock.start()
+        self.addCleanup(clock.stop)
+
+
+class _PortalCase(_NoonCase):
     """An LNET account, a cashier with an open drawer, and a manager."""
 
     def setUp(self):
+        super().setUp()
         ensure_role_groups()
         users = get_user_model().objects
         self.cashier = users.create_user(username="bahr", first_name="بحر", password="x")
@@ -253,8 +282,9 @@ class _PortalCase(TestCase):
 
 
 # --- the driver -------------------------------------------------------------
-class PaymentReportPageTests(TestCase):
+class PaymentReportPageTests(_NoonCase):
     def setUp(self):
+        super().setUp()
         self.account = lnet_account()
         self.now = timezone.now()
 
@@ -690,6 +720,24 @@ class RecordPortalPaymentTests(_PortalCase):
         lnet_row = next(
             row
             for row in position["accounts"]
+            if row["account"].pk == self.account.money_account_id
+        )
+        self.assertEqual(lnet_row["expected_balance"], Decimal("457.25"))
+
+    def test_a_float_drawn_on_an_earlier_day_stays_drawn_in_the_treasury(self):
+        # The float's account opens today and LNET drew yesterday. The treasury
+        # took off only the draws dated today, and showed the whole 500 again.
+        float_ledger.ensure_money_account(self.account)
+        float_ledger.record_top_up(self.account, amount=Decimal("500.00"))
+        yesterday = self.now - timedelta(days=1)
+        rows = [pay(4307299, "45", "salem.q", yesterday)]
+        self.listing(rows, yesterday)
+        self.record(rows, "4307299")
+
+        self.assertEqual(float_ledger.expected_balance(self.account), Decimal("457.25"))
+        lnet_row = next(
+            row
+            for row in treasury_position()["accounts"]
             if row["account"].pk == self.account.money_account_id
         )
         self.assertEqual(lnet_row["expected_balance"], Decimal("457.25"))

@@ -16,15 +16,22 @@ class TransferComposerOutcome {
   final bool sendNow;
 }
 
+/// [canSendNow] is whether this person may dispatch. Without it the sheet
+/// only saves drafts: "send now" would create the transfer and then have the
+/// dispatch refused, leaving a draft behind an error.
 Future<TransferComposerOutcome?> showTransferComposer(
   BuildContext context, {
   required List<Warehouse> places,
   required WarehouseRepository repository,
+  required bool canSendNow,
 }) {
   return showAdaptiveModalBottomSheet<TransferComposerOutcome>(
     context: context,
-    builder: (_) =>
-        _TransferComposerSheet(places: places, repository: repository),
+    builder: (_) => _TransferComposerSheet(
+      places: places,
+      repository: repository,
+      canSendNow: canSendNow,
+    ),
   );
 }
 
@@ -38,10 +45,12 @@ class _TransferComposerSheet extends StatefulWidget {
   const _TransferComposerSheet({
     required this.places,
     required this.repository,
+    required this.canSendNow,
   });
 
   final List<Warehouse> places;
   final WarehouseRepository repository;
+  final bool canSendNow;
 
   @override
   State<_TransferComposerSheet> createState() => _TransferComposerSheetState();
@@ -78,6 +87,8 @@ class _TransferComposerSheetState extends State<_TransferComposerSheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final saveDraft = _isSendable ? () => _finish(sendNow: false) : null;
+    final sendNow = _isSendable ? () => _finish(sendNow: true) : null;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -188,37 +199,40 @@ class _TransferComposerSheetState extends State<_TransferComposerSheet> {
           child: Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  onPressed: _isSendable
-                      ? () => Navigator.of(context).pop(
-                          TransferComposerOutcome(
-                            draft: _draft,
-                            sendNow: false,
-                          ),
-                        )
-                      : null,
-                  child: Text(l10n.transferSaveDraftAction),
-                ),
+                // Without the right to send, saving is the only way out of
+                // the sheet, so it takes the filled button instead.
+                child: widget.canSendNow
+                    ? OutlinedButton(
+                        onPressed: saveDraft,
+                        child: Text(l10n.transferSaveDraftAction),
+                      )
+                    : FilledButton(
+                        onPressed: saveDraft,
+                        child: Text(l10n.transferSaveDraftAction),
+                      ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                // The common case gets the filled button: somebody standing at
-                // the store room with a box in their hands is sending it now,
-                // not saving it for later.
-                child: FilledButton(
-                  onPressed: _isSendable
-                      ? () => Navigator.of(context).pop(
-                          TransferComposerOutcome(draft: _draft, sendNow: true),
-                        )
-                      : null,
-                  child: Text(l10n.transferSendNowAction),
+              if (widget.canSendNow) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  // The common case gets the filled button: somebody standing
+                  // at the store room with a box in their hands is sending it
+                  // now, not saving it for later.
+                  child: FilledButton(
+                    onPressed: sendNow,
+                    child: Text(l10n.transferSendNowAction),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  void _finish({required bool sendNow}) {
+    final outcome = TransferComposerOutcome(draft: _draft, sendNow: sendNow);
+    Navigator.of(context).pop(outcome);
   }
 
   Future<void> _addLine() async {

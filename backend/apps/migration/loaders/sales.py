@@ -18,6 +18,7 @@ from decimal import Decimal
 from django.utils import timezone
 
 from apps.documents.guards import system_write
+from apps.documents.statuses import DocumentStatus
 from apps.payments.models import Payment
 from apps.sales.models import (
     Order,
@@ -195,6 +196,20 @@ class SaleLoader(BaseLoader):
         order.status = (
             Order.Status.PAID if paid >= order.total else Order.Status.OPEN
         )
+        if credit:
+            # Issued, whatever is still owed on it: the old system handed it over
+            # the day it was written. ``Order.save`` issues only an order that
+            # is created PAID, so one created OPEN stayed a draft for good — its
+            # payments could not be cancelled, and its last collection had to
+            # submit it into its own backdated month, period lock and all. Not
+            # ``document_services.submit``: its period lock refuses a caller
+            # with no user.
+            order.doc_status = DocumentStatus.SUBMITTED
+            order.submitted_at = (
+                _aware(record.occurred_at)
+                if record.occurred_at is not None
+                else order.created_at
+            )
         order.save(
             update_fields=[
                 "subtotal",
@@ -204,6 +219,8 @@ class SaleLoader(BaseLoader):
                 "sale_type",
                 "customer",
                 "due_date",
+                "doc_status",
+                "submitted_at",
                 "updated_at",
             ]
         )
@@ -281,7 +298,7 @@ class PaymentLoader(BaseLoader):
         orders = (
             Order.objects.open_credit()
             .filter(customer_id=customer_pk)
-            .prefetch_related("payments")
+            .with_balance_relations()
             .order_by("created_at", "pk")
         )
         remaining = amount
@@ -334,7 +351,7 @@ class PaymentLoader(BaseLoader):
     @staticmethod
     def _settle(order_pk):
         """Close an invoice the moment it is square."""
-        order = Order.objects.prefetch_related("payments").get(pk=order_pk)
+        order = Order.objects.with_balance_relations().get(pk=order_pk)
         if order.status == Order.Status.OPEN and order.balance_due <= 0:
             Order.objects.filter(pk=order.pk).update(status=Order.Status.PAID)
 
@@ -482,8 +499,9 @@ class SaleReturnLoader(BaseLoader):
                     for order_line, quantity, price in specs
                 ]
             )
+            refund = None
             if amount > 0:
-                Payment.objects.create(
+                refund = Payment.objects.create(
                     order=order,
                     method=method,
                     amount=-amount,
@@ -492,9 +510,18 @@ class SaleReturnLoader(BaseLoader):
                     ),
                 )
             if record.occurred_at is not None:
+                occurred_at = _aware(record.occurred_at)
                 OrderAdjustment.objects.filter(pk=adjustment.pk).update(
-                    created_at=_aware(record.occurred_at)
+                    created_at=occurred_at
                 )
+                # The refund is dated with the return it pays out, as every
+                # imported payment is (``_pay``). Left on the day of the import,
+                # a report as of any day in between saw the goods come back
+                # and not the money go out — a customer owing their own refund.
+                if refund is not None:
+                    Payment.objects.filter(pk=refund.pk).update(
+                        paid_at=occurred_at, created_at=occurred_at
+                    )
         resolver.remember(self.entity_type, record.source_key, adjustment)
         return LoadOutcome(action, adjustment.pk, issues)
 

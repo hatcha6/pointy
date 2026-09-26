@@ -119,6 +119,28 @@ class ExpectedCashTests(SimpleTestCase):
         )
 
 
+class SaleBalanceTests(SimpleTestCase):
+    """What a sale still owes belongs to ``Order.raw_balance_due`` alone."""
+
+    # The oracle models the balance independently, from its own inputs.
+    ALLOWED = {"apps/sales/business_simulation.py"}
+
+    def test_no_surface_nets_a_sale_against_its_payments_alone(self):
+        # ``total − amount_paid`` is the balance that forgot returns: a refund
+        # is a negative payment and the total never drops, so it read every
+        # part-returned sale as owing its refund.
+        offenders = _offending_files(
+            r"\btotal\s*-\s*[\w.]*\bamount_paid\b", self.ALLOWED
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "A sale's balance was re-derived from its payments. Read "
+            "order.balance_due (the total less apps.sales.documents."
+            f"settled_amount). Offenders: {offenders}",
+        )
+
+
 class MoneyDateRegistryTests(TestCase):
     """Every money model declares the one column that dates its money."""
 
@@ -133,6 +155,40 @@ class MoneyDateRegistryTests(TestCase):
 
         with self.assertRaises(UnknownMoneyModel):
             money_period(Product.objects.all(), "2026-01-01", "2026-01-31")
+
+    def test_a_missing_bound_leaves_that_side_open(self):
+        """``None`` is an open side, never "today". Read as today, "everything
+        up to a day" was nothing at all for a past day on a timestamp column,
+        and an error on a date column — the provider-float balance bug."""
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from django.utils import timezone
+
+        from apps.core.money_dates import day_range_start
+        from apps.sales.models import Order
+        from apps.treasury.models import MoneyAccount, MoneyTransfer
+
+        today = timezone.localdate()
+        week_ago = today - timedelta(days=7)
+        order = Order.objects.create()
+        Order.objects.filter(pk=order.pk).update(created_at=day_range_start(week_ago))
+        bank = MoneyAccount.objects.create(name="بنك", kind=MoneyAccount.Kind.BANK)
+        MoneyTransfer.objects.create(
+            to_account=bank, amount=Decimal("1.00"), moved_at=week_ago
+        )
+
+        for rows in (
+            Order.objects.filter(pk=order.pk),  # a timestamp column
+            MoneyTransfer.objects.filter(to_account=bank),  # a date column
+        ):
+            with self.subTest(model=rows.model._meta.label):
+                self.assertEqual(money_period(rows, None, today).count(), 1)
+                self.assertEqual(
+                    money_period(rows, None, week_ago - timedelta(days=1)).count(), 0
+                )
+                self.assertEqual(money_period(rows, week_ago, None).count(), 1)
+                self.assertEqual(money_period(rows, today, None).count(), 0)
 
     def test_the_profit_report_slices_every_source_the_same_way(self):
         """The report that mixes sales, wages and expenses must not date them

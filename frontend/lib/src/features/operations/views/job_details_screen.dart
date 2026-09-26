@@ -12,7 +12,6 @@ import '../../../data/models/pos_user.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/workflow.dart';
 import '../../../data/repositories/catalog_repository.dart';
-import '../../../data/repositories/employee_repository.dart';
 import '../../../data/repositories/operations_repository.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -26,6 +25,8 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/job_details_view_model.dart';
 import 'job_decline_sheet.dart';
 import 'job_declined_callout.dart';
+import 'job_labor_dialog.dart';
+import 'job_stage_move.dart';
 import 'jobs_screen.dart' show formatQuantity, unitLabel;
 import '../../assets/views/assets_ui.dart';
 import 'operations_ui.dart';
@@ -39,7 +40,6 @@ class JobDetailsScreen extends StatefulWidget {
     required this.currentUser,
     required this.catalogRepository,
     required this.operationsRepository,
-    required this.employeeRepository,
     this.shopSettingsRepository,
   });
 
@@ -48,7 +48,6 @@ class JobDetailsScreen extends StatefulWidget {
   final PosUser currentUser;
   final CatalogRepository catalogRepository;
   final OperationsRepository operationsRepository;
-  final EmployeeRepository employeeRepository;
 
   /// Supplies the shop's usual diagnosis fee to the decline form. Optional:
   /// without it the form simply starts with no fee.
@@ -122,7 +121,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   currentUser: widget.currentUser,
                   catalogRepository: widget.catalogRepository,
                   operationsRepository: widget.operationsRepository,
-                  employeeRepository: widget.employeeRepository,
                   shopSettingsRepository: widget.shopSettingsRepository,
                 ),
         );
@@ -138,6 +136,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   ) {
     final isOpen = job.status == OperationsJobStatus.open;
     final isRepair = job.jobType == OperationsJobType.repair;
+    // Declining and cancelling change the job; the server refuses both to
+    // someone who may only look at it.
+    final canWork = widget.capabilities.canChangeJobs;
     // The receipt and the sticker are for an item the shop holds: an open
     // repair, or a declined one still waiting on the shelf.
     final canPrint =
@@ -156,11 +157,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         ),
         const PopupMenuDivider(),
       ],
-      if (isOpen)
-        PopupMenuItem(value: 'move', child: Text(l10n.jobMoveToStageAction)),
-      if (isOpen && job.order == null && isRepair)
+      if (isOpen && job.order == null && isRepair && canWork)
         PopupMenuItem(value: 'decline', child: Text(l10n.jobDeclineMenuAction)),
-      if (isOpen && job.order == null)
+      if (isOpen && job.order == null && canWork)
         PopupMenuItem(value: 'cancel', child: Text(l10n.jobCancelAction)),
       if (!isOpen && widget.capabilities.canReopenJobs)
         PopupMenuItem(value: 'reopen', child: Text(l10n.jobReopenAction)),
@@ -173,8 +172,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         await _print(ticket: true);
       case 'print_label':
         await _print(ticket: false);
-      case 'move':
-        await _openMoveDialog(job);
       case 'decline':
         await _runDecline(
           context,
@@ -200,83 +197,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(jobPrintStatusMessage(l10n, status, ticket: ticket)),
-      ),
-    );
-  }
-
-  Future<void> _openMoveDialog(OperationsJob job) async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final templatesResult = await widget.operationsRepository
-        .loadAllWorkflowTemplates();
-    if (!mounted) {
-      return;
-    }
-    final templates = switch (templatesResult) {
-      Ok<List<WorkflowTemplate>>(value: final value) => value,
-      Error<List<WorkflowTemplate>>() => const <WorkflowTemplate>[],
-    };
-    final template = templates
-        .where((template) => template.id == job.workflowTemplate)
-        .firstOrNull;
-    if (template == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.operationsActionError)),
-      );
-      return;
-    }
-
-    final stage = await showAdaptiveModalBottomSheet<WorkflowStage>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Text(
-                    l10n.jobMoveToStageAction,
-                    style: Theme.of(sheetContext).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.jobManagerOnlyMoveHint,
-                    style: Theme.of(sheetContext).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            for (final stage in template.stages)
-              ListTile(
-                leading: Icon(
-                  stage.id == job.currentStage
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                ),
-                title: Text(stage.name),
-                enabled: stage.id != job.currentStage,
-                onTap: () => Navigator.of(sheetContext).pop(stage),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (stage == null || !mounted) {
-      return;
-    }
-    final moved = await widget.viewModel.transition(stage.id);
-    if (!mounted) {
-      return;
-    }
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          moved
-              ? l10n.jobStageChangedMessage(stage.name)
-              : l10n.operationsActionError,
-        ),
       ),
     );
   }
@@ -330,7 +250,6 @@ class _JobDetailsBody extends StatefulWidget {
     required this.currentUser,
     required this.catalogRepository,
     required this.operationsRepository,
-    required this.employeeRepository,
     this.shopSettingsRepository,
   });
 
@@ -340,7 +259,6 @@ class _JobDetailsBody extends StatefulWidget {
   final PosUser currentUser;
   final CatalogRepository catalogRepository;
   final OperationsRepository operationsRepository;
-  final EmployeeRepository employeeRepository;
   final ShopSettingsRepository? shopSettingsRepository;
 
   @override
@@ -399,6 +317,10 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
         job.isOpen &&
         (job.currentStageDetails?.requiresCustomerApproval ?? false) &&
         job.approvedPrice == null;
+    // Moving the job, holding it, answering for the customer and charging for
+    // work are all "changing the job" to the server; someone who may only
+    // look gets the page without the buttons that would each be refused.
+    final canWork = widget.capabilities.canChangeJobs;
 
     return Column(
       children: [
@@ -482,7 +404,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
             ],
           ),
         ),
-        if (needsApproval)
+        if (needsApproval && canWork)
           PointyStickyActionFooter(
             primaryAction: FilledButton.icon(
               onPressed: widget.viewModel.isMutating ? null : _approve,
@@ -511,7 +433,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                 ),
             ],
           )
-        else if (job.awaitingHandBack)
+        else if (job.awaitingHandBack && canWork)
           PointyStickyActionFooter(
             primaryAction: FilledButton.icon(
               onPressed: widget.viewModel.isMutating ? null : _handBack,
@@ -530,10 +452,13 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
             ],
           )
         else if (job.status == OperationsJobStatus.open &&
-            job.nextStage != null)
+            job.nextStage != null &&
+            canWork)
           PointyStickyActionFooter(
             primaryAction: FilledButton.icon(
-              onPressed: widget.viewModel.isMutating ? null : _advance,
+              onPressed: widget.viewModel.isMutating
+                  ? null
+                  : () => _moveTo(job.nextStage!),
               icon: Icon(
                 job.nextStageReleasesCustody
                     ? Icons.how_to_reg_outlined
@@ -600,6 +525,9 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final statusVisual = JobStatusVisual.of(context, job.status);
     final overdue =
         job.isOpen && job.dueAt != null && job.dueAt!.isBefore(DateTime.now());
+    final stageIndex = job.workflowStages.indexWhere(
+      (stage) => stage.id == job.currentStage,
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -678,6 +606,27 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                     ),
                 ],
               ),
+            ],
+            // Where the job is, and the way to put it where the work actually
+            // is — any stage, not only the next one.
+            if (job.isOpen && stageIndex >= 0) ...[
+              SizedBox(height: spacing.md),
+              JobStageProgressBar(
+                currentIndex: stageIndex,
+                total: job.workflowStages.length,
+                label: job.workflowStages[stageIndex].name,
+              ),
+              if (widget.capabilities.canChangeJobs)
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: TextButton.icon(
+                    onPressed: widget.viewModel.isMutating
+                        ? null
+                        : _chooseStage,
+                    icon: const Icon(Icons.swap_horiz, size: 18),
+                    label: Text(l10n.jobChangeStageButton),
+                  ),
+                ),
             ],
             SizedBox(height: spacing.md),
             if (job.createdAt != null)
@@ -902,10 +851,11 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
     final job = widget.job;
-    final canAddMaterials =
+    final canManageOpenJob =
         widget.capabilities.canManageJobMaterials &&
-        job.status == OperationsJobStatus.open &&
-        job.order == null;
+        job.status == OperationsJobStatus.open;
+    final isInvoiced = job.order != null;
+    final canAddMaterials = canManageOpenJob && !isInvoiced;
 
     return PointyDetailSection(
       title: l10n.jobMaterialsSection,
@@ -931,7 +881,16 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                 for (final material in job.materials)
                   _MaterialRow(
                     material: material,
-                    canReverse: canAddMaterials && material.reversedAt == null,
+                    refundedOnInvoice: material.refundedOnInvoice(
+                      jobIsInvoiced: isInvoiced,
+                    ),
+                    // A part the invoice still charges for comes off the
+                    // invoice first; once refunded there it can come back.
+                    canReverse:
+                        canManageOpenJob &&
+                        material.reversedAt == null &&
+                        (!isInvoiced ||
+                            material.refundedOnInvoice(jobIsInvoiced: true)),
                     isBusy: widget.viewModel.isMutating,
                     onReverse: () => _reverseMaterial(material),
                   ),
@@ -975,8 +934,11 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
     final job = widget.job;
+    // Labour is priced work, not stock: the server lets anyone who works the
+    // job charge for it, and so does this — a counter that can take a phone
+    // in and move it along must be able to say what the repair cost.
     final canEdit =
-        widget.capabilities.canManageJobMaterials &&
+        widget.capabilities.canChangeJobs &&
         job.status == OperationsJobStatus.open &&
         job.order == null;
 
@@ -987,7 +949,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
           ? TextButton.icon(
               onPressed: widget.viewModel.isMutating ? null : _addService,
               icon: const Icon(Icons.add, size: 18),
-              label: Text(l10n.jobAddServiceButton),
+              label: Text(l10n.jobAddLaborButton),
             )
           : null,
       child: job.services.isEmpty
@@ -1010,14 +972,10 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                service.variantName.trim().isEmpty
-                                    ? service.productName
-                                    : '${service.productName} — '
-                                          '${service.variantName}',
-                                style: textTheme.bodyMedium,
-                              ),
-                              if (service.note.trim().isNotEmpty)
+                              Text(service.title, style: textTheme.bodyMedium),
+                              // Labour's note is its name, already above.
+                              if (!service.isLabor &&
+                                  service.note.trim().isNotEmpty)
                                 Text(
                                   service.note,
                                   style: textTheme.bodySmall?.copyWith(
@@ -1112,7 +1070,10 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
   Future<void> _openAssignDialog() async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final employees = await _loadAssignableEmployees();
+    // Its own list rather than the employee register: assigning work is
+    // counter work, reading HR records is not (field export, 2026-09-25 — the
+    // picker 403'd for every cashier it was offered to).
+    final employees = await widget.viewModel.loadAssignees();
     if (!mounted) {
       return;
     }
@@ -1143,28 +1104,6 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
         ),
       ),
     );
-  }
-
-  Future<List<Employee>?> _loadAssignableEmployees() async {
-    final employees = <Employee>[];
-    var page = 1;
-    var hasMore = true;
-    while (hasMore) {
-      final result = await widget.employeeRepository.loadEmployees(page: page);
-      switch (result) {
-        case Ok<EmployeePage>():
-          employees.addAll(
-            result.value.employees.where(
-              (employee) => employee.status == EmployeeStatus.active,
-            ),
-          );
-          hasMore = result.value.hasMore;
-          page += 1;
-        case Error<EmployeePage>():
-          return null;
-      }
-    }
-    return employees;
   }
 
   // Symptoms/diagnosis/warranty are repair-only; a customer quote/approval
@@ -1266,65 +1205,67 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     );
   }
 
-  Future<void> _advance() async {
+  /// Every stage of this job's workflow, in order. A job loaded on its own
+  /// carries them; failing that, the two the footer needs are enough to move
+  /// on by one.
+  List<WorkflowStage> get _stages {
+    final job = widget.job;
+    if (job.workflowStages.isNotEmpty) {
+      return job.workflowStages;
+    }
+    return [?job.currentStageDetails, ?job.nextStage];
+  }
+
+  /// Any stage the counter picks — ahead past work already done, or back.
+  Future<void> _chooseStage() async {
+    final target = await showJobStagePicker(
+      context,
+      stages: _stages,
+      currentStageId: widget.job.currentStage,
+    );
+    if (target != null && mounted) {
+      await _moveTo(target);
+    }
+  }
+
+  Future<void> _moveTo(WorkflowStage target) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final nextStage = widget.job.nextStage;
-    if (nextStage == null) {
-      return;
-    }
-    // Handing the customer's property back is its own act, with its own
-    // question ("who is collecting it?"), so it gets a confirmation rather
-    // than sharing the plain "next stage" button's silence.
-    var collector = '';
-    if (nextStage.releasesCustody) {
-      final answer = await _askWhoIsCollecting();
-      if (answer == null || !mounted) {
-        return;
-      }
-      collector = answer;
-    }
-
-    final moved = await widget.viewModel.transition(
-      nextStage.id,
-      handedOverTo: collector,
+    final outcome = await runJobStageMove(
+      context,
+      job: widget.job,
+      stages: _stages,
+      target: target,
+      recordApprovedPrice: widget.viewModel.recordApprovedPrice,
+      moveTo: (stage, collector) =>
+          widget.viewModel.moveTo(stage, handedOverTo: collector),
     );
     if (!mounted) {
       return;
     }
-    if (moved) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.jobStageChangedMessage(nextStage.name))),
-      );
-      return;
+    switch (outcome.result) {
+      case JobMoveResult.moved:
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.jobStageChangedMessage(target.name))),
+        );
+      // The one refusal worth explaining rather than reporting: the job is not
+      // settled. Offer the two ways out — invoice it now, or (for a manager)
+      // release it anyway on the record.
+      case JobMoveResult.unsettled:
+        await _handleUnsettledHandover(target, collector: outcome.collector);
+      case JobMoveResult.failed:
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.operationsActionError)),
+        );
+      case JobMoveResult.cancelled:
+        break;
     }
-
-    // The one refusal worth explaining rather than reporting: the job is not
-    // settled. Offer the two ways out — invoice it now, or (for a manager)
-    // release it anyway on the record.
-    final refusal = widget.viewModel.lastRefusal;
-    if (refusal?.kind == JobRefusalKind.settlementRequired) {
-      await _handleUnsettledHandover(nextStage);
-      return;
-    }
-    messenger.showSnackBar(SnackBar(content: Text(l10n.operationsActionError)));
   }
 
-  Future<String?> _askWhoIsCollecting() async {
-    final l10n = AppLocalizations.of(context)!;
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) => _PromptDialog(
-        title: l10n.jobHandoverDialogTitle,
-        fieldLabel: l10n.jobHandoverCollectorLabel,
-        fieldHint: l10n.jobHandoverCollectorHint,
-        confirmLabel: l10n.jobHandoverConfirm,
-        cancelLabel: l10n.cancelButton,
-      ),
-    );
-  }
-
-  Future<void> _handleUnsettledHandover(WorkflowStage nextStage) async {
+  Future<void> _handleUnsettledHandover(
+    WorkflowStage nextStage, {
+    String collector = '',
+  }) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     final canOverride = widget.capabilities.canReleaseUnpaidJobs;
@@ -1370,6 +1311,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final released = await widget.viewModel.transition(
       nextStage.id,
       note: note,
+      handedOverTo: collector,
       forceRelease: true,
     );
     if (!mounted) {
@@ -1635,25 +1577,21 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     }
   }
 
+  /// Labour typed at the counter — what the work was and what it costs — or
+  /// a catalog service when the shop has priced one. A repair shop cannot be
+  /// expected to list every job it will ever do before it can charge for one.
   Future<void> _addService() async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final variant = await showVariantPickerSheet(
-      context,
-      catalogRepository: widget.catalogRepository,
-      title: l10n.jobServicePickerTitle,
-      // Only service products: adding a screen as "labour" would bill it
-      // without moving any stock, and the phone on the bench would still be
-      // waiting for a part the system thinks was fitted.
-      where: (variant) => variant.isService,
-      emptyMessage: l10n.jobNoServiceProductsMessage,
+    final draft = await showDialog<JobServiceDraft>(
+      context: context,
+      builder: (_) =>
+          JobLaborDialog(catalogRepository: widget.catalogRepository),
     );
-    if (variant == null || !mounted) {
+    if (draft == null || !mounted) {
       return;
     }
-    final added = await widget.viewModel.addService(
-      JobServiceDraft(variant: variant.id),
-    );
+    final added = await widget.viewModel.addService(draft);
     if (!added && mounted) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.operationsActionError)),
@@ -2051,12 +1989,14 @@ class _TimelineEntry extends StatelessWidget {
 class _MaterialRow extends StatelessWidget {
   const _MaterialRow({
     required this.material,
+    required this.refundedOnInvoice,
     required this.canReverse,
     required this.isBusy,
     required this.onReverse,
   });
 
   final JobMaterial material;
+  final bool refundedOnInvoice;
   final bool canReverse;
   final bool isBusy;
   final VoidCallback onReverse;
@@ -2072,6 +2012,8 @@ class _MaterialRow extends StatelessWidget {
         : material.variantName;
     final (statusLabel, statusColor) = material.reversedAt != null
         ? (l10n.materialReversedBadge, colors.mutedInk)
+        : refundedOnInvoice
+        ? (l10n.materialRefundedBadge, colors.accentAmber)
         : material.isConsumed
         ? (l10n.materialConsumedBadge, colors.success)
         : (l10n.materialPendingBadge, colors.warning);

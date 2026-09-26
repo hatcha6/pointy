@@ -476,11 +476,12 @@ class StockUnitViewSet(
             )
             # Two per-row queries hide behind two innocent-looking properties:
             # ``variant.full_name`` reads the option values, and the invoice's
-            # ``balance_due`` sums its payments in Python. Both are cheap once
-            # and a query per handset otherwise.
+            # ``balance_due`` sums its payments and returns in Python. Both are
+            # cheap once and a query per handset otherwise.
             .prefetch_related(
                 "variant__option_values__option",
                 "sold_order_line__order__payments",
+                "sold_order_line__order__adjustments",
             )
             .order_by("sold_at", "id")
         )

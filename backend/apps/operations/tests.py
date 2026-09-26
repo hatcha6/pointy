@@ -21,6 +21,10 @@ from apps.core.roles import (
     pointy_domain_data_exists,
 )
 from apps.customers.models import Asset, AssetType, Customer
+from apps.documents import trail
+from apps.documents.models import DocumentEvent
+from apps.documents.reconciliation import reconcile_lifecycles
+from apps.documents.statuses import DocumentStatus
 from apps.employees.models import Employee
 from apps.inventory.models import StockItem
 from apps.purchasing.models import PurchaseLine, PurchaseOrder, Supplier
@@ -152,32 +156,33 @@ class JobLifecycleTests(OperationsTestCase):
         self.assertEqual(job.current_stage.code, "diagnosing")
         self.assertEqual(job.stage_events.count(), 2)
 
-    def test_skip_and_backward_transitions_require_manager(self):
+    def test_any_stage_is_reachable_by_whoever_can_change_the_job(self):
+        # Skipping ahead and stepping back used to be a manager's correction.
+        # A counter that has to click through every stage to record a phone
+        # that is already fixed stops keeping the board current, so any stage
+        # is a move — the gates it passes still hold (test_counter_workflow).
         client = authenticated_client(self.technician)
         data = self.create_repair_job(client=client)
         job = Job.objects.get(pk=data["id"])
+        client.patch(
+            reverse("job-detail", args=[job.pk]),
+            {"approved_price": "100.00"},
+            format="json",
+        )
 
         skip = client.post(
             reverse("job-transition", args=[job.pk]),
             {"to_stage": stage(job.workflow_template, "repairing").pk},
             format="json",
         )
-        self.assertEqual(skip.status_code, status.HTTP_400_BAD_REQUEST)
-
-        manager_client = authenticated_client(self.manager)
-        manager_skip = manager_client.post(
-            reverse("job-transition", args=[job.pk]),
-            {"to_stage": stage(job.workflow_template, "repairing").pk},
-            format="json",
-        )
-        self.assertEqual(manager_skip.status_code, status.HTTP_200_OK)
+        self.assertEqual(skip.status_code, status.HTTP_200_OK, skip.data)
 
         backward = client.post(
             reverse("job-transition", args=[job.pk]),
             {"to_stage": stage(job.workflow_template, "received").pk},
             format="json",
         )
-        self.assertEqual(backward.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(backward.status_code, status.HTTP_200_OK, backward.data)
 
     def test_approval_gate_blocks_forward_until_price_approved(self):
         client = authenticated_client(self.manager)
@@ -213,6 +218,14 @@ class JobLifecycleTests(OperationsTestCase):
         client = authenticated_client(self.manager)
         data = self.create_repair_job(client=client)
         job = Job.objects.get(pk=data["id"])
+        # Jumping straight to the end passes the approval gate, which wants a
+        # price; zero is a real one (a warranty repair), and leaves nothing to
+        # settle at the handover.
+        client.patch(
+            reverse("job-detail", args=[job.pk]),
+            {"approved_price": "0.00"},
+            format="json",
+        )
         response = client.post(
             reverse("job-transition", args=[job.pk]),
             {"to_stage": stage(job.workflow_template, "delivered").pk},
@@ -1437,6 +1450,94 @@ class JobSettlementAndCustodyTests(OperationsTestCase):
         job = Job.objects.get(pk=data["id"])
         self.assertEqual(job.order.balance_due, Decimal("150.00"))
         self.assertEqual(job.settlement_state, "credit_open")
+        self.assertEqual(job.order.doc_status, DocumentStatus.SUBMITTED)
+
+    def issue_credit_invoice(self, method="cash"):
+        """A 150.00 repair on آجل with 50.00 down, issued by the cashier."""
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        self.open_register(self.cashier)
+        invoiced = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "sale_type": "credit",
+                "payments": [{"method": method, "amount": "50.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(invoiced.status_code, status.HTTP_200_OK, invoiced.data)
+        return client, Job.objects.get(pk=data["id"])
+
+    def test_credit_invoice_is_issued_at_once_not_when_it_is_paid(self):
+        # It used to stay a draft until paid in full, and a draft's payments are
+        # refused as though its invoice had been voided.
+        _, job = self.issue_credit_invoice()
+
+        order = job.order
+        self.assertEqual(order.doc_status, DocumentStatus.SUBMITTED)
+        self.assertEqual(order.status, Order.Status.OPEN)
+        self.assertEqual(order.submitted_by, self.cashier)
+        self.assertTrue(
+            trail.history(order)
+            .filter(action=DocumentEvent.Action.SUBMITTED, actor=self.cashier)
+            .exists()
+        )
+
+    def test_credit_invoice_down_payment_can_be_cancelled_and_is_owed_again(self):
+        # A transfer, as in the business simulation that found this. Giving one
+        # back needs no drawer, so the manager needs no register of their own.
+        _, job = self.issue_credit_invoice(method="transfer")
+
+        cancelled = authenticated_client(self.manager).post(
+            reverse("payment-cancel", args=[job.order.payments.get().pk]),
+            {"reason": "الحوالة لم تصل"},
+            format="json",
+        )
+
+        self.assertEqual(cancelled.status_code, status.HTTP_200_OK, cancelled.data)
+        job = Job.objects.get(pk=job.pk)
+        self.assertEqual(job.order.amount_paid, Decimal("0.00"))
+        self.assertEqual(job.order.balance_due, Decimal("150.00"))
+        self.assertEqual(job.order.status, Order.Status.OPEN)
+        self.assertEqual(job.settlement_state, "credit_open")
+
+    def test_a_draft_an_older_backend_left_is_issued_on_upgrade(self):
+        client, job = self.issue_credit_invoice()
+        order = job.order
+        # What the older code left behind: the same invoice, never submitted,
+        # issued in a month the shop has since closed.
+        issued_at = timezone.now() - timedelta(days=60)
+        Order.objects.filter(pk=order.pk).update(
+            doc_status=DocumentStatus.DRAFT, submitted_at=None, submitted_by=None
+        )
+        Order.objects.filter(pk=order.pk).update(created_at=issued_at)
+        settings_row = ShopSettings.load()
+        settings_row.books_locked_through = timezone.localdate() - timedelta(days=30)
+        settings_row.save(update_fields=["books_locked_through"])
+
+        def collect_the_rest():
+            return client.post(
+                reverse("order-record-payment", args=[order.pk]),
+                {"method": "cash", "amount": "100.00"},
+                format="json",
+            )
+
+        # Its last collection has to submit it, dated to that closed month —
+        # which a cashier cannot override.
+        self.assertEqual(collect_the_rest().status_code, status.HTTP_403_FORBIDDEN)
+
+        reconcile_lifecycles()
+
+        order.refresh_from_db()
+        self.assertEqual(order.doc_status, DocumentStatus.SUBMITTED)
+        self.assertEqual(order.submitted_at, issued_at)
+        self.assertEqual(reconcile_lifecycles(), 0)
+        collected = collect_the_rest()
+        self.assertEqual(collected.status_code, status.HTTP_201_CREATED, collected.data)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PAID)
 
     def test_standard_invoice_still_demands_the_full_amount(self):
         client = authenticated_client(self.cashier)

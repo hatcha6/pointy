@@ -97,8 +97,13 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
       _capabilities.canAdjustPurchaseOrder && _order.canRefund;
   bool get canExchange =>
       _capabilities.canAdjustPurchaseOrder && _order.canExchange;
+
+  /// Owing the supplier is not enough: the payment is its own permission,
+  /// which a buyer who runs the rest of the order does not hold by default.
   bool get canRecordPayment =>
-      _order.supplierId != null && _order.balanceDue > 0.005;
+      _capabilities.canRecordSupplierPayment &&
+      _order.supplierId != null &&
+      _order.balanceDue > 0.005;
 
   Future<bool> printOrder() async {
     if (_isPrinting) {

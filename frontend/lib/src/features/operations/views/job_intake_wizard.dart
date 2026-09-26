@@ -12,6 +12,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/operations_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/api_session.dart' show PosApiException;
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
@@ -36,11 +37,17 @@ class JobIntakeWizard extends StatefulWidget {
     required this.boardViewModel,
     required this.contactRepository,
     required this.operationsRepository,
+    this.canCreateCustomers = true,
     this.shopSettingsRepository,
     this.printActions,
   });
 
   final WorkflowTemplate template;
+
+  /// Whether this person may register a new customer. Without it the wizard
+  /// still takes a device in for someone already on file, and says who can add
+  /// a new one — rather than offering a form the server will refuse.
+  final bool canCreateCustomers;
   final JobsBoardViewModel boardViewModel;
   final ContactRepository contactRepository;
   final OperationsRepository operationsRepository;
@@ -72,6 +79,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   final _newCustomerPhoneController = TextEditingController();
   var _showCustomerValidation = false;
   var _customerCreateFailed = false;
+  var _customerCreateForbidden = false;
 
   // Step 2 — device.
   List<CustomerAsset> _customerAssets = const [];
@@ -291,7 +299,10 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
 
   Future<void> _onPrimaryPressed() async {
     if (_step == 0) {
-      setState(() => _customerCreateFailed = false);
+      setState(() {
+        _customerCreateFailed = false;
+        _customerCreateForbidden = false;
+      });
       final customer = await _resolveCustomer();
       if (customer == null) {
         setState(() => _showCustomerValidation = true);
@@ -346,7 +357,12 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
           },
         ),
         SizedBox(height: spacing.sm),
-        if (_customerCreateFailed)
+        if (_customerCreateForbidden)
+          PointyInlineMessage.error(
+            message: l10n.intakeCustomerCreateForbidden,
+            icon: Icons.lock_outline,
+          )
+        else if (_customerCreateFailed)
           PointyInlineMessage.error(
             message: l10n.intakeCustomerCreateError,
             icon: Icons.cloud_off_outlined,
@@ -394,7 +410,12 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
             ),
           ),
         SizedBox(height: spacing.sm),
-        if (!_creatingCustomer)
+        if (!widget.canCreateCustomers)
+          PointyInlineMessage(
+            message: l10n.intakeNewCustomerNotAllowed,
+            icon: Icons.person_add_disabled_outlined,
+          )
+        else if (!_creatingCustomer)
           OutlinedButton.icon(
             onPressed: () => setState(() {
               _creatingCustomer = true;
@@ -466,11 +487,18 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
     switch (result) {
       case Ok<Customer>(value: final customer):
         return customer;
-      case Error<Customer>():
+      case Error<Customer>(:final exception):
         // The clerk filled the form correctly; the server is what failed.
-        // Falling through to "pick a customer" would blame them for it.
+        // Falling through to "pick a customer" would blame them for it — and
+        // a refusal is not a dropped connection, so it is not called one.
         if (mounted) {
-          setState(() => _customerCreateFailed = true);
+          setState(() {
+            if (exception is PosApiException && exception.statusCode == 403) {
+              _customerCreateForbidden = true;
+            } else {
+              _customerCreateFailed = true;
+            }
+          });
         }
         return null;
     }

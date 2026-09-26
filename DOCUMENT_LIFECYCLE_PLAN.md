@@ -555,6 +555,41 @@ to fifteen aggregation sites across treasury, reports, the dashboard, the
 register summary and the supplier balance — including the batched balance
 primer, which now has a test asserting it agrees with the property it replaces).
 
+**Correction (2026-09-26): both halves of that were wrong somewhere.** A
+payment's opposing row did *not* net the drawer. `cash_sales_total` counts
+positive rows only, to keep a refund's negative rows out (a refund reaches the
+drawer through `cash_amount`), so a cancelled cash payment never left the
+drawer that handed it back and that shift closed short by the amount. It now
+counts through `Payment.reverses`, a link only the cancellation writes — never
+through the `cancel:<pk>` reference, which anyone taking a payment can type.
+And a drawer-paid expense, POS cash purchase or consignor payout *does* mix the
+two styles: it stops counting and writes a pay-in. The money position excluded
+the pay-out the retracted document had claimed and counted the pay-in, so the
+cash box read richer by every amount ever cancelled; a pay-out now stands alone
+again once its document is cancelled (`treasury.position.claimed_by_live`).
+Tests: `payments/test_cancelled_payment_drawer.py`, `treasury/tests.py`
+`RetractionTests`.
+
+**Decision (2026-09-26): a cash sale's payment is not cancelled out from under
+it.** Cancelling it left the sale `open` + `submitted`, a state in none of
+`committed_sales()`, `transactional()`, `open_credit()` or the two `*_sale_q`
+helpers. The sale left the Z-report (a closed shift's included), the dashboard,
+every report, aging and the customer's history, while its stock stayed issued
+and `void_order`/`return_order_items` refused it as unpaid. §5.1 gives a
+receivable to credit invoices only, and a walk-in sale has nobody to owe it, so
+the cancel is refused (`cash_sale_payment_not_cancellable`) whenever it would
+leave a standard sale short. A cancel that leaves it settled still works. The
+goods go back by a void or a return. A payment taken through the wrong tender
+is moved by `payments.services.replace_payment` (`POST
+/api/payments/{id}/replace/`), which takes the new tenders first and then
+cancels the old one, so the sale is briefly over-settled and never unpaid.
+Credit invoices keep the old rule: a cancelled collection is owed again. For
+every sale type, a payment cannot be given back beyond what its tender still
+holds on the order (`payment_already_given_back`). That stops a returned
+sale's money from being refunded a second time. The oracle cancels and replaces
+customer payments and counts all four outcomes. Tests:
+`payments/test_cancel_and_replace.py`.
+
 The frontend followed for the one verb it actually used: the expenses screen's
 delete became a retraction with a reason box, and its strings say so in Arabic.
 1,297 Flutter tests still pass.

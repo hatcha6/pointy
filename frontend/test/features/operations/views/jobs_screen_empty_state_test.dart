@@ -100,7 +100,6 @@ void main() {
 
       expect(viewModel.searchQuery, isEmpty);
       expect(viewModel.assignedToMe, isFalse);
-      expect(viewModel.jobTypeFilter, isNull);
       expect(viewModel.hasActiveFilters, isFalse);
       // The search box owns its own controller, so the cleared term has to
       // disappear from the field as well as from the query.

@@ -94,6 +94,7 @@ class JobMaterial {
     required this.unitPrice,
     required this.lineTotal,
     required this.isConsumed,
+    this.isBilled,
     this.consumedAt,
     this.reversedAt,
     this.createdAt,
@@ -109,11 +110,20 @@ class JobMaterial {
   final double unitPrice;
   final double lineTotal;
   final bool isConsumed;
+
+  /// Charged on the job's live invoice. Null from a server that predates the
+  /// field, where every part of an invoiced job is still charged.
+  final bool? isBilled;
   final DateTime? consumedAt;
   final DateTime? reversedAt;
   final DateTime? createdAt;
 
   bool get isReversed => reversedAt != null;
+
+  /// Refunded on the invoice while still fitted: the customer has had the
+  /// money back, and the part is the job's to put back on the shelf.
+  bool refundedOnInvoice({required bool jobIsInvoiced}) =>
+      jobIsInvoiced && isConsumed && isBilled == false;
 
   factory JobMaterial.fromJson(Map<String, Object?> json) {
     return JobMaterial(
@@ -127,6 +137,7 @@ class JobMaterial {
       unitPrice: _moneyFromJson(json['unit_price']),
       lineTotal: _moneyFromJson(json['line_total']),
       isConsumed: json['is_consumed'] == true,
+      isBilled: json['is_billed'] as bool?,
       consumedAt: _dateTimeFromJson(json['consumed_at']),
       reversedAt: _dateTimeFromJson(json['reversed_at']),
       createdAt: _dateTimeFromJson(json['created_at']),
@@ -209,6 +220,7 @@ class JobServiceLine {
     required this.unitPrice,
     required this.lineTotal,
     this.note = '',
+    this.isLabor = false,
     this.createdAt,
   });
 
@@ -220,7 +232,21 @@ class JobServiceLine {
   final double unitPrice;
   final double lineTotal;
   final String note;
+
+  /// Labour typed at the counter rather than a catalog service: its [note] is
+  /// what the work was, so it is the line's name, not a remark under one.
+  final bool isLabor;
   final DateTime? createdAt;
+
+  /// What the line is called on screen.
+  String get title {
+    if (isLabor && note.trim().isNotEmpty) {
+      return note.trim();
+    }
+    return variantName.trim().isEmpty
+        ? productName
+        : '$productName — $variantName';
+  }
 
   factory JobServiceLine.fromJson(Map<String, Object?> json) {
     return JobServiceLine(
@@ -232,6 +258,7 @@ class JobServiceLine {
       unitPrice: _moneyFromJson(json['unit_price']),
       lineTotal: _moneyFromJson(json['line_total']),
       note: json['note']?.toString() ?? '',
+      isLabor: json['is_labor'] == true,
       createdAt: _dateTimeFromJson(json['created_at']),
     );
   }
@@ -322,6 +349,7 @@ class OperationsJob {
     this.orderSaleType = '',
     this.currentStageDetails,
     this.nextStage,
+    this.workflowStages = const [],
     this.customer,
     this.assignedTo,
     this.assignedEmployee,
@@ -348,6 +376,11 @@ class OperationsJob {
   final int currentStage;
   final WorkflowStage? currentStageDetails;
   final WorkflowStage? nextStage;
+
+  /// Every stage of this job's workflow, in order. Only a single job carries
+  /// it — the job screen, which can move a job to any of them. Empty on a
+  /// board row: the board has the workflows already.
+  final List<WorkflowStage> workflowStages;
   final OperationsJobStatus status;
   final int? customer;
   final String customerName;
@@ -437,6 +470,7 @@ class OperationsJob {
     final materialsJson = (json['materials'] as List<Object?>?) ?? const [];
     final eventsJson = (json['stage_events'] as List<Object?>?) ?? const [];
     final servicesJson = (json['services'] as List<Object?>?) ?? const [];
+    final stagesJson = (json['workflow_stages'] as List<Object?>?) ?? const [];
 
     return OperationsJob(
       id: json['id'] as int,
@@ -452,6 +486,10 @@ class OperationsJob {
       nextStage: json['next_stage'] is Map<String, Object?>
           ? WorkflowStage.fromJson(json['next_stage'] as Map<String, Object?>)
           : null,
+      workflowStages: stagesJson
+          .whereType<Map<String, Object?>>()
+          .map(WorkflowStage.fromJson)
+          .toList(growable: false),
       status: OperationsJobStatus.fromJson(json['status']),
       customer: _nullableIntFromJson(json['customer']),
       customerName: json['customer_name']?.toString() ?? '',
@@ -635,22 +673,30 @@ class JobInvoiceDraft {
 }
 
 /// Adding priced work to a job.
+///
+/// Without a [variant] it is labour typed at the counter — [note] says what
+/// the work was and [unitPrice] what it costs — billed under the shop's one
+/// labour service. With one, [unitPrice] is the price agreed for this job when
+/// it differs from the catalog's.
 class JobServiceDraft {
   const JobServiceDraft({
-    required this.variant,
+    this.variant,
     this.quantity = 1,
     this.note = '',
+    this.unitPrice,
   });
 
-  final int variant;
+  final int? variant;
   final double quantity;
   final String note;
+  final double? unitPrice;
 
   Map<String, Object?> toJson() {
     return {
-      'variant': variant,
+      if (variant != null) 'variant': variant,
       'quantity': quantity.toStringAsFixed(3),
       if (note.trim().isNotEmpty) 'note': note.trim(),
+      if (unitPrice != null) 'unit_price': unitPrice!.toStringAsFixed(2),
     };
   }
 }

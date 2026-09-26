@@ -1385,13 +1385,14 @@ String _formatDateOnly(Object? value) {
 }
 
 /// Arabic money-status text for a thermal slip, keyed on the server's
-/// `payment_status` (`paid` | `partial` | `unpaid` | `quotation`).
+/// `payment_status` (`paid` | `partial` | `unpaid` | `quotation` | `void`).
 String _saleStatusText(String paymentStatus) {
   return switch (paymentStatus) {
     'paid' => 'مدفوعة بالكامل',
     'partial' => 'مدفوعة جزئيًا',
     'unpaid' => 'آجل — غير مدفوعة',
     'quotation' => 'عرض سعر',
+    'void' => 'ملغاة',
     _ => '',
   };
 }

@@ -6645,8 +6645,26 @@ abstract class AppLocalizations {
   /// No description provided for @jobsEmptyMessage.
   ///
   /// In ar, this message translates to:
-  /// **'المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.'**
+  /// **'المهمة هي أي عمل تتابعه خطوة بخطوة حتى يكتمل. أنشئ أول مهمة وسيظهر مسارها هنا.'**
   String get jobsEmptyMessage;
+
+  /// No description provided for @jobsLaneEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مهام مفتوحة هنا الآن.'**
+  String get jobsLaneEmptyMessage;
+
+  /// No description provided for @jobsNoWorkTypesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد نوع عمل مفعّل'**
+  String get jobsNoWorkTypesTitle;
+
+  /// No description provided for @jobsNoWorkTypesMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُفعَّل التصليح ولا الإنتاج ولا المطبخ لهذا المحل. يفعّلها المدير من الإعدادات ← العمليات.'**
+  String get jobsNoWorkTypesMessage;
 
   /// No description provided for @newJobButton.
   ///
@@ -6816,11 +6834,35 @@ abstract class AppLocalizations {
   /// **'انتقلت المهمة إلى «{stageName}».'**
   String jobStageChangedMessage(String stageName);
 
-  /// No description provided for @jobManagerOnlyMoveHint.
+  /// No description provided for @jobMoveToStageHint.
   ///
   /// In ar, this message translates to:
-  /// **'الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.'**
-  String get jobManagerOnlyMoveHint;
+  /// **'اختر المرحلة التي وصل إليها العمل فعلًا — للأمام بأكثر من خطوة، أو للخلف إذا احتاج الجهاز إعادة.'**
+  String get jobMoveToStageHint;
+
+  /// No description provided for @jobStageCurrentBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرحلة الحالية'**
+  String get jobStageCurrentBadge;
+
+  /// No description provided for @jobChangeStageButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير المرحلة'**
+  String get jobChangeStageButton;
+
+  /// No description provided for @jobMoveNeedsApprovalMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه النقلة تتجاوز مرحلة موافقة الزبون. سجّل السعر الذي وافق عليه لتكمل.'**
+  String get jobMoveNeedsApprovalMessage;
+
+  /// No description provided for @jobOpenAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح المهمة'**
+  String get jobOpenAction;
 
   /// No description provided for @jobCustomerSection.
   ///
@@ -6905,6 +6947,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أُرجعت للمخزون'**
   String get materialReversedBadge;
+
+  /// No description provided for @materialRefundedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'استُرد ثمنها'**
+  String get materialRefundedBadge;
 
   /// No description provided for @reverseMaterialAction.
   ///
@@ -7163,6 +7211,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.'**
   String get intakeCustomerCreateError;
+
+  /// No description provided for @intakeCustomerCreateForbidden.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تملك صلاحية إضافة العملاء. اطلبها من المدير، أو اختر زبونًا مسجلًا.'**
+  String get intakeCustomerCreateForbidden;
+
+  /// No description provided for @intakeNewCustomerNotAllowed.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة زبون جديد تحتاج صلاحية «إضافة العملاء». اختر زبونًا مسجلًا، أو اطلب الصلاحية من المدير.'**
+  String get intakeNewCustomerNotAllowed;
 
   /// No description provided for @intakeSelectAssetHint.
   ///
@@ -7686,11 +7746,65 @@ abstract class AppLocalizations {
   /// **'الخدمات والأعمال'**
   String get jobServicesSectionTitle;
 
-  /// No description provided for @jobAddServiceButton.
+  /// No description provided for @jobAddLaborButton.
   ///
   /// In ar, this message translates to:
-  /// **'إضافة خدمة'**
-  String get jobAddServiceButton;
+  /// **'إضافة أجور'**
+  String get jobAddLaborButton;
+
+  /// No description provided for @jobLaborDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجور عمل'**
+  String get jobLaborDialogTitle;
+
+  /// No description provided for @jobLaborDescriptionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصف العمل'**
+  String get jobLaborDescriptionLabel;
+
+  /// No description provided for @jobLaborNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get jobLaborNoteLabel;
+
+  /// No description provided for @jobLaborDescriptionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: تبديل شاشة'**
+  String get jobLaborDescriptionHint;
+
+  /// No description provided for @jobLaborDescriptionRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب ما هو العمل.'**
+  String get jobLaborDescriptionRequired;
+
+  /// No description provided for @jobLaborPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر'**
+  String get jobLaborPriceLabel;
+
+  /// No description provided for @jobLaborPriceRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل سعرًا صحيحًا.'**
+  String get jobLaborPriceRequired;
+
+  /// No description provided for @jobLaborPickServiceButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو اختر خدمة من الكتالوج'**
+  String get jobLaborPickServiceButton;
+
+  /// No description provided for @jobLaborAddConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة'**
+  String get jobLaborAddConfirm;
 
   /// No description provided for @jobServicesTotalLabel.
   ///
@@ -8555,6 +8669,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.'**
   String get productionNoRecipesMessage;
+
+  /// No description provided for @productionRecipesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الوصفات. قد لا تملك صلاحية عرضها.'**
+  String get productionRecipesLoadError;
 
   /// No description provided for @recipesTitle.
   ///
@@ -29460,6 +29580,12 @@ abstract class AppLocalizations {
   /// **'أضف صندوقًا نقديًا أو حسابًا مصرفيًا لتتابع أموال المحل.'**
   String get treasuryEmptyMessage;
 
+  /// Empty state message for someone who may read the money position but not add accounts to it. Names the permission as the permissions editor labels it.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُضَف أي حساب بعد. إضافة صندوق نقدي أو حساب مصرفي تحتاج صلاحية «إضافة حسابات» — اطلبها من المدير.'**
+  String get treasuryEmptyReadOnlyMessage;
+
   /// Error state title for the money position screen.
   ///
   /// In ar, this message translates to:
@@ -29591,6 +29717,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تحويلات صادرة'**
   String get treasuryComponentTransferOut;
+
+  /// Breakdown line and movement row on a provider float (LNET, HD Box): what the provider has drawn from the float for the top-ups it performed. Same wording as the reports' integration_draw label.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب مزوّد الخدمة'**
+  String get treasuryComponentIntegrationDraw;
+
+  /// Breakdown line: money handed to the owners of consigned goods the shop sold for them. Same wording as the reports' consignor_payout label.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعات أصحاب الأمانات'**
+  String get treasuryComponentConsignorPayout;
 
   /// Note making the payroll routing assumption visible and correctable.
   ///
@@ -31344,6 +31482,12 @@ abstract class AppLocalizations {
   /// **'كل المخزون في {name}. أضف مخزناً أو مستودعاً إذا كنت تحتفظ ببضاعة في مكان آخر.'**
   String warehousesEmptyBody(String name);
 
+  /// The one-place callout for someone who may not add a place, so it states the fact without inviting them to add one.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المخزون في {name}.'**
+  String warehousesEmptyBodyReadOnly(String name);
+
   /// No description provided for @warehousesAddAction.
   ///
   /// In ar, this message translates to:
@@ -31560,12 +31704,6 @@ abstract class AppLocalizations {
   /// **'هذا الصندوق يبيع الآن من {name}'**
   String registerWarehouseSaved(String name);
 
-  /// No description provided for @registerWarehouseManagerOnly.
-  ///
-  /// In ar, this message translates to:
-  /// **'تغيير مكان الصندوق يحتاج صلاحية مدير.'**
-  String get registerWarehouseManagerOnly;
-
   /// No description provided for @warehousesSectionTitle.
   ///
   /// In ar, this message translates to:
@@ -31583,6 +31721,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'التحويلات'**
   String get transfersTitle;
+
+  /// Navigation drawer, rail and command palette entry for stock transfers between the shop's places. Says «البضاعة» because the treasury also records money transfers.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويلات البضاعة'**
+  String get transfersDrawerLabel;
 
   /// No description provided for @transfersSectionTitle.
   ///

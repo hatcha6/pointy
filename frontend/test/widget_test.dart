@@ -3370,6 +3370,22 @@ void main() {
 
     expect(find.text('إعدادات الجهاز'), findsWidgets);
     expect(find.text('استخدام الجهاز'), findsOneWidget);
+
+    // App updates and the other device sections come first, so the printers
+    // start below the fold; scroll them into view (building the lazy ListView
+    // item) before reading them.
+    final deviceSettingsScrollable = find
+        .ancestor(
+          of: find.text('استخدام الجهاز'),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('الطابعات'),
+      240,
+      scrollable: deviceSettingsScrollable,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('الطابعات'), findsOneWidget);
     expect(find.text('ماذا يُطبع وأين'), findsOneWidget);
     expect(find.text('تفعيل وكيل الطباعة المحلي'), findsNothing);

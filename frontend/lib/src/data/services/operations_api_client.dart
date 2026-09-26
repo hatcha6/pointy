@@ -1,5 +1,6 @@
 import '../models/bill_of_materials.dart';
 import '../models/customer_asset.dart';
+import '../models/employee.dart';
 import '../models/operations_job.dart';
 import '../models/workflow.dart';
 import 'api_session.dart';
@@ -102,6 +103,25 @@ class OperationsApiClient {
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  /// Who a job can be given to: active employees, by name and title only.
+  ///
+  /// Its own endpoint rather than the employees list, which is the HR register
+  /// and needs a permission the counter that assigns work does not hold.
+  Future<List<Employee>> fetchJobAssignees() async {
+    final response = await _session.get('jobs/assignees/');
+    _session.ensureSuccess(
+      response,
+      'Job assignees request failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    return decoded is List<Object?>
+        ? decoded
+              .whereType<Map<String, Object?>>()
+              .map(Employee.fromJson)
+              .toList(growable: false)
+        : const [];
   }
 
   Future<OperationsJob> assignJob(int jobId, int? employeeId) async {

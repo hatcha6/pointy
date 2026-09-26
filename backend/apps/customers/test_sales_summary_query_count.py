@@ -149,9 +149,11 @@ class CustomerSalesSummaryQueryCountTests(APITestCase):
 
         # Two reads of sales_order: the folded aggregate, plus the separate
         # open-debt pass whose balance is summed in Python (``Order.balance_due``
-        # stays the single implementation of that arithmetic).
+        # stays the single implementation of that arithmetic). Two of the
+        # adjustments for the same reason: the folded aggregate, plus that
+        # pass's prefetch — the balance is net of what came back.
         self.assertEqual(self._table_hits("sales_order"), 2)
-        self.assertEqual(self._table_hits("sales_orderadjustment"), 1)
+        self.assertEqual(self._table_hits("sales_orderadjustment"), 2)
 
     def test_summary_query_count_stays_flat_as_history_grows(self):
         self._seed_every_order_shape()
@@ -166,8 +168,9 @@ class CustomerSalesSummaryQueryCountTests(APITestCase):
         # 8 → 9 when the summary began reporting the credit ceiling: one
         # constant ShopSettings read (per-request cached in production), not a
         # query that grows with history — which is what the equality above and
-        # this ceiling together are guarding.
-        self.assertLessEqual(large_count, 9)
+        # this ceiling together are guarding. 9 → 10 when the balance began
+        # netting returns: the open-debt pass prefetches them beside payments.
+        self.assertLessEqual(large_count, 10)
 
     def test_summary_values_cover_every_order_and_adjustment_shape(self):
         self._seed_every_order_shape()
