@@ -71,10 +71,11 @@ ENTITY_PLAN: tuple[EntitySpec, ...] = (
         canonical.CanonicalPurchaseOrder,
         (SUPPLIER, VARIANT),
     ),
-    # What each party owes (or is owed) carried as a balance in its own right,
-    # rather than as the arithmetic of invoices nobody asked for. Placed before
-    # the transactional entities so an opening document exists before any
-    # receipt tries to allocate against it.
+    # What each party owes (or is owed) carried as a balance entry in its own
+    # right, rather than as the arithmetic of invoices nobody asked for. Placed
+    # before the transactional entities so an opening debt exists before any
+    # receipt tries to allocate against it. A run carrying the history brings
+    # it along without being asked (``scopes.with_party_balances``).
     EntitySpec(
         PARTY_BALANCE,
         "Customer & supplier balances",

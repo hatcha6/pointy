@@ -94,6 +94,39 @@ def resolve_party_balance_basis(options, entities) -> str:
     return BASIS_OPENING if selected & _BALANCE_MOVING_ENTITIES else BASIS_CURRENT
 
 
+def with_party_balances(selection: Selection, available) -> Selection:
+    """Bring the opening balances along with the history that moves them.
+
+    Invoices and receipts only add up to what a party owes if they start from
+    what the party already owed; without it, every customer whose debt predates
+    the file is short by exactly that debt. So a run that carries any of the
+    history, from a source that can say what each party opened on, carries
+    those balances too — as balance entries, never as documents in the sales or
+    purchase stream.
+
+    Added *without* its dependencies: it is the history's companion, not a
+    reason to import parties nobody asked for. The connector writes a balance
+    only for the kind of party that is in the run (``KassConnector
+    ._party_balances``), so "sales only" opens the customers and leaves the
+    suppliers alone.
+    """
+    entities = set(selection.entities)
+    if (
+        PARTY_BALANCE in entities
+        or PARTY_BALANCE not in set(available or ())
+        or not entities & _BALANCE_MOVING_ENTITIES
+    ):
+        return selection
+    entities.add(PARTY_BALANCE)
+    added = set(selection.added) | {PARTY_BALANCE}
+    return Selection(
+        entities=tuple(entity for entity in all_entity_types() if entity in entities),
+        requested=selection.requested,
+        added=tuple(entity for entity in all_entity_types() if entity in added),
+        unknown=selection.unknown,
+    )
+
+
 # --- named scopes ------------------------------------------------------------
 
 CUSTOM = "custom"

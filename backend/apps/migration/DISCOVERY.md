@@ -304,6 +304,33 @@ instead of duplicate.
 - Skip the non-data rows you found in section 2, and write down *why* in a
   comment. Those comments are the most re-read lines in the existing connectors.
 
+### What a party owed before the file — `PARTY_BALANCE`
+
+Most schemas keep a balance on the party card, often two: what the party was
+opened with and where it stands now (KASS: `FirstRasid` / `NawRasid`). Emit
+one `CanonicalPartyBalance` per party and kind, and let the importer write it as
+an **opening balance entry** (`apps.balances`) — never as an invoice or a
+purchase order against a placeholder item. That was the first design, and it
+booked every inherited debt as the import day's revenue and purchases, and
+could not say the shop owed anybody anything.
+
+- **`amount` is signed, from the side `party_kind` names.** Positive is the
+  usual way round (a customer owes the shop, the shop owes a supplier);
+  negative is credit (the shop owes a customer, a supplier owes the shop).
+  Convert from the source's own sign convention, and prove it from the data —
+  KASS's is "positive means the shop owes them", the opposite of a customer's.
+- **Read the figure `ctx.party_balance_basis` asks for** — `opening` when the
+  history that moves it is in the run, `current` when it is not
+  (`scopes.resolve_party_balance_basis`). The wrong one is silent and plausible.
+- **Emit zero too.** It is what withdraws the entry an earlier run wrote when a
+  shop switches scope; silence leaves both.
+- **Emit a kind only when `ctx.includes(CUSTOMER)` / `ctx.includes(SUPPLIER)`.**
+  A run that carries sales history gets the balances added without the other
+  kind of party (`scopes.with_party_balances`).
+- `as_of` is the day before the file's first document, so the debt does not
+  read as incurred on the day of the import, and a receipt in the history
+  settles it first.
+
 ### `analysis_tables` — the preview
 
 `{entity_type: (table, date_column_or_None)}`, read by `preparation/analyze.py`

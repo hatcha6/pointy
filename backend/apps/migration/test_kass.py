@@ -12,43 +12,61 @@ connector makes has a consequence something here can measure:
 * one آجل sale to a named customer, settled later by a receipt on their account
 * one sale to a named customer whose counter receipt was booked to the walk-in
   account — the case that decides whether the shop is owed the money
-* two parties carrying a balance from before the file's history begins
+* parties carrying a balance from before the file's history begins — both
+  ways round: customers and a supplier the shop owes, and a customer and a
+  supplier who are owed by it
 * a daily cash sweep, which must not be imported
 """
 
 import tempfile
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.balances.models import (
+    BalanceEntry,
+    CustomerBalanceEntry,
+    SupplierBalanceEntry,
+)
+from apps.balances.customers import create_customer_entry
 from apps.catalog.models import Product, ProductCategory, ProductVariant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
-from apps.customers.receivables import outstanding_balance
+from apps.customers.receivables import customer_balance, outstanding_balance
+from apps.documents import services as documents
+from apps.documents.models import DocumentNumberSeries
+from apps.documents.numbering import PARTY_BALANCE_SERIES
 from apps.documents.reconciliation import reconcile_lifecycles
 from apps.documents.statuses import DocumentStatus
 from apps.employees.models import CompensationPlan, Employee, PayrollRun
 from apps.expenses.models import Expense
 from apps.inventory.models import StockItem, StockLedgerEntry, StockValuationBin
 from apps.payments.models import Payment
-from apps.purchasing.models import PurchaseOrder, Supplier
+from apps.purchasing.models import PurchaseOrder, Supplier, SupplierCredit
 from apps.sales.models import Order, OrderAdjustment, RegisterSession
 from apps.treasury.models import MoneyAccount
 
-from . import canonical, storage
+from . import canonical, scopes, storage
 from .connectors import get_connector
 from .connectors.base import ExtractContext
-from .connectors.kass import OPENING_PRODUCT_NAME
+from .entity_plan import CUSTOMER, PARTY_BALANCE, PRODUCT, SALE, SUPPLIER, VARIANT
 from .identity import IdentityResolver
-from .loaders.sales import PaymentLoader
+from .loaders.base import LoaderError
+from .loaders.legacy_openings import OPENING_ITEM_KEY as LEGACY_OPENING_ITEM_KEY
+from .loaders.legacy_openings import OPENING_ITEM_NAME as LEGACY_OPENING_ITEM_NAME
+from .loaders.parties import IMPORT_NOTE, PartyBalanceLoader
+from .loaders.purchasing import PurchaseOrderLoader
+from .loaders.sales import PaymentLoader, SaleLoader
 from .models import MigrationIssue, MigrationRun, MigrationSource
 from .preparation import identify as identification
 from .preparation import mysqldump, pipeline
@@ -126,10 +144,16 @@ def _dump() -> str:
         ("مبيعات نقدية", 1, 0, 0, 1, None, 1, 1, 1, 1, None, None, None, 0, "2025-01-01", 1),
         ("أحمد علي", 2, -70, -50, 1, None, 1, 1, 1, 1, "0910000000", None, None, 0, "2025-01-01", 1),
         ("شركة التوريد", 3, 130, 100, 1, None, 1, 1, 1, 1, None, None, None, 0, "2025-01-01", 1),
-        # A balance and not one document: without an opening-balance document
-        # this customer's debt disappears on import.
+        # A balance and not one document: without an opening balance this
+        # customer's debt disappears on import.
         ("سالم", 4, -40, -40, 1, None, 1, 1, 1, 1, None, None, None, 0, "2025-01-01", 1),
         ("خالد", 5, -60, 0, 1, None, 1, 1, 1, 1, None, None, None, 0, "2025-01-01", 1),
+        # A customer the shop owes: 25 in credit from before the file, and a
+        # purchase paid at the counter since. An invoice cannot carry that.
+        ("منى", 6, 25, 25, 1, None, 1, 1, 1, 1, None, None, None, 0, "2025-01-01", 1),
+        # A supplier who owed the shop 35 — an advance — and has since
+        # delivered 20 of it.
+        ("مؤسسة الأمل", 7, -15, -35, 1, None, 1, 1, 1, 1, None, None, None, 0, "2025-01-01", 1),
     )
     insert(
         "kamhrka",
@@ -167,6 +191,12 @@ def _dump() -> str:
          None, 0, "2026-02-08 10:00:00", 16),
         ("2026-02-09", "930000003", 3, 1, "ret-clamp", 1, 2, 60, 60, 24, 0,
          None, 0, "2026-02-09 13:00:00", 16),
+        # منى buys a لصقة and pays for it there and then.
+        ("2026-02-05", "970000005", 7, 1, "sale-mona", 6, 2, 15, 15, 5, 0,
+         None, 0, "2026-02-05 16:00:00", 16),
+        # The advance being worked off: a delivery worth 20.
+        ("2026-02-03", "910000003", 1, 1, "buy-2", 7, 1, 20, 20, 20, 0,
+         None, 0, "2026-02-03 09:30:00", 16),
     )
     insert(
         "kammwad",
@@ -194,6 +224,10 @@ def _dump() -> str:
          "2026-02-08 10:00:00", 16, "1002", 1, "قطعة"),
         ("2026-02-09", 1, 8, "ret-clamp", 11, 3, 2, 0, 30, 12, 1, None,
          "2026-02-09 13:00:00", 16, "1002", 1, "قطعة"),
+        ("2026-02-05", 1, 9, "sale-mona", 10, 7, 1, 0, 15, 5, 1, None,
+         "2026-02-05 16:00:00", 16, "1001", 1, "قطعة"),
+        ("2026-02-03", 1, 10, "buy-2", 12, 1, 2, 0, 10, 10, 1, None,
+         "2026-02-03 09:30:00", 16, "1003", 1, "قطعة"),
     )
     insert(
         "edaahrka",
@@ -226,6 +260,9 @@ def _dump() -> str:
         # The daily cash sweep — the same dinars as the day's sales.
         (29, "8", 0, "2026-02-02", 30, 2, 1, None, "k-7", None, 0,
          "2026-02-02 21:00:00", 16, -1),
+        # منى's counter receipt, on her own account and naming her invoice.
+        (21, "9", 6, "2026-02-05", 15, 1, None, None, "k-8", "970000005", 0,
+         "2026-02-05 16:00:00", 16, -1),
     )
     insert(
         "aamldata",
@@ -261,6 +298,25 @@ def _literal(value) -> str:
     if isinstance(value, str):
         return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
     return str(value)
+
+
+#: Where every opening in the fixture is dated: the day before the cash box
+#: opened, which is the first thing in the file.
+OPENED_AT = date(2026, 1, 30)
+
+
+def _entry_numbers() -> dict:
+    """Every balance entry, by number, with whether it is still live."""
+    return {
+        entry.number: entry.doc_status
+        for model in (CustomerBalanceEntry, SupplierBalanceEntry)
+        for entry in model.objects.all()
+    }
+
+
+def _balance_numbers_issued() -> int:
+    series = DocumentNumberSeries.objects.filter(pk=PARTY_BALANCE_SERIES).first()
+    return series.last_value if series else 0
 
 
 class KassTestBase(MigrationTestBase):
@@ -450,7 +506,7 @@ class KassDetectionTests(KassTestBase):
         source = self.prepared_source()
         entities = source.analysis["entities"]
         self.assertEqual(entities["product"]["count"], 4)
-        self.assertEqual(entities["customer"]["count"], 5)
+        self.assertEqual(entities["customer"]["count"], 7)
         self.assertEqual(source.analysis["conversion"]["encoding"], "cp1256")
 
 
@@ -473,12 +529,11 @@ class KassCatalogueTests(KassTestBase):
         self.assertEqual(products["لصقة"].barcode, "1001")
         self.assertEqual(products["لصقة"].sku, "1001")
 
-    def test_the_opening_balance_item_keeps_no_stock(self):
-        opening = [
-            record for record in self.extract("product") if record.name == OPENING_PRODUCT_NAME
-        ]
-        self.assertEqual(len(opening), 1)
-        self.assertTrue(opening[0].is_service)
+    def test_the_catalogue_is_only_the_item_cards(self):
+        """No placeholder item to hang balances on: they are entries now."""
+        names = [record.name for record in self.extract("product")]
+        self.assertEqual(len(names), 4)
+        self.assertNotIn(LEGACY_OPENING_ITEM_NAME, names)
 
 
 class KassSalesTests(KassTestBase):
@@ -528,7 +583,7 @@ class KassSalesTests(KassTestBase):
         self.assertEqual(occurred.date().isoformat(), "2026-02-02")
         self.assertEqual(occurred.hour, 10)
 
-    def test_customers_who_only_have_a_balance_get_an_opening_invoice(self):
+    def test_customers_who_only_have_a_balance_get_an_opening_balance(self):
         balances = {
             record.source_key: record
             for record in self.extract("party_balance")
@@ -539,29 +594,39 @@ class KassSalesTests(KassTestBase):
         # Dated before the history, not on the day of the import.
         self.assertLess(opening.as_of.date().isoformat(), "2026-02-01")
 
-    def test_the_opening_documents_are_not_emitted_twice(self):
-        """PARTY_BALANCE owns them, so the sale stream must not repeat them.
+    def test_a_customer_the_shop_owes_comes_across_as_credit(self):
+        """KASS's sign says the shop owes منى 25. The record reads it from the
+        customer's side, where owing the shop is positive — so it is negative,
+        and not dropped, which is what the invoice-based design had to do."""
+        balances = {
+            record.source_key: record
+            for record in self.extract("party_balance")
+            if record.party_kind == "customer"
+        }
+        self.assertEqual(balances["opening:party:6"].amount, Decimal("-25.00"))
 
-        Both streams carrying the same ``opening:party:N`` key would load the
-        same debt through two entities — and because the key is stable, the
-        second would quietly *update* the first rather than fail, leaving a
-        number that looks right and a run that counted it twice.
-        """
-        openings = [
-            record
-            for record in self.extract("sale")
-            if record.source_key.startswith("opening:")
-        ]
-        self.assertEqual(openings, [])
+    def test_openings_never_ride_the_sale_stream(self):
+        """Whatever the scope. An opening debt is not a sale, and emitting it as
+        one put every inherited debt into the import day's revenue."""
+        for scope in (None, (SALE, CUSTOMER)):
+            openings = [
+                record
+                for record in self.extract("sale", scope=scope)
+                if record.source_key.startswith("opening:")
+            ]
+            self.assertEqual(openings, [], msg=f"scope={scope}")
 
-    def test_openings_come_back_to_the_sale_stream_when_nothing_else_carries_them(self):
-        """A scope that asks for sales without balances still gets the debts."""
-        openings = [
-            record
-            for record in self.extract("sale", scope=("sale", "customer"))
-            if record.source_key.startswith("opening:")
-        ]
-        self.assertTrue(openings)
+    def test_only_the_kinds_of_party_in_the_run_get_a_balance(self):
+        """A run with the sales history and no suppliers still opens its
+        customers (``scopes.with_party_balances``), and writes nothing for a
+        supplier it has nowhere to put."""
+        kinds = {
+            record.party_kind
+            for record in self.extract(
+                "party_balance", scope=(SALE, CUSTOMER, PARTY_BALANCE)
+            )
+        }
+        self.assertEqual(kinds, {"customer"})
 
     def test_a_return_is_matched_to_the_sale_it_came_off(self):
         matched = {
@@ -620,13 +685,21 @@ class KassMoneyTests(KassTestBase):
         self.assertNotIn("buy-empty", orders)
         self.assertIn("buy-1", orders)
 
-    def test_suppliers_owed_from_before_get_an_opening_order(self):
+    def test_suppliers_owed_from_before_get_an_opening_balance(self):
         balances = {
             record.source_key: record
             for record in self.extract("party_balance")
             if record.party_kind == "supplier"
         }
         self.assertEqual(balances["opening:party:3"].amount, Decimal("100.00"))
+
+    def test_a_supplier_who_owes_the_shop_comes_across_as_credit(self):
+        balances = {
+            record.source_key: record
+            for record in self.extract("party_balance")
+            if record.party_kind == "supplier"
+        }
+        self.assertEqual(balances["opening:party:7"].amount, Decimal("-35.00"))
 
 
 class KassPeopleTests(KassTestBase):
@@ -678,8 +751,8 @@ class KassImportTests(KassTestBase):
         self.assertIn("return_without_sale", codes)
 
     def test_the_catalogue_lands(self):
-        self.assertCreated(Product, 5)  # four items + the opening-balance item
-        self.assertCreated(ProductVariant, 5)
+        self.assertCreated(Product, 4)
+        self.assertCreated(ProductVariant, 4)
         self.assertCreated(ProductCategory, 2)
 
     def test_stock_arrives_with_a_cost_behind_it(self):
@@ -818,10 +891,84 @@ class KassImportTests(KassTestBase):
             actual = outstanding_balance(customer) if customer else Decimal("0.00")
             self.assertEqual(actual, owed, msg=f"{name} owes {actual}, expected {owed}")
 
+    def test_what_the_shop_owes_a_customer_matches_the_old_system(self):
+        """منى's 25 in credit is the shop's debt to her, and her paid purchase
+        does not touch it."""
+        balance = customer_balance(Customer.objects.get(full_name="منى"))
+        self.assertEqual(balance.owed_to_customer, Decimal("25.00"))
+        self.assertEqual(balance.owed_by_customer, Decimal("0.00"))
+
     def test_what_the_shop_owes_its_supplier_matches_the_old_system(self):
         supplier = Supplier.objects.get(name="شركة التوريد")
         # 100 opening + 50 order − 20 paid = 130, the supplier's stored balance.
         self.assertEqual(supplier.payable_balance, Decimal("130.00"))
+
+    def test_what_a_supplier_owes_the_shop_matches_the_old_system(self):
+        supplier = Supplier.objects.get(name="مؤسسة الأمل")
+        # Owed 35 before the file; a delivery of 20 since leaves 15 owed.
+        self.assertEqual(supplier.payable_balance, Decimal("20.00"))
+        self.assertEqual(supplier.credit_balance, Decimal("35.00"))
+        self.assertEqual(supplier.net_balance, Decimal("-15.00"))
+
+    def test_each_opening_is_a_balance_entry(self):
+        """Five parties opened before the file, each as an entry on their
+        account, on the side the balance runs."""
+        customers = {
+            entry.customer.full_name: (entry.direction, entry.amount)
+            for entry in CustomerBalanceEntry.objects.live().select_related("customer")
+        }
+        self.assertEqual(
+            customers,
+            {
+                "أحمد علي": (BalanceEntry.Direction.THEY_OWE_US, Decimal("50.00")),
+                "سالم": (BalanceEntry.Direction.THEY_OWE_US, Decimal("40.00")),
+                "منى": (BalanceEntry.Direction.WE_OWE_THEM, Decimal("25.00")),
+            },
+        )
+        suppliers = {
+            entry.supplier.name: (entry.direction, entry.amount)
+            for entry in SupplierBalanceEntry.objects.live().select_related("supplier")
+        }
+        self.assertEqual(
+            suppliers,
+            {
+                "شركة التوريد": (BalanceEntry.Direction.WE_OWE_THEM, Decimal("100.00")),
+                "مؤسسة الأمل": (BalanceEntry.Direction.THEY_OWE_US, Decimal("35.00")),
+            },
+        )
+        entries = [*CustomerBalanceEntry.objects.all(), *SupplierBalanceEntry.objects.all()]
+        for entry in entries:
+            self.assertEqual(entry.kind, BalanceEntry.Kind.OPENING)
+            # The day before the cash box opened, the first thing in the file.
+            self.assertEqual(entry.effective_date, OPENED_AT)
+            self.assertEqual(entry.note, IMPORT_NOTE)
+
+    def test_an_inherited_debt_is_not_revenue(self):
+        """The bug this design exists to fix: the old opening invoices were
+        آجل sales, so every inherited debt was the import day's revenue."""
+        sold = set(
+            Order.objects.committed_sales().values_list("receipt_number", flat=True)
+        )
+        self.assertEqual(
+            sold, {"970000001", "970000002", "970000003", "970000004", "970000005"}
+        )
+        carriers = Order.objects.filter(sale_type=Order.SaleType.ACCOUNT_ENTRY)
+        self.assertEqual(carriers.count(), 2)  # أحمد's and سالم's debts
+        self.assertFalse(Order.objects.transactional().filter(pk__in=carriers).exists())
+        self.assertFalse(Product.objects.filter(name=LEGACY_OPENING_ITEM_NAME).exists())
+
+    def test_an_inherited_debt_is_not_a_purchase(self):
+        bought = set(PurchaseOrder.objects.values_list("supplier_invoice_number", flat=True))
+        self.assertEqual(bought, {"910000001", "910000003"})
+
+    def test_the_account_receipt_settles_the_opening_debt_first(self):
+        """أحمد paid 10 on account, naming no invoice. Oldest first, which is
+        what a shop means by "the account", puts it on what he owed before any
+        invoice in this file — and the history only adds up if it can."""
+        carrier = CustomerBalanceEntry.objects.get(customer__full_name="أحمد علي").order
+        self.assertEqual(carrier.balance_due, Decimal("40.00"))
+        invoice = Order.objects.get(receipt_number="970000002")
+        self.assertEqual(invoice.balance_due, Decimal("30.00"))
 
     def test_the_return_comes_off_the_sale_it_belonged_to(self):
         order = Order.objects.get(receipt_number="970000001")
@@ -885,6 +1032,8 @@ class KassImportTests(KassTestBase):
             "purchases": PurchaseOrder.objects.count(),
             "products": Product.objects.count(),
             "owed": outstanding_balance(Customer.objects.get(full_name="أحمد علي")),
+            "entries": _entry_numbers(),
+            "numbered": _balance_numbers_issued(),
         }
         second = self.run_sync(self.source, IMPORT)
         self.assertEqual(second.status, MigrationRun.Status.SUCCEEDED)
@@ -897,13 +1046,451 @@ class KassImportTests(KassTestBase):
             outstanding_balance(Customer.objects.get(full_name="أحمد علي")),
             before["owed"],
         )
+        # The same entries, not equal ones: nothing cancelled, nothing re-issued.
+        self.assertEqual(_entry_numbers(), before["entries"])
+        self.assertEqual(_balance_numbers_issued(), before["numbered"])
+        carrier = CustomerBalanceEntry.objects.get(customer__full_name="أحمد علي").order
+        self.assertEqual(carrier.balance_due, Decimal("40.00"))
 
 
 class KassDryRunTests(KassTestBase):
     def test_a_dry_run_writes_nothing(self):
         source = self.prepared_source()
         before = Product.objects.count()
+        numbered = _balance_numbers_issued()
         run = self.run_sync(source, DRY_RUN)
         self.assertEqual(run.status, MigrationRun.Status.SUCCEEDED)
         self.assertEqual(Product.objects.count(), before)
         self.assertTrue(run.summary)
+        # The entries were written, checked and rolled back — numbers and all,
+        # so the series a real import numbers from has no hole in it.
+        self.assertEqual(run.summary[PARTY_BALANCE]["created"], 5)
+        self.assertFalse(CustomerBalanceEntry.objects.exists())
+        self.assertFalse(SupplierBalanceEntry.objects.exists())
+        self.assertEqual(_balance_numbers_issued(), numbered)
+
+
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+class KassBalanceEntryTests(KassTestBase):
+    """What a re-run may change on an account an import opened, and what it
+    must refuse to.
+
+    The shop is opened on today's balances; each test then hands the loader
+    the record a later run would, the way the engine does — inside a savepoint,
+    so a refusal takes back whatever the record had written.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.source = self.prepared_source()
+        self.run = self.run_sync(
+            self.source,
+            IMPORT,
+            scope=scopes.OPENING_POSITION,
+            options={"keep_file": True},
+        )
+
+    def load(self, amount, *, party=4, kind="customer", name="سالم"):
+        resolver = IdentityResolver(self.source, self.run, dry_run=False)
+        record = canonical.CanonicalPartyBalance(
+            source_key=f"opening:party:{party}",
+            party_kind=kind,
+            party_source_key=f"party:{party}",
+            amount=Decimal(amount),
+            as_of=OPENED_AT,
+            party_name=name,
+        )
+        with transaction.atomic():
+            return PartyBalanceLoader().load(record, resolver, dry_run=False)
+
+    @staticmethod
+    def live(model=CustomerBalanceEntry, **party):
+        return model.objects.live().get(**party)
+
+    def test_the_run_succeeds(self):
+        self.assertEqual(
+            self.run.status,
+            MigrationRun.Status.SUCCEEDED,
+            msg=f"{self.run.error_message} {self.run.summary}",
+        )
+
+    def test_the_same_figure_leaves_the_entry_alone(self):
+        entry = self.live(customer__full_name="سالم")
+        numbered = _balance_numbers_issued()
+
+        outcome = self.load("40.00")
+
+        self.assertEqual(outcome.target_pk, entry.pk)
+        self.assertEqual(outcome.issues, [])
+        self.assertEqual(_balance_numbers_issued(), numbered)
+
+    def test_a_different_figure_replaces_the_entry(self):
+        old = self.live(customer__full_name="سالم")
+
+        outcome = self.load("55.00")
+
+        old.refresh_from_db()
+        self.assertEqual(old.doc_status, DocumentStatus.CANCELLED)
+        self.assertIsNone(old.cancelled_by)
+        # Its carrier goes with it, so the old debt stops being collectable.
+        self.assertEqual(Order.objects.get(pk=old.order_id).status, Order.Status.VOID)
+        new = self.live(customer__full_name="سالم")
+        self.assertEqual(new.amount, Decimal("55.00"))
+        self.assertEqual(outcome.target_pk, new.pk)
+        self.assertEqual(
+            [issue.code for issue in outcome.issues], ["opening_balance_replaced"]
+        )
+        self.assertEqual(outstanding_balance(new.customer), Decimal("55.00"))
+
+    def test_a_debt_that_has_been_collected_from_is_never_rewritten(self):
+        """The earlier design deleted the payments on an opening invoice when a
+        re-import rewrote it. Money a cashier took stays taken."""
+        entry = self.live(customer__full_name="سالم")
+        Payment.objects.create(order=entry.order, method="cash", amount=Decimal("10.00"))
+
+        with self.assertRaises(LoaderError) as caught:
+            self.load("55.00")
+
+        self.assertEqual(caught.exception.code, "opening_balance_in_use")
+        entry.refresh_from_db()
+        self.assertEqual(entry.doc_status, DocumentStatus.SUBMITTED)
+        self.assertEqual(entry.order.payments.count(), 1)
+        self.assertEqual(
+            CustomerBalanceEntry.objects.filter(customer=entry.customer).count(), 1
+        )
+
+    def test_credit_that_has_been_spent_is_never_withdrawn(self):
+        mona = Customer.objects.get(full_name="منى")
+        create_customer_entry(
+            customer=mona,
+            kind=BalanceEntry.Kind.ADJUSTMENT,
+            direction=BalanceEntry.Direction.THEY_OWE_US,
+            amount=Decimal("10.00"),
+            note="إصلاح شاشة",
+        )
+        credit = self.live(customer=mona, kind=BalanceEntry.Kind.OPENING)
+        self.assertTrue(credit.applications.exists())
+
+        with self.assertRaises(LoaderError) as caught:
+            self.load("0", party=6, name="منى")
+
+        self.assertEqual(caught.exception.code, "opening_balance_in_use")
+        credit.refresh_from_db()
+        self.assertEqual(credit.doc_status, DocumentStatus.SUBMITTED)
+
+    def test_an_entry_a_person_cancelled_stays_cancelled(self):
+        owner = get_user_model().objects.create_superuser("owner", "o@x.ly", "pw12")
+        entry = self.live(customer__full_name="سالم")
+        documents.cancel(entry, reason="سُدّد قبل النقل", actor=owner)
+
+        outcome = self.load("40.00")
+
+        self.assertEqual(
+            [issue.code for issue in outcome.issues], ["opening_balance_retracted"]
+        )
+        self.assertFalse(
+            CustomerBalanceEntry.objects.live().filter(customer=entry.customer).exists()
+        )
+
+    def test_an_opening_typed_by_hand_is_not_doubled(self):
+        """The source said square, so the import withdrew its entry; the owner
+        then typed the figure they trust. A later run does not add its own."""
+        self.load("0")
+        salem = Customer.objects.get(full_name="سالم")
+        typed = create_customer_entry(
+            customer=salem,
+            kind=BalanceEntry.Kind.OPENING,
+            direction=BalanceEntry.Direction.THEY_OWE_US,
+            amount=Decimal("45.00"),
+        )
+
+        with self.assertRaises(LoaderError) as caught:
+            self.load("40.00")
+
+        self.assertEqual(caught.exception.code, "opening_balance_exists")
+        self.assertEqual(caught.exception.detail["number"], typed.number)
+        self.assertEqual(
+            list(CustomerBalanceEntry.objects.live().filter(customer=salem)), [typed]
+        )
+
+    def test_a_supplier_who_falls_square_loses_their_entry(self):
+        supplier = Supplier.objects.get(name="شركة التوريد")
+        entry = self.live(SupplierBalanceEntry, supplier=supplier)
+
+        outcome = self.load("0", party=3, kind="supplier", name="شركة التوريد")
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.doc_status, DocumentStatus.CANCELLED)
+        self.assertEqual(
+            [issue.code for issue in outcome.issues], ["opening_balance_withdrawn"]
+        )
+        self.assertEqual(
+            Supplier.objects.get(pk=supplier.pk).payable_balance, Decimal("0.00")
+        )
+
+    def test_a_supplier_credit_is_withdrawn_while_unspent(self):
+        supplier = Supplier.objects.get(name="مؤسسة الأمل")
+        self.assertEqual(supplier.credit_balance, Decimal("15.00"))
+
+        self.load("0", party=7, kind="supplier", name="مؤسسة الأمل")
+
+        self.assertFalse(SupplierCredit.objects.filter(supplier=supplier).exists())
+        self.assertEqual(
+            Supplier.objects.get(pk=supplier.pk).credit_balance, Decimal("0.00")
+        )
+
+    def test_a_closed_period_refuses_the_change(self):
+        settings_row = ShopSettings.load()
+        settings_row.books_locked_through = date(2026, 3, 31)
+        settings_row.save(update_fields=["books_locked_through"])
+
+        with self.assertRaises(LoaderError) as caught:
+            self.load("55.00")
+
+        self.assertEqual(caught.exception.code, "period_locked")
+        self.assertEqual(
+            self.live(customer__full_name="سالم").amount, Decimal("40.00")
+        )
+
+    def test_a_replayed_receipt_settles_the_opening_debt_again(self):
+        """A re-run replays each receipt: its rows are deleted and allocated
+        again. An invoice is rewritten by the sale pass first, but an opening
+        debt's carrier is not — closed by this receipt last time, it has to be
+        reopened when the payment goes, or the replay finds nothing to pay."""
+        resolver = IdentityResolver(self.source, self.run, dry_run=False)
+        receipt = canonical.CanonicalPayment(
+            source_key="receipt:salem",
+            customer_source_key="party:4",
+            amount=Decimal("40.00"),
+            reference="test:receipt:salem",
+        )
+        carrier = self.live(customer__full_name="سالم").order
+
+        for _ in range(2):
+            with transaction.atomic():
+                outcome = PaymentLoader().load(receipt, resolver, dry_run=False)
+            self.assertEqual(outcome.issues, [])
+
+        carrier.refresh_from_db()
+        self.assertEqual(carrier.status, Order.Status.PAID)
+        self.assertEqual(
+            list(carrier.payments.values_list("amount", flat=True)), [Decimal("40.00")]
+        )
+
+
+def _old_design_invoice(resolver, *, party, amount):
+    """An opening balance the way the importer used to write one: an unpaid
+    آجل invoice for one «رصيد افتتاحي»."""
+    _old_design_item(resolver)
+    outcome = SaleLoader().load(
+        canonical.CanonicalSale(
+            source_key=f"opening:party:{party}",
+            customer_source_key=f"party:{party}",
+            status="open",
+            sale_type="credit",
+            amount_paid=Decimal("0"),
+            occurred_at=datetime(2026, 1, 30),
+            lines=[
+                canonical.CanonicalSaleLine(
+                    variant_source_key=LEGACY_OPENING_ITEM_KEY,
+                    unit_price=Decimal(amount),
+                )
+            ],
+        ),
+        resolver,
+        dry_run=False,
+    )
+    return Order.objects.get(pk=outcome.target_pk)
+
+
+def _old_design_purchase(resolver, *, party, amount):
+    """…and a supplier's: a received order the shop never paid."""
+    _old_design_item(resolver)
+    outcome = PurchaseOrderLoader().load(
+        canonical.CanonicalPurchaseOrder(
+            source_key=f"opening:party:{party}",
+            supplier_source_key=f"party:{party}",
+            status="received",
+            supplier_invoice_number=LEGACY_OPENING_ITEM_NAME,
+            occurred_at=datetime(2026, 1, 30),
+            lines=[
+                canonical.CanonicalPurchaseLine(
+                    variant_source_key=LEGACY_OPENING_ITEM_KEY,
+                    unit_cost=Decimal(amount),
+                )
+            ],
+        ),
+        resolver,
+        dry_run=False,
+    )
+    return PurchaseOrder.objects.get(pk=outcome.target_pk)
+
+
+def _old_design_item(resolver):
+    """The service item those documents hung off, registered as it was."""
+    if resolver.resolve(VARIANT, LEGACY_OPENING_ITEM_KEY) is not None:
+        return
+    product = Product.objects.filter(name=LEGACY_OPENING_ITEM_NAME).first()
+    if product is None:
+        product = Product.objects.create(
+            name=LEGACY_OPENING_ITEM_NAME, is_service=True, is_active=True
+        )
+    variant = product.ensure_default_variant(
+        name="", sku="", barcode="", unit_price=Decimal("0"), is_active=True
+    )
+    resolver.remember(PRODUCT, LEGACY_OPENING_ITEM_KEY, product)
+    resolver.remember(VARIANT, LEGACY_OPENING_ITEM_KEY, variant)
+
+
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+class KassOldDesignOpeningTests(KassTestBase):
+    """A shop imported before balances were entries, imported again.
+
+    Its openings are an آجل invoice and a received order against «رصيد
+    افتتاحي». Nothing converts them in bulk; a re-import of the same source
+    converts each one it can show is untouched, and leaves anything a person
+    has since used or retracted exactly where it is.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.source = self.prepared_source()
+        self.parties_run = self.run_sync(
+            self.source,
+            IMPORT,
+            entities=[CUSTOMER, SUPPLIER],
+            options={"keep_file": True},
+        )
+        resolver = IdentityResolver(self.source, self.parties_run, dry_run=False)
+        self.invoice = _old_design_invoice(resolver, party=4, amount="40.00")
+        self.order = _old_design_purchase(resolver, party=3, amount="130.00")
+
+    def reimport(self, source=None):
+        return self.run_sync(
+            source or self.source,
+            IMPORT,
+            scope=scopes.OPENING_POSITION,
+            options={"keep_file": True},
+        )
+
+    def test_an_untouched_opening_invoice_and_order_become_entries(self):
+        run = self.reimport()
+
+        self.assertEqual(
+            run.status,
+            MigrationRun.Status.SUCCEEDED,
+            msg=f"{run.error_message} {list(run.issues.values_list('code', 'message'))}",
+        )
+        self.assertFalse(Order.objects.filter(pk=self.invoice.pk).exists())
+        self.assertFalse(PurchaseOrder.objects.filter(pk=self.order.pk).exists())
+        salem = Customer.objects.get(full_name="سالم")
+        entry = CustomerBalanceEntry.objects.live().get(customer=salem)
+        self.assertEqual(entry.amount, Decimal("40.00"))
+        self.assertEqual(outstanding_balance(salem), Decimal("40.00"))
+        self.assertEqual(
+            Supplier.objects.get(name="شركة التوريد").payable_balance, Decimal("130.00")
+        )
+        converted = run.issues.filter(code="opening_balance_converted")
+        self.assertEqual(
+            sorted(converted.values_list("source_key", flat=True)),
+            ["opening:party:3", "opening:party:4"],
+        )
+        self.assertFalse(Order.objects.committed_sales().exists())
+
+    def test_an_old_opening_position_can_still_take_the_history(self):
+        """Annaseem's path: opened the old way on today's balances, then the
+        whole file. Each old opening becomes the opening entry the history walks
+        forward from — or goes, for خالد, who opened on nothing."""
+        resolver = IdentityResolver(self.source, self.parties_run, dry_run=False)
+        invoices = [
+            self.invoice,
+            _old_design_invoice(resolver, party=2, amount="70.00"),
+            _old_design_invoice(resolver, party=5, amount="60.00"),
+        ]
+
+        run = self.run_sync(self.source, IMPORT, options={"keep_file": True})
+
+        self.assertEqual(
+            run.status,
+            MigrationRun.Status.SUCCEEDED,
+            msg=f"{run.error_message} {list(run.issues.values_list('code', 'message'))}",
+        )
+        self.assertFalse(
+            Order.objects.filter(pk__in=[invoice.pk for invoice in invoices]).exists()
+        )
+        self.assertFalse(PurchaseOrder.objects.filter(pk=self.order.pk).exists())
+        codes = dict(
+            run.issues.filter(code__startswith="opening_balance").values_list(
+                "source_key", "code"
+            )
+        )
+        self.assertEqual(codes["opening:party:5"], "opening_balance_withdrawn")
+        self.assertEqual(codes["opening:party:2"], "opening_balance_converted")
+        for name, owed in (("أحمد علي", "70.00"), ("سالم", "40.00"), ("خالد", "60.00")):
+            self.assertEqual(
+                outstanding_balance(Customer.objects.get(full_name=name)),
+                Decimal(owed),
+                msg=name,
+            )
+        self.assertEqual(
+            customer_balance(Customer.objects.get(full_name="منى")).owed_to_customer,
+            Decimal("25.00"),
+        )
+        self.assertEqual(
+            Supplier.objects.get(name="شركة التوريد").net_balance, Decimal("130.00")
+        )
+        self.assertEqual(
+            Supplier.objects.get(name="مؤسسة الأمل").net_balance, Decimal("-15.00")
+        )
+
+    def test_an_opening_invoice_that_was_collected_from_is_left_alone(self):
+        Payment.objects.create(order=self.invoice, method="cash", amount=Decimal("15.00"))
+
+        run = self.reimport()
+
+        self.assertEqual(run.status, MigrationRun.Status.PARTIAL)
+        issue = run.issues.get(source_key="opening:party:4")
+        self.assertEqual(issue.code, "opening_balance_in_use")
+        self.assertTrue(Order.objects.filter(pk=self.invoice.pk).exists())
+        self.assertEqual(self.invoice.payments.count(), 1)
+        salem = Customer.objects.get(full_name="سالم")
+        self.assertFalse(CustomerBalanceEntry.objects.filter(customer=salem).exists())
+        # Still owed through the invoice it always was: 40 less the 15 taken.
+        self.assertEqual(outstanding_balance(salem), Decimal("25.00"))
+
+    def test_an_opening_invoice_a_person_voided_stays_voided(self):
+        Order.objects.filter(pk=self.invoice.pk).update(
+            doc_status=DocumentStatus.CANCELLED, status=Order.Status.VOID
+        )
+
+        run = self.reimport()
+
+        issue = run.issues.get(source_key="opening:party:4")
+        self.assertEqual(issue.code, "opening_balance_retracted")
+        salem = Customer.objects.get(full_name="سالم")
+        self.assertFalse(CustomerBalanceEntry.objects.filter(customer=salem).exists())
+        self.assertEqual(outstanding_balance(salem), Decimal("0.00"))
+
+    def test_an_opening_from_an_earlier_upload_is_not_opened_twice(self):
+        """A fresh upload of the same file is a new source, blind to the old
+        one's documents. It finds أحمد (by phone) and the supplier (by name) —
+        and both already carry an opening from the first import."""
+        resolver = IdentityResolver(self.source, self.parties_run, dry_run=False)
+        ahmad_invoice = _old_design_invoice(resolver, party=2, amount="70.00")
+
+        run = self.reimport(self.prepared_source())
+
+        errors = dict(
+            run.issues.filter(severity="error").values_list("source_key", "code")
+        )
+        self.assertEqual(errors.get("opening:party:2"), "legacy_opening_exists")
+        self.assertEqual(errors.get("opening:party:3"), "legacy_opening_exists")
+        ahmad = Customer.objects.get(phone="0910000000")
+        self.assertFalse(CustomerBalanceEntry.objects.filter(customer=ahmad).exists())
+        self.assertEqual(outstanding_balance(ahmad), Decimal("70.00"))
+        self.assertEqual(
+            Supplier.objects.get(name="شركة التوريد").payable_balance, Decimal("130.00")
+        )
+        # This upload cannot show those documents are its own, so it leaves them.
+        self.assertTrue(Order.objects.filter(pk=ahmad_invoice.pk).exists())
+        self.assertTrue(PurchaseOrder.objects.filter(pk=self.order.pk).exists())

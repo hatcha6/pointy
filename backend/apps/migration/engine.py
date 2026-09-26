@@ -48,7 +48,12 @@ from .reconstruct import (
     resolve_carry_costs,
     resolve_stock_source,
 )
-from .scopes import attach_selection, attaches_to_catalogue, resolve_party_balance_basis
+from .scopes import (
+    attach_selection,
+    attaches_to_catalogue,
+    resolve_party_balance_basis,
+    with_party_balances,
+)
 from .transports import build_transport
 
 #: Stage key for the collapse's unit phase — not an ENTITY_PLAN entity, because
@@ -457,10 +462,10 @@ class MigrationEngine:
     def _specs_to_run(self, connector):
         """What this run actually walks, and in what order.
 
-        Three things narrow or widen the operator's tick-boxes, and all three
-        have to happen before anything extracts, because the connectors are told
-        the answer (an entity's meaning can depend on what else is in the run —
-        see ``scopes``).
+        Several things narrow or widen the operator's tick-boxes, and all of
+        them have to happen before anything extracts, because the connectors are
+        told the answer (an entity's meaning can depend on what else is in the
+        run — see ``scopes``).
         """
         supported = set(connector.supported_entities)
         if attaches_to_catalogue(self.run.options):
@@ -495,6 +500,9 @@ class MigrationEngine:
         # means every sale line failing to resolve a variant — quietly, one
         # warning at a time, 900,000 times.
         self._selection = resolve_selection(selected, available=supported)
+        # And the history brings the balances it walks forward from, which no
+        # dependency can say without dragging the other kind of party along.
+        self._selection = with_party_balances(self._selection, supported)
         return [ENTITY_PLAN_BY_TYPE[entity] for entity in self._selection.entities]
 
     def _persist_compat(self, report):

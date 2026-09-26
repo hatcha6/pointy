@@ -139,7 +139,10 @@ class CanonicalSupplier(CanonicalRecord):
 
 @dataclass
 class CanonicalPartyBalance(CanonicalRecord):
-    """What a customer owes the shop, or the shop owes a supplier, as a figure.
+    """Where a customer's or a supplier's account stands, as a figure.
+
+    Loaded as an opening balance entry (``apps.balances``) — never as a sale or
+    a purchase, because an inherited debt is neither.
 
     Legacy systems keep two numbers per party: the balance they were opened
     with, and the balance they stand at now. Which one Pointy should start them
@@ -161,8 +164,11 @@ class CanonicalPartyBalance(CanonicalRecord):
     #: ``customer`` or ``supplier``.
     party_kind: str = "customer"
     party_source_key: str = ""
-    #: Always positive; ``party_kind`` is the side. A customer's amount is what
-    #: they owe the shop (receivable); a supplier's is what the shop owes them.
+    #: Signed, read from the side ``party_kind`` names. Positive is the usual
+    #: way round — a customer owes the shop, the shop owes a supplier — and
+    #: negative the other: credit the shop holds for a customer, money a
+    #: supplier owes the shop. Zero is square, and still a record: it is what
+    #: withdraws an entry an earlier run wrote.
     amount: Decimal = Decimal("0")
     #: When the balance is struck. Dated before the shop's history so an
     #: inherited debt does not read as having been incurred this morning.

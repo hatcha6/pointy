@@ -24,20 +24,23 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework.serializers import ValidationError
 
+from apps.balances.models import CustomerBalanceEntry, SupplierBalanceEntry
 from apps.catalog.models import Product, ProductVariant
 from apps.customers.models import Customer
-from apps.customers.receivables import outstanding_balance
+from apps.customers.receivables import customer_balance, outstanding_balance
+from apps.documents.statuses import DocumentStatus
 from apps.inventory.models import StockItem, StockLedgerEntry, StockValuationBin
 from apps.purchasing.models import PurchaseOrder, Supplier
 from apps.sales.models import Order
 from apps.treasury.models import MoneyAccount
 
-from . import canonical, scopes, services
+from . import scopes, services
 from .entity_plan import (
     CATEGORY,
     CUSTOMER,
     MONEY_ACCOUNT,
     PARTY_BALANCE,
+    PAYMENT,
     PRODUCT,
     PURCHASE_ORDER,
     SALE,
@@ -49,8 +52,6 @@ from .entity_plan import (
     dependency_closure,
     resolve_selection,
 )
-from .identity import IdentityResolver
-from .loaders.parties import PartyBalanceLoader
 from .models import MigrationRun
 from .serializers import MigrationRunCreateSerializer
 from .reconstruct import STOCK_SOURCE_COST_ONLY, STOCK_SOURCE_NONE
@@ -62,7 +63,32 @@ EXPECTED_RECEIVABLES = {
     "سالم": Decimal("40.00"),
     "خالد": Decimal("60.00"),
 }
+#: …and the other way round: what the shop owes a customer.
+EXPECTED_CUSTOMER_CREDIT = {"منى": Decimal("25.00")}
 EXPECTED_PAYABLE = Decimal("130.00")
+#: Each supplier's net position — negative where the supplier owes the shop.
+EXPECTED_SUPPLIER_NET = {
+    "شركة التوريد": Decimal("130.00"),
+    "مؤسسة الأمل": Decimal("-15.00"),
+}
+
+
+def assert_old_systems_balances(test):
+    """Every party stands where KASS's own ``NawRasid`` says, both ways round."""
+    for name, owed in EXPECTED_RECEIVABLES.items():
+        customer = Customer.objects.filter(full_name=name).first()
+        test.assertIsNotNone(customer, msg=f"{name} was not imported")
+        test.assertEqual(
+            outstanding_balance(customer), owed, msg=f"{name} owes the wrong amount"
+        )
+    for name, credit in EXPECTED_CUSTOMER_CREDIT.items():
+        balance = customer_balance(Customer.objects.get(full_name=name))
+        test.assertEqual(balance.owed_to_customer, credit, msg=f"{name}'s credit")
+        test.assertEqual(balance.owed_by_customer, Decimal("0.00"))
+    for name, net in EXPECTED_SUPPLIER_NET.items():
+        test.assertEqual(
+            Supplier.objects.get(name=name).net_balance, net, msg=f"{name}'s balance"
+        )
 
 
 class SelectionClosureTests(KassTestBase):
@@ -150,6 +176,77 @@ class BalanceBasisTests(KassTestBase):
         }
         self.assertEqual(current["party:5"], Decimal("60.00"))
 
+    def test_a_balance_running_the_other_way_keeps_its_sign_on_both_bases(self):
+        """The shop owes منى 25 either way; مؤسسة الأمل owed the shop 35 and has
+        delivered 20 of it since."""
+        for basis, supplier_credit in (("opening", "-35.00"), ("current", "-15.00")):
+            with self.subTest(basis=basis):
+                records = {
+                    (record.party_kind, record.party_source_key): record.amount
+                    for record in self.extract(
+                        "party_balance",
+                        scope=(CUSTOMER, SUPPLIER, PARTY_BALANCE),
+                        basis=basis,
+                    )
+                }
+                self.assertEqual(records[("customer", "party:6")], Decimal("-25.00"))
+                self.assertEqual(
+                    records[("supplier", "party:7")], Decimal(supplier_credit)
+                )
+
+
+class HistoryBringsItsBalancesTests(KassTestBase):
+    """A run with the history and without the balances still carries them.
+
+    The invoices only add up to what a party owes if they start from what the
+    party owed before them. This used to be done by slipping opening invoices
+    into the sales stream; it is done now by adding the balances to the run.
+    """
+
+    def test_the_balances_are_added_to_a_run_with_history(self):
+        selection = scopes.with_party_balances(
+            resolve_selection([SALE]), all_entity_types()
+        )
+        self.assertIn(PARTY_BALANCE, selection.entities)
+        self.assertIn(PARTY_BALANCE, selection.added)
+        # Without the other kind of party: a sales run gains no suppliers.
+        self.assertNotIn(SUPPLIER, selection.entities)
+        self.assertLess(
+            selection.entities.index(PARTY_BALANCE), selection.entities.index(SALE)
+        )
+
+    def test_not_without_history(self):
+        selection = resolve_selection([CUSTOMER])
+        self.assertIs(scopes.with_party_balances(selection, all_entity_types()), selection)
+
+    def test_not_from_a_source_that_has_none(self):
+        available = set(all_entity_types()) - {PARTY_BALANCE}
+        selection = resolve_selection([SALE], available=available)
+        self.assertIs(scopes.with_party_balances(selection, available), selection)
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    def test_a_sales_run_opens_its_customers_and_nobody_else(self):
+        run = self.run_sync(
+            self.prepared_source(),
+            IMPORT,
+            entities=[SALE, PAYMENT],
+            options={"keep_file": True},
+        )
+
+        self.assertEqual(
+            run.status,
+            MigrationRun.Status.SUCCEEDED,
+            msg=f"{run.error_message} {list(run.issues.values_list('code', 'message'))}",
+        )
+        self.assertIn(PARTY_BALANCE, run.options["resolved"]["added"])
+        self.assertEqual(run.options["resolved"]["party_balance_basis"], scopes.BASIS_OPENING)
+        for name, owed in EXPECTED_RECEIVABLES.items():
+            self.assertEqual(
+                outstanding_balance(Customer.objects.get(full_name=name)), owed
+            )
+        self.assertFalse(SupplierBalanceEntry.objects.exists())
+        self.assertFalse(Supplier.objects.filter(name="شركة التوريد").exists())
+
 
 @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
 class OpeningPositionScopeTests(KassTestBase):
@@ -181,20 +278,25 @@ class OpeningPositionScopeTests(KassTestBase):
         *current* figure rather than the opening one. Reading the wrong figure
         would leave أحمد علي owing 50 instead of 70 — plausible, and wrong.
         """
-        for name, owed in EXPECTED_RECEIVABLES.items():
-            customer = Customer.objects.filter(full_name=name).first()
-            self.assertIsNotNone(customer, msg=f"{name} was not imported")
-            self.assertEqual(
-                outstanding_balance(customer), owed, msg=f"{name} owes the wrong amount"
-            )
+        assert_old_systems_balances(self)
         supplier = Supplier.objects.get(name="شركة التوريد")
         self.assertEqual(supplier.payable_balance, EXPECTED_PAYABLE)
 
     def test_no_history_came_with_them(self):
-        """One document per indebted party, and not one invoice more."""
+        """A balance entry per party, and not one invoice or order.
+
+        The only orders are the carriers of the debts, and a carrier is not a
+        sale: nothing here is the import day's revenue or its purchases.
+        """
+        self.assertEqual(
+            Order.objects.filter(sale_type=Order.SaleType.ACCOUNT_ENTRY).count(),
+            len(EXPECTED_RECEIVABLES),
+        )
         self.assertEqual(Order.objects.count(), len(EXPECTED_RECEIVABLES))
-        self.assertEqual(PurchaseOrder.objects.count(), 1)
-        self.assertFalse(Order.objects.filter(receipt_number="970000001").exists())
+        self.assertFalse(Order.objects.committed_sales().exists())
+        self.assertFalse(PurchaseOrder.objects.exists())
+        self.assertEqual(CustomerBalanceEntry.objects.count(), 4)
+        self.assertEqual(SupplierBalanceEntry.objects.count(), 2)
 
     def test_the_catalogue_came_with_its_costs(self):
         variant = ProductVariant.objects.get(barcode="1001")
@@ -259,6 +361,7 @@ class OpeningPositionScopeTests(KassTestBase):
 
     def test_running_it_again_changes_nothing(self):
         before = Order.objects.count()
+        entries = set(CustomerBalanceEntry.objects.values_list("number", "doc_status"))
         self.run_sync(
             self.source,
             IMPORT,
@@ -266,58 +369,44 @@ class OpeningPositionScopeTests(KassTestBase):
             options={"keep_file": True},
         )
         self.assertEqual(Order.objects.count(), before)
-        for name, owed in EXPECTED_RECEIVABLES.items():
-            self.assertEqual(
-                outstanding_balance(Customer.objects.get(full_name=name)), owed
-            )
-
-    def test_a_supplier_who_falls_square_loses_their_opening_order(self):
-        """The mirror of the customer case, proved on its own model.
-
-        A ``PurchaseReceipt`` is PROTECT-linked to its order, so "delete the
-        placeholder" is not a given on this side — and the supplier branch has
-        its own model, its own lines and its own delete.
-        """
-        resolver = IdentityResolver(self.source, self.run, dry_run=False)
-        opening = PurchaseOrder.objects.get(supplier__name="شركة التوريد")
-
-        outcome = PartyBalanceLoader().load(
-            canonical.CanonicalPartyBalance(
-                source_key="opening:party:3",
-                party_kind="supplier",
-                party_source_key="party:3",
-                amount=Decimal("0"),
-                party_name="شركة التوريد",
-            ),
-            resolver,
-            dry_run=False,
-        )
-
-        self.assertFalse(PurchaseOrder.objects.filter(pk=opening.pk).exists())
         self.assertEqual(
-            [issue.code for issue in outcome.issues], ["opening_balance_withdrawn"]
+            set(CustomerBalanceEntry.objects.values_list("number", "doc_status")), entries
         )
-        self.assertEqual(
-            Supplier.objects.get(name="شركة التوريد").payable_balance, Decimal("0.00")
-        )
+        assert_old_systems_balances(self)
 
     def test_the_full_history_can_still_be_imported_afterwards(self):
         """A shop that starts on the opening position and later wants the
         history must not end up owing everything twice.
 
-        The opening documents keep their source keys, so the full run updates
-        the very same invoice instead of raising a second one beside it.
+        The entries keep their source keys, so the full run finds each one it
+        wrote: a figure that changed with the basis is cancelled and written
+        again, one that fell to zero is withdrawn, and one that is the same
+        either way — سالم's, منى's — is left exactly as it was.
         """
-        self.run_sync(self.source, IMPORT, options={"keep_file": True})
-        for name, owed in EXPECTED_RECEIVABLES.items():
-            self.assertEqual(
-                outstanding_balance(Customer.objects.get(full_name=name)),
-                owed,
-                msg=f"{name} owes the wrong amount after re-importing the history",
-            )
+        salem = CustomerBalanceEntry.objects.get(customer__full_name="سالم")
+
+        run = self.run_sync(self.source, IMPORT, options={"keep_file": True})
+
+        assert_old_systems_balances(self)
+        codes = set(run.issues.values_list("code", flat=True))
+        self.assertIn("opening_balance_replaced", codes)  # أحمد: 70 today, 50 then
+        self.assertIn("opening_balance_withdrawn", codes)  # خالد: 60 today, 0 then
         self.assertEqual(
-            Supplier.objects.get(name="شركة التوريد").payable_balance, EXPECTED_PAYABLE
+            CustomerBalanceEntry.objects.live().get(customer__full_name="سالم"), salem
         )
+        self.assertFalse(
+            CustomerBalanceEntry.objects.live()
+            .filter(customer__full_name="خالد")
+            .exists()
+        )
+        # Never two live openings on one account.
+        for model, party in (
+            (CustomerBalanceEntry, "customer"),
+            (SupplierBalanceEntry, "supplier"),
+        ):
+            live = model.objects.filter(doc_status=DocumentStatus.SUBMITTED)
+            parties = list(live.values_list(party, flat=True))
+            self.assertEqual(len(parties), len(set(parties)), msg=model.__name__)
 
 
 @override_settings(CELERY_TASK_ALWAYS_EAGER=True)

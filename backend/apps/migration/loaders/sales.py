@@ -249,11 +249,14 @@ class PaymentLoader(BaseLoader):
     FoxPro POS posts a receipt to the *party ledger* and never says which
     invoices it settles, because the ledger only has a running balance. Pointy
     has no running balance to post to: what a customer owes is the sum of their
-    open آجل invoices (``apps.customers.receivables``), so a receipt has to be
-    put onto invoices or it is not a receipt at all.
+    open receivables — آجل invoices, and the debts written onto the account
+    that no invoice carries, an imported opening balance among them
+    (``apps.customers.receivables``) — so a receipt has to be put onto those or
+    it is not a receipt at all.
 
     Oldest first, which is what both sides assume when neither says otherwise,
-    and what a shop does when it hands over cash against "the account".
+    and what a shop does when it hands over cash against "the account". An
+    opening balance is dated before the history, so it is settled first.
     """
 
     entity_type = PAYMENT
@@ -269,7 +272,14 @@ class PaymentLoader(BaseLoader):
         # second import from paying the same invoice twice. Keyed on the
         # reference rather than the identity map because one receipt can land on
         # several invoices, and the map holds one row per source key.
-        Payment.objects.filter(external_reference=reference).delete()
+        replayed = Payment.objects.filter(external_reference=reference)
+        settled = set(replayed.values_list("order_id", flat=True))
+        replayed.delete()
+        # An invoice is rewritten by the sale pass before this runs, but an
+        # opening balance's carrier is not — it is the balance entry's, and an
+        # unchanged entry is left alone. Closed by this receipt last time, it
+        # would stay closed with the payment gone and be skipped below.
+        _reopen(settled)
 
         with system_write():
             if record.sale_source_key:
@@ -296,7 +306,7 @@ class PaymentLoader(BaseLoader):
                 code="unresolved_customer",
             )
         orders = (
-            Order.objects.open_credit()
+            Order.objects.open_receivables()
             .filter(customer_id=customer_pk)
             .with_balance_relations()
             .order_by("created_at", "pk")
@@ -354,6 +364,18 @@ class PaymentLoader(BaseLoader):
         order = Order.objects.with_balance_relations().get(pk=order_pk)
         if order.status == Order.Status.OPEN and order.balance_due <= 0:
             Order.objects.filter(pk=order.pk).update(status=Order.Status.PAID)
+
+
+def _reopen(order_ids):
+    """Put back to open any receivable that is no longer square."""
+    orders = Order.objects.filter(
+        pk__in=order_ids,
+        sale_type__in=Order.RECEIVABLE_SALE_TYPES,
+        status=Order.Status.PAID,
+    ).with_balance_relations()
+    for order in orders:
+        if order.balance_due > 0:
+            Order.objects.filter(pk=order.pk).update(status=Order.Status.OPEN)
 
 
 class SaleReturnLoader(BaseLoader):
