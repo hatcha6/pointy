@@ -211,6 +211,9 @@ func (s *PostgresStore) ProvisionInstallation(
 		AccessTokenHash:    TokenHash(accessToken),
 		RelayEnabled:       relayEnabled,
 		AIEnabled:          request.AIEnabled,
+		FXEnabled:          request.FXEnabled,
+		SMSEnabled:         request.SMSEnabled,
+		SMSMonthlyLimit:    max(request.SMSMonthlyLimit, 0),
 		SubscriptionActive: subscriptionActive,
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
@@ -286,20 +289,42 @@ func (s *PostgresStore) UpdateSubscription(
 ) (Installation, error) {
 	installation, err := scanInstallation(s.pool.QueryRow(
 		ctx,
-		`UPDATE relay_installations
-		SET
-			relay_enabled = CASE WHEN $2 THEN $3 ELSE relay_enabled END,
-			ai_enabled = CASE WHEN $4 THEN $5 ELSE ai_enabled END,
-			fx_enabled = CASE WHEN $6 THEN $7 ELSE fx_enabled END,
-			subscription_active = CASE WHEN $8 THEN $9 ELSE subscription_active END,
-			subscription_ends_at = CASE
-				WHEN $10 THEN NULL
-				WHEN $11 THEN $12::timestamptz
-				ELSE subscription_ends_at
-			END,
-			updated_at = $13::timestamptz
-		WHERE id = $1
-		RETURNING `+installationColumns,
+		updateSubscriptionSQL,
+		updateSubscriptionArgs(id, update, s.clock.Now())...,
+	))
+	if err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
+// updateSubscriptionSQL applies a SubscriptionUpdate: each field is written
+// only when the update carries it (the $even "is set" flags), so a PATCH
+// touches exactly what it sends. Shared by the plain and the audited update so
+// the two can never drift apart on a new column.
+const updateSubscriptionSQL = `UPDATE relay_installations
+SET
+	relay_enabled = CASE WHEN $2 THEN $3 ELSE relay_enabled END,
+	ai_enabled = CASE WHEN $4 THEN $5 ELSE ai_enabled END,
+	fx_enabled = CASE WHEN $6 THEN $7 ELSE fx_enabled END,
+	subscription_active = CASE WHEN $8 THEN $9 ELSE subscription_active END,
+	subscription_ends_at = CASE
+		WHEN $10 THEN NULL
+		WHEN $11 THEN $12::timestamptz
+		ELSE subscription_ends_at
+	END,
+	updated_at = $13::timestamptz,
+	sms_enabled = CASE WHEN $14 THEN $15 ELSE sms_enabled END,
+	sms_monthly_limit = CASE WHEN $16 THEN $17::integer ELSE sms_monthly_limit END
+WHERE id = $1
+RETURNING ` + installationColumns
+
+func updateSubscriptionArgs(id string, update SubscriptionUpdate, now time.Time) []any {
+	smsMonthlyLimit := 0
+	if update.SMSMonthlyLimit != nil {
+		smsMonthlyLimit = max(*update.SMSMonthlyLimit, 0)
+	}
+	return []any{
 		id,
 		update.RelayEnabled != nil,
 		boolValue(update.RelayEnabled),
@@ -312,12 +337,12 @@ func (s *PostgresStore) UpdateSubscription(
 		update.ClearEnd,
 		update.SubscriptionEndsAt != nil,
 		update.SubscriptionEndsAt,
-		s.clock.Now(),
-	))
-	if err != nil {
-		return Installation{}, err
+		now,
+		update.SMSEnabled != nil,
+		boolValue(update.SMSEnabled),
+		update.SMSMonthlyLimit != nil,
+		smsMonthlyLimit,
 	}
-	return installation, nil
 }
 
 func (s *PostgresStore) UpdateSubscriptionWithAudit(
@@ -343,33 +368,8 @@ func (s *PostgresStore) UpdateSubscriptionWithAudit(
 	now := s.clock.Now()
 	installation, err := scanInstallation(tx.QueryRow(
 		ctx,
-		`UPDATE relay_installations
-		SET
-			relay_enabled = CASE WHEN $2 THEN $3 ELSE relay_enabled END,
-			ai_enabled = CASE WHEN $4 THEN $5 ELSE ai_enabled END,
-			fx_enabled = CASE WHEN $6 THEN $7 ELSE fx_enabled END,
-			subscription_active = CASE WHEN $8 THEN $9 ELSE subscription_active END,
-			subscription_ends_at = CASE
-				WHEN $10 THEN NULL
-				WHEN $11 THEN $12::timestamptz
-				ELSE subscription_ends_at
-			END,
-			updated_at = $13::timestamptz
-		WHERE id = $1
-		RETURNING `+installationColumns,
-		id,
-		update.RelayEnabled != nil,
-		boolValue(update.RelayEnabled),
-		update.AIEnabled != nil,
-		boolValue(update.AIEnabled),
-		update.FXEnabled != nil,
-		boolValue(update.FXEnabled),
-		update.SubscriptionActive != nil,
-		boolValue(update.SubscriptionActive),
-		update.ClearEnd,
-		update.SubscriptionEndsAt != nil,
-		update.SubscriptionEndsAt,
-		now,
+		updateSubscriptionSQL,
+		updateSubscriptionArgs(id, update, now)...,
 	))
 	if err != nil {
 		return Installation{}, AdminAuditEvent{}, err
@@ -1107,7 +1107,9 @@ const installationColumns = `id,
 	update_status,
 	update_error,
 	last_update_at,
-	agent_last_seen_at`
+	agent_last_seen_at,
+	sms_enabled,
+	sms_monthly_limit`
 
 const selectInstallationSQL = `SELECT ` + installationColumns + ` FROM relay_installations`
 
@@ -1154,6 +1156,8 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 		&installation.UpdateError,
 		&lastUpdateAt,
 		&agentLastSeenAt,
+		&installation.SMSEnabled,
+		&installation.SMSMonthlyLimit,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Installation{}, ErrNotFound

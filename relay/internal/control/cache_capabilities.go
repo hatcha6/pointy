@@ -25,6 +25,7 @@ var (
 	_ MetadataStore          = (*CachedInstallationStore)(nil)
 	_ AdminSubscriptionStore = (*CachedInstallationStore)(nil)
 	_ UpdateStore            = (*CachedInstallationStore)(nil)
+	_ SMSStore               = (*CachedInstallationStore)(nil)
 )
 
 var (

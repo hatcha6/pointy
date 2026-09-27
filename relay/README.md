@@ -361,13 +361,14 @@ pointy-relay subscription extend  <id> --days 365        # set end 1 year out, a
 
 `subscription set` is the human one-liner: `--months N` (or `--days N`, or
 `--until <RFC3339>`) activates the subscription for that span and turns remote
-access on, while `--ai`/`--no-ai` and `--remote`/`--no-remote` flip the add-ons —
-all in a single audited change.
+access on, while `--ai`/`--no-ai`, `--sms`/`--no-sms` (plus
+`--sms-monthly-limit N`) and `--remote`/`--no-remote` flip the add-ons — all in
+a single audited change.
 
 For explicit field-by-field control, `subscription update` takes the id as the
 first argument (or `--installation-id`) plus any of `--relay-enabled`,
-`--subscription-active`, `--ai-enabled`, `--subscription-ends-at`,
-`--clear-subscription-end`. Provision a new installation remotely with
+`--subscription-active`, `--ai-enabled`, `--sms-enabled`,
+`--sms-monthly-limit`, `--subscription-ends-at`, `--clear-subscription-end`. Provision a new installation remotely with
 `pointy-relay installations provision --shop-name '...' --relay-enabled` (the
 one-time connector and access tokens print once).
 
@@ -675,13 +676,261 @@ publication's natural identity (`from, to, instrument, bank, effective_at`), a
 rate delivered both ways collapses into one row — the two paths cost nothing when
 they overlap, and the poll is what heals the gap when the push never came.
 
+## Relay-Hosted SMS (Resala)
+
+The relay sends every shop's SMS through **one company-owned
+[Resala](https://resala.ly) account**. Like AI and the exchange-rate feed, the
+provider account belongs to the company, not the shop: the Resala API token and
+the approved template ids live only in relay env, and a shop's backend never
+holds a credential it could spend from.
+
+```text
+Pointy feature (invoice SMS, debt reminder, recall, consignment, month-end, ...)
+  -> on-prem Django: queues the message, renders its local copy from its catalog
+  -> Pointy Relay: POST /v1/sms/send   (X-Pointy-Relay-Token: ptr1...)
+       configured -> identity -> sms entitlement -> body -> burst limit
+       -> idempotency (replay) -> monthly cap -> kind -> approved template id
+       -> ledger row (pending) -> Resala POST /messages/send-template -> ledger (sent|failed)
+  <- {id, status, content, cost, usage}
+Delivery sync (every 5m): Resala's sent log -> ledger delivered | undelivered
+```
+
+Resala is one-way: no inbound SMS and no delivery webhook, and every message
+must use a template approved in the Resala dashboard. Pointy sends template
+messages only (Resala's OTP `/pins` API is not used). The SMS sender ID is the
+company's, which is why every template carries the shop's name.
+
+### Entitlement and monthly cap
+
+SMS is its own entitlement: an **active, unexpired subscription** plus the
+**`sms_enabled`** flag — exactly like `ai_enabled`, and deliberately not
+requiring `relay_enabled`. A shop that is not entitled gets
+`402 not_entitled`.
+
+Each installation also has a **monthly cap** over the calendar month in Libya
+(UTC+2): its own `sms_monthly_limit` when above 0, otherwise
+`POINTY_RELAY_SMS_MONTHLY_LIMIT` (default `500`; `0` = unlimited). A message
+counts when it was, or may have been, sent for real (`pending`, `sent`,
+`delivered`, `undelivered`); failures and test sends are free. The count and the
+ledger insert run under a per-shop Postgres advisory lock, so two concurrent
+sends cannot both take the month's last message. Separately, a short per-shop
+burst limit (`POINTY_RELAY_SMS_RATE_LIMIT`, `60/minute`) answers
+`429 rate_limited` with `Retry-After`.
+
+Both fields are company-owned and set through the audited subscription path —
+the CLI below, the `/admin` console (*SMS entitlement*, *SMS monthly limit*), or
+`PATCH /v1/installations/{id}/subscription` with `sms_enabled` /
+`sms_monthly_limit`. Provisioning accepts both too, and the installation JSON
+(including the shop's self-serviceable `GET /v1/installations/{id}`) exposes
+them.
+
+```sh
+pointy-relay subscription set <id> --sms                          # SMS add-on on
+pointy-relay subscription set <id> --months 12 --sms --sms-monthly-limit 2000
+pointy-relay subscription set <id> --sms-monthly-limit 0          # back to the relay default
+pointy-relay subscription set <id> --no-sms
+pointy-relay subscription update <id> --sms-enabled true --sms-monthly-limit 750 --reason 'plan upgrade'
+```
+
+### API
+
+Shop routes use the installation's access token (`X-Pointy-Relay-Token`) and are
+served on the public listener:
+
+| Route | Purpose |
+|---|---|
+| `POST /v1/sms/send` | Send one templated message. |
+| `GET /v1/sms/usage/self` | This month's allowance. Identity only, so it also answers an unentitled shop (`"entitled": false`). |
+| `GET /v1/sms/status?ids=a,b` | Ledger status of up to 100 of the shop's **own** messages. |
+
+Admin routes (admin bearer token, admin listener):
+`GET /v1/sms/usage?from=&to=` (per-shop counts and cost, busiest first; default
+the current Libyan month), `GET /v1/sms/messages?installation_id=&status=&limit=`
+(recent ledger rows) and `GET /v1/sms/config` (templates, test mode, limits —
+never the token).
+
+```json
+POST /v1/sms/send
+{"kind":"invoice_link","to":"+218912345678",
+ "variables":["محل النور","000123","125.00 د.ل","https://..."],
+ "idempotency_key":"4821-20260927101500123456","consent_class":"transactional","test":false}
+
+201 {"id":"<ledger id>","status":"sent","test_mode":false,
+     "content":"<approved template body with the values filled in>","cost":"0.10","replayed":false,
+     "usage":{"used":13,"limit":500,"remaining":487,
+              "period_start":"2026-09-01T00:00:00+02:00","resets_at":"2026-10-01T00:00:00+02:00"}}
+```
+
+`to` may be E.164 or national; the relay normalizes it to `218` + the 9-digit
+mobile number (starting with 9) and answers `422 invalid_phone` for anything
+else. Errors are always `{"error": "<english>", "code": "<code>", ...}`:
+
+| HTTP | code | meaning |
+|---|---|---|
+| 503 | `sms_unconfigured` | the relay has no Resala token |
+| 401 | `unauthorized` | token missing or invalid |
+| 402 | `not_entitled` | no active subscription, or `sms_enabled` is off |
+| 400 | `invalid_request` | bad JSON, missing key, bad variables, wrong variable count or consent class for the kind |
+| 422 | `invalid_phone` | not a Libyan mobile number |
+| 422 | `unknown_kind` / `template_not_configured` | no template id for the kind |
+| 429 | `rate_limited` | per-shop burst limit (with `Retry-After`) |
+| 429 | `monthly_limit` | cap reached; the body adds `limit`, `used`, `resets_at` |
+| 409 | `in_flight` | the same key is being sent right now (with `Retry-After`) |
+| 502 | `provider_credit` | Resala's wallet is empty — the company must top up |
+| 502 | `provider_unauthorized` | Resala rejected the relay's token (401/403) |
+| 502 | `provider_rejected` | Resala refused the message (4xx, 422, or `failed > 0`); `detail` carries Resala's message |
+| 502 | `provider_error` | Resala 5xx, network error or timeout — the outcome is unknown |
+| 502 | `outcome_unknown` | a repeat of a key whose earlier send never finished |
+| 500 | `internal_error` | the relay's own store failed; nothing was sent, safe to retry |
+
+**Never twice.** A send claims `(installation, idempotency_key)` in the ledger
+*before* Resala is called, so a repeated key never reaches Resala again: a
+finished send is replayed with its stored outcome (`200` + `replayed: true`;
+failures replay the same `502`), a send still in progress answers
+`409 in_flight`, and a row left `pending` for over two minutes — the relay died
+mid-call — answers `502 outcome_unknown` and is marked failed with that code.
+The Resala call itself is never retried: a send that timed out may still have
+gone out, and a retry would text the customer twice and charge twice.
+
+**No message content is stored.** The ledger keeps the recipient (needed to
+match delivery reports), a sha256 of the rendered text, and the approved
+template body (placeholders only, no customer data) so a replay can hand back
+the exact text. Logs carry the installation id, kind and outcome — never the
+phone number or the text.
+
+### Configuration
+
+SMS is disabled until a Resala token is configured. All values are env/flags on
+the relay `server` command; a malformed `POINTY_RELAY_SMS_TEMPLATES` or
+`POINTY_RELAY_SMS_RATE_LIMIT` stops the relay at startup rather than failing
+sends later.
+
+- `POINTY_RELAY_RESALA_API_TOKEN` — the JWT from the Resala dashboard; empty
+  disables SMS (`503 sms_unconfigured`).
+- `POINTY_RELAY_RESALA_BASE_URL` — defaults to `https://dev.resala.ly/api/v1`
+  (Resala's production API, despite the name).
+- `POINTY_RELAY_SMS_TEMPLATES` — JSON object, kind → approved Resala template id.
+- `POINTY_RELAY_SMS_TEST_MODE` — `true` sends everything in Resala test mode.
+- `POINTY_RELAY_SMS_MONTHLY_LIMIT` — default per-shop monthly cap (`500`;
+  `0` = unlimited) for shops whose own `sms_monthly_limit` is 0.
+- `POINTY_RELAY_SMS_RATE_LIMIT` — per-shop burst limit (`60/minute`; also
+  `N/second|hour|day` or `N/<duration>`; `0` disables).
+- `POINTY_RELAY_SMS_REQUEST_TIMEOUT` — one Resala call (`20s`).
+- `POINTY_RELAY_SMS_MAX_VARIABLE_RUNES` — longest template value (`320`).
+- `POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL` — delivery-log sync (`5m`; `0` off;
+  floor `1m`).
+
+### Message templates
+
+Every kind maps to one approved Resala template. Django owns the canonical text
+(`backend/apps/messaging/sms_templates.py`) and renders its own copy; the relay
+maps the kind to the template id, checks each known kind's variable count and
+consent class, and returns Resala's approved body with the values filled in as
+`content`. Values are positional: the first fills `$1`, the second `$2`, and so
+on.
+
+| kind | consent | text to register | variables |
+|---|---|---|---|
+| `test` | transactional | `رسالة تجريبية من $1 عبر دفتر: خدمة الرسائل تعمل بنجاح.` | `$1` shop name |
+| `invoice` | transactional | `شكرًا لتسوقك من $1. فاتورتك رقم $2 بقيمة $3.` | `$1` shop, `$2` invoice number, `$3` invoice total |
+| `invoice_link` | transactional | `شكرًا لتسوقك من $1. فاتورتك رقم $2 بقيمة $3. لعرضها: $4` | `$1` shop, `$2` invoice number, `$3` invoice total, `$4` invoice link |
+| `debt_reminder` | transactional | `تذكير من $1: لديك مبلغ مستحق قدره $2 على $3. نرجو المبادرة بالسداد.` | `$1` shop, `$2` amount due, `$3` what it is owed on (e.g. «الفاتورة رقم 000123») |
+| `debt_reminder_link` | transactional | `تذكير من $1: لديك مبلغ مستحق قدره $2 على $3. التفاصيل: $4` | as `debt_reminder`, `$4` invoice link |
+| `consignment_sale` | transactional | `مرحبًا $1، تم بيع أمانتكم $2 (رقم $3) لدى $4. صافي المستحق لكم $5، نرجو زيارتنا لاستلامه.` | `$1` consignor's name, `$2` item name, `$3` item number, `$4` shop, `$5` net amount owed |
+| `consignment_payout` | transactional | `$1: تم تسليمكم مبلغ $2 بموجب السند رقم $3 مقابل بيع $4. شكرًا لتعاملكم معنا.` | `$1` shop, `$2` amount, `$3` voucher number, `$4` item name |
+| `consignment_claim` | transactional | `$1: تم تسليمكم مبلغ $2 تسويةً عن $3 بموجب المحضر $4، سند الصرف رقم $5.` | `$1` shop, `$2` amount, `$3` item name, `$4` incident report number, `$5` payment voucher number |
+| `batch_recall` | transactional | `تنبيه هام من $1: يرجى التوقف عن استخدام $2 (دفعة رقم $3) ومراجعتنا فورًا لإرجاعه واسترداد قيمته كاملة. للاستفسار: $4` | `$1` shop, `$2` item name, `$3` batch number, `$4` shop phone |
+| `month_end_report` | transactional | `$1 - إقفال $2: المبيعات $3، الربح الإجمالي $4، صافي الربح $5، النقدية $6، ذمم العملاء $7. التقرير الكامل في التطبيق.` | `$1` shop, `$2` month, `$3` sales, `$4` gross profit, `$5` net profit, `$6` cash, `$7` customer receivables |
+| `direct` | transactional | `رسالة من $1: $2` | `$1` shop, `$2` the staff member's free text |
+| `marketing` | marketing | `عرض من $1: $2 (لإيقاف العروض أبلغ المحل)` | `$1` shop, `$2` the offer's free text |
+
+`direct` and `marketing` carry free text in `$2`, and Resala may refuse to
+approve a free-text template; those kinds then stay unconfigured and fail with
+`template_not_configured` — never silently.
+
+To register the templates:
+
+1. Sign in to the Resala dashboard with the company account and open
+   **قوالب الرسائل** (message templates).
+2. Create one template per kind above, pasting the Arabic text **exactly** —
+   `$1`, `$2`, … are Resala's variable placeholders, in order.
+3. Wait for Resala to approve it (status `APPROVED`).
+4. Copy its id with **نسخ معرف القالب** (copy template id).
+5. Put every id into one JSON object and restart/redeploy the relay:
+
+   ```sh
+   POINTY_RELAY_SMS_TEMPLATES='{"test":"<uuid>","invoice":"<uuid>","invoice_link":"<uuid>","debt_reminder":"<uuid>"}'
+   ```
+
+6. Check with `pointy-relay sms config`: a kind without an id shows `MISSING`,
+   and its sends fail with `422 template_not_configured`.
+7. Send a test message from the app's messaging settings (the `test` kind).
+
+Changing a text means registering it again and pointing the kind at the new id.
+A kind configured here that the relay does not know is still sendable (so a new
+kind needs no relay deploy), just without the variable-count check; the startup
+log warns about it.
+
+### Test mode
+
+`POINTY_RELAY_SMS_TEST_MODE=true` adds Resala's `&test` flag to every send:
+nothing reaches a phone and nothing is charged. It is the `.env.example`
+default, and `make relay-run` forces it unless you pass
+`RELAY_SMS_TEST_MODE=false`, so a dev relay holding the real token cannot text
+customers by accident. A shop can also send one message in test mode with
+`"test": true`. Test sends are recorded in the ledger (`test_mode`), never count
+against the cap, and are not delivery-tracked. If Resala reports `is_prod:false`
+for a send the relay did not mark as a test, the ledger records it as a test
+too, so it is never billed to the shop.
+
+### Delivery sync
+
+Resala's send answer carries no message id and there is no delivery webhook, so
+delivery is read back from its log. Every
+`POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL` the relay loads real sends still at
+`sent` from the last 48 hours (at most 500), pages through
+`GET /sent-view?filters=source:message&paginate=100&sorts=-created_at` (newest
+first; stopping once rows are 15 minutes older than the oldest candidate, or
+after 10 pages), and matches each message to at most one log row: the same
+number, a Resala timestamp within 10 minutes of the send, preferring an
+identical content hash, then the nearest time. `delivered` → delivered;
+`undelivered`, `failed`, `rejected`, `expired` → undelivered; `sent` records
+Resala's id on the row (pinning the match for later syncs); `null`/`accepted`
+wait for the next sync. The sync runs only with a token configured, and never
+calls Resala when nothing awaits a report.
+
+### Operator CLI
+
+```sh
+pointy-relay sms usage                                     # this month, busiest shop first
+pointy-relay sms usage --from 2026-09-01 --to 2026-09-30   # Libyan days, --to inclusive
+pointy-relay sms log --installation <id> --status failed --limit 20   # numbers masked; --json for full rows
+pointy-relay sms config                                    # templates (MISSING ones flagged), test mode, limits
+```
+
+### Operations
+
+- **Empty wallet.** When the company's Resala wallet runs dry, Resala answers
+  `400 wallet must have at least 0.15 LYD to send an sms`: every send fails with
+  `502 provider_credit`, and the relay logs an **ERROR**
+  (`resala wallet is empty: top up the company account`). Top the wallet up in
+  the Resala dashboard; nothing needs restarting. Failed sends are free, so no
+  shop loses allowance to the outage, and Django does not retry them.
+- **Rejected token.** `502 provider_unauthorized` plus an ERROR log: replace
+  `POINTY_RELAY_RESALA_API_TOKEN`.
+- **Metrics.** `/v1/status` and `/v1/metrics` count sends by outcome
+  (`sms_sends_by_outcome`) and applied delivery reports
+  (`sms_deliveries_by_outcome`). Per-shop numbers live in the ledger
+  (`pointy-relay sms usage`), not in metric labels.
+
 ## State
 
 The relay uses PostgreSQL for durable installation state. Run
 `pointy-relay migrate` before provisioning or starting a fresh server. The
 PostgreSQL store keeps token hashes, shop names, subscription state, AI
 entitlement state, connector certificate binding metadata, connector heartbeat
-metadata, and database-backed relay TLS material when auto-generation is used.
+metadata, the SMS ledger (no message content), and database-backed relay TLS
+material when auto-generation is used.
 
 Redis is used as an operational layer for:
 
@@ -804,6 +1053,16 @@ go vet ./...
 
 The integration tests run without binding local ports; they use in-memory
 protocol sessions to verify relay, connector, subscription, and HTTP behavior.
+
+The Postgres store tests (the holiday calendar and the SMS ledger, including
+its concurrent monthly-cap claims) skip unless `POINTY_RELAY_E2E_DATABASE_URL`
+is set. Point it at a **dedicated** database, never a dev one:
+
+```sh
+docker exec pointy-postgres-1 psql -U postgres -c 'CREATE DATABASE relay_store_test'
+POINTY_RELAY_E2E_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/relay_store_test?sslmode=disable' \
+  go test -count=1 -run TestPostgres ./internal/control
+```
 
 Production E2E is opt-in because it requires reachable PostgreSQL and Redis.
 It applies relay migrations, uses PostgreSQL for installation/admin-audit state,

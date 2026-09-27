@@ -453,7 +453,7 @@ frontend-learning-preview: frontend-install ## Run the learning (in-app guides) 
 frontend-subscription-preview: frontend-install ## Run the subscription / relay status settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/subscription_preview.dart
 
-frontend-messaging-preview: frontend-install ## Run the SMS device / messaging settings UI preview harness as a local web server.
+frontend-messaging-preview: frontend-install ## Run the SMS (relay/Resala) settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/messaging_preview.dart
 
 frontend-user-settings-preview: frontend-install ## Run the account settings (profile / password / loans) UI preview harness as a local web server.
@@ -552,6 +552,15 @@ relay-run: ## Run the relay server.
 		POINTY_RELAY_AI_MAX_IMAGES="$(RELAY_AI_MAX_IMAGES)" \
 		POINTY_RELAY_AI_MAX_REQUEST_BYTES="$(RELAY_AI_MAX_REQUEST_BYTES)" \
 		POINTY_RELAY_SERPER_API_KEY="$(RELAY_SERPER_API_KEY)" \
+		POINTY_RELAY_RESALA_API_TOKEN="$(RELAY_RESALA_API_TOKEN)" \
+		POINTY_RELAY_RESALA_BASE_URL="$(RELAY_RESALA_BASE_URL)" \
+		POINTY_RELAY_SMS_TEMPLATES='$(RELAY_SMS_TEMPLATES)' \
+		POINTY_RELAY_SMS_TEST_MODE="$(or $(RELAY_SMS_TEST_MODE),true)" \
+		POINTY_RELAY_SMS_MONTHLY_LIMIT="$(RELAY_SMS_MONTHLY_LIMIT)" \
+		POINTY_RELAY_SMS_RATE_LIMIT="$(RELAY_SMS_RATE_LIMIT)" \
+		POINTY_RELAY_SMS_REQUEST_TIMEOUT="$(RELAY_SMS_REQUEST_TIMEOUT)" \
+		POINTY_RELAY_SMS_MAX_VARIABLE_RUNES="$(RELAY_SMS_MAX_VARIABLE_RUNES)" \
+		POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL="$(RELAY_SMS_DELIVERY_SYNC_INTERVAL)" \
 		POINTY_RELAY_ALLOW_INSECURE_HTTP="$(RELAY_ALLOW_INSECURE_HTTP)" \
 		POINTY_RELAY_ALLOW_INSECURE_CONNECTOR="$(RELAY_ALLOW_INSECURE_CONNECTOR)" \
 		POINTY_RELAY_HTTP_TLS_CERT="$(RELAY_HTTP_TLS_CERT)" \

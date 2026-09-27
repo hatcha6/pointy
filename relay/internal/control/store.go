@@ -53,6 +53,14 @@ type Installation struct {
 	// the relay holds one fulus.ly subscription for the whole fleet and serves
 	// the published rates, so this is what a shop is actually buying.
 	FXEnabled bool `json:"fx_enabled"`
+	// SMSEnabled gates relay-hosted SMS (Resala). Its own entitlement like AI
+	// and FX: the company owns the provider account and pays per message, so
+	// sending is something a shop buys, not a setting it flips.
+	SMSEnabled bool `json:"sms_enabled"`
+	// SMSMonthlyLimit caps the shop's billable messages per calendar month
+	// (UTC+2). 0 means "the relay default" (POINTY_RELAY_SMS_MONTHLY_LIMIT),
+	// so a plan that needs more is raised per shop without a redeploy.
+	SMSMonthlyLimit int `json:"sms_monthly_limit"`
 	// LastFXFetchAt stamps the goodwill allowance (see FXAccessAt). Written
 	// only for a shop WITHOUT the entitlement, so an entitled shop's fetches
 	// never cost a write.
@@ -114,6 +122,23 @@ func (i Installation) AIActive(now time.Time) bool {
 // exactly the one thing it wants.
 func (i Installation) FXActive(now time.Time) bool {
 	if !i.FXEnabled {
+		return false
+	}
+	if !i.SubscriptionActive {
+		return false
+	}
+	if i.SubscriptionEndsAt == nil {
+		return true
+	}
+	return now.Before(*i.SubscriptionEndsAt)
+}
+
+// SMSActive reports whether the installation may send SMS through the relay
+// right now. Same rule as AIActive: an active, unexpired subscription plus the
+// SMS flag, deliberately NOT requiring RelayEnabled — invoice texts and debt
+// reminders are useful to a shop that never buys remote access.
+func (i Installation) SMSActive(now time.Time) bool {
+	if !i.SMSEnabled {
 		return false
 	}
 	if !i.SubscriptionActive {
@@ -198,6 +223,8 @@ type ProvisionInstallationRequest struct {
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          bool       `json:"ai_enabled"`
 	FXEnabled          bool       `json:"fx_enabled"`
+	SMSEnabled         bool       `json:"sms_enabled"`
+	SMSMonthlyLimit    int        `json:"sms_monthly_limit"`
 	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 }
@@ -212,6 +239,8 @@ type SubscriptionUpdate struct {
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          *bool      `json:"ai_enabled,omitempty"`
 	FXEnabled          *bool      `json:"fx_enabled,omitempty"`
+	SMSEnabled         *bool      `json:"sms_enabled,omitempty"`
+	SMSMonthlyLimit    *int       `json:"sms_monthly_limit,omitempty"`
 	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 	ClearEnd           bool       `json:"clear_subscription_end,omitempty"`
@@ -635,6 +664,7 @@ type fileStoreData struct {
 	ExchangeRates                    map[string]ExchangeRate                   `json:"exchange_rates,omitempty"`
 	ChannelTargets                   map[string]ChannelTarget                  `json:"channel_targets,omitempty"`
 	EnrollmentTokens                 map[string]EnrollmentTokenRecord          `json:"enrollment_tokens,omitempty"`
+	SMSMessages                      map[string]SMSMessage                     `json:"sms_messages,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {
@@ -690,6 +720,8 @@ func (s *FileStore) ProvisionInstallation(
 		RelayEnabled:       relayEnabled,
 		AIEnabled:          request.AIEnabled,
 		FXEnabled:          request.FXEnabled,
+		SMSEnabled:         request.SMSEnabled,
+		SMSMonthlyLimit:    max(request.SMSMonthlyLimit, 0),
 		SubscriptionActive: subscriptionActive,
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
@@ -741,6 +773,12 @@ func (s *FileStore) UpdateSubscription(
 	}
 	if update.FXEnabled != nil {
 		installation.FXEnabled = *update.FXEnabled
+	}
+	if update.SMSEnabled != nil {
+		installation.SMSEnabled = *update.SMSEnabled
+	}
+	if update.SMSMonthlyLimit != nil {
+		installation.SMSMonthlyLimit = max(*update.SMSMonthlyLimit, 0)
 	}
 	if update.SubscriptionActive != nil {
 		installation.SubscriptionActive = *update.SubscriptionActive
@@ -1142,6 +1180,9 @@ func (s *FileStore) load() error {
 	}
 	if s.data.ChannelTargets == nil {
 		s.data.ChannelTargets = map[string]ChannelTarget{}
+	}
+	if s.data.SMSMessages == nil {
+		s.data.SMSMessages = map[string]SMSMessage{}
 	}
 	return nil
 }
@@ -1585,6 +1626,12 @@ func applySubscriptionUpdate(
 	if update.FXEnabled != nil {
 		installation.FXEnabled = *update.FXEnabled
 	}
+	if update.SMSEnabled != nil {
+		installation.SMSEnabled = *update.SMSEnabled
+	}
+	if update.SMSMonthlyLimit != nil {
+		installation.SMSMonthlyLimit = max(*update.SMSMonthlyLimit, 0)
+	}
 	if update.SubscriptionActive != nil {
 		installation.SubscriptionActive = *update.SubscriptionActive
 	}
@@ -1630,6 +1677,8 @@ func InstallationSubscriptionAuditState(
 		"subscription_ends_at": installation.SubscriptionEndsAt,
 		"ai_enabled":           installation.AIEnabled,
 		"fx_enabled":           installation.FXEnabled,
+		"sms_enabled":          installation.SMSEnabled,
+		"sms_monthly_limit":    installation.SMSMonthlyLimit,
 		"relay_active":         installation.RelayActive(now),
 	}
 }

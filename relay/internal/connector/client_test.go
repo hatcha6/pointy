@@ -102,7 +102,13 @@ func TestServeSessionRejectsRequestWhenConnectorLimitExhausted(t *testing.T) {
 		t.Fatal("first request did not reach backend")
 	}
 
-	second := openRequestStream(t, session, "/api/overflow")
+	// Over its limit the connector answers and closes the stream without
+	// reading the request, so the request can find the stream closed already.
+	// The answer is on the stream either way.
+	second, err := writeRequestStream(t, session, "/api/overflow")
+	if err != nil && !errors.Is(err, protocol.ErrStreamClosed) {
+		t.Fatal(err)
+	}
 	defer second.Close()
 	secondResponse := readStreamResponse(t, second)
 	secondBody := readResponseBody(t, secondResponse)
@@ -311,6 +317,22 @@ func openRequestStream(
 	path string,
 ) *protocol.Stream {
 	t.Helper()
+	stream, err := writeRequestStream(t, session, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stream
+}
+
+// writeRequestStream opens a stream and writes a request into it, returning the
+// stream with the write's error so the caller can still read an answer the
+// connector sent before it took the request.
+func writeRequestStream(
+	t *testing.T,
+	session *protocol.Session,
+	path string,
+) (*protocol.Stream, error) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stream, err := session.OpenStream(ctx)
@@ -318,10 +340,8 @@ func openRequestStream(
 		t.Fatal(err)
 	}
 	request := "GET " + path + " HTTP/1.1\r\nHost: pointy.local\r\n\r\n"
-	if _, err := io.WriteString(stream, request); err != nil {
-		t.Fatal(err)
-	}
-	return stream
+	_, err = io.WriteString(stream, request)
+	return stream, err
 }
 
 func readStreamResponse(t *testing.T, stream *protocol.Stream) *http.Response {

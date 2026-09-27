@@ -301,6 +301,62 @@ ALTER TABLE relay_installations
 	ADD COLUMN IF NOT EXISTS last_fx_fetch_at timestamptz;
 `,
 	},
+	{
+		version: 13,
+		name:    "relay-hosted sms",
+		sql: `
+-- SMS is its own entitlement, like AI and FX, plus a per-shop monthly cap
+-- where 0 means "the relay default".
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS sms_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS sms_monthly_limit integer NOT NULL DEFAULT 0;
+
+-- One row per send: the company's per-shop record of who sent what, what it
+-- cost and whether it arrived. It holds NO message content, only a sha256 of
+-- it, which is enough to recognise the message in the provider's delivery log.
+-- No ON DELETE CASCADE: this is a billing record and must outlive a deleted
+-- installation rather than vanish with it.
+CREATE TABLE IF NOT EXISTS relay_sms_messages (
+	id text PRIMARY KEY,
+	installation_id text NOT NULL REFERENCES relay_installations(id),
+	idempotency_key text NOT NULL,
+	kind text NOT NULL,
+	consent_class text NOT NULL DEFAULT 'transactional',
+	recipient text NOT NULL,
+	content_sha256 text NOT NULL DEFAULT '',
+	template_id text NOT NULL DEFAULT '',
+	template_body text NOT NULL DEFAULT '',
+	test_mode boolean NOT NULL DEFAULT false,
+	status text NOT NULL DEFAULT 'pending',
+	error_code text NOT NULL DEFAULT '',
+	error_detail text NOT NULL DEFAULT '',
+	cost numeric(12, 4) NOT NULL DEFAULT 0,
+	provider_message_id text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	sent_at timestamptz,
+	delivered_at timestamptz,
+	-- The idempotency guarantee: a retried send finds its first attempt here
+	-- instead of texting the customer twice.
+	CONSTRAINT relay_sms_messages_idempotency_key_key UNIQUE (installation_id, idempotency_key),
+	CONSTRAINT relay_sms_messages_status_valid
+		CHECK (status IN ('pending', 'sent', 'failed', 'delivered', 'undelivered'))
+);
+
+-- The monthly-cap count on every send, and one shop's history.
+CREATE INDEX IF NOT EXISTS relay_sms_messages_installation_created_idx
+	ON relay_sms_messages (installation_id, created_at);
+
+-- The delivery sync (status = 'sent', last 48h) and the operator's status filter.
+CREATE INDEX IF NOT EXISTS relay_sms_messages_status_created_idx
+	ON relay_sms_messages (status, created_at);
+
+-- The fleet usage report over a period.
+CREATE INDEX IF NOT EXISTS relay_sms_messages_created_idx
+	ON relay_sms_messages (created_at);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

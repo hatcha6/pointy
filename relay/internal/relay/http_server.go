@@ -105,6 +105,16 @@ var adminConsoleTemplate = template.Must(template.New("relay-admin").Parse(`<!do
         <option value="false">Disabled</option>
       </select>
     </label>
+    <label>SMS entitlement
+      <select name="sms_enabled">
+        <option value="keep">Keep current</option>
+        <option value="true">Enabled</option>
+        <option value="false">Disabled</option>
+      </select>
+    </label>
+    <label>SMS monthly limit
+      <input name="sms_monthly_limit" inputmode="numeric" placeholder="Keep current (0 = relay default)" autocomplete="off">
+    </label>
     <label>Subscription end mode
       <select name="subscription_end_mode">
         <option value="keep">Keep current</option>
@@ -293,6 +303,10 @@ type HTTPServer struct {
 	// Fulus (exchange rates). The subscription token lives only here, for the
 	// same reason as the OpenRouter key: the fleet buys one and fans it out.
 	Fulus FulusConfig
+	// SMS (Resala). The company's provider account: the API token and the
+	// approved template ids live only here, and every shop's messages go out
+	// through it, gated by the sms_enabled entitlement and a monthly cap.
+	SMS SMSConfig
 	// Relay-hosted AI (OpenRouter). The key and tier->model catalog live only
 	// here so AI billing and model routing stay company-controlled.
 	OpenRouterAPIKey  string
@@ -622,6 +636,44 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleHolidayByID)
+	case r.URL.Path == "/v1/sms/send" && r.Method == http.MethodPost:
+		// A shop's backend sends one templated SMS through the company's
+		// Resala account, gated on the SMS entitlement and the monthly cap.
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleSMSSend(w, r)
+	case r.URL.Path == "/v1/sms/usage/self" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleSMSUsageSelf(w, r)
+	case r.URL.Path == "/v1/sms/status" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleSMSStatus(w, r)
+	case r.URL.Path == "/v1/sms/usage" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleSMSAdminUsage)
+	case r.URL.Path == "/v1/sms/messages" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleSMSAdminMessages)
+	case r.URL.Path == "/v1/sms/config" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleSMSAdminConfig)
 	default:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
@@ -1095,6 +1147,10 @@ func (s HTTPServer) handleProvisionInstallation(w http.ResponseWriter, r *http.R
 	var request control.ProvisionInstallationRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if request.SMSMonthlyLimit < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sms_monthly_limit must be 0 or positive"})
 		return
 	}
 	provisioned, err := s.Store.ProvisionInstallation(r.Context(), request)
@@ -2072,6 +2128,9 @@ func (s HTTPServer) updateAdminSubscription(
 	if update.ClearEnd && update.SubscriptionEndsAt != nil {
 		return control.Installation{}, control.AdminAuditEvent{}, adminValidationError("clear_subscription_end cannot be combined with subscription_ends_at")
 	}
+	if update.SMSMonthlyLimit != nil && *update.SMSMonthlyLimit < 0 {
+		return control.Installation{}, control.AdminAuditEvent{}, adminValidationError("sms_monthly_limit must be 0 or positive")
+	}
 	adminStore, ok := s.Store.(control.AdminSubscriptionStore)
 	if !ok {
 		return control.Installation{}, control.AdminAuditEvent{}, errAdminAuditUnavailable
@@ -2106,6 +2165,8 @@ func subscriptionUpdateHasChange(update control.SubscriptionUpdate) bool {
 	return update.RelayEnabled != nil ||
 		update.AIEnabled != nil ||
 		update.FXEnabled != nil ||
+		update.SMSEnabled != nil ||
+		update.SMSMonthlyLimit != nil ||
 		update.SubscriptionActive != nil ||
 		update.SubscriptionEndsAt != nil ||
 		update.ClearEnd
@@ -2124,6 +2185,8 @@ func adminInstallationPayload(
 		"subscription_ends_at":              installation.SubscriptionEndsAt,
 		"ai_enabled":                        installation.AIEnabled,
 		"fx_enabled":                        installation.FXEnabled,
+		"sms_enabled":                       installation.SMSEnabled,
+		"sms_monthly_limit":                 installation.SMSMonthlyLimit,
 		"relay_active":                      installation.RelayActive(now),
 		"created_at":                        installation.CreatedAt,
 		"updated_at":                        installation.UpdatedAt,
@@ -2166,6 +2229,18 @@ func subscriptionUpdateFromForm(r *http.Request) (control.SubscriptionUpdate, er
 		return control.SubscriptionUpdate{}, err
 	} else if set {
 		update.FXEnabled = &value
+	}
+	if value, set, err := optionalBoolFormValue(r, "sms_enabled"); err != nil {
+		return control.SubscriptionUpdate{}, err
+	} else if set {
+		update.SMSEnabled = &value
+	}
+	if raw := strings.TrimSpace(r.FormValue("sms_monthly_limit")); raw != "" && raw != "keep" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit < 0 {
+			return control.SubscriptionUpdate{}, adminValidationError("sms monthly limit must be a whole number, 0 or more")
+		}
+		update.SMSMonthlyLimit = &limit
 	}
 	update.ClearEnd = r.FormValue("subscription_end_mode") == "clear"
 	if rawEndsAt := strings.TrimSpace(r.FormValue("subscription_ends_at")); rawEndsAt != "" {
@@ -2455,7 +2530,8 @@ func (s HTTPServer) handleRelayWithOptions(
 	if maxBytes := s.MaxRelayedRequestBodyBytes; maxBytes > 0 && request.Body != nil {
 		request.Body = http.MaxBytesReader(w, request.Body, maxBytes)
 	}
-	if err := request.Write(stream); err != nil {
+	responseReader := bufio.NewReader(stream)
+	if err := request.Write(stream); err != nil && !answeredBeforeRequest(stream, responseReader) {
 		if requestCtx.Err() != nil {
 			statusCode = http.StatusGatewayTimeout
 			outcome = "request_timeout"
@@ -2478,7 +2554,7 @@ func (s HTTPServer) handleRelayWithOptions(
 		return
 	}
 
-	response, err := http.ReadResponse(bufio.NewReader(stream), request)
+	response, err := http.ReadResponse(responseReader, request)
 	if err != nil {
 		if requestCtx.Err() != nil {
 			statusCode = http.StatusGatewayTimeout
@@ -2534,6 +2610,23 @@ func (s HTTPServer) handleRelayWithOptions(
 	if err != nil {
 		s.logger().Warn("relay response copy failed", "installation_id", installation.ID, "error", err)
 	}
+}
+
+// answeredBeforeRequest reports whether the connector answered and closed the
+// stream before taking the whole request, leaving its answer to read; a tunnel
+// that went down leaves nothing, and its failed write stays a 502. A connector
+// at its concurrency limit turns a stream away just so — 429, close, the
+// request never read — and Stream.Write refuses a closed stream, so the write
+// fails whenever that answer lands first. An upload still streaming when it did
+// always failed, and the device got "relay request failed" for the 429.
+func answeredBeforeRequest(stream interface{ Done() <-chan struct{} }, reader *bufio.Reader) bool {
+	select {
+	case <-stream.Done():
+	default:
+		return false
+	}
+	_, err := reader.Peek(1)
+	return err == nil
 }
 
 func (s HTTPServer) relayedRequestBodyTooLarge(w http.ResponseWriter, r *http.Request) bool {

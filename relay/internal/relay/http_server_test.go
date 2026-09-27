@@ -1317,22 +1317,19 @@ func TestHTTPRelayReturnsConnectorLimitResponseWhenConnectorConcurrencyIsExhaust
 		Logger: logger,
 	}
 
-	firstDone := make(chan struct{})
+	first, err := http.NewRequest(http.MethodGet, "http://relay.test/api/products/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	// The status comes back over a channel, never through t: a request still
+	// in flight when an assertion below fails would otherwise report after the
+	// test ended, and that panics the whole package run.
+	firstStatus := make(chan int, 1)
 	go func() {
-		defer close(firstDone)
-		request, err := http.NewRequest(http.MethodGet, "http://relay.test/api/products/", nil)
-		if err != nil {
-			t.Errorf("first request creation failed: %v", err)
-			return
-		}
-		request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
 		recorder := httptest.NewRecorder()
-		server.ServeHTTP(recorder, request)
-		response := recorder.Result()
-		defer response.Body.Close()
-		if response.StatusCode != http.StatusOK {
-			t.Errorf("expected first request 200, got %d", response.StatusCode)
-		}
+		server.ServeHTTP(recorder, first)
+		firstStatus <- recorder.Code
 	}()
 	select {
 	case <-firstStarted:
@@ -1354,10 +1351,83 @@ func TestHTTPRelayReturnsConnectorLimitResponseWhenConnectorConcurrencyIsExhaust
 	}
 	close(releaseBackend)
 	select {
-	case <-firstDone:
+	case status := <-firstStatus:
+		if status != http.StatusOK {
+			t.Fatalf("expected first request 200, got %d", status)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("first connector request did not finish")
 	}
+}
+
+// A connector at its limit answers 429 and closes the stream without reading
+// the request, so an upload still streaming when that answer lands finds the
+// stream closed. The relay took the failed write for a broken tunnel and
+// answered 502, and the connector's 429 was dropped.
+func TestHTTPRelayReturnsConnectorLimitResponseThatArrivesMidUpload(t *testing.T) {
+	store, provisioned := provisionRelayInstallation(t)
+	hub := NewHub()
+	relayRaw, connectorRaw := net.Pipe()
+	relaySession := protocol.NewSession(protocol.NewConn(relayRaw))
+	connectorSession := protocol.NewSession(protocol.NewConn(connectorRaw))
+	t.Cleanup(hub.Register(provisioned.Installation.ID, relaySession))
+	t.Cleanup(func() {
+		_ = relaySession.Close()
+		_ = connectorSession.Close()
+	})
+	go func() { _ = relaySession.Run() }()
+	go func() { _ = connectorSession.Run() }()
+
+	// Turn the stream away as a connector at its limit does, and only then let
+	// the upload's bytes go. A session takes frames in order, so once the relay
+	// has taken the ping it has taken the close before it.
+	answered := make(chan struct{})
+	go func() {
+		defer close(answered)
+		stream, err := connectorSession.Accept(context.Background())
+		if err != nil {
+			return
+		}
+		_, _ = io.WriteString(stream, "HTTP/1.1 429 Too Many Requests\r\n"+
+			"Content-Length: 32\r\nConnection: close\r\n\r\n"+
+			"connector request limit reached\n")
+		_ = stream.Close()
+		_ = connectorSession.Ping()
+	}()
+
+	server := HTTPServer{
+		Store:  store,
+		Hub:    hub,
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/api/attachments/",
+		heldUpload{release: answered, body: strings.NewReader("receipt photo")},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected the connector's 429, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "connector request limit reached") {
+		t.Fatalf("expected the connector's own answer, got %q", recorder.Body.String())
+	}
+}
+
+// heldUpload is a request body whose bytes wait until release is closed.
+type heldUpload struct {
+	release <-chan struct{}
+	body    io.Reader
+}
+
+func (u heldUpload) Read(p []byte) (int, error) {
+	<-u.release
+	return u.body.Read(p)
 }
 
 func TestHTTPRelayIssuesAndAcceptsShortLivedTicket(t *testing.T) {

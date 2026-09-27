@@ -184,8 +184,10 @@ const installationInsertSQL = `INSERT INTO relay_installations (
 	subscription_active,
 	subscription_ends_at,
 	created_at,
-	updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
+	updated_at,
+	sms_enabled,
+	sms_monthly_limit
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
 
 func installationInsertArgs(installation Installation) []any {
 	return []any{
@@ -204,6 +206,8 @@ func installationInsertArgs(installation Installation) []any {
 		installation.SubscriptionEndsAt,
 		installation.CreatedAt,
 		installation.UpdatedAt,
+		installation.SMSEnabled,
+		installation.SMSMonthlyLimit,
 	}
 }
 

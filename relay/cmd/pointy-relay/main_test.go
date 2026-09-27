@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1039,5 +1040,282 @@ func TestDiagnosticsHelpers(t *testing.T) {
 	}
 	if isConnectorOfflineError(fmt.Errorf("some other error")) {
 		t.Fatal("did not expect connector-offline detection")
+	}
+}
+
+// fakeAdminAPI answers every admin call with body and records what was asked.
+type fakeAdminAPI struct {
+	method string
+	path   string
+	query  url.Values
+	sent   map[string]any
+}
+
+func installFakeAdminAPI(t *testing.T, body string) *fakeAdminAPI {
+	t.Helper()
+	restore := newRelayAdminHTTPClient
+	t.Cleanup(func() { newRelayAdminHTTPClient = restore })
+	fake := &fakeAdminAPI{}
+	newRelayAdminHTTPClient = func(_ relayAdminHTTPClientOptions) (*http.Client, error) {
+		return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			fake.method = r.Method
+			fake.path = r.URL.Path
+			fake.query = r.URL.Query()
+			if r.Body != nil {
+				_ = json.NewDecoder(r.Body).Decode(&fake.sent)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		})}, nil
+	}
+	return fake
+}
+
+var adminFlags = []string{"--control-url", "https://relay.test", "--admin-token", "secret"}
+
+func TestSubscriptionUpdateBodyCarriesSMSFields(t *testing.T) {
+	body, err := subscriptionUpdateBody(subscriptionUpdateOptions{
+		InstallationID:  "installation-1",
+		Actor:           "ops@example.com",
+		Reason:          "sms add-on",
+		SMSEnabled:      "true",
+		SMSMonthlyLimit: "750",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body["sms_enabled"] != true || body["sms_monthly_limit"] != 750 {
+		t.Fatalf("unexpected body %#v", body)
+	}
+	if _, ok := body["relay_enabled"]; ok {
+		t.Fatal("an SMS-only change must not touch remote access")
+	}
+	for _, bad := range []string{"-3", "lots", "1.5"} {
+		if _, err := subscriptionUpdateBody(subscriptionUpdateOptions{
+			InstallationID:  "installation-1",
+			Actor:           "ops",
+			Reason:          "typo",
+			SMSMonthlyLimit: bad,
+		}); err == nil {
+			t.Fatalf("sms-monthly-limit %q should be rejected", bad)
+		}
+	}
+	// "0" is a real value: back to the relay default.
+	body, err = subscriptionUpdateBody(subscriptionUpdateOptions{
+		InstallationID:  "installation-1",
+		Actor:           "ops",
+		Reason:          "reset",
+		SMSMonthlyLimit: "0",
+	})
+	if err != nil || body["sms_monthly_limit"] != 0 {
+		t.Fatalf("expected an explicit 0, got %#v %v", body, err)
+	}
+}
+
+func TestRunSubscriptionUpdateSendsSMSFlags(t *testing.T) {
+	t.Setenv("POINTY_RELAY_OPERATOR", "ops-team")
+	fake := installFakeAdminAPI(t, `{"installation":{"id":"inst_1","sms_enabled":true,"sms_monthly_limit":750},"audit_event":{}}`)
+	out, err := captureStdout(t, func() error {
+		return runSubscriptionUpdate(append([]string{
+			"inst_1", "--reason", "sms add-on", "--sms-enabled", "true", "--sms-monthly-limit", "750",
+		}, adminFlags...))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.method != http.MethodPatch || fake.path != "/v1/installations/inst_1/subscription" {
+		t.Fatalf("unexpected request %s %s", fake.method, fake.path)
+	}
+	if fake.sent["sms_enabled"] != true || fake.sent["sms_monthly_limit"] != float64(750) {
+		t.Fatalf("unexpected body %#v", fake.sent)
+	}
+	if !strings.Contains(out, "sms enabled") || !strings.Contains(out, "750/month") {
+		t.Fatalf("the confirmation should show the SMS state:\n%s", out)
+	}
+}
+
+func TestRunSubscriptionSetTogglesSMS(t *testing.T) {
+	t.Setenv("POINTY_RELAY_OPERATOR", "ops-team")
+	fake := installFakeAdminAPI(t, `{"installation":{"id":"inst_1","sms_enabled":true},"audit_event":{}}`)
+	if _, err := captureStdout(t, func() error {
+		return runSubscriptionSet(append([]string{"inst_1", "--sms", "--sms-monthly-limit", "900"}, adminFlags...))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if fake.sent["sms_enabled"] != true || fake.sent["sms_monthly_limit"] != float64(900) {
+		t.Fatalf("unexpected body %#v", fake.sent)
+	}
+	if _, ok := fake.sent["relay_enabled"]; ok {
+		t.Fatal("--sms alone must not change remote access")
+	}
+	if _, ok := fake.sent["subscription_active"]; ok {
+		t.Fatal("--sms alone must not change the subscription")
+	}
+	reason, _ := fake.sent["reason"].(string)
+	if !strings.Contains(reason, "SMS on") || !strings.Contains(reason, "SMS cap 900/month") {
+		t.Fatalf("expected a descriptive reason, got %q", reason)
+	}
+
+	if _, err := captureStdout(t, func() error {
+		return runSubscriptionSet(append([]string{"inst_1", "--no-sms"}, adminFlags...))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if fake.sent["sms_enabled"] != false {
+		t.Fatalf("--no-sms must send false, got %#v", fake.sent)
+	}
+	if err := runSubscriptionSet(append([]string{"inst_1", "--sms", "--no-sms"}, adminFlags...)); err == nil {
+		t.Fatal("--sms and --no-sms are mutually exclusive")
+	}
+	if err := runSubscriptionSet(append([]string{"inst_1", "--sms-monthly-limit", "-2"}, adminFlags...)); err == nil {
+		t.Fatal("a negative SMS cap must be rejected")
+	}
+}
+
+func TestInstallationViewsShowSMS(t *testing.T) {
+	installFakeAdminAPI(t, `{"id":"inst_1","shop_name":"Alpha","sms_enabled":true,"sms_monthly_limit":0}`)
+	out, err := captureStdout(t, func() error {
+		return runInstallationsShow(append([]string{"inst_1"}, adminFlags...))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "sms enabled") || !strings.Contains(out, "relay default") {
+		t.Fatalf("show should include the SMS entitlement and cap:\n%s", out)
+	}
+
+	installFakeAdminAPI(t, `{"count":1,"installations":[{"id":"inst_1","shop_name":"Alpha","sms_enabled":true}]}`)
+	out, err = captureStdout(t, func() error { return runInstallationsList(adminFlags) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "SMS") {
+		t.Fatalf("list should have an SMS column:\n%s", out)
+	}
+}
+
+func TestRunSMSUsageRendersTheBusiestShopFirst(t *testing.T) {
+	fake := installFakeAdminAPI(t, `{"from":"2026-09-01T00:00:00+02:00","to":"2026-10-01T00:00:00+02:00",
+		"totals":{"installations":2,"messages":15,"sent":13,"failed":2,"delivered":11,"test":4,"cost":"1.50"},
+		"installations":[
+			{"installation_id":"inst_quiet","shop_name":"Quiet Shop","messages":3,"sent":3,"failed":0,"delivered":3,"cost":"0.30"},
+			{"installation_id":"inst_busy","shop_name":"Busy Shop","messages":12,"sent":10,"failed":2,"delivered":8,"cost":"1.20","last_sent_at":"2026-09-27T08:15:00Z"}
+		]}`)
+	out, err := captureStdout(t, func() error {
+		return runSMSUsage(append([]string{"--from", "2026-09-01", "--to", "2026-09-30"}, adminFlags...))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.method != http.MethodGet || fake.path != "/v1/sms/usage" {
+		t.Fatalf("unexpected request %s %s", fake.method, fake.path)
+	}
+	// Days are Libyan days, and --to includes the whole day.
+	if fake.query.Get("from") != "2026-09-01T00:00:00+02:00" || fake.query.Get("to") != "2026-10-01T00:00:00+02:00" {
+		t.Fatalf("unexpected period %v", fake.query)
+	}
+	busy, quiet := strings.Index(out, "Busy Shop"), strings.Index(out, "Quiet Shop")
+	if busy < 0 || quiet < 0 || busy > quiet {
+		t.Fatalf("the busiest shop must come first:\n%s", out)
+	}
+	for _, want := range []string{
+		"2026-09-01 00:00 +02:00 → 2026-10-01 00:00 +02:00",
+		"MESSAGES", "COST", "LAST SENT", "1.20", "2026-09-27 08:15 UTC", "15 message(s)", "1.50 LYD",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+	if err := runSMSUsage(append([]string{"--from", "yesterday"}, adminFlags...)); err == nil {
+		t.Fatal("a malformed date must be rejected")
+	}
+}
+
+func TestRunSMSLogMasksNumbers(t *testing.T) {
+	fake := installFakeAdminAPI(t, `{"count":1,"messages":[{"id":"m1","installation_id":"inst_1","shop_name":"Alpha",
+		"kind":"invoice","recipient":"218912345678","status":"failed","test_mode":false,"cost":"0.00",
+		"error_code":"provider_credit","created_at":"2026-09-27T08:00:00Z"}]}`)
+	out, err := captureStdout(t, func() error {
+		return runSMSLog(append([]string{"--installation", "inst_1", "--status", "failed", "--limit", "20"}, adminFlags...))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.path != "/v1/sms/messages" || fake.query.Get("installation_id") != "inst_1" ||
+		fake.query.Get("status") != "failed" || fake.query.Get("limit") != "20" {
+		t.Fatalf("unexpected request %s %v", fake.path, fake.query)
+	}
+	if strings.Contains(out, "218912345678") || !strings.Contains(out, "218••••••678") {
+		t.Fatalf("the table must mask the number:\n%s", out)
+	}
+	if !strings.Contains(out, "provider_credit") || !strings.Contains(out, "Alpha") {
+		t.Fatalf("unexpected table:\n%s", out)
+	}
+	if err := runSMSLog(append([]string{"--status", "lost"}, adminFlags...)); err == nil {
+		t.Fatal("an unknown status must be rejected")
+	}
+}
+
+func TestRunSMSConfigListsMissingTemplates(t *testing.T) {
+	fake := installFakeAdminAPI(t, `{"configured":true,"test_mode":true,"base_url":"https://dev.resala.ly/api/v1",
+		"templates":{"invoice":"uuid-invoice","loyalty":"uuid-loyalty"},"monthly_limit_default":500,
+		"rate_limit":"60/minute","request_timeout":"20s","max_variable_runes":320,"delivery_sync_interval":"5m0s",
+		"catalog":[{"kind":"invoice","consent_class":"transactional","variables":3,"configured":true},
+		           {"kind":"test","consent_class":"transactional","variables":1,"configured":false}]}`)
+	out, err := captureStdout(t, func() error { return runSMSConfig(adminFlags) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.path != "/v1/sms/config" {
+		t.Fatalf("unexpected path %q", fake.path)
+	}
+	for _, want := range []string{"test mode", "60/minute", "uuid-invoice", "MISSING", "loyalty", "1 kind(s) have no template id"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestBuildSMSConfig(t *testing.T) {
+	config, warnings, err := buildSMSConfig(smsSettings{
+		Token:                " resala-token ",
+		BaseURL:              "https://dev.resala.ly/api/v1",
+		Templates:            `{"invoice":"uuid-1","test":"uuid-2"}`,
+		TestMode:             true,
+		MonthlyLimit:         500,
+		RateLimit:            "60/minute",
+		RequestTimeout:       20 * time.Second,
+		MaxVariableRunes:     320,
+		DeliverySyncInterval: 5 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Token != "resala-token" || len(config.Templates) != 2 || config.Templates["test"] != "uuid-2" ||
+		!config.TestMode || config.MonthlyLimit != 500 || config.RateLimit.Limit != 60 ||
+		config.RateLimit.Window != time.Minute || config.DeliverySyncInterval != 5*time.Minute {
+		t.Fatalf("unexpected config %+v", config)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings %v", warnings)
+	}
+
+	_, _, err = buildSMSConfig(smsSettings{Templates: `{"invoice":`, RateLimit: "60/minute"})
+	if err == nil || !strings.Contains(err.Error(), "POINTY_RELAY_SMS_TEMPLATES") {
+		t.Fatalf("invalid template JSON must fail startup clearly, got %v", err)
+	}
+	if _, _, err := buildSMSConfig(smsSettings{RateLimit: "sixty"}); err == nil ||
+		!strings.Contains(err.Error(), "POINTY_RELAY_SMS_RATE_LIMIT") {
+		t.Fatalf("an invalid rate must fail startup, got %v", err)
+	}
+	if _, _, err := buildSMSConfig(smsSettings{RateLimit: "60/minute", MonthlyLimit: -1}); err == nil {
+		t.Fatal("a negative monthly limit must fail startup")
+	}
+	_, warnings, err = buildSMSConfig(smsSettings{Templates: `{"invoice":"uuid"}`, RateLimit: "0"})
+	if err != nil || len(warnings) != 1 || !strings.Contains(warnings[0], "POINTY_RELAY_RESALA_API_TOKEN is empty") {
+		t.Fatalf("templates without a token deserve a warning: %v %v", warnings, err)
 	}
 }

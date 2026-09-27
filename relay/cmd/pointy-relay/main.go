@@ -38,6 +38,7 @@ import (
 	"pointy/relay/internal/observability"
 	"pointy/relay/internal/ratelimit"
 	relayserver "pointy/relay/internal/relay"
+	"pointy/relay/internal/resala"
 	"pointy/relay/internal/security"
 )
 
@@ -86,6 +87,8 @@ func run(args []string) error {
 		return runSubscription(args[1:])
 	case "fleet":
 		return runFleet(args[1:])
+	case "sms":
+		return runSMS(args[1:])
 	case "artifacts":
 		return runArtifacts(args[1:])
 	case "migrate":
@@ -355,6 +358,51 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_FULUS_WEBHOOK_SECRET", ""),
 		"shared secret verifying fulus.ly rate webhooks; empty disables the webhook endpoint",
 	)
+	resalaAPIToken := flags.String(
+		"resala-api-token",
+		envString("POINTY_RELAY_RESALA_API_TOKEN", ""),
+		"Resala (resala.ly) API token for relay-hosted SMS; empty disables SMS",
+	)
+	resalaBaseURL := flags.String(
+		"resala-base-url",
+		envString("POINTY_RELAY_RESALA_BASE_URL", "https://dev.resala.ly/api/v1"),
+		"Resala API base URL",
+	)
+	smsTemplates := flags.String(
+		"sms-templates",
+		envString("POINTY_RELAY_SMS_TEMPLATES", ""),
+		`JSON object mapping each SMS kind to its approved Resala template id, e.g. {"invoice":"<uuid>"}`,
+	)
+	smsTestMode := flags.Bool(
+		"sms-test-mode",
+		envBool("POINTY_RELAY_SMS_TEST_MODE", false),
+		"send every SMS in Resala test mode (no message delivered, nothing charged)",
+	)
+	smsMonthlyLimit := flags.Int(
+		"sms-monthly-limit",
+		envInt("POINTY_RELAY_SMS_MONTHLY_LIMIT", 500),
+		"default per-installation SMS cap per calendar month (UTC+2) when the installation sets none; 0 = unlimited",
+	)
+	smsRateLimit := flags.String(
+		"sms-rate-limit",
+		envString("POINTY_RELAY_SMS_RATE_LIMIT", "60/minute"),
+		"per-installation SMS burst limit, e.g. 60/minute; 0 disables",
+	)
+	smsRequestTimeout := flags.Duration(
+		"sms-request-timeout",
+		envDuration("POINTY_RELAY_SMS_REQUEST_TIMEOUT", 20*time.Second),
+		"timeout for one Resala call",
+	)
+	smsMaxVariableRunes := flags.Int(
+		"sms-max-variable-runes",
+		envInt("POINTY_RELAY_SMS_MAX_VARIABLE_RUNES", 320),
+		"maximum characters in one SMS template variable",
+	)
+	smsDeliverySyncInterval := flags.Duration(
+		"sms-delivery-sync-interval",
+		envDuration("POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL", 5*time.Minute),
+		"how often to read Resala's delivery log back into the SMS ledger; 0 disables",
+	)
 	openRouterAPIKey := flags.String(
 		"openrouter-api-key",
 		envString("POINTY_RELAY_OPENROUTER_API_KEY", ""),
@@ -483,6 +531,22 @@ func runServer(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	// Parsed before anything connects, so a malformed template map or rate
+	// stops the relay at startup instead of failing every send later.
+	smsConfig, smsWarnings, err := buildSMSConfig(smsSettings{
+		Token:                *resalaAPIToken,
+		BaseURL:              *resalaBaseURL,
+		Templates:            *smsTemplates,
+		TestMode:             *smsTestMode,
+		MonthlyLimit:         *smsMonthlyLimit,
+		RateLimit:            *smsRateLimit,
+		RequestTimeout:       *smsRequestTimeout,
+		MaxVariableRunes:     *smsMaxVariableRunes,
+		DeliverySyncInterval: *smsDeliverySyncInterval,
+	})
+	if err != nil {
+		return err
+	}
 	profile := strings.ToLower(strings.TrimSpace(*platform))
 	if profile == "paas" {
 		// A PaaS host (e.g. JPaaS) sits behind the platform load balancer,
@@ -563,6 +627,9 @@ func runServer(args []string) error {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	for _, warning := range smsWarnings {
+		logger.Warn("relay sms templates: " + warning)
+	}
 	if profile == "paas" {
 		logger.Info(
 			"relay paas profile active",
@@ -809,6 +876,9 @@ func runServer(args []string) error {
 	if imageSearchClientTimeout <= 0 {
 		imageSearchClientTimeout = 8 * time.Second
 	}
+	// Resala shares the tuned transport; the per-call timeout is also applied
+	// by the client itself, so this one is only a backstop.
+	smsConfig.HTTPClient = &http.Client{Timeout: smsConfig.RequestTimeout + 5*time.Second, Transport: outboundTransport}
 
 	baseHTTPHandler := relayserver.HTTPServer{
 		Store:                         store,
@@ -843,6 +913,7 @@ func runServer(args []string) error {
 			Token:         strings.TrimSpace(*fulusToken),
 			WebhookSecret: strings.TrimSpace(*fulusWebhookSecret),
 		},
+		SMS:               smsConfig,
 		OpenRouterAPIKey:  strings.TrimSpace(*openRouterAPIKey),
 		OpenRouterBaseURL: strings.TrimSpace(*openRouterBaseURL),
 		AIModelTiers: map[string]string{
@@ -908,6 +979,33 @@ func runServer(args []string) error {
 		if poller.Enabled() {
 			go poller.Run(ctx)
 		}
+	}
+
+	// Resala has no delivery webhook, so delivery is read back from its sent
+	// log. Only worth doing with a token and a ledger to reconcile.
+	if smsStore, ok := store.(control.SMSStore); ok && smsConfig.Token != "" && smsConfig.DeliverySyncInterval > 0 {
+		poller := &relayserver.SMSDeliveryPoller{
+			Client: resala.New(resala.Config{
+				BaseURL:    smsConfig.BaseURL,
+				Token:      smsConfig.Token,
+				HTTPClient: smsConfig.HTTPClient,
+				Timeout:    smsConfig.RequestTimeout,
+			}),
+			Store:    smsStore,
+			Interval: smsConfig.DeliverySyncInterval,
+			Logger:   logger,
+			Metrics:  metrics,
+		}
+		go poller.Run(ctx)
+	}
+	if smsConfig.Token != "" {
+		logger.Info(
+			"relay sms configured",
+			"templates", len(smsConfig.Templates),
+			"test_mode", smsConfig.TestMode,
+			"monthly_limit_default", smsConfig.MonthlyLimit,
+			"rate_limit", smsConfig.RateLimit.String(),
+		)
 	}
 
 	errs := make(chan error, 3)
@@ -1514,6 +1612,8 @@ func runProvision(args []string) error {
 	relayEnabled := flags.Bool("relay-enabled", false, "enable remote relay access")
 	subscriptionActive := flags.Bool("subscription-active", false, "mark the relay subscription active")
 	aiEnabled := flags.Bool("ai-enabled", false, "enable AI entitlement for this installation")
+	smsEnabled := flags.Bool("sms-enabled", false, "enable the relay-hosted SMS entitlement for this installation")
+	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "SMS cap per calendar month; 0 uses the relay default")
 	subscriptionEndsAt := flags.String(
 		"subscription-ends-at",
 		"",
@@ -1521,6 +1621,9 @@ func runProvision(args []string) error {
 	)
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if *smsMonthlyLimit < 0 {
+		return usageError("--sms-monthly-limit must be 0 or positive")
 	}
 
 	var endsAt *time.Time
@@ -1545,6 +1648,8 @@ func runProvision(args []string) error {
 		RelayEnabled:       relayEnabled,
 		SubscriptionActive: subscriptionActive,
 		AIEnabled:          *aiEnabled,
+		SMSEnabled:         *smsEnabled,
+		SMSMonthlyLimit:    *smsMonthlyLimit,
 		SubscriptionEndsAt: endsAt,
 	})
 	if err != nil {
@@ -1585,6 +1690,8 @@ func runSubscriptionUpdate(args []string) error {
 	relayEnabled := flags.String("relay-enabled", "", "optional true/false relay entitlement")
 	subscriptionActive := flags.String("subscription-active", "", "optional true/false subscription state")
 	aiEnabled := flags.String("ai-enabled", "", "optional true/false AI entitlement")
+	smsEnabled := flags.String("sms-enabled", "", "optional true/false relay-hosted SMS entitlement")
+	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "optional SMS cap per calendar month; 0 = relay default")
 	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
 	clearEnd := flags.Bool("clear-subscription-end", false, "clear subscription end time")
 	asJSON := flags.Bool("json", false, "print the raw JSON response")
@@ -1600,6 +1707,8 @@ func runSubscriptionUpdate(args []string) error {
 		RelayEnabled:         *relayEnabled,
 		SubscriptionActive:   *subscriptionActive,
 		AIEnabled:            *aiEnabled,
+		SMSEnabled:           *smsEnabled,
+		SMSMonthlyLimit:      *smsMonthlyLimit,
 		SubscriptionEndsAt:   *subscriptionEndsAt,
 		ClearSubscriptionEnd: *clearEnd,
 	})
@@ -1655,6 +1764,9 @@ func runSubscriptionSet(args []string) error {
 	until := flags.String("until", "", "explicit RFC3339 subscription end (alternative to --months/--days)")
 	aiOn := flags.Bool("ai", false, "enable the AI add-on")
 	aiOff := flags.Bool("no-ai", false, "disable the AI add-on")
+	smsOn := flags.Bool("sms", false, "enable the relay-hosted SMS add-on")
+	smsOff := flags.Bool("no-sms", false, "disable the relay-hosted SMS add-on")
+	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "SMS cap per calendar month; 0 = relay default")
 	remoteOn := flags.Bool("remote", false, "enable remote access (implied when a length is set)")
 	remoteOff := flags.Bool("no-remote", false, "disable remote access")
 	asJSON := flags.Bool("json", false, "print the raw JSON response")
@@ -1664,6 +1776,9 @@ func runSubscriptionSet(args []string) error {
 	}
 	if *aiOn && *aiOff {
 		return usageError("--ai and --no-ai are mutually exclusive")
+	}
+	if *smsOn && *smsOff {
+		return usageError("--sms and --no-sms are mutually exclusive")
 	}
 	if *remoteOn && *remoteOff {
 		return usageError("--remote and --no-remote are mutually exclusive")
@@ -1697,8 +1812,16 @@ func runSubscriptionSet(args []string) error {
 	case *aiOff:
 		options.AIEnabled = "false"
 	}
-	if endsAt == "" && options.RelayEnabled == "" && options.AIEnabled == "" {
-		return usageError("nothing to set: pass a length (--months/--days/--until) and/or --ai/--no-ai/--remote/--no-remote")
+	switch {
+	case *smsOn:
+		options.SMSEnabled = "true"
+	case *smsOff:
+		options.SMSEnabled = "false"
+	}
+	options.SMSMonthlyLimit = strings.TrimSpace(*smsMonthlyLimit)
+	if endsAt == "" && options.RelayEnabled == "" && options.AIEnabled == "" &&
+		options.SMSEnabled == "" && options.SMSMonthlyLimit == "" {
+		return usageError("nothing to set: pass a length (--months/--days/--until) and/or --ai/--no-ai/--sms/--no-sms/--sms-monthly-limit/--remote/--no-remote")
 	}
 	options.Reason = defaultReason(*reason, subscriptionSetReason(*months, *days, *until, options))
 
@@ -1755,6 +1878,19 @@ func subscriptionSetReason(months, days int, until string, options subscriptionU
 		parts = append(parts, "AI on")
 	case "false":
 		parts = append(parts, "AI off")
+	}
+	switch options.SMSEnabled {
+	case "true":
+		parts = append(parts, "SMS on")
+	case "false":
+		parts = append(parts, "SMS off")
+	}
+	switch strings.TrimSpace(options.SMSMonthlyLimit) {
+	case "":
+	case "0":
+		parts = append(parts, "SMS cap = relay default")
+	default:
+		parts = append(parts, "SMS cap "+strings.TrimSpace(options.SMSMonthlyLimit)+"/month")
 	}
 	if options.RelayEnabled == "false" {
 		parts = append(parts, "remote off")
@@ -1956,9 +2092,14 @@ func runInstallationsProvision(args []string) error {
 	relayEnabled := flags.Bool("relay-enabled", false, "enable remote relay access immediately")
 	subscriptionActive := flags.Bool("subscription-active", false, "mark the relay subscription active immediately")
 	aiEnabled := flags.Bool("ai-enabled", false, "enable the AI entitlement immediately")
+	smsEnabled := flags.Bool("sms-enabled", false, "enable the relay-hosted SMS entitlement immediately")
+	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "SMS cap per calendar month; 0 uses the relay default")
 	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if *smsMonthlyLimit < 0 {
+		return usageError("--sms-monthly-limit must be 0 or positive")
 	}
 	body := map[string]any{
 		"business_id":         strings.TrimSpace(*businessID),
@@ -1966,6 +2107,8 @@ func runInstallationsProvision(args []string) error {
 		"relay_enabled":       *relayEnabled,
 		"subscription_active": *subscriptionActive,
 		"ai_enabled":          *aiEnabled,
+		"sms_enabled":         *smsEnabled,
+		"sms_monthly_limit":   *smsMonthlyLimit,
 	}
 	if ends := strings.TrimSpace(*subscriptionEndsAt); ends != "" {
 		if _, err := time.Parse(time.RFC3339, ends); err != nil {
@@ -2655,6 +2798,8 @@ type installationView struct {
 	RelayEnabled             bool    `json:"relay_enabled"`
 	SubscriptionActive       bool    `json:"subscription_active"`
 	AIEnabled                bool    `json:"ai_enabled"`
+	SMSEnabled               bool    `json:"sms_enabled"`
+	SMSMonthlyLimit          int     `json:"sms_monthly_limit"`
 	RelayActive              bool    `json:"relay_active"`
 	SubscriptionEndsAt       *string `json:"subscription_ends_at"`
 	LastConnectorConnectedAt *string `json:"last_connector_connected_at"`
@@ -2699,16 +2844,17 @@ func renderInstallationTable(response installationListResponse) error {
 		return nil
 	}
 	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(writer, "ID\tSHOP\tRELAY\tSUB\tAI\tENDS\tLAST SEEN")
+	fmt.Fprintln(writer, "ID\tSHOP\tRELAY\tSUB\tAI\tSMS\tENDS\tLAST SEEN")
 	for _, installation := range response.Installations {
 		fmt.Fprintf(
 			writer,
-			"%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			installation.ID,
 			dashIfEmpty(installation.ShopName),
 			onOff(installation.RelayEnabled),
 			onOff(installation.SubscriptionActive),
 			onOff(installation.AIEnabled),
+			onOff(installation.SMSEnabled),
 			formatTimeField(installation.SubscriptionEndsAt),
 			formatTimeField(installation.LastConnectorConnectedAt),
 		)
@@ -2730,6 +2876,8 @@ func renderInstallationDetail(installation installationView) error {
 		{"subscription", onOff(installation.SubscriptionActive)},
 		{"relay active", onOff(installation.RelayActive)},
 		{"ai enabled", onOff(installation.AIEnabled)},
+		{"sms enabled", onOff(installation.SMSEnabled)},
+		{"sms monthly limit", smsMonthlyLimitLabel(installation.SMSMonthlyLimit)},
 		{"subscription ends", formatTimeField(installation.SubscriptionEndsAt)},
 		{"last connector seen", formatTimeField(installation.LastConnectorConnectedAt)},
 		{"connector cert expires", formatTimeField(installation.CertificateExpiresAt)},
@@ -2739,6 +2887,14 @@ func renderInstallationDetail(installation installationView) error {
 		fmt.Fprintf(writer, "%s\t%s\n", row[0], row[1])
 	}
 	return writer.Flush()
+}
+
+// smsMonthlyLimitLabel shows a shop's SMS cap; 0 defers to the relay default.
+func smsMonthlyLimitLabel(limit int) string {
+	if limit <= 0 {
+		return "relay default"
+	}
+	return strconv.Itoa(limit) + "/month"
 }
 
 func renderInstallationStatus(status installationStatusView) error {
@@ -3058,6 +3214,8 @@ type subscriptionUpdateOptions struct {
 	RelayEnabled         string
 	SubscriptionActive   string
 	AIEnabled            string
+	SMSEnabled           string
+	SMSMonthlyLimit      string
 	SubscriptionEndsAt   string
 	ClearSubscriptionEnd bool
 }
@@ -3095,6 +3253,20 @@ func subscriptionUpdateBody(options subscriptionUpdateOptions) (map[string]any, 
 		body["ai_enabled"] = value
 		changeCount++
 	}
+	if value, ok, err := optionalBoolFlag("sms-enabled", options.SMSEnabled); err != nil {
+		return nil, err
+	} else if ok {
+		body["sms_enabled"] = value
+		changeCount++
+	}
+	if raw := strings.TrimSpace(options.SMSMonthlyLimit); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit < 0 {
+			return nil, fmt.Errorf("sms-monthly-limit must be a whole number, 0 or more (0 = relay default)")
+		}
+		body["sms_monthly_limit"] = limit
+		changeCount++
+	}
 	if strings.TrimSpace(options.SubscriptionEndsAt) != "" {
 		if options.ClearSubscriptionEnd {
 			return nil, fmt.Errorf("subscription-ends-at cannot be combined with clear-subscription-end")
@@ -3127,6 +3299,8 @@ func provisionedInstallationOutput(provisioned control.ProvisionedInstallation) 
 			"subscription_active":               installation.SubscriptionActive,
 			"subscription_ends_at":              installation.SubscriptionEndsAt,
 			"ai_enabled":                        installation.AIEnabled,
+			"sms_enabled":                       installation.SMSEnabled,
+			"sms_monthly_limit":                 installation.SMSMonthlyLimit,
 			"created_at":                        installation.CreatedAt,
 			"updated_at":                        installation.UpdatedAt,
 			"last_connector_connected_at":       installation.LastConnectorConnectedAt,
@@ -3360,6 +3534,7 @@ func printUsage() {
   pointy-relay subscription <set|update|enable|disable|extend|audit> <id> [flags]
   pointy-relay enrollment mint [--count N] [--relay] [--ai] [--subscription DUR]
   pointy-relay fleet <status|set-version|rollout|pause|pin|unpin|channel> [args]
+  pointy-relay sms <usage|log|config> [flags]
   pointy-relay artifacts upload --version X --bundle pointy-onprem-X.zip
   pointy-relay provision [flags]
   pointy-relay migrate [flags]
@@ -3377,12 +3552,15 @@ Commands:
                    audit <id> [--json]       recent subscription change history
                    provision [--shop-name .. --relay-enabled ..]   create remotely
   subscription   Fast subscription changes over the admin API (audited):
-                   set <id> --months N [--ai|--no-ai] [--remote|--no-remote]
+                   set <id> --months N [--ai|--no-ai] [--sms|--no-sms]
+                          [--sms-monthly-limit N] [--remote|--no-remote]
                                              give an N-month subscription + add-ons
                    enable <id>               turn relay + subscription on
                    disable <id>              turn relay + subscription off
                    extend <id> --days N      set the end date N days out, active
                    update <id> [flags]       explicit field-by-field control
+                                             (--ai-enabled, --sms-enabled,
+                                             --sms-monthly-limit, ...)
                    audit <id>                change history (alias)
   enrollment     Mint single-use license keys (redeemed at /v1/enroll):
                    mint [--count N] [--expires-in 720h]
@@ -3396,6 +3574,12 @@ Commands:
                    rollout <canary|all|N%> [--channel]   advance the rollout
                    pause [--channel]         kill switch: stop the rollout
                    pin <id> <v> / unpin <id> / channel <id> <channel>
+  sms            Relay-hosted SMS (Resala) over the admin API:
+                   usage [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--json]
+                                             messages + cost per shop, busiest first
+                   log [--installation ID] [--status S] [--limit N] [--json]
+                                             recent sends, newest first
+                   config [--json]           templates, test mode, limits (no token)
   artifacts      upload --version X --bundle pointy-onprem-X.zip   serve a bundle
   provision      Create an installation directly against the database (host-side).
   migrate        Apply relay PostgreSQL migrations.

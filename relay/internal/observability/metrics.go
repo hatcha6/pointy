@@ -33,6 +33,12 @@ type Metrics struct {
 	credentialRejections       uint64
 
 	connectorHandshakeRejections map[string]uint64
+
+	// SMS counters are labelled by outcome only. Which shop sends what lives
+	// in the relay's SMS ledger; a per-installation label here would grow
+	// with the fleet and duplicate it.
+	smsSendsByOutcome      map[string]uint64
+	smsDeliveriesByOutcome map[string]uint64
 }
 
 type Snapshot struct {
@@ -61,6 +67,12 @@ type Snapshot struct {
 	// constantly; counting them here keeps the burst measurable without
 	// putting a line per probe in the log.
 	ConnectorHandshakeRejections map[string]uint64 `json:"connector_handshake_rejections"`
+	// SMSSendsByOutcome counts POST /v1/sms/send answers by outcome ("sent",
+	// "replayed", "monthly_limit", "provider_credit", ...).
+	SMSSendsByOutcome map[string]uint64 `json:"sms_sends_by_outcome"`
+	// SMSDeliveriesByOutcome counts delivery reports the sent-log sync applied
+	// ("delivered", "undelivered", "sent").
+	SMSDeliveriesByOutcome map[string]uint64 `json:"sms_deliveries_by_outcome"`
 }
 
 type RelayRequestObservation struct {
@@ -243,6 +255,36 @@ func (m *Metrics) RecordConnectorHandshakeRejected(reason string) {
 	m.mu.Unlock()
 }
 
+func (m *Metrics) RecordSMSSend(outcome string) {
+	if m == nil {
+		return
+	}
+	if outcome == "" {
+		outcome = "unknown"
+	}
+	m.mu.Lock()
+	if m.smsSendsByOutcome == nil {
+		m.smsSendsByOutcome = make(map[string]uint64)
+	}
+	m.smsSendsByOutcome[outcome]++
+	m.mu.Unlock()
+}
+
+func (m *Metrics) RecordSMSDelivery(outcome string) {
+	if m == nil {
+		return
+	}
+	if outcome == "" {
+		outcome = "unknown"
+	}
+	m.mu.Lock()
+	if m.smsDeliveriesByOutcome == nil {
+		m.smsDeliveriesByOutcome = make(map[string]uint64)
+	}
+	m.smsDeliveriesByOutcome[outcome]++
+	m.mu.Unlock()
+}
+
 func (m *Metrics) Snapshot() Snapshot {
 	if m == nil {
 		return NewMetrics().Snapshot()
@@ -277,6 +319,8 @@ func (m *Metrics) Snapshot() Snapshot {
 		ResponseBodyLimitFailures:    m.responseBodyLimitFailures,
 		CredentialRejections:         m.credentialRejections,
 		ConnectorHandshakeRejections: copyStringMap(m.connectorHandshakeRejections),
+		SMSSendsByOutcome:            copyStringMap(m.smsSendsByOutcome),
+		SMSDeliveriesByOutcome:       copyStringMap(m.smsDeliveriesByOutcome),
 	}
 }
 
