@@ -279,6 +279,11 @@ rig_build_catalog() {
   # backend is rebuilt on it — i.e. AFTER traffic has already moved. The only
   # path that reaches pu_rollback_live.
   rig_build_release 2.4.0-fails-after-flip never_ready_at_start || return 1
+  # A release whose backend is still "migrating" after Docker's healthcheck has
+  # stopped waiting for it: heavy migrations on a shop's old machine. Not
+  # broken. Scenario 09 shrinks the healthcheck window in the shop's .env so
+  # that 100s is enough to outlast it.
+  rig_build_release 2.5.0-slow-migrations "" 100 || return 1
 
   rig_build_bundle 1.0.0 >/dev/null || return 1
   rig_build_bundle 1.1.0 >/dev/null || return 1
@@ -290,6 +295,7 @@ rig_build_catalog() {
   rig_build_bundle 2.2.0-sick-after-flip >/dev/null || return 1
   rig_build_bundle 2.3.0-slow-boot >/dev/null || return 1
   rig_build_bundle 2.4.0-fails-after-flip >/dev/null || return 1
+  rig_build_bundle 2.5.0-slow-migrations >/dev/null || return 1
 }
 
 # A bundle of an already-built release that declares a restart-only update.
@@ -443,6 +449,15 @@ rig_served_version() {
 }
 
 rig_installed_version() { cat "${RIG_SHOP}/VERSION.txt" 2>/dev/null | tr -d '[:space:]'; }
+
+# The client manifest the tills are actually offered: the copy published into
+# the backend's volume, not the one sitting in the deploy directory.
+rig_published_manifest() {
+  local copy="${RIG_RUN_DIR}/published-manifest.json"
+  rm -f "$copy"
+  rig_compose cp backend:/var/lib/pointy/clients/manifest.json "$copy" >/dev/null 2>&1
+  cat "$copy" 2>/dev/null
+}
 
 rig_serving() { curl -fsS --max-time 5 "$(rig_url /readyz/)" >/dev/null 2>&1; }
 

@@ -372,7 +372,18 @@ services:
       interval: 15s
       timeout: 5s
       retries: 6
-      start_period: 90s
+      # The backend applies the release's migrations BEFORE it serves, and failed
+      # checks only count once this period is over. With 90s here, a migration-
+      # heavy update on a shop's machine (about four minutes on a 2011 OptiPlex)
+      # was declared unhealthy three minutes in, still migrating: compose gave up
+      # on everything that waits for the backend, install.sh died before it
+      # published the client installers, and update.sh rolled a good release
+      # back. Ten minutes covers that with room to spare and costs a normal boot
+      # nothing: start_interval below still marks the backend healthy ~2s after
+      # /readyz passes, and once it has passed, every later failure counts.
+      # install.sh keeps waiting past it (POINTY_STACK_START_TIMEOUT); raise this
+      # only for a very slow machine holding years of sales.
+      start_period: ${POINTY_BACKEND_START_PERIOD:-600s}
       # Probe every 2s DURING startup (Docker 25+) so the backend is marked
       # healthy within ~2s of /readyz passing instead of at the next 15s tick.
       # web/celery/connector all wait on backend health, so this brings the rest

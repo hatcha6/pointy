@@ -489,6 +489,34 @@ the first update that introduces it is applied the old way — a full restart, a
 before. Every update after that one is live. The updater tells you when this is
 what it is doing.
 
+### A full restart waits for a slow backend
+
+On the restart path (`--restart`, a release that asks for one, the one-time
+exception above, or `install.sh` itself) the tills are offline while the new
+backend applies the release's database migrations. On an old machine with years
+of sales that can take several minutes. Docker's healthcheck gives the backend
+ten minutes before it counts a failure (`POINTY_BACKEND_START_PERIOD`). If
+Compose still reports
+
+```
+dependency failed to start: container pointy-backend-1 is unhealthy
+```
+
+the installer does not stop there. It waits for the backend, prints what it is
+doing once a minute, and starts the rest of the stack when the backend is up.
+Then it publishes the client installers as usual. It gives up in three cases:
+the backend keeps crashing, nothing is left starting, or 20 minutes pass
+(`POINTY_STACK_START_TIMEOUT`, in seconds). When it gives up, the updater rolls
+back as it would for any failed update.
+
+Bundles from before this change stopped at that message. An update made with
+one was rolled back (`VERSION.txt` still shows the old release) and its client
+installers were never published: apply that update again with a bundle that has
+this change. Do not run `install.sh` on a rolled-back shop to "finish" it. It
+would publish the new release's installers for a server still running the old
+one. If it was a plain `install.sh` run that stopped, run it again once
+`docker compose ps` shows the backend healthy.
+
 ### Rolling back
 
 Point the updater at the previous release and force it:

@@ -1,8 +1,8 @@
 # On-prem update engine tests
 
 Unit tests for the code that applies a release to a shop: `update-lib.sh` (the
-engine), `update-agent.sh` (what the relay drives) and `update.sh` (what an
-engineer carries to the machine).
+engine), `update-agent.sh` (what the relay drives), `update.sh` (what an
+engineer carries to the machine) and `install.sh` (which the restart path runs).
 
 ```bash
 make onprem-test
@@ -20,7 +20,7 @@ KEEP_TMP=1 bash deploy/onprem/tests/run-tests.sh   # keep each test's deploy dir
 
 No dependencies beyond bash and coreutils. Docker, curl, sleep and systemctl are
 replaced by recording stubs, so this runs anywhere — a laptop, CI, or a shop's
-own machine while debugging a failed update. 293 tests, roughly 45 seconds with
+own machine while debugging a failed update. 337 tests, roughly 30 seconds with
 the suites running concurrently. Nearly all of that is process spawning: the
 tests drive the real scripts, and the real scripts shell out constantly.
 
@@ -47,6 +47,8 @@ mechanism. A bug here is a site visit.
 | `test_rollback_backup_staging.sh` | rolling back after traffic moved, the pre-migration dump, turning a zip or directory into an applyable bundle |
 | `test_update_agent.sh` | the agent end to end with a stubbed relay: quiet no-ops, checksum enforcement, lock discipline, status reporting, self-update |
 | `test_update_script.sh` | `update.sh` argument handling, `--force`, and leaving an operator's media alone |
+| `test_install_env.sh` | `install.sh --env-only`: every variable compose demands gets a real value, secrets never rotate, the app goes through the pooler |
+| `test_install_start.sh` | `install.sh` starting the stack on a fake clock: waiting out a backend compose gave up on while it migrated, publishing the client installers only once the stack is up, failing fast on a crash loop or a failure nothing is starting for |
 
 ## Writing a test
 

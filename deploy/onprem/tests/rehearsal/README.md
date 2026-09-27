@@ -55,6 +55,7 @@ works and the one that does not.
 | `06-update-lock-and-watchdog` | Two updates, an agent and the watchdog all arriving at once. |
 | `07-power-cut-mid-update` | The updater is `kill -9`'d at the worst possible moment. What state is the shop left in, and who rescues it? |
 | `08-relay-driven-update` | The whole point: upload, target, pause, canary, apply, pin backwards, reject a corrupted bundle — with no one visiting the shop. |
+| `09-restart-slow-boot` | A restart update whose backend is still migrating when compose stops waiting for it. Does the update finish and publish the client installers, where it used to roll back? And does a release that cannot boot still fail fast? |
 
 ## Numbers this produces
 
@@ -88,6 +89,13 @@ before batching a rollout:
   A reboot at that point leaves the shop dark with a healthy backend beside it.
 * `pu_load_images` is only ever called with `live`; the restart path goes through
   `install.sh`, which does its own loading. The `restart` branch is dead code.
+* Only the restart path can be stopped by a slow backend. The live path starts and
+  waits for the new backend itself, and recreates services with `--no-deps`, which
+  never waits on a dependency's health. `install.sh`'s plain `compose up -d` does.
+  A release that boots for longer than the backend's healthcheck window (ten
+  minutes now) can still be waited out, for up to `POINTY_STACK_START_TIMEOUT` (20
+  minutes). Those are minutes of dark tills on the restart path, so a crash loop
+  is recognised within about a minute rather than waited out.
 
 ## A finding worth knowing before you batch
 

@@ -469,17 +469,160 @@ docker rm -f pointy-backend-standby >/dev/null 2>&1 || true
 
 wsl_check_backup_drives
 
+compose() { docker compose --env-file .env -f docker-compose.yml "$@"; }
+
+# ---------------------------------------------------------------------------
+# Starting the stack, without giving up on a backend that is only slow.
+#
+# `compose up -d` does more than start containers. The Celery workers and the
+# relay connector wait for the backend to be HEALTHY, and compose abandons them
+# the moment Docker's healthcheck calls the backend unhealthy:
+#
+#     dependency failed to start: container pointy-backend-1 is unhealthy
+#
+# The backend applies the release's migrations before it serves, and on a
+# shop's machine that can outlast its healthcheck (Sufian's 2011 OptiPlex took
+# about four minutes for 0.4.7 -> 0.5.1). Docker never stops an unhealthy
+# container, so the backend finished and came up anyway, which is why a
+# hand-run `compose up -d` a few minutes later always worked. By then `set -e`
+# had ended this script: the client installers never reached the tills, the
+# watchdog was never registered, and update.sh read the exit status as a broken
+# release and rolled it back.
+#
+# So a failed `up` is tried again for as long as something is still coming up.
+# It is an error only when the backend keeps crashing, when nothing is coming up
+# and `up` still fails (a port in use, a missing image), or once
+# POINTY_STACK_START_TIMEOUT seconds have passed (20 minutes by default).
+# ---------------------------------------------------------------------------
+
+# One line per container of the stack:
+#   <service> <status> <health> <restarts> <depends_on>
+# depends_on is compose's own record of what the service waits for, e.g.
+# "backend:service_healthy:false". One-off `compose run` containers are not
+# part of the stack.
+stack_states() {
+  local ids
+  ids="$(compose ps -aq 2>/dev/null)" || true
+  [ -n "$ids" ] || return 0
+  # shellcheck disable=SC2086  # one argument per container id
+  docker inspect -f '{{index .Config.Labels "com.docker.compose.oneoff"}} {{index .Config.Labels "com.docker.compose.service"}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} {{.RestartCount}} {{index .Config.Labels "com.docker.compose.depends_on"}}' $ids 2>/dev/null \
+    | awk '$1 != "True" { print $2, $3, $4, $5, $6 }' || true
+}
+
+# What compose is still waiting on, e.g. "backend (unhealthy)": a service that
+# something depends on as `service_healthy` and that is still on its way up. A
+# healthcheck inside its start period reports "starting", a container Docker is
+# bringing back after a crash is "restarting", and a backend still migrating
+# past its start period is running but "unhealthy": slow, not broken. Nothing
+# waits on the web front door, so a sick one is not a reason to keep trying.
+stack_pending() {
+  stack_states | awk '
+    { svc[NR] = $1; status[NR] = $2; health[NR] = $3
+      n = split($5, deps, ",")
+      for (i = 1; i <= n; i++) { split(deps[i], dep, ":"); if (dep[2] == "service_healthy") gate[dep[1]] = 1 } }
+    END {
+      for (r = 1; r <= NR; r++) {
+        if (!(svc[r] in gate)) continue
+        if (status[r] == "restarting") state = "restarting"
+        else if (status[r] == "running" && (health[r] == "starting" || health[r] == "unhealthy")) state = health[r]
+        else continue
+        printf "%s%s (%s)", sep, svc[r], state; sep = ", "
+      }
+    }'
+}
+
+backend_restarts() { stack_states | awk '$1 == "backend" { print $4; exit }'; }
+
+backend_log() { # <lines>
+  local id
+  id="$(compose ps -aq backend 2>/dev/null | head -1)" || true
+  [ -n "$id" ] || return 0
+  docker logs --tail "$1" "$id" 2>&1 || true
+}
+
+duration() { printf '%dm%02ds' $(($1 / 60)) $(($1 % 60)); }
+
+# Wall-clock seconds. Not $SECONDS: one `compose up` can itself block for
+# minutes, and the tests drive this loop with a clock of their own.
+now() { date +%s; }
+
+start_stack() {
+  local timeout started elapsed pending last restarts restarts_from attempt=1 idle=0 next_note=60 out
+  timeout="${POINTY_STACK_START_TIMEOUT:-$(env_value POINTY_STACK_START_TIMEOUT)}"
+  case "$timeout" in ''|*[!0-9]*) timeout=1200 ;; esac
+  started="$(now)"
+
+  compose up -d && return 0
+
+  echo "==> Compose stopped waiting, but the stack can still be coming up: usually the"
+  echo "    backend applying this release's database migrations. Waiting for it and"
+  echo "    trying again (for up to $(duration "$timeout"))…"
+  out="$(mktemp)"
+  restarts_from="$(backend_restarts)"
+  while :; do
+    elapsed=$(($(now) - started))
+    if [ "$elapsed" -ge "$timeout" ]; then
+      echo "ERROR: the stack was still not up after $(duration "$elapsed") (POINTY_STACK_START_TIMEOUT=${timeout})." >&2
+      break
+    fi
+    # A crash loop is a broken release, not a slow one: say so now rather than
+    # wait out the whole timeout on a container that cannot come up.
+    restarts="$(backend_restarts)"
+    if [ "${restarts:-0}" -ge $((${restarts_from:-0} + 3)) ]; then
+      echo "ERROR: the backend keeps crashing (it restarted $((restarts - ${restarts_from:-0})) times while this waited)." >&2
+      break
+    fi
+    pending="$(stack_pending)"
+    if [ -n "$pending" ]; then
+      idle=0
+      if [ "$elapsed" -ge "$next_note" ]; then
+        echo "    …still coming up after $(duration "$elapsed"): ${pending}"
+        # The migration it is on, so a long wait reads as progress, not a hang.
+        case "$pending" in
+          *backend*) last="$(backend_log 1 | tail -1 | cut -c1-150)"
+                     [ -z "$last" ] || echo "      backend: ${last}" ;;
+        esac
+        next_note=$((elapsed + 60))
+      fi
+    else
+      # Nothing is coming up and `up` still fails: time will not fix that.
+      idle=$((idle + 1))
+      if [ "$idle" -gt 2 ]; then
+        echo "ERROR: compose keeps failing, and nothing is still starting that it could be waiting for." >&2
+        break
+      fi
+    fi
+    sleep 10
+    attempt=$((attempt + 1))
+    if compose up -d >"$out" 2>&1; then
+      rm -f "$out"
+      echo "==> The stack is up, $(duration $(($(now) - started))) after starting it (compose tried ${attempt} times)."
+      return 0
+    fi
+  done
+  if [ -s "$out" ]; then
+    echo "    What compose said last:" >&2
+    sed 's/^/      /' "$out" >&2
+  fi
+  rm -f "$out"
+  echo "    The backend's last log lines:" >&2
+  backend_log 40 | sed 's/^/      /' >&2
+  return 1
+}
+
 echo "==> Starting the Pointy stack…"
-docker compose --env-file .env -f docker-compose.yml up -d
+echo "    (The backend applies database migrations before it serves; on a large shop"
+echo "    that can take several minutes. It is working, not stuck.)"
+start_stack || err "the Pointy stack did not come up (see above), so the client installers
+       were not published and the watchdog was not registered."
 
 # Publish the bundled client installers (Android APK + Windows installer + Linux
 # tar.gz) into the volume Django serves on the LAN, so on-site devices can
 # download and self-update.
 if [ -d ./clients ]; then
   echo "==> Publishing client installers for LAN download…"
-  if docker compose --env-file .env -f docker-compose.yml cp clients/. backend:/var/lib/pointy/clients/; then
-    docker compose --env-file .env -f docker-compose.yml exec -u 0 -T backend \
-      chmod -R a+rX /var/lib/pointy/clients >/dev/null 2>&1 || true
+  if compose cp clients/. backend:/var/lib/pointy/clients/; then
+    compose exec -u 0 -T backend chmod -R a+rX /var/lib/pointy/clients >/dev/null 2>&1 || true
   else
     echo "WARN: could not publish client installers; retry with ./install.sh once the backend is up."
   fi
