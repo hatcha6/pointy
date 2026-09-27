@@ -29,6 +29,8 @@ void main() {
     'auto_print_min_line_count': null,
     'auto_print_min_total': null,
     'auto_print_kitchen_tickets': false,
+    // Off here: the switch defaults on, so only an off travels visibly.
+    'print_voucher_qr_codes': false,
     'allow_overselling': false,
     'prevent_selling_at_loss': false,
     'low_stock_threshold': 3,
@@ -76,6 +78,7 @@ void main() {
     'auto_print_min_line_count': 3,
     'auto_print_min_total': '20.00',
     'auto_print_kitchen_tickets': true,
+    'print_voucher_qr_codes': true,
     'allow_overselling': true,
     'prevent_selling_at_loss': true,
     'low_stock_threshold': 9,

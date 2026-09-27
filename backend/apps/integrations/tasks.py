@@ -88,7 +88,8 @@ def sync_voucher_catalog_task(self, account_id):
     """A whole shelf, now — for an account that was just connected or verified.
 
     Reads every collapsed brand instead of the sweep's stalest dozen, so a new
-    shop's till has its cards within seconds rather than over the next hour.
+    shop's till has its cards within seconds rather than over the next hour —
+    and then every brand's logo, once the cards are already on sale.
     """
     from .models import IntegrationAccount
     from .vouchers import sells_vouchers, sync_account
@@ -96,4 +97,4 @@ def sync_voucher_catalog_task(self, account_id):
     account = IntegrationAccount.objects.filter(pk=account_id, is_active=True).first()
     if account is None or not sells_vouchers(account) or not account.is_configured:
         return {"skipped": True}
-    return sync_account(account, refresh_limit=1000).as_dict()
+    return sync_account(account, refresh_limit=1000, logo_limit=1000).as_dict()

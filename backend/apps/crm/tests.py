@@ -122,15 +122,14 @@ class InboundWebhookTests(TestCase):
         self.assertEqual(InboundMessage.objects.count(), 1)
         self.assertEqual(Conversation.objects.get().unread_count, 1)
 
-    def test_unsigned_sms_gate_webhook_is_rejected(self):
-        # A real provider with no webhook signing key fails HMAC verification.
-        # No webhook token either, so there is nothing to fall back to.
+    def test_unsigned_relay_gateway_webhook_is_rejected(self):
+        # The relay transport never vouches for an inbound call, and with no
+        # webhook token either there is nothing to fall back to.
         gateway = make_fake_gateway(
             webhook_token=None,
             name="real",
             is_default=False,
-            provider=MessagingGateway.Provider.SMS_GATE,
-            config={"base_url": "http://x"},
+            provider=MessagingGateway.Provider.RELAY,
         )
         resp = self.client.post(
             f"/api/messaging/inbound/{gateway.id}/",

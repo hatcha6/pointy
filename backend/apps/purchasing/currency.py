@@ -36,8 +36,10 @@ from decimal import Decimal
 
 from apps.core.models import ShopSettings
 from apps.core.money_dates import day_range_end
-from apps.fx.money import Money, quantize_amount, quantize_rate
-from apps.fx.rates import decimals_for, rate_on
+from apps.fx.money import quantize_rate
+from apps.fx.rates import rate_on
+
+from .unit_costs import quantize_cost
 
 logger = logging.getLogger(__name__)
 
@@ -98,20 +100,17 @@ def resolve_order_rate(currency_code: str | None, *, at=None, invoice_date=None)
 def convert_unit_cost(amount, *, currency_code: str, rate) -> Decimal:
     """One invoiced unit cost, in the shop's own currency.
 
-    The single conversion on the buy side. Rounds once, to the base currency's
-    precision, using the same half-up regime the sell side uses — a purchase
-    cost and a sale price meeting at different rounding would put a permanent
-    fraction into every margin.
+    The single conversion on the buy side. Rounds once, half-up like the sell
+    side — but to a unit cost's six places, not to money's two: a unit cost is
+    a rate, and rounding it to money before it is multiplied by the quantity
+    moves the line total off what the invoice says (see ``unit_costs``).
     """
     if rate is None or Decimal(str(rate)) <= 0:
         raise PurchaseCurrencyError(
             f"no usable exchange rate for {currency_code}; the cost cannot be "
             "converted"
         )
-    base = base_currency_code()
-    money = Money(amount, currency_code)
-    converted = money.amount * quantize_rate(rate)
-    return quantize_amount(converted, decimals_for(base))
+    return quantize_cost(Decimal(str(amount)) * quantize_rate(rate))
 
 
 def apply_order_currency(order, lines_data, *, rate=None):

@@ -62,12 +62,17 @@ class NormalizedImage:
         self.extension = extension
 
 
-def normalize_image_bytes(data: bytes) -> NormalizedImage | None:
+def normalize_image_bytes(
+    data: bytes, *, max_dimension: int = MAX_DIMENSION
+) -> NormalizedImage | None:
     """Return client-renderable bytes for ``data``, or ``None`` if it is not an image.
 
     Decoding is the real content check: a host that hotlink-blocks by serving an
     HTML page under an ``image/jpeg`` header fails here, where trusting the
     declared content type would have stored the error page as the product photo.
+
+    ``max_dimension`` caps the longer side; a caller that knows its pictures
+    are only ever shown small (a provider's brand logo) asks for less.
     """
     try:
         with Image.open(io.BytesIO(data)) as image:
@@ -76,13 +81,15 @@ def normalize_image_bytes(data: bytes) -> NormalizedImage | None:
             # malformed data that would otherwise fail later on the client.
             image.load()
             animated = getattr(image, "n_frames", 1) > 1
-            if _is_passthrough(source_format, image, animated=animated):
+            if _is_passthrough(
+                source_format, image, animated=animated, max_dimension=max_dimension
+            ):
                 return NormalizedImage(
                     data=data,
                     content_type=CONTENT_TYPES_BY_FORMAT[source_format],
                     extension=EXTENSIONS_BY_FORMAT[source_format],
                 )
-            return _reencode(image)
+            return _reencode(image, max_dimension=max_dimension)
     except (
         UnidentifiedImageError,
         DecompressionBombError,
@@ -97,7 +104,9 @@ def normalize_image_bytes(data: bytes) -> NormalizedImage | None:
         return None
 
 
-def _is_passthrough(source_format: str, image: Image.Image, *, animated: bool) -> bool:
+def _is_passthrough(
+    source_format: str, image: Image.Image, *, animated: bool, max_dimension: int
+) -> bool:
     """Whether the original bytes can be stored untouched.
 
     Re-encoding is lossy and pointless when the source already renders, so an
@@ -108,10 +117,10 @@ def _is_passthrough(source_format: str, image: Image.Image, *, animated: bool) -
         return False
     if animated:
         return True
-    return max(image.size) <= MAX_DIMENSION
+    return max(image.size) <= max_dimension
 
 
-def _reencode(image: Image.Image) -> NormalizedImage:
+def _reencode(image: Image.Image, *, max_dimension: int) -> NormalizedImage:
     # Camera and phone sources carry rotation in EXIF rather than in the pixels.
     image = ImageOps.exif_transpose(image)
 
@@ -127,8 +136,8 @@ def _reencode(image: Image.Image) -> NormalizedImage:
         image = image.convert("RGB")
         target_format = "JPEG"
 
-    if max(image.size) > MAX_DIMENSION:
-        image.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
+    if max(image.size) > max_dimension:
+        image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
 
     buffer = io.BytesIO()
     if target_format == "PNG":

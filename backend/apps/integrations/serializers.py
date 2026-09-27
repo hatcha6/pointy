@@ -7,6 +7,7 @@ from rest_framework import serializers
 from . import catalog
 from .fulfillment import fulfillment_kind
 from .models import IntegrationAccount
+from .redeem import printed_receipt
 from .providers import is_implemented
 
 
@@ -151,6 +152,23 @@ class IntegrationAccountWriteSerializer(serializers.Serializer):
 # Plain dict builders rather than Serializer classes: these render frozen
 # dataclasses that came off a provider, not model instances, and the shape is
 # the API contract either way.
+#
+# ``with_cost`` is who is reading. What the provider charges the shop is the
+# owner's figure, the same as a sale's cost and profit, so it goes only to the
+# reporting roles (``user_has_full_visibility``) — a view decides that once per
+# request and passes it down. Everyone else gets prices, and cost-bearing keys
+# are left out rather than blanked: a null cost and a hidden one read alike.
+
+
+def exceeds_float(cost, account) -> bool:
+    """Whether the float, as last read, cannot pay ``cost``.
+
+    Decided here rather than at the till so the till can warn without being
+    told the cost. False when nobody has read the float: warning about a
+    number we do not have would be a guess.
+    """
+    balance = getattr(account, "balance", None)
+    return balance is not None and cost is not None and cost > balance
 
 
 def card_payload(card) -> dict | None:
@@ -171,17 +189,24 @@ def card_payload(card) -> dict | None:
     }
 
 
-def offer_payload(option, account=None, *, prices=None) -> dict:
-    """One buyable option, with both numbers the till needs.
+def offer_payload(
+    option, account=None, *, prices=None, with_cost=True, quote=None
+) -> dict:
+    """One buyable option, priced for the customer.
 
-    ``cost`` is the float's share and ``price`` is what the customer pays,
-    computed here from the shop's markup rather than at the till — apps.sales
-    will recompute it at checkout anyway, and a cart that showed a different
-    number from the invoice would be a bug the cashier discovers in front of
-    the customer.
+    ``price`` is what the customer pays, computed here from the shop's markup
+    rather than at the till — apps.sales will recompute it at checkout anyway,
+    and a cart that showed a different number from the invoice would be a bug
+    the cashier discovers in front of the customer. ``cost``, the float's
+    share, goes only to a reader ``with_cost``; ``exceeds_float`` carries the
+    one thing the till needed it for.
+
+    ``quote`` is the sealed cost (:mod:`apps.integrations.quotes`) for an
+    option only the provider can price; checkout opens it, so the cart line
+    never needs the cost in the clear.
     """
     face_value = getattr(option, "face_value", None)
-    return {
+    payload = {
         "code": option.code,
         "kind": option.kind,
         "label": option.label,
@@ -198,10 +223,15 @@ def offer_payload(option, account=None, *, prices=None) -> dict:
         "months": option.months,
         "package_id": option.package_id,
         "package_name": option.package_name,
+        "exceeds_float": exceeds_float(option.cost, account),
+        "quote": quote,
     }
+    if not with_cost:
+        del payload["cost"]
+    return payload
 
 
-def open_amount_payload(spec, account=None) -> dict | None:
+def open_amount_payload(spec, account=None, *, with_cost=True) -> dict | None:
     """The provider will take any amount, not just the listed ones.
 
     Carries the two coefficients a till needs to price an amount nobody has
@@ -209,6 +239,15 @@ def open_amount_payload(spec, account=None) -> dict | None:
     Sending those rather than the shop's markup *settings* keeps one copy of
     the pricing rule — the till evaluates a line the server handed it instead
     of reimplementing ``selling_price`` in Dart and drifting from it.
+
+    ``cost_ratio`` is the agency's commission, so only a reader ``with_cost``
+    gets it. The rule itself can carry it too: with no markup, or a fixed
+    one, ``price_per_unit`` *is* the ratio. Where the markup never lifts a
+    price above face value across the amounts the provider takes — the usual
+    case, since stored value sells at face — every price is the face value,
+    and such a reader is sent that same rule as ``1 × amount + 0``. Where it
+    does lift a price, the coefficients are what the till's own prices show
+    anyway, so they are sent as they are.
     """
     if spec is None:
         return None
@@ -221,7 +260,7 @@ def open_amount_payload(spec, account=None) -> dict | None:
             )
         elif account.markup_kind == account.Markup.AMOUNT:
             fixed = account.markup_value
-    return {
+    payload = {
         "minimum": spec.minimum,
         "maximum": spec.maximum,
         "step": spec.step,
@@ -229,11 +268,29 @@ def open_amount_payload(spec, account=None) -> dict | None:
         "price_per_unit": per_unit,
         "price_fixed": fixed,
     }
+    if not with_cost:
+        del payload["cost_ratio"]
+        if not _markup_lifts_price(spec, per_unit, fixed):
+            payload["price_per_unit"] = Decimal("1")
+            payload["price_fixed"] = Decimal("0")
+    return payload
 
 
-def purchase_payload(entry) -> dict:
-    return {
+def _markup_lifts_price(spec, per_unit, fixed) -> bool:
+    """Whether ``amount * per_unit + fixed`` exceeds ``amount`` for any amount
+    the provider takes. The gap is linear in the amount, so its ends decide:
+    unbounded above, a per-unit rate over 1 always gets there."""
+    if spec.maximum is None and per_unit > 1:
+        return True
+    ends = [spec.minimum] if spec.maximum is None else [spec.minimum, spec.maximum]
+    return any(end * (per_unit - 1) + fixed > 0 for end in ends)
+
+
+def purchase_payload(entry, *, with_cost=True) -> dict:
+    payload = {
         "reference": entry.reference,
+        # What the provider charged whichever agency sold it. The owner's
+        # figure: see ``with_cost`` above.
         "cost": entry.cost,
         "months": entry.months,
         "at": entry.at,
@@ -251,6 +308,9 @@ def purchase_payload(entry) -> dict:
         # cashier should read as done.
         "status": entry.status,
     }
+    if not with_cost:
+        del payload["cost"]
+    return payload
 
 
 def status_payload(entry) -> dict:
@@ -336,11 +396,17 @@ def float_payload(account) -> dict:
 
 
 
-def subscriber_payload(subscriber) -> dict | None:
+#: What an agency's portal says this subscriber's package and history cost the
+#: agencies — HD Box's «Price/month» and «Total pay». Provider prices, so they
+#: follow ``with_cost``; the purchase count stays for everyone.
+SUBSCRIBER_COST_FIELDS = ("price_per_month", "lifetime_spend")
+
+
+def subscriber_payload(subscriber, *, with_cost=True) -> dict | None:
     """Who this card belongs to, and what the provider says about it."""
     if subscriber is None:
         return None
-    return {
+    payload = {
         "id": subscriber.id,
         "subscriber_ref": subscriber.subscriber_ref,
         "customer_id": subscriber.customer_id,
@@ -360,6 +426,10 @@ def subscriber_payload(subscriber) -> dict | None:
         "lifetime_spend": subscriber.lifetime_spend,
         "last_synced_at": subscriber.last_synced_at,
     }
+    if not with_cost:
+        for field in SUBSCRIBER_COST_FIELDS:
+            del payload[field]
+    return payload
 
 
 def search_payload(row) -> dict:
@@ -400,7 +470,7 @@ def charge_payload(outcome) -> dict:
     leaves the row ``submitted``, which is what forbids another attempt.
     """
     fulfillment = outcome.fulfillment
-    printed = (fulfillment.provider_receipt or {}).get("printed") if fulfillment else None
+    printed = printed_receipt(fulfillment)
     return {
         "fulfillment": fulfillment.pk if fulfillment else None,
         "order_line": fulfillment.order_line_id if fulfillment else None,

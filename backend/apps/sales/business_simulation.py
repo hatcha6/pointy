@@ -151,6 +151,13 @@ def q3(value) -> Decimal:
     return Decimal(value).quantize(QTY, rounding=ROUND_HALF_UP)
 
 
+def up6(value) -> Decimal:
+    """A purchase unit cost: a rate to six places, HALF_UP. Rounded to money
+    it would not multiply back to the line it came from — see
+    ``apps.purchasing.unit_costs``, which this ports rather than imports."""
+    return Decimal(value).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+
 def allocate_discount_amount(amount: Decimal, weights_by_key: dict) -> dict:
     """Proportional floor + largest-remainder allocation.
 
@@ -1254,6 +1261,12 @@ class Simulation:
     def assert_money(self, actual, expected, what: str):
         if even2(actual) != even2(expected):
             self.fail(f"{what}: backend={even2(actual)} oracle={even2(expected)}")
+
+    def assert_rate(self, actual, expected, what: str):
+        """A per-unit cost, compared at the six places it is kept to: at two
+        a drift that moves a line's stock value by cents would still pass."""
+        if up6(actual) != up6(expected):
+            self.fail(f"{what}: backend={up6(actual)} oracle={up6(expected)}")
 
     def assert_qty(self, actual, expected, what: str):
         if q3(actual) != q3(expected):
@@ -3477,13 +3490,14 @@ class Simulation:
             for name in (
                 "discount_amount",
                 "net_line_total",
-                "net_unit_cost",
                 "allocated_landed_cost",
-                "landed_unit_cost",
-                "effective_unit_cost",
                 "effective_line_total",
             ):
                 self.assert_money(
+                    Decimal(payload[name]), getattr(expected, name), f"{tag} {name}"
+                )
+            for name in ("net_unit_cost", "landed_unit_cost", "effective_unit_cost"):
+                self.assert_rate(
                     Decimal(payload[name]), getattr(expected, name), f"{tag} {name}"
                 )
 
@@ -3508,7 +3522,7 @@ class Simulation:
             share = extra_shares.get(keys[line.line_id], ZERO)
             line.discount_amount = min(share, line.line_total)
             line.net_line_total = even2(line.line_total - line.discount_amount)
-            line.net_unit_cost = up2(line.net_line_total / Decimal(line.quantity))
+            line.net_unit_cost = up6(line.net_line_total / Decimal(line.quantity))
 
         # 2. The landed costs, weighted by the method the order was created with
         # — read off the post-discount line values, exactly as recalculate()
@@ -3538,10 +3552,10 @@ class Simulation:
         )
         for line in rec.lines:
             line.allocated_landed_cost = allocations.get(line.line_id, ZERO)
-            line.landed_unit_cost = even2(
+            line.landed_unit_cost = up6(
                 line.allocated_landed_cost / Decimal(line.quantity)
             )
-            line.effective_unit_cost = even2(
+            line.effective_unit_cost = up6(
                 line.net_unit_cost + line.landed_unit_cost
             )
 
@@ -4846,12 +4860,13 @@ class Simulation:
             for name in (
                 "discount_amount",
                 "net_line_total",
-                "net_unit_cost",
                 "allocated_landed_cost",
-                "landed_unit_cost",
-                "effective_unit_cost",
             ):
                 self.assert_money(
+                    getattr(line, name), getattr(expected, name), f"{tag} {name}"
+                )
+            for name in ("net_unit_cost", "landed_unit_cost", "effective_unit_cost"):
+                self.assert_rate(
                     getattr(line, name), getattr(expected, name), f"{tag} {name}"
                 )
             self.assert_money(

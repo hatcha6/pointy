@@ -81,6 +81,26 @@ void main() {
     });
   });
 
+  // The shop's paid entitlements ride beside `user`, not inside it; the
+  // capabilities read them off the user, so they have to be folded on.
+  test('folds the AI and SMS entitlements onto the user', () async {
+    final session = PosApiSession(
+      client: MockClient(
+        (request) async => _json({
+          ..._userPayload,
+          'ai_available': false,
+          'sms_available': true,
+        }, 200),
+      ),
+      baseUrl: _lan,
+    );
+
+    final user = await AuthApiClient(session).fetchCurrentUser();
+
+    expect(user?.aiAvailable, isFalse);
+    expect(user?.smsAvailable, isTrue);
+  });
+
   group('who am I, through the relay', () {
     test("the backend's 401 is a sign-out", () async {
       final session = PosApiSession(

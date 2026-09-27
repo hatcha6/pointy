@@ -18,7 +18,7 @@ from django.utils import timezone
 from .models import MessagingGateway, OutboundMessage
 from .quiet_hours import in_quiet_hours
 from .ratelimit import note_sent, take_minute_slot, within_daily_cap
-from .services import deliver_message
+from .services import deliver_message, sync_delivery_statuses
 from .transports import UnknownProvider, transport_for
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,24 @@ def sweep_stuck_task():
         expires_at__lte=now,
     ).update(status=OutboundMessage.Status.EXPIRED)
     return {"requeued": requeued, "expired": expired}
+
+
+@shared_task(name="messaging.sync_delivery_status")
+def sync_delivery_status_task():
+    """Poll each active gateway's provider for the fate of recent sends.
+
+    Best-effort and self-contained: a provider that cannot be reached this time
+    is simply asked again on the next run.
+    """
+    applied = 0
+    for gateway in MessagingGateway.objects.filter(is_active=True):
+        try:
+            applied += sync_delivery_statuses(gateway)
+        except UnknownProvider:
+            continue
+        except Exception:  # one gateway's failure must not stop the others
+            logger.exception("delivery status sync failed for gateway %s", gateway.pk)
+    return {"applied": applied}
 
 
 def _expire(message: OutboundMessage) -> None:

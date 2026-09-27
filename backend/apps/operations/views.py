@@ -428,8 +428,16 @@ class JobViewSet(
             status=RegisterSession.Status.OPEN,
         ).first()
         if session is None:
+            # Coded like the refund and loan-payout refusals, because it is a
+            # step the app can take for the user rather than a dead end: it
+            # opens their drawer right there and invoices again. A bare
+            # sentence here left a manager at closing time unable to invoice
+            # a finished repair and so unable to hand it back.
             return Response(
-                {"detail": "No open register session for this request owner."},
+                {
+                    "code": "register_session_required",
+                    "detail": "No open register session for this request owner.",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         invoice_job(

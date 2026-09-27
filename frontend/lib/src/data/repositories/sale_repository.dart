@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/messaging_gateway.dart';
 import '../models/print_job.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
@@ -62,7 +63,7 @@ class SaleRepository {
   /// latches "no active rules" against it to skip preview requests.
   String? get discountsVersionToken => _service.discountsVersionToken;
 
-  Future<Result<void>> sendInvoiceSms(int saleOrderId) {
+  Future<Result<MessagingSendResult>> sendInvoiceSms(int saleOrderId) {
     return Result.guard(() => _service.sendInvoiceSms(saleOrderId));
   }
 

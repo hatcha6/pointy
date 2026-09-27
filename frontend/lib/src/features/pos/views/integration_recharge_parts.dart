@@ -807,13 +807,16 @@ class _RechargeSubscriberStripState extends State<RechargeSubscriberStrip> {
     final facts = <String>[
       if (subscriber != null && subscriber.deviceModel.isNotEmpty)
         l10n.rechargeSubscriberDevice(subscriber.deviceModel),
-      if (subscriber != null &&
-          subscriber.purchaseCount > 0 &&
-          subscriber.lifetimeSpend != null)
-        l10n.rechargeSubscriberLifetime(
-          subscriber.purchaseCount,
-          formatMoney(subscriber.lifetimeSpend!),
-        ),
+      if (subscriber != null && subscriber.purchaseCount > 0)
+        // What the agencies paid over the years is a provider price, sent to
+        // the reporting roles only; how often is everyone's to know.
+        switch (subscriber.lifetimeSpend) {
+          final spend? => l10n.rechargeSubscriberLifetime(
+            subscriber.purchaseCount,
+            formatMoney(spend),
+          ),
+          null => l10n.rechargeSubscriberPurchases(subscriber.purchaseCount),
+        },
     ];
 
     return DecoratedBox(

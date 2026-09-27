@@ -7,9 +7,11 @@ import 'package:image/image.dart' as img;
 
 import '../../shared/branding.dart';
 import '../../shared/branding_assets.dart';
+import '../../shared/formatters.dart' show formatPrintedQuantity;
+import '../../shared/printing/print_qr_code.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
-import 'receipt_integration_rows.dart';
+import 'receipt_provider_slips.dart';
 
 part 'esc_pos_repair_ticket.dart';
 
@@ -37,13 +39,17 @@ List<int> _encodeEscPosResolved(_EscPosEncodeRequest request) {
   return const EscPosReceiptEncoder()._encodeWithProfile(request);
 }
 
-/// Decoded + downscaled shop/station logos keyed by their base64 source, so a
-/// busy printer doesn't re-decode the same image for every ticket.
+/// Decoded + downscaled shop/station logos, already byte-aligned on white by
+/// [_byteAlignedOnWhite], keyed by their base64 source, so a busy printer
+/// doesn't re-decode the same image for every ticket.
 final Map<String, img.Image?> _logoRasterCache = {};
 
 /// Decoded + downscaled brand marks for the closing tagline, keyed by source
 /// length + density, so the fixed brand asset is rasterised once per size.
 final Map<String, img.Image?> _brandRasterCache = {};
+
+/// Card brands' receipt logos, fitted to their slip box (see [_slipLogoFor]).
+final Map<String, img.Image?> _slipLogoCache = {};
 
 /// The currency symbol the current receipt renders. Set per-encode from the
 /// payload so it works inside the print isolate, where the main isolate's
@@ -240,6 +246,13 @@ class EscPosReceiptEncoder {
     final sessionNumber = _string(
       _map(order['register_session'])['session_number'],
     );
+    // What providers did for this sale — a card's PIN, a subscriber's new
+    // term. The receipt of such a sale prints only once the provider has
+    // answered, so these are the answers.
+    final slips = receiptProviderSlipsFromPayload(
+      lines,
+      printQrCodes: shop['print_voucher_qr_codes'] != false,
+    );
 
     final bytes = <int>[];
     bytes.addAll(
@@ -252,7 +265,20 @@ class EscPosReceiptEncoder {
       ),
     );
 
-    bytes.addAll(generator.hr());
+    // Each answer is a block of its own between the masthead and the invoice,
+    // never beneath its line, where a long basket buried the PIN. The block
+    // closes on its own rule, which stands in for the header's.
+    bytes.addAll(
+      slips.isEmpty
+          ? generator.hr()
+          : _providerSlips(
+              generator,
+              slips,
+              endpoint: endpoint,
+              codeTable: codeTable,
+              dense: dense,
+            ),
+    );
     final headerStyles = PosStyles(align: PosAlign.right, codeTable: codeTable);
     final headerWidth = _charsPerLine(endpoint.paperWidthMm);
     bytes.addAll(
@@ -288,7 +314,7 @@ class EscPosReceiptEncoder {
         line['product_name'],
         fallback: _string(line['name'], fallback: 'منتج'),
       );
-      final quantity = _string(line['quantity'], fallback: '1');
+      final quantity = _quantity(line['quantity']);
       final unitLabel = _string(line['unit_label'], fallback: '');
       // "2 صندوق × 12.000 = 24.000" — the unit makes pack sales unambiguous.
       final quantityLabel = unitLabel.isEmpty
@@ -302,16 +328,6 @@ class EscPosReceiptEncoder {
           : null;
       if (compactRow != null) {
         bytes.addAll(_text(generator, compactRow, styles: itemStyles));
-        // Even on a compact slip: a card's PIN is the thing that was sold.
-        bytes.addAll(
-          _integrationRows(
-            generator,
-            line,
-            itemWidth,
-            itemStyles,
-            dense: dense,
-          ),
-        );
         continue;
       }
 
@@ -330,12 +346,6 @@ class EscPosReceiptEncoder {
           bytes.addAll(_text(generator, wrapped, styles: itemStyles));
         }
       }
-      // What a provider did for this line — a card's PIN, a subscriber's new
-      // term — printed beneath it. The receipt of such a sale is printed only
-      // once the provider has answered, so this is the answer.
-      bytes.addAll(
-        _integrationRows(generator, line, itemWidth, itemStyles, dense: dense),
-      );
     }
 
     bytes.addAll(generator.hr());
@@ -536,7 +546,7 @@ class EscPosReceiptEncoder {
         line['name'],
         fallback: _string(line['parent_product_name'], fallback: 'منتج'),
       );
-      final quantity = _string(line['quantity'], fallback: '1');
+      final quantity = _quantity(line['quantity']);
       for (final wrapped in _wrap('$quantity × $name', width)) {
         bytes.addAll(
           _text(
@@ -1013,35 +1023,193 @@ class EscPosReceiptEncoder {
     return generator.rawBytes([0x1b, 0x33, 26]);
   }
 
-  List<int> _integrationRows(
+  /// The providers' answers, a ruled block each: title, then a card's PIN and
+  /// how to redeem it, or a top-up's line and term.
+  ///
+  /// Laid out to survive a worn head as much as to stand out: Font A and
+  /// full line spacing even on a compact slip, the PIN double size in one
+  /// unbroken run, the dial string on a line of its own (an Arabic word
+  /// beside it would hand the line to the printer's own bidi), and a card's
+  /// QR code as a whole-dot raster ([_qrRaster]).
+  List<int> _providerSlips(
     Generator generator,
-    Map<String, Object?> line,
-    int width,
-    PosStyles itemStyles, {
+    List<ReceiptProviderSlip> slips, {
+    required PrinterEndpoint endpoint,
+    required String? codeTable,
     required bool dense,
   }) {
-    final rows = receiptIntegrationRowsFromPayload(line['integration']);
-    if (rows.isEmpty) {
-      return const [];
-    }
-    final bytes = <int>[];
-    for (final row in rows) {
-      final styles = row.emphasized
-          // The PIN: bold and tall, in Font A even on a compact slip, so it
-          // can be read at arm's length and typed without a second look.
-          ? itemStyles.copyWith(
+    final columns = _charsPerLine(endpoint.paperWidthMm);
+    PosStyles style({
+      PosAlign align = PosAlign.center,
+      bool bold = false,
+      PosTextSize height = PosTextSize.size1,
+      PosTextSize width = PosTextSize.size1,
+    }) => PosStyles(
+      align: align,
+      bold: bold,
+      height: height,
+      width: width,
+      fontType: PosFontType.fontA,
+      codeTable: codeTable,
+    );
+    final bytes = <int>[
+      // `ESC 2`: the default spacing, which a compact slip has tightened. The
+      // title and the PIN print double height, and tight spacing would print
+      // the next line into them.
+      ...generator.rawBytes([0x1B, 0x32]),
+    ];
+    for (var i = 0; i < slips.length; i++) {
+      final slip = slips[i];
+      bytes.addAll(generator.hr(ch: i == 0 ? '=' : '-', len: columns));
+      bytes.addAll(_slipLogoRaster(generator, slip, endpoint, dense: dense));
+      for (final line in _wrap(slip.title, columns)) {
+        bytes.addAll(
+          _text(
+            generator,
+            line,
+            styles: style(bold: true, height: PosTextSize.size2),
+          ),
+        );
+      }
+      for (final line in _wrap(slip.notice, columns)) {
+        bytes.addAll(_text(generator, line, styles: style(bold: true)));
+      }
+      if (slip.pin.isNotEmpty) {
+        bytes.addAll(_text(generator, receiptPinLabel, styles: style()));
+        // Double width only where the whole PIN still fits one line: a PIN
+        // broken over two lines is a PIN typed wrong.
+        final doubleWidth = slip.pin.length * 2 <= columns;
+        bytes.addAll(
+          _text(
+            generator,
+            slip.pin,
+            styles: style(
               bold: true,
               height: PosTextSize.size2,
-              fontType: PosFontType.fontA,
-              align: PosAlign.center,
-            )
-          : itemStyles;
-      for (final wrapped in _wrap(row.text, width)) {
-        bytes.addAll(_text(generator, wrapped, styles: styles));
+              width: doubleWidth ? PosTextSize.size2 : PosTextSize.size1,
+            ),
+          ),
+        );
+      }
+      final qr = slip.qrData == null
+          ? const <int>[]
+          : _qrRaster(generator, slip.qrData!, endpoint);
+      if (qr.isNotEmpty) {
+        bytes.addAll(qr);
+        bytes.addAll(_text(generator, receiptScanToRedeem, styles: style()));
+      }
+      if (slip.dial.isNotEmpty) {
+        bytes.addAll(
+          _text(
+            generator,
+            qr.isEmpty ? receiptDialToRedeem : receiptOrDial,
+            styles: style(),
+          ),
+        );
+        bytes.addAll(
+          _text(
+            generator,
+            slip.dial,
+            styles: style(bold: true, height: PosTextSize.size2),
+          ),
+        );
+      }
+      for (final row in slip.rows) {
+        for (final line in _wrap(row, columns)) {
+          bytes.addAll(
+            _text(generator, line, styles: style(align: PosAlign.right)),
+          );
+        }
       }
     }
+    bytes.addAll(generator.hr(ch: '=', len: columns));
+    bytes.addAll(_tightLineSpacing(generator, dense));
     return bytes;
   }
+
+  /// A card's QR code, centred, as a raster in whole printer dots.
+  ///
+  /// Drawn here rather than left to the printer's own QR command (`GS ( k`):
+  /// many of the cheap heads in the field have none, or ignore the module
+  /// size and error correction asked of them, where a raster prints on every
+  /// one of them exactly as encoded. Modules are as big as the head allows,
+  /// up to 10 dots (1.25 mm): a dead heating element leaves a one-dot white
+  /// line down the whole slip, and a module ten dots wide still reads as
+  /// black on either side of it. Nothing at all when even 4-dot modules would
+  /// not fit — the dial string beneath still prints.
+  List<int> _qrRaster(
+    Generator generator,
+    String data,
+    PrinterEndpoint endpoint,
+  ) {
+    final code = PrintQrCode.tryEncode(data);
+    if (code == null) {
+      return const [];
+    }
+    // 3 mm short of the head: some rolls sold as 58 mm print narrower than
+    // the 384 dots the generator assumes, and an image wider than the head is
+    // dropped or wrapped.
+    final usableDots = _paperSize(endpoint.paperWidthMm).width - 24;
+    final moduleDots = math.min(
+      _maxQrModuleDots,
+      usableDots ~/ code.moduleCountWithQuietZone,
+    );
+    if (moduleDots < _minQrModuleDots) {
+      return const [];
+    }
+    return [
+      ...generator.setStyles(const PosStyles(align: PosAlign.center)),
+      ...escPosQrRaster(code, moduleDots: moduleDots),
+    ];
+  }
+
+  static const int _maxQrModuleDots = 10;
+  static const int _minQrModuleDots = 4;
+
+  /// A card's brand logo, centred at the head of its slip, then a 2 mm gap.
+  ///
+  /// Scaled into a box [_slipLogoHeightDots] tall (less in a compact slip)
+  /// and at most half the roll wide, so a square mark and a long wordmark
+  /// read at the same weight. Nothing at all when the slip has none or it
+  /// cannot be drawn: a logo is never worth a receipt.
+  List<int> _slipLogoRaster(
+    Generator generator,
+    ReceiptProviderSlip slip,
+    PrinterEndpoint endpoint, {
+    required bool dense,
+  }) {
+    final bytes = receiptSlipLogoBytes(slip);
+    if (bytes == null) {
+      return const [];
+    }
+    try {
+      final image = _slipLogoFor(
+        slip.logo,
+        bytes,
+        maxWidth: math.min(
+          _paperSize(endpoint.paperWidthMm).width ~/ 2,
+          _slipLogoMaxWidthDots,
+        ),
+        maxHeight: dense ? _slipLogoHeightDotsDense : _slipLogoHeightDots,
+      );
+      if (image == null) {
+        return const [];
+      }
+      return [
+        ...generator.imageRaster(image, align: PosAlign.center),
+        // `ESC J 16`: print, then feed 16 dots, so the title's glyphs, which
+        // sit at the top of their line, do not touch the logo.
+        ...generator.rawBytes([0x1B, 0x4A, 16]),
+      ];
+    } on Object {
+      return const [];
+    }
+  }
+
+  /// 12 mm at 203 dpi; 9 mm on a compact slip.
+  static const int _slipLogoHeightDots = 96;
+  static const int _slipLogoHeightDotsDense = 72;
+  static const int _slipLogoMaxWidthDots = 256;
 
   /// Enlarged-text height for headings/totals: double height normally, single
   /// height in a compact slip (so the reduced line spacing never overlaps).
@@ -1148,9 +1316,11 @@ class EscPosReceiptEncoder {
         final decoded = img.decodeImage(base64Decode(encoded));
         image = decoded == null
             ? null
-            : (decoded.width > 384
-                  ? img.copyResize(decoded, width: 384)
-                  : decoded);
+            : _byteAlignedOnWhite(
+                decoded.width > 384
+                    ? img.copyResize(decoded, width: 384)
+                    : decoded,
+              );
         _logoRasterCache[encoded] = image;
       }
       if (image == null) {
@@ -1320,6 +1490,109 @@ img.Image? _brandRasterFor(Uint8List bytes, {required bool dense}) {
   return resized;
 }
 
+/// A slip's brand logo, fitted into [maxWidth] × [maxHeight] dots and made
+/// ready for [Generator.imageRaster], cached by its source and box, so the
+/// same brand printing twice on one receipt is decoded once. Shrunk by area
+/// averaging, which keeps a thin stroke as grey rather than dropping it before
+/// the printer's threshold; never enlarged past twice its size. Null when the
+/// bytes do not decode.
+img.Image? _slipLogoFor(
+  String key,
+  Uint8List bytes, {
+  required int maxWidth,
+  required int maxHeight,
+}) {
+  final cacheKey = '$maxWidth:$maxHeight:$key';
+  if (_slipLogoCache.containsKey(cacheKey)) {
+    return _slipLogoCache[cacheKey];
+  }
+  img.Image? fitted;
+  final decoded = img.decodeImage(bytes);
+  if (decoded != null && decoded.width > 0 && decoded.height > 0) {
+    final scale = math.min(
+      2.0,
+      math.min(maxWidth / decoded.width, maxHeight / decoded.height),
+    );
+    final width = math.max(1, (decoded.width * scale).round());
+    final height = math.max(1, (decoded.height * scale).round());
+    fitted = _byteAlignedOnWhite(
+      width == decoded.width && height == decoded.height
+          ? decoded
+          : img.copyResize(
+              decoded,
+              width: width,
+              height: height,
+              interpolation: scale < 1
+                  ? img.Interpolation.average
+                  : img.Interpolation.linear,
+            ),
+    );
+  }
+  _slipLogoCache[cacheKey] = fitted;
+  return fitted;
+}
+
+/// [logo] centred on white paper whose width is a whole number of bytes.
+///
+/// `imageRaster` cannot take a width that is not a multiple of eight: its
+/// padding step zeroes the pixels and then throws, so such a logo silently
+/// vanished from the ticket. It also ignores alpha, so a transparent
+/// background printed solid black. Hence a fresh white canvas, with the logo
+/// alpha-blended onto it.
+img.Image _byteAlignedOnWhite(img.Image logo) {
+  final canvas = img.Image(
+    width: (logo.width + 7) ~/ 8 * 8,
+    height: logo.height,
+  );
+  img.fill(canvas, color: img.ColorRgb8(255, 255, 255));
+  // Widened to 8-bit RGBA first: `compositeImage` reads a lone gray channel
+  // as red, and ignores the alpha of a gray + alpha pixel.
+  return img.compositeImage(
+    canvas,
+    logo.convert(format: img.Format.uint8, numChannels: 4),
+    center: true,
+  );
+}
+
+/// [code] as a single ESC/POS raster image (`GS v 0`, normal density):
+/// [moduleDots] printer dots a module, the quiet zone drawn in as blank
+/// paper, and the width padded to whole bytes with blank paper split evenly
+/// on both sides.
+///
+/// Packed here, bit by bit, instead of going through `imageRaster`: that
+/// blanks any image whose width is not a multiple of eight, and a QR code's
+/// width is whatever its version makes it.
+@visibleForTesting
+List<int> escPosQrRaster(PrintQrCode code, {required int moduleDots}) {
+  final modules = code.moduleCountWithQuietZone;
+  final side = modules * moduleDots;
+  final widthBytes = (side + 7) ~/ 8;
+  final left = (widthBytes * 8 - side) ~/ 2;
+  final data = Uint8List(widthBytes * side);
+  for (var y = 0; y < side; y++) {
+    final row = y ~/ moduleDots - PrintQrCode.quietZone;
+    if (row < 0 || row >= code.moduleCount) {
+      continue;
+    }
+    for (var x = 0; x < side; x++) {
+      final column = x ~/ moduleDots - PrintQrCode.quietZone;
+      if (column < 0 || column >= code.moduleCount) {
+        continue;
+      }
+      if (code.isDark(row, column)) {
+        final dot = left + x;
+        data[y * widthBytes + (dot >> 3)] |= 0x80 >> (dot & 7);
+      }
+    }
+  }
+  return [
+    0x1D, 0x76, 0x30, 0x00, // GS v 0, normal density
+    widthBytes & 0xFF, widthBytes >> 8,
+    side & 0xFF, side >> 8,
+    ...data,
+  ];
+}
+
 Map<String, Object?> _map(Object? value) {
   if (value is Map<String, Object?>) {
     return value;
@@ -1354,6 +1627,16 @@ String _money(Object? value) {
         : '$fallback $_receiptCurrencySymbol';
   }
   return '${number.toStringAsFixed(2)} $_receiptCurrencySymbol';
+}
+
+/// A line's quantity as the invoice PDF prints it: "6" for the `6.0` the
+/// payload's float carries, "1.25" as it is. Anything that isn't a number
+/// prints as sent, and a missing quantity as "1".
+String _quantity(Object? value) {
+  final number = num.tryParse(value?.toString() ?? '');
+  return number != null && number.isFinite
+      ? formatPrintedQuantity(number)
+      : _string(value, fallback: '1');
 }
 
 String _formatDateTime(Object? value) {

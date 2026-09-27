@@ -84,6 +84,7 @@ from .base import (
     ERROR_INDETERMINATE,
     ERROR_INSUFFICIENT_FLOAT,
     ERROR_NOT_CONFIGURED,
+    ERROR_NOT_FOUND,
     ERROR_OUT_OF_STOCK,
     ERROR_PIN_REQUIRED,
     ERROR_PROFILE_MISMATCH,
@@ -106,6 +107,7 @@ from .base import (
     VoucherBrand,
     VoucherCatalogResult,
     VoucherItem,
+    VoucherLogo,
     register,
 )
 
@@ -185,6 +187,20 @@ EXCLUDED_CATEGORY_MARKERS = ("حوالات",)
 
 #: Account-wide voucher log, newest first, fifteen to a page in the capture.
 HISTORY_MAX_PAGES = 6
+
+#: Where a brand's ``logo`` path may be served from, after the account's own
+#: host. Qareeb is moving hosts (see ``catalog.QAREEB``) and its pictures have
+#: not moved together: on 2026-09-26, of 135 brand logos, 125 were on both
+#: hosts, 6 only on the new one and 4 only on the old — and the app itself,
+#: still on the old host in the capture, asked it for six logos it did not
+#: have, with a 404 every time. So a 404 from one host is asked of the other
+#: before a logo counts as missing.
+MEDIA_HOSTS = ("https://api.qareeb.ly", "https://api.qareb.ly")
+#: ``(connect, read)``. A picture is not worth a long wait: nothing waits on
+#: it, and the sweep that fetches it must finish inside its lock.
+MEDIA_TIMEOUT = (5, 10)
+#: Past this, it is not a logo. The largest one seen was 1.2 MB.
+MEDIA_MAX_BYTES = 5 * 1024 * 1024
 
 #: A purchase can only happen while the basket is ours. Long enough for the
 #: slowest checkout we are prepared to wait for, and no longer: a process that
@@ -583,6 +599,70 @@ class QareebProvider(IntegrationProvider):
                 ok=False, error_code=ERROR_UNEXPECTED, error_detail="no brand in reply"
             )
         return VoucherCatalogResult(ok=True, brands=(_with_items_known(brand, True),))
+
+    # --- the shelf's pictures ------------------------------------------------
+    def voucher_logo(self, logo_path: str) -> VoucherLogo:
+        """The picture a brand's ``logo`` or ``logo_print`` names, from whichever host has it.
+
+        Both are paths on the API host (``/media/products/….png``) and they
+        are public: the app asks for them with its usual headers and no
+        bearer, so this spends no login. See :data:`MEDIA_HOSTS` for why one
+        host is not enough.
+        """
+        urls = _media_urls(self.account.resolved_base_url(), logo_path)
+        if not urls:
+            return VoucherLogo(
+                ok=False, error_code=ERROR_UNEXPECTED, error_detail=f"not a media path: {logo_path!r}"
+            )
+        misses = []
+        for url in urls:
+            data, reason = self._fetch_media(url)
+            if data:
+                return VoucherLogo(ok=True, data=data, url=url)
+            misses.append(f"{url}: {reason}")
+        # "Not there" only when every host said so; anything else may pass.
+        missing = all(miss.endswith(": 404") for miss in misses)
+        return VoucherLogo(
+            ok=False,
+            error_code=ERROR_NOT_FOUND if missing else ERROR_UNREACHABLE,
+            error_detail="; ".join(misses),
+        )
+
+    def _fetch_media(self, url: str) -> tuple[bytes, str]:
+        """``(bytes, "")``, or ``(b"", why not)``."""
+        try:
+            response = self._http().get(
+                url,
+                headers=self._media_headers(),
+                timeout=MEDIA_TIMEOUT,
+                stream=True,
+            )
+        except requests.RequestException as exc:
+            return b"", type(exc).__name__
+        try:
+            if response.status_code >= 400:
+                return b"", str(response.status_code)
+            data = _read_capped(response, MEDIA_MAX_BYTES)
+        except requests.RequestException as exc:
+            return b"", type(exc).__name__
+        finally:
+            response.close()
+        if data is None:
+            return b"", f"over {MEDIA_MAX_BYTES} bytes"
+        return data, "" if data else "empty"
+
+    def _media_headers(self) -> dict:
+        """What the app sends for a picture: its own headers, and no bearer.
+
+        Never mints the device identity (:meth:`_device_ids` writes it down):
+        this runs on the sweep's worker threads, which must not write.
+        """
+        config = self.account.config or {}
+        headers = dict(APP_HEADERS)
+        if config.get(CONFIG_DEVICE_UUID) and config.get(CONFIG_DEVICE_IDENTIFIER):
+            headers["x-device-uuid"] = config[CONFIG_DEVICE_UUID]
+            headers["identifier"] = config[CONFIG_DEVICE_IDENTIFIER]
+        return headers
 
     # --- offline arithmetic ------------------------------------------------
     def quote(self, option_code: str) -> OptionQuote | None:
@@ -1266,6 +1346,7 @@ def _parse_brand(raw, *, category: str) -> VoucherBrand | None:
         category=category,
         currency=_plain_str(raw.get("product_currency")) or "LYD",
         logo_path=_plain_str(raw.get("logo")),
+        print_logo_path=_plain_str(raw.get("logo_print")),
         items=tuple(items),
     )
 
@@ -1278,9 +1359,43 @@ def _with_items_known(brand: VoucherBrand, known: bool) -> VoucherBrand:
         category=brand.category,
         currency=brand.currency,
         logo_path=brand.logo_path,
+        print_logo_path=brand.print_logo_path,
         items=brand.items,
         items_known=known,
     )
+
+
+def _media_urls(base_url: str, logo_path: str) -> list[str]:
+    """Every URL a logo path may be served from, the account's own host first.
+
+    Only a path on the API host is followed. A full URL would send the shop's
+    server wherever the provider's JSON pointed, from inside the shop's own
+    network, so it is refused rather than fetched.
+    """
+    path = (logo_path or "").strip()
+    if not path.startswith("/") or path.startswith("//"):
+        return []
+    hosts = []
+    for host in (base_url, *MEDIA_HOSTS):
+        host = (host or "").rstrip("/")
+        if host and host not in hosts:
+            hosts.append(host)
+    return [f"{host}{path}" for host in hosts]
+
+
+def _read_capped(response, limit: int) -> bytes | None:
+    """The whole body, or ``None`` once it is known to be over ``limit``."""
+    try:
+        if int(response.headers.get("content-length") or 0) > limit:
+            return None
+    except ValueError:
+        pass
+    data = bytearray()
+    for chunk in response.iter_content(64 * 1024):
+        data.extend(chunk)
+        if len(data) > limit:
+            return None
+    return bytes(data)
 
 
 def _printed_fields(row: dict) -> dict:

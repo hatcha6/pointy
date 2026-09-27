@@ -143,10 +143,17 @@ class _ProviderBreakdown extends StatelessWidget {
           key: const ValueKey('session_integrations_refunded_after_delivery'),
           compact: true,
           icon: Icons.money_off_outlined,
-          message: l10n.sessionIntegrationsRefundedAfterDeliveryNote(
-            figures.refundedAfterDelivery.count,
-            formatMoney(figures.refundedAfterDelivery.cost),
-          ),
+          // What the float lost is the provider's share: said only to a
+          // reader who is sent it, but that it happened is said to everyone.
+          message: switch (figures.refundedAfterDelivery.cost) {
+            final lost? => l10n.sessionIntegrationsRefundedAfterDeliveryNote(
+              figures.refundedAfterDelivery.count,
+              formatMoney(lost),
+            ),
+            null => l10n.sessionIntegrationsRefundedAfterDeliveryCountNote(
+              figures.refundedAfterDelivery.count,
+            ),
+          },
         ),
       if (figures.awaiting.count > 0)
         PointyInlineMessage.warning(
@@ -175,23 +182,29 @@ class _MoneySplit extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
+    final cost = figures.cost;
+    final margin = figures.margin;
     return PointySummaryList(
       rows: [
         PointySummaryRow(
           label: l10n.sessionIntegrationsSoldLabel,
           value: formatMoney(figures.sold),
         ),
-        PointySummaryRow(
-          label: l10n.sessionIntegrationsCostLabel,
-          value: formatMoney(figures.cost),
-        ),
-        PointySummaryRow(
-          label: l10n.sessionIntegrationsMarginLabel,
-          value: formatMoney(figures.margin),
-          emphasized: true,
-          dividerAbove: true,
-          valueColor: figures.margin < 0 ? colors.danger : colors.primaryStrong,
-        ),
+        // Absent, not zero, for a reader outside the reporting roles — so the
+        // rows are not built rather than showing a cost of nothing.
+        if (cost != null)
+          PointySummaryRow(
+            label: l10n.sessionIntegrationsCostLabel,
+            value: formatMoney(cost),
+          ),
+        if (margin != null)
+          PointySummaryRow(
+            label: l10n.sessionIntegrationsMarginLabel,
+            value: formatMoney(margin),
+            emphasized: true,
+            dividerAbove: true,
+            valueColor: margin < 0 ? colors.danger : colors.primaryStrong,
+          ),
       ],
     );
   }
@@ -382,14 +395,13 @@ class _TransactionRow extends StatelessWidget {
                   formatMoney(transaction.price),
                   style: theme.textTheme.titleSmall,
                 ),
-                Text(
-                  l10n.sessionIntegrationsTransactionCost(
-                    formatMoney(transaction.cost),
+                if (transaction.cost case final cost?)
+                  Text(
+                    l10n.sessionIntegrationsTransactionCost(formatMoney(cost)),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.mutedInk,
+                    ),
                   ),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.mutedInk,
-                  ),
-                ),
               ],
             ),
           ],

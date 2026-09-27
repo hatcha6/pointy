@@ -392,12 +392,27 @@ class Job(TimeStampedModel):
             if update_fields is not None and "public_token" not in update_fields:
                 kwargs["update_fields"] = [*update_fields, "public_token"]
         if not self.job_number:
+            # The number and its row are one unit, as for receipts and purchase
+            # orders: a number taken by a write that then fails is a hole in the
+            # series. It used to be the row's own id, which inherits every gap a
+            # key may have — see ``apps.documents.numbering``.
             with transaction.atomic():
-                super().save(*args, **kwargs)
-                prefix = JOB_NUMBER_PREFIXES.get(self.job_type, "JOB")
-                self.job_number = f"{prefix}-{self.created_at:%Y%m%d}-{self.id:06d}"
-                return super().save(update_fields=["job_number", "public_token"])
+                self.job_number = self._next_job_number()
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None and "job_number" not in update_fields:
+                    kwargs["update_fields"] = [*update_fields, "job_number"]
+                return super().save(*args, **kwargs)
         return super().save(*args, **kwargs)
+
+    def _next_job_number(self) -> str:
+        from apps.documents.numbering import JOB_SERIES, next_document_number
+
+        prefix = JOB_NUMBER_PREFIXES.get(self.job_type, "JOB")
+        # `created_at` is auto_now_add and not set until the insert; this is
+        # the clock it will be stamped from, so the date part reads as it did
+        # when it was taken off the saved row.
+        issued_at = self.created_at or timezone.now()
+        return f"{prefix}-{issued_at:%Y%m%d}-{next_document_number(JOB_SERIES):06d}"
 
     @classmethod
     def _generate_public_token(cls) -> str:

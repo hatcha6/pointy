@@ -5,13 +5,11 @@ import 'camera_wedge_controller.dart';
 /// Makes the counter camera reachable from any screen without threading it
 /// through constructors.
 ///
-/// Exactly the shape `CompanionScope` uses, for exactly the same reason:
-/// scanning is ambient — it belongs to every scanning surface at once — so
-/// passing a controller down through POS, purchasing, stock count and half a
-/// dozen dialogs would mean editing each of them, and every preview harness
-/// and widget test that builds one, to add a parameter they only forward. A
-/// scope keeps the feature additive: screens that want it look it up, screens
-/// and tests that do not get `null` and behave exactly as before.
+/// Not for scanning: the camera's scans reach screens as keystrokes
+/// (`ScanKeyboard`), so no screen looks the camera up to hear it. The
+/// scope is for the few that talk ABOUT the camera — device settings, and the
+/// shortcut sheet that mentions F8 only on a till that has one. Screens and
+/// tests that do not want it get `null` and behave exactly as before.
 class CameraWedgeScope extends InheritedWidget {
   const CameraWedgeScope({
     super.key,

@@ -12,9 +12,15 @@ from apps.core.permissions import HasPointyPermission
 from apps.customers.models import Customer
 from apps.messaging.phone import normalize_phone
 from apps.messaging.serializers import OutboundMessageSerializer
-from apps.messaging.services import NoGatewayConfigured
+from apps.messaging.services import NoGatewayConfigured, unavailable_message
+from apps.messaging.sms_templates import MAX_VALUE_LENGTH, SmsValueTooLong
 
-from .campaigns import InvalidCampaignState, approve_and_send, preview_campaign
+from .campaigns import (
+    CampaignTooLong,
+    InvalidCampaignState,
+    approve_and_send,
+    preview_campaign,
+)
 from .consent import apply_consent, consent_state
 from .models import Campaign, ConsentEvent, Conversation
 from .transactional import NoRecipientPhone, send_invoice_sms
@@ -84,8 +90,18 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": "نص الرسالة مطلوب."}, status=400)
         try:
             message = post_reply(conversation, body, author=request.user)
-        except NoGatewayConfigured:
-            return Response({"detail": "لا توجد بوابة رسائل مُفعّلة."}, status=400)
+        except NoGatewayConfigured as exc:
+            return Response(
+                {"detail": unavailable_message(exc), "code": exc.code}, status=400
+            )
+        except SmsValueTooLong:
+            return Response(
+                {
+                    "detail": f"الرسالة أطول من المسموح ({MAX_VALUE_LENGTH} حرفًا).",
+                    "code": "too_long",
+                },
+                status=400,
+            )
         return Response(ConversationMessageSerializer(message).data, status=201)
 
     @action(detail=True, methods=["post"])
@@ -166,8 +182,10 @@ class SendInvoiceSmsView(APIView):
             message = send_invoice_sms(order, actor=request.user)
         except NoRecipientPhone:
             return Response({"detail": "لا يوجد رقم هاتف للعميل."}, status=400)
-        except NoGatewayConfigured:
-            return Response({"detail": "لا توجد بوابة رسائل مُفعّلة."}, status=400)
+        except NoGatewayConfigured as exc:
+            return Response(
+                {"detail": unavailable_message(exc), "code": exc.code}, status=400
+            )
         return Response(OutboundMessageSerializer(message).data, status=201)
 
 
@@ -238,6 +256,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
         except InvalidCampaignState:
             return Response(
                 {"detail": "لا يمكن إرسال هذه الحملة في حالتها الحالية."},
+                status=400,
+            )
+        except CampaignTooLong:
+            return Response(
+                {
+                    "detail": (
+                        f"نص الحملة أطول من المسموح ({MAX_VALUE_LENGTH} حرفًا) "
+                        "بعد تعبئة اسم العميل."
+                    ),
+                    "code": "too_long",
+                },
                 status=400,
             )
         return Response(CampaignSerializer(campaign).data)

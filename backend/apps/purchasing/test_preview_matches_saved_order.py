@@ -24,6 +24,13 @@ from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 
 from .models import PurchaseOrder, Supplier
+from .unit_costs import cost_string
+
+
+def _as_published(field, value):
+    """A saved figure as the API renders it: a unit cost as a rate, money to
+    two places."""
+    return cost_string(value) if field.endswith("unit_cost") else f"{value:.2f}"
 
 
 class PurchasePreviewMatchesSavedOrderTests(TestCase):
@@ -74,7 +81,7 @@ class PurchasePreviewMatchesSavedOrderTests(TestCase):
         )
         saved_lines = self._save(payload)
         self.assertEqual(
-            [f"{getattr(line, field):.2f}" for line in saved_lines],
+            [_as_published(field, getattr(line, field)) for line in saved_lines],
             expected,
             f"saved {field}",
         )
@@ -87,7 +94,9 @@ class PurchasePreviewMatchesSavedOrderTests(TestCase):
         all zero, so the allocation falls back to quantity: 500.00 over 3 × 10
         units is 166.666... a line, floored to 166.66 (499.98), and the two
         leftover cents go to the first two lines on an all-equal remainder.
-        Per unit that is 16.67, on top of a 1.00 net unit cost.
+        Per unit that is 16.667 (16.666 on the third line), on top of a 1.00
+        net unit cost — kept to the places that multiply back to each line's
+        share.
         """
         variants = self._variants(3, Decimal("0.00"))
         payload = {
@@ -103,7 +112,7 @@ class PurchasePreviewMatchesSavedOrderTests(TestCase):
             payload, "allocated_landed_cost", ["166.67", "166.67", "166.66"]
         )
         self.assert_both(
-            payload, "effective_unit_cost", ["17.67", "17.67", "17.67"]
+            payload, "effective_unit_cost", ["17.667", "17.667", "17.666"]
         )
 
     def test_equal_allocation_leftover_cents_settle_on_the_same_lines(self):
@@ -132,12 +141,13 @@ class PurchasePreviewMatchesSavedOrderTests(TestCase):
             ["8.34"] * 4 + ["8.33"] * 8,
         )
 
-    def test_net_unit_cost_on_a_half_cent_rounds_half_up(self):
+    def test_net_unit_cost_on_a_half_cent_is_kept_not_rounded(self):
         """4.00 less a 0.91 manual discount is 3.09 over two units — 1.545.
 
-        PurchaseOrder.recalculate() rounds this one figure ROUND_HALF_UP, giving
-        1.55. A bare quantize() in the preview rounds half-even to 1.54, so the
-        buyer approved a unit cost a cent below the one that was written.
+        Both the preview and the save used to round this to money, and had to
+        agree on which way (a half-even preview said 1.54 while the save wrote
+        1.55). Neither is the cost: 1.54 and 1.55 multiply back to 3.08 and
+        3.10. A unit cost is a rate and keeps its places, so both say 1.545.
         """
         variant = self._variants(1, Decimal("9.00"))[0]
         payload = {
@@ -146,4 +156,4 @@ class PurchasePreviewMatchesSavedOrderTests(TestCase):
             "lines": [{"variant": variant.pk, "quantity": 2, "unit_cost": "2.00"}],
         }
         self.assert_both(payload, "net_line_total", ["3.09"])
-        self.assert_both(payload, "net_unit_cost", ["1.55"])
+        self.assert_both(payload, "net_unit_cost", ["1.545"])

@@ -9,8 +9,6 @@ import '../../../../data/models/money_position.dart';
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../../shared/barcode/scan_feedback_sounds.dart';
-import '../../../companion/companion_scan_listener.dart';
-import '../../../companion/companion_scope.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/responsive/responsive.dart';
@@ -291,21 +289,18 @@ class _PaymentSheetState extends State<PaymentSheet> {
   @override
   Widget build(BuildContext context) {
     // The terminal slip is scanned straight into the sheet — by the counter
-    // scanner or a paired phone — and matches the card payment on its own. The
+    // scanner, or by the counter camera or a paired phone, which type what
+    // they read just like it — and matches the card payment on its own. The
     // cashier used to have to open the match dialog first, which is one dialog
     // too many for something the till can recognise by itself.
-    return CompanionScanListener(
-      bridge: CompanionScope.bridgeOf(context),
-      onScan: _handleScannedValue,
-      child: BarcodeScanListener(
-        // Deliberately the default (short) burst length rather than a
-        // receipt-sized one: only a receipt link is acted on, but every burst
-        // has to be caught and rolled back, because the field it would
-        // otherwise land in is a payment amount.
-        clock: widget.clock,
-        onBarcodeScanned: _handleScannedValue,
-        child: _buildSheet(),
-      ),
+    return BarcodeScanListener(
+      // Deliberately the default (short) burst length rather than a
+      // receipt-sized one: only a receipt link is acted on, but every burst
+      // has to be caught and rolled back, because the field it would
+      // otherwise land in is a payment amount.
+      clock: widget.clock,
+      onBarcodeScanned: _handleScannedValue,
+      child: _buildSheet(),
     );
   }
 

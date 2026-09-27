@@ -18,12 +18,14 @@ import 'package:pointy_frontend/src/shared/design/design.dart';
 
 import '../../../shared/fake_app_navigation.dart';
 
+// SMS is a paid entitlement: without it the inbox offers nothing to start.
 const _manager = PosUser(
   id: 1,
   username: 'manager',
   displayName: 'مدير',
   role: UserRole.manager,
   isActive: true,
+  smsAvailable: true,
 );
 
 const _customer = Customer(

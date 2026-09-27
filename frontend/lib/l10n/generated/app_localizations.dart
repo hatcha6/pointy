@@ -7095,8 +7095,38 @@ abstract class AppLocalizations {
   /// No description provided for @jobInvoiceNeedsRegister.
   ///
   /// In ar, this message translates to:
-  /// **'افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.'**
+  /// **'يُسجَّل المبلغ في جلسة درجك. إن لم تكن مفتوحة نفتحها لك قبل إصدار الفاتورة.'**
   String get jobInvoiceNeedsRegister;
+
+  /// Title of the dialog that opens the user's own register session from a screen that takes money outside the POS (e.g. invoicing a repair job).
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح جلسة درج لاستلام المبلغ'**
+  String get paymentDrawerTitle;
+
+  /// Explains why a register session must be opened before taking a payment outside the POS.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جلسة درج مفتوحة باسمك، والمبلغ يُسجَّل في درج من يستلمه. افتح جلستك الآن ونكمل من حيث توقفت.'**
+  String get paymentDrawerMessage;
+
+  /// Button that opens the user's register session and then continues the interrupted payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الجلسة والمتابعة'**
+  String get paymentDrawerConfirm;
+
+  /// Shown when a payment needs a register session but the user may not start one.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جلسة درج مفتوحة باسمك، ولا تملك صلاحية فتحها. اطلب من المدير فتح جلسة لك أو إصدار الفاتورة.'**
+  String get paymentDrawerNotAllowedMessage;
+
+  /// Inline error when starting a register session from the payment drawer dialog fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر فتح جلسة الدرج. تحقق من الاتصال وحاول مرة أخرى.'**
+  String get paymentDrawerStartError;
 
   /// Badge linking a job to its receipt.
   ///
@@ -9144,6 +9174,12 @@ abstract class AppLocalizations {
   /// **'فواتير الإنترنت: {status}'**
   String onlineInvoiceSettingSummary(String status);
 
+  /// Voucher QR code setting summary in the shop settings index; only shown when the shop sells provider cards.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز QR للكروت: {status}'**
+  String voucherQrSettingSummary(String status);
+
   /// Summary for register session settings in the shop settings index.
   ///
   /// In ar, this message translates to:
@@ -10101,6 +10137,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.'**
   String get enableOnlineInvoicesSubtitle;
+
+  /// Shop settings switch: print a QR code beside the PIN of a Libyana/Almadar card so the customer's phone dials it.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة رمز QR على كروت الشحن'**
+  String get printVoucherQrCodesLabel;
+
+  /// No description provided for @printVoucherQrCodesSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُطبع بجانب الرقم السري لكروت ليبيانا والمدار، فيمسحه الزبون بكاميرا هاتفه ليُشحن الكرت. يسري على كل نقاط البيع في المتجر.'**
+  String get printVoucherQrCodesSubtitle;
 
   /// No description provided for @allowOversellingLabel.
   ///
@@ -16347,6 +16395,12 @@ abstract class AppLocalizations {
   /// **'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.'**
   String get purchaseDraftSubmitError;
 
+  /// Shown when a purchase order is refused because its supplier invoice number is already used on another order from the same supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم فاتورة المورد هذا مسجّل من قبل على أمر شراء آخر لنفس المورد. صحّح الرقم أو امسحه ثم أرسل.'**
+  String get purchaseSupplierInvoiceNumberTaken;
+
   /// App-bar title when reopening a draft purchase order to edit it.
   ///
   /// In ar, this message translates to:
@@ -17637,6 +17691,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{أُرجع للزبون ثمن عملية واحدة بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} =2{أُرجع للزبائن ثمن عمليتين بعد أن نفّذهما المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} few{أُرجع للزبائن ثمن {count} عمليات بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.} other{أُرجع للزبائن ثمن {count} عملية بعد أن نفّذها المزوّد، فخرج {cost} من رصيد الوكالة دون مقابل.}}'**
   String sessionIntegrationsRefundedAfterDeliveryNote(int count, String cost);
 
+  /// The same warning for a reader who is not shown what the float lost.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{أُرجع للزبون ثمن عملية واحدة بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.} =2{أُرجع للزبائن ثمن عمليتين بعد أن نفّذهما المزوّد، فخُصمتا من رصيد الوكالة دون مقابل.} few{أُرجع للزبائن ثمن {count} عمليات بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.} other{أُرجع للزبائن ثمن {count} عملية بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.}}'**
+  String sessionIntegrationsRefundedAfterDeliveryCountNote(int count);
+
   /// No description provided for @sessionIntegrationsTransactionsToggle.
   ///
   /// In ar, this message translates to:
@@ -18266,6 +18326,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{productName}: الخسارة {amount}'**
   String lossSaleLine(String productName, String amount);
+
+  /// A line sold below cost, named without its figures for a cashier who may not see cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: أقل من التكلفة'**
+  String lossSaleBelowCostLine(String productName);
+
+  /// No description provided for @lossSaleBlockedAskManagerMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعض الأصناف أقل من تكلفتها، ولا تسمح إعدادات المتجر بالبيع بخسارة. راجع المدير.'**
+  String get lossSaleBlockedAskManagerMessage;
 
   /// No description provided for @reviewCartButton.
   ///
@@ -28308,6 +28380,12 @@ abstract class AppLocalizations {
   /// **'الذكاء الاصطناعي · {state}'**
   String subscriptionAiPill(String state);
 
+  /// Hero pill summarising SMS state.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل النصية · {state}'**
+  String subscriptionSmsPill(String state);
+
   /// Section title for the relay installation identifier.
   ///
   /// In ar, this message translates to:
@@ -28457,6 +28535,36 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذّر تحميل بيانات الاستهلاك حاليًا.'**
   String get subscriptionAiUsageUnavailable;
+
+  /// Section title for the SMS subscription state.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل النصية'**
+  String get subscriptionSmsTitle;
+
+  /// Callout title when SMS is in the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل النصية مشمولة في اشتراكك'**
+  String get subscriptionSmsActiveTitle;
+
+  /// Callout body when SMS is in the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستهلاك وحدود الإرسال ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.'**
+  String get subscriptionSmsActiveMessage;
+
+  /// Callout title when SMS is not in the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل النصية غير مشمولة'**
+  String get subscriptionSmsInactiveTitle;
+
+  /// Callout body when SMS is not in the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضِف الرسائل النصية إلى اشتراكك لإرسال الفواتير والتذكيرات والعروض إلى عملائك. تواصل مع الدعم.'**
+  String get subscriptionSmsInactiveMessage;
 
   /// Caption showing when the snapshot was last refreshed from the relay.
   ///
@@ -28608,77 +28716,71 @@ abstract class AppLocalizations {
   /// **'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.'**
   String get smartReorderSeed;
 
-  /// No description provided for @messagingSettingsTitle.
+  /// Shop Settings tile and page title for the SMS service (relay-hosted, paid add-on).
   ///
   /// In ar, this message translates to:
-  /// **'إعدادات الرسائل'**
+  /// **'الرسائل النصية'**
   String get messagingSettingsTitle;
 
-  /// No description provided for @messagingSettingsSubtitle.
+  /// Shop Settings tile subtitle for the SMS page.
   ///
   /// In ar, this message translates to:
-  /// **'بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار'**
+  /// **'خدمة الرسائل في اشتراكك: الاستهلاك وحدود الإرسال ونصوص الرسائل ورسالة اختبار'**
   String get messagingSettingsSubtitle;
 
-  /// No description provided for @messagingHeroTitle.
+  /// Hero title on the SMS settings page.
   ///
   /// In ar, this message translates to:
-  /// **'بوابة الرسائل'**
+  /// **'رسائل دفتر النصية'**
   String get messagingHeroTitle;
 
-  /// No description provided for @messagingStatusInactive.
+  /// Hero headline: SMS is in the subscription and switched on.
   ///
   /// In ar, this message translates to:
-  /// **'غير مُهيّأة'**
-  String get messagingStatusInactive;
+  /// **'مفعّلة'**
+  String get messagingStatusActive;
 
-  /// No description provided for @messagingConnectionTitle.
+  /// Hero headline: the shop switched SMS off.
   ///
   /// In ar, this message translates to:
-  /// **'الاتصال بالجهاز'**
-  String get messagingConnectionTitle;
+  /// **'موقوفة'**
+  String get messagingStatusDisabled;
 
-  /// No description provided for @messagingBaseUrlLabel.
+  /// Hero headline: SMS is not part of the shop's subscription (followed by messagingStatusNotSubscribedSubtitle).
   ///
   /// In ar, this message translates to:
-  /// **'عنوان الجهاز (Base URL)'**
-  String get messagingBaseUrlLabel;
+  /// **'غير مشمولة'**
+  String get messagingStatusNotSubscribed;
 
-  /// No description provided for @messagingUsernameLabel.
+  /// Small text beside the not-subscribed hero headline.
   ///
   /// In ar, this message translates to:
-  /// **'اسم المستخدم'**
-  String get messagingUsernameLabel;
+  /// **'في اشتراكك الحالي'**
+  String get messagingStatusNotSubscribedSubtitle;
 
-  /// No description provided for @messagingPasswordLabel.
+  /// Hero headline: entitled, but the service is not set up on Daftar's side yet.
   ///
   /// In ar, this message translates to:
-  /// **'كلمة المرور'**
-  String get messagingPasswordLabel;
+  /// **'قيد التجهيز'**
+  String get messagingStatusNotReady;
 
-  /// No description provided for @messagingPasswordKeepHint.
+  /// Hero pill: the relay processes sends without delivering them.
   ///
   /// In ar, this message translates to:
-  /// **'اتركه فارغًا للإبقاء على كلمة المرور الحالية'**
-  String get messagingPasswordKeepHint;
+  /// **'وضع تجريبي'**
+  String get messagingTestModePill;
 
-  /// No description provided for @messagingRateLabel.
+  /// Hero pill: when the relay last accepted a send.
   ///
   /// In ar, this message translates to:
-  /// **'رسائل/الدقيقة'**
-  String get messagingRateLabel;
+  /// **'آخر إرسال {when}'**
+  String messagingLastSeenLabel(String when);
 
-  /// No description provided for @messagingDailyCapLabel.
+  /// No description provided for @messagingUnsavedBadge.
   ///
   /// In ar, this message translates to:
-  /// **'الحد اليومي (0 = بلا حد)'**
-  String get messagingDailyCapLabel;
-
-  /// No description provided for @messagingSaveError.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذّر حفظ الإعدادات'**
-  String get messagingSaveError;
+  /// **'تغييرات غير محفوظة'**
+  String get messagingUnsavedBadge;
 
   /// No description provided for @messagingLoadError.
   ///
@@ -28686,29 +28788,251 @@ abstract class AppLocalizations {
   /// **'تعذّر تحميل إعدادات الرسائل'**
   String get messagingLoadError;
 
+  /// Callout title when SMS is not in the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل النصية خدمة إضافية مدفوعة'**
+  String get messagingNotSubscribedTitle;
+
+  /// Callout body when SMS is not in the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل الفواتير وتذكيرات الديون والعروض إلى هواتف عملائك برسائل نصية تحمل اسم محلك، دون أي جهاز أو إعداد في المحل. الخدمة غير مشمولة في اشتراكك الحالي — تواصل مع الدعم لإضافتها.'**
+  String get messagingNotSubscribedMessage;
+
+  /// Callout title when the shop switched SMS off.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة الرسائل موقوفة'**
+  String get messagingDisabledTitle;
+
+  /// Callout body when the shop switched SMS off.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يُرسل من هذا المحل أي شيء: لا فواتير ولا تذكيرات ولا حملات. شغّل الخدمة من «إعدادات الإرسال» ثم احفظ.'**
+  String get messagingDisabledMessage;
+
+  /// Callout title when the relay reports SMS as not configured.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة الرسائل قيد التجهيز'**
+  String get messagingNotReadyTitle;
+
+  /// Callout body when the relay reports SMS as not configured.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمة مشمولة في اشتراكك لكنها لم تُجهَّز بعد لدى دفتر. تواصل مع الدعم إن طال ذلك.'**
+  String get messagingNotReadyMessage;
+
+  /// Callout title when the relay runs in test mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمة في وضع تجريبي'**
+  String get messagingTestModeTitle;
+
+  /// Callout body when the relay runs in test mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُعالَج الرسائل كاملة لكنها لا تصل فعليًا إلى هواتف العملاء، ولا تُحتسب من باقتك.'**
+  String get messagingTestModeMessage;
+
+  /// Callout title when this month's usage could not be read from the relay.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر قراءة الاستهلاك'**
+  String get messagingUsageUnavailableTitle;
+
+  /// Callout body when this month's usage could not be read from the relay.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى خادم دفتر لقراءة استهلاك هذا الشهر. تحقّق من اتصال المحل بالإنترنت ثم أعد المحاولة.'**
+  String get messagingUsageUnavailableMessage;
+
+  /// Callout title for the gateway's last send error.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر خطأ في الإرسال'**
+  String get messagingLastErrorTitle;
+
+  /// The last send error and when it happened.
+  ///
+  /// In ar, this message translates to:
+  /// **'{detail} — {when}'**
+  String messagingLastErrorMessage(String detail, String when);
+
+  /// Section title for this month's SMS usage.
+  ///
+  /// In ar, this message translates to:
+  /// **'استهلاك هذا الشهر'**
+  String get messagingUsageTitle;
+
+  /// Label beside the monthly usage figure.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل المُرسلة'**
+  String get messagingUsageSentLabel;
+
+  /// Messages used out of the monthly limit.
+  ///
+  /// In ar, this message translates to:
+  /// **'{used} من {limit}'**
+  String messagingUsageUsedOfLimit(int used, int limit);
+
+  /// Messages used when the plan has no monthly limit.
+  ///
+  /// In ar, this message translates to:
+  /// **'{used} — بلا حد شهري'**
+  String messagingUsageUnlimited(int used);
+
+  /// Messages left this month.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي {remaining}'**
+  String messagingUsageRemaining(int remaining);
+
+  /// When the monthly allowance resets.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتجدّد الباقة في {date}'**
+  String messagingUsageResets(String date);
+
+  /// Callout title when the monthly cap is used up.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلغت الحد الشهري للرسائل'**
+  String get messagingLimitReachedTitle;
+
+  /// Callout body when the monthly cap is used up.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تُرسل رسائل جديدة حتى تتجدّد الباقة. لزيادة الحد تواصل مع الدعم.'**
+  String get messagingLimitReachedMessage;
+
+  /// Section title for the shop's own SMS dials.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الإرسال'**
+  String get messagingSettingsSectionTitle;
+
+  /// Switch that turns all SMS from this shop on or off.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل خدمة الرسائل'**
+  String get messagingServiceSwitchLabel;
+
+  /// No description provided for @messagingServiceSwitchHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند الإيقاف لا يُرسل أي شيء من هذا المحل.'**
+  String get messagingServiceSwitchHelper;
+
+  /// No description provided for @messagingRateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسائل/الدقيقة'**
+  String get messagingRateLabel;
+
+  /// No description provided for @messagingRateHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'0 = بلا حد'**
+  String get messagingRateHelper;
+
+  /// No description provided for @messagingDailyCapLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد اليومي'**
+  String get messagingDailyCapLabel;
+
+  /// Label of the quiet-hours window for promotional SMS.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوقات الهدوء للعروض'**
+  String get messagingQuietHoursLabel;
+
+  /// No description provided for @messagingQuietHoursHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تؤجَّل رسائل العروض والحملات الواقعة في هذه الفترة إلى ما بعدها. الفواتير والتذكيرات تُرسل في أي وقت.'**
+  String get messagingQuietHoursHelper;
+
+  /// Button to pick the quiet-hours start while none is set.
+  ///
+  /// In ar, this message translates to:
+  /// **'وقت البداية'**
+  String get messagingQuietHoursPickStart;
+
+  /// Button to pick the quiet-hours end while none is set.
+  ///
+  /// In ar, this message translates to:
+  /// **'وقت النهاية'**
+  String get messagingQuietHoursPickEnd;
+
+  /// Quiet-hours start button once a time is set.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {time}'**
+  String messagingQuietHoursFrom(String time);
+
+  /// Quiet-hours end button once a time is set.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {time}'**
+  String messagingQuietHoursTo(String time);
+
+  /// Clears both quiet-hours times.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء أوقات الهدوء'**
+  String get messagingQuietHoursClear;
+
+  /// Validation when only one quiet-hours time is set, or both are equal.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد وقتي البداية والنهاية مختلفين، أو ألغِ أوقات الهدوء.'**
+  String get messagingQuietHoursInvalid;
+
+  /// No description provided for @messagingSaveFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الإعدادات'**
+  String get messagingSaveFailedTitle;
+
+  /// Fallback body of the save-failed callout when the server gave no reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقّق من الاتصال ثم أعد المحاولة.'**
+  String get messagingSaveError;
+
+  /// Snackbar after the SMS settings were saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُفظت إعدادات الرسائل'**
+  String get messagingSavedMessage;
+
   /// No description provided for @messagingTestTitle.
   ///
   /// In ar, this message translates to:
   /// **'إرسال رسالة اختبار'**
   String get messagingTestTitle;
 
-  /// No description provided for @messagingTestNeedsSaveTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'احفظ البوابة أولًا'**
-  String get messagingTestNeedsSaveTitle;
-
-  /// No description provided for @messagingTestNeedsSaveMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.'**
-  String get messagingTestNeedsSaveMessage;
-
   /// No description provided for @messagingTestPhoneLabel.
   ///
   /// In ar, this message translates to:
   /// **'رقم الهاتف'**
   String get messagingTestPhoneLabel;
+
+  /// Example Libyan mobile number in the test-send field.
+  ///
+  /// In ar, this message translates to:
+  /// **'0912345678'**
+  String get messagingTestPhoneHint;
+
+  /// No description provided for @messagingTestPhoneHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم هاتف محمول ليبي بين يديك الآن، لتتأكد من وصول الرسالة.'**
+  String get messagingTestPhoneHelper;
 
   /// No description provided for @messagingTestSendButton.
   ///
@@ -28722,11 +29046,17 @@ abstract class AppLocalizations {
   /// **'تم الإرسال'**
   String get messagingTestSentTitle;
 
-  /// No description provided for @messagingTestSentMessage.
+  /// Test send accepted but not out yet (queued behind pacing).
   ///
   /// In ar, this message translates to:
-  /// **'غادرت رسالة الاختبار البوابة بنجاح.'**
-  String get messagingTestSentMessage;
+  /// **'قُبلت رسالة الاختبار وستُرسل خلال لحظات'**
+  String get messagingTestQueuedTitle;
+
+  /// The exact text the test send delivered.
+  ///
+  /// In ar, this message translates to:
+  /// **'النص المُرسل: {body}'**
+  String messagingTestSentBody(String body);
 
   /// No description provided for @messagingTestFailedTitle.
   ///
@@ -28734,191 +29064,125 @@ abstract class AppLocalizations {
   /// **'فشل الإرسال'**
   String get messagingTestFailedTitle;
 
-  /// No description provided for @messagingTestFailedMessage.
+  /// Fallback when a test send failed without a known reason.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.'**
+  /// **'تعذّر إرسال رسالة الاختبار. أعد المحاولة بعد قليل.'**
   String get messagingTestFailedMessage;
 
-  /// No description provided for @messagingStatusReady.
+  /// Section listing every SMS text Daftar sends to customers.
   ///
   /// In ar, this message translates to:
-  /// **'جاهزة — إرسال واستقبال'**
-  String get messagingStatusReady;
+  /// **'الرسائل التي يرسلها دفتر'**
+  String get messagingTemplatesTitle;
 
-  /// No description provided for @messagingStatusSendOnly.
+  /// No description provided for @messagingTemplatesIntro.
   ///
   /// In ar, this message translates to:
-  /// **'إرسال فقط — لم تُفعّل'**
-  String get messagingStatusSendOnly;
+  /// **'هذه نصوص الرسائل التي تصل إلى عملائك كما اعتمدها مزوّد الرسائل. تُرسل باسم دفتر، لذلك يظهر اسم محلك داخل كل رسالة.'**
+  String get messagingTemplatesIntro;
 
-  /// No description provided for @messagingLastSeenLabel.
+  /// Badge on a message kind the provider has not approved/wired yet.
   ///
   /// In ar, this message translates to:
-  /// **'آخر اتصال {when}'**
-  String messagingLastSeenLabel(String when);
+  /// **'غير مفعّل بعد لدى المزوّد'**
+  String get messagingTemplateNotConfigured;
 
-  /// No description provided for @messagingUnsavedBadge.
+  /// Badge on promotional message kinds (they obey quiet hours and opt-outs).
   ///
   /// In ar, this message translates to:
-  /// **'تغييرات غير محفوظة'**
-  String get messagingUnsavedBadge;
+  /// **'ترويجية'**
+  String get messagingTemplateMarketingBadge;
 
-  /// No description provided for @messagingSetupGuideTitle.
+  /// SMS error code not_entitled.
   ///
   /// In ar, this message translates to:
-  /// **'أين أجد هذه البيانات؟'**
-  String get messagingSetupGuideTitle;
+  /// **'خدمة الرسائل غير مشمولة في اشتراك المحل. تواصل مع الدعم لإضافتها.'**
+  String get messagingErrorNotEntitled;
 
-  /// No description provided for @messagingSetupGuideMessage.
+  /// SMS error code service_disabled.
   ///
   /// In ar, this message translates to:
-  /// **'على هاتف الرسائل: افتح تطبيق SMS Gate، فعّل «Local Server»، ثم اضغط زر الحالة في الأسفل حتى تصبح Online. سيعرض التطبيق عنوان الهاتف على الشبكة واسم المستخدم وكلمة المرور — انقلها هنا كما هي.'**
-  String get messagingSetupGuideMessage;
+  /// **'خدمة الرسائل موقوفة من إعدادات الرسائل في المحل.'**
+  String get messagingErrorServiceDisabled;
 
-  /// No description provided for @messagingBaseUrlHelper.
+  /// SMS error code monthly_limit.
   ///
   /// In ar, this message translates to:
-  /// **'يكفي عنوان الهاتف على الشبكة؛ المنفذ الافتراضي 8080 يُضاف تلقائيًا.'**
-  String get messagingBaseUrlHelper;
+  /// **'بلغ المحل الحد الشهري للرسائل. تتجدّد الباقة أول الشهر، أو تواصل مع الدعم لزيادتها.'**
+  String get messagingErrorMonthlyLimit;
 
-  /// No description provided for @messagingBaseUrlInvalid.
+  /// SMS error code rate_limited.
   ///
   /// In ar, this message translates to:
-  /// **'عنوان غير صالح. اكتب عنوان الهاتف على الشبكة، مثل 192.168.1.50'**
-  String get messagingBaseUrlInvalid;
+  /// **'أُرسلت رسائل كثيرة في وقت قصير. انتظر دقيقة ثم أعد المحاولة.'**
+  String get messagingErrorRateLimited;
 
-  /// No description provided for @messagingBaseUrlNormalized.
+  /// SMS error codes template_not_configured / unknown_kind.
   ///
   /// In ar, this message translates to:
-  /// **'سيُحفظ العنوان هكذا: {url}'**
-  String messagingBaseUrlNormalized(String url);
+  /// **'نص هذه الرسالة لم يُعتمد بعد لدى مزوّد الرسائل. تواصل مع الدعم.'**
+  String get messagingErrorTemplateNotConfigured;
 
-  /// No description provided for @messagingRateHelper.
+  /// SMS error code template_required.
   ///
   /// In ar, this message translates to:
-  /// **'0 = بلا حد'**
-  String get messagingRateHelper;
+  /// **'لا تُرسل إلا النصوص المعتمدة لدى مزوّد الرسائل، وهذه الرسالة ليست منها.'**
+  String get messagingErrorTemplateRequired;
 
-  /// No description provided for @messagingUnpacedTitle.
+  /// SMS error codes invalid_phone / bad_number.
   ///
   /// In ar, this message translates to:
-  /// **'لا يوجد حد للإرسال في الدقيقة'**
-  String get messagingUnpacedTitle;
+  /// **'رقم الهاتف غير صالح. يلزم رقم محمول ليبي مثل 0912345678.'**
+  String get messagingErrorInvalidPhone;
 
-  /// No description provided for @messagingUnpacedMessage.
+  /// SMS error code provider_credit (the company's provider wallet is empty).
   ///
   /// In ar, this message translates to:
-  /// **'بدون حد، قد تُصنَّف الشريحة كمرسل مزعج فيُحظر الرقم. القيمة المقترحة 6 رسائل في الدقيقة.'**
-  String get messagingUnpacedMessage;
+  /// **'نفد رصيد الرسائل لدى المزوّد مؤقتًا. أبلغ الدعم ليعيد شحنه.'**
+  String get messagingErrorProviderCredit;
 
-  /// No description provided for @messagingConnectButton.
+  /// SMS error code provider_unauthorized.
   ///
   /// In ar, this message translates to:
-  /// **'حفظ وتفعيل'**
-  String get messagingConnectButton;
+  /// **'تعذّر الإرسال بسبب مشكلة في حساب دفتر لدى مزوّد الرسائل. أبلغ الدعم.'**
+  String get messagingErrorProviderUnauthorized;
 
-  /// No description provided for @messagingActivateOnlyButton.
+  /// SMS error code provider_rejected.
   ///
   /// In ar, this message translates to:
-  /// **'تفعيل الجهاز'**
-  String get messagingActivateOnlyButton;
+  /// **'رفض مزوّد الرسائل هذه الرسالة.'**
+  String get messagingErrorProviderRejected;
 
-  /// No description provided for @messagingReactivateButton.
+  /// SMS error codes provider_error / outcome_unknown.
   ///
   /// In ar, this message translates to:
-  /// **'إعادة تسجيل الروابط'**
-  String get messagingReactivateButton;
+  /// **'تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.'**
+  String get messagingErrorOutcomeUnknown;
 
-  /// No description provided for @messagingConnectingLabel.
+  /// SMS error code sms_unconfigured.
   ///
   /// In ar, this message translates to:
-  /// **'جارٍ التفعيل…'**
-  String get messagingConnectingLabel;
+  /// **'خدمة الرسائل غير مُجهّزة بعد لدى دفتر. تواصل مع الدعم.'**
+  String get messagingErrorSmsUnconfigured;
 
-  /// No description provided for @messagingConnectHint.
+  /// SMS error code relay_unreachable.
   ///
   /// In ar, this message translates to:
-  /// **'الحفظ يكفي للإرسال؛ التفعيل يضبط الهاتف ليُعيد إلينا الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي عليه.'**
-  String get messagingConnectHint;
+  /// **'تعذّر الوصول إلى خادم دفتر. تحقّق من اتصال المحل بالإنترنت ثم أعد المحاولة.'**
+  String get messagingErrorRelayUnreachable;
 
-  /// No description provided for @messagingNotActivatedTitle.
+  /// SMS error code driver_error.
   ///
   /// In ar, this message translates to:
-  /// **'لم يُفعّل الجهاز بعد'**
-  String get messagingNotActivatedTitle;
+  /// **'حدث خطأ أثناء الإرسال. أعد المحاولة، وإن تكرر أبلغ الدعم.'**
+  String get messagingErrorDriverError;
 
-  /// No description provided for @messagingNotActivatedMessage.
+  /// SMS error code delivery_failed.
   ///
   /// In ar, this message translates to:
-  /// **'الإرسال يعمل، لكن الردود الواردة وتقارير التسليم لن تصل حتى تضغط «تفعيل الجهاز».'**
-  String get messagingNotActivatedMessage;
-
-  /// No description provided for @messagingConnectedTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'الجهاز جاهز'**
-  String get messagingConnectedTitle;
-
-  /// No description provided for @messagingConnectedMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'حُفظت الإعدادات وسُجّلت {count} روابط على الهاتف — الرسائل الواردة وتقارير التسليم تصل الآن تلقائيًا.'**
-  String messagingConnectedMessage(int count);
-
-  /// No description provided for @messagingSavedNotActivatedTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'حُفظت الإعدادات — لم يُفعّل الجهاز'**
-  String get messagingSavedNotActivatedTitle;
-
-  /// No description provided for @messagingSavedNotActivatedMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذّر الوصول إلى الهاتف لتسجيل الروابط. تأكد أن الهاتف يعمل وأن «Local Server» في وضع Online على نفس الشبكة، ثم أعد المحاولة.'**
-  String get messagingSavedNotActivatedMessage;
-
-  /// No description provided for @messagingReactivateFailedTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'حُفظت الإعدادات'**
-  String get messagingReactivateFailedTitle;
-
-  /// No description provided for @messagingReactivateFailedMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذّر الوصول إلى الهاتف الآن لإعادة تسجيل الروابط، والروابط المسجّلة سابقًا ما زالت تعمل.'**
-  String get messagingReactivateFailedMessage;
-
-  /// No description provided for @messagingSaveFailedTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذّر حفظ الإعدادات'**
-  String get messagingSaveFailedTitle;
-
-  /// No description provided for @messagingDeviceErrorTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'آخر خطأ من الجهاز'**
-  String get messagingDeviceErrorTitle;
-
-  /// No description provided for @messagingDeviceErrorMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'{detail} — {when}'**
-  String messagingDeviceErrorMessage(String detail, String when);
-
-  /// No description provided for @messagingUnsavedTestHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'احفظ التغييرات أولًا — الاختبار يجري على الإعدادات المحفوظة في الخادم، لا على ما تراه هنا.'**
-  String get messagingUnsavedTestHint;
-
-  /// No description provided for @messagingTestPhoneHelper.
-  ///
-  /// In ar, this message translates to:
-  /// **'استخدم رقمًا بين يديك الآن للتحقق من وصول الرسالة.'**
-  String get messagingTestPhoneHelper;
+  /// **'أُرسلت الرسالة لكنها لم تصل إلى هاتف العميل. تأكد أن الرقم صحيح وأن الهاتف يعمل.'**
+  String get messagingErrorDeliveryFailed;
 
   /// No description provided for @conversationsTitle.
   ///
@@ -28937,6 +29201,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد محادثات بعد'**
   String get conversationsEmpty;
+
+  /// Conversations empty state: SMS is one-way, replies never come back.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل تصل إلى هاتف العميل كرسائل نصية، وردوده لا تعود إلى التطبيق.'**
+  String get conversationsEmptyMessage;
 
   /// No description provided for @conversationsLoadError.
   ///
@@ -28959,7 +29229,7 @@ abstract class AppLocalizations {
   /// No description provided for @conversationReplyHint.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب ردًا…'**
+  /// **'اكتب رسالة للعميل… ردوده لا تصل إلى التطبيق'**
   String get conversationReplyHint;
 
   /// No description provided for @conversationSendTooltip.
@@ -33510,6 +33780,18 @@ abstract class AppLocalizations {
   /// **'المستحق لصاحبها'**
   String get stockUnitPayoutOwed;
 
+  /// What a consigned article's sale earned its owner, shown when an advance offsets it.
+  ///
+  /// In ar, this message translates to:
+  /// **'حصة صاحبها من البيع'**
+  String get stockUnitPayoutFromSale;
+
+  /// Money already handed to the owner for this same consigned article.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبق صرفه لصاحبها'**
+  String get stockUnitPayoutAdvance;
+
   ///
   ///
   /// In ar, this message translates to:
@@ -34536,6 +34818,12 @@ abstract class AppLocalizations {
   /// **'رصيد الوكالة {balance} لا يغطّي {cost}. سجّل البيع الآن وارصد الرصيد لاحقاً.'**
   String rechargeFloatShort(String balance, String cost);
 
+  /// Low-float warning for a cashier who is not shown what the top-up costs the agency.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الوكالة {balance} قد لا يغطّي هذا الشحن. سجّل البيع الآن وارصد الرصيد لاحقاً.'**
+  String rechargeFloatMayNotCover(String balance);
+
   ///
   ///
   /// In ar, this message translates to:
@@ -34973,6 +35261,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count, plural, one{عملية شحن واحدة} two{عمليتا شحن} few{{count} عمليات شحن} other{{count} عملية شحن}} بقيمة {amount} لدى كل الوكلاء'**
   String rechargeSubscriberLifetime(int count, String amount);
+
+  /// How often a card was topped up across every agency, for a reader who is not shown what the agencies paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{عملية شحن واحدة} two{عمليتا شحن} few{{count} عمليات شحن} other{{count} عملية شحن}} لدى كل الوكلاء'**
+  String rechargeSubscriberPurchases(int count);
 
   ///
   ///

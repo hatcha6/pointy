@@ -21,7 +21,9 @@ def draft_campaign_for_discount(rule):
     """Create a draft campaign for ``rule`` (idempotent per rule)."""
     if Campaign.objects.filter(discount_rule=rule).exists():
         return None
-    body = "عرض خاص من {{shop_name}}: " + (rule.name or "") + "! لا تفوّت الفرصة."
+    # The marketing template already opens with "عرض من <shop>:"; the draft is
+    # only the offer itself.
+    body = (rule.name or "عرض خاص") + "! لا تفوّت الفرصة."
     return Campaign.objects.create(
         name=f"حملة: {rule.name}"[:120],
         body_template=body,

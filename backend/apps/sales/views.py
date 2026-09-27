@@ -820,8 +820,19 @@ class RegisterSessionViewSet(
         """Full end-of-shift summary across all payment methods plus a
         sales-by-category breakdown and cash reconciliation. Single source of
         truth for the manager session view and the printable Z-Report."""
+        from apps.integrations.session_breakdown import without_costs
+
         session = self.get_object()
-        return Response(cached_register_session_summary(session))
+        summary = cached_register_session_summary(session)
+        # The cache is shop-wide, so who is reading is decided here, after it:
+        # a cashier reviewing their own shift sees what the provider sales
+        # took, not what they cost the shop or made it.
+        if not user_has_full_visibility(request.user):
+            summary = {
+                **summary,
+                "integrations": without_costs(summary["integrations"]),
+            }
+        return Response(summary)
 
     @action(detail=True, methods=["get"], url_path="cash-movements")
     def cash_movements(self, request, pk=None):

@@ -151,6 +151,13 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
   }
 
   Widget _consignmentPanel(BuildContext context, AppLocalizations l10n) {
+    final colors = context.pointyColors;
+    // What is owed comes as its own figures, to whoever may see what the shop
+    // owes consignors — never from the unit's cost, which is masked from the
+    // very counter staff who pay the owner out. Absent means "not told", so
+    // the rows are left out rather than showing a debt of nothing.
+    final owed = _unit.awaitsPayout ? _unit.netDue : null;
+    final advance = _unit.consignorAdvance ?? 0;
     final l10nRows = <PointySummaryRow>[
       PointySummaryRow(
         label: l10n.stockUnitConsignor,
@@ -161,13 +168,29 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
           label: l10n.stockUnitDeclaredValue,
           value: formatMoney(_unit.declaredValue!),
         ),
-      if (_unit.awaitsPayout)
+      if (owed != null) ...[
+        // An owner who already took money for this same article is handed
+        // the rest, and the screen says why: a bare 1,600 reads as though
+        // the watch had earned 1,600.
+        if (advance > 0) ...[
+          PointySummaryRow(
+            label: l10n.stockUnitPayoutFromSale,
+            value: formatMoney(_unit.payoutDue ?? 0),
+            dividerAbove: true,
+          ),
+          PointySummaryRow(
+            label: l10n.stockUnitPayoutAdvance,
+            value: '- ${formatMoney(advance)}',
+            valueColor: colors.danger,
+          ),
+        ],
         PointySummaryRow(
           label: l10n.stockUnitPayoutOwed,
-          value: formatMoney(_unit.incomingRate ?? 0),
+          value: formatMoney(owed),
           emphasized: true,
           dividerAbove: true,
         ),
+      ],
       if (_unit.consignorPaidAt != null)
         PointySummaryRow(
           label: l10n.stockUnitPayoutPaidOn,

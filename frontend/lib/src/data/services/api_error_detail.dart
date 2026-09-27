@@ -33,6 +33,13 @@ String? apiErrorCode(Object? error) {
   return code is String && code.isNotEmpty ? code : null;
 }
 
+/// Whether the refusal names [field] — DRF's per-field error shape. For the
+/// few refusals a screen can say better in its own words than in the server's
+/// English sentence.
+bool apiErrorHasField(Object? error, String field) {
+  return _decodedMap(error)?.containsKey(field) ?? false;
+}
+
 /// A short human-readable reason, or empty when the body carried none.
 ///
 /// Empty rather than a placeholder on purpose — a caller that gets nothing back

@@ -363,12 +363,14 @@ class CostGuardSeesOneCurrencyTests(SupplierCurrencyTestCase):
 class ConversionUnitTests(SupplierCurrencyTestCase):
     """The service itself, away from the API."""
 
-    def test_conversion_rounds_once_to_the_base_precision(self):
+    def test_conversion_rounds_once_to_a_unit_costs_precision(self):
+        # 12.005 × 6.85 = 82.23425: a unit cost, so six places — rounded to
+        # money it would no longer multiply back to the invoiced line.
         self.assertEqual(
             purchase_currency.convert_unit_cost(
                 "12.005", currency_code="USD", rate=Decimal("6.85")
             ),
-            Decimal("82.23"),
+            Decimal("82.234250"),
         )
 
     def test_a_missing_rate_is_an_error_not_a_silent_one_to_one(self):

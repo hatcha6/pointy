@@ -422,13 +422,13 @@ def _notify_payout(units, payout, *, settings):
     phone = getattr(unit.consignor, "phone", "") if unit.consignor_id else ""
     if not phone:
         return
-    body = figures.render_payout_sms(unit, payout, settings=settings)
+    template = figures.payout_sms(unit, payout, settings=settings)
 
     def _send():
         try:
             messaging.enqueue_message(
                 to=phone,
-                body=body,
+                template=template,
                 consent_class=OutboundMessage.ConsentClass.TRANSACTIONAL,
                 channel=MessagingGateway.Channel.SMS,
                 dedup_key=f"consignment_payout_{payout.pk}",

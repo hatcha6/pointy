@@ -76,9 +76,9 @@ class ReportRunApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["reports"], [])
 
-    def test_cashier_can_run_sales_report_and_audit_is_recorded(self):
+    def test_manager_can_run_sales_report_and_audit_is_recorded(self):
         client = APIClient()
-        client.force_authenticate(user=self.cashier)
+        client.force_authenticate(user=self.manager)
 
         response = client.post(
             reverse("report-list"),
@@ -92,11 +92,32 @@ class ReportRunApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], ReportRun.Status.SUCCESS)
-        self.assertEqual(response.data["requested_by"], self.cashier.pk)
+        self.assertEqual(response.data["requested_by"], self.manager.pk)
         self.assertEqual(response.data["payload"]["summary"]["net_sales"], "8.00")
         self.assertGreater(response.data["row_count"], 0)
         self.assertEqual(len(response.data["checksum"]), 64)
         self.assertEqual(ReportRun.objects.count(), 1)
+
+    def test_cashier_cannot_run_even_their_own_tills_sales_report(self):
+        # The sale in setUp is the cashier's own. Reading their orders at the
+        # till never made the gross profit on them the cashier's to know.
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        catalog = client.get(reverse("report-catalog"))
+        response = client.post(
+            reverse("report-list"),
+            {
+                "report_type": ReportRun.ReportType.SALES_SUMMARY,
+                "output_format": ReportRun.OutputFormat.PDF,
+                "params": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(catalog.data["reports"], [])
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(ReportRun.objects.get().status, ReportRun.Status.FAILED)
 
     def test_manager_can_run_reorder_items_report(self):
         from apps.inventory.models import StockItem

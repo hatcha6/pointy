@@ -566,6 +566,18 @@ class MatchInvoiceProductsTests(_PurchasingFixtures):
         )
         self.assertEqual(result["lines"][0]["current_cost"], "4.00")
 
+    def test_current_cost_is_only_for_those_who_read_purchase_orders(self):
+        # Otherwise a cashier types a product's name in as an "invoice line"
+        # and is told what the shop paid for it.
+        variant = self._sellable(name="سكر", sku="SUG-2", price="5.00")
+        self._purchase_line(variant, "4.00")
+        result = match_invoice_products(
+            user=self.cashier,
+            lines=[{"name": "سكر", "quantity": 1, "unit_cost": "4.50"}],
+        )
+        self.assertTrue(result["lines"][0]["matched"], result)
+        self.assertNotIn("current_cost", result["lines"][0])
+
     def test_supplier_matched_by_exact_name(self):
         supplier = self._supplier("Acme Foods")
         result = match_invoice_products(

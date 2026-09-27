@@ -441,34 +441,47 @@ class PurchaseViewModel extends ChangeNotifier {
 
   Future<void> loadCatalog() async {
     _isLoading = true;
+    // A new catalog supersedes any page still loading for the old one, and
+    // that load's own ending is dropped as stale — so its flag comes down
+    // here or never. Left up, the grid's footer spinner drew a frame on every
+    // vsync for the rest of the session (a back office logged 671 frames per
+    // 10 s overnight) and no further page was ever requested.
+    _isLoadingMore = false;
     _errorMessage = null;
     _nextVariantPage = 1;
     _hasMoreProducts = true;
     final requestVersion = ++_catalogRequestVersion;
     notifyListeners();
 
-    final result = await _catalogRepository.loadProductVariants(
-      query: _query,
-      page: _nextVariantPage,
-    );
-    if (requestVersion != _catalogRequestVersion) {
-      // A newer search started while this was in flight; drop the stale result.
-      return;
+    try {
+      final result = await _catalogRepository.loadProductVariants(
+        query: _query,
+        page: _nextVariantPage,
+      );
+      if (requestVersion != _catalogRequestVersion) {
+        // A newer search started while this was in flight; drop the stale
+        // result.
+        return;
+      }
+      switch (result) {
+        case Ok<ProductVariantPage>():
+          _variants = result.value.variants;
+          _hasMoreProducts = result.value.hasMore;
+          _nextVariantPage = 2;
+          _adoptSellingPricesFrom(result.value.variants);
+        case Error<ProductVariantPage>():
+          _variants = _catalogRepository.sampleProductVariants(_query);
+          _hasMoreProducts = false;
+          _errorMessage = 'sample_catalog_notice';
+      }
+    } finally {
+      // Also on a throw `Result.guard` does not catch (an Error, not an
+      // Exception): a spinner is a promise that something is still coming.
+      if (requestVersion == _catalogRequestVersion) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
-    switch (result) {
-      case Ok<ProductVariantPage>():
-        _variants = result.value.variants;
-        _hasMoreProducts = result.value.hasMore;
-        _nextVariantPage = 2;
-        _adoptSellingPricesFrom(result.value.variants);
-      case Error<ProductVariantPage>():
-        _variants = _catalogRepository.sampleProductVariants(_query);
-        _hasMoreProducts = false;
-        _errorMessage = 'sample_catalog_notice';
-    }
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> loadMoreCatalog() async {
@@ -480,26 +493,31 @@ class PurchaseViewModel extends ChangeNotifier {
     final requestVersion = _catalogRequestVersion;
     notifyListeners();
 
-    final result = await _catalogRepository.loadProductVariants(
-      query: _query,
-      page: _nextVariantPage,
-    );
-    if (requestVersion != _catalogRequestVersion) {
-      // A new search replaced this catalog while the page was loading.
-      return;
+    try {
+      final result = await _catalogRepository.loadProductVariants(
+        query: _query,
+        page: _nextVariantPage,
+      );
+      if (requestVersion != _catalogRequestVersion) {
+        // A new search replaced this catalog while the page was loading, and
+        // took the flag down when it did.
+        return;
+      }
+      switch (result) {
+        case Ok<ProductVariantPage>():
+          _variants = [..._variants, ...result.value.variants];
+          _hasMoreProducts = result.value.hasMore;
+          _nextVariantPage += 1;
+          _adoptSellingPricesFrom(result.value.variants);
+        case Error<ProductVariantPage>():
+          _errorMessage = 'sample_catalog_notice';
+      }
+    } finally {
+      if (requestVersion == _catalogRequestVersion) {
+        _isLoadingMore = false;
+        notifyListeners();
+      }
     }
-    switch (result) {
-      case Ok<ProductVariantPage>():
-        _variants = [..._variants, ...result.value.variants];
-        _hasMoreProducts = result.value.hasMore;
-        _nextVariantPage += 1;
-        _adoptSellingPricesFrom(result.value.variants);
-      case Error<ProductVariantPage>():
-        _errorMessage = 'sample_catalog_notice';
-    }
-
-    _isLoadingMore = false;
-    notifyListeners();
   }
 
   Future<void> updateSearch(String search) async {
@@ -887,8 +905,10 @@ class PurchaseViewModel extends ChangeNotifier {
     // hand-entered costs meaningful across unit changes.
     final previousFactor = line.unitFactor <= 0 ? 1.0 : line.unitFactor;
     final newFactor = unitFactor <= 0 ? 1.0 : unitFactor;
+    // Six places, like the server keeps a unit cost: rounding a carton's 58
+    // down to a piece's 3.87 is what used to save 15 pieces as 58.05.
     final rescaledCost = double.parse(
-      (line.unitCost / previousFactor * newFactor).toStringAsFixed(2),
+      (line.unitCost / previousFactor * newFactor).toStringAsFixed(6),
     );
     _draft[index] = line.copyWith(
       quantity: line.quantity,
@@ -2060,9 +2080,17 @@ class PurchaseViewModel extends ChangeNotifier {
     required String reason,
     required String source,
   }) {
+    // Named by direction. A typed quantity was always reported as a decrease,
+    // so 223 of 238 "decreases" in a week of field data were buyers typing a
+    // carton count over the default 1 — and a shrinking order read as common.
+    final increased = newQuantity > previousQuantity;
     _trackDraftLineAuditEvent(
-      name: 'purchasing.draft.line.quantity_decreased',
-      severity: AnalyticsEventSeverity.warning,
+      name: increased
+          ? 'purchasing.draft.line.quantity_increased'
+          : 'purchasing.draft.line.quantity_decreased',
+      severity: increased
+          ? AnalyticsEventSeverity.info
+          : AnalyticsEventSeverity.warning,
       line: line,
       attributes: {
         'reason': reason,

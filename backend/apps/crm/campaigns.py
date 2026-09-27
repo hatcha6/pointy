@@ -2,9 +2,13 @@
 
 Expansion is where the ``can_send`` consent authority is finally consumed —
 opted-out / do-not-contact customers are excluded up front, and the pump
-re-checks at send time so a STOP received mid-drip is still honored. The actual
-send pace is the gateway's rate limiter (messaging.dispatch_outbound); the pump
-only enqueues.
+re-checks at send time so an opt-out recorded mid-drip is still honored. The
+actual send pace is the gateway's rate limiter (messaging.dispatch_outbound); the
+pump only enqueues.
+
+Each recipient's copy goes out inside the approved "marketing" template, which
+names the shop and says how to stop promotions; ``rendered_body`` is the
+campaign's own text for that customer, the part the manager wrote.
 """
 
 from __future__ import annotations
@@ -20,6 +24,12 @@ from apps.messaging.models import MessagingGateway, OutboundMessage
 from apps.messaging.phone import normalize_phone
 from apps.messaging.segments import count_segments
 from apps.messaging.services import NoGatewayConfigured, enqueue_message
+from apps.messaging.sms_templates import (
+    MAX_VALUE_LENGTH,
+    SMS_TEMPLATES,
+    SmsValueTooLong,
+    sms_template,
+)
 
 from .consent import can_send
 from .models import Campaign, CampaignRecipient
@@ -34,8 +44,18 @@ class InvalidCampaignState(Exception):
     """The campaign is not in a state that can be sent."""
 
 
+class CampaignTooLong(Exception):
+    """The campaign's text, filled in for a customer, exceeds what one approved
+    template slot accepts."""
+
+
 def _shop_name() -> str:
     return (getattr(ShopSettings.load(), "shop_name", "") or "").strip()
+
+
+def _marketing_message(shop_name: str, text: str) -> str:
+    """The whole SMS a customer receives for campaign ``text``."""
+    return SMS_TEMPLATES["marketing"].render((shop_name or "متجرنا", text))
 
 
 def resolve_audience(campaign):
@@ -86,8 +106,9 @@ def preview_campaign(campaign) -> dict:
     ).count()
     shop_name = _shop_name()
     sample_customer = audience.first()
-    sample = render_template(
-        campaign.body_template, sample_customer, shop_name=shop_name
+    sample = _marketing_message(
+        shop_name,
+        render_template(campaign.body_template, sample_customer, shop_name=shop_name),
     )
     return {
         "audience_total": total,
@@ -95,7 +116,11 @@ def preview_campaign(campaign) -> dict:
         "skipped_estimate": max(total - sendable, 0),
         "sample_message": sample,
         "segments": count_segments(sample),
-        "estimated_minutes": _estimate_minutes(sendable, campaign.gateway),
+        "estimated_minutes": _estimate_minutes(
+            sendable,
+            campaign.gateway
+            or MessagingGateway.objects.filter(is_active=True, is_default=True).first(),
+        ),
     }
 
 
@@ -128,7 +153,7 @@ def expand_campaign_recipients(campaign) -> None:
             defaults={
                 "phone": normalized,
                 "rendered_body": body,
-                "segments": count_segments(body),
+                "segments": count_segments(_marketing_message(shop_name, body)),
                 "status": CampaignRecipient.Status.PENDING,
             },
         )
@@ -148,6 +173,15 @@ def approve_and_send(campaign, *, actor) -> Campaign:
         Campaign.Status.APPROVED,
     ):
         raise InvalidCampaignState(campaign.status)
+    # Refuse before approving: a text the provider will not take would otherwise
+    # fail recipient by recipient, after the manager believed it was sent.
+    # Checked against the audience's first customer; a longer name elsewhere
+    # fails just that recipient at pump time.
+    sample = render_template(
+        campaign.body_template, resolve_audience(campaign).first(), shop_name=_shop_name()
+    )
+    if len(sample) > MAX_VALUE_LENGTH:
+        raise CampaignTooLong(len(sample))
     campaign.approved_by = actor
     campaign.approved_at = timezone.now()
     campaign.status = Campaign.Status.SENDING
@@ -196,7 +230,10 @@ def pump_campaign(campaign, *, batch: int = 200) -> int:
         )
         return 0
 
-    gateway = campaign.gateway or MessagingGateway.default_gateway()
+    # A campaign pinned to a gateway that has since been switched off (or
+    # retired with its provider) falls back to the shop's current one.
+    gateway = campaign.gateway if campaign.gateway and campaign.gateway.is_active else None
+    shop_name = _shop_name() or "متجرنا"
     queued = 0
     for recipient in pending:
         allowed, _reason = can_send(recipient.customer, _MARKETING)
@@ -205,9 +242,15 @@ def pump_campaign(campaign, *, batch: int = 200) -> int:
             recipient.save(update_fields=["status", "updated_at"])
             continue
         try:
+            template = sms_template("marketing", shop_name, recipient.rendered_body)
+        except SmsValueTooLong:
+            recipient.status = CampaignRecipient.Status.FAILED
+            recipient.save(update_fields=["status", "updated_at"])
+            continue
+        try:
             message = enqueue_message(
                 to=recipient.phone,
-                body=recipient.rendered_body,
+                template=template,
                 consent_class=_MARKETING,
                 gateway=gateway,
                 dedup_key=f"campaign:{recipient.id}",

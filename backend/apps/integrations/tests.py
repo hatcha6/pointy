@@ -859,8 +859,10 @@ class TillApiTests(TestCase):
         # The detail modal's extras, kept against the card.
         subscriber = resp.data["subscriber"]
         self.assertEqual(subscriber["device_model"], "R-10000 Plus")
-        self.assertEqual(subscriber["lifetime_spend"], Decimal("750.00"))
         self.assertEqual(subscriber["purchase_count"], 6)
+        # «Total pay» is what the agencies paid HD Box — provider cost — and
+        # this is a cashier. See test_cost_visibility for both audiences.
+        self.assertNotIn("lifetime_spend", subscriber)
         # HD Box masks the name; Pointy has not been told one yet.
         self.assertFalse(subscriber["is_identified"])
         self.assertEqual(subscriber["display_name"], "")
@@ -870,10 +872,14 @@ class TillApiTests(TestCase):
         self.assertEqual(variant["sku"], "INTEG-HDBOX")
         self.assertIsNotNone(variant["id"])
         self.assertIsNotNone(variant["product_id"])
-        # Both numbers, so the cart cannot show one and the invoice the other.
+        # The price the cart and the invoice will both show. What the float
+        # pays stays with the reporting roles; the till gets a sealed quote
+        # for checkout and a flag for the float warning instead.
         offer = resp.data["offers"][0]
-        self.assertIn("cost", offer)
         self.assertIn("price", offer)
+        self.assertNotIn("cost", offer)
+        self.assertTrue(offer["quote"])
+        self.assertIn("exceeds_float", offer)
 
     def test_the_card_carries_the_subscribers_own_balance(self):
         """HD Box keeps a card's credit on the detail page, not the card list.

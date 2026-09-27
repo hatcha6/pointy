@@ -103,6 +103,51 @@ void main() {
     expect(pos.shouldShowPrintInvoiceCheckbox, isFalse);
   });
 
+  test(
+    'a device nobody is signed in on does not re-read the catalog',
+    () async {
+      // A price-checker kiosk, or a till waiting at the sign-in screen: every
+      // catalog edit at the back office used to send each one an
+      // unauthenticated catalog read, answered 401 (field telemetry,
+      // 2026-09-22..26: 55 of them from two kiosks).
+      final signedOutApi = _FakePosApiService();
+      final signedOutPos = PosViewModel(
+        CatalogRepository(signedOutApi),
+        RegisterSessionRepository(signedOutApi),
+        SaleRepository(signedOutApi),
+        ShopSettingsRepository(signedOutApi),
+        PrintingRepository(
+          signedOutApi,
+          serialTransport: const _NoopPrintTransport(),
+          bluetoothTransport: const _NoopPrintTransport(),
+          wifiTransport: const _NoopPrintTransport(),
+          fakeTransport: const _NoopPrintTransport(),
+        ),
+        sessionStorage: MemoryScopedJsonStorage(),
+      );
+      final signedOutRevalidator = Revalidator(signedOutApi.serverState);
+      addTearDown(signedOutRevalidator.dispose);
+      addTearDown(signedOutPos.dispose);
+      registerPosRevalidation(
+        revalidator: signedOutRevalidator,
+        posViewModel: signedOutPos,
+        isSignedIn: () => false,
+      );
+      signedOutApi.serverState.apply({
+        ServerStateDomain.settings: '1',
+        ServerStateDomain.catalogDefs: '1',
+      });
+
+      signedOutApi.serverState.apply({
+        ServerStateDomain.settings: '2',
+        ServerStateDomain.catalogDefs: '2',
+      });
+      await _settle();
+
+      expect(signedOutApi.catalogRequests, 0);
+    },
+  );
+
   test('stock moving does not churn the sell screen', () async {
     // Every checkout in the shop moves the stock counter. If that refreshed
     // the grid, a busy floor would re-read the catalog all day.

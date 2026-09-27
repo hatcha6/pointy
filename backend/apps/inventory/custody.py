@@ -427,17 +427,24 @@ def _notify_settlement(incident, payout, *, settings):
     phone = getattr(unit.consignor, "phone", "") if unit.consignor_id else ""
     if not phone:
         return
-    body = (
-        f"تم تسليمكم مبلغ {payout.amount:.2f} د.ل تسويةً عن "
-        f"{unit.variant.full_name if unit.variant_id else ''} "
-        f"بموجب المحضر {incident.number}. سند الصرف {payout.number}."
+    from apps.messaging.sms_templates import sms_template
+
+    shop_name = (getattr(settings, "shop_name", "") or "").strip()
+    currency = (getattr(settings, "currency_symbol", "") or "").strip() or "د.ل"
+    template = sms_template(
+        "consignment_claim",
+        shop_name,
+        f"{payout.amount:.2f} {currency}",
+        unit.variant.full_name if unit.variant_id else "",
+        incident.number,
+        payout.number,
     )
 
     def _send():
         try:
             messaging.enqueue_message(
                 to=phone,
-                body=body,
+                template=template,
                 consent_class=OutboundMessage.ConsentClass.TRANSACTIONAL,
                 channel=MessagingGateway.Channel.SMS,
                 dedup_key=f"consignment_claim_{payout.pk}",

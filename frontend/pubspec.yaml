@@ -121,6 +121,11 @@ dev_dependencies:
   # Run `flutter pub run flutter_launcher_icons` after changing the logo.
   flutter_launcher_icons: ^0.14.4
 
+  # A pure-Dart QR reader for the tests: the QR codes printed on provider
+  # cards are decoded back from the exact dots the printer receives — clean
+  # and deliberately damaged — so a wrong or fragile code fails the build.
+  zxing2: ^0.2.4
+
 # App icon generation for all platforms. Source: assets/branding/logo.png.
 flutter_launcher_icons:
   image_path: "assets/branding/logo.png"

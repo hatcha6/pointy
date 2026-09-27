@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 
 from apps.core.models import TimeStampedModel
@@ -8,18 +8,22 @@ from apps.core.models import TimeStampedModel
 from .secrets import decrypt_secrets, encrypt_secrets
 
 
-class MessagingGateway(TimeStampedModel):
-    """A configured way to send/receive messages — one per SIM/phone/provider.
+RELAY_GATEWAY_NAME = "رسائل دفتر"
 
-    ``provider`` selects the transport driver (see apps.messaging.transports);
-    ``config`` holds non-secret connection details; the ``max_messages_per_minute``
-    etc. fields hold the deliverability policy that paces a single consumer SIM.
-    Credentials (the SMS Gate password, the inbound webhook signing key) live
-    encrypted in ``secrets_encrypted`` and are never serialized back out.
+
+class MessagingGateway(TimeStampedModel):
+    """A configured way to send messages — in practice, the relay.
+
+    ``provider`` selects the transport driver (see apps.messaging.transports).
+    SMS goes through the company relay to Resala, so the shop holds no
+    credentials; what it does own is the pacing policy here — how fast, how many
+    a day, and the quiet hours promotions wait out — and ``is_active``, the
+    switch that stops all SMS from this shop. ``config`` and ``secrets_encrypted``
+    remain for providers that need connection details (none does today).
     """
 
     class Provider(models.TextChoices):
-        SMS_GATE = "sms_gate", "SMS Gate (Android)"
+        RELAY = "relay", "Pointy relay (Resala)"
         FAKE = "fake", "Fake (testing)"
 
     class Channel(models.TextChoices):
@@ -27,7 +31,7 @@ class MessagingGateway(TimeStampedModel):
 
     name = models.CharField(max_length=120, unique=True)
     provider = models.CharField(
-        max_length=32, choices=Provider.choices, default=Provider.SMS_GATE
+        max_length=32, choices=Provider.choices, default=Provider.RELAY
     )
     channel = models.CharField(
         max_length=16, choices=Channel.choices, default=Channel.SMS
@@ -38,12 +42,13 @@ class MessagingGateway(TimeStampedModel):
     is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
-    # Deliverability policy — a single SIM is the bottleneck (see the plan §7).
-    max_messages_per_minute = models.PositiveIntegerField(default=6)
+    # Deliverability policy. The relay has its own per-shop burst limit and a
+    # monthly allowance; these are the shop's own brakes under it.
+    max_messages_per_minute = models.PositiveIntegerField(default=30)
     daily_cap = models.PositiveIntegerField(default=0)  # 0 = unlimited
     quiet_hours_start = models.TimeField(blank=True, null=True)
     quiet_hours_end = models.TimeField(blank=True, null=True)
-    send_timeout_seconds = models.PositiveIntegerField(default=15)
+    send_timeout_seconds = models.PositiveIntegerField(default=20)
 
     # Health / observability.
     last_seen_at = models.DateTimeField(blank=True, null=True)
@@ -93,7 +98,38 @@ class MessagingGateway(TimeStampedModel):
     @classmethod
     def default_gateway(cls) -> "MessagingGateway | None":
         active = cls.objects.filter(is_active=True)
-        return active.filter(is_default=True).first() or active.order_by("created_at").first()
+        gateway = (
+            active.filter(is_default=True).first()
+            or active.order_by("created_at").first()
+        )
+        if gateway is not None:
+            return gateway
+        return cls.ensure_relay_gateway()
+
+    @classmethod
+    def ensure_relay_gateway(cls) -> "MessagingGateway | None":
+        """The relay gateway, created on first need; ``None`` if switched off.
+
+        Nothing about it needs configuring, so a shop never has to "add" one —
+        but a factory reset wipes the row, and a missing gateway must not read
+        as "SMS is off". One the shop deactivated stays off: that is the
+        shop's switch, and recreating it would override the decision.
+        """
+        existing = cls.objects.filter(provider=cls.Provider.RELAY).order_by("created_at")
+        gateway = existing.first()
+        if gateway is None:
+            try:
+                with transaction.atomic():
+                    gateway = cls.objects.create(
+                        name=RELAY_GATEWAY_NAME,
+                        provider=cls.Provider.RELAY,
+                        is_default=True,
+                        is_active=True,
+                    )
+            except IntegrityError:
+                # A concurrent first send created it (the name is unique).
+                gateway = existing.first()
+        return gateway if gateway is not None and gateway.is_active else None
 
 
 class OutboundMessage(TimeStampedModel):
@@ -145,6 +181,14 @@ class OutboundMessage(TimeStampedModel):
     source_type = models.CharField(max_length=40, blank=True)
     source_id = models.CharField(max_length=64, blank=True)
 
+    # The approved template this message is an instance of (see
+    # apps.messaging.sms_templates) and the values for its $1..$n slots. The
+    # provider sends the template, not ``body``; ``body`` is our rendering of it.
+    # ``db_default`` too: the previous release, still serving during a live
+    # update, inserts rows that name neither column.
+    template_kind = models.CharField(max_length=40, blank=True, default="", db_default="")
+    template_values = models.JSONField(default=list, blank=True, db_default=[])
+
     sent_at = models.DateTimeField(blank=True, null=True)
     delivered_at = models.DateTimeField(blank=True, null=True)
 
@@ -158,6 +202,16 @@ class OutboundMessage(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.to_phone} [{self.status}]"
+
+    @property
+    def relay_idempotency_key(self) -> str:
+        """Names this message to the relay, which never sends one key twice.
+
+        The creation instant rides along with the id because ids are not unique
+        forever: a restored or reset database hands out the same ids again, and
+        the relay would answer a new message with an old one's outcome.
+        """
+        return f"{self.pk}-{self.created_at:%Y%m%d%H%M%S%f}"
 
     @property
     def is_terminal(self) -> bool:

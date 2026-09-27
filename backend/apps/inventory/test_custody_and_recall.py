@@ -406,7 +406,10 @@ class RecallTests(TestCase):
             full_name="زبون", phone="0911111111"
         )
         MessagingGateway.objects.create(
-            name="g", channel=MessagingGateway.Channel.SMS, is_active=True
+            name="g",
+            channel=MessagingGateway.Channel.SMS,
+            provider=MessagingGateway.Provider.FAKE,
+            is_active=True,
         )
 
     def _sell(self, quantity, customer=None):

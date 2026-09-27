@@ -18,9 +18,11 @@ import 'features/treasury/view_models/bank_routing.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_controller.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_preview_panel.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_scope.dart';
+import 'shared/barcode/scan_keyboard.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'shared/documents/document_trail_scope.dart';
 import 'features/auth/view_models/auth_view_model.dart';
+import 'features/auth/views/signed_out_route_reset.dart';
 import 'features/auth/views/auth_gate.dart';
 import 'features/connection/views/connection_gate.dart';
 import 'features/onboarding/views/shop_setup_wizard.dart';
@@ -55,6 +57,8 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
   /// Lives as long as the app: [TrackedScreen]s subscribe to it so a screen
   /// knows when the route above it is popped and it is on show again.
   final AnalyticsRouteObserver _routeObserver = AnalyticsRouteObserver();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  late final SignedOutRouteReset _signedOutRouteReset;
   void Function(FlutterErrorDetails details)? _previousFlutterErrorHandler;
   ErrorCallback? _previousPlatformErrorHandler;
   late final TimingsCallback _frameTimingsCallback;
@@ -65,6 +69,11 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
     _dependencies = PointyAppDependencies(apiService: widget.apiService);
     _navigationRailController = PointyNavigationRailController();
     _dependencies.authViewModel.addListener(_dependencies.handleAuthChanged);
+    _signedOutRouteReset = SignedOutRouteReset(
+      authChanges: _dependencies.authViewModel,
+      status: () => _dependencies.authViewModel.status,
+      navigatorKey: _navigatorKey,
+    )..attach();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_dependencies.start());
     unawaited(_dependencies.analyticsEngine.start());
@@ -111,6 +120,7 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     SchedulerBinding.instance.removeTimingsCallback(_frameTimingsCallback);
     _dependencies.authViewModel.removeListener(_dependencies.handleAuthChanged);
+    _signedOutRouteReset.detach();
     _navigationRailController.dispose();
     _dependencies.dispose();
     super.dispose();
@@ -157,6 +167,7 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
 
   Widget _buildApp() {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
@@ -199,12 +210,23 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                       builder: (context, wedge, companionChild) =>
                           CameraWedgeScope(
                             controller: wedge,
-                            // F8 anywhere: what the counter camera sees. Here,
-                            // above the Navigator, so it floats over every
-                            // route, sheets and dialogs included.
-                            child: CameraWedgePreviewHost(
-                              controller: wedge,
-                              child: companionChild ?? const SizedBox.shrink(),
+                            // The camera types what it reads, like a USB
+                            // scanner, so every route hears it through the
+                            // keyboard: the till, a payment sheet waiting for
+                            // a terminal slip, any focused field.
+                            child: ScanKeyboard<CameraWedgeController>(
+                              source: 'camera_wedge',
+                              device: wedge,
+                              scans: (camera) =>
+                                  camera.scans.map((scan) => scan.value),
+                              // F8 anywhere: what the counter camera sees.
+                              // Here, above the Navigator, so it floats over
+                              // every route, sheets and dialogs included.
+                              child: CameraWedgePreviewHost(
+                                controller: wedge,
+                                child:
+                                    companionChild ?? const SizedBox.shrink(),
+                              ),
                             ),
                           ),
                       child: ValueListenableBuilder<CompanionBridge?>(
@@ -213,23 +235,30 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                         builder: (context, bridge, railChild) => CompanionScope(
                           bridge: bridge,
                           repository: _dependencies.companionRepository,
-                          // Same reasoning, one level in: every screen that shows a
-                          // document can offer its history without a constructor
-                          // parameter for it.
-                          child: DocumentTrailScope(
-                            repository: _dependencies.documentTrailRepository,
-                            // And one more: the till, the record-payment dialog
-                            // and the settings screen all need to know which
-                            // bank account a card or transfer lands in.
-                            child: BankRoutingScope(
-                              routing: _dependencies.bankRouting,
-                              // Per device, like the theme: the product
-                              // searches on every route read whether this
-                              // machine offers the search-mode picker.
-                              child: ProductSearchModeScope(
-                                controller:
-                                    _dependencies.productSearchModeController,
-                                child: railChild ?? const SizedBox.shrink(),
+                          // A paired phone types what it reads too, exactly
+                          // like the camera above.
+                          child: ScanKeyboard<CompanionBridge>(
+                            source: 'companion_camera',
+                            device: bridge,
+                            scans: (phone) => phone.scans,
+                            // Same reasoning, one level in: every screen that
+                            // shows a document can offer its history without a
+                            // constructor parameter for it.
+                            child: DocumentTrailScope(
+                              repository: _dependencies.documentTrailRepository,
+                              // And one more: the till, the record-payment
+                              // dialog and the settings screen all need to know
+                              // which bank account a card or transfer lands in.
+                              child: BankRoutingScope(
+                                routing: _dependencies.bankRouting,
+                                // Per device, like the theme: the product
+                                // searches on every route read whether this
+                                // machine offers the search-mode picker.
+                                child: ProductSearchModeScope(
+                                  controller:
+                                      _dependencies.productSearchModeController,
+                                  child: railChild ?? const SizedBox.shrink(),
+                                ),
                               ),
                             ),
                           ),

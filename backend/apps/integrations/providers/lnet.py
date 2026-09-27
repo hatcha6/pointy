@@ -1047,7 +1047,7 @@ class LnetProvider(IntegrationProvider):
                 error_detail=f"customer credited, float debit unconfirmed: {message}",
             )
 
-        # What the customer's receipt prints beneath the line: whose line was
+        # What the customer's receipt prints in the line's slip: whose line was
         # topped up, by how much, and the serial LNET issued for it — the
         # number LNET's own support asks for.
         receipt["printed"] = {

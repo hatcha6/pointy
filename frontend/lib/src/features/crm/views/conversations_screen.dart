@@ -156,9 +156,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           if (viewModel.isEmpty)
             Padding(
               padding: EdgeInsets.only(top: spacing.xl),
+              // SMS is one-way now: say so before anyone waits for a reply.
               child: PointyEmptyState(
                 icon: Icons.forum_outlined,
                 title: l10n.conversationsEmpty,
+                message: l10n.conversationsEmptyMessage,
               ),
             )
           else

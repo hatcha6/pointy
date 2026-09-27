@@ -1283,7 +1283,11 @@ def _integration_notifications(now):
                     # What was sold, for a card off a provider's shelf that has
                     # no card number of its own: «ليبيانا 10 دينار».
                     "item": row.option_label,
-                    "amount": _money(row.cost),
+                    # What the customer paid — the sum they are out of pocket,
+                    # and the one the alert says they paid. Not the provider's
+                    # cost: this alert reaches the cashier at the counter, and
+                    # nothing was drawn from the float anyway.
+                    "amount": _money(row.order_line.line_total),
                     "sold_at": row.created_at.isoformat(),
                     "order_id": row.order_line.order_id,
                     "count": 1,

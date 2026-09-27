@@ -128,7 +128,7 @@ def _notify(settings, run, period_start, period_end) -> bool:
     try:
         enqueue_message(
             to=phone,
-            body=_message_body(settings, run, period_start, period_end),
+            template=_message_template(settings, run, period_start, period_end),
             source_type="report_run",
             source_id=run.pk,
             # One message per closed month, whatever else re-runs.
@@ -142,16 +142,24 @@ def _notify(settings, run, period_start, period_end) -> bool:
     return True
 
 
-def _message_body(settings, run, period_start, period_end) -> str:
+def _message_template(settings, run, period_start, period_end):
+    """The approved ``month_end_report`` message: the shop, the month, and the
+    headline figures in ``MESSAGE_FIGURES`` order (a figure the pack lacks
+    shows as a dash rather than shifting the others into the wrong slots)."""
+    from apps.messaging.sms_templates import sms_template
+
     summary = (run.payload or {}).get("summary", {})
-    lines = [
-        f"{settings.shop_name} — إقفال {period_start.strftime('%Y/%m')}",
+    currency = (settings.currency_symbol or "").strip()
+    figures = [
+        f"{summary[key]} {currency}".strip() if key in summary else ""
+        for key, _label in MESSAGE_FIGURES
     ]
-    for key, label in MESSAGE_FIGURES:
-        if key in summary:
-            lines.append(f"{label}: {summary[key]} {settings.currency_symbol}")
-    lines.append(f"التقرير الكامل في التطبيق (رقم {run.pk}).")
-    return "\n".join(lines)
+    return sms_template(
+        "month_end_report",
+        settings.shop_name,
+        period_start.strftime("%Y/%m"),
+        *figures,
+    )
 
 
 __all__ = ["MESSAGE_FIGURES", "SNAPSHOT_REPORT", "snapshot_month_end"]

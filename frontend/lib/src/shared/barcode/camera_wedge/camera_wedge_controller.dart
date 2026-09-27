@@ -11,10 +11,10 @@ import 'native_wedge_source.dart';
 
 /// One camera acting as a barcode wedge for this till.
 ///
-/// Owns a [CameraWedgeSource] and publishes the scans it confirms. From a
-/// screen's point of view this is exactly the counter scanner: a stream of
-/// strings, same handler, same gating — the shape `CompanionScanListener`
-/// already established for a paired phone.
+/// Owns a [CameraWedgeSource] and publishes the scans it confirms. No screen
+/// listens to them: `ScanKeyboard` types each one into the app as key
+/// presses and Enter, so to a screen the camera IS the counter scanner — same
+/// keystrokes, same listeners, same gating, wherever a scanner works.
 ///
 /// It notifies when the camera's [health] changes (settings, the F8 preview
 /// panel), never per scan: the point of the feature is that nobody looks at

@@ -158,6 +158,7 @@ Two constraints that follow, and both are already known in this codebase:
 
 Nothing here needs inventing. A scan from a non-wedge source already has a
 proven route into every screen that can be scanned into:
-[`CompanionScanListener`](../../frontend/lib/src/features/companion/companion_scan_listener.dart)
-hands a phone's scan to the exact callback the USB wedge feeds, with the same
-enabled and route gating. A camera is a third source on the same seam.
+[`ScanKeyboard`](../../frontend/lib/src/shared/barcode/scan_keyboard.dart)
+types it into the app as key presses and Enter, the way a USB wedge types, so
+it meets the same listeners, fields and gating. The counter camera and a paired
+phone both go that way; a new source is one more `ScanKeyboard`.

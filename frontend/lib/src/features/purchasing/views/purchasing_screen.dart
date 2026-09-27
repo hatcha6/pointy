@@ -10,8 +10,6 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
-import '../../companion/companion_scan_listener.dart';
-import '../../companion/companion_scope.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
@@ -239,79 +237,75 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
 
   @override
   Widget build(BuildContext context) {
-    return CompanionScanListener(
-      bridge: CompanionScope.bridgeOf(context),
+    // The counter scanner, the counter camera and a paired phone all type
+    // their scans (the last two through ScanKeyboard), so this one listener
+    // hears all three.
+    return BarcodeScanListener(
       enabled: !viewModel.isSubmitting,
-      onScan: (barcode) {
+      onBarcodeScanned: (barcode) {
         unawaited(_addBarcode(context, barcode));
       },
-      child: BarcodeScanListener(
-        enabled: !viewModel.isSubmitting,
-        onBarcodeScanned: (barcode) {
-          unawaited(_addBarcode(context, barcode));
-        },
-        // A scan only ever adds its own product; it never touches a line's
-        // quantity. Arrow keys flip the active line's unit of measure — the
-        // deliberate quantity edit lives behind a line tap.
-        onArrowKey: (key) => _cycleActiveLineUnit(key),
-        // Till function keys, dispatched through the same global hardware-keyboard
-        // handler as scans — NOT focus-tree Shortcuts, which silently die when
-        // focus parks outside the workspace. Deliberately the same keys as the
-        // POS where the job is the same (F2 unit, F4 delete line), so a cashier
-        // moved onto receiving does not have to relearn the two they know.
-        onFunctionKey: (key) {
-          if (key == LogicalKeyboardKey.f1) {
-            final open = _submitController.onOpenSettings;
-            if (open == null) {
-              return false;
-            }
-            open();
-            return true;
+      // A scan only ever adds its own product; it never touches a line's
+      // quantity. Arrow keys flip the active line's unit of measure — the
+      // deliberate quantity edit lives behind a line tap.
+      onArrowKey: (key) => _cycleActiveLineUnit(key),
+      // Till function keys, dispatched through the same global hardware-keyboard
+      // handler as scans — NOT focus-tree Shortcuts, which silently die when
+      // focus parks outside the workspace. Deliberately the same keys as the
+      // POS where the job is the same (F2 unit, F4 delete line), so a cashier
+      // moved onto receiving does not have to relearn the two they know.
+      onFunctionKey: (key) {
+        if (key == LogicalKeyboardKey.f1) {
+          final open = _submitController.onOpenSettings;
+          if (open == null) {
+            return false;
           }
-          if (key == LogicalKeyboardKey.f2) {
-            return _cycleActiveLineUnit();
-          }
-          if (key == LogicalKeyboardKey.f3) {
-            return _openPricingForActiveLine();
-          }
-          if (key == LogicalKeyboardKey.f4) {
-            return _deleteActiveLine();
-          }
-          if (key == LogicalKeyboardKey.f6) {
-            return _acceptSuggestedQuantityForActiveLine();
-          }
-          return false;
-        },
-        onCommandEnter: () => _submitController.onSubmit?.call(),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.hasBoundedWidth
-                ? constraints.maxWidth
-                : MediaQuery.sizeOf(context).width;
-            if (AppBreakpoints.usesTwoPane(width)) {
-              return TwoPaneLayout(
-                minPrimaryWidth: 390,
-                primaryPane: PurchaseCatalogPane(
-                  viewModel: viewModel,
-                  capabilities: widget.capabilities,
-                ),
-                secondaryPane: PurchaseDraftPane(
-                  viewModel: viewModel,
-                  contactRepository: widget.contactRepository,
-                  submitController: _submitController,
-                  onSubmitSuccess: widget.onSaved,
-                ),
-              );
-            }
-
-            return _CompactPurchasingWorkspace(
-              viewModel: viewModel,
-              contactRepository: widget.contactRepository,
-              capabilities: widget.capabilities,
-              onSaved: widget.onSaved,
+          open();
+          return true;
+        }
+        if (key == LogicalKeyboardKey.f2) {
+          return _cycleActiveLineUnit();
+        }
+        if (key == LogicalKeyboardKey.f3) {
+          return _openPricingForActiveLine();
+        }
+        if (key == LogicalKeyboardKey.f4) {
+          return _deleteActiveLine();
+        }
+        if (key == LogicalKeyboardKey.f6) {
+          return _acceptSuggestedQuantityForActiveLine();
+        }
+        return false;
+      },
+      onCommandEnter: () => _submitController.onSubmit?.call(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          if (AppBreakpoints.usesTwoPane(width)) {
+            return TwoPaneLayout(
+              minPrimaryWidth: 390,
+              primaryPane: PurchaseCatalogPane(
+                viewModel: viewModel,
+                capabilities: widget.capabilities,
+              ),
+              secondaryPane: PurchaseDraftPane(
+                viewModel: viewModel,
+                contactRepository: widget.contactRepository,
+                submitController: _submitController,
+                onSubmitSuccess: widget.onSaved,
+              ),
             );
-          },
-        ),
+          }
+
+          return _CompactPurchasingWorkspace(
+            viewModel: viewModel,
+            contactRepository: widget.contactRepository,
+            capabilities: widget.capabilities,
+            onSaved: widget.onSaved,
+          );
+        },
       ),
     );
   }

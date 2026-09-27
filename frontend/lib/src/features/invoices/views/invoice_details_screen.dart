@@ -21,6 +21,7 @@ import '../../../shared/order/sale_order_details_content.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../printing/views/print_audit_sheet.dart';
+import '../../settings/views/messaging_presentation.dart';
 import '../view_models/invoice_details_view_model.dart';
 import 'convert_quotation_dialog.dart';
 
@@ -91,14 +92,21 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
   Future<void> _sendSms(SaleOrder order) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final ok = await _viewModel.sendInvoiceSms();
+    final failure = await _viewModel.sendInvoiceSms();
     if (!mounted) {
       return;
     }
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          ok ? l10n.invoiceSendSmsSuccess : l10n.invoiceSendSmsError,
+          failure == null
+              ? l10n.invoiceSendSmsSuccess
+              : messagingFailureMessage(
+                  l10n,
+                  code: failure.code,
+                  detail: failure.detail,
+                  fallback: l10n.invoiceSendSmsError,
+                ),
         ),
       ),
     );
@@ -117,7 +125,10 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
           appBar: AppBar(
             title: Text(l10n.invoiceDetailsTitle(_receiptNumber(l10n, order))),
             actions: [
-              if ((order.customerPhone ?? '').trim().isNotEmpty)
+              // SMS is a paid add-on the shop can also switch off: no action
+              // at all without it, rather than one that can only fail.
+              if (widget.capabilities.canSendSms &&
+                  (order.customerPhone ?? '').trim().isNotEmpty)
                 IconButton(
                   tooltip: l10n.invoiceSendSmsTooltip,
                   onPressed: _viewModel.isLoading

@@ -143,7 +143,7 @@ class StockBatchBalance {
     this.warehouseName = '',
     this.receivedQuantity = 0,
     this.remainingQuantity = 0,
-    this.incomingRate = 0,
+    this.incomingRate,
     this.expiryDate,
     this.isSellable = true,
   });
@@ -156,8 +156,9 @@ class StockBatchBalance {
   final double remainingQuantity;
 
   /// Cost sits with the quantity, because value is quantity × rate and quantity
-  /// is here.
-  final double incomingRate;
+  /// is here. `null` for a reader who may not see what a lot cost (anyone who
+  /// reads no purchase orders): the server leaves it out.
+  final double? incomingRate;
 
   /// Copied from the lot so the till's FEFO lookup is one indexed scan of one
   /// table. Never edited here — it is the lot that owns it.
@@ -174,7 +175,7 @@ class StockBatchBalance {
       warehouseName: json['warehouse_name']?.toString() ?? '',
       receivedQuantity: _doubleOrNull(json['received_quantity']) ?? 0,
       remainingQuantity: _doubleOrNull(json['remaining_quantity']) ?? 0,
-      incomingRate: _doubleOrNull(json['incoming_rate']) ?? 0,
+      incomingRate: _doubleOrNull(json['incoming_rate']),
       expiryDate: _dateOrNull(json['expiry_date']),
       isSellable: json['is_sellable'] != false,
     );

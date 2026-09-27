@@ -63,11 +63,12 @@ class ReportRunViewSet(
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if self.request.user.is_superuser:
+        if user_has_full_visibility(self.request.user):
             return queryset
-        if self.request.user.has_perm("reports.view_reportrun"):
-            return queryset
-        return queryset.filter(requested_by=self.request.user)
+        # Nobody else may run a report (ReportDefinition.is_allowed), and the
+        # runs a cashier made while they still could — gross profit and all —
+        # are not theirs to reopen either.
+        return queryset.none()
 
     @action(detail=False, methods=["get"])
     def catalog(self, request):

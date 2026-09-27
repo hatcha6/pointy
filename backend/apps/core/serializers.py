@@ -626,6 +626,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "auto_print_min_line_count",
             "auto_print_min_total",
             "auto_print_kitchen_tickets",
+            # A dialled card (Libyana, Almadar) prints a QR code the customer's
+            # phone dials. Shop-wide, so every till prints a card the same way.
+            "print_voucher_qr_codes",
             "allow_overselling",
             "prevent_selling_at_loss",
             "low_stock_threshold",

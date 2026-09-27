@@ -126,6 +126,7 @@ import '../models/integration_recent_search.dart';
 import '../models/portal_payment.dart';
 import '../models/voucher_availability.dart';
 import '../models/messaging_gateway.dart';
+import '../models/messaging_status.dart';
 import 'crm_api_client.dart';
 import 'integrations_api_client.dart';
 import 'messaging_api_client.dart';
@@ -1084,7 +1085,7 @@ class PosApiService {
     );
   }
 
-  Future<void> sendInvoiceSms(int saleOrderId) {
+  Future<MessagingSendResult> sendInvoiceSms(int saleOrderId) {
     return _sales.sendInvoiceSms(saleOrderId);
   }
 
@@ -2337,28 +2338,18 @@ class PosApiService {
     return _printing.requeuePrintJob(jobId: printJobId);
   }
 
-  Future<List<MessagingGateway>> fetchMessagingGateways() =>
-      _messaging.fetchGateways();
-
-  Future<MessagingGateway> createMessagingGateway(
-    MessagingGatewayDraft draft,
-  ) => _messaging.createGateway(draft);
+  Future<MessagingServiceStatus> fetchMessagingStatus() =>
+      _messaging.fetchStatus();
 
   Future<MessagingGateway> updateMessagingGateway(
     int id,
-    MessagingGatewayDraft draft,
-  ) => _messaging.updateGateway(id, draft);
-
-  Future<void> deleteMessagingGateway(int id) => _messaging.deleteGateway(id);
+    MessagingGatewayUpdate update,
+  ) => _messaging.updateGateway(id, update);
 
   Future<MessagingSendResult> testSendMessagingGateway({
     required int id,
     required String to,
-    String? body,
-  }) => _messaging.testSend(id: id, to: to, body: body);
-
-  Future<GatewayActivation> activateMessagingGateway(int id) =>
-      _messaging.activate(id);
+  }) => _messaging.testSend(id: id, to: to);
 
   Future<List<IntegrationProvider>> fetchIntegrationProviders() =>
       _integrations.fetchProviders();

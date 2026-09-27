@@ -4,6 +4,7 @@ from django.db.models.deletion import ProtectedError
 from rest_framework import serializers
 
 from apps.catalog.models import BillOfMaterials, BomLine, ProductVariant
+from apps.core.roles import reader_has_full_visibility
 from apps.customers.models import Asset, AssetOwnership, AssetType, Customer
 from apps.employees.models import Employee
 from .models import (
@@ -16,6 +17,15 @@ from .models import (
     WorkflowTemplate,
 )
 from .services import LABOR_PRODUCT_SKU
+
+
+#: What the shop paid for a part a job used, and what a production job's output
+#: cost to make. That is the owner's figure, so it goes to the reporting roles
+#: only, the same line the invoices' profit is drawn on: a cashier or a
+#: technician fitting a part sees what it sells for, never what it cost. Removed
+#: rather than blanked, like every other cost mask.
+JOB_MATERIAL_COST_FIELDS = ("unit_cost",)
+JOB_COST_FIELDS = ("output_unit_cost",)
 
 
 def _user_display_name(user) -> str:
@@ -384,6 +394,13 @@ class JobMaterialSerializer(serializers.ModelSerializer):
             "reversed_at",
         )
 
+    def to_representation(self, material):
+        data = super().to_representation(material)
+        if not reader_has_full_visibility(self.context):
+            for field in JOB_MATERIAL_COST_FIELDS:
+                data.pop(field, None)
+        return data
+
     def get_line_total(self, material) -> str:
         return str(
             (material.unit_price * material.quantity).quantize(Decimal("0.01"))
@@ -581,6 +598,13 @@ class JobSerializer(serializers.ModelSerializer):
             "order",
             "public_token",
         )
+
+    def to_representation(self, job):
+        data = super().to_representation(job)
+        if not reader_has_full_visibility(self.context):
+            for field in JOB_COST_FIELDS:
+                data.pop(field, None)
+        return data
 
     def get_next_stage(self, job):
         stages = list(job.workflow_template.stages.all())

@@ -510,9 +510,10 @@ class LnetLineHistoryTests(_PortalCase):
         self.assertEqual(body["total"], 1)
         entry = body["entries"][0]
         self.assertEqual(entry["reference"], "59000")
-        # What the customer paid onto the line, beside the float's share.
+        # What the customer paid onto the line. The float's share of it is the
+        # owner's figure, and this is a cashier's till.
         self.assertEqual(Decimal(entry["amount"]), Decimal("40.00"))
-        self.assertEqual(Decimal(entry["cost"]), Decimal("38.00"))
+        self.assertNotIn("cost", entry)
         self.assertEqual(entry["status"], "verified")
         self.assertTrue(entry["is_ours"])
 

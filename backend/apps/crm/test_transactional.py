@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -20,6 +21,8 @@ from .tasks import debt_reminder_sweep_task
 from .transactional import NoRecipientPhone, send_debt_reminder, send_invoice_sms
 
 _TRANSACTIONAL = OutboundMessage.ConsentClass.TRANSACTIONAL
+_LINK = "https://relay.example/invoices/inst/tok"
+_PUBLIC_URL = "apps.crm.transactional.public_invoice_url_for_order"
 
 
 def make_gateway():
@@ -54,6 +57,19 @@ class InvoiceSmsTests(TestCase):
         self.assertEqual(message.source_type, "invoice")
         self.assertEqual(message.dedup_key, f"invoice:{self.order.id}")
         self.assertIn(self.order.receipt_number, message.body)
+
+    def test_without_a_link_it_is_the_plain_invoice_template(self):
+        message = send_invoice_sms(self.order)
+        self.assertEqual(message.template_kind, "invoice")
+        self.assertEqual(message.template_values[1], self.order.receipt_number)
+        self.assertTrue(message.template_values[2].startswith("100.00"))
+
+    def test_with_a_link_it_is_the_link_template(self):
+        with mock.patch(_PUBLIC_URL, return_value=_LINK):
+            message = send_invoice_sms(self.order)
+        self.assertEqual(message.template_kind, "invoice_link")
+        self.assertEqual(message.template_values[-1], _LINK)
+        self.assertIn(_LINK, message.body)
 
     def test_idempotent_per_order(self):
         first = send_invoice_sms(self.order)
@@ -98,12 +114,32 @@ class DebtReminderTests(TestCase):
             make_credit_order(customer, due_date=due)
         )
         self.assertIn(due.strftime("%Y-%m-%d"), message.body)
-        self.assertIn("تاريخ الاستحقاق", message.body)
+        self.assertIn("المستحقة بتاريخ", message.body)
+        self.assertEqual(message.template_kind, "debt_reminder")
+
+    def test_a_linked_reminder_uses_the_link_template(self):
+        customer = Customer.objects.create(full_name="علي", phone="+218912345678")
+        with mock.patch(_PUBLIC_URL, return_value=_LINK):
+            message = send_debt_reminder(make_credit_order(customer))
+        self.assertEqual(message.template_kind, "debt_reminder_link")
+        self.assertEqual(message.template_values[-1], _LINK)
+
+    def test_an_account_balance_is_not_called_an_invoice(self):
+        customer = Customer.objects.create(full_name="علي", phone="+218912345678")
+        order = make_credit_order(customer)
+        Order.objects.filter(pk=order.pk).update(sale_type="account_entry")
+        order.refresh_from_db()
+        with mock.patch(_PUBLIC_URL, return_value=_LINK) as public_url:
+            message = send_debt_reminder(order)
+        public_url.assert_not_called()
+        self.assertEqual(message.template_kind, "debt_reminder")
+        self.assertIn("رصيد مسجّل على حسابك", message.body)
+        self.assertNotIn("الفاتورة", message.template_values[2])
 
     def test_reminder_omits_due_date_when_unset(self):
         customer = Customer.objects.create(full_name="علي", phone="+218912345678")
         message = send_debt_reminder(make_credit_order(customer))
-        self.assertNotIn("تاريخ الاستحقاق", message.body)
+        self.assertNotIn("المستحقة بتاريخ", message.body)
 
 
 class DebtSweepTests(TestCase):

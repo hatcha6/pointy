@@ -1,172 +1,157 @@
 import 'package:flutter/foundation.dart';
 
-import '../../../core/error_messages.dart';
 import '../../../core/result.dart';
+import '../../../data/models/clock_time.dart';
 import '../../../data/models/messaging_gateway.dart';
+import '../../../data/models/messaging_status.dart';
 import '../../../data/repositories/messaging_repository.dart';
+import '../../../data/services/api_error_detail.dart';
 
-enum MessagingTestOutcome { none, sending, success, failure }
+/// Where the shop stands with SMS, in the order the page explains it.
+enum MessagingServiceState {
+  /// SMS is not in the subscription: a paid add-on to ask support for.
+  notSubscribed,
 
-/// Outcome of the page's primary action (save, then register the device
-/// webhooks). "Saved but not activated" is its own state on purpose: the save
-/// can succeed against our own database while the phone is unreachable, and
-/// telling the shop "saved ✓" there would hide a gateway that can never receive
-/// a reply or a delivery report.
-enum MessagingConnectOutcome {
-  none,
-  running,
-  connected,
-  savedNotActivated,
-  failed,
+  /// In the subscription, but not set up on Daftar's side yet.
+  notReady,
+
+  /// The shop switched it off.
+  disabled,
+  active,
 }
 
-/// How far along setup is. Sending only needs [configured]; two-way messaging
-/// needs the device webhooks too, which is what [ready] adds.
-enum MessagingSetupStage { unconfigured, configured, ready }
+enum MessagingTestOutcome { none, sending, sent, queued, failed }
 
-/// Why the device address is not usable, for the page to localize.
-enum MessagingBaseUrlIssue { none, missing, invalid }
-
-/// Drives the SMS device settings page: loads the shop's default messaging
-/// gateway (the SMS Gate phone), edits its connection + pacing config, saves
-/// (create or update), registers the device webhooks, and runs a Test-send.
-/// A single default gateway is managed here for the common case; the endpoints
-/// support multiple.
+/// Drives the SMS settings page: reads the service status (entitlement, usage,
+/// the texts Daftar sends), edits the shop's own dials on its gateway — the
+/// switch, pacing, daily cap, quiet hours for promotions — saves them in one
+/// PATCH, and runs a test send.
+///
+/// There is nothing to connect: the provider account lives on the company's
+/// relay, so this is a status page with a few brakes on it.
 class MessagingSettingsViewModel extends ChangeNotifier {
   MessagingSettingsViewModel(this._repository);
 
   final MessagingRepository _repository;
 
-  MessagingGateway? _gateway;
+  MessagingServiceStatus? _status;
   bool _isLoading = false;
   bool _isSaving = false;
   bool _hasLoadError = false;
-  MessagingTestOutcome _testOutcome = MessagingTestOutcome.none;
-  String _testMessage = '';
-  MessagingConnectOutcome _connectOutcome = MessagingConnectOutcome.none;
-  String _connectDetail = '';
-  int _registeredWebhooks = 0;
-  bool _isActivating = false;
   int _revision = 0;
 
-  // Editable form state.
-  String baseUrl = '';
-  String username = '';
-  String password = ''; // a new secret; blank = keep the stored one
-  int maxMessagesPerMinute = 6;
+  bool _saveFailed = false;
+  String _saveErrorCode = '';
+  String _saveErrorDetail = '';
+
+  MessagingTestOutcome _testOutcome = MessagingTestOutcome.none;
+  String _testBody = '';
+  String _testErrorCode = '';
+  String _testErrorDetail = '';
+
+  // Editable form state, seeded from the saved gateway.
+  bool isActive = true;
+  int maxMessagesPerMinute = 30;
   int dailyCap = 0;
+  ClockTime? quietHoursStart;
+  ClockTime? quietHoursEnd;
 
-  // The last saved values, so an edit can be told apart from a reload.
-  String _savedBaseUrl = '';
-  String _savedUsername = '';
-  int _savedMaxPerMinute = 6;
-  int _savedDailyCap = 0;
+  MessagingServiceStatus? get status => _status;
+  MessagingGateway? get gateway => _status?.gateway;
+  MessagingUsage? get usage => _status?.usage;
+  List<MessagingTemplateInfo> get templates => _status?.templates ?? const [];
 
-  MessagingGateway? get gateway => _gateway;
+  /// In the subscription, by the relay's live word when it gave one: a stale
+  /// local mirror must not offer dials for a service the relay refuses.
+  bool get isEntitled {
+    final status = _status;
+    return status != null && status.entitled && !status.isRefusedByRelay;
+  }
+
+  bool get isTestMode => _status?.testMode ?? false;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get hasLoadError => _hasLoadError;
-  bool get hasGateway => _gateway != null;
-  bool get isConfigured => _gateway?.isConfigured ?? false;
-  bool get isActivated => _gateway?.isActivated ?? false;
-  MessagingTestOutcome get testOutcome => _testOutcome;
-  String get testMessage => _testMessage;
+  bool get hasStatus => _status != null;
   bool get isTesting => _testOutcome == MessagingTestOutcome.sending;
-  bool get isActivating => _isActivating;
-  bool get isBusy => _isLoading || _isSaving || isTesting || _isActivating;
-
-  MessagingConnectOutcome get connectOutcome => _connectOutcome;
-
-  /// The backend's own explanation of the last failure, when it sent one.
-  String get connectDetail => _connectDetail;
-  int get registeredWebhooks => _registeredWebhooks;
+  bool get isBusy => _isLoading || _isSaving || isTesting;
 
   /// Bumped whenever server state replaces the form, so the page knows to
   /// re-seed its text controllers (which the view model cannot touch).
   int get revision => _revision;
 
-  MessagingSetupStage get setupStage {
-    if (!isConfigured) return MessagingSetupStage.unconfigured;
-    return isActivated
-        ? MessagingSetupStage.ready
-        : MessagingSetupStage.configured;
-  }
-
-  /// True while the form holds edits that are not on the server yet. Everything
-  /// that acts on the *saved* gateway — Test-send, activation — has to know,
-  /// because those run against the stored config, not what is on screen.
-  bool get isDirty {
-    final gateway = _gateway;
-    if (gateway == null) {
-      return baseUrl.trim().isNotEmpty ||
-          username.trim().isNotEmpty ||
-          password.isNotEmpty;
+  MessagingServiceState get serviceState {
+    final status = _status;
+    if (status == null || !isEntitled) {
+      return MessagingServiceState.notSubscribed;
     }
-    return normalizeGatewayBaseUrl(baseUrl) != _savedBaseUrl ||
-        username.trim() != _savedUsername ||
-        password.isNotEmpty ||
-        maxMessagesPerMinute != _savedMaxPerMinute ||
-        dailyCap != _savedDailyCap;
+    final gateway = status.gateway;
+    if (gateway == null || status.isNotConfigured) {
+      return MessagingServiceState.notReady;
+    }
+    return gateway.isActive
+        ? MessagingServiceState.active
+        : MessagingServiceState.disabled;
   }
 
-  MessagingBaseUrlIssue get baseUrlIssue {
-    final raw = baseUrl.trim();
-    if (raw.isEmpty) return MessagingBaseUrlIssue.missing;
-    return isValidGatewayBaseUrl(raw)
-        ? MessagingBaseUrlIssue.none
-        : MessagingBaseUrlIssue.invalid;
+  /// The dials are the shop's to set only once SMS is in its subscription.
+  bool get canEdit => isEntitled && gateway != null;
+
+  /// A test send needs the service switched on — as saved, since that is what
+  /// the server sends with.
+  bool get canTest => canEdit && (gateway?.isActive ?? false);
+
+  /// The relay could not be asked for this month's usage; retrying may help.
+  bool get isUsageUnavailable =>
+      isEntitled && usage == null && (_status?.isRelayUnreachable ?? false);
+
+  bool get isDirty {
+    final gateway = this.gateway;
+    if (gateway == null) {
+      return false;
+    }
+    return isActive != gateway.isActive ||
+        maxMessagesPerMinute != gateway.maxMessagesPerMinute ||
+        dailyCap != gateway.dailyCap ||
+        quietHoursStart != gateway.quietHoursStart ||
+        quietHoursEnd != gateway.quietHoursEnd;
   }
 
-  /// What the address will actually be saved as, once normalized — shown back
-  /// to the user when it differs from what they typed, so the correction is
-  /// visible rather than silent.
-  String get normalizedBaseUrl => normalizeGatewayBaseUrl(baseUrl);
-
-  bool get baseUrlWasNormalized {
-    final raw = baseUrl.trim();
-    return raw.isNotEmpty &&
-        baseUrlIssue == MessagingBaseUrlIssue.none &&
-        normalizedBaseUrl != raw;
+  /// Quiet hours are both ends or neither, and not the same minute twice: the
+  /// server refuses half a window and ignores an empty one.
+  bool get hasQuietHoursIssue {
+    final start = quietHoursStart;
+    final end = quietHoursEnd;
+    if (start == null && end == null) {
+      return false;
+    }
+    return start == null || end == null || start == end;
   }
 
-  /// A gateway with no per-minute ceiling. Legal, and how the backend reads 0 —
-  /// but it removes the pacing that keeps a consumer SIM from being flagged as
-  /// a spam sender, so the page says so out loud.
-  bool get isUnpaced => maxMessagesPerMinute <= 0;
+  bool get canSave => canEdit && isDirty && !hasQuietHoursIssue && !isBusy;
 
-  bool get hasStoredPassword => _gateway?.hasPassword ?? false;
+  bool get saveFailed => _saveFailed;
+  String get saveErrorCode => _saveErrorCode;
+  String get saveErrorDetail => _saveErrorDetail;
 
-  bool get canSave =>
-      !isBusy &&
-      isDirty &&
-      baseUrlIssue == MessagingBaseUrlIssue.none &&
-      (hasStoredPassword || password.isNotEmpty);
+  MessagingTestOutcome get testOutcome => _testOutcome;
 
-  /// Can Test-send: a saved, configured gateway with no unsaved edits — the
-  /// Test-send runs on the server against the *persisted* config, so testing a
-  /// dirty form would report on settings the user is no longer looking at.
-  bool get canTest => _gateway != null && isConfigured && !isDirty && !isBusy;
-
-  /// Can register the device webhooks on their own (no pending edits to save
-  /// first). While dirty, the page offers save-then-activate instead.
-  bool get canActivate =>
-      _gateway != null && isConfigured && !isDirty && !isBusy;
-
-  /// The one primary action: save whatever is pending, then activate. Available
-  /// as soon as the form is valid, or whenever an already-saved gateway can be
-  /// (re-)activated.
-  bool get canConnect => canSave || canActivate;
+  /// The text the test send delivered (or queued) — the approved template
+  /// with the shop's name filled in.
+  String get testBody => _testBody;
+  String get testErrorCode => _testErrorCode;
+  String get testErrorDetail => _testErrorDetail;
 
   Future<void> load() async {
     _isLoading = true;
     _hasLoadError = false;
     notifyListeners();
 
-    final result = await _repository.loadGateways();
+    final result = await _repository.loadStatus();
     switch (result) {
-      case Ok<List<MessagingGateway>>(value: final gateways):
-        _applyGateway(_pickDefault(gateways));
-      case Error<List<MessagingGateway>>():
+      case Ok<MessagingServiceStatus>(value: final status):
+        _applyStatus(status);
+      case Error<MessagingServiceStatus>():
         _hasLoadError = true;
     }
 
@@ -174,109 +159,36 @@ class MessagingSettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The page's primary action: persist any pending edits, then run zero-touch
-  /// activation so the phone posts inbound messages and delivery receipts back
-  /// to us. Reports the two failures apart — could not save, versus saved but
-  /// could not reach the device.
-  Future<MessagingConnectOutcome> connect() async {
-    _connectOutcome = MessagingConnectOutcome.running;
-    _connectDetail = '';
-    _registeredWebhooks = 0;
-    notifyListeners();
-
-    if (isDirty || _gateway == null) {
-      final saved = await _save();
-      if (!saved) {
-        _connectOutcome = MessagingConnectOutcome.failed;
-        notifyListeners();
-        return _connectOutcome;
-      }
+  /// A reload never throws away what the user is typing: with edits pending
+  /// only the saved side moves, and the form stays as it is.
+  void _applyStatus(MessagingServiceStatus status) {
+    final keepEdits = isDirty;
+    _status = status;
+    if (!keepEdits) {
+      _seedForm(status.gateway);
     }
-
-    final activation = await _activate();
-    _connectOutcome = activation != null && activation.ok
-        ? MessagingConnectOutcome.connected
-        : MessagingConnectOutcome.savedNotActivated;
-    _registeredWebhooks = activation?.registered ?? 0;
-    notifyListeners();
-    return _connectOutcome;
   }
 
-  Future<GatewayActivation?> _activate() async {
-    final gateway = _gateway;
-    if (gateway == null) return null;
-    _isActivating = true;
-    notifyListeners();
-
-    final result = await _repository.activate(gateway.id);
-    GatewayActivation? activation;
-    switch (result) {
-      case Ok<GatewayActivation>(value: final value):
-        activation = value;
-      case Error<GatewayActivation>(exception: final exception):
-        _connectDetail = backendDetailFor(exception) ?? '';
-    }
-
-    _isActivating = false;
-    notifyListeners();
-    if (activation != null) {
-      // Re-read so the page reflects the server's view of activation rather
-      // than assuming it from a 200.
-      await load();
-    }
-    return activation;
-  }
-
-  MessagingGateway? _pickDefault(List<MessagingGateway> gateways) {
-    if (gateways.isEmpty) return null;
-    return gateways.firstWhere(
-      (gateway) => gateway.isDefault,
-      orElse: () => gateways.first,
-    );
-  }
-
-  void _applyGateway(MessagingGateway? gateway) {
-    _gateway = gateway;
-    baseUrl = gateway?.baseUrl ?? '';
-    username = gateway?.username ?? '';
-    password = '';
-    maxMessagesPerMinute = gateway?.maxMessagesPerMinute ?? 6;
+  void _seedForm(MessagingGateway? gateway) {
+    isActive = gateway?.isActive ?? true;
+    maxMessagesPerMinute = gateway?.maxMessagesPerMinute ?? 30;
     dailyCap = gateway?.dailyCap ?? 0;
-    _savedBaseUrl = baseUrl;
-    _savedUsername = username;
-    _savedMaxPerMinute = maxMessagesPerMinute;
-    _savedDailyCap = dailyCap;
-    _testOutcome = MessagingTestOutcome.none;
-    _testMessage = '';
+    quietHoursStart = gateway?.quietHoursStart;
+    quietHoursEnd = gateway?.quietHoursEnd;
     _revision++;
   }
 
-  /// Any edit invalidates the previous outcome banners — they describe a state
-  /// the form has moved on from.
+  /// An edit retires the last save's failure: it described a form the user
+  /// has moved on from.
   void _onEdited() {
-    if (_connectOutcome != MessagingConnectOutcome.none) {
-      _connectOutcome = MessagingConnectOutcome.none;
-      _connectDetail = '';
-    }
-    if (_testOutcome != MessagingTestOutcome.none) {
-      _testOutcome = MessagingTestOutcome.none;
-      _testMessage = '';
-    }
+    _saveFailed = false;
+    _saveErrorCode = '';
+    _saveErrorDetail = '';
     notifyListeners();
   }
 
-  void setBaseUrl(String value) {
-    baseUrl = value.trim();
-    _onEdited();
-  }
-
-  void setUsername(String value) {
-    username = value;
-    _onEdited();
-  }
-
-  void setPassword(String value) {
-    password = value;
+  void setActive(bool value) {
+    isActive = value;
     _onEdited();
   }
 
@@ -290,40 +202,61 @@ class MessagingSettingsViewModel extends ChangeNotifier {
     _onEdited();
   }
 
-  Future<bool> _save() async {
-    if (!canSave) return false;
+  void setQuietHoursStart(ClockTime? value) {
+    quietHoursStart = value;
+    _onEdited();
+  }
+
+  void setQuietHoursEnd(ClockTime? value) {
+    quietHoursEnd = value;
+    _onEdited();
+  }
+
+  void clearQuietHours() {
+    quietHoursStart = null;
+    quietHoursEnd = null;
+    _onEdited();
+  }
+
+  /// Puts the form back to what is saved — the answer to "discard changes?",
+  /// so the page's next visit does not open on edits nobody kept.
+  void discardEdits() {
+    _seedForm(gateway);
+    _onEdited();
+  }
+
+  Future<bool> save() async {
+    final gateway = this.gateway;
+    if (gateway == null || !canSave) {
+      return false;
+    }
     _isSaving = true;
+    _saveFailed = false;
+    _saveErrorCode = '';
+    _saveErrorDetail = '';
     notifyListeners();
 
-    final existing = _gateway;
-    final draft = MessagingGatewayDraft(
-      name: (existing != null && existing.name.isNotEmpty)
-          ? existing.name
-          : 'هاتف الرسائل',
-      provider: existing?.provider ?? MessagingProvider.smsGate,
-      // Normalized, not raw: the driver appends its own path, so a missing
-      // scheme or a pasted "/message" suffix would fail at send time as an
-      // unreachable device — a network symptom for what is really a typo.
-      baseUrl: normalizeGatewayBaseUrl(baseUrl),
-      username: username.trim(),
-      password: password.isEmpty ? null : password,
-      isDefault: true,
-      isActive: true,
-      maxMessagesPerMinute: maxMessagesPerMinute,
-      dailyCap: dailyCap,
+    final result = await _repository.updateGateway(
+      gateway.id,
+      MessagingGatewayUpdate(
+        isActive: isActive,
+        maxMessagesPerMinute: maxMessagesPerMinute,
+        dailyCap: dailyCap,
+        quietHoursStart: quietHoursStart,
+        quietHoursEnd: quietHoursEnd,
+      ),
     );
-
-    final Result<MessagingGateway> result = existing == null
-        ? await _repository.createGateway(draft)
-        : await _repository.updateGateway(existing.id, draft);
 
     var ok = false;
     switch (result) {
       case Ok<MessagingGateway>(value: final saved):
-        _applyGateway(saved);
+        _status = _status?.withGateway(saved);
+        _seedForm(saved);
         ok = true;
       case Error<MessagingGateway>(exception: final exception):
-        _connectDetail = backendDetailFor(exception) ?? '';
+        _saveFailed = true;
+        _saveErrorCode = apiErrorCode(exception) ?? '';
+        _saveErrorDetail = apiErrorDetail(exception);
     }
 
     _isSaving = false;
@@ -332,90 +265,39 @@ class MessagingSettingsViewModel extends ChangeNotifier {
   }
 
   Future<void> sendTest(String phone) async {
-    final gateway = _gateway;
-    if (gateway == null || phone.trim().isEmpty) return;
+    final gateway = this.gateway;
+    final to = phone.trim();
+    if (gateway == null || to.isEmpty || !canTest || isBusy) {
+      return;
+    }
     _testOutcome = MessagingTestOutcome.sending;
-    _testMessage = '';
+    _testBody = '';
+    _testErrorCode = '';
+    _testErrorDetail = '';
     notifyListeners();
 
-    final result = await _repository.testSend(id: gateway.id, to: phone.trim());
+    final result = await _repository.testSend(id: gateway.id, to: to);
     switch (result) {
-      case Ok<MessagingSendResult>(value: final sendResult):
-        if (sendResult.ok) {
-          _testOutcome = MessagingTestOutcome.success;
-          _testMessage = '';
+      case Ok<MessagingSendResult>(value: final sent):
+        _testBody = sent.body;
+        if (sent.ok) {
+          _testOutcome = MessagingTestOutcome.sent;
+        } else if (sent.isFailure) {
+          _testOutcome = MessagingTestOutcome.failed;
+          _testErrorCode = sent.errorCode;
+          _testErrorDetail = sent.errorDetail;
         } else {
-          _testOutcome = MessagingTestOutcome.failure;
-          _testMessage = sendResult.errorDetail.isNotEmpty
-              ? sendResult.errorDetail
-              : sendResult.errorCode;
+          _testOutcome = MessagingTestOutcome.queued;
         }
       case Error<MessagingSendResult>(exception: final exception):
-        _testOutcome = MessagingTestOutcome.failure;
-        _testMessage = backendDetailFor(exception) ?? '';
+        _testOutcome = MessagingTestOutcome.failed;
+        _testErrorCode = apiErrorCode(exception) ?? '';
+        _testErrorDetail = apiErrorDetail(exception);
     }
     notifyListeners();
 
-    // A send is also the truest health probe we have, so refresh to pick up the
-    // gateway's cleared (or newly set) last_error. Reloading resets the test
-    // banner along with the rest of the form, so the outcome the user just
-    // asked for is carried across and restored.
-    final outcome = _testOutcome;
-    final message = _testMessage;
+    // A send is the truest probe there is: re-read so this month's usage and
+    // the gateway's last error reflect it. The test result above stays put.
     await load();
-    _testOutcome = outcome;
-    _testMessage = message;
-    notifyListeners();
   }
-}
-
-const _defaultGatewayPort = 8080;
-
-/// Paths people paste from the SMS Gate docs, whose example endpoint URL is
-/// `http://<ip>:8080/message`. The driver appends its own path, so leaving one
-/// on the base URL produces `/message/messages` and a 404 at send time.
-const _redundantPaths = {'/message', '/messages'};
-
-/// Turns whatever the user typed into the base URL the driver can actually use:
-/// adds the `http://` scheme and the default `:8080` port, and drops a trailing
-/// slash or a pasted endpoint path.
-///
-/// Kept pure and top-level so it can be tested directly — this is the single
-/// highest-traffic source of "the phone is unreachable" reports that are really
-/// a mistyped address.
-String normalizeGatewayBaseUrl(String raw) {
-  var text = raw.trim();
-  if (text.isEmpty) return '';
-  if (!text.contains('://')) {
-    text = 'http://$text';
-  }
-  final uri = Uri.tryParse(text);
-  if (uri == null || uri.host.isEmpty) return text;
-
-  var path = uri.path;
-  while (path.endsWith('/')) {
-    path = path.substring(0, path.length - 1);
-  }
-  if (_redundantPaths.contains(path.toLowerCase())) {
-    path = '';
-  }
-
-  final port = uri.hasPort ? uri.port : _defaultGatewayPort;
-  final scheme = uri.scheme.isEmpty ? 'http' : uri.scheme.toLowerCase();
-  final host = uri.host.toLowerCase();
-  return '$scheme://$host:$port$path';
-}
-
-/// A LAN host: an IPv4/IPv6 address or a hostname. Anything else — spaces,
-/// Arabic text, a stray sentence — arrives percent-encoded in [Uri.host] rather
-/// than failing to parse, so checking the parse alone would call it valid.
-final _hostPattern = RegExp(r'^[A-Za-z0-9.\-:]+$');
-
-/// Whether [raw] resolves to something the driver can POST to.
-bool isValidGatewayBaseUrl(String raw) {
-  if (raw.trim().isEmpty) return false;
-  final uri = Uri.tryParse(normalizeGatewayBaseUrl(raw));
-  if (uri == null) return false;
-  if (uri.scheme != 'http' && uri.scheme != 'https') return false;
-  return _hostPattern.hasMatch(uri.host);
 }

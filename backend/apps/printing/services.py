@@ -178,7 +178,8 @@ def build_receipt_payload(order):
             "lines__variant__product",
             "lines__variant__option_values__option",
             "lines__modifiers",
-            # A line a provider performs prints what it did beneath it.
+            # A line a provider performs prints what it did, in its own
+            # block at the top of the slip.
             "lines__integration_fulfillment",
         )
         # Paid, balance and payment status each sum payments and returns;
@@ -188,6 +189,8 @@ def build_receipt_payload(order):
     )
     applied_discounts = order_applied_discounts(order)
     unit_labels = receipt_unit_labels()
+    # One read per brand however many of its cards the sale holds.
+    receipt_logos = {}
     return {
         "shop": {
             "name": shop_settings.shop_name,
@@ -196,6 +199,10 @@ def build_receipt_payload(order):
             "currency_symbol": shop_settings.currency_symbol,
             "logo": shop_logo_payload(shop_settings),
             "logo_bytes": shop_logo_base64(shop_settings),
+            # Whether a dialled card (Libyana, Almadar) prints the QR code its
+            # customer scans to dial it in. A shop setting, so every till
+            # prints a card the same way.
+            "print_voucher_qr_codes": shop_settings.print_voucher_qr_codes,
         },
         "order": {
             "id": order.pk,
@@ -229,7 +236,9 @@ def build_receipt_payload(order):
             # only: a 58 mm roll has no room for a full one.
             "cashier": cashier_payload(order),
             "lines": [
-                receipt_line_payload(line, unit_labels=unit_labels)
+                receipt_line_payload(
+                    line, unit_labels=unit_labels, receipt_logos=receipt_logos
+                )
                 for line in order.lines.all()
             ],
         },
@@ -258,7 +267,7 @@ def order_line_modifier_payloads(line):
     ]
 
 
-def receipt_line_payload(line, *, unit_labels=None):
+def receipt_line_payload(line, *, unit_labels=None, receipt_logos=None):
     from apps.sales.tracked_lines import order_line_identifiers
 
     variant = line.variant
@@ -305,12 +314,12 @@ def receipt_line_payload(line, *, unit_labels=None):
         # What a provider did for this line — a card's PIN, a subscriber's
         # new term — so the one receipt the customer takes carries all of it.
         # None for every line no provider performs.
-        "integration": receipt_integration_payload(line),
+        "integration": receipt_integration_payload(line, receipt_logos=receipt_logos),
     }
 
 
-def receipt_integration_payload(line):
-    """What the receipt prints beneath a line a provider performed.
+def receipt_integration_payload(line, *, receipt_logos=None):
+    """What the receipt prints for a line a provider performed.
 
     The receipt is printed after the provider has answered (the till performs
     a sale's top-ups and cards first, then prints), so this is the provider's
@@ -318,9 +327,15 @@ def receipt_integration_payload(line):
     line, term and serial. The client lays it out with its own Arabic labels
     keyed on these stable names, and prints the status honestly when the
     provider did not confirm — a slip that looks complete for a card nobody
-    bought would be worse than no slip.
+    bought would be worse than no slip. ``printed.dial`` is what to dial to
+    redeem a card whose operator redeems by dialling (see
+    :mod:`apps.integrations.redeem`). ``receipt_logo`` is a card's brand logo
+    as receipts print it (base64 PNG), for the head of its slip; ``receipt_logos``
+    shares its reads between one receipt's lines.
     """
     from apps.integrations.fulfillment import fulfillment_kind
+    from apps.integrations.redeem import printed_receipt
+    from apps.integrations.voucher_logos import receipt_logo_for
 
     fulfillment = getattr(line, "integration_fulfillment", None)
     if fulfillment is None:
@@ -333,7 +348,8 @@ def receipt_integration_payload(line):
         "option_label": fulfillment.option_label,
         "months": fulfillment.months,
         "reference": fulfillment.provider_reference,
-        "printed": (fulfillment.provider_receipt or {}).get("printed") or {},
+        "printed": printed_receipt(fulfillment),
+        "receipt_logo": receipt_logo_for(fulfillment, memo=receipt_logos),
     }
 
 

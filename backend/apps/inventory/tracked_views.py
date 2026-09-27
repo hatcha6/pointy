@@ -37,11 +37,14 @@ from .identity import (
 from .models import StockAllocation, StockBatch, StockBatchBalance, StockUnit
 from .tracked_serializers import (
     IdentifyUnitSerializer,
+    LotAllocationSerializer,
     StockAllocationSerializer,
     StockBatchBalanceSerializer,
     StockBatchSerializer,
     StockUnitLookupSerializer,
     StockUnitSerializer,
+    user_sees_lot_cost,
+    user_sees_unit_cost,
 )
 
 
@@ -673,26 +676,30 @@ class StockUnitViewSet(
         «who dropped this price from 1600 to 1450» must never be able to.
         """
         unit = self.get_object()
+        # An allocation's rate is what the unit cost, so it follows the unit's
+        # own cost mask — the key is left out, not blanked.
+        sees_cost = user_sees_unit_cost(request.user)
         rows = []
         for allocation in (
             StockAllocation.objects.filter(unit=unit)
             .select_related("batch", "warehouse")
             .order_by("posting_at", "id")
         ):
-            rows.append(
-                {
-                    "at": allocation.posting_at,
-                    "source": "allocation",
-                    "kind": allocation.direction,
-                    "quantity": str(allocation.quantity),
-                    "rate": str(allocation.rate),
-                    "warehouse": allocation.warehouse_id,
-                    "warehouse_name": allocation.warehouse.name,
-                    "voucher_type": allocation.voucher_type,
-                    "voucher_id": allocation.voucher_id,
-                    "note": allocation.note,
-                }
-            )
+            row = {
+                "at": allocation.posting_at,
+                "source": "allocation",
+                "kind": allocation.direction,
+                "quantity": str(allocation.quantity),
+                "rate": str(allocation.rate),
+                "warehouse": allocation.warehouse_id,
+                "warehouse_name": allocation.warehouse.name,
+                "voucher_type": allocation.voucher_type,
+                "voucher_id": allocation.voucher_id,
+                "note": allocation.note,
+            }
+            if not sees_cost:
+                del row["rate"]
+            rows.append(row)
         for event in unit.events.select_related("actor").order_by("at", "id"):
             rows.append(
                 {
@@ -891,7 +898,7 @@ class StockBatchViewSet(
             .order_by("posting_at", "id")
         )
         return Response(
-            StockAllocationSerializer(
+            LotAllocationSerializer(
                 rows, many=True, context={"request": request}
             ).data
         )
@@ -952,9 +959,15 @@ class StockBatchViewSet(
             batches, many=True, context={"request": request}
         )
         data = list(serializer.data)
-        suggestions = expiry_markdown_suggestions(batches)
-        for row in data:
-            row["markdown"] = suggestions.get(row["id"])
+        # The suggestion is built on the lot's cost: its price is floored at
+        # cost and its saving is cost times quantity, so a floored suggestion
+        # *is* the cost. A reader who may not see a lot's cost gets no
+        # suggestion at all rather than advice to sell below a cost they
+        # cannot be shown.
+        if user_sees_lot_cost(request.user):
+            suggestions = expiry_markdown_suggestions(batches)
+            for row in data:
+                row["markdown"] = suggestions.get(row["id"])
         if page is not None:
             return self.get_paginated_response(data)
         return Response(data)
@@ -970,7 +983,13 @@ class StockBatchViewSet(
         """
         from .recall import recall_report
 
-        return Response(recall_report(self.get_object()))
+        report = recall_report(self.get_object())
+        if not user_sees_lot_cost(request.user):
+            # What each delivery cost the shop. A recall needs where the goods
+            # came from and where they went, never what they were bought at.
+            for row in report["inward"]:
+                row.pop("rate", None)
+        return Response(report)
 
     @action(detail=True, methods=["post"], url_path="notify-affected")
     def notify_affected(self, request, pk=None):

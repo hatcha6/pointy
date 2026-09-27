@@ -19,7 +19,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.catalog.testing import create_product_with_default_variant
 from apps.channels.models import SalesChannel
@@ -121,7 +121,12 @@ class RegisterSessionOrdersQueryScalingTests(TestCase):
         _count, response = self._measure()
         rows = {row["id"]: row for row in response.data["results"]}
         self.assertEqual(len(rows), 3)
+        # Serialized for the endpoint's own reader: what a row says depends on
+        # who reads it — cost and profit are left out for anyone outside the
+        # reporting roles, which is what a row with no reader at all gets.
+        reader = APIRequestFactory().get("/")
+        reader.user = self.user
         for order_id in rows:
             cold = Order.objects.get(pk=order_id)
-            expected = OrderSessionSerializer(cold, context={"request": None}).data
+            expected = OrderSessionSerializer(cold, context={"request": reader}).data
             self.assertEqual(dict(rows[order_id]), dict(expected))

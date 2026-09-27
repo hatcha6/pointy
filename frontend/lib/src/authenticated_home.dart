@@ -539,6 +539,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           catalogRepository: dependencies.catalogRepository,
           operationsRepository: dependencies.operationsRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
+          registerSessionRepository: dependencies.registerSessionRepository,
         ),
       ),
     );
@@ -2370,6 +2371,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           catalogRepository: dependencies.catalogRepository,
           operationsRepository: dependencies.operationsRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
+          registerSessionRepository: dependencies.registerSessionRepository,
         ),
       ),
     );

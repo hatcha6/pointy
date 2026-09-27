@@ -1,4 +1,5 @@
 import '../../features/payments/models/payment_record.dart';
+import '../models/messaging_gateway.dart';
 import '../models/print_job.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
@@ -44,11 +45,17 @@ class SalesApiClient {
     );
   }
 
-  Future<void> sendInvoiceSms(int saleOrderId) async {
+  /// Queues the invoice SMS and returns the queued message — which can
+  /// already be a refusal (a bad number) the screen should name.
+  Future<MessagingSendResult> sendInvoiceSms(int saleOrderId) async {
     final response = await _session.post(
       'crm/orders/$saleOrderId/send-invoice-sms/',
     );
     _session.throwApiException(response, 'Send invoice SMS failed with status');
+    final decoded = _session.decodedBodyOrNull(response);
+    return decoded is Map<String, Object?>
+        ? MessagingSendResult.fromJson(decoded)
+        : const MessagingSendResult(status: 'queued');
   }
 
   /// Customer money-IN payments for the Payments hub, read through the backend

@@ -79,6 +79,13 @@ CONSIGNOR_PAYOUT_SERIES = "consignor_payout"
 #: document two people, and sometimes a court, will refer to by name.
 CONSIGNMENT_INCIDENT_SERIES = "consignment_incident"
 
+#: The number on a repair's intake ticket — and on a production or kitchen
+#: job's. The customer holds the paper and claims the device with it, so a
+#: jump reads as tickets the shop cannot account for: one unclean restart took
+#: a shop's repairs from REP-…-000003 straight to REP-…-000036. One series for
+#: every job type, as when the number was the job's id.
+JOB_SERIES = "job"
+
 #: قيد رصيد — an opening balance or an adjustment written straight onto a
 #: customer's or a supplier's account. One series for both sides: the number
 #: is what an owner quotes when a customer disputes a figure on a statement,

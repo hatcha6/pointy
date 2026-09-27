@@ -75,7 +75,6 @@ void main() {
       expect(draft.subscriberRef, '12345');
       expect(draft.cost, 220);
       expect(draft.price, 245);
-      expect(draft.margin, 25);
       expect(draft.serviceVariant.sku, 'INTEG-HDBOX');
     });
 

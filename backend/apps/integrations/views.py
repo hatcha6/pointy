@@ -20,9 +20,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import HasPointyPermission
+from apps.core.roles import user_has_full_visibility
 
 from . import catalog
 from . import payment_report
+from . import quotes
 from . import recharge
 from .models import IntegrationAccount, IntegrationFulfillment, IntegrationSearch
 from .providers import provider_for
@@ -333,6 +335,17 @@ def _usable_account(provider: str):
     return account, spec, ""
 
 
+def _sealed_quote(driver, account, card_no: str, option):
+    """The sealed cost for an option only the provider can price, else None.
+
+    Checkout prices anything a driver can quote offline by itself and never
+    reads a till's figure for it, so only the rest need to carry one.
+    """
+    if driver.quote(option.code) is not None:
+        return None
+    return quotes.seal_quote(account, card_no, option.code, option.cost)
+
+
 def _service_variant_payload(provider: str) -> dict:
     variant = service_variant_for(provider)
     return {
@@ -488,13 +501,24 @@ class IntegrationCardView(APIView):
         )
         # One query for the shop's whole price list rather than one per option.
         prices = account.option_price_map()
+        # What the provider charges is the owner's figure; a cashier is told
+        # prices, and whether the float covers them.
+        with_cost = user_has_full_visibility(request.user)
         return Response(
             {
                 "ok": True,
                 "card": card_payload(_with_subscriber_balance(lookup.card, profile)),
-                "subscriber": subscriber_payload(subscriber),
+                "subscriber": subscriber_payload(subscriber, with_cost=with_cost),
                 "offers": [
-                    offer_payload(option, account, prices=prices)
+                    offer_payload(
+                        option,
+                        account,
+                        prices=prices,
+                        with_cost=with_cost,
+                        quote=_sealed_quote(
+                            driver, account, resolved_card_no, option
+                        ),
+                    )
                     for option in offers.options
                 ],
                 "offers_error_code": "" if offers.ok else offers.error_code,
@@ -502,7 +526,9 @@ class IntegrationCardView(APIView):
                 # will take any amount in this range — the till must give the
                 # cashier somewhere to type one, or it is less capable than
                 # the portal the shop already uses.
-                "open_amount": open_amount_payload(offers.open_amount, account),
+                "open_amount": open_amount_payload(
+                    offers.open_amount, account, with_cost=with_cost
+                ),
                 # False here, but always present so the till has one shape to
                 # read rather than two.
                 "needs_selection": False,
@@ -624,7 +650,11 @@ class IntegrationHistoryView(APIView):
                 )
             else:
                 result = driver.purchase_history(card_no, limit=limit, offset=offset)
-            entries = [purchase_payload(entry) for entry in result.purchases]
+            with_cost = user_has_full_visibility(request.user)
+            entries = [
+                purchase_payload(entry, with_cost=with_cost)
+                for entry in result.purchases
+            ]
 
         return Response(
             {
@@ -850,7 +880,11 @@ class IntegrationSubscriberView(APIView):
         if fields:
             subscriber.save(update_fields=[*fields, "updated_at"])
 
-        return Response(subscriber_payload(subscriber))
+        return Response(
+            subscriber_payload(
+                subscriber, with_cost=user_has_full_visibility(request.user)
+            )
+        )
 
 
 class IntegrationChargeView(APIView):
@@ -1123,4 +1157,13 @@ class IntegrationVoucherView(APIView):
         account, _spec, error = _usable_account(brand.account.provider)
         if account is None:
             return Response({"ok": False, "error_code": error})
-        return Response({"ok": True, **vouchers.refresh_brand(account, brand)})
+        return Response(
+            {
+                "ok": True,
+                **vouchers.refresh_brand(
+                    account,
+                    brand,
+                    with_cost=user_has_full_visibility(request.user),
+                ),
+            }
+        )

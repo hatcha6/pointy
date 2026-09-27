@@ -30,6 +30,13 @@ from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 
 from .models import PurchaseOrder, Supplier
+from .unit_costs import cost_string
+
+
+def _as_published(field, value):
+    """A saved figure as the API renders it: a unit cost as a rate, money to
+    two places."""
+    return cost_string(value) if field.endswith("unit_cost") else f"{value:.2f}"
 
 
 class LandedCostPackUnitTests(TestCase):
@@ -94,7 +101,7 @@ class LandedCostPackUnitTests(TestCase):
         )
         saved_lines = self._save(payload)
         self.assertEqual(
-            [f"{getattr(line, field):.2f}" for line in saved_lines],
+            [_as_published(field, getattr(line, field)) for line in saved_lines],
             expected,
             f"saved {field}",
         )
@@ -128,9 +135,10 @@ class LandedCostPackUnitTests(TestCase):
         }
         self.assert_both(payload, "allocated_landed_cost", ["50.00", "50.00"])
         # Per PURCHASE unit, which is what both surfaces publish: 50.00 over 5
-        # cartons is 10.00 a carton; 50.00 over 120 pieces is 0.4166… → 0.42.
-        self.assert_both(payload, "landed_unit_cost", ["10.00", "0.42"])
-        self.assert_both(payload, "effective_unit_cost", ["20.00", "0.82"])
+        # cartons is 10.00 a carton; 50.00 over 120 pieces is 0.416667 — a
+        # rate, kept to six places so the 120 pieces carry 50.00 and not 50.40.
+        self.assert_both(payload, "landed_unit_cost", ["10.00", "0.416667"])
+        self.assert_both(payload, "effective_unit_cost", ["20.00", "0.816667"])
 
     def test_effective_cost_per_base_unit_stays_under_the_retail_price(self):
         """The figure the sell-at-a-loss guard and every margin actually read.

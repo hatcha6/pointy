@@ -53,6 +53,16 @@ logger = logging.getLogger(__name__)
 SHOP_LOGO_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
 
 
+def _sms_available():
+    # Imported late: messaging builds on core, never the other way round at
+    # import time. Delivered with the session like ai_available so the app
+    # shows SMS actions only where the subscription and the shop allow them.
+    from apps.messaging.status import sms_available
+
+    return sms_available()
+
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def setup_status_view(request):
@@ -129,6 +139,7 @@ def login_view(request):
             "user": UserSerializer(user).data,
             "csrf_token": get_token(request),
             "ai_available": relay_ai_available(),
+            "sms_available": _sms_available(),
             "allow_cashier_customer_access": (
                 ShopSettings.load().allow_cashier_customer_access
             ),
@@ -187,6 +198,7 @@ def me_view(request):
                 "user": UserSerializer(user).data,
                 "csrf_token": get_token(request),
                 "ai_available": relay_ai_available(),
+                "sms_available": _sms_available(),
             }
         )
     return Response(
@@ -194,6 +206,7 @@ def me_view(request):
             "user": UserSerializer(request.user).data,
             "csrf_token": get_token(request),
             "ai_available": relay_ai_available(),
+            "sms_available": _sms_available(),
             "allow_cashier_customer_access": (
                 ShopSettings.load().allow_cashier_customer_access
             ),
@@ -308,6 +321,14 @@ class PosUserViewSet(viewsets.ModelViewSet):
         password_changed = "password" in serializer.validated_data
         role = serializer.validated_data.get("role")
         user = serializer.save()
+        if password_changed and user.pk == self.request.user.pk:
+            # A new password invalidates every session built on the old one —
+            # including the one making this request, unless it is re-keyed
+            # here, as the self-service change does. Without this an owner who
+            # reset their own password from the users screen was signed out by
+            # their very next request while the app kept showing that screen:
+            # every button answered 401 until they found logout.
+            update_session_auth_hash(self.request, user)
         record_domain_event(
             name="users.user.updated",
             event_type=AnalyticsEvent.EventType.AUDIT,

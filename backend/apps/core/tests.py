@@ -398,6 +398,56 @@ class PosUserManagementTests(TestCase):
         self.cashier = User.objects.create_user(username="cashier", password="pass")
         self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
+    def _signed_in(self, username, password="pass"):
+        """A real session, not ``force_authenticate`` — which skips the
+        session-hash check a password change trips, and so hid this."""
+        client = APIClient()
+        response = client.post(
+            reverse("auth-login"),
+            {"username": username, "password": password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return client
+
+    def test_resetting_your_own_password_keeps_you_signed_in(self):
+        """Field telemetry, 2026-09-26: an owner reset their own password from
+        the users screen, and every request after it answered 401 while the
+        app went on showing that screen."""
+        client = self._signed_in("manager")
+
+        response = client.patch(
+            reverse("pos-user-detail", args=[self.manager.pk]),
+            {"password": "a-new-owner-pass"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(client.get(reverse("auth-me")).status_code, status.HTTP_200_OK)
+        self.manager.refresh_from_db()
+        self.assertTrue(self.manager.check_password("a-new-owner-pass"))
+
+    def test_resetting_someone_elses_password_still_signs_them_out(self):
+        """The reset is for a password someone else may know; their session
+        on another device must not outlive it."""
+        manager_client = self._signed_in("manager")
+        cashier_client = self._signed_in("cashier")
+
+        response = manager_client.patch(
+            reverse("pos-user-detail", args=[self.cashier.pk]),
+            {"password": "a-new-cashier-pass"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            cashier_client.get(reverse("auth-me")).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.assertEqual(
+            manager_client.get(reverse("auth-me")).status_code, status.HTTP_200_OK
+        )
+
     def test_cashier_cannot_manage_users(self):
         client = APIClient()
         client.force_authenticate(user=self.cashier)

@@ -67,10 +67,10 @@ class CompanionStatus {
 /// reads into an ordinary scan.
 ///
 /// The design rule that matters: a companion scan is delivered through
-/// [scans], which POS, purchasing and stock count feed into the *same*
-/// callback their USB wedge scanner already uses. None of those screens knows
-/// a companion exists — which is why pairing a phone makes every scanning
-/// surface in the app work at once, and why a change here cannot break them.
+/// [scans], which `ScanKeyboard` types into the app as key presses, exactly as
+/// a USB wedge scanner types. No screen knows a companion exists — which is
+/// why pairing a phone makes every scanning surface in the app work at once,
+/// any focused field included, and why a change here cannot break them.
 ///
 /// Nothing is held open when no phone is paired: a shop that never uses the
 /// feature pays nothing for it. The stream opens when a device pairs (or while
@@ -125,8 +125,8 @@ class CompanionBridge {
   final StreamController<CompanionEvent> _events =
       StreamController<CompanionEvent>.broadcast();
 
-  /// Barcode and QR payloads, ready to hand to the same callback a USB wedge
-  /// scanner feeds.
+  /// Barcode and QR payloads, ready to be typed the way a USB wedge scanner
+  /// types them (`ScanKeyboard`, above the Navigator).
   Stream<String> get scans => _scans.stream;
 
   /// Everything the phone sent, including photos — for screens that care about

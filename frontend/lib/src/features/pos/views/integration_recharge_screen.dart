@@ -606,10 +606,15 @@ class _IntegrationRechargeScreenState extends State<IntegrationRechargeScreen> {
           children: [
             if (viewModel.exceedsBalance && offer != null) ...[
               PointyInlineMessage.warning(
-                message: l10n.rechargeFloatShort(
-                  formatMoney(viewModel.snapshot!.balance!),
-                  formatMoney(offer.cost),
-                ),
+                // The cost is named only to a reader who may see it.
+                message: offer.cost == null
+                    ? l10n.rechargeFloatMayNotCover(
+                        formatMoney(viewModel.snapshot!.balance!),
+                      )
+                    : l10n.rechargeFloatShort(
+                        formatMoney(viewModel.snapshot!.balance!),
+                        formatMoney(offer.cost!),
+                      ),
                 compact: true,
               ),
               SizedBox(height: spacing.sm),

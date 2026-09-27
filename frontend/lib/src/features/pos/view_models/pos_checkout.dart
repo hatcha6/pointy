@@ -691,7 +691,7 @@ extension PosCheckoutActions on PosViewModel {
   /// The receipt of a sale whose provider lines have just been performed.
   ///
   /// Re-read from the server first, so the document route prints the
-  /// provider's answers beneath their lines exactly as the thermal route
+  /// provider's answers at the top of the receipt exactly as the thermal route
   /// does (that one asks the server to build the receipt, and the server
   /// reads the answers itself). Its own deadline, drawn after the provider
   /// answered — the wait for a provider is not printer time. Never throws.

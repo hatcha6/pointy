@@ -1361,6 +1361,32 @@ void main() {
       await viewModel.addVariantByBarcode('1000001');
       expect(resets, 2);
     });
+
+    test('a scan the counter camera or a paired phone typed resets the search '
+        'field too', () async {
+      // Both type their scans like the counter scanner (ScanKeyboard), so the
+      // code lands in the focused search field just the same and must not be
+      // left there.
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+      var resets = 0;
+      viewModel.searchResetController.addListener(() => resets += 1);
+
+      await viewModel.addVariantByBarcode('1000001', source: 'camera_wedge');
+      expect(resets, 1);
+
+      await viewModel.addVariantByBarcode(
+        '1000001',
+        source: 'companion_camera',
+      );
+      expect(resets, 2);
+    });
   });
 
   group('held-invoice cycling (Page Up / Page Down)', () {

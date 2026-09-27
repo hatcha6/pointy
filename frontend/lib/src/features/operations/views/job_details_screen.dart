@@ -13,6 +13,7 @@ import '../../../data/models/sale_order.dart';
 import '../../../data/models/workflow.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/operations_repository.dart';
+import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
@@ -29,6 +30,7 @@ import 'job_labor_dialog.dart';
 import 'job_stage_move.dart';
 import 'jobs_screen.dart' show formatQuantity, unitLabel;
 import '../../assets/views/assets_ui.dart';
+import '../../register_sessions/views/open_register_session_dialog.dart';
 import 'operations_ui.dart';
 import 'variant_picker_sheet.dart';
 
@@ -41,6 +43,7 @@ class JobDetailsScreen extends StatefulWidget {
     required this.catalogRepository,
     required this.operationsRepository,
     this.shopSettingsRepository,
+    this.registerSessionRepository,
   });
 
   final JobDetailsViewModel viewModel;
@@ -52,6 +55,11 @@ class JobDetailsScreen extends StatefulWidget {
   /// Supplies the shop's usual diagnosis fee to the decline form. Optional:
   /// without it the form simply starts with no fee.
   final ShopSettingsRepository? shopSettingsRepository;
+
+  /// Opens the person's own drawer when an invoice is refused for want of
+  /// one, so the invoice — and the handover waiting on it — can go through.
+  /// Optional: without it the refusal is explained instead.
+  final RegisterSessionRepository? registerSessionRepository;
 
   @override
   State<JobDetailsScreen> createState() => _JobDetailsScreenState();
@@ -122,6 +130,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   catalogRepository: widget.catalogRepository,
                   operationsRepository: widget.operationsRepository,
                   shopSettingsRepository: widget.shopSettingsRepository,
+                  registerSessionRepository: widget.registerSessionRepository,
                 ),
         );
       },
@@ -251,6 +260,7 @@ class _JobDetailsBody extends StatefulWidget {
     required this.catalogRepository,
     required this.operationsRepository,
     this.shopSettingsRepository,
+    this.registerSessionRepository,
   });
 
   final OperationsJob job;
@@ -260,6 +270,7 @@ class _JobDetailsBody extends StatefulWidget {
   final CatalogRepository catalogRepository;
   final OperationsRepository operationsRepository;
   final ShopSettingsRepository? shopSettingsRepository;
+  final RegisterSessionRepository? registerSessionRepository;
 
   @override
   State<_JobDetailsBody> createState() => _JobDetailsBodyState();
@@ -1300,7 +1311,12 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
       return;
     }
     if (action == 'invoice') {
-      await _openInvoiceDialog(widget.job);
+      // The counter asked to hand the device over and was told to invoice
+      // first; once it is invoiced, finish what they asked for rather than
+      // leaving them to find the handover button a second time.
+      if (await _openInvoiceDialog(widget.job) && mounted) {
+        await _continueHandover(nextStage, collector: collector);
+      }
       return;
     }
 
@@ -1326,6 +1342,35 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
         ),
       ),
     );
+  }
+
+  /// The handover that was waiting on the invoice. Still refused when the
+  /// invoice left a balance with no named customer to carry it — then the
+  /// same question comes back, which is the truth.
+  Future<void> _continueHandover(
+    WorkflowStage stage, {
+    required String collector,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final attempt = await widget.viewModel.moveTo(
+      stage,
+      handedOverTo: collector,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (attempt.moved) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.jobStageChangedMessage(stage.name))),
+      );
+      return;
+    }
+    if (attempt.refusal?.kind == JobRefusalKind.settlementRequired) {
+      await _handleUnsettledHandover(stage, collector: collector);
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text(l10n.operationsActionError)));
   }
 
   Future<String?> _askForceReleaseReason() async {
@@ -1459,7 +1504,18 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
       return;
     }
     if (action == 'invoice') {
-      await _openInvoiceDialog(job);
+      if (await _openInvoiceDialog(job) && mounted) {
+        final handed = await widget.viewModel.handBack(handedOverTo: collector);
+        if (mounted) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                handed ? l10n.jobHandedBackMessage : l10n.operationsActionError,
+              ),
+            ),
+          );
+        }
+      }
       return;
     }
     final note = await _askForceReleaseReason();
@@ -1646,23 +1702,27 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     }
   }
 
-  Future<void> _openInvoiceDialog(OperationsJob job) async {
+  /// Whether the job ended up invoiced.
+  Future<bool> _openInvoiceDialog(OperationsJob job) async {
     final draft = await showDialog<JobInvoiceDraft>(
       context: context,
       builder: (dialogContext) => _JobInvoiceDialog(job: job),
     );
     if (draft == null || !mounted) {
-      return;
+      return false;
     }
-    await _submitInvoice(draft);
+    return _submitInvoice(draft);
   }
 
-  Future<void> _submitInvoice(JobInvoiceDraft draft) async {
+  Future<bool> _submitInvoice(
+    JobInvoiceDraft draft, {
+    bool drawerJustOpened = false,
+  }) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     final invoiced = await widget.viewModel.invoice(draft);
     if (!mounted) {
-      return;
+      return false;
     }
     if (invoiced != null) {
       messenger.showSnackBar(
@@ -1670,14 +1730,41 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
           content: Text(l10n.jobInvoiceSuccess(invoiced.orderReceiptNumber)),
         ),
       );
-      return;
+      return true;
+    }
+
+    // The money needs the person's own drawer and none is open — typically a
+    // manager finishing a repair after the cashier closed up. Open it here and
+    // send the same invoice again; the alternative was a job that could be
+    // neither invoiced nor, because of that, handed back.
+    final refusal = widget.viewModel.lastRefusal;
+    // Asked once: a drawer we have just opened that the server still cannot
+    // see is a fault to report, not a question to repeat.
+    if (refusal?.kind == JobRefusalKind.registerSessionRequired &&
+        !drawerJustOpened) {
+      final sessions = widget.registerSessionRepository;
+      if (sessions == null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.paymentDrawerNotAllowedMessage)),
+        );
+        return false;
+      }
+      final opened = await openRegisterSessionForPayment(
+        context,
+        repository: sessions,
+        capabilities: widget.capabilities,
+        shopSettingsRepository: widget.shopSettingsRepository,
+      );
+      if (!opened || !mounted) {
+        return false;
+      }
+      return _submitInvoice(draft, drawerJustOpened: true);
     }
 
     // Billing above what the customer agreed to is a real thing that happens —
     // the part turned out worse than the diagnosis said — so it is a question,
     // not a failure. Asking it here, with both numbers on screen, is the point
     // of the guard: someone has to have said yes.
-    final refusal = widget.viewModel.lastRefusal;
     if (refusal?.kind == JobRefusalKind.overApprovedPrice) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -1703,7 +1790,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
         ),
       );
       if (confirmed == true && mounted) {
-        await _submitInvoice(
+        return _submitInvoice(
           JobInvoiceDraft(
             laborTotal: draft.laborTotal,
             payments: draft.payments,
@@ -1713,9 +1800,10 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
           ),
         );
       }
-      return;
+      return false;
     }
     messenger.showSnackBar(SnackBar(content: Text(l10n.operationsActionError)));
+    return false;
   }
 }
 

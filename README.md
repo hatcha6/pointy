@@ -717,12 +717,30 @@ unexplained 401.
 ### One receipt for the whole sale
 
 A sale with provider lines prints **once, after the providers have answered**,
-with each provider's result beneath its own line: a card's PIN (emphasized) and
-serial, an HD Box card's new term, an LNET line's serial. A line whose charge was
-not confirmed says so and prints no PIN. The same rows are drawn on the thermal
-slip (standard and compact), the A4 PDF and the roll-width PDF
-(`frontend/lib/src/data/services/receipt_integration_rows.dart`). If the printer
+and each provider's result prints as a block of its own at the **top** of the
+receipt, between the shop's masthead and the invoice — never beneath its line,
+where a long basket buried it: a card's PIN (large) and serial, an HD Box card's
+new term, an LNET line's serial. A line whose charge was not confirmed says so
+and prints no PIN. The same slips are drawn on the thermal receipt (standard and
+compact), the A4 PDF (a strip under the title) and the roll-width PDF
+(`frontend/lib/src/data/services/receipt_provider_slips.dart`). If the printer
 fails, the till shows the PINs on screen.
+
+**Dialled cards print their dial string and a QR code.** A card its operator
+redeems by dialling prints the exact string to dial — Almadar `*112*<PIN>#`,
+Libyana a call to `120<PIN>`, each from the operator's own published
+instructions (the table is `backend/apps/integrations/redeem.py`; anything not
+in it prints its PIN alone) — and, while **Shop settings → الإيصالات → طباعة رمز
+QR على كروت الشحن** is on (the default, shop-wide), a QR code the customer's
+phone camera turns into that call: a `tel:` link with `#` escaped as `%23`,
+without which the phone drops it. The code is built for worn thermal heads:
+error correction H, the fewest-bits segment split (a version smaller, so bigger
+modules), and on ESC/POS a `GS v 0` raster of whole-dot modules up to 10 dots
+(1.25 mm) with the quiet zone drawn in, rather than the printer's own QR command;
+the PDFs pin the same modules to the 203-dpi dot grid.
+`frontend/test/shared/printing/print_qr_code_test.dart` decodes the printer's
+exact dots back — clean, and with dead heating elements, faded dots, feed
+stutter and an unprinted blot.
 
 ### Screenshots without a browser
 
@@ -746,6 +764,14 @@ the rule that a 1-D read needs two agreeing looks before it reaches a cart —
 runs in native code in `frontend/packages/pointy_camera_wedge`; Dart only
 receives finished scans. Android, iOS and macOS use `mobile_scanner` instead.
 
+- **It types what it reads**, key by key and then Enter, exactly like a USB
+  scanner (`ScanKeyboard` + `KeystrokeWedge` in `frontend/lib/src/shared/barcode/`).
+  So a read lands wherever a scanner's would: the till, the payment sheet
+  matching a terminal slip, the card-receipt dialog, purchasing, stock count,
+  any focused field. A paired phone (the companion camera) types the same way.
+  Unlike a USB scanner it types the exact characters whatever the keyboard
+  layout, and it types nothing while another program has the keyboard or
+  while Ctrl/Alt is held down.
 - **F8** anywhere in the app shows what the camera sees, whether it is
   reading, and the last thing it read (a small floating panel; F8 again
   closes it). Device settings shows the same picture for aiming.

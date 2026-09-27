@@ -65,6 +65,7 @@ from .stock_count_serializers import (
     StockCountSerializer,
     StockCountStartSerializer,
 )
+from .tracked_serializers import user_sees_unit_cost
 
 
 def _selling_warehouse_id(request):
@@ -637,6 +638,10 @@ class StockCountViewSet(
         """The four findings a scanned count produces, by name (§6.6)."""
         stock_count = self.get_object()
         found = stock_count_tracking.reconcile_scans(stock_count)
+        # A missing unit's value is what it cost, so it follows the unit's own
+        # cost mask: a counter who may not see that is told which units are
+        # gone, not what they were worth.
+        sees_cost = user_sees_unit_cost(request.user)
         return Response(
             {
                 "expected": found["expected"],
@@ -647,7 +652,7 @@ class StockCountViewSet(
                         "code": unit.code,
                         "variant": unit.variant_id,
                         "variant_name": unit.variant.full_name,
-                        "value": str(unit.stock_value),
+                        **({"value": str(unit.stock_value)} if sees_cost else {}),
                     }
                     for unit in found["missing"]
                 ],

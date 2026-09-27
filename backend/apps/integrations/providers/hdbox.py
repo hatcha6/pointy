@@ -100,6 +100,23 @@ _MASKED_RE = re.compile(r"^-+$")
 _MONTH_OPTION_RE = re.compile(
     r'<option\s+value="(\d+)"\s+price="([\d.]+)"\s*>([^<]*)<', re.I
 )
+# The agency's price at the end of an option's wording — "12 month 220.00$",
+# "radwan(5.00$)". A money figure only: it needs a decimal point or HD Box's
+# dollar sign (which is LYD, and a lie), so "Package 3" keeps its 3.
+_LABEL_PRICE_RE = re.compile(
+    r"\s*\(?\s*(?:\$\s*\d[\d,]*(?:\.\d+)?|\d[\d,]*\.\d+\s*\$?|\d[\d,]*\s*\$)"
+    r"\s*\)?\s*$"
+)
+
+
+def label_without_price(label: str) -> str:
+    """HD Box's wording for an option, less the agency price it ends with.
+
+    That price is what the float pays — the shop's cost — and the label goes
+    wherever the sale goes: the till, the invoice, the shift report. The
+    months are the option's own field, so nothing is lost.
+    """
+    return _LABEL_PRICE_RE.sub("", label or "").strip()
 # The renew form also carries a package <select name="pid">, and it is NOT
 # read. HD Box hides it (`style="display:none"`) and the agency confirms it is
 # not something they do — so offering it at a till would be a one-tap way for
@@ -143,6 +160,9 @@ class HdBoxProvider(IntegrationProvider):
         #: this session turns out to be dead — a session we just verified by
         #: using it to log in has nothing to retry.
         self._session_from_cache = False
+
+    def option_label(self, label: str) -> str:
+        return label_without_price(label)
 
     # --- plumbing ----------------------------------------------------------
     @property
@@ -382,7 +402,7 @@ class HdBoxProvider(IntegrationProvider):
                 RechargeOption(
                     code=f"{RECHARGE_RENEW}:{months}",
                     kind=RECHARGE_RENEW,
-                    label=label.strip(),
+                    label=label_without_price(label),
                     cost=cost,
                     months=_as_int(months) or 0,
                 )

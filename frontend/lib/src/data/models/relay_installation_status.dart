@@ -1,6 +1,6 @@
 /// Snapshot of the shop's relay installation as reported by
 /// `GET /api/relay/installation/` — the installation ID the owner sends to
-/// support plus the entitlement flags (remote access + AI) and the shared
+/// support plus the entitlement flags (remote access, AI, SMS) and the shared
 /// subscription expiry. Read-only: the relay control server owns this state and
 /// the backend mirrors it.
 class RelayInstallationStatus {
@@ -14,6 +14,7 @@ class RelayInstallationStatus {
     required this.relayEnabled,
     required this.subscriptionActive,
     required this.aiEnabled,
+    this.smsEnabled = false,
     this.subscriptionEndsAt,
     this.lastSyncedAt,
     this.connectorLastSeenAt,
@@ -42,6 +43,10 @@ class RelayInstallationStatus {
   /// AI-assistant feature flag on the installation.
   final bool aiEnabled;
 
+  /// SMS feature flag on the installation (messages go out through the relay
+  /// on the company's provider account, so the subscription carries them).
+  final bool smsEnabled;
+
   /// When the shared subscription lapses. Null means no expiry (perpetual).
   final DateTime? subscriptionEndsAt;
 
@@ -63,6 +68,11 @@ class RelayInstallationStatus {
   /// subscription. The 5h/weekly usage call is only meaningful when this holds.
   bool get aiAvailable =>
       aiEnabled && subscriptionActive && !subscriptionExpired;
+
+  /// The same rule for SMS: flag + active, unexpired subscription. Says what
+  /// the subscription includes; the shop can still have switched SMS off.
+  bool get smsAvailable =>
+      smsEnabled && subscriptionActive && !subscriptionExpired;
 
   /// Whole days until the subscription lapses (negative once expired). Null when
   /// there is no end date.
@@ -86,6 +96,7 @@ class RelayInstallationStatus {
       relayEnabled: _bool(json['relay_enabled']),
       subscriptionActive: _bool(json['subscription_active']),
       aiEnabled: _bool(json['ai_enabled']),
+      smsEnabled: _bool(json['sms_enabled']),
       subscriptionEndsAt: _dateTime(json['subscription_ends_at']),
       lastSyncedAt: _dateTime(json['last_synced_at']),
       connectorLastSeenAt: _dateTime(json['connector_last_seen_at']),

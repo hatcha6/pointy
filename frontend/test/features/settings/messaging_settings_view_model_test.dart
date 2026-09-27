@@ -1,263 +1,440 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/clock_time.dart';
 import 'package:pointy_frontend/src/data/models/messaging_gateway.dart';
+import 'package:pointy_frontend/src/data/models/messaging_status.dart';
 import 'package:pointy_frontend/src/data/repositories/messaging_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/settings/view_models/messaging_settings_view_model.dart';
 
+MessagingGateway _gateway({
+  bool isActive = true,
+  int perMinute = 30,
+  int dailyCap = 0,
+  ClockTime? start = const ClockTime(22, 0),
+  ClockTime? end = const ClockTime(8, 0),
+}) {
+  return MessagingGateway(
+    id: 7,
+    name: 'رسائل دفتر',
+    isDefault: true,
+    isActive: isActive,
+    maxMessagesPerMinute: perMinute,
+    dailyCap: dailyCap,
+    quietHoursStart: start,
+    quietHoursEnd: end,
+  );
+}
+
+MessagingServiceStatus _status({
+  bool entitled = true,
+  MessagingGateway? gateway,
+  MessagingUsage? usage = const MessagingUsage(
+    used: 12,
+    limit: 500,
+    remaining: 488,
+  ),
+  String usageError = '',
+}) {
+  final resolved = gateway ?? _gateway();
+  return MessagingServiceStatus(
+    entitled: entitled,
+    available: entitled && resolved.isActive,
+    gateway: resolved,
+    usage: usage,
+    usageError: usageError,
+  );
+}
+
+PosApiException _refusal(Map<String, Object?> body, {int status = 400}) {
+  return PosApiException(
+    message: 'refused $status',
+    statusCode: status,
+    responseBody: jsonEncode(body),
+  );
+}
+
 void main() {
-  MessagingGateway gateway({
-    bool isActivated = false,
-    String baseUrl = 'http://192.168.1.50:8080',
-  }) {
-    return MessagingGateway(
-      id: 1,
-      name: 'هاتف الرسائل',
-      provider: MessagingProvider.smsGate,
-      baseUrl: baseUrl,
-      username: 'pointy',
-      isDefault: true,
-      hasPassword: true,
-      isActivated: isActivated,
+  group('where the shop stands', () {
+    test('without SMS in the subscription there is nothing to edit', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(
+          status: _status(
+            entitled: false,
+            usage: null,
+            usageError: 'not_entitled',
+          ),
+        ),
+      );
+      await vm.load();
+
+      expect(vm.serviceState, MessagingServiceState.notSubscribed);
+      expect(vm.canEdit, isFalse);
+      expect(vm.canTest, isFalse);
+      // "Not entitled" is the story; a usage-unavailable banner would be noise.
+      expect(vm.isUsageUnavailable, isFalse);
+    });
+
+    test('the relay refusing outranks a stale local entitlement', () async {
+      // Mirrored "entitled", but the relay said 402 when asked for usage: the
+      // sends would be refused the same way, so the page must not say "on".
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(status: _status(usage: null, usageError: 'not_entitled')),
+      );
+      await vm.load();
+
+      expect(vm.serviceState, MessagingServiceState.notSubscribed);
+      expect(vm.canEdit, isFalse);
+      expect(vm.canTest, isFalse);
+    });
+
+    test('a working service seeds the form from the saved gateway', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(status: _status(gateway: _gateway(dailyCap: 200))),
+      );
+      await vm.load();
+
+      expect(vm.serviceState, MessagingServiceState.active);
+      expect(vm.canEdit, isTrue);
+      expect(vm.canTest, isTrue);
+      expect(vm.isActive, isTrue);
+      expect(vm.maxMessagesPerMinute, 30);
+      expect(vm.dailyCap, 200);
+      expect(vm.quietHoursStart, const ClockTime(22, 0));
+      expect(vm.quietHoursEnd, const ClockTime(8, 0));
+      expect(vm.usage?.used, 12);
+    });
+
+    test('switched off: editable, but no test send', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(status: _status(gateway: _gateway(isActive: false))),
+      );
+      await vm.load();
+
+      expect(vm.serviceState, MessagingServiceState.disabled);
+      expect(vm.canEdit, isTrue);
+      expect(vm.canTest, isFalse);
+    });
+
+    test('a relay without the provider set up reads as not ready', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(status: _status(usage: null, usageError: 'not_configured')),
+      );
+      await vm.load();
+
+      expect(vm.serviceState, MessagingServiceState.notReady);
+    });
+
+    test(
+      'an unreachable relay leaves usage unknown, not the service',
+      () async {
+        final vm = MessagingSettingsViewModel(
+          _FakeRepo(
+            status: _status(usage: null, usageError: 'relay_unreachable'),
+          ),
+        );
+        await vm.load();
+
+        expect(vm.serviceState, MessagingServiceState.active);
+        expect(vm.isUsageUnavailable, isTrue);
+      },
     );
-  }
 
-  group('normalizeGatewayBaseUrl', () {
-    test('adds the scheme and the default SMS Gate port', () {
-      expect(
-        normalizeGatewayBaseUrl('192.168.1.50'),
-        'http://192.168.1.50:8080',
+    test('a failed load says so', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(statusResult: Error(Exception('offline'))),
       );
-    });
+      await vm.load();
 
-    test('keeps an explicit port and scheme', () {
-      expect(
-        normalizeGatewayBaseUrl('https://phone.local:9000'),
-        'https://phone.local:9000',
-      );
-    });
-
-    test('drops the endpoint path pasted from the SMS Gate docs', () {
-      // The docs' example URL is http://<ip>:8080/message, and the driver
-      // appends its own path — left alone this sends to /message/messages.
-      expect(
-        normalizeGatewayBaseUrl('http://192.168.1.50:8080/message'),
-        'http://192.168.1.50:8080',
-      );
-      expect(
-        normalizeGatewayBaseUrl('http://192.168.1.50:8080/messages/'),
-        'http://192.168.1.50:8080',
-      );
-    });
-
-    test('leaves a genuine sub-path in place', () {
-      expect(
-        normalizeGatewayBaseUrl('http://192.168.1.50:8080/gate'),
-        'http://192.168.1.50:8080/gate',
-      );
-    });
-
-    test('rejects input that is not an address', () {
-      expect(isValidGatewayBaseUrl('not a url'), isFalse);
-      expect(isValidGatewayBaseUrl('192.168.1.50'), isTrue);
+      expect(vm.hasLoadError, isTrue);
+      expect(vm.hasStatus, isFalse);
     });
   });
 
-  group('MessagingSettingsViewModel dirty state', () {
-    test('a freshly loaded gateway is not dirty', () async {
-      final vm = MessagingSettingsViewModel(_FakeRepo(stored: gateway()));
+  group('saving the dials', () {
+    test('a fresh load is clean and has nothing to save', () async {
+      final vm = MessagingSettingsViewModel(_FakeRepo(status: _status()));
       await vm.load();
 
       expect(vm.isDirty, isFalse);
-      expect(vm.canTest, isTrue);
       expect(vm.canSave, isFalse);
     });
 
-    test('an edit blocks Test-send, which runs on the saved config', () async {
-      final vm = MessagingSettingsViewModel(_FakeRepo(stored: gateway()));
-      await vm.load();
-
-      vm.setBaseUrl('192.168.1.77');
-
-      expect(vm.isDirty, isTrue);
-      expect(vm.canTest, isFalse);
-      expect(vm.canSave, isTrue);
-    });
-
-    test('a stored address that needs normalizing reads as dirty', () async {
-      final vm = MessagingSettingsViewModel(
-        _FakeRepo(stored: gateway(baseUrl: 'http://192.168.1.50:8080/message')),
-      );
-      await vm.load();
-
-      expect(vm.isDirty, isTrue);
-    });
-  });
-
-  group('MessagingSettingsViewModel.connect', () {
-    test('saves the normalized address, then activates', () async {
-      final repo = _FakeRepo();
+    test('one PATCH carries every editable field', () async {
+      final repo = _FakeRepo(status: _status());
       final vm = MessagingSettingsViewModel(repo);
       await vm.load();
 
-      vm.setBaseUrl('192.168.1.50');
-      vm.setUsername('pointy');
-      vm.setPassword('secret');
-      final outcome = await vm.connect();
+      vm.setActive(false);
+      vm.setMaxMessagesPerMinute(12);
+      vm.setDailyCap(150);
+      vm.setQuietHoursStart(const ClockTime(21, 30));
+      expect(vm.isDirty, isTrue);
+      expect(vm.canSave, isTrue);
 
-      expect(outcome, MessagingConnectOutcome.connected);
-      expect(repo.savedDraft?.baseUrl, 'http://192.168.1.50:8080');
-      expect(repo.activatedId, 1);
-      expect(vm.registeredWebhooks, 4);
+      final revision = vm.revision;
+      expect(await vm.save(), isTrue);
+
+      expect(repo.updatedId, 7);
+      expect(repo.update?.toJson(), {
+        'is_active': false,
+        'max_messages_per_minute': 12,
+        'daily_cap': 150,
+        'quiet_hours_start': '21:30:00',
+        'quiet_hours_end': '08:00:00',
+      });
+      expect(vm.isDirty, isFalse);
+      expect(vm.revision, greaterThan(revision));
+      // The switch is the shop's: saving it off makes SMS unavailable here.
+      expect(vm.status?.available, isFalse);
+      expect(vm.serviceState, MessagingServiceState.disabled);
+    });
+
+    test('putting a value back makes the form clean again', () async {
+      final vm = MessagingSettingsViewModel(_FakeRepo(status: _status()));
+      await vm.load();
+
+      vm.setDailyCap(10);
+      expect(vm.isDirty, isTrue);
+      vm.setDailyCap(0);
       expect(vm.isDirty, isFalse);
     });
 
-    test('reports a save that landed without reaching the device', () async {
+    test('half a quiet-hours window cannot be saved', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(status: _status(gateway: _gateway(start: null, end: null))),
+      );
+      await vm.load();
+
+      vm.setQuietHoursStart(const ClockTime(22, 0));
+      expect(vm.hasQuietHoursIssue, isTrue);
+      expect(vm.canSave, isFalse);
+
+      vm.setQuietHoursEnd(const ClockTime(22, 0));
+      expect(vm.hasQuietHoursIssue, isTrue, reason: 'an empty window');
+
+      vm.setQuietHoursEnd(const ClockTime(7, 0));
+      expect(vm.hasQuietHoursIssue, isFalse);
+      expect(vm.canSave, isTrue);
+    });
+
+    test('clearing the window sends both ends as null', () async {
+      final repo = _FakeRepo(status: _status());
+      final vm = MessagingSettingsViewModel(repo);
+      await vm.load();
+
+      vm.clearQuietHours();
+      expect(await vm.save(), isTrue);
+
+      final payload = repo.update!.toJson();
+      expect(payload.containsKey('quiet_hours_start'), isTrue);
+      expect(payload['quiet_hours_start'], isNull);
+      expect(payload['quiet_hours_end'], isNull);
+    });
+
+    test('a refused save keeps the edits and names the reason', () async {
       final repo = _FakeRepo(
-        activation: const Ok(
-          GatewayActivation(ok: false, registered: 0, total: 4),
+        status: _status(),
+        updateResult: Error(
+          _refusal({
+            'quiet_hours_end': ['حدّد بداية ونهاية أوقات الهدوء معًا.'],
+          }),
         ),
       );
       final vm = MessagingSettingsViewModel(repo);
       await vm.load();
 
-      vm.setBaseUrl('192.168.1.50');
-      vm.setPassword('secret');
+      vm.setDailyCap(40);
+      expect(await vm.save(), isFalse);
 
-      expect(await vm.connect(), MessagingConnectOutcome.savedNotActivated);
-      expect(repo.savedDraft, isNotNull);
+      expect(vm.saveFailed, isTrue);
+      expect(vm.saveErrorDetail, contains('أوقات الهدوء'));
+      expect(vm.isDirty, isTrue);
+      expect(vm.dailyCap, 40);
+
+      // Editing again retires the failure: it described another form.
+      vm.setDailyCap(41);
+      expect(vm.saveFailed, isFalse);
     });
 
-    test('surfaces the backend reason when the save itself fails', () async {
-      final repo = _FakeRepo(createResult: Error(Exception('nope')));
-      final vm = MessagingSettingsViewModel(repo);
+    test('a reload while editing keeps what is being typed', () async {
+      final vm = MessagingSettingsViewModel(_FakeRepo(status: _status()));
       await vm.load();
 
-      vm.setBaseUrl('192.168.1.50');
-      vm.setPassword('secret');
+      vm.setMaxMessagesPerMinute(5);
+      await vm.load();
 
-      expect(await vm.connect(), MessagingConnectOutcome.failed);
-      expect(repo.activatedId, isNull);
+      expect(vm.maxMessagesPerMinute, 5);
+      expect(vm.isDirty, isTrue);
     });
 
-    test('an already-saved gateway activates without re-saving', () async {
-      final repo = _FakeRepo(stored: gateway());
-      final vm = MessagingSettingsViewModel(repo);
+    test('discarding puts the saved values back', () async {
+      final vm = MessagingSettingsViewModel(_FakeRepo(status: _status()));
       await vm.load();
 
-      expect(await vm.connect(), MessagingConnectOutcome.connected);
-      expect(repo.savedDraft, isNull);
-      expect(repo.activatedId, 1);
+      vm.setActive(false);
+      vm.clearQuietHours();
+      vm.discardEdits();
+
+      expect(vm.isDirty, isFalse);
+      expect(vm.isActive, isTrue);
+      expect(vm.quietHoursStart, const ClockTime(22, 0));
     });
   });
 
-  group('MessagingSettingsViewModel setup stage', () {
-    test('separates "can send" from "fully connected"', () async {
+  group('test send', () {
+    test('success shows the text that went out, then re-reads', () async {
+      final repo = _FakeRepo(
+        status: _status(),
+        testResult: const Ok(
+          MessagingSendResult(
+            status: 'sent',
+            body: 'رسالة تجريبية من محل النور عبر دفتر',
+          ),
+        ),
+      );
+      final vm = MessagingSettingsViewModel(repo);
+      await vm.load();
+      final loadsBefore = repo.loads;
+
+      await vm.sendTest(' 0912345678 ');
+
+      expect(repo.testedTo, '0912345678');
+      expect(vm.testOutcome, MessagingTestOutcome.sent);
+      expect(vm.testBody, contains('محل النور'));
+      expect(repo.loads, loadsBefore + 1);
+    });
+
+    test('a failed message carries its code and detail', () async {
       final vm = MessagingSettingsViewModel(
-        _FakeRepo(stored: gateway(isActivated: false)),
+        _FakeRepo(
+          status: _status(),
+          testResult: const Ok(
+            MessagingSendResult(
+              status: 'failed',
+              errorCode: 'invalid_phone',
+              errorDetail: 'LY phones must be made of 9 numbers',
+            ),
+          ),
+        ),
       );
       await vm.load();
-      expect(vm.setupStage, MessagingSetupStage.configured);
 
-      final ready = MessagingSettingsViewModel(
-        _FakeRepo(stored: gateway(isActivated: true)),
-      );
-      await ready.load();
-      expect(ready.setupStage, MessagingSetupStage.ready);
+      await vm.sendTest('12345');
+
+      expect(vm.testOutcome, MessagingTestOutcome.failed);
+      expect(vm.testErrorCode, 'invalid_phone');
+      expect(vm.testErrorDetail, contains('9 numbers'));
     });
 
-    test('an empty shop starts unconfigured', () async {
-      final vm = MessagingSettingsViewModel(_FakeRepo());
+    test('a refused send reads the code from the response', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(
+          status: _status(),
+          testResult: Error(
+            _refusal({
+              'detail': 'خدمة الرسائل موقوفة من إعدادات الرسائل في المحل.',
+              'code': 'service_disabled',
+            }),
+          ),
+        ),
+      );
       await vm.load();
 
-      expect(vm.setupStage, MessagingSetupStage.unconfigured);
-      expect(vm.canConnect, isFalse);
+      await vm.sendTest('0912345678');
+
+      expect(vm.testOutcome, MessagingTestOutcome.failed);
+      expect(vm.testErrorCode, 'service_disabled');
     });
-  });
 
-  test('a zeroed per-minute rate is flagged as unpaced', () async {
-    final vm = MessagingSettingsViewModel(_FakeRepo(stored: gateway()));
-    await vm.load();
+    test('a queued message is on its way, not failed', () async {
+      final vm = MessagingSettingsViewModel(
+        _FakeRepo(
+          status: _status(),
+          testResult: const Ok(MessagingSendResult(status: 'queued')),
+        ),
+      );
+      await vm.load();
 
-    expect(vm.isUnpaced, isFalse);
-    vm.setMaxMessagesPerMinute(0);
-    expect(vm.isUnpaced, isTrue);
+      await vm.sendTest('0912345678');
+
+      expect(vm.testOutcome, MessagingTestOutcome.queued);
+    });
+
+    test('nothing is sent while the service is switched off', () async {
+      final repo = _FakeRepo(
+        status: _status(gateway: _gateway(isActive: false)),
+      );
+      final vm = MessagingSettingsViewModel(repo);
+      await vm.load();
+
+      await vm.sendTest('0912345678');
+
+      expect(repo.testedTo, isNull);
+      expect(vm.testOutcome, MessagingTestOutcome.none);
+    });
   });
 }
 
 class _FakeRepo extends MessagingRepository {
   _FakeRepo({
-    this.stored,
-    this.createResult,
-    Result<GatewayActivation>? activation,
-  }) : activation =
-           activation ??
-           const Ok(GatewayActivation(ok: true, registered: 4, total: 4)),
+    MessagingServiceStatus? status,
+    this.statusResult,
+    this.updateResult,
+    Result<MessagingSendResult>? testResult,
+  }) : _status = status,
+       testResult = testResult ?? const Ok(MessagingSendResult(status: 'sent')),
        super(PosApiService());
 
-  MessagingGateway? stored;
-  final Result<MessagingGateway>? createResult;
-  final Result<GatewayActivation> activation;
+  MessagingServiceStatus? _status;
+  final Result<MessagingServiceStatus>? statusResult;
+  final Result<MessagingGateway>? updateResult;
+  final Result<MessagingSendResult> testResult;
 
-  MessagingGatewayDraft? savedDraft;
-  int? activatedId;
-
-  @override
-  Future<Result<List<MessagingGateway>>> loadGateways() async {
-    final gateway = stored;
-    return Ok(gateway == null ? const [] : [gateway]);
-  }
+  int loads = 0;
+  int? updatedId;
+  MessagingGatewayUpdate? update;
+  String? testedTo;
 
   @override
-  Future<Result<MessagingGateway>> createGateway(
-    MessagingGatewayDraft draft,
-  ) async {
-    savedDraft = draft;
-    final failure = createResult;
-    if (failure != null) {
-      return failure;
-    }
-    stored = MessagingGateway(
-      id: 1,
-      name: draft.name,
-      provider: draft.provider,
-      baseUrl: draft.baseUrl,
-      username: draft.username,
-      isDefault: true,
-      hasPassword: true,
-      maxMessagesPerMinute: draft.maxMessagesPerMinute,
-      dailyCap: draft.dailyCap,
-    );
-    return Ok(stored!);
+  Future<Result<MessagingServiceStatus>> loadStatus() async {
+    loads++;
+    return statusResult ?? Ok(_status!);
   }
 
   @override
   Future<Result<MessagingGateway>> updateGateway(
     int id,
-    MessagingGatewayDraft draft,
-  ) => createGateway(draft);
+    MessagingGatewayUpdate update,
+  ) async {
+    updatedId = id;
+    this.update = update;
+    final refusal = updateResult;
+    if (refusal != null) {
+      return refusal;
+    }
+    final saved = MessagingGateway(
+      id: id,
+      name: 'رسائل دفتر',
+      isDefault: true,
+      isActive: update.isActive,
+      maxMessagesPerMinute: update.maxMessagesPerMinute,
+      dailyCap: update.dailyCap,
+      quietHoursStart: update.quietHoursStart,
+      quietHoursEnd: update.quietHoursEnd,
+    );
+    _status = _status?.withGateway(saved);
+    return Ok(saved);
+  }
 
   @override
-  Future<Result<GatewayActivation>> activate(int id) async {
-    activatedId = id;
-    final result = activation;
-    if (result is Ok<GatewayActivation> && result.value.ok) {
-      final current = stored;
-      if (current != null) {
-        stored = MessagingGateway(
-          id: current.id,
-          name: current.name,
-          provider: current.provider,
-          baseUrl: current.baseUrl,
-          username: current.username,
-          isDefault: true,
-          hasPassword: true,
-          isActivated: true,
-          maxMessagesPerMinute: current.maxMessagesPerMinute,
-          dailyCap: current.dailyCap,
-        );
-      }
-    }
-    return result;
+  Future<Result<MessagingSendResult>> testSend({
+    required int id,
+    required String to,
+  }) async {
+    testedTo = to;
+    return testResult;
   }
 }

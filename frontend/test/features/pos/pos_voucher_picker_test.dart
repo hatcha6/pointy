@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
+import 'package:pointy_frontend/src/data/models/attachment_summary.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
 import 'package:pointy_frontend/src/data/models/voucher_availability.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_voucher_picker_sheet.dart';
+import 'package:pointy_frontend/src/shared/catalog/catalog.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
 /// Qareeb's cards are products in the till's catalog: a brand is a product,
@@ -42,8 +44,9 @@ void main() {
 
   Future<ProductVariant?> pump(
     WidgetTester tester,
-    Future<VoucherAvailability?> Function() check,
-  ) async {
+    Future<VoucherAvailability?> Function() check, {
+    Product product = libyana,
+  }) async {
     ProductVariant? picked;
     await tester.pumpWidget(
       MaterialApp(
@@ -58,7 +61,7 @@ void main() {
         theme: PointyTheme.light(),
         home: Scaffold(
           body: PosVoucherPicker(
-            product: libyana,
+            product: product,
             variants: [ten, five, hundred],
             checkAvailability: check,
             onPicked: (variant) => picked = variant,
@@ -88,6 +91,41 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+
+  testWidgets('wears the logo the provider gave the brand', (tester) async {
+    const withLogo = Product(
+      id: 30,
+      name: 'ليبيانا',
+      quantityOnHand: 0,
+      isService: true,
+      isSystem: true,
+      systemKind: ProductSystemKind.voucher,
+      primaryImage: AttachmentSummary(
+        id: 7,
+        originalFilename: '7671138237167963211.png',
+        contentType: 'image/png',
+        contentUrl: 'http://127.0.0.1:8000/api/attachments/7/content/?token=t',
+        downloadUrl: 'http://127.0.0.1:8000/api/attachments/7/download/',
+        isPrimary: true,
+      ),
+    );
+    await pump(tester, () async => null, product: withLogo);
+    await tester.pump();
+
+    final mark = tester.widget<PointyProductImageFrame>(
+      find.byType(PointyProductImageFrame),
+    );
+    expect(mark.imageUrl, withLogo.primaryImage!.contentUrl);
+    expect(find.byIcon(Icons.confirmation_number_outlined), findsNothing);
+  });
+
+  testWidgets('a brand without a logo keeps the card icon', (tester) async {
+    await pump(tester, () async => null);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.confirmation_number_outlined), findsOneWidget);
+    expect(find.byType(PointyProductImageFrame), findsNothing);
+  });
 
   testWidgets('a card the provider no longer has disappears', (tester) async {
     await pump(

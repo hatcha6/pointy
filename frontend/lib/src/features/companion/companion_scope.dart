@@ -6,12 +6,11 @@ import 'companion_bridge.dart';
 /// Makes the companion camera reachable from any screen without threading it
 /// through constructors.
 ///
-/// Phone scanning is ambient — it belongs to every scanning surface at once —
-/// so passing a bridge down through POS, purchasing, stock count and half a
-/// dozen dialogs would mean editing each of them (and every preview harness and
-/// widget test that builds one) to add a parameter they only forward. A scope
-/// keeps the feature additive: screens that want it look it up, screens and
-/// tests that do not get `null` and behave exactly as before.
+/// Not for scanning: a phone's scans reach screens as keystrokes
+/// (`ScanKeyboard`), so no screen looks the bridge up to hear them. The scope
+/// is for the screens that manage the phone itself — pairing, its status, the
+/// photo capture sheets — without a constructor parameter each. Screens and
+/// tests that do not want it get `null` and behave exactly as before.
 class CompanionScope extends InheritedWidget {
   const CompanionScope({
     super.key,

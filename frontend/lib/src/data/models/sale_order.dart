@@ -294,19 +294,24 @@ class SaleLossLine {
     required this.productName,
     required this.quantity,
     required this.unitPrice,
-    required this.unitCost,
     required this.lineTotal,
-    required this.lineCost,
-    required this.lossAmount,
+    this.unitCost,
+    this.lineCost,
+    this.lossAmount,
   });
 
   final String productName;
   final int quantity;
   final double unitPrice;
-  final double unitCost;
   final double lineTotal;
-  final double lineCost;
-  final double lossAmount;
+
+  /// What the line cost the shop, and what selling it at [lineTotal] loses.
+  /// The server leaves all three out for a reader who may not see cost — the
+  /// loss is the cost less a total the cashier typed — so null means "not
+  /// yours to know", never zero.
+  final double? unitCost;
+  final double? lineCost;
+  final double? lossAmount;
 
   factory SaleLossLine.fromJson(Map<String, Object?> json) {
     return SaleLossLine(
@@ -316,10 +321,10 @@ class SaleLossLine {
           '',
       quantity: _intFromJson(json['quantity']),
       unitPrice: _moneyFromJson(json['unit_price']),
-      unitCost: _moneyFromJson(json['unit_cost']),
+      unitCost: _nullableMoneyFromJson(json['unit_cost']),
       lineTotal: _moneyFromJson(json['line_total']),
-      lineCost: _moneyFromJson(json['line_cost']),
-      lossAmount: _moneyFromJson(json['loss_amount']),
+      lineCost: _nullableMoneyFromJson(json['line_cost']),
+      lossAmount: _nullableMoneyFromJson(json['loss_amount']),
     );
   }
 }
@@ -1058,6 +1063,7 @@ class SaleLineIntegration {
     this.errorCode = '',
     this.attemptCount = 0,
     this.receipt = const {},
+    this.receiptLogo = '',
   });
 
   final String provider;
@@ -1096,6 +1102,10 @@ class SaleLineIntegration {
   /// The provider's own printed slip, ready to reprint beside our invoice.
   final Map<String, String> receipt;
 
+  /// A card's brand logo as receipts print it (a base64 PNG, grey on white),
+  /// for the head of its slip. Empty for a top-up and for a brand without one.
+  final String receiptLogo;
+
   bool get isConfirmed => status == 'confirmed';
   bool get isPending => status == 'pending';
   bool get isVoucher => kind == 'voucher';
@@ -1131,6 +1141,7 @@ class SaleLineIntegration {
             in (json['receipt'] as Map<String, Object?>? ?? const {}).entries)
           entry.key: entry.value?.toString() ?? '',
       },
+      receiptLogo: json['receipt_logo']?.toString() ?? '',
     );
   }
 
@@ -1158,6 +1169,7 @@ class SaleLineIntegration {
     errorCode: errorCode,
     attemptCount: attemptCount,
     receipt: receipt ?? this.receipt,
+    receiptLogo: receiptLogo,
   );
 }
 

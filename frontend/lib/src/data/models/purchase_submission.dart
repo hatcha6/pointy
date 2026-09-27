@@ -925,6 +925,24 @@ class PurchaseDraftLine {
   }
 }
 
+/// A purchase unit cost as the API takes it: a rate to six places, not money
+/// to two.
+///
+/// A line keyed as its total — 58.00 for fifteen loaves — costs 3.866667 each.
+/// Sent as `toStringAsFixed(2)` that became 3.87, and the saved order said
+/// 58.05: a shop's 107-line delivery was saved 28.74 above the total the buyer
+/// had been shown. Trailing zeros past the second place are dropped, so an
+/// ordinary cost still goes as "12.50".
+String unitCostJson(double cost) {
+  final fixed = cost.toStringAsFixed(6);
+  final point = fixed.indexOf('.');
+  var end = fixed.length;
+  while (end > point + 3 && fixed[end - 1] == '0') {
+    end--;
+  }
+  return fixed.substring(0, end);
+}
+
 class PurchaseOrderLineDraft {
   const PurchaseOrderLineDraft({
     required this.variantId,
@@ -964,9 +982,9 @@ class PurchaseOrderLineDraft {
       // Serialised as a 3dp string, matching the backend's decimal quantity.
       'quantity': quantity.toStringAsFixed(3),
       if (normalizedUnit.isNotEmpty) 'unit': normalizedUnit,
-      'unit_cost': unitCost.toStringAsFixed(2),
+      'unit_cost': unitCostJson(unitCost),
       if (unitCostInCurrency != null)
-        'unit_cost_in_currency': unitCostInCurrency!.toStringAsFixed(2),
+        'unit_cost_in_currency': unitCostJson(unitCostInCurrency!),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
       if (units.isNotEmpty) 'units': [for (final unit in units) unit.toJson()],
     };

@@ -45,6 +45,7 @@ from apps.inventory.services import (
     stock_snapshot,
 )
 from . import documents as sales_documents
+from .loss_visibility import SALE_AT_LOSS_BLOCKED
 from .tracked_return import BUY_IN, return_units_for_line
 from .tracked_sale import (
     attribute_allocations,
@@ -847,6 +848,9 @@ def sale_loss_line_payload(
     line_total,
     line_cost,
 ):
+    # The full figures, for the guard and for readers who may see cost. Anyone
+    # else gets ``loss_visibility.LOSS_LINE_FIELDS_WITHOUT_COST`` of this, so a
+    # key added here reaches a cashier only once it is added there too.
     loss_amount = money(line_cost - line_total)
     return {
         "line_key": line_key,
@@ -891,7 +895,7 @@ def validate_order_loss_sales_allowed(*, settings, order):
 
 def sale_loss_blocked_payload(loss_lines):
     return {
-        "code": "sale_at_loss_blocked",
+        "code": SALE_AT_LOSS_BLOCKED,
         "detail": "Selling at a loss is disabled for this shop.",
         "loss": loss_lines,
     }

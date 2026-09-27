@@ -1,4 +1,4 @@
-from . import fake, sms_gate  # noqa: F401  (import for @register side-effects)
+from . import fake, relay  # noqa: F401  (import for @register side-effects)
 from .base import (
     MessagingTransport,
     SendResult,

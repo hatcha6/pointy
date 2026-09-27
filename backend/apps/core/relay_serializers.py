@@ -11,6 +11,7 @@ class RelayInstallationStatusSerializer(serializers.Serializer):
     relay_enabled = serializers.BooleanField()
     subscription_active = serializers.BooleanField()
     ai_enabled = serializers.BooleanField()
+    sms_enabled = serializers.BooleanField()
     subscription_ends_at = serializers.DateTimeField(allow_null=True)
     last_synced_at = serializers.DateTimeField(allow_null=True)
     connector_last_seen_at = serializers.DateTimeField(allow_null=True)

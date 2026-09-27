@@ -6,11 +6,13 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/data/models/money_position.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/features/companion/companion_bridge.dart';
-import 'package:pointy_frontend/src/features/companion/companion_scope.dart';
 import 'package:pointy_frontend/src/features/pos/views/payment/payment.dart';
 import 'package:pointy_frontend/src/shared/barcode/barcode_scan_listener.dart';
+import 'package:pointy_frontend/src/shared/barcode/camera_wedge/camera_wedge_controller.dart';
+import 'package:pointy_frontend/src/shared/barcode/scan_keyboard.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
+import '../../../../support/fake_camera_wedge_source.dart';
 import '../../../../support/fake_companion_bridge.dart';
 import '../../../../support/moamalat_receipt_links.dart';
 
@@ -760,6 +762,84 @@ void main() {
     expect(find.textContaining('تمت المطابقة'), findsOneWidget);
   });
 
+  testWidgets('the counter camera matches a receipt it reads while the sheet '
+      'is open', (tester) async {
+    // The field report: the camera read the terminal slip's QR, and the sheet
+    // waiting for exactly that never heard it — camera scans went to the
+    // till's own listener, which a covering sheet silences. Now the camera
+    // types, and the sheet hears it the way it hears the counter scanner.
+    final camera = FakeCameraWedgeSource();
+    final controller = CameraWedgeController(source: camera);
+    addTearDown(controller.dispose);
+    PaymentSheetResult? submitted;
+
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      requireCardReceipt: true,
+      trustedCardTerminalIds: const ['0JA8Y13W'],
+      cameraWedge: controller,
+      onSubmit: (result) => submitted = result,
+    );
+    await controller.start();
+
+    await tester.tap(find.byKey(const ValueKey('payment_method_card')));
+    await tester.pumpAndSettle();
+
+    camera.see(moamalatReceiptUrl(amount: 45));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+    expect(submitted, isNull, reason: "the scan's Enter confirms nothing");
+
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(
+      submitted?.payments.single.cardReceiptUrl,
+      moamalatReceiptUrl(amount: 45),
+    );
+    expect(
+      submitted?.payments.single.amount,
+      45,
+      reason: 'the link typed through the amount field left it as it was',
+    );
+  });
+
+  testWidgets('the counter camera types a receipt into the match dialog', (
+    tester,
+  ) async {
+    final camera = FakeCameraWedgeSource();
+    final controller = CameraWedgeController(source: camera);
+    addTearDown(controller.dispose);
+
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      requireCardReceipt: true,
+      trustedCardTerminalIds: const ['0JA8Y13W'],
+      cameraWedge: controller,
+    );
+    await controller.start();
+
+    await tester.tap(find.byKey(const ValueKey('payment_method_card')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('payment_card_receipt_button')),
+    );
+    await tester.tap(find.byKey(const ValueKey('payment_card_receipt_button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('card_receipt_url_field')), findsOne);
+
+    camera.see(moamalatReceiptUrl(amount: 45));
+    await tester.pumpAndSettle();
+
+    // The dialog took the slip and closed; the sheet under it did not also
+    // try to read it — it was covered — and holds exactly one match.
+    expect(find.byKey(const ValueKey('card_receipt_url_field')), findsNothing);
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+  });
+
   testWidgets("a scanner's key burst neither picks a payment method nor "
       'confirms the sale', (tester) async {
     PaymentSheetResult? submitted;
@@ -954,6 +1034,7 @@ Future<void> _pumpPaymentSheet(
   List<MoneyAccount> bankAccounts = const [],
   MoneyAccount? Function(String terminalId)? accountForTerminal,
   CompanionBridge? companionBridge,
+  CameraWedgeController? cameraWedge,
   DateTime Function()? clock,
 }) async {
   tester.view.physicalSize = Size(width, height);
@@ -972,38 +1053,47 @@ Future<void> _pumpPaymentSheet(
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: PointyTheme.light(),
+      // The counter camera and a paired phone, wired as app.dart wires them:
+      // they type what they read, and the sheet hears it as keystrokes.
+      builder: (context, navigator) => ScanKeyboard<CameraWedgeController>(
+        source: 'camera_wedge',
+        device: cameraWedge,
+        scans: (camera) => camera.scans.map((scan) => scan.value),
+        child: ScanKeyboard<CompanionBridge>(
+          source: 'companion_camera',
+          device: companionBridge,
+          scans: (phone) => phone.scans,
+          child: navigator ?? const SizedBox.shrink(),
+        ),
+      ),
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: CompanionScope(
-          bridge: companionBridge,
-          repository: null,
-          child: Scaffold(
-            body: SizedBox.expand(
-              child: PaymentSheet(
-                total: total,
-                enableCashPayments: enableCash,
-                enableCardPayments: enableCard,
-                enableTransferPayments: enableTransfer,
-                requireCardReceipt: requireCardReceipt,
-                trustedCardTerminalIds: trustedCardTerminalIds,
-                bankAccounts: bankAccounts,
-                accountForTerminal: accountForTerminal,
-                clock: clock ?? DateTime.now,
-                showPrintInvoiceToggle: showPrintInvoiceToggle,
-                printInvoiceAfterPayment: printInvoiceAfterPayment,
-                onPrintInvoiceChanged: onPrintInvoiceChanged ?? (_) {},
-                showShareInvoiceToggle: false,
-                shareInvoiceAfterPayment: false,
-                onShareInvoiceChanged: (_) {},
-                hasCustomer: hasCustomer,
-                requireCustomerForCredit: requireCustomerForCredit,
-                enableQuotations: enableQuotations,
-                enableCredit: enableCredit,
-                proposedDueDate: proposedDueDate,
-                isStaffAccount: isStaffAccount,
-                onSubmit: onSubmit ?? (_) {},
-                onCancel: () {},
-              ),
+        child: Scaffold(
+          body: SizedBox.expand(
+            child: PaymentSheet(
+              total: total,
+              enableCashPayments: enableCash,
+              enableCardPayments: enableCard,
+              enableTransferPayments: enableTransfer,
+              requireCardReceipt: requireCardReceipt,
+              trustedCardTerminalIds: trustedCardTerminalIds,
+              bankAccounts: bankAccounts,
+              accountForTerminal: accountForTerminal,
+              clock: clock ?? DateTime.now,
+              showPrintInvoiceToggle: showPrintInvoiceToggle,
+              printInvoiceAfterPayment: printInvoiceAfterPayment,
+              onPrintInvoiceChanged: onPrintInvoiceChanged ?? (_) {},
+              showShareInvoiceToggle: false,
+              shareInvoiceAfterPayment: false,
+              onShareInvoiceChanged: (_) {},
+              hasCustomer: hasCustomer,
+              requireCustomerForCredit: requireCustomerForCredit,
+              enableQuotations: enableQuotations,
+              enableCredit: enableCredit,
+              proposedDueDate: proposedDueDate,
+              isStaffAccount: isStaffAccount,
+              onSubmit: onSubmit ?? (_) {},
+              onCancel: () {},
             ),
           ),
         ),

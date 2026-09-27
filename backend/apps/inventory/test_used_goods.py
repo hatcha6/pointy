@@ -176,6 +176,54 @@ class PerUnitPriceTests(TestCase):
         )
         self.assertEqual(losses, [])
 
+    def test_the_till_names_the_article_below_cost_but_prices_it_for_the_owner(
+        self,
+    ):
+        """The article's own cost went round the stock-unit cost mask: the
+        loss line priced it for any cashier who discounted it under water."""
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        from django.urls import reverse
+        from rest_framework.test import APIClient
+
+        from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+
+        ensure_role_groups()
+        expensive = StockUnit.objects.get(code_normalized=IMEI_A)
+        previews = {}
+        for role in (CASHIER_GROUP, MANAGER_GROUP):
+            user = get_user_model().objects.create_user(username=role, password="pw")
+            user.groups.add(Group.objects.get(name=role))
+            client = APIClient()
+            client.force_authenticate(user=user)
+            previews[role] = client.post(
+                reverse("order-discount-preview"),
+                {
+                    "lines": [
+                        {
+                            "variant": self.variant.pk,
+                            "quantity": "1",
+                            "stock_units": [expensive.pk],
+                        }
+                    ],
+                    # 300 off its own 1,400 sells it at 1,100: under what this
+                    # handset cost, though not under the bin's 1,000 average.
+                    "extra_discount_amount": "300.00",
+                },
+                format="json",
+            )
+
+        cashier = previews[CASHIER_GROUP]
+        self.assertEqual(cashier.status_code, 200, cashier.data)
+        [line] = cashier.data["loss_lines"]
+        self.assertEqual(line["variant_id"], self.variant.pk)
+        self.assertNotIn("unit_cost", line)
+        self.assertNotIn("1200.00", str(cashier.data))
+        owner = previews[MANAGER_GROUP]
+        [line] = owner.data["loss_lines"]
+        self.assertEqual(line["unit_cost"], "1200.00")
+        self.assertEqual(line["loss_amount"], "100.00")
+
 
 class _ParentWith:
     """A stand-in for the list serializer's bulk preload."""

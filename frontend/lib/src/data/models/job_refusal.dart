@@ -20,6 +20,12 @@ enum JobRefusalKind {
   /// the price, and no approved price is recorded yet.
   approvalRequired,
 
+  /// Taking the money needs the person's own drawer open, and none is. The
+  /// app opens one on the spot and tries again — before this was a refusal
+  /// with a code, a manager invoicing after the cashier had closed up could
+  /// neither invoice the job nor, therefore, hand it back.
+  registerSessionRequired,
+
   unknown,
 }
 
@@ -55,6 +61,10 @@ JobRefusal? jobRefusalFromException(Object error) {
     'settlement_required' => JobRefusalKind.settlementRequired,
     'over_approved_price' => JobRefusalKind.overApprovedPrice,
     'approval_required' => JobRefusalKind.approvalRequired,
+    'register_session_required' => JobRefusalKind.registerSessionRequired,
+    // A backend from before the code was added says it only in its sentence.
+    _ when _legacyNoDrawerDetail(decoded['detail']) =>
+      JobRefusalKind.registerSessionRequired,
     _ => JobRefusalKind.unknown,
   };
   if (kind == JobRefusalKind.unknown) {
@@ -66,6 +76,10 @@ JobRefusal? jobRefusalFromException(Object error) {
     approvedPrice: decoded['approved_price']?.toString() ?? '',
     invoiceTotal: decoded['invoice_total']?.toString() ?? '',
   );
+}
+
+bool _legacyNoDrawerDetail(Object? detail) {
+  return detail?.toString().startsWith('No open register session') ?? false;
 }
 
 /// One attempted stage move: whether it happened, and — when the server said

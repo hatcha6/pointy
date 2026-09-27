@@ -4047,7 +4047,25 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get jobInvoiceNeedsRegister =>
-      'افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.';
+      'يُسجَّل المبلغ في جلسة درجك. إن لم تكن مفتوحة نفتحها لك قبل إصدار الفاتورة.';
+
+  @override
+  String get paymentDrawerTitle => 'افتح جلسة درج لاستلام المبلغ';
+
+  @override
+  String get paymentDrawerMessage =>
+      'لا توجد جلسة درج مفتوحة باسمك، والمبلغ يُسجَّل في درج من يستلمه. افتح جلستك الآن ونكمل من حيث توقفت.';
+
+  @override
+  String get paymentDrawerConfirm => 'فتح الجلسة والمتابعة';
+
+  @override
+  String get paymentDrawerNotAllowedMessage =>
+      'لا توجد جلسة درج مفتوحة باسمك، ولا تملك صلاحية فتحها. اطلب من المدير فتح جلسة لك أو إصدار الفاتورة.';
+
+  @override
+  String get paymentDrawerStartError =>
+      'تعذر فتح جلسة الدرج. تحقق من الاتصال وحاول مرة أخرى.';
 
   @override
   String jobInvoicedBadge(String receiptNumber) {
@@ -5185,6 +5203,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String voucherQrSettingSummary(String status) {
+    return 'رمز QR للكروت: $status';
+  }
+
+  @override
   String registerSessionSettingsSummary(String status, String window) {
     return 'نقدية الافتتاح: $status، صلاحية الكاشير للإرجاع: $window';
   }
@@ -5757,6 +5780,13 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get enableOnlineInvoicesSubtitle =>
       'بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.';
+
+  @override
+  String get printVoucherQrCodesLabel => 'طباعة رمز QR على كروت الشحن';
+
+  @override
+  String get printVoucherQrCodesSubtitle =>
+      'يُطبع بجانب الرقم السري لكروت ليبيانا والمدار، فيمسحه الزبون بكاميرا هاتفه ليُشحن الكرت. يسري على كل نقاط البيع في المتجر.';
 
   @override
   String get allowOversellingLabel => 'السماح بالبيع فوق المخزون';
@@ -9382,6 +9412,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
 
   @override
+  String get purchaseSupplierInvoiceNumberTaken =>
+      'رقم فاتورة المورد هذا مسجّل من قبل على أمر شراء آخر لنفس المورد. صحّح الرقم أو امسحه ثم أرسل.';
+
+  @override
   String get editPurchaseOrderTitle => 'تعديل أمر الشراء';
 
   @override
@@ -10216,6 +10250,23 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String sessionIntegrationsRefundedAfterDeliveryCountNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'أُرجع للزبائن ثمن $count عملية بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.',
+      few:
+          'أُرجع للزبائن ثمن $count عمليات بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.',
+      two:
+          'أُرجع للزبائن ثمن عمليتين بعد أن نفّذهما المزوّد، فخُصمتا من رصيد الوكالة دون مقابل.',
+      one:
+          'أُرجع للزبون ثمن عملية واحدة بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String sessionIntegrationsTransactionsToggle(int count) {
     return 'العمليات ($count)';
   }
@@ -10584,6 +10635,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String lossSaleLine(String productName, String amount) {
     return '$productName: الخسارة $amount';
   }
+
+  @override
+  String lossSaleBelowCostLine(String productName) {
+    return '$productName: أقل من التكلفة';
+  }
+
+  @override
+  String get lossSaleBlockedAskManagerMessage =>
+      'بعض الأصناف أقل من تكلفتها، ولا تسمح إعدادات المتجر بالبيع بخسارة. راجع المدير.';
 
   @override
   String get reviewCartButton => 'مراجعة السلة';
@@ -16453,6 +16513,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String subscriptionSmsPill(String state) {
+    return 'الرسائل النصية · $state';
+  }
+
+  @override
   String get subscriptionInstallationIdTitle => 'معرّف التثبيت';
 
   @override
@@ -16536,6 +16601,23 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get subscriptionAiUsageUnavailable =>
       'تعذّر تحميل بيانات الاستهلاك حاليًا.';
+
+  @override
+  String get subscriptionSmsTitle => 'الرسائل النصية';
+
+  @override
+  String get subscriptionSmsActiveTitle => 'الرسائل النصية مشمولة في اشتراكك';
+
+  @override
+  String get subscriptionSmsActiveMessage =>
+      'الاستهلاك وحدود الإرسال ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.';
+
+  @override
+  String get subscriptionSmsInactiveTitle => 'الرسائل النصية غير مشمولة';
+
+  @override
+  String get subscriptionSmsInactiveMessage =>
+      'أضِف الرسائل النصية إلى اشتراكك لإرسال الفواتير والتذكيرات والعروض إلى عملائك. تواصل مع الدعم.';
 
   @override
   String subscriptionLastSynced(String time) {
@@ -16622,58 +16704,190 @@ class AppLocalizationsAr extends AppLocalizations {
       'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.';
 
   @override
-  String get messagingSettingsTitle => 'إعدادات الرسائل';
+  String get messagingSettingsTitle => 'الرسائل النصية';
 
   @override
   String get messagingSettingsSubtitle =>
-      'بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار';
+      'خدمة الرسائل في اشتراكك: الاستهلاك وحدود الإرسال ونصوص الرسائل ورسالة اختبار';
 
   @override
-  String get messagingHeroTitle => 'بوابة الرسائل';
+  String get messagingHeroTitle => 'رسائل دفتر النصية';
 
   @override
-  String get messagingStatusInactive => 'غير مُهيّأة';
+  String get messagingStatusActive => 'مفعّلة';
 
   @override
-  String get messagingConnectionTitle => 'الاتصال بالجهاز';
+  String get messagingStatusDisabled => 'موقوفة';
 
   @override
-  String get messagingBaseUrlLabel => 'عنوان الجهاز (Base URL)';
+  String get messagingStatusNotSubscribed => 'غير مشمولة';
 
   @override
-  String get messagingUsernameLabel => 'اسم المستخدم';
+  String get messagingStatusNotSubscribedSubtitle => 'في اشتراكك الحالي';
 
   @override
-  String get messagingPasswordLabel => 'كلمة المرور';
+  String get messagingStatusNotReady => 'قيد التجهيز';
 
   @override
-  String get messagingPasswordKeepHint =>
-      'اتركه فارغًا للإبقاء على كلمة المرور الحالية';
+  String get messagingTestModePill => 'وضع تجريبي';
 
   @override
-  String get messagingRateLabel => 'رسائل/الدقيقة';
+  String messagingLastSeenLabel(String when) {
+    return 'آخر إرسال $when';
+  }
 
   @override
-  String get messagingDailyCapLabel => 'الحد اليومي (0 = بلا حد)';
-
-  @override
-  String get messagingSaveError => 'تعذّر حفظ الإعدادات';
+  String get messagingUnsavedBadge => 'تغييرات غير محفوظة';
 
   @override
   String get messagingLoadError => 'تعذّر تحميل إعدادات الرسائل';
 
   @override
+  String get messagingNotSubscribedTitle => 'الرسائل النصية خدمة إضافية مدفوعة';
+
+  @override
+  String get messagingNotSubscribedMessage =>
+      'أرسل الفواتير وتذكيرات الديون والعروض إلى هواتف عملائك برسائل نصية تحمل اسم محلك، دون أي جهاز أو إعداد في المحل. الخدمة غير مشمولة في اشتراكك الحالي — تواصل مع الدعم لإضافتها.';
+
+  @override
+  String get messagingDisabledTitle => 'خدمة الرسائل موقوفة';
+
+  @override
+  String get messagingDisabledMessage =>
+      'لن يُرسل من هذا المحل أي شيء: لا فواتير ولا تذكيرات ولا حملات. شغّل الخدمة من «إعدادات الإرسال» ثم احفظ.';
+
+  @override
+  String get messagingNotReadyTitle => 'خدمة الرسائل قيد التجهيز';
+
+  @override
+  String get messagingNotReadyMessage =>
+      'الخدمة مشمولة في اشتراكك لكنها لم تُجهَّز بعد لدى دفتر. تواصل مع الدعم إن طال ذلك.';
+
+  @override
+  String get messagingTestModeTitle => 'الخدمة في وضع تجريبي';
+
+  @override
+  String get messagingTestModeMessage =>
+      'تُعالَج الرسائل كاملة لكنها لا تصل فعليًا إلى هواتف العملاء، ولا تُحتسب من باقتك.';
+
+  @override
+  String get messagingUsageUnavailableTitle => 'تعذّر قراءة الاستهلاك';
+
+  @override
+  String get messagingUsageUnavailableMessage =>
+      'تعذّر الوصول إلى خادم دفتر لقراءة استهلاك هذا الشهر. تحقّق من اتصال المحل بالإنترنت ثم أعد المحاولة.';
+
+  @override
+  String get messagingLastErrorTitle => 'آخر خطأ في الإرسال';
+
+  @override
+  String messagingLastErrorMessage(String detail, String when) {
+    return '$detail — $when';
+  }
+
+  @override
+  String get messagingUsageTitle => 'استهلاك هذا الشهر';
+
+  @override
+  String get messagingUsageSentLabel => 'الرسائل المُرسلة';
+
+  @override
+  String messagingUsageUsedOfLimit(int used, int limit) {
+    return '$used من $limit';
+  }
+
+  @override
+  String messagingUsageUnlimited(int used) {
+    return '$used — بلا حد شهري';
+  }
+
+  @override
+  String messagingUsageRemaining(int remaining) {
+    return 'المتبقي $remaining';
+  }
+
+  @override
+  String messagingUsageResets(String date) {
+    return 'تتجدّد الباقة في $date';
+  }
+
+  @override
+  String get messagingLimitReachedTitle => 'بلغت الحد الشهري للرسائل';
+
+  @override
+  String get messagingLimitReachedMessage =>
+      'لن تُرسل رسائل جديدة حتى تتجدّد الباقة. لزيادة الحد تواصل مع الدعم.';
+
+  @override
+  String get messagingSettingsSectionTitle => 'إعدادات الإرسال';
+
+  @override
+  String get messagingServiceSwitchLabel => 'تشغيل خدمة الرسائل';
+
+  @override
+  String get messagingServiceSwitchHelper =>
+      'عند الإيقاف لا يُرسل أي شيء من هذا المحل.';
+
+  @override
+  String get messagingRateLabel => 'رسائل/الدقيقة';
+
+  @override
+  String get messagingRateHelper => '0 = بلا حد';
+
+  @override
+  String get messagingDailyCapLabel => 'الحد اليومي';
+
+  @override
+  String get messagingQuietHoursLabel => 'أوقات الهدوء للعروض';
+
+  @override
+  String get messagingQuietHoursHelper =>
+      'تؤجَّل رسائل العروض والحملات الواقعة في هذه الفترة إلى ما بعدها. الفواتير والتذكيرات تُرسل في أي وقت.';
+
+  @override
+  String get messagingQuietHoursPickStart => 'وقت البداية';
+
+  @override
+  String get messagingQuietHoursPickEnd => 'وقت النهاية';
+
+  @override
+  String messagingQuietHoursFrom(String time) {
+    return 'من $time';
+  }
+
+  @override
+  String messagingQuietHoursTo(String time) {
+    return 'إلى $time';
+  }
+
+  @override
+  String get messagingQuietHoursClear => 'إلغاء أوقات الهدوء';
+
+  @override
+  String get messagingQuietHoursInvalid =>
+      'حدّد وقتي البداية والنهاية مختلفين، أو ألغِ أوقات الهدوء.';
+
+  @override
+  String get messagingSaveFailedTitle => 'تعذّر حفظ الإعدادات';
+
+  @override
+  String get messagingSaveError => 'تحقّق من الاتصال ثم أعد المحاولة.';
+
+  @override
+  String get messagingSavedMessage => 'حُفظت إعدادات الرسائل';
+
+  @override
   String get messagingTestTitle => 'إرسال رسالة اختبار';
 
   @override
-  String get messagingTestNeedsSaveTitle => 'احفظ البوابة أولًا';
-
-  @override
-  String get messagingTestNeedsSaveMessage =>
-      'أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.';
-
-  @override
   String get messagingTestPhoneLabel => 'رقم الهاتف';
+
+  @override
+  String get messagingTestPhoneHint => '0912345678';
+
+  @override
+  String get messagingTestPhoneHelper =>
+      'رقم هاتف محمول ليبي بين يديك الآن، لتتأكد من وصول الرسالة.';
 
   @override
   String get messagingTestSendButton => 'إرسال اختبار';
@@ -16682,123 +16896,92 @@ class AppLocalizationsAr extends AppLocalizations {
   String get messagingTestSentTitle => 'تم الإرسال';
 
   @override
-  String get messagingTestSentMessage => 'غادرت رسالة الاختبار البوابة بنجاح.';
+  String get messagingTestQueuedTitle =>
+      'قُبلت رسالة الاختبار وستُرسل خلال لحظات';
+
+  @override
+  String messagingTestSentBody(String body) {
+    return 'النص المُرسل: $body';
+  }
 
   @override
   String get messagingTestFailedTitle => 'فشل الإرسال';
 
   @override
   String get messagingTestFailedMessage =>
-      'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.';
+      'تعذّر إرسال رسالة الاختبار. أعد المحاولة بعد قليل.';
 
   @override
-  String get messagingStatusReady => 'جاهزة — إرسال واستقبال';
+  String get messagingTemplatesTitle => 'الرسائل التي يرسلها دفتر';
 
   @override
-  String get messagingStatusSendOnly => 'إرسال فقط — لم تُفعّل';
+  String get messagingTemplatesIntro =>
+      'هذه نصوص الرسائل التي تصل إلى عملائك كما اعتمدها مزوّد الرسائل. تُرسل باسم دفتر، لذلك يظهر اسم محلك داخل كل رسالة.';
 
   @override
-  String messagingLastSeenLabel(String when) {
-    return 'آخر اتصال $when';
-  }
+  String get messagingTemplateNotConfigured => 'غير مفعّل بعد لدى المزوّد';
 
   @override
-  String get messagingUnsavedBadge => 'تغييرات غير محفوظة';
+  String get messagingTemplateMarketingBadge => 'ترويجية';
 
   @override
-  String get messagingSetupGuideTitle => 'أين أجد هذه البيانات؟';
+  String get messagingErrorNotEntitled =>
+      'خدمة الرسائل غير مشمولة في اشتراك المحل. تواصل مع الدعم لإضافتها.';
 
   @override
-  String get messagingSetupGuideMessage =>
-      'على هاتف الرسائل: افتح تطبيق SMS Gate، فعّل «Local Server»، ثم اضغط زر الحالة في الأسفل حتى تصبح Online. سيعرض التطبيق عنوان الهاتف على الشبكة واسم المستخدم وكلمة المرور — انقلها هنا كما هي.';
+  String get messagingErrorServiceDisabled =>
+      'خدمة الرسائل موقوفة من إعدادات الرسائل في المحل.';
 
   @override
-  String get messagingBaseUrlHelper =>
-      'يكفي عنوان الهاتف على الشبكة؛ المنفذ الافتراضي 8080 يُضاف تلقائيًا.';
+  String get messagingErrorMonthlyLimit =>
+      'بلغ المحل الحد الشهري للرسائل. تتجدّد الباقة أول الشهر، أو تواصل مع الدعم لزيادتها.';
 
   @override
-  String get messagingBaseUrlInvalid =>
-      'عنوان غير صالح. اكتب عنوان الهاتف على الشبكة، مثل 192.168.1.50';
+  String get messagingErrorRateLimited =>
+      'أُرسلت رسائل كثيرة في وقت قصير. انتظر دقيقة ثم أعد المحاولة.';
 
   @override
-  String messagingBaseUrlNormalized(String url) {
-    return 'سيُحفظ العنوان هكذا: $url';
-  }
+  String get messagingErrorTemplateNotConfigured =>
+      'نص هذه الرسالة لم يُعتمد بعد لدى مزوّد الرسائل. تواصل مع الدعم.';
 
   @override
-  String get messagingRateHelper => '0 = بلا حد';
+  String get messagingErrorTemplateRequired =>
+      'لا تُرسل إلا النصوص المعتمدة لدى مزوّد الرسائل، وهذه الرسالة ليست منها.';
 
   @override
-  String get messagingUnpacedTitle => 'لا يوجد حد للإرسال في الدقيقة';
+  String get messagingErrorInvalidPhone =>
+      'رقم الهاتف غير صالح. يلزم رقم محمول ليبي مثل 0912345678.';
 
   @override
-  String get messagingUnpacedMessage =>
-      'بدون حد، قد تُصنَّف الشريحة كمرسل مزعج فيُحظر الرقم. القيمة المقترحة 6 رسائل في الدقيقة.';
+  String get messagingErrorProviderCredit =>
+      'نفد رصيد الرسائل لدى المزوّد مؤقتًا. أبلغ الدعم ليعيد شحنه.';
 
   @override
-  String get messagingConnectButton => 'حفظ وتفعيل';
+  String get messagingErrorProviderUnauthorized =>
+      'تعذّر الإرسال بسبب مشكلة في حساب دفتر لدى مزوّد الرسائل. أبلغ الدعم.';
 
   @override
-  String get messagingActivateOnlyButton => 'تفعيل الجهاز';
+  String get messagingErrorProviderRejected => 'رفض مزوّد الرسائل هذه الرسالة.';
 
   @override
-  String get messagingReactivateButton => 'إعادة تسجيل الروابط';
+  String get messagingErrorOutcomeUnknown =>
+      'تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.';
 
   @override
-  String get messagingConnectingLabel => 'جارٍ التفعيل…';
+  String get messagingErrorSmsUnconfigured =>
+      'خدمة الرسائل غير مُجهّزة بعد لدى دفتر. تواصل مع الدعم.';
 
   @override
-  String get messagingConnectHint =>
-      'الحفظ يكفي للإرسال؛ التفعيل يضبط الهاتف ليُعيد إلينا الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي عليه.';
+  String get messagingErrorRelayUnreachable =>
+      'تعذّر الوصول إلى خادم دفتر. تحقّق من اتصال المحل بالإنترنت ثم أعد المحاولة.';
 
   @override
-  String get messagingNotActivatedTitle => 'لم يُفعّل الجهاز بعد';
+  String get messagingErrorDriverError =>
+      'حدث خطأ أثناء الإرسال. أعد المحاولة، وإن تكرر أبلغ الدعم.';
 
   @override
-  String get messagingNotActivatedMessage =>
-      'الإرسال يعمل، لكن الردود الواردة وتقارير التسليم لن تصل حتى تضغط «تفعيل الجهاز».';
-
-  @override
-  String get messagingConnectedTitle => 'الجهاز جاهز';
-
-  @override
-  String messagingConnectedMessage(int count) {
-    return 'حُفظت الإعدادات وسُجّلت $count روابط على الهاتف — الرسائل الواردة وتقارير التسليم تصل الآن تلقائيًا.';
-  }
-
-  @override
-  String get messagingSavedNotActivatedTitle =>
-      'حُفظت الإعدادات — لم يُفعّل الجهاز';
-
-  @override
-  String get messagingSavedNotActivatedMessage =>
-      'تعذّر الوصول إلى الهاتف لتسجيل الروابط. تأكد أن الهاتف يعمل وأن «Local Server» في وضع Online على نفس الشبكة، ثم أعد المحاولة.';
-
-  @override
-  String get messagingReactivateFailedTitle => 'حُفظت الإعدادات';
-
-  @override
-  String get messagingReactivateFailedMessage =>
-      'تعذّر الوصول إلى الهاتف الآن لإعادة تسجيل الروابط، والروابط المسجّلة سابقًا ما زالت تعمل.';
-
-  @override
-  String get messagingSaveFailedTitle => 'تعذّر حفظ الإعدادات';
-
-  @override
-  String get messagingDeviceErrorTitle => 'آخر خطأ من الجهاز';
-
-  @override
-  String messagingDeviceErrorMessage(String detail, String when) {
-    return '$detail — $when';
-  }
-
-  @override
-  String get messagingUnsavedTestHint =>
-      'احفظ التغييرات أولًا — الاختبار يجري على الإعدادات المحفوظة في الخادم، لا على ما تراه هنا.';
-
-  @override
-  String get messagingTestPhoneHelper =>
-      'استخدم رقمًا بين يديك الآن للتحقق من وصول الرسالة.';
+  String get messagingErrorDeliveryFailed =>
+      'أُرسلت الرسالة لكنها لم تصل إلى هاتف العميل. تأكد أن الرقم صحيح وأن الهاتف يعمل.';
 
   @override
   String get conversationsTitle => 'المحادثات';
@@ -16808,6 +16991,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get conversationsEmpty => 'لا توجد محادثات بعد';
+
+  @override
+  String get conversationsEmptyMessage =>
+      'الرسائل تصل إلى هاتف العميل كرسائل نصية، وردوده لا تعود إلى التطبيق.';
 
   @override
   String get conversationsLoadError => 'تعذّر تحميل المحادثات';
@@ -16821,7 +17008,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get conversationThreadEmpty => 'لا توجد رسائل في هذه المحادثة';
 
   @override
-  String get conversationReplyHint => 'اكتب ردًا…';
+  String get conversationReplyHint =>
+      'اكتب رسالة للعميل… ردوده لا تصل إلى التطبيق';
 
   @override
   String get conversationSendTooltip => 'إرسال';
@@ -19469,6 +19657,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get stockUnitPayoutOwed => 'المستحق لصاحبها';
 
   @override
+  String get stockUnitPayoutFromSale => 'حصة صاحبها من البيع';
+
+  @override
+  String get stockUnitPayoutAdvance => 'سبق صرفه لصاحبها';
+
+  @override
   String get stockUnitPayoutPaidOn => 'صُرفت في';
 
   @override
@@ -20116,6 +20310,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String rechargeFloatMayNotCover(String balance) {
+    return 'رصيد الوكالة $balance قد لا يغطّي هذا الشحن. سجّل البيع الآن وارصد الرصيد لاحقاً.';
+  }
+
+  @override
   String get rechargeHistoryTitle => 'سجلّ البطاقة';
 
   @override
@@ -20378,6 +20577,19 @@ class AppLocalizationsAr extends AppLocalizations {
       one: 'عملية شحن واحدة',
     );
     return '$_temp0 بقيمة $amount لدى كل الوكلاء';
+  }
+
+  @override
+  String rechargeSubscriberPurchases(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية شحن',
+      few: '$count عمليات شحن',
+      two: 'عمليتا شحن',
+      one: 'عملية شحن واحدة',
+    );
+    return '$_temp0 لدى كل الوكلاء';
   }
 
   @override

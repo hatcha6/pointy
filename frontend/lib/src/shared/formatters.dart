@@ -117,6 +117,20 @@ String formatSpokenMoney(String rawValue) {
       .replaceFirst(RegExp(r'\.$'), '');
 }
 
+/// A quantity as printed documents show it, the invoice PDF and the thermal
+/// slips alike. Whole quantities render bare ("2"); fractional keep up to three
+/// places with trailing zeros trimmed ("1.5"), so paper never shows "2.0".
+String formatPrintedQuantity(num value) {
+  final quantity = value.toDouble();
+  if (quantity == quantity.roundToDouble()) {
+    return quantity.toInt().toString();
+  }
+  return quantity
+      .toStringAsFixed(3)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
 /// An exchange rate as the apps show it: "1 $ = 6.85 د.ل".
 ///
 /// Rates are quoted to more places than money because a parallel-market rate

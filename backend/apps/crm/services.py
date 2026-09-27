@@ -4,10 +4,12 @@ import re
 
 from django.utils import timezone
 
+from apps.core.models import ShopSettings
 from apps.customers.models import Customer
 from apps.messaging.models import InboundMessage, OutboundMessage
 from apps.messaging.phone import normalize_phone
 from apps.messaging.services import enqueue_message
+from apps.messaging.sms_templates import sms_template
 
 from .models import Conversation, ConversationMessage
 
@@ -113,10 +115,16 @@ def start_conversation(customer, *, author=None) -> tuple[Conversation, bool]:
 
 
 def post_reply(conversation: Conversation, body: str, *, author=None) -> ConversationMessage:
-    """Queue a staff reply on a conversation (transactional — always allowed)."""
+    """Queue a staff reply on a conversation (transactional — always allowed).
+
+    It goes out as the approved "direct message" template, which names the shop
+    ahead of the staff member's text; the thread keeps just what they typed.
+    Raises ``SmsValueTooLong`` for a text the provider would refuse.
+    """
+    shop_name = (ShopSettings.load().shop_name or "").strip() or "متجرنا"
     outbound = enqueue_message(
         to=conversation.phone or conversation.phone_raw,
-        body=body,
+        template=sms_template("direct", shop_name, body),
         consent_class=OutboundMessage.ConsentClass.TRANSACTIONAL,
         source_type="conversation_reply",
         source_id=conversation.id,

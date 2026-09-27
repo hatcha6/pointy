@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/voucher_availability.dart';
+import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
@@ -80,9 +81,13 @@ class _PosVoucherPickerState extends State<PosVoucherPicker> {
 
   /// The cards on offer: the catalog's, less anything the provider says it no
   /// longer has, cheapest first, priced as checkout will price them.
-  List<({ProductVariant variant, double price, double? cost})> get _cards {
+  ///
+  /// Whether the float covers a card is the server's answer: only it may know
+  /// what the card costs the agency.
+  List<({ProductVariant variant, double price, bool beyondFloat})> get _cards {
     final live = _live;
-    final cards = <({ProductVariant variant, double price, double? cost})>[];
+    final cards =
+        <({ProductVariant variant, double price, bool beyondFloat})>[];
     for (final variant in widget.variants) {
       final fresh = live?.cardFor(variant.id);
       if (live != null && (fresh == null || !fresh.isAvailable)) {
@@ -91,7 +96,7 @@ class _PosVoucherPickerState extends State<PosVoucherPicker> {
       cards.add((
         variant: variant,
         price: fresh?.price ?? variant.unitPrice,
-        cost: fresh?.cost,
+        beyondFloat: fresh?.beyondFloat(live?.balance) ?? false,
       ));
     }
     cards.sort((a, b) => a.price.compareTo(b.price));
@@ -118,10 +123,7 @@ class _PosVoucherPickerState extends State<PosVoucherPicker> {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.confirmation_number_outlined,
-                  color: colors.primaryStrong,
-                ),
+                _BrandMark(product: widget.product),
                 SizedBox(width: spacing.sm),
                 Expanded(
                   child: Text(
@@ -191,10 +193,7 @@ class _PosVoucherPickerState extends State<PosVoucherPicker> {
                                 // Warned, not refused: the figure is as old as
                                 // the last read, and the owner may have topped
                                 // up in the provider's own app since.
-                                beyondFloat:
-                                    balance != null &&
-                                    card.cost != null &&
-                                    card.cost! > balance,
+                                beyondFloat: card.beyondFloat,
                                 onTap: () => widget.onPicked(card.variant),
                               ),
                             ),
@@ -214,6 +213,32 @@ class _PosVoucherPickerState extends State<PosVoucherPicker> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The brand's logo, as the provider's own app shows it and the sync stored it
+/// on the product; the generic card icon for a brand that has none yet.
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = product.primaryImage?.contentUrl ?? '';
+    if (url.isEmpty) {
+      return Icon(
+        Icons.confirmation_number_outlined,
+        color: context.pointyColors.primaryStrong,
+      );
+    }
+    return PointyProductImageFrame(
+      imageUrl: url,
+      fallbackText: product.name,
+      width: 36,
+      height: 36,
+      padding: const EdgeInsets.all(2),
     );
   }
 }

@@ -17,7 +17,8 @@ import 'cups_pdf_spooler_stub.dart'
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
-import 'receipt_integration_rows.dart';
+import 'provider_slip_pdf.dart';
+import 'receipt_provider_slips.dart';
 import 'system_printer_lookup.dart';
 import '../../shared/branding_assets.dart';
 import '../../shared/date_formatters.dart';
@@ -483,11 +484,13 @@ class OrderDocumentService {
               _formatMoney(line.total),
             ],
         ],
-        // What each line issued (an IMEI, a lot) and what a provider did for
-        // it (a card's PIN, a subscriber's new term), one printed line each.
+        // What each line issued — an IMEI, a lot — one printed line each.
         rowNotes: [for (final line in order.lines) _saleLineNotes(line)],
         columnFlex: const [2.8, 0.9, 1.1, 1.1],
       ),
+      // What a provider did for a line — a card's PIN, a subscriber's new term
+      // — prints at the top, in a block of its own, not beneath the line.
+      providerSlips: _saleProviderSlips(order, shopSettings),
       totals: [
         OrderDocumentField(
           labels.subtotal,
@@ -1333,12 +1336,18 @@ class OrderDocumentTemplate {
     this.notes,
     this.terms,
     this.publicInvoiceUrl,
+    this.providerSlips = const [],
   });
 
   final String title;
   final String reference;
   final String shopName;
   final List<String> shopHeaderLines;
+
+  /// What providers did for the sale's lines — a card's PIN, a subscriber's
+  /// new term — each printed as a block of its own at the top of the
+  /// document, so a long invoice cannot bury it. Empty for anything else.
+  final List<ReceiptProviderSlip> providerSlips;
   final String recipientTitle;
 
   /// The recipient's label where it leads the name on the same line — a
@@ -1393,7 +1402,15 @@ class _DocumentFrame {
         footer: _footer,
         build: (_) => [
           _hero(),
-          pw.SizedBox(height: compact ? 16 : 32),
+          for (final slip in template.providerSlips) ...[
+            pw.SizedBox(height: compact ? 8 : 10),
+            pdfPageProviderSlip(slip),
+          ],
+          pw.SizedBox(
+            height: template.providerSlips.isEmpty
+                ? (compact ? 16 : 32)
+                : (compact ? 12 : 18),
+          ),
           _documentParties(),
           pw.SizedBox(height: compact ? 12 : 24),
           if (template.itemsTable != null) ...[
@@ -1830,7 +1847,25 @@ class _ReceiptFrame {
   /// between any two top-level widgets (notably between item rows) when a long
   /// receipt spills past a single roll segment.
   List<pw.Widget> _bodyChildren() {
-    final children = <pw.Widget>[..._header(), _divider(), ..._titleBlock()];
+    final children = <pw.Widget>[..._header()];
+    // A provider's answer — a card's PIN, a top-up's new term — is a box of
+    // its own between the masthead and the invoice, where no length of
+    // basket can push it out of sight. One widget each, so a paginated roll
+    // never splits a card from its PIN.
+    for (final slip in template.providerSlips) {
+      children
+        ..add(pw.SizedBox(height: compact ? 4 : 6))
+        ..add(
+          pdfRollProviderSlip(
+            slip,
+            contentWidth: _contentWidth,
+            detailFont: _detailFont,
+            emphasisFont: _emphasisFont,
+            compact: compact,
+          ),
+        );
+    }
+    children.addAll([_divider(), ..._titleBlock()]);
 
     if (template.details.isNotEmpty) {
       children.add(pw.SizedBox(height: compact ? 2 : 3));
@@ -2062,7 +2097,7 @@ class _ReceiptFrame {
       final row = _itemRow(table.rows[i], twoColumn: twoColumn);
       final notes = table.notesFor(i);
       // One widget per item, notes included, so a page break can never land
-      // between a card and its PIN.
+      // between a handset and its IMEI.
       rows.add(
         notes.isEmpty
             ? row
@@ -2075,23 +2110,9 @@ class _ReceiptFrame {
     return rows;
   }
 
-  /// A line beneath an item. Never clipped, even on a compact roll: a PIN
-  /// cut off at the edge of the paper is a card the customer cannot use.
+  /// A line beneath an item. Never clipped, even on a compact roll: half an
+  /// IMEI is a warranty document that cannot settle a claim.
   pw.Widget _itemNote(OrderDocumentNote note) {
-    if (note.emphasized) {
-      return pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 2),
-        child: pw.Text(
-          note.text,
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(
-            fontSize: _emphasisFont + 4,
-            fontWeight: pw.FontWeight.bold,
-            color: _ink,
-          ),
-        ),
-      );
-    }
     return pw.Text(
       note.text,
       style: pw.TextStyle(fontSize: _detailFont, color: _ink),
@@ -2318,14 +2339,12 @@ class OrderDocumentTable {
       line.length <= 120 ? line : '${line.substring(0, 117)}...';
 }
 
-/// One line printed beneath a document row. [emphasized] is a card's PIN —
-/// the line that has to be read at arm's length.
+/// One line printed beneath a document row: an identifier the line issued.
 @immutable
 class OrderDocumentNote {
-  const OrderDocumentNote(this.text, {this.emphasized = false});
+  const OrderDocumentNote(this.text);
 
   final String text;
-  final bool emphasized;
 }
 
 class OrderDocumentField {
@@ -2478,18 +2497,15 @@ List<String> _nonBlankStrings(Iterable<Object?> values) {
   return List.unmodifiable(lines);
 }
 
-/// The printed lines beneath a sale line, in order: the identifiers it
-/// issued, then what a provider did for it.
+/// The printed lines beneath a sale line: the identifiers it issued.
 ///
 /// Notes rather than text folded into the name cell. Folded in, they were
 /// flattened onto the name's line by the table's whitespace clean-up — and
-/// clipped altogether on a compact roll — which for a provider's card would
-/// cut off the PIN the customer paid for.
+/// clipped altogether on a compact roll.
 List<OrderDocumentNote> _saleLineNotes(SaleOrderLine line) {
   return [
     for (final identifier in _saleLineIdentifierLines(line))
       OrderDocumentNote(identifier),
-    ..._saleLineIntegrationNotes(line),
   ];
 }
 
@@ -2508,23 +2524,26 @@ String _saleLineProductName(SaleOrderLine line) {
   return '$product - $variant';
 }
 
-/// What a provider did for this line — a card's PIN, a subscriber's new term
-/// — from the same rows the thermal receipt prints.
-List<OrderDocumentNote> _saleLineIntegrationNotes(SaleOrderLine line) {
-  final integration = line.integration;
-  if (integration == null) {
-    return const [];
-  }
+/// What providers did for the sale's lines — a card's PIN, a subscriber's new
+/// term — as the slips the thermal receipt prints too, in line order.
+List<ReceiptProviderSlip> _saleProviderSlips(
+  SaleOrder order,
+  ShopSettings? settings,
+) {
   return [
-    for (final row in receiptIntegrationRows(
-      kind: integration.kind,
-      status: integration.status,
-      printed: integration.receipt,
-      subscriberRef: integration.subscriberRef,
-      reference: integration.providerReference,
-      months: integration.months,
-    ))
-      OrderDocumentNote(row.text, emphasized: row.emphasized),
+    for (final line in order.lines)
+      if (line.integration case final integration?)
+        receiptProviderSlip(
+          title: _saleLineProductName(line),
+          kind: integration.kind,
+          status: integration.status,
+          printed: integration.receipt,
+          subscriberRef: integration.subscriberRef,
+          reference: integration.providerReference,
+          months: integration.months,
+          printQrCodes: settings?.printVoucherQrCodes ?? true,
+          logo: integration.receiptLogo,
+        ),
   ];
 }
 
@@ -2539,7 +2558,7 @@ List<String> _saleLineIdentifierLines(SaleOrderLine line) {
         [
           identifier.code.trim(),
           if (!identifier.isUnit && identifier.quantity > 0)
-            '× ${_formatQuantity(identifier.quantity)}',
+            '× ${formatPrintedQuantity(identifier.quantity)}',
           if (identifier.expiryDate != null)
             formatExpiry(identifier.expiryDate!),
         ].join('  '),
@@ -2553,22 +2572,9 @@ String _formatMoney(double value) =>
 /// sum of payments a hair off in floating point still counts as the total.
 bool _sameMoney(double a, double b) => _formatMoney(a) == _formatMoney(b);
 
-/// Whole quantities render bare ("2"); fractional keep up to three places with
-/// trailing zeros trimmed ("1.5"), so the invoice never shows "2.0".
-String _formatQuantity(num value) {
-  final quantity = value.toDouble();
-  if (quantity == quantity.roundToDouble()) {
-    return quantity.toInt().toString();
-  }
-  return quantity
-      .toStringAsFixed(3)
-      .replaceFirst(RegExp(r'0+$'), '')
-      .replaceFirst(RegExp(r'\.$'), '');
-}
-
 /// "2 صندوق" — the quantity with its unit label appended for invoice/PO rows.
 String _formatQuantityWithUnit(num value, String unitLabel) {
-  final quantity = _formatQuantity(value);
+  final quantity = formatPrintedQuantity(value);
   final unit = unitLabel.trim();
   return unit.isEmpty ? quantity : '$quantity $unit';
 }

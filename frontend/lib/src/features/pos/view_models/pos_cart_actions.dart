@@ -516,16 +516,7 @@ extension PosCartActions on PosViewModel {
         isDefault: true,
       ),
       quantity: 1,
-      integration: CartLineIntegration(
-        provider: integrationProviderKeyToJson(draft.provider),
-        subscriberRef: draft.subscriberRef,
-        optionCode: draft.offer.code,
-        optionLabel: draft.offer.label,
-        cost: draft.cost,
-        months: draft.offer.months,
-        packageId: draft.offer.packageId,
-        packageName: draft.offer.packageName,
-      ),
+      integration: CartLineIntegration.fromRecharge(draft),
     );
     _cart.add(line);
     // Every other way into the cart is recorded; this one was not, so a field

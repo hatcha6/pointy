@@ -663,6 +663,22 @@ def user_has_full_visibility(user):
     return user.has_perm("reports.view_reportrun")
 
 
+def reader_has_full_visibility(context):
+    """``user_has_full_visibility`` for the request behind a serializer
+    ``context``, asked once per response.
+
+    The answer is kept in the context, which a list's rows and every nested
+    serializer share, because the question costs a query and a page of fifty
+    jobs must not ask it fifty times. No request means no reader, and no reader
+    sees anything: a serializer called from a script fails closed.
+    """
+    key = "_reader_has_full_visibility"
+    if key not in context:
+        request = context.get("request")
+        context[key] = user_has_full_visibility(getattr(request, "user", None))
+    return context[key]
+
+
 def initial_admin_setup_required():
     """Whether the first-run wizard should be offered.
 

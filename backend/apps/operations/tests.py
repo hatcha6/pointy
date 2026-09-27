@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -139,6 +140,34 @@ class JobLifecycleTests(OperationsTestCase):
         self.assertEqual(job.stage_events.count(), 1)
         self.assertIsNotNone(data["next_stage"])
         self.assertEqual(data["next_stage"]["code"], "diagnosing")
+
+    def test_job_numbers_do_not_skip_when_ids_do(self):
+        """The intake ticket's number comes from a counter, not the row id.
+
+        A shop's repairs went from REP-…-000003 straight to REP-…-000036: the
+        number was the job's id, and PostgreSQL's crash recovery discards the
+        ~32 ids it had reserved. Burning ids here stands in for that restart.
+        """
+        from apps.documents.numbering import JOB_SERIES, DocumentNumberSeries
+
+        first = Job.objects.get(pk=self.create_repair_job()["id"])
+        if connection.vendor == "postgresql":
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT setval(pg_get_serial_sequence('operations_job', 'id'),"
+                    " (SELECT max(id) FROM operations_job) + 32)"
+                )
+        second = Job.objects.get(pk=self.create_repair_job()["id"])
+        if connection.vendor == "postgresql":
+            self.assertGreater(second.pk, first.pk + 32)
+
+        first_counter = int(first.job_number.rsplit("-", 1)[1])
+        second_counter = int(second.job_number.rsplit("-", 1)[1])
+        self.assertEqual(second_counter, first_counter + 1)
+        self.assertEqual(
+            DocumentNumberSeries.objects.get(pk=JOB_SERIES).last_value,
+            second_counter,
+        )
 
     def test_forward_transition_allowed_for_technician(self):
         client = authenticated_client(self.technician)
@@ -514,6 +543,36 @@ class JobInvoiceTests(OperationsTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # The app keys its "open your drawer here" step on this code.
+        self.assertEqual(response.data["code"], "register_session_required")
+        job = Job.objects.get(pk=data["id"])
+        self.assertIsNone(job.order_id)
+
+    def test_invoice_after_opening_a_drawer_goes_through(self):
+        """The refusal is a step, not a wall: the same request succeeds once
+        the actor's own drawer is open — what the app does for them."""
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        payload = {
+            "labor_total": "30.00",
+            "payments": [{"method": "cash", "amount": "30.00"}],
+        }
+        refused = client.post(
+            reverse("job-invoice", args=[data["id"]]), payload, format="json"
+        )
+        self.assertEqual(refused.data["code"], "register_session_required")
+
+        started = client.post(
+            reverse("register-session-start"), {"opening_cash": "0"}, format="json"
+        )
+        self.assertEqual(started.status_code, status.HTTP_200_OK, started.data)
+
+        response = client.post(
+            reverse("job-invoice", args=[data["id"]]), payload, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        order = Order.objects.get(pk=response.data["order"])
+        self.assertEqual(order.register_session_id, started.data["id"])
 
     def test_technician_cannot_invoice(self):
         tech_client = authenticated_client(self.technician)

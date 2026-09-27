@@ -13,6 +13,8 @@ from apps.documents.guards import DocumentQuerySetMixin, is_live
 from apps.documents.models import DocumentMixin
 from apps.documents.statuses import DocumentStatus
 
+from .unit_costs import quantize_cost
+
 
 class Supplier(TimeStampedModel):
     name = models.CharField(max_length=255)
@@ -384,10 +386,9 @@ class PurchaseOrder(DocumentMixin, TimeStampedModel):
         )
         net_unit_cost = Decimal("0.00")
         if line.quantity > 0:
-            net_unit_cost = (net_line_total / Decimal(line.quantity)).quantize(
-                self.MONEY_PLACES,
-                rounding=ROUND_HALF_UP,
-            )
+            # A rate, kept to six places: rounded to money it no longer
+            # multiplies back to the net line total — see ``unit_costs``.
+            net_unit_cost = quantize_cost(net_line_total / Decimal(line.quantity))
         line.discount_amount = discount_amount
         line.net_line_total = net_line_total
         line.net_unit_cost = net_unit_cost
@@ -444,14 +445,14 @@ class PurchaseOrder(DocumentMixin, TimeStampedModel):
             allocated_landed_cost = allocations[line.pk]
             landed_unit_cost = Decimal("0.00")
             if line.quantity > 0:
-                landed_unit_cost = (
+                landed_unit_cost = quantize_cost(
                     allocated_landed_cost / Decimal(line.quantity)
-                ).quantize(self.MONEY_PLACES)
+                )
             line.allocated_landed_cost = allocated_landed_cost
             line.landed_unit_cost = landed_unit_cost
-            line.effective_unit_cost = (
+            line.effective_unit_cost = quantize_cost(
                 line.net_unit_cost + landed_unit_cost
-            ).quantize(self.MONEY_PLACES)
+            )
 
     def _landed_cost_allocations(self, lines, landed_cost_total):
         if landed_cost_total == Decimal("0.00"):
@@ -750,16 +751,18 @@ class PurchaseLine(TimeStampedModel):
     # from this at the order's frozen rate and stays the single number every
     # downstream figure is built on — net cost, landed cost, valuation, COGS,
     # margin — so none of them had to learn about currencies.
+    # Per-unit costs are rates and keep six places; the money columns beside
+    # them are totals and keep two. See ``apps.purchasing.unit_costs``.
     unit_cost_in_currency = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=18,
+        decimal_places=6,
         null=True,
         blank=True,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     unit_cost = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=18,
+        decimal_places=6,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     discount_amount = models.DecimalField(
@@ -775,8 +778,8 @@ class PurchaseLine(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     net_unit_cost = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=18,
+        decimal_places=6,
         default=0,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
@@ -787,14 +790,14 @@ class PurchaseLine(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     landed_unit_cost = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=18,
+        decimal_places=6,
         default=0,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     effective_unit_cost = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=18,
+        decimal_places=6,
         default=0,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
@@ -805,7 +808,11 @@ class PurchaseLine(TimeStampedModel):
 
     @property
     def line_total(self):
-        return (self.unit_cost * self.quantity).quantize(Decimal("0.01"))
+        # Half-up, as the discount engine rounds the same product into the
+        # order's subtotal — so the lines always add up to the subtotal.
+        return (self.unit_cost * self.quantity).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
     def to_base_quantity(self, quantity) -> Decimal:
         """A quantity in this line's purchase unit → the product's base unit."""

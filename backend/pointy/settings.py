@@ -586,12 +586,11 @@ POINTY_SMS_AUTO_CAMPAIGN_ON_DISCOUNT = env.bool(
 POINTY_SMS_AI_SUGGESTIONS_ENABLED = env.bool(
     "POINTY_SMS_AI_SUGGESTIONS_ENABLED", default=False
 )
-# Explicit base URL the SMS Gate phone should POST webhooks to (e.g.
-# http://192.168.1.20:8000). Blank = derive from the activation request's Host
-# (the LAN address the admin reached the backend on).
-POINTY_MESSAGING_WEBHOOK_BASE_URL = env(
-    "POINTY_MESSAGING_WEBHOOK_BASE_URL", default=""
-)
+# SMS goes through the relay, which sends with Resala's test mode (no real SMS,
+# no charge) when asked. A development machine asks by default: its database is
+# often a copy of a real shop's, and a debt-reminder sweep there must not text
+# that shop's customers.
+POINTY_SMS_TEST_MODE = env.bool("POINTY_SMS_TEST_MODE", default=DEBUG)
 # How long an idempotency record can still match a retry. Clients retry within
 # seconds; two days is generous.
 POINTY_IDEMPOTENCY_RETENTION_HOURS = int(
@@ -771,6 +770,12 @@ CELERY_BEAT_SCHEDULE = {
     "messaging.sweep-stuck": {
         "task": "messaging.sweep_stuck",
         "schedule": timedelta(minutes=5),
+    },
+    # Ask the relay what became of recent sends (delivered / undelivered) —
+    # Resala reports delivery only in its log, never by calling back.
+    "messaging.sync-delivery-status": {
+        "task": "messaging.sync_delivery_status",
+        "schedule": timedelta(minutes=10),
     },
     # Daily debt reminders for open-credit (آجل) invoices — opt-in via
     # POINTY_SMS_DEBT_REMINDERS_ENABLED; the task no-ops when disabled.
@@ -1178,6 +1183,10 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+    # DRF's own handler, plus one redaction: a sale refused below cost names
+    # its lines to everyone and prices them only for readers who may see cost,
+    # whichever of the sale paths refused it (apps/sales/loss_visibility.py).
+    "EXCEPTION_HANDLER": "apps.sales.loss_visibility.exception_handler",
     # Number of trusted reverse proxies in front of the backend. Used when
     # deriving the client IP for throttling. 0 keys on REMOTE_ADDR so a client
     # cannot bypass throttles by spoofing X-Forwarded-For; set this to the real

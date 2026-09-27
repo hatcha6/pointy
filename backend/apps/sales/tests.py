@@ -759,6 +759,22 @@ class OrderCheckoutApiTests(TestCase):
             format="json",
         ).data
 
+    def owner_client(self):
+        """Reads a sale as the owner does. What it cost and what it made are
+        not sent to the cashier who rang it up (test_margin_visibility), so the
+        cost snapshot is checked from here."""
+        if not hasattr(self, "_owner_client"):
+            owner = get_user_model().objects.create_user(
+                username="checkout-owner", password="pass"
+            )
+            owner.groups.add(Group.objects.get(name=MANAGER_GROUP))
+            self._owner_client = APIClient()
+            self._owner_client.force_authenticate(user=owner)
+        return self._owner_client
+
+    def owner_view(self, order_id):
+        return self.owner_client().get(reverse("order-detail", args=[order_id])).data
+
     def test_card_checkout_captures_card_and_mints_placeholder_customer(self):
         self.start_session()
 
@@ -1070,7 +1086,7 @@ class OrderCheckoutApiTests(TestCase):
         )
         self.assertEqual(response.data["shop_logo_data_uri"], expected)
 
-    def test_checkout_exposes_cost_and_profit_snapshot(self):
+    def test_checkout_snapshots_cost_and_profit_for_the_owner(self):
         self.start_session()
         supplier = Supplier.objects.create(name="Profit supplier")
         first_purchase = PurchaseOrder.objects.create(
@@ -1098,20 +1114,23 @@ class OrderCheckoutApiTests(TestCase):
             quantity=10,
             unit_cost=Decimal("2.75"),
         )
-        detail_response = self.client.get(
+        owner = self.owner_client()
+        detail_response = owner.get(
             reverse("order-detail", args=[response.data["id"]]),
         )
-        list_response = self.client.get(reverse("order-list"))
+        list_response = owner.get(reverse("order-list"))
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["lines"][0]["unit_cost"], "2.00")
-        self.assertEqual(response.data["lines"][0]["line_cost"], "4.00")
-        self.assertEqual(response.data["lines"][0]["line_profit"], "3.00")
-        self.assertEqual(response.data["total_cost"], "4.00")
-        self.assertEqual(response.data["total_profit"], "3.00")
+        # The cost struck at the sale, not the later purchase's.
         self.assertEqual(detail_response.data["lines"][0]["unit_cost"], "2.00")
+        self.assertEqual(detail_response.data["lines"][0]["line_cost"], "4.00")
+        self.assertEqual(detail_response.data["lines"][0]["line_profit"], "3.00")
+        self.assertEqual(detail_response.data["total_cost"], "4.00")
         self.assertEqual(detail_response.data["total_profit"], "3.00")
         self.assertEqual(list_response.data["results"][0]["total_profit"], "3.00")
+        # The cashier who rang it up is told none of it.
+        self.assertNotIn("total_profit", response.data)
+        self.assertNotIn("unit_cost", response.data["lines"][0])
 
         order_line = Order.objects.get(pk=response.data["id"]).lines.get()
         self.assertEqual(order_line.unit_cost, Decimal("2.00"))
@@ -1141,8 +1160,10 @@ class OrderCheckoutApiTests(TestCase):
         loss_line = response.data["loss"][0]
         self.assertEqual(int(loss_line["variant_id"]), self.variant.pk)
         self.assertEqual(str(loss_line["line_total"]), "7.00")
-        self.assertEqual(str(loss_line["line_cost"]), "8.00")
-        self.assertEqual(str(loss_line["loss_amount"]), "1.00")
+        # Named to the cashier, not priced: the loss is the cost less a total
+        # they typed. Who is told the figures: test_loss_line_visibility.
+        self.assertNotIn("line_cost", loss_line)
+        self.assertNotIn("loss_amount", loss_line)
         self.assertEqual(Order.objects.count(), 0)
         self.assertEqual(Payment.objects.count(), 0)
         self.assertEqual(StockMovement.objects.count(), 0)
@@ -1175,11 +1196,12 @@ class OrderCheckoutApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        line = response.data["lines"][0]
+        sale = self.owner_view(response.data["id"])
+        line = sale["lines"][0]
         self.assertEqual(line["unit_cost"], "3.00")
         self.assertEqual(line["line_cost"], "6.00")
         self.assertEqual(line["line_profit"], "1.00")
-        self.assertEqual(response.data["total_profit"], "1.00")
+        self.assertEqual(sale["total_profit"], "1.00")
 
     def test_checkout_allows_loss_sale_when_setting_is_disabled(self):
         ShopSettings.load()
@@ -1203,8 +1225,9 @@ class OrderCheckoutApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["lines"][0]["line_profit"], "-1.00")
-        self.assertEqual(response.data["total_profit"], "-1.00")
+        sale = self.owner_view(response.data["id"])
+        self.assertEqual(sale["lines"][0]["line_profit"], "-1.00")
+        self.assertEqual(sale["total_profit"], "-1.00")
         self.stock_item.refresh_from_db()
         self.assertEqual(self.stock_item.quantity_on_hand, 8)
 
@@ -1226,7 +1249,9 @@ class OrderCheckoutApiTests(TestCase):
             value=Decimal("2.00"),
         )
 
-        response = self.client.post(
+        # Read as the owner: a cashier is told which line is below cost, not
+        # what it cost (test_loss_line_visibility).
+        response = self.owner_client().post(
             reverse("order-discount-preview"),
             {"lines": [{"variant": self.variant.pk, "quantity": 2}]},
             format="json",
@@ -1321,9 +1346,10 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(line["product"], self.product.pk)
         self.assertEqual(line["variant"], variant.pk)
         self.assertEqual(line["unit_price"], "5.75")
-        self.assertEqual(line["unit_cost"], "4.25")
-        self.assertEqual(line["line_cost"], "8.50")
-        self.assertEqual(line["line_profit"], "3.00")
+        owner_line = self.owner_view(response.data["id"])["lines"][0]
+        self.assertEqual(owner_line["unit_cost"], "4.25")
+        self.assertEqual(owner_line["line_cost"], "8.50")
+        self.assertEqual(owner_line["line_profit"], "3.00")
         self.stock_item.refresh_from_db()
         variant_stock.refresh_from_db()
         self.assertEqual(self.stock_item.quantity_on_hand, 10)
@@ -1465,7 +1491,7 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(response.data["lines"][0]["line_subtotal"], "7.00")
         self.assertEqual(response.data["lines"][0]["discount_total"], "0.70")
         self.assertEqual(response.data["lines"][0]["line_total"], "6.30")
-        self.assertEqual(response.data["total_profit"], "6.30")
+        self.assertEqual(self.owner_view(response.data["id"])["total_profit"], "6.30")
 
         order = Order.objects.get(pk=response.data["id"])
         self.assertEqual(order.discount_total, Decimal("0.70"))

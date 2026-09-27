@@ -2,7 +2,7 @@ import '../models/integration_card.dart';
 import '../models/sale_order.dart';
 
 /// Overlay the provider's just-received recharge answers onto [order] so a
-/// printed receipt carries them inline.
+/// printed receipt carries them in its provider slips.
 ///
 /// A provider line (a top-up or a card) sells `pending`: the sale is recorded,
 /// then the till performs the charge and the provider answers with the thing

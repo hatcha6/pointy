@@ -90,7 +90,7 @@ class JobMaterial {
     required this.variantName,
     this.unit = 'piece',
     required this.quantity,
-    required this.unitCost,
+    this.unitCost,
     required this.unitPrice,
     required this.lineTotal,
     required this.isConsumed,
@@ -106,7 +106,10 @@ class JobMaterial {
   final String variantName;
   final String unit;
   final double quantity;
-  final double unitCost;
+
+  /// What the part cost the shop. Sent to the reporting roles only, so
+  /// `null` for the counter and the bench.
+  final double? unitCost;
   final double unitPrice;
   final double lineTotal;
   final bool isConsumed;
@@ -133,7 +136,7 @@ class JobMaterial {
       variantName: json['variant_name']?.toString() ?? '',
       unit: json['unit']?.toString() ?? 'piece',
       quantity: _qtyFromJson(json['quantity']),
-      unitCost: _moneyFromJson(json['unit_cost']),
+      unitCost: _nullableMoneyFromJson(json['unit_cost']),
       unitPrice: _moneyFromJson(json['unit_price']),
       lineTotal: _moneyFromJson(json['line_total']),
       isConsumed: json['is_consumed'] == true,

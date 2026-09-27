@@ -1,10 +1,13 @@
 /// The till-facing half of `apps.integrations`: a subscriber's card, what can
 /// be bought for it today, and what has been bought for it before.
 ///
-/// Prices live in [IntegrationOffer.cost] and are quoted per lookup, never
-/// cached. The same HD Box card in the field paid 210.00 for twelve months in
-/// 2024 and 220.00 in 2026 — a remembered ladder books a sale at a cost the
-/// shop did not pay.
+/// Prices are quoted per lookup, never cached. The same HD Box card in the
+/// field paid 210.00 for twelve months in 2024 and 220.00 in 2026 — a
+/// remembered ladder books a sale at a cost the shop did not pay.
+///
+/// What the provider charges the shop reaches the reporting roles only. For
+/// everyone else the server leaves every cost-bearing key out — so a cost here
+/// is `null` when this reader may not see it, never a made-up zero.
 library;
 
 import 'integration_provider.dart';
@@ -120,12 +123,14 @@ class IntegrationOffer {
     required this.code,
     required this.kind,
     required this.label,
-    required this.cost,
     required this.price,
+    this.cost,
     this.months = 0,
     this.packageId = '',
     this.packageName = '',
     this.faceValue,
+    this.exceedsFloat,
+    this.quote,
   });
 
   /// Stable within one lookup, e.g. `renew:12`.
@@ -139,15 +144,26 @@ class IntegrationOffer {
   /// chooses. These carry no [months]; do not print one for them.
   final String kind;
 
-  /// The provider's own wording, e.g. "12 month 220.00$".
+  /// The provider's own wording, less any price it quotes, e.g. "12 month".
   final String label;
 
-  /// What the shop's float pays, in LYD.
-  final double cost;
+  /// What the shop's float pays, in LYD. `null` for a reader outside the
+  /// reporting roles: the server does not send it.
+  final double? cost;
 
-  /// What the customer pays: [cost] plus the shop's configured markup, worked
-  /// out server-side. The till shows this; [cost] is the shop's own business.
+  /// What the customer pays: cost plus the shop's configured markup, worked
+  /// out server-side. The till shows this; cost is the shop's own business.
   final double price;
+
+  /// Whether the float, as last read, cannot pay for this — decided by the
+  /// server, which knows the cost. `null` when nobody quoted this offer (an
+  /// amount the cashier typed), so the till has to judge it itself.
+  final bool? exceedsFloat;
+
+  /// The cost, sealed by the server for checkout: an option only the
+  /// provider can price travels to the sale in this rather than in the clear.
+  /// `null` when the server prices the option itself.
+  final String? quote;
 
   /// What the provider says this is worth, when the provider — not the shop —
   /// decides: the face value of stored value. 45 dinars of credit sells for
@@ -155,7 +171,6 @@ class IntegrationOffer {
   /// Null when the shop's markup is what sets the price.
   final double? faceValue;
 
-  double get margin => price - cost;
   final int months;
   final String packageId;
   final String packageName;
@@ -164,16 +179,19 @@ class IntegrationOffer {
   bool get isTopUp => kind == 'topup';
 
   factory IntegrationOffer.fromJson(Map<String, Object?> json) {
+    final quote = json['quote']?.toString() ?? '';
     return IntegrationOffer(
       code: json['code']?.toString() ?? '',
       kind: json['kind']?.toString() ?? '',
       label: json['label']?.toString() ?? '',
-      cost: _toDouble(json['cost']) ?? 0,
+      cost: _toDouble(json['cost']),
       price: _toDouble(json['price']) ?? _toDouble(json['cost']) ?? 0,
       months: _toInt(json['months']),
       packageId: json['package_id']?.toString() ?? '',
       packageName: json['package_name']?.toString() ?? '',
       faceValue: _toDouble(json['face_value']),
+      exceedsFloat: json['exceeds_float'] as bool?,
+      quote: quote.isEmpty ? null : quote,
     );
   }
 }
@@ -189,7 +207,7 @@ class IntegrationOpenAmount {
     this.minimum = 1,
     this.maximum,
     this.step = 1,
-    this.costRatio = 1,
+    this.costRatio,
     this.pricePerUnit = 1,
     this.priceFixed = 0,
   });
@@ -201,7 +219,9 @@ class IntegrationOpenAmount {
   final double step;
 
   /// What the float pays per dinar of face value — 0.95 for a 5% commission.
-  final double costRatio;
+  /// `null` for a reader outside the reporting roles: the commission is the
+  /// shop's own business.
+  final double? costRatio;
 
   /// Together these are the shop's pricing rule for an amount nobody quoted:
   /// `price = max(face, amount * pricePerUnit + priceFixed)`. The server sends
@@ -210,7 +230,11 @@ class IntegrationOpenAmount {
   final double pricePerUnit;
   final double priceFixed;
 
-  double costOf(double amount) => _money(amount * costRatio);
+  /// What the float pays for [amount], when this reader may know.
+  double? costOf(double amount) {
+    final ratio = costRatio;
+    return ratio == null ? null : _money(amount * ratio);
+  }
 
   /// What the customer pays for [amount] of face value. Never below face: the
   /// shop's income is the commission inside [costOf], and selling stored value
@@ -220,8 +244,7 @@ class IntegrationOpenAmount {
     return marked > amount ? marked : _money(amount);
   }
 
-  static double _money(double value) =>
-      double.parse(value.toStringAsFixed(2));
+  static double _money(double value) => double.parse(value.toStringAsFixed(2));
 
   /// `null` when [amount] is sellable, else which rule it broke.
   IntegrationAmountProblem? validate(double amount) {
@@ -247,9 +270,11 @@ class IntegrationOpenAmount {
       minimum: _toDouble(json['minimum']) ?? 1,
       maximum: _toDouble(json['maximum']),
       step: _toDouble(json['step']) ?? 1,
-      costRatio: _toDouble(json['cost_ratio']) ?? 1,
+      costRatio: _toDouble(json['cost_ratio']),
       pricePerUnit:
-          _toDouble(json['price_per_unit']) ?? _toDouble(json['cost_ratio']) ?? 1,
+          _toDouble(json['price_per_unit']) ??
+          _toDouble(json['cost_ratio']) ??
+          1,
       priceFixed: _toDouble(json['price_fixed']) ?? 0,
     );
   }
@@ -549,10 +574,12 @@ class IntegrationHistoryPage {
 
 /// A top-up the cashier has chosen, on its way into the cart.
 ///
-/// Carries both numbers deliberately: [cost] is what the provider will draw
-/// from the float, [price] is what the customer pays. Keeping them apart is
-/// what makes the margin on a recharge real rather than assumed, and it is
-/// what lands in `OrderLine.unit_cost` versus `unit_price`.
+/// Carries what the provider will draw from the float apart from what the
+/// customer pays: that is what makes the margin on a recharge real rather
+/// than assumed, and it is what lands in `OrderLine.unit_cost` versus
+/// `unit_price`. The till need not be able to read the first: an option only
+/// the provider can price carries it sealed ([IntegrationOffer.quote]), and
+/// [cost] is `null` for a reader outside the reporting roles.
 class IntegrationRechargeDraft {
   const IntegrationRechargeDraft({
     required this.provider,
@@ -572,8 +599,8 @@ class IntegrationRechargeDraft {
   /// trusts a price that came from a till.
   final double price;
 
-  double get cost => offer.cost;
-  double get margin => price - cost;
+  double? get cost => offer.cost;
+  String? get quote => offer.quote;
 
   Map<String, Object?> toJson() => {
     'provider': integrationProviderKeyToJson(provider),
@@ -583,7 +610,8 @@ class IntegrationRechargeDraft {
     'months': offer.months,
     'package_id': offer.packageId,
     'package_name': offer.packageName,
-    'cost': cost,
+    if (cost != null) 'cost': cost,
+    if (quote != null) 'quote': quote,
   };
 }
 

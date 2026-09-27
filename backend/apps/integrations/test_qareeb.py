@@ -1025,11 +1025,21 @@ class VoucherChargeTests(TransactionTestCase):
         self.assertEqual(result["outcome"], recharge.OUTCOME_CHARGED)
         self.assertEqual(result["kind"], "voucher")
         self.assertEqual(result["receipt"]["code"], "1111222233334")
+        # Libyana is redeemed by calling 120 and the PIN — not the *120*PIN#
+        # Qareeb's own slip prints — and every route to a printer says so.
+        self.assertEqual(result["receipt"]["dial"], "1201111222233334")
         payload = build_receipt_payload(self.order)
         integration = payload["order"]["lines"][0]["integration"]
         self.assertEqual(integration["kind"], "voucher")
         self.assertEqual(integration["status"], "confirmed")
         self.assertEqual(integration["printed"]["serial"], "123456789012345")
+        self.assertEqual(integration["printed"]["dial"], "1201111222233334")
+        self.assertIs(payload["shop"]["print_voucher_qr_codes"], True)
+        invoice = self.client.get(f"/api/orders/{self.order.pk}/")
+        self.assertEqual(
+            invoice.data["lines"][0]["integration"]["receipt"]["dial"],
+            "1201111222233334",
+        )
 
     def test_a_lost_answer_is_settled_from_the_log_with_its_pin(self):
         with patch_qareeb(buying(_FakeQareeb(), checkout=requests.ReadTimeout("lost"))):

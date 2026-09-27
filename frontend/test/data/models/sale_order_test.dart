@@ -111,6 +111,23 @@ void main() {
 
       expect(line.quantity, 0);
     });
+
+    test('a line sent without its cost reads as unknown, not as zero', () {
+      // What a cashier gets: the server leaves the cost and the loss out.
+      // Read as zero, the warning would tell them the loss was 0.00.
+      final line = SaleLossLine.fromJson(const {
+        'variant_name': 'قميص',
+        'quantity': '1',
+        'unit_price': '4.00',
+        'line_total': '4.00',
+      });
+
+      expect(line.productName, 'قميص');
+      expect(line.lineTotal, 4);
+      expect(line.unitCost, isNull);
+      expect(line.lineCost, isNull);
+      expect(line.lossAmount, isNull);
+    });
   });
 
   group('the cashier\'s own discount on the wire', () {

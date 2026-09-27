@@ -15,10 +15,11 @@
 /// PHOTO about once a second through `camera_windows`, saved it as a JPEG and
 /// decoded that, which is why reading a barcode used to take seconds.
 ///
-/// Either way, a source hands over only scans it stands behind: the screen
-/// on the other end treats them exactly as it treats the counter wedge. A
-/// platform with no source reports [CameraWedgeBackend.none] and the feature
-/// is offered nowhere, rather than throwing when someone taps it.
+/// Either way, a source hands over only scans it stands behind, and
+/// `ScanKeyboard` types them into the app the way the counter wedge
+/// types, so no screen can tell the two apart. A platform with no source
+/// reports [CameraWedgeBackend.none] and the feature is offered nowhere,
+/// rather than throwing when someone taps it.
 library;
 
 import 'package:flutter/foundation.dart';

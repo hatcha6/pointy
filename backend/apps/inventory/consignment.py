@@ -516,11 +516,10 @@ def notify_consignor_of_sale(unit, order, *, settings=None):
     if not phone:
         return None
 
-    body = render_sale_sms(unit, order, settings=settings)
     try:
         return messaging.enqueue_message(
             to=phone,
-            body=body,
+            template=sale_sms(unit, order, settings=settings),
             consent_class=OutboundMessage.ConsentClass.TRANSACTIONAL,
             channel=MessagingGateway.Channel.SMS,
             dedup_key=f"consignment_sold_{unit.pk}_{order.pk}",
@@ -533,34 +532,47 @@ def notify_consignor_of_sale(unit, order, *, settings=None):
         return None
 
 
-def render_sale_sms(unit, order, *, settings=None) -> str:
-    from apps.core.models import CONSIGNMENT_SALE_SMS_TEMPLATE, ShopSettings
+def _shop_and_currency(settings) -> tuple[str, str]:
+    shop_name = (getattr(settings, "shop_name", "") or "").strip()
+    currency = (getattr(settings, "currency_symbol", "") or "").strip() or "د.ل"
+    return shop_name, currency
+
+
+def sale_sms(unit, order, *, settings=None):
+    """The approved ``consignment_sale`` message for this unit's sale.
+
+    SMS goes out only as templates the provider approved, so the wording is
+    fixed there — the shop's own ``consignment_sale_sms_template`` setting is
+    no longer what the consignor receives.
+    """
+    from apps.core.models import ShopSettings
+    from apps.messaging.sms_templates import sms_template
 
     settings = settings or ShopSettings.load()
-    template = (
-        settings.consignment_sale_sms_template or CONSIGNMENT_SALE_SMS_TEMPLATE
+    shop_name, currency = _shop_and_currency(settings)
+    return sms_template(
+        "consignment_sale",
+        getattr(unit.consignor, "full_name", "") or "",
+        unit.variant.full_name if unit.variant_id else "",
+        unit.code,
+        shop_name,
+        f"{consignor_payout_due(unit):.2f} {currency}",
     )
-    values = {
-        "consignor_name": getattr(unit.consignor, "full_name", "") or "",
-        "product_name": unit.variant.full_name if unit.variant_id else "",
-        "code": unit.code,
-        "invoice_number": getattr(order, "receipt_number", "") or "",
-        "payout_amount": f"{consignor_payout_due(unit):.2f}",
-    }
-    try:
-        return template.format(**values)
-    except (KeyError, IndexError, ValueError):
-        # A shop that typed {total} into its own template gets its template
-        # back rather than a 500 in the middle of a checkout.
-        return template
 
 
-def render_payout_sms(unit, payout, *, settings=None) -> str:
-    return (
-        f"تم تسليمكم مبلغ {payout.amount:.2f} د.ل سند رقم "
-        f"{payout.number or payout.pk} مقابل بيع "
-        f"{unit.variant.full_name if unit.variant_id else ''}. "
-        "سعدنا بالتعامل معكم."
+def payout_sms(unit, payout, *, settings=None):
+    """The approved ``consignment_payout`` message for a payout voucher."""
+    from apps.core.models import ShopSettings
+    from apps.messaging.sms_templates import sms_template
+
+    settings = settings or ShopSettings.load()
+    shop_name, currency = _shop_and_currency(settings)
+    return sms_template(
+        "consignment_payout",
+        shop_name,
+        f"{payout.amount:.2f} {currency}",
+        payout.number or payout.pk,
+        unit.variant.full_name if unit.variant_id else "",
     )
 
 
@@ -582,8 +594,8 @@ __all__ = [
     "payable_units",
     "payout_floor",
     "receivable_units",
-    "render_payout_sms",
-    "render_sale_sms",
+    "payout_sms",
+    "sale_sms",
     "shop_consignment_commission",
     "stamp_payout",
     "terms_for",

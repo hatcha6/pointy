@@ -287,6 +287,7 @@ Map<String, Object?> userJson(SandboxShop shop) {
     // learner must not discover screens their real account cannot open.
     'permissions': shop.cashierPermissions,
     'ai_available': false,
+    'sms_available': false,
     'allow_cashier_customer_access': true,
     'surveillance_enabled': false,
   };

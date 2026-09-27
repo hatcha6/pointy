@@ -57,6 +57,7 @@ class ShopSettings {
     this.allowCashierCustomerAccess = true,
     this.warnLowStockBeforeSale = true,
     this.autoPrintKitchenTickets = false,
+    this.printVoucherQrCodes = true,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
@@ -108,6 +109,11 @@ class ShopSettings {
   final int? autoPrintMinLineCount;
   final double? autoPrintMinTotal;
   final bool autoPrintKitchenTickets;
+
+  /// Whether a card its operator redeems by dialling (Libyana, Almadar) prints
+  /// a QR code the customer scans to dial it in. Shop-wide, so every till
+  /// prints a card the same way; on unless an owner turns it off.
+  final bool printVoucherQrCodes;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
   final int lowStockThreshold;
@@ -212,6 +218,13 @@ class ShopSettings {
   /// button in a shop that does not.
   bool get hasIntegrations => connectedIntegrations.isNotEmpty;
 
+  /// Whether a connected provider sells cards off a shelf (Qareeb): connected,
+  /// but not one the till looks a customer's line up on. What decides whether
+  /// the settings screen offers the voucher QR switch at all.
+  bool get sellsProviderCards => connectedIntegrations.any(
+    (provider) => !tillRechargeIntegrations.contains(provider),
+  );
+
   /// Whether this shop has cameras wired up. Gates the camera wall, the
   /// command-palette entry and the invoice playback panel — a shop with no DVR
   /// never sees a surface it cannot use. Turned on by the backend the first
@@ -300,6 +313,7 @@ class ShopSettings {
         json['auto_print_kitchen_tickets'],
         false,
       ),
+      printVoucherQrCodes: _boolFromJson(json['print_voucher_qr_codes'], true),
       allowOverselling: json['allow_overselling'] is bool
           ? json['allow_overselling'] as bool
           : json['allow_overselling']?.toString() == 'true',
@@ -460,6 +474,7 @@ class ShopSettingsDraft {
     this.allowCashierCustomerAccess = true,
     this.warnLowStockBeforeSale = true,
     this.autoPrintKitchenTickets = false,
+    this.printVoucherQrCodes = true,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
@@ -496,6 +511,7 @@ class ShopSettingsDraft {
   final int? autoPrintMinLineCount;
   final double? autoPrintMinTotal;
   final bool autoPrintKitchenTickets;
+  final bool printVoucherQrCodes;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
   final int lowStockThreshold;
@@ -540,6 +556,7 @@ class ShopSettingsDraft {
       autoPrintMinLineCount: settings.autoPrintMinLineCount,
       autoPrintMinTotal: settings.autoPrintMinTotal,
       autoPrintKitchenTickets: settings.autoPrintKitchenTickets,
+      printVoucherQrCodes: settings.printVoucherQrCodes,
       allowOverselling: settings.allowOverselling,
       warnLowStockBeforeSale: settings.warnLowStockBeforeSale,
       preventSellingAtLoss: settings.preventSellingAtLoss,
@@ -605,6 +622,7 @@ class ShopSettingsDraft {
     Object? autoPrintMinLineCount = _keep,
     Object? autoPrintMinTotal = _keep,
     bool? autoPrintKitchenTickets,
+    bool? printVoucherQrCodes,
     bool? allowOverselling,
     bool? warnLowStockBeforeSale,
     bool? preventSellingAtLoss,
@@ -653,6 +671,7 @@ class ShopSettingsDraft {
           : autoPrintMinTotal as double?,
       autoPrintKitchenTickets:
           autoPrintKitchenTickets ?? this.autoPrintKitchenTickets,
+      printVoucherQrCodes: printVoucherQrCodes ?? this.printVoucherQrCodes,
       allowOverselling: allowOverselling ?? this.allowOverselling,
       warnLowStockBeforeSale:
           warnLowStockBeforeSale ?? this.warnLowStockBeforeSale,
@@ -733,6 +752,7 @@ class ShopSettingsDraft {
       'auto_print_min_line_count': autoPrintMinLineCount,
       'auto_print_min_total': autoPrintMinTotal?.toStringAsFixed(2),
       'auto_print_kitchen_tickets': autoPrintKitchenTickets,
+      'print_voucher_qr_codes': printVoucherQrCodes,
       'allow_overselling': allowOverselling,
       'prevent_selling_at_loss': preventSellingAtLoss,
       'low_stock_threshold': lowStockThreshold,

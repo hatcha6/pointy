@@ -4,6 +4,7 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/messaging_gateway.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
@@ -13,6 +14,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/api_error_detail.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/payment_proof_printer.dart';
 
@@ -353,9 +355,22 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> sendInvoiceSms() async {
+  /// Queues the invoice SMS. Null once it is on its way; otherwise why not —
+  /// the refusal's code and the server's words, for the screen to say in
+  /// Arabic (a spent allowance, a number that is not a Libyan mobile).
+  Future<({String code, String detail})?> sendInvoiceSms() async {
     final result = await _saleRepository.sendInvoiceSms(_order.id);
-    return result is Ok<void>;
+    switch (result) {
+      case Ok<MessagingSendResult>(value: final sent):
+        return sent.isFailure
+            ? (code: sent.errorCode, detail: sent.errorDetail)
+            : null;
+      case Error<MessagingSendResult>(exception: final exception):
+        return (
+          code: apiErrorCode(exception) ?? '',
+          detail: apiErrorDetail(exception),
+        );
+    }
   }
 
   Future<OrderDocumentActionStatus> shareInvoice(SaleOrder order) async {

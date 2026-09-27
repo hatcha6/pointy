@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import logging
-import secrets
 
-from django.conf import settings
-from django.utils import timezone
-from rest_framework import viewsets
+from django.db import transaction
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core import caching
 from apps.core.dispatch import enqueue_best_effort
+from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 
 from .models import MessagingGateway, OutboundMessage
@@ -23,100 +23,77 @@ from .services import (
     deliver_message,
     enqueue_message,
     record_inbound,
+    unavailable_message,
 )
+from .sms_templates import sms_template
+from .status import messaging_status
 from .transports import transport_for
 
 logger = logging.getLogger(__name__)
 
 
-def _webhook_base_url(request) -> str:
-    """The base URL the phone should POST webhooks to. An explicit override wins;
-    otherwise use the LAN host the admin reached the backend on (the phone is on
-    the same LAN). Plain http — SMS Gate posts over the LAN, not TLS."""
-    override = (getattr(settings, "POINTY_MESSAGING_WEBHOOK_BASE_URL", "") or "").strip()
-    if override:
-        return override.rstrip("/")
-    return f"http://{request.get_host()}"
+class MessagingGatewayViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """The shop's SMS gateway: read it, tune its pacing, switch it off, test it.
 
+    No create/delete: the relay gateway provisions itself on first need
+    (``MessagingGateway.ensure_relay_gateway``) and holds no credentials, so
+    there is nothing for a shop to add — only brakes and a switch to set.
+    """
 
-class MessagingGatewayViewSet(viewsets.ModelViewSet):
     queryset = MessagingGateway.objects.all()
     serializer_class = MessagingGatewaySerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
         "list": ("messaging.manage_gateways",),
         "retrieve": ("messaging.manage_gateways",),
-        "create": ("messaging.manage_gateways",),
         "update": ("messaging.manage_gateways",),
         "partial_update": ("messaging.manage_gateways",),
-        "destroy": ("messaging.manage_gateways",),
         "test_send": ("messaging.manage_gateways",),
-        "activate": ("messaging.manage_gateways",),
         "messages": ("messaging.view_logs",),
     }
 
+    def perform_update(self, serializer):
+        was_active = serializer.instance.is_active
+        gateway = serializer.save()
+        if gateway.is_active != was_active:
+            # sms_available rides the session; moving the permissions version
+            # makes every device re-read it, so switching SMS off hides the
+            # send actions everywhere within one poll.
+            transaction.on_commit(caching.bump_perm_version)
+
     @action(detail=True, methods=["post"])
     def test_send(self, request, pk=None):
-        """Send one transactional test message now and return its final state.
+        """Send the test template now and return the message's final state.
 
-        ``max_attempts=1`` so a misconfigured gateway surfaces its error to the
-        manager immediately instead of silently re-queuing for a retry.
+        ``max_attempts=1`` so a problem — no subscription, the allowance spent,
+        a template the provider has not approved — reaches the manager at once
+        instead of being quietly re-queued for a retry.
         """
         gateway = self.get_object()
         to = (request.data.get("to") or "").strip()
         if not to:
             return Response({"detail": "رقم الهاتف مطلوب."}, status=400)
-        body = (request.data.get("body") or "").strip() or "رسالة اختبار من دفتر ✅"
+        shop_name = (ShopSettings.load().shop_name or "").strip() or "متجرنا"
         try:
             message = enqueue_message(
                 to=to,
-                body=body,
+                template=sms_template("test", shop_name),
                 gateway=gateway,
-                consent_class=OutboundMessage.ConsentClass.TRANSACTIONAL,
                 source_type="test_send",
                 max_attempts=1,
             )
-        except NoGatewayConfigured:
-            return Response({"detail": "لا توجد بوابة رسائل مُفعّلة."}, status=400)
+        except NoGatewayConfigured as exc:
+            return Response(
+                {"detail": unavailable_message(exc), "code": exc.code}, status=400
+            )
         deliver_message(message)
         message.refresh_from_db()
         return Response(OutboundMessageSerializer(message).data)
-
-    @action(detail=True, methods=["post"])
-    def activate(self, request, pk=None):
-        """Zero-touch activation: provision a per-gateway webhook token, register
-        our inbound + delivery webhooks on the phone (so two-way SMS + delivery
-        receipts start flowing automatically), and make this the active default.
-        No manual SMS Gate configuration needed."""
-        gateway = self.get_object()
-        transport = transport_for(gateway)
-
-        token = gateway.get_secret("webhook_token")
-        if not token:
-            token = secrets.token_urlsafe(24)
-            gateway.set_secret("webhook_token", token)
-            gateway.save(update_fields=["secrets_encrypted", "updated_at"])
-
-        base = _webhook_base_url(request)
-        inbound_url = f"{base}/api/messaging/inbound/{gateway.id}/?token={token}"
-        receipt_url = f"{base}/api/messaging/receipts/{gateway.id}/?token={token}"
-
-        webhooks = []
-        register = getattr(transport, "register_webhooks", None)
-        if callable(register):
-            webhooks = register(inbound_url=inbound_url, receipt_url=receipt_url)
-
-        gateway.is_active = True
-        gateway.is_default = True
-        gateway.last_seen_at = timezone.now()
-        gateway.save(
-            update_fields=["is_active", "is_default", "last_seen_at", "updated_at"]
-        )
-
-        all_ok = bool(webhooks) and all(item.get("ok") for item in webhooks)
-        return Response(
-            {"ok": all_ok, "webhooks": webhooks, "webhook_base_url": base}
-        )
 
     @action(detail=False, methods=["get"])
     def messages(self, request):
@@ -133,6 +110,17 @@ class MessagingGatewayViewSet(viewsets.ModelViewSet):
                 OutboundMessageSerializer(page, many=True).data
             )
         return Response(OutboundMessageSerializer(queryset[:200], many=True).data)
+
+
+class MessagingStatusView(APIView):
+    """Everything the SMS settings page shows: the subscription's verdict, this
+    month's usage, the gateway's brakes and the messages Pointy sends."""
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"GET": ("messaging.manage_gateways",)}
+
+    def get(self, request):
+        return Response(messaging_status())
 
 
 class InboundWebhookView(APIView):

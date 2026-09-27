@@ -20,7 +20,6 @@ from .segments import count_segments
 from .services import NoGatewayConfigured, deliver_message, enqueue_message
 from .tasks import dispatch_outbound_task
 from .transports import fake, registered_providers, transport_for
-from .transports.sms_gate import SmsGateDriver
 
 _LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
@@ -86,10 +85,27 @@ class EnqueueTests(TestCase):
         fake.reset()
         self.gateway = make_gateway()
 
-    def test_requires_a_gateway(self):
+    def test_requires_a_usable_gateway(self):
+        # With no gateway at all the relay one provisions itself — and without
+        # SMS in the subscription it cannot send, which is the answer.
         MessagingGateway.objects.all().delete()
-        with self.assertRaises(NoGatewayConfigured):
+        with self.assertRaises(NoGatewayConfigured) as caught:
             enqueue_message(to="+218912345678", body="hi")
+        self.assertEqual(caught.exception.code, "not_entitled")
+        self.assertTrue(
+            MessagingGateway.objects.filter(
+                provider=MessagingGateway.Provider.RELAY, is_active=True
+            ).exists()
+        )
+
+    def test_a_switched_off_gateway_sends_nothing(self):
+        MessagingGateway.objects.all().delete()
+        make_gateway(provider=MessagingGateway.Provider.RELAY, is_active=False)
+        with self.assertRaises(NoGatewayConfigured) as caught:
+            enqueue_message(to="+218912345678", body="hi")
+        self.assertEqual(caught.exception.code, "service_disabled")
+        # The shop's switch is respected: nothing re-provisions around it.
+        self.assertEqual(MessagingGateway.objects.count(), 1)
 
     def test_normalizes_and_counts_segments(self):
         msg = enqueue_message(to="0912345678", body="ش" * 71)
@@ -109,6 +125,22 @@ class EnqueueTests(TestCase):
         self.assertEqual(a.pk, b.pk)
         self.assertEqual(OutboundMessage.objects.count(), 1)
         self.assertEqual(b.body, "one")  # second call did not overwrite
+
+    def test_a_key_whose_message_never_went_out_can_be_used_again(self):
+        failed = enqueue_message(to="garbage", body="one", dedup_key="invoice:6")
+        self.assertEqual(failed.status, OutboundMessage.Status.FAILED)
+
+        retry = enqueue_message(to="+218912345678", body="two", dedup_key="invoice:6")
+
+        self.assertNotEqual(retry.pk, failed.pk)
+        self.assertEqual(retry.status, OutboundMessage.Status.QUEUED)
+        failed.refresh_from_db()
+        self.assertIsNone(failed.dedup_key)
+        # A key whose message did go out still stops a second copy.
+        self.assertEqual(
+            enqueue_message(to="+218912345678", body="three", dedup_key="invoice:6").pk,
+            retry.pk,
+        )
 
     def test_scheduled_when_not_before_set(self):
         later = timezone.now() + timezone.timedelta(hours=1)
@@ -236,116 +268,84 @@ class GatewayApiTests(TestCase):
         self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
         self.client = APIClient()
 
-    def test_manager_can_create_gateway_and_secret_is_write_only(self):
+    def test_a_gateway_is_tuned_not_created(self):
+        """The relay gateway provisions itself; a shop only sets its brakes."""
+        gateway = make_gateway()
         self.client.force_authenticate(self.manager)
-        resp = self.client.post(
-            "/api/messaging/gateways/",
+
+        created = self.client.post(
+            "/api/messaging/gateways/", {"name": "x", "provider": "fake"}, format="json"
+        )
+        self.assertIn(created.status_code, (403, 405))
+        deleted = self.client.delete(f"/api/messaging/gateways/{gateway.pk}/")
+        self.assertIn(deleted.status_code, (403, 405))
+        self.assertEqual(MessagingGateway.objects.count(), 1)
+
+        resp = self.client.patch(
+            f"/api/messaging/gateways/{gateway.pk}/",
             {
-                "name": "Front desk",
-                "provider": "fake",
-                "config": {},
-                "password": "hunter2",
-                "is_default": True,
+                "max_messages_per_minute": 12,
+                "daily_cap": 200,
+                "quiet_hours_start": "22:00",
+                "quiet_hours_end": "08:00",
+                "provider": "relay",
+                "name": "renamed",
             },
             format="json",
         )
-        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        gateway.refresh_from_db()
+        self.assertEqual(gateway.max_messages_per_minute, 12)
+        self.assertEqual(gateway.daily_cap, 200)
+        self.assertEqual(gateway.quiet_hours_start, time(22, 0))
+        # Provider and name are the relay's, not the shop's to edit.
+        self.assertEqual(gateway.provider, MessagingGateway.Provider.FAKE)
+        self.assertEqual(gateway.name, "Shop phone")
         self.assertNotIn("password", resp.data)
-        self.assertTrue(resp.data["has_password"])
-        gateway = MessagingGateway.objects.get(pk=resp.data["id"])
-        self.assertEqual(gateway.get_secret("password"), "hunter2")
+        self.assertNotIn("config", resp.data)
 
-    def test_test_send_delivers_immediately(self):
+    def test_quiet_hours_take_both_ends_or_neither(self):
+        gateway = make_gateway()
+        self.client.force_authenticate(self.manager)
+        resp = self.client.patch(
+            f"/api/messaging/gateways/{gateway.pk}/",
+            {"quiet_hours_start": "22:00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("quiet_hours_end", resp.data)
+
+    def test_test_send_sends_the_test_template(self):
         gateway = make_gateway()
         self.client.force_authenticate(self.manager)
         resp = self.client.post(
             f"/api/messaging/gateways/{gateway.pk}/test_send/",
-            {"to": "+218912345678", "body": "ping"},
+            {"to": "+218912345678", "body": "free text is ignored"},
             format="json",
         )
         self.assertEqual(resp.status_code, 200, resp.content)
         self.assertEqual(resp.data["status"], "sent")
+        self.assertEqual(resp.data["template_kind"], "test")
         self.assertEqual(len(fake.SENT_MESSAGES), 1)
+        self.assertEqual(fake.SENT_MESSAGES[0]["kind"], "test")
+        self.assertNotIn("free text", fake.SENT_MESSAGES[0]["body"])
 
-    def test_activation_state_is_exposed_without_leaking_the_token(self):
-        """The client cannot otherwise tell a sending gateway from a wired one.
-
-        Without this flag the settings page shows "ready" for a gateway that was
-        never activated — one that can send but will never receive a reply or a
-        delivery report.
-        """
-        gateway = make_gateway()
+    def test_test_send_explains_a_missing_subscription(self):
+        gateway = make_gateway(provider=MessagingGateway.Provider.RELAY)
         self.client.force_authenticate(self.manager)
-
-        resp = self.client.get(f"/api/messaging/gateways/{gateway.pk}/")
-        self.assertEqual(resp.status_code, 200, resp.content)
-        self.assertFalse(resp.data["is_activated"])
-
-        self.client.post(f"/api/messaging/gateways/{gateway.pk}/activate/")
-        resp = self.client.get(f"/api/messaging/gateways/{gateway.pk}/")
-        self.assertTrue(resp.data["is_activated"])
-        self.assertNotIn("webhook_token", resp.data)
+        resp = self.client.post(
+            f"/api/messaging/gateways/{gateway.pk}/test_send/",
+            {"to": "+218912345678"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertEqual(resp.data["code"], "not_entitled")
+        self.assertIn("اشتراك", resp.data["detail"])
 
     def test_cashier_cannot_manage_gateways(self):
         self.client.force_authenticate(self.cashier)
         resp = self.client.get("/api/messaging/gateways/")
         self.assertEqual(resp.status_code, 403)
-
-
-class GatewayActivationTests(TestCase):
-    def setUp(self):
-        fake.reset()
-        ensure_role_groups()
-        User = get_user_model()
-        self.manager = User.objects.create_user(username="mgr", password="x")
-        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
-        self.gateway = make_gateway()
-        self.client = APIClient()
-
-    def test_activate_provisions_token_registers_webhooks_and_activates(self):
-        self.client.force_authenticate(self.manager)
-        resp = self.client.post(
-            f"/api/messaging/gateways/{self.gateway.id}/activate/"
-        )
-        self.assertEqual(resp.status_code, 200, resp.content)
-        self.assertTrue(resp.data["ok"])
-        self.assertEqual(len(fake.REGISTERED_WEBHOOKS), 1)
-        self.gateway.refresh_from_db()
-        self.assertTrue(self.gateway.is_active)
-        self.assertTrue(self.gateway.is_default)
-        self.assertTrue(self.gateway.has_secret("webhook_token"))
-        registered = fake.REGISTERED_WEBHOOKS[0]
-        self.assertIn(f"/inbound/{self.gateway.id}/", registered["inbound"])
-        self.assertIn("token=", registered["inbound"])
-
-
-@override_settings(**_LOCMEM, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
-class SmsGateSignatureTests(TestCase):
-    """The HMAC path is the other unauthenticated credential check."""
-
-    def _driver(self):
-        gateway = make_gateway(provider=MessagingGateway.Provider.SMS_GATE)
-        gateway.set_secret("webhook_signing_key", "signing-key")
-        gateway.save()
-        return SmsGateDriver(gateway)
-
-    def _request(self, signature):
-        request = APIRequestFactory().post(
-            "/api/messaging/inbound/1/", {"event": "sms:received"}, format="json"
-        )
-        request.headers = {"X-Signature": signature, "X-Timestamp": "1"}
-        return request
-
-    def test_non_ascii_signature_rejected_instead_of_erroring(self):
-        """A high byte in ``X-Signature`` is a bad signature, not a ``TypeError``.
-
-        Django decodes headers as latin-1, so the caller controls whether the
-        header is a non-ASCII ``str`` — and ``compare_digest`` raises on those.
-        """
-        self.assertFalse(self._driver().verify_inbound(self._request("de\u00e9dbeef")))
-
-    def test_wrong_ascii_signature_still_rejected(self):
-        self.assertFalse(self._driver().verify_inbound(self._request("deadbeef")))
 
 
 class SecretlessGatewayInboundAuthTests(TestCase):
@@ -355,8 +355,8 @@ class SecretlessGatewayInboundAuthTests(TestCase):
     and otherwise delegates to ``transport.verify_inbound``. Delegation makes
     the driver the authenticator, and the fake driver — registered in
     production code, selectable as a ``Provider`` choice — answered True for
-    every caller. A gateway created but not yet activated (so no token has been
-    provisioned) therefore accepted an unauthenticated POST from any LAN peer,
+    every caller. A gateway with no token provisioned therefore accepted an
+    unauthenticated POST from any LAN peer,
     who could forge an inbound SMS carrying any sender number: a "STOP" that
     revokes a real customer's marketing consent, or a message threaded into the
     conversation staff read and reply to.
@@ -385,10 +385,10 @@ class SecretlessGatewayInboundAuthTests(TestCase):
             "a forged inbound must not be stored, let alone routed to consent handling",
         )
 
-    def test_secretless_sms_gate_gateway_rejects_unauthenticated_inbound(self):
+    def test_secretless_relay_gateway_rejects_unauthenticated_inbound(self):
         gateway = make_gateway(
-            name="Unconfigured phone",
-            provider=MessagingGateway.Provider.SMS_GATE,
+            name="Relay",
+            provider=MessagingGateway.Provider.RELAY,
             is_default=False,
         )
 

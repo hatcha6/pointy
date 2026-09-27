@@ -496,7 +496,7 @@ PERMISSION_CATALOG = [
             _perm(
                 "reports.view_reportrun",
                 "عرض التقارير ولوحات المعلومات",
-                "يفتح اللوحات والتقارير ويمنح رؤية على مستوى المتجر كاملاً (كل الورديات).",
+                "يفتح اللوحات والتقارير ويمنح رؤية على مستوى المتجر كاملاً (كل الورديات)، ومنها ربح الفواتير وتكلفة أصنافها.",
             ),
             # Closing a month is bookkeeping, not shop configuration — and
             # writing into a closed one is a separate, rarer right again.
@@ -691,7 +691,7 @@ PERMISSION_CATALOG = [
         "label": "المراسلة والحملات",
         "description": "بوابات الرسائل وسجلّها ومحادثات العملاء والحملات.",
         "permissions": [
-            _perm("messaging.manage_gateways", "إعداد بوابات الرسائل", "ضبط أجهزة/بوابات إرسال الرسائل وإرسال رسائل اختبار."),
+            _perm("messaging.manage_gateways", "إعدادات الرسائل النصية", "تشغيل خدمة الرسائل أو إيقافها، وضبط سرعة الإرسال وأوقات الهدوء، وإرسال رسالة اختبار."),
             _perm("messaging.view_logs", "سجل الرسائل", "الاطلاع على سجل الرسائل الصادرة والواردة."),
             _perm("crm.view_conversations", "عرض المحادثات", "الاطلاع على محادثات العملاء عبر الرسائل."),
             _perm("crm.manage_conversations", "الرد على المحادثات", "إرسال ردود في محادثات العملاء."),

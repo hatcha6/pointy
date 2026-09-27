@@ -25,7 +25,7 @@ from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers
 
-from . import catalog
+from . import catalog, quotes
 from .models import (
     IntegrationAccount,
     IntegrationFulfillment,
@@ -51,11 +51,20 @@ class IntegrationLineSerializer(serializers.Serializer):
     package_name = serializers.CharField(
         max_length=160, required=False, allow_blank=True, default=""
     )
-    # What the provider quoted the shop at the moment the cashier chose it.
-    # Recorded as the quote, not believed as gospel: nothing has been spent
-    # yet, and reconciliation against the provider's own purchase log is what
-    # eventually settles the real figure.
-    cost = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+    # What the provider quoted the shop at the moment the cashier chose it,
+    # sealed by the lookup (:mod:`apps.integrations.quotes`) so the till can
+    # carry it without reading it. Recorded as the quote, not believed as
+    # gospel: nothing has been spent yet, and reconciliation against the
+    # provider's own purchase log is what eventually settles the real figure.
+    quote = serializers.CharField(
+        max_length=1024, required=False, allow_blank=True, default=""
+    )
+    # The same figure in the clear, as a till sent it before quotes were
+    # sealed. Still honoured when a line has no quote — a held invoice or an
+    # older build — and ignored when it has one.
+    cost = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, required=False
+    )
 
 
 def voucher_line_payload(variant) -> dict | None:
@@ -118,29 +127,36 @@ def resolve_line_integration(payload: dict, variant):
         )
 
     option_code = (payload.get("option_code") or "").strip()
+    subscriber_ref = (payload.get("subscriber_ref") or "").strip()
+    driver = provider_for(account)
     # A driver that can price its own options offline is believed over the
     # till. For stored value that is not a nicety: the option code carries the
     # face value, so the shop's cost and the customer's price are both
     # arithmetic here, and a cart line cannot assert either of them.
-    quote = provider_for(account).quote(option_code)
+    quote = driver.quote(option_code)
     if quote is not None:
         cost = quote.cost
         floor = quote.face_value
     else:
         floor = None
-        try:
-            cost = Decimal(payload["cost"])
-        except (KeyError, TypeError, InvalidOperation):
-            raise serializers.ValidationError(
-                {"integration": "A quoted cost is required."}
-            )
+        cost = _quoted_cost(
+            payload,
+            account=account,
+            subscriber_ref=subscriber_ref,
+            option_code=option_code,
+        )
 
     return {
         "account": account,
         "provider": provider,
-        "subscriber_ref": (payload.get("subscriber_ref") or "").strip(),
+        "subscriber_ref": subscriber_ref,
         "option_code": option_code,
-        "option_label": (payload.get("option_label") or "").strip(),
+        # In the provider's words, less anything they say about its price: a
+        # held cart from before a driver learned to leave the price out still
+        # carries it.
+        "option_label": driver.option_label(
+            (payload.get("option_label") or "").strip()
+        ),
         "months": int(payload.get("months") or 0),
         "package_id": (payload.get("package_id") or "").strip(),
         "package_name": (payload.get("package_name") or "").strip(),
@@ -149,6 +165,36 @@ def resolve_line_integration(payload: dict, variant):
         # month at +5 and twelve at +20.
         "price": account.selling_price(cost, option_code, floor=floor),
     }
+
+
+def _quoted_cost(payload: dict, *, account, subscriber_ref: str, option_code: str):
+    """What the provider quoted for an option only the provider can price.
+
+    The sealed quote the lookup handed the till, when the line carries one;
+    otherwise the plain figure a till sent before quotes were sealed. A quote
+    that does not open for exactly this card and option is refused rather than
+    set aside for the plain figure beside it: it means the line was edited
+    after it was quoted, and the cashier should look the card up again.
+    """
+    token = (payload.get("quote") or "").strip()
+    if token:
+        cost = quotes.open_quote(
+            token,
+            account=account,
+            subscriber_ref=subscriber_ref,
+            option_code=option_code,
+        )
+        if cost is None:
+            raise serializers.ValidationError(
+                {"integration": "This quote is not for this card and option."}
+            )
+        return cost
+    try:
+        return Decimal(payload["cost"])
+    except (KeyError, TypeError, InvalidOperation):
+        raise serializers.ValidationError(
+            {"integration": "A quoted cost is required."}
+        )
 
 
 def _resolve_voucher_line(provider: str, variant) -> dict:

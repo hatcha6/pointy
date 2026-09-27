@@ -19,6 +19,7 @@ class VoucherCard {
     required this.price,
     required this.isAvailable,
     this.cost,
+    this.exceedsFloat,
   });
 
   final int variantId;
@@ -27,9 +28,24 @@ class VoucherCard {
   /// What the customer pays — the same figure checkout will charge.
   final double price;
 
-  /// What the agency float pays, for the low-float warning.
+  /// What the agency float pays. Only a reporting-role reader is sent it.
   final double? cost;
+
+  /// Whether the float, as last read, cannot pay for this card — decided by
+  /// the server, so the picker can warn without being told the cost. `null`
+  /// from a server that predates the flag.
+  final bool? exceedsFloat;
   final bool isAvailable;
+
+  /// Whether the picker should warn that the float, at [balance], cannot pay
+  /// for this card: the server's answer, or the cost when an older server
+  /// sent that instead.
+  bool beyondFloat(double? balance) {
+    final decided = exceedsFloat;
+    if (decided != null) return decided;
+    final cost = this.cost;
+    return balance != null && cost != null && cost > balance;
+  }
 
   factory VoucherCard.fromJson(Map<String, Object?> json) {
     return VoucherCard(
@@ -37,6 +53,7 @@ class VoucherCard {
       label: json['label']?.toString() ?? '',
       price: _toDouble(json['price']) ?? 0,
       cost: _toDouble(json['cost']),
+      exceedsFloat: json['exceeds_float'] as bool?,
       isAvailable: json['is_available'] == true,
     );
   }

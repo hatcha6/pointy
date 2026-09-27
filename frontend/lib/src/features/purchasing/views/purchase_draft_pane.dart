@@ -356,11 +356,18 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       }
     }
 
+    // A supplier invoice number already on another order is the one refusal
+    // here the buyer fixes by changing what they typed; sending the same order
+    // again cannot help, so it gets its own words and no Retry.
+    final duplicateInvoice =
+        result is Error<PurchaseSubmission> &&
+        _refusesSupplierInvoiceNumber(result.exception);
     final message = switch (result) {
       Ok(:final value) =>
         value.status == 'received'
             ? l10n.purchaseOrderReceiveSuccess(value.draftNumber)
             : l10n.purchaseDraftSubmitSuccess(value.draftNumber),
+      Error() when duplicateInvoice => l10n.purchaseSupplierInvoiceNumberTaken,
       Error() => l10n.purchaseDraftSubmitError,
     };
 
@@ -369,7 +376,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          action: result is Ok<PurchaseSubmission>
+          action: result is Ok<PurchaseSubmission> || duplicateInvoice
               ? null
               : SnackBarAction(
                   label: l10n.retryButton,
@@ -385,6 +392,11 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     if (result is Ok<PurchaseSubmission>) {
       widget.onSubmitSuccess?.call();
     }
+  }
+
+  static bool _refusesSupplierInvoiceNumber(Object exception) {
+    return apiStatusCode(exception) == 400 &&
+        apiErrorHasField(exception, 'supplier_invoice_number');
   }
 
   /// Saves edits to a reopened draft without committing it. Mirrors
@@ -452,6 +464,8 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
 
     final message = switch (result) {
       Ok(:final value) => l10n.purchaseDraftSaveSuccess(value.orderNumber),
+      Error(:final exception) when _refusesSupplierInvoiceNumber(exception) =>
+        l10n.purchaseSupplierInvoiceNumberTaken,
       // The server said why. Saying it back beats a generic failure the buyer
       // can only answer by pressing the same button again.
       Error(:final exception) => switch (apiErrorDetail(exception)) {

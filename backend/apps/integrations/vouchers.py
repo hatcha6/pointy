@@ -35,7 +35,9 @@ cashier is still choosing.
 
 Every card product is also filed under one category per provider, pinned to
 the till's quick-access strip when it is first made, so the whole shelf is one
-tap away (see :mod:`.shelf_category`).
+tap away (see :mod:`.shelf_category`), and wears its brand's logo, the one the
+provider's own app shows, on the till and on every receipt that sells it (see
+:mod:`.voucher_logos`).
 """
 
 from __future__ import annotations
@@ -53,7 +55,7 @@ from django.utils.dateparse import parse_datetime
 from apps.catalog.models import Product, ProductAlias, ProductVariant
 from apps.core import caching
 
-from . import catalog, shelf_category
+from . import catalog, shelf_category, voucher_logos
 from .models import IntegrationAccount, IntegrationVoucher, IntegrationVoucherBrand
 from .providers import provider_for
 from .providers.base import VoucherBrand, in_parallel
@@ -96,6 +98,9 @@ class SyncReport:
     brands_listed: int = 0
     brands_refreshed: int = 0
     changed: int = 0
+    #: Logos this pass changed, the tiles' and the receipts' (see
+    #: ``voucher_logos``).
+    logos: int = 0
 
     def as_dict(self) -> dict:
         return {
@@ -105,6 +110,7 @@ class SyncReport:
             "brands_listed": self.brands_listed,
             "brands_refreshed": self.brands_refreshed,
             "changed": self.changed,
+            "logos": self.logos,
         }
 
 
@@ -143,7 +149,12 @@ def sync_all() -> dict:
 
 
 # --- the sweep --------------------------------------------------------------------
-def sync_account(account, *, refresh_limit: int = BRAND_REFRESHES_PER_SWEEP) -> SyncReport:
+def sync_account(
+    account,
+    *,
+    refresh_limit: int = BRAND_REFRESHES_PER_SWEEP,
+    logo_limit: int = voucher_logos.LOGO_FETCHES_PER_SWEEP,
+) -> SyncReport:
     """Mirror the provider's shelf into the catalog. Never raises on a provider error."""
     report = SyncReport(provider=account.provider)
     listing = provider_for(account).voucher_catalog()
@@ -157,7 +168,22 @@ def sync_account(account, *, refresh_limit: int = BRAND_REFRESHES_PER_SWEEP) -> 
     fetched = _read_stale_brands(account, listing.brands, limit=refresh_limit)
     report.brands_refreshed = len(fetched)
     report.changed = apply_listing(account, listing.brands, fetched)
+    report.logos = _sync_logos(account, limit=logo_limit)
     return report
+
+
+def _sync_logos(account, *, limit: int) -> int:
+    """The brands' pictures, once the shelf they hang on is written.
+
+    Outside the listing's transaction, because it waits on downloads, and never
+    an error: a logo that could not be fetched must not fail the sync that
+    decides what the till may sell.
+    """
+    try:
+        return voucher_logos.sync_logos(account, limit=limit)
+    except Exception:  # pragma: no cover - a nicety must not fail a sync
+        logger.warning("could not fetch %s logos", account.provider, exc_info=True)
+        return 0
 
 
 def _read_stale_brands(account, listed, *, limit: int) -> dict:
@@ -230,9 +256,9 @@ def apply_listing(account, listed, fetched=None) -> int:
     now = timezone.now()
     brands = {
         brand.code: brand
-        for brand in IntegrationVoucherBrand.objects.filter(account=account).select_related(
-            "product"
-        )
+        for brand in IntegrationVoucherBrand.objects.filter(account=account)
+        .select_related("product")
+        .defer("print_logo")
     }
     vouchers = _vouchers_by_code(account)
     touched = []
@@ -268,7 +294,9 @@ def withdraw_shelf(account) -> int:
     """Take every card of this account off the till. Past sales are untouched."""
     with transaction.atomic():
         brands = list(
-            IntegrationVoucherBrand.objects.filter(account=account, is_listed=True)
+            IntegrationVoucherBrand.objects.filter(
+                account=account, is_listed=True
+            ).defer("print_logo")
         )
         for brand in brands:
             brand.is_listed = False
@@ -295,6 +323,7 @@ def _write_brand(account, brand, info: VoucherBrand, *, inline: bool):
         "name_en": (info.name_en or "")[:160],
         "currency": (info.currency or "LYD")[:8],
         "logo_path": (info.logo_path or "")[:255],
+        "print_logo_path": (info.print_logo_path or "")[:255],
         "is_listed": True,
         "items_inline": inline,
     }
@@ -302,6 +331,12 @@ def _write_brand(account, brand, info: VoucherBrand, *, inline: bool):
     # must not blank the one the listing gave it.
     if info.category:
         wanted["category"] = info.category[:160]
+    # Another file is another logo: fetch it on the next sweep, not a month
+    # after the old one was read (see ``voucher_logos``).
+    if brand.logo_path != wanted["logo_path"]:
+        wanted["logo_checked_at"] = None
+    if brand.print_logo_path != wanted["print_logo_path"]:
+        wanted["print_logo_checked_at"] = None
     renamed_en = brand.name_en != wanted["name_en"]
     fields = [name for name, value in wanted.items() if getattr(brand, name) != value]
     for name in fields:
@@ -526,7 +561,7 @@ def _forget_active_products() -> None:
 
 
 # --- what the till asks -----------------------------------------------------------
-def refresh_brand(account, brand: IntegrationVoucherBrand) -> dict:
+def refresh_brand(account, brand: IntegrationVoucherBrand, *, with_cost=True) -> dict:
     """Re-read one brand now and answer with what the till may sell of it.
 
     Single-flighted and shared for under a minute: ten tills opening the same
@@ -539,7 +574,8 @@ def refresh_brand(account, brand: IntegrationVoucherBrand) -> dict:
     """
     if brand.items_inline:
         key = f"pointy:integrations:vouchers:listing:{account.pk}"
-        compute = lambda: sync_account(account, refresh_limit=0).ok  # noqa: E731
+        # A cashier is waiting on this one: no brand reads, and no pictures.
+        compute = lambda: sync_account(account, refresh_limit=0, logo_limit=0).ok  # noqa: E731
     else:
         key = f"pointy:integrations:vouchers:brand:{account.pk}:{brand.code}"
         compute = lambda: _read_brand_now(account, brand)  # noqa: E731
@@ -548,7 +584,7 @@ def refresh_brand(account, brand: IntegrationVoucherBrand) -> dict:
     except Exception:  # noqa: BLE001 - the picker keeps what it has
         logger.warning("could not refresh voucher brand %s", brand.code, exc_info=True)
     brand.refresh_from_db()
-    return availability_payload(account, brand)
+    return availability_payload(account, brand, with_cost=with_cost)
 
 
 def _read_brand_now(account, brand) -> bool:
@@ -558,8 +594,15 @@ def _read_brand_now(account, brand) -> bool:
     return result.ok
 
 
-def availability_payload(account, brand) -> dict:
-    """What the picker shows: every card of the brand, priced, live or not."""
+def availability_payload(account, brand, *, with_cost=True) -> dict:
+    """What the picker shows: every card of the brand, priced, live or not.
+
+    A card's ``cost`` is what the float pays for it, so only a reporting-role
+    reader (``with_cost``) gets it; ``exceeds_float`` is the warning the
+    picker needed it for, decided here.
+    """
+    from .serializers import exceeds_float
+
     vouchers = brand.vouchers.select_related("variant").order_by("cost", "code")
     return {
         "product_id": brand.product_id,
@@ -577,7 +620,8 @@ def availability_payload(account, brand) -> dict:
                 "code": voucher.code,
                 "label": voucher.label,
                 "price": voucher_price(account, voucher),
-                "cost": voucher.cost,
+                **({"cost": voucher.cost} if with_cost else {}),
+                "exceeds_float": exceeds_float(voucher.cost, account),
                 "face_amount": voucher.face_amount,
                 "is_available": brand.is_listed and voucher.is_available,
             }

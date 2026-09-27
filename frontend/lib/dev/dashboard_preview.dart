@@ -267,6 +267,7 @@ class _PreviewNavigation implements AppNavigation {
     'permissions': <String>[],
     'is_active': true,
     'ai_available': false,
+    'sms_available': false,
     'surveillance_enabled': false,
   });
 

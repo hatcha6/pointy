@@ -618,6 +618,24 @@ def _account_debts(user):
     )
 
 
+def _sees_margins(user):
+    """Profit, cost and margin are for the reporting roles, the same line the
+    invoices and the reports draw. Every other tool here scopes a cashier to
+    their own till; these figures are not scoped down for them, they are left
+    out: a cashier asking how the till is doing gets its sales, never what the
+    shop made on them."""
+    from apps.core.roles import user_has_full_visibility
+
+    return user_has_full_visibility(user)
+
+
+_MARGIN_REFUSAL = {
+    "ok": False,
+    "error": "permission_denied",
+    "message": "الأرباح والتكاليف متاحة لمن يملك صلاحية التقارير فقط.",
+}
+
+
 def _scoped_orders(user, *, start=None, end=None):
     """Permission-scoped ``OrderQuerySet`` (the same boundary as every read tool),
     optionally bounded to a local-date range on ``created_at``. Returns
@@ -733,6 +751,12 @@ def compare_periods(*, user, period=None, start=None, end=None):
             else round(cur["margin_percent"] - prev["margin_percent"], 1)
         ),
     }
+    if not _sees_margins(user):
+        for figures in (cur, prev):
+            figures.pop("profit")
+            figures.pop("margin_percent")
+        change.pop("profit_percent")
+        change.pop("margin_point_change")
     return {
         "ok": True,
         "data": _json_safe(
@@ -750,6 +774,9 @@ def profitability(*, user, group_by="product", period=None, start=None, end=None
     ``order='bottom'`` to surface the lowest-margin sellers — the trap a 'best
     seller' ranking hides. Cost is the at-sale ``unit_cost`` snapshot on each line."""
     from apps.sales.models import OrderLine
+
+    if not _sees_margins(user):
+        return dict(_MARGIN_REFUSAL)
 
     today = timezone.localdate()
     win_start, win_end, err = _window(period, start, end, today)
@@ -1453,7 +1480,7 @@ def project_forecast(*, user):
             "start": month_start,
             "through": today,
             "revenue": mtd["revenue"],
-            "profit": mtd["profit"],
+            **({"profit": mtd["profit"]} if _sees_margins(user) else {}),
             "days_elapsed": days_elapsed,
         },
         "projection": {
@@ -2331,6 +2358,12 @@ def match_invoice_products(*, user, supplier_name=None, lines=None):
 
     truncated = len(valid_lines) > _MAX_INVOICE_LINES
     supplier = _match_supplier(suppliers_meta, user=user, supplier_name=supplier_name)
+    # What the shop last paid is for the people who read purchase orders
+    # anyway. Anyone else could type a product's name in as an "invoice line"
+    # and be told what it cost.
+    reads_purchase_costs = user is not None and user.has_perm(
+        "purchasing.view_purchaseorder"
+    )
 
     out_lines = []
     for index, raw in enumerate(valid_lines[:_MAX_INVOICE_LINES]):
@@ -2368,11 +2401,12 @@ def match_invoice_products(*, user, supplier_name=None, lines=None):
             line_out["product_name"] = match.get("product_name")
             line_out["match_by"] = match.get("match_by")
             line_out["current_price"] = match.get("current_price")
-            try:
-                cost = latest_variant_unit_cost(match.get("variant_id"))
-            except Exception:
-                cost = None
-            line_out["current_cost"] = None if cost is None else f"{cost:.2f}"
+            if reads_purchase_costs:
+                try:
+                    cost = latest_variant_unit_cost(match.get("variant_id"))
+                except Exception:
+                    cost = None
+                line_out["current_cost"] = None if cost is None else f"{cost:.2f}"
         else:
             line_out["candidates"] = match.get("candidates", [])
             suggested = None
@@ -2916,8 +2950,9 @@ def action_tool_definitions():
             "function": {
                 "name": "draft_campaign",
                 "description": (
-                    "أنشئ مسودّة حملة تسويقية عبر SMS — لا تُرسَل أبدًا. اكتب أنت نصّ الرسالة "
-                    "(يمكن تضمين {{first_name}} و{{shop_name}})، وحدّد الفئة المستهدفة عبر "
+                    "أنشئ مسودّة حملة تسويقية عبر SMS — لا تُرسَل أبدًا. اكتب أنت نصّ العرض "
+                    "(يمكن تضمين {{first_name}}؛ تبدأ الرسالة تلقائيًا بـ«عرض من <اسم المحل>:» "
+                    "فلا تكرّر اسم المحل، وبحدّ أقصى 320 حرفًا)، وحدّد الفئة المستهدفة عبر "
                     "rfm_segments (تصنيفات RFM مثل champion أو at_risk، أو اتركها فارغة لكل "
                     "العملاء). تُنشأ كمسودّة فقط ويعتمدها المستخدم ويُرسلها من شاشة الحملات — "
                     "لا يمكنك أنت الإرسال. تُستبعَد تلقائيًا مَن أوقفوا الرسائل التسويقية. تُرجع "

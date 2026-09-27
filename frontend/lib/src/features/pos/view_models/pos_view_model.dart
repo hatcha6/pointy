@@ -10,7 +10,6 @@ import '../../../core/result.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/integration_card.dart';
-import '../../../data/models/integration_provider.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../shared/barcode/scale_barcode.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';

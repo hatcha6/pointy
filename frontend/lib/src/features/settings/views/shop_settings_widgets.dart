@@ -263,6 +263,8 @@ class _ReceiptSettingsFields extends StatelessWidget {
     required this.enabled,
     required this.onAutoPrintReceiptsChanged,
     required this.onEnableOnlineInvoicesChanged,
+    this.printVoucherQrCodes,
+    this.onPrintVoucherQrCodesChanged,
   });
 
   final TextEditingController headerController;
@@ -277,6 +279,11 @@ class _ReceiptSettingsFields extends StatelessWidget {
   final bool enabled;
   final ValueChanged<bool> onAutoPrintReceiptsChanged;
   final ValueChanged<bool> onEnableOnlineInvoicesChanged;
+
+  /// The voucher QR switch. Null hides it: a shop that sells no provider
+  /// cards has nothing for it to print on.
+  final bool? printVoucherQrCodes;
+  final ValueChanged<bool>? onPrintVoucherQrCodesChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -352,6 +359,15 @@ class _ReceiptSettingsFields extends StatelessWidget {
           subtitle: Text(l10n.enableOnlineInvoicesSubtitle),
           onChanged: enabled ? onEnableOnlineInvoicesChanged : null,
         ),
+        if (printVoucherQrCodes case final printQr?)
+          SwitchListTile(
+            key: const ValueKey('print_voucher_qr_codes_switch'),
+            contentPadding: EdgeInsets.zero,
+            value: printQr,
+            title: Text(l10n.printVoucherQrCodesLabel),
+            subtitle: Text(l10n.printVoucherQrCodesSubtitle),
+            onChanged: enabled ? onPrintVoucherQrCodesChanged : null,
+          ),
       ],
     );
   }

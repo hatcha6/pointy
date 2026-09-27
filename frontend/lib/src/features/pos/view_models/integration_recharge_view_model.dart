@@ -230,11 +230,20 @@ class IntegrationRechargeViewModel extends ChangeNotifier {
   /// True when the float cannot cover the selected top-up. Advisory: the sale
   /// is still recorded, and the shop tops the float up separately — but a
   /// cashier should know before the customer pays.
+  ///
+  /// A quoted offer arrives with the server's answer, because only the
+  /// server may know what it costs. An amount the cashier typed was never
+  /// quoted; it is judged here, on its cost when this reader may see it and
+  /// otherwise on its face value — never less than the float pays for it, so
+  /// the warning can come early but never late.
   bool get exceedsBalance {
     final offer = _selectedOffer;
     final balance = _snapshot?.balance;
     if (offer == null || balance == null) return false;
-    return offer.cost > balance;
+    final decided = offer.exceedsFloat;
+    if (decided != null) return decided;
+    final needed = offer.cost ?? offer.faceValue;
+    return needed != null && needed > balance;
   }
 
   void selectOffer(IntegrationOffer? offer) {

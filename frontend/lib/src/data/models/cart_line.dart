@@ -1,3 +1,5 @@
+import 'integration_card.dart';
+import 'integration_provider.dart';
 import 'modifier_group.dart';
 import 'product_variant.dart';
 
@@ -13,7 +15,8 @@ class CartLineIntegration {
     required this.subscriberRef,
     required this.optionCode,
     required this.optionLabel,
-    required this.cost,
+    this.cost,
+    this.quote,
     this.months = 0,
     this.packageId = '',
     this.packageName = '',
@@ -26,31 +29,56 @@ class CartLineIntegration {
   final String optionCode;
   final String optionLabel;
 
-  /// What the provider draws from the float, in LYD. Distinct from the line's
-  /// selling price, which is the shop's own.
-  final double cost;
+  /// What the provider draws from the float, in LYD, when this till's reader
+  /// may know it. Distinct from the line's selling price, which is the
+  /// shop's own. A held invoice from before quotes were sealed carries it,
+  /// and checkout still honours it there.
+  final double? cost;
+
+  /// The same figure sealed by the server, which is what checkout reads for
+  /// an option only the provider can price. The till cannot open it.
+  final String? quote;
   final int months;
   final String packageId;
   final String packageName;
+
+  /// The line a top-up the cashier chose rides on: its sealed quote, and its
+  /// cost only when this reader was sent one.
+  factory CartLineIntegration.fromRecharge(IntegrationRechargeDraft draft) {
+    return CartLineIntegration(
+      provider: integrationProviderKeyToJson(draft.provider),
+      subscriberRef: draft.subscriberRef,
+      optionCode: draft.offer.code,
+      optionLabel: draft.offer.label,
+      cost: draft.cost,
+      quote: draft.quote,
+      months: draft.offer.months,
+      packageId: draft.offer.packageId,
+      packageName: draft.offer.packageName,
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'provider': provider,
     'subscriber_ref': subscriberRef,
     'option_code': optionCode,
     'option_label': optionLabel,
-    'cost': cost,
+    if (cost != null) 'cost': cost,
+    if (quote != null) 'quote': quote,
     'months': months,
     'package_id': packageId,
     'package_name': packageName,
   };
 
   factory CartLineIntegration.fromJson(Map<String, Object?> json) {
+    final quote = json['quote']?.toString() ?? '';
     return CartLineIntegration(
       provider: json['provider']?.toString() ?? '',
       subscriberRef: json['subscriber_ref']?.toString() ?? '',
       optionCode: json['option_code']?.toString() ?? '',
       optionLabel: json['option_label']?.toString() ?? '',
-      cost: _doubleFromJson(json['cost']),
+      cost: json['cost'] == null ? null : _doubleFromJson(json['cost']),
+      quote: quote.isEmpty ? null : quote,
       months: _intOrNull(json['months']) ?? 0,
       packageId: json['package_id']?.toString() ?? '',
       packageName: json['package_name']?.toString() ?? '',

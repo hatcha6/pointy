@@ -1,54 +1,37 @@
 import '../models/messaging_gateway.dart';
+import '../models/messaging_status.dart';
 import 'api_session.dart';
 
-/// REST access to the messaging gateway endpoints (apps.messaging):
-/// `GET/POST/PATCH/DELETE /api/messaging/gateways/` and the per-gateway
-/// `POST .../test_send/` + `POST .../activate/` actions. Mirrors
-/// [PrintingApiClient]'s shape.
+/// REST access to the SMS service (apps.messaging): the status read behind
+/// the settings page, `PATCH /api/messaging/gateways/{id}/` for the shop's
+/// dials, and the per-gateway `POST .../test_send/`.
 ///
-/// Failures throw [PosApiException] rather than a bare `Exception` so the
-/// settings page can show the backend's own reason (a rejected base URL, a
-/// permission denial) instead of a generic "couldn't save" — on a page whose
-/// whole job is diagnosing a connection, the reason *is* the feature.
+/// Failures throw [PosApiException] rather than a bare `Exception` so the page
+/// can show the backend's own reason — a refused entitlement, a cap, a bad
+/// number — instead of a generic "couldn't save".
 class MessagingApiClient {
   const MessagingApiClient(this._session);
 
   final PosApiSession _session;
 
-  Future<List<MessagingGateway>> fetchGateways() async {
-    final response = await _session.get('messaging/gateways/');
+  Future<MessagingServiceStatus> fetchStatus() async {
+    final response = await _session.get('messaging/status/');
     _session.throwApiException(
       response,
-      'Messaging gateways request failed with status',
+      'Messaging status request failed with status',
     );
-    final decoded = _session.decodedBody(response);
-    final items = decoded is Map<String, Object?>
-        ? (decoded['results'] as List<Object?>? ?? const [])
-        : (decoded as List<Object?>? ?? const []);
-    return items
-        .whereType<Map<String, Object?>>()
-        .map(MessagingGateway.fromJson)
-        .toList();
-  }
-
-  Future<MessagingGateway> createGateway(MessagingGatewayDraft draft) async {
-    final response = await _session.post(
-      'messaging/gateways/',
-      body: draft.toJson(),
-    );
-    _session.throwApiException(response, 'Gateway creation failed with status');
-    return MessagingGateway.fromJson(
+    return MessagingServiceStatus.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
 
   Future<MessagingGateway> updateGateway(
     int id,
-    MessagingGatewayDraft draft,
+    MessagingGatewayUpdate update,
   ) async {
     final response = await _session.patch(
       'messaging/gateways/$id/',
-      body: draft.toJson(),
+      body: update.toJson(),
     );
     _session.throwApiException(response, 'Gateway update failed with status');
     return MessagingGateway.fromJson(
@@ -56,33 +39,18 @@ class MessagingApiClient {
     );
   }
 
-  Future<void> deleteGateway(int id) async {
-    final response = await _session.delete('messaging/gateways/$id/');
-    _session.throwApiException(response, 'Gateway delete failed with status');
-  }
-
+  /// Sends the approved test template to [to]. There is no free-text body any
+  /// more: every SMS is a template the provider has approved.
   Future<MessagingSendResult> testSend({
     required int id,
     required String to,
-    String? body,
   }) async {
     final response = await _session.post(
       'messaging/gateways/$id/test_send/',
-      body: {'to': to, if (body != null && body.isNotEmpty) 'body': body},
+      body: {'to': to},
     );
     _session.throwApiException(response, 'Test send failed with status');
     return MessagingSendResult.fromJson(
-      _session.decodedBody(response) as Map<String, Object?>,
-    );
-  }
-
-  Future<GatewayActivation> activate(int id) async {
-    final response = await _session.post('messaging/gateways/$id/activate/');
-    _session.throwApiException(
-      response,
-      'Gateway activation failed with status',
-    );
-    return GatewayActivation.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

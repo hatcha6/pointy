@@ -38,6 +38,10 @@ enum SessionIntegrationBucket {
 /// the provider's share, the shop's profit — cover only the sales the shop
 /// kept; refunds are counted beside them, and a refund the provider had
 /// already performed is counted on its own because the float paid for it.
+///
+/// The provider's share and the profit reach the reporting roles only. For
+/// anyone else the server leaves them out, and they are `null` here — never
+/// a zero that reads as "cost nothing, made nothing".
 class SessionIntegrations {
   const SessionIntegrations({
     this.providers = const [],
@@ -58,6 +62,9 @@ class SessionIntegrations {
   final List<SessionIntegrationTransaction> transactions;
 
   bool get hasActivity => providers.isNotEmpty;
+
+  /// Whether this reader was sent what the providers cost the shop.
+  bool get showsCost => totals.cost != null;
 
   List<SessionIntegrationTransaction> transactionsFor(String provider) => [
     for (final transaction in transactions)
@@ -96,8 +103,8 @@ class SessionIntegrationFigures {
   static const empty = SessionIntegrationFigures(
     count: 0,
     sold: 0,
-    cost: 0,
-    margin: 0,
+    cost: null,
+    margin: null,
     delivered: SessionIntegrationBucketTotals.empty,
     awaiting: SessionIntegrationBucketTotals.empty,
     unknown: SessionIntegrationBucketTotals.empty,
@@ -115,11 +122,12 @@ class SessionIntegrationFigures {
   final double sold;
 
   /// The provider's share of [sold]: already out of the float for the
-  /// delivered ones, still owed for the rest.
-  final double cost;
+  /// delivered ones, still owed for the rest. `null` when not sent.
+  final double? cost;
 
-  /// What the shop keeps once every kept sale is delivered.
-  final double margin;
+  /// What the shop keeps once every kept sale is delivered. `null` when not
+  /// sent.
+  final double? margin;
 
   final SessionIntegrationBucketTotals delivered;
   final SessionIntegrationBucketTotals awaiting;
@@ -156,8 +164,8 @@ class SessionIntegrationFigures {
       provider: (json['provider'] ?? '').toString(),
       count: _int(json['count']),
       sold: _money(json['sold']),
-      cost: _money(json['cost']),
-      margin: _money(json['margin']),
+      cost: _nullableMoney(json['cost']),
+      margin: _nullableMoney(json['margin']),
       delivered: SessionIntegrationBucketTotals.fromJson(
         _map(json['delivered']),
       ),
@@ -181,18 +189,20 @@ class SessionIntegrationBucketTotals {
   static const empty = SessionIntegrationBucketTotals(
     count: 0,
     amount: 0,
-    cost: 0,
+    cost: null,
   );
 
   final int count;
   final double amount;
-  final double cost;
+
+  /// The provider's share. `null` when not sent.
+  final double? cost;
 
   factory SessionIntegrationBucketTotals.fromJson(Map<String, Object?> json) {
     return SessionIntegrationBucketTotals(
       count: _int(json['count']),
       amount: _money(json['amount']),
-      cost: _money(json['cost']),
+      cost: _nullableMoney(json['cost']),
     );
   }
 }
@@ -238,8 +248,8 @@ class SessionIntegrationTransaction {
   /// What the customer paid for this line.
   final double price;
 
-  /// The provider's price for it.
-  final double cost;
+  /// The provider's price for it. `null` when not sent.
+  final double? cost;
 
   /// What went back to the customer, for a refunded line.
   final double refundedAmount;
@@ -272,7 +282,7 @@ class SessionIntegrationTransaction {
       subscriberLabel: (json['subscriber_label'] ?? '').toString(),
       optionLabel: (json['option_label'] ?? '').toString(),
       price: _money(json['price']),
-      cost: _money(json['cost']),
+      cost: _nullableMoney(json['cost']),
       refundedAmount: _money(json['refunded_amount']),
       status: (json['status'] ?? '').toString(),
       bucket: SessionIntegrationBucket.fromJson(json['bucket']),

@@ -5,7 +5,12 @@ from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 
 from apps.sales.testing import issue
-from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.core.roles import (
+    CASHIER_GROUP,
+    MANAGER_GROUP,
+    SUPERVISOR_GROUP,
+    ensure_role_groups,
+)
 
 from .tool_registry import DENY_BASENAMES, get_registry
 from .tools import (
@@ -679,6 +684,41 @@ class AiAdviceToolTests(TestCase):
 
         manager_view = compare_periods(user=self.manager, period="last_30_days")
         self.assertEqual(float(manager_view["data"]["current"]["revenue"]), 50.0)
+
+    def test_profit_and_margin_are_for_the_reporting_roles_alone(self):
+        # A till's own sales are its cashier's to ask about; what the shop made
+        # on them is not — the line the invoices and the reports draw too.
+        v = self._variant("منتج", "ADV-MARGIN", "10.00", on_hand="100")
+        self._order([(v, "5", "10.00", "4.00")])
+
+        till = compare_periods(user=self.cashier, period="last_30_days")
+        self.assertTrue(till["ok"], till)
+        for window in ("current", "previous"):
+            self.assertIn("revenue", till["data"][window])
+            self.assertNotIn("profit", till["data"][window])
+            self.assertNotIn("margin_percent", till["data"][window])
+        self.assertNotIn("profit_percent", till["data"]["change"])
+        self.assertNotIn("margin_point_change", till["data"]["change"])
+        forecast = project_forecast(user=self.cashier)
+        self.assertIn("revenue", forecast["data"]["month_to_date"])
+        self.assertNotIn("profit", forecast["data"]["month_to_date"])
+        refused = profitability(user=self.cashier, group_by=None)
+        self.assertFalse(refused["ok"])
+        self.assertEqual(refused["error"], "permission_denied")
+        self.assertTrue(business_health(user=self.cashier)["ok"])
+
+        supervisor = User.objects.create_user(username="adv-supervisor", password="pw")
+        supervisor.groups.add(Group.objects.get(name=SUPERVISOR_GROUP))
+        shop = compare_periods(user=supervisor, period="last_30_days")
+        self.assertEqual(float(shop["data"]["current"]["profit"]), 30.0)
+        self.assertEqual(
+            float(profitability(user=supervisor, group_by=None)["data"]["profit"]),
+            30.0,
+        )
+        self.assertEqual(
+            float(project_forecast(user=supervisor)["data"]["month_to_date"]["profit"]),
+            30.0,
+        )
 
     def test_advice_tools_results_are_json_serializable(self):
         import json

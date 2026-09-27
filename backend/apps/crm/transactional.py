@@ -1,10 +1,10 @@
 """Transactional customer SMS: invoice delivery and debt reminders.
 
 Both are ``transactional`` consent-class, so they always send (an invoice or a
-debt reminder is not marketing). They reuse the shareable public-invoice link
-when the shop's subscription supports it, and fall back to a plain-text summary
-otherwise. Idempotency keys keep a double-tap (invoice) or a daily sweep (debt)
-from sending twice.
+debt reminder is not marketing). Each has two approved templates: one carrying
+the shareable public-invoice link, used when the shop's subscription supports
+it, and one without. Idempotency keys keep a double-tap (invoice) or a daily
+sweep (debt) from sending twice.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from apps.core.models import ShopSettings
 from apps.core.timeutils import business_local_date
 from apps.messaging.models import OutboundMessage
 from apps.messaging.services import enqueue_message
+from apps.messaging.sms_templates import sms_template
 from apps.sales.public_invoices import public_invoice_url_for_order
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,10 @@ def _money(amount) -> str:
     return f"{Decimal(amount):.2f}"
 
 
+def _amount(amount, currency: str) -> str:
+    return f"{_money(amount)} {currency}".strip()
+
+
 def send_invoice_sms(order, *, actor=None) -> OutboundMessage:
     """Queue an invoice SMS to the order's customer (idempotent per order)."""
     customer = getattr(order, "customer", None)
@@ -47,17 +52,14 @@ def send_invoice_sms(order, *, actor=None) -> OutboundMessage:
 
     shop_name, currency = _shop_context()
     link = public_invoice_url_for_order(order)
-    total = _money(order.total)
+    values = (shop_name, order.receipt_number, _amount(order.total, currency))
     if link:
-        body = f"فاتورتك من {shop_name}: الإجمالي {total} {currency}. عرض الفاتورة: {link}"
+        template = sms_template("invoice_link", *values, link)
     else:
-        body = (
-            f"فاتورتك من {shop_name}: الإجمالي {total} {currency} "
-            f"(فاتورة رقم {order.receipt_number})."
-        )
+        template = sms_template("invoice", *values)
     return enqueue_message(
         to=phone,
-        body=body,
+        template=template,
         consent_class=_TRANSACTIONAL,
         dedup_key=f"invoice:{order.id}",
         source_type="invoice",
@@ -83,25 +85,22 @@ def send_debt_reminder(order, *, now=None) -> OutboundMessage | None:
         # is not an invoice, and has no invoice page to link to. Calling it one
         # would send the customer looking for a sale that never happened.
         link = None
-        body = (
-            f"تذكير من {shop_name}: لديك مبلغ مستحق {_money(balance)} {currency} "
-            f"من رصيد مسجّل على حسابك برقم {order.receipt_number}."
-        )
+        reference = f"رصيد مسجّل على حسابك (مرجع {order.receipt_number})"
     else:
         link = public_invoice_url_for_order(order)
-        body = (
-            f"تذكير من {shop_name}: لديك مبلغ مستحق {_money(balance)} {currency} "
-            f"على الفاتورة {order.receipt_number}."
-        )
+        reference = f"الفاتورة رقم {order.receipt_number}"
     due_date = getattr(order, "due_date", None)
     if due_date is not None:
-        body += f" تاريخ الاستحقاق: {due_date:%Y-%m-%d}."
+        reference += f" المستحقة بتاريخ {due_date:%Y-%m-%d}"
+    values = (shop_name, _amount(balance, currency), reference)
     if link:
-        body += f" التفاصيل: {link}"
+        template = sms_template("debt_reminder_link", *values, link)
+    else:
+        template = sms_template("debt_reminder", *values)
     day = business_local_date(now).strftime("%Y%m%d")
     return enqueue_message(
         to=phone,
-        body=body,
+        template=template,
         consent_class=_TRANSACTIONAL,
         dedup_key=f"debt:{order.id}:{day}",
         source_type="debt_reminder",

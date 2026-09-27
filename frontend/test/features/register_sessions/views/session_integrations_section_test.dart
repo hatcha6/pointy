@@ -17,7 +17,8 @@ SessionIntegrationFigures _figures({
   SessionIntegrationBucketTotals refundedAfterDelivery = _none,
 }) {
   final sold = delivered.amount + awaiting.amount + unknown.amount;
-  final cost = delivered.cost + awaiting.cost + unknown.cost;
+  final cost =
+      (delivered.cost ?? 0) + (awaiting.cost ?? 0) + (unknown.cost ?? 0);
   return SessionIntegrationFigures(
     provider: provider,
     count: delivered.count + awaiting.count + unknown.count,

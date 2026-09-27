@@ -21,6 +21,8 @@ from .models import ReportRun
 class ReportDefinition:
     key: str
     category: str
+    #: The records this report reads. Descriptive, not a gate: see
+    #: ``is_allowed``.
     permissions: tuple[str, ...]
     #: Figures the client leads with, in order. Everything else still prints in
     #: the summary table; this only decides what is promoted.
@@ -37,10 +39,17 @@ class ReportDefinition:
     composed_of: tuple[str, ...] = field(default=())
 
     def is_allowed(self, user):
+        """Reports are the shop's books — profit, cost, cash, stock value, who
+        owes what — so they belong to the reporting roles (managers,
+        supervisors, accountants, auditors) and to nobody else.
+
+        Holding a report's source permissions used to be enough on its own. A
+        cashier reads orders and payments for the till, so every cashier could
+        run the sales summary, the product margins and the payment mix — gross
+        profit included — and a storekeeper could price the whole shelf at cost.
+        """
         # ``None`` is the scheduler — see apps.reports.builders.scope._scoped.
-        if user is None or user_has_full_visibility(user):
-            return True
-        return all(user.has_perm(permission) for permission in self.permissions)
+        return user is None or user_has_full_visibility(user)
 
 
 ReportType = ReportRun.ReportType

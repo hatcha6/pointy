@@ -12,6 +12,8 @@ from apps.integrations.fulfillment import (
     resolve_line_integration,
     voucher_line_payload,
 )
+from apps.integrations.redeem import printed_receipt
+from apps.integrations.voucher_logos import receipt_logo_for
 from apps.catalog.units import (
     UnitConversionError,
     resolve_unit,
@@ -68,6 +70,7 @@ from .services import (
     validate_order_adjustment_allowed,
     void_order,
 )
+from .loss_visibility import loss_lines_for_reader
 from .public_invoices import public_invoice_url_for_order
 
 
@@ -286,6 +289,38 @@ class RegisterCashMovementCreateSerializer(serializers.Serializer):
     reason = serializers.CharField(trim_whitespace=True, allow_blank=False)
 
 
+#: What a sale cost the shop and what it made on it, on the order and on each
+#: line. That is the owner's number, so it goes only to the reporting roles —
+#: managers, supervisors, accountants and auditors, the people
+#: ``user_has_full_visibility`` names and the reports built from these figures
+#: are open to. A cashier reads what a sale charged, never what it made.
+#: Removed rather than blanked, like the stock-unit cost mask: a null profit and
+#: a hidden one read identically to a client, and only one of them is true.
+ORDER_MARGIN_FIELDS = ("total_cost", "total_profit")
+ORDER_LINE_MARGIN_FIELDS = ("unit_cost", "line_cost", "line_profit")
+#: The same rule on a top-up line's ``integration``: ``cost`` is what the
+#: provider charged the shop, and ``provider_receipt`` is the provider's own
+#: record of the purchase as it came back — Qareeb's ``purchase_price``, a
+#: reconciled log entry's ``cost``, HD Box's whole reply. That record goes
+#: whole rather than key by key: each provider names its money its own way, so
+#: a list of keys to strip would pass the first one it had not met. What a till
+#: prints from it is already in ``receipt``.
+ORDER_LINE_INTEGRATION_COST_FIELDS = ("cost", "provider_receipt")
+
+
+def reader_sees_margins(context):
+    """Whether the request behind a serializer ``context`` may see cost and
+    profit. Asked once per response: the answer is kept in the context, which a
+    list's rows and their nested lines all share, because the question costs a
+    query."""
+    if "_reader_sees_margins" not in context:
+        request = context.get("request")
+        context["_reader_sees_margins"] = user_has_full_visibility(
+            getattr(request, "user", None)
+        )
+    return context["_reader_sees_margins"]
+
+
 class OrderLineSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = serializers.PrimaryKeyRelatedField(
@@ -360,10 +395,19 @@ class OrderLineSerializer(serializers.ModelSerializer):
             # or, later, in its own purchase log. The proof the customer got it.
             "provider_reference": fulfillment.provider_reference,
             "confirmed_at": fulfillment.confirmed_at,
+            # The provider's raw record, cost and all — reporting roles only
+            # (``ORDER_LINE_INTEGRATION_COST_FIELDS``).
             "provider_receipt": fulfillment.provider_receipt,
             # The provider's own printed slip, already reduced to the fields
-            # worth reprinting beside Pointy's invoice.
-            "receipt": (fulfillment.provider_receipt or {}).get("printed") or {},
+            # worth reprinting beside Pointy's invoice — plus, for a card its
+            # operator redeems by dialling, the ``dial`` string to redeem it.
+            "receipt": printed_receipt(fulfillment),
+            # A card's brand logo as receipts print it (base64 PNG), for the
+            # head of its slip; read once per brand for the whole response.
+            "receipt_logo": receipt_logo_for(
+                fulfillment,
+                memo=self.context.setdefault("voucher_receipt_logos", {}),
+            ),
             # Why the last attempt did not land, as a code the client can act
             # on — "top up the float" is a different screen from "try again".
             "error_code": fulfillment.last_error_code,
@@ -402,6 +446,17 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "notes",
         ]
         read_only_fields = ("unit_price", "unit_cost", "discount_total")
+
+    def to_representation(self, line):
+        data = super().to_representation(line)
+        if not reader_sees_margins(self.context):
+            for field in ORDER_LINE_MARGIN_FIELDS:
+                data.pop(field, None)
+            # What the provider charged the shop for a top-up is its cost.
+            if data.get("integration"):
+                for field in ORDER_LINE_INTEGRATION_COST_FIELDS:
+                    data["integration"].pop(field, None)
+        return data
 
     def get_identifiers(self, line):
         """The serials and lots this line moved, for the printed document.
@@ -642,6 +697,13 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_representation(self, order):
+        data = super().to_representation(order)
+        if not reader_sees_margins(self.context):
+            for field in ORDER_MARGIN_FIELDS:
+                data.pop(field, None)
+        return data
 
     def get_card_receipt_status(self, order):
         """One word for how well this invoice's CARD money is backed by receipts.
@@ -1900,10 +1962,15 @@ class DiscountPreviewSerializer(serializers.Serializer):
                 discount_result,
                 coupon_codes,
             ),
-            "loss_lines": checkout_loss_lines(
-                self.validated_data["lines"],
-                discount_result,
-                extra_discount_amount=extra_discount_amount,
+            # Named to everyone, priced only for a reader who may see cost: the
+            # loss is the cost less a total the cashier typed (loss_visibility).
+            "loss_lines": loss_lines_for_reader(
+                checkout_loss_lines(
+                    self.validated_data["lines"],
+                    discount_result,
+                    extra_discount_amount=extra_discount_amount,
+                ),
+                self.context,
             ),
             # Gate state for the POS: when no active rule targets sales, the
             # client latches "no rules @ this version" and stops previewing on

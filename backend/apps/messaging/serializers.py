@@ -4,24 +4,11 @@ from rest_framework import serializers
 
 from .models import MessagingGateway, OutboundMessage
 
-_SECRET_FIELDS = ("password", "webhook_signing_key")
-
 
 class MessagingGatewaySerializer(serializers.ModelSerializer):
-    # Secrets are write-only: accepted on create/update, never echoed back. GET
-    # exposes only whether each secret is set.
-    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    webhook_signing_key = serializers.CharField(
-        write_only=True, required=False, allow_blank=True
-    )
-    has_password = serializers.SerializerMethodField()
-    has_webhook_signing_key = serializers.SerializerMethodField()
-    # Activation state. The token itself stays secret; the client only needs to
-    # know *whether* the device webhooks were ever registered, because a gateway
-    # that can send but was never activated receives nothing back — no inbound
-    # SMS, no delivery receipts — and that gap is otherwise invisible in the UI.
-    is_activated = serializers.SerializerMethodField()
-
+    # A shop tunes its gateway, it does not configure one: the relay holds the
+    # provider account, so the only writable fields are the shop's own brakes
+    # (pace, daily cap, quiet hours) and the switch that stops all SMS.
     class Meta:
         model = MessagingGateway
         fields = [
@@ -29,7 +16,6 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
             "name",
             "provider",
             "channel",
-            "config",
             "is_default",
             "is_active",
             "max_messages_per_minute",
@@ -40,15 +26,16 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
             "last_seen_at",
             "last_error",
             "last_error_at",
-            "password",
-            "webhook_signing_key",
-            "has_password",
-            "has_webhook_signing_key",
-            "is_activated",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
+            "id",
+            "name",
+            "provider",
+            "channel",
+            "is_default",
+            "send_timeout_seconds",
             "last_seen_at",
             "last_error",
             "last_error_at",
@@ -56,34 +43,14 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def get_has_password(self, obj) -> bool:
-        return obj.has_secret("password")
-
-    def get_has_webhook_signing_key(self, obj) -> bool:
-        return obj.has_secret("webhook_signing_key")
-
-    def get_is_activated(self, obj) -> bool:
-        return obj.has_secret("webhook_token")
-
-    def _pop_secrets(self, validated_data) -> dict:
-        return {k: validated_data.pop(k) for k in _SECRET_FIELDS if k in validated_data}
-
-    def create(self, validated_data):
-        secrets_in = self._pop_secrets(validated_data)
-        instance = MessagingGateway(**validated_data)
-        for key, value in secrets_in.items():
-            instance.set_secret(key, value)
-        instance.save()
-        return instance
-
-    def update(self, instance, validated_data):
-        secrets_in = self._pop_secrets(validated_data)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        for key, value in secrets_in.items():
-            instance.set_secret(key, value)
-        instance.save()
-        return instance
+    def validate(self, attrs):
+        start = attrs.get("quiet_hours_start", getattr(self.instance, "quiet_hours_start", None))
+        end = attrs.get("quiet_hours_end", getattr(self.instance, "quiet_hours_end", None))
+        if (start is None) != (end is None):
+            raise serializers.ValidationError(
+                {"quiet_hours_end": "حدّد بداية ونهاية أوقات الهدوء معًا، أو اتركهما فارغين."}
+            )
+        return attrs
 
 
 class OutboundMessageSerializer(serializers.ModelSerializer):
@@ -96,6 +63,7 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
             "to_phone",
             "to_phone_raw",
             "body",
+            "template_kind",
             "consent_class",
             "status",
             "segments",

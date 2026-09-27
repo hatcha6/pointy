@@ -12,6 +12,10 @@ enum AppCapability {
   viewCustomerDashboard,
   viewDiscountDashboard,
   viewPrintingDashboard,
+
+  /// The reports screen: managers, supervisors, accountants and auditors —
+  /// the holders of `reports.view_reportrun`. Every report states profit,
+  /// cost or cash, and the server refuses everyone else.
   viewReports,
 
   /// Sees shop-wide sales rather than only this till's own — the mirror of the
@@ -101,6 +105,12 @@ enum AppCapability {
   manageCameras,
   manageScales,
   manageMessaging,
+
+  /// Sends one customer an SMS from a document — the invoice's "send as
+  /// message". Present only while the shop can send SMS (`sms_available`), for
+  /// managers and for whoever may open invoices: the server gates the send on
+  /// `sales.view_order`.
+  sendSms,
   manageIntegrations,
   useIntegrations,
   recordIntegrationTopUp,
@@ -257,6 +267,19 @@ class AuthorizationCapabilities {
     AppCapability.exportCameraFootage,
   };
 
+  /// Everything that sends SMS, withdrawn while the shop cannot send any: SMS
+  /// is a paid add-on on the company's relay (like the assistant), and the shop
+  /// can also switch it off. [AppCapability.manageMessaging] is deliberately
+  /// absent — the SMS settings page is where a shop reads that the service is
+  /// not in its subscription, and where it switches it back on.
+  static const _smsCapabilities = {
+    AppCapability.viewConversations,
+    AppCapability.manageConversations,
+    AppCapability.manageCampaigns,
+    AppCapability.sendCampaigns,
+    AppCapability.sendSms,
+  };
+
   /// Removed for a shop that has not opted into identified stock, the same way
   /// cameras are removed for a shop with no recorder. Without this the two
   /// drawer entries and their ⌘K matches appeared for every shop that took the
@@ -279,6 +302,10 @@ class AuthorizationCapabilities {
       // when the shop's subscription has it active.
       if (!user.aiAvailable) {
         all.remove(AppCapability.useAiAssistant);
+      }
+      // SMS too: no inbox, campaigns or "send as message" without it.
+      if (!user.smsAvailable) {
+        all.removeAll(_smsCapabilities);
       }
       if (!user.surveillanceEnabled) {
         all.removeAll(_surveillanceCapabilities);
@@ -1213,34 +1240,28 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewFraudFindings)
           ..add(AppCapability.manageFraudFindings);
       }
-      if (_hasAny(user, const [
-        'view_reportrun',
-        'reports.view_reportrun',
-        'view_order',
-        'sales.view_order',
-        'view_registersession',
-        'sales.view_registersession',
-        'view_payment',
-        'payments.view_payment',
-        'view_stockitem',
-        'inventory.view_stockitem',
-        'view_stockmovement',
-        'inventory.view_stockmovement',
-        'view_purchaseorder',
-        'purchasing.view_purchaseorder',
-        'view_customer',
-        'customers.view_customer',
-        'view_supplier',
-        'purchasing.view_supplier',
-        'view_discountrule',
-        'discounts.view_discountrule',
-      ])) {
+      // Reports are the shop's books — profit, cost, cash, stock at cost — so
+      // the screen opens for the reporting permission alone, the same rule the
+      // server applies to running one. It used to open for anyone holding a
+      // report's source permissions, and every cashier reads orders and
+      // payments to work the till.
+      if (_hasAny(user, const ['view_reportrun', 'reports.view_reportrun'])) {
         capabilities.add(AppCapability.viewReports);
       }
     }
 
     if (user.aiAvailable) {
       capabilities.add(AppCapability.useAiAssistant);
+    }
+
+    // Nor do held CRM permissions conjure SMS: a shop without the service (or
+    // with it switched off) shows no inbox, campaign or send action to anyone.
+    if (user.smsAvailable) {
+      if (_hasAny(user, const ['view_order', 'sales.view_order'])) {
+        capabilities.add(AppCapability.sendSms);
+      }
+    } else {
+      capabilities.removeAll(_smsCapabilities);
     }
 
     // Held permissions do not conjure cameras: a shop with no recorder shows no
@@ -1384,6 +1405,7 @@ class AuthorizationCapabilities {
   bool get canManageCameras => allows(AppCapability.manageCameras);
   bool get canManageScales => allows(AppCapability.manageScales);
   bool get canManageMessaging => allows(AppCapability.manageMessaging);
+  bool get canSendSms => allows(AppCapability.sendSms);
   bool get canManageIntegrations => allows(AppCapability.manageIntegrations);
   bool get canUseIntegrations => allows(AppCapability.useIntegrations);
   bool get canRecordIntegrationTopUp =>
@@ -1392,6 +1414,13 @@ class AuthorizationCapabilities {
       allows(AppCapability.recordPortalPayments);
   bool get canViewConversations => allows(AppCapability.viewConversations);
   bool get canViewTillCost => allows(AppCapability.viewTillCost);
+
+  /// How far below cost a cart line sells, in the loss warning. The server
+  /// sends those figures to the reporting roles and to holders of the
+  /// till-cost permission (`reader_sees_till_cost`), and the till draws them
+  /// for the same people — so a backend from before that rule, which still
+  /// sends them to everyone, does not put them in front of a cashier either.
+  bool get canViewLossAmounts => canViewTillCost || canViewShopWideSales;
   bool get canOverrideLinePrice => allows(AppCapability.overrideLinePrice);
   bool get canManageConversations => allows(AppCapability.manageConversations);
   bool get canManageCampaigns => allows(AppCapability.manageCampaigns);

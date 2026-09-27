@@ -280,6 +280,7 @@ class PointyAppDependencies {
     registerPosRevalidation(
       revalidator: revalidator,
       posViewModel: posViewModel,
+      isSignedIn: () => authViewModel.status == AuthStatus.authenticated,
     );
     // The back-office screens. Each is a view model that loads once and then
     // lives as long as the session, so without this every one of them shows

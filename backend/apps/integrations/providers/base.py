@@ -468,6 +468,9 @@ class VoucherBrand:
     category: str = ""
     currency: str = "LYD"
     logo_path: str = ""
+    #: The receipt version of the logo: black on white, drawn for a thermal
+    #: head (Qareeb's ``logo_print``).
+    print_logo_path: str = ""
     items: tuple[VoucherItem, ...] = ()
     #: True when ``items`` IS the brand's in-stock list as of this read.
     #:
@@ -482,6 +485,22 @@ class VoucherBrand:
 class VoucherCatalogResult:
     ok: bool
     brands: tuple[VoucherBrand, ...] = ()
+    error_code: str = ""
+    error_detail: str = ""
+
+
+@dataclass(frozen=True)
+class VoucherLogo:
+    """The picture behind a brand's ``logo_path``, as the provider serves it.
+
+    Bytes as they came, not yet proven to be an image: deciding that is the
+    caller's job (it decodes them anyway, to store them).
+    """
+
+    ok: bool
+    data: bytes = b""
+    #: Where the bytes came from, for the record.
+    url: str = ""
     error_code: str = ""
     error_detail: str = ""
 
@@ -588,6 +607,17 @@ class IntegrationProvider:
         """
         return None
 
+    def option_label(self, label: str) -> str:
+        """An option's label as Pointy shows it: the provider's own words,
+        less anything they say about what the option costs the agency.
+
+        A label travels where cost may not — onto the till, the invoice, the
+        shift report and a cashier's alerts — so a provider that writes its
+        price into the label strips it here. Pure and never raises; most
+        providers' labels need nothing.
+        """
+        return label
+
     def option_for_payment(self, amount) -> "RechargeOption | None":
         """The option a payment of ``amount`` in this provider's report bought.
 
@@ -681,6 +711,14 @@ class IntegrationProvider:
         Answers with a single brand whose ``items_known`` is True, or not ok.
         """
         return VoucherCatalogResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def voucher_logo(self, logo_path: str) -> VoucherLogo:
+        """The picture a brand's ``logo_path`` names. Must never raise.
+
+        Not a capability call: it needs no login and records no telemetry, so
+        a missing picture never reads as the provider being down.
+        """
+        return VoucherLogo(ok=False, error_code=ERROR_UNAVAILABLE)
 
     # --- which identity the login acts as -------------------------------------
     def profiles(self) -> ProfilesResult:

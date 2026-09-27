@@ -308,6 +308,60 @@ class RelayControlClient:
             timeout=self.config.image_search_timeout_seconds,
         )
 
+    def send_sms(
+        self,
+        *,
+        access_token,
+        kind,
+        to,
+        variables,
+        idempotency_key,
+        consent_class,
+        test=False,
+        timeout=None,
+    ):
+        """Send one templated SMS through the relay (Resala behind it).
+
+        The relay holds the provider account and the approved template ids, and
+        gates on the installation's SMS entitlement and monthly allowance. The
+        idempotency key makes a retry safe: a key the relay has already seen
+        answers with that send's outcome instead of texting the customer twice.
+        Returns the decoded ``{id, status, content, ...}``; raises
+        ``RelayControlError`` on transport or non-2xx status.
+        """
+        body = {
+            "kind": kind,
+            "to": to,
+            "variables": list(variables),
+            "idempotency_key": idempotency_key,
+            "consent_class": consent_class,
+        }
+        if test:
+            body["test"] = True
+        return self._request(
+            "POST",
+            "/v1/sms/send",
+            body=body,
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def get_sms_usage(self, *, access_token, timeout=None):
+        """This installation's SMS entitlement and this month's usage (no charge)."""
+        return self._request(
+            "GET", "/v1/sms/usage/self", relay_token=access_token, timeout=timeout
+        )
+
+    def get_sms_statuses(self, *, access_token, ids, timeout=None):
+        """Delivery status of messages this installation sent, by relay id."""
+        joined = ",".join(str(value) for value in ids)
+        return self._request(
+            "GET",
+            f"/v1/sms/status?ids={quote(joined, safe=',')}",
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
     def open_ai_stream(
         self,
         *,
@@ -484,6 +538,7 @@ def relay_status_payload(installation):
             "relay_enabled": False,
             "subscription_active": False,
             "ai_enabled": False,
+            "sms_enabled": False,
             "subscription_ends_at": None,
             "last_synced_at": None,
             "connector_last_seen_at": None,
@@ -499,6 +554,7 @@ def relay_status_payload(installation):
         "relay_enabled": installation.relay_enabled,
         "subscription_active": installation.subscription_active,
         "ai_enabled": installation.ai_enabled,
+        "sms_enabled": installation.sms_enabled,
         "subscription_ends_at": installation.subscription_ends_at,
         "last_synced_at": installation.last_synced_at,
         "connector_last_seen_at": installation.connector_last_seen_at,
@@ -516,6 +572,28 @@ def relay_ai_available(installation=None):
     if installation is None:
         installation = RelayInstallation.load()
     if installation is None or not installation.ai_enabled:
+        return False
+    if not installation.subscription_active:
+        return False
+    if (
+        installation.subscription_ends_at is not None
+        and installation.subscription_ends_at <= timezone.now()
+    ):
+        return False
+    return True
+
+
+def relay_sms_available(installation=None):
+    """Whether this shop's subscription includes SMS right now.
+
+    Mirrors the relay's own gate (``Installation.SMSActive``): an active,
+    unexpired subscription plus the SMS flag, independent of remote access. The
+    relay remains the authority — this mirror only keeps a shop without SMS from
+    queueing messages that would all be refused.
+    """
+    if installation is None:
+        installation = RelayInstallation.load()
+    if installation is None or not installation.sms_enabled:
         return False
     if not installation.subscription_active:
         return False
@@ -556,6 +634,7 @@ def _persist_provisioned(provisioned, *, public_api_url, connector_address, shop
         relay_enabled=bool(relay_installation.get("relay_enabled", False)),
         subscription_active=bool(relay_installation.get("subscription_active", False)),
         ai_enabled=bool(relay_installation.get("ai_enabled", False)),
+        sms_enabled=bool(relay_installation.get("sms_enabled", False)),
         subscription_ends_at=parse_relay_datetime(relay_installation.get("subscription_ends_at")),
         last_synced_at=timezone.now(),
     )
@@ -680,11 +759,13 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     relay_installation = relay_client.get_installation(
         installation.installation_id, timeout=timeout
     )
+    entitlements_before = _entitlement_snapshot(installation)
     # Entitlements are relay-owned, so mirror them down.
     installation.shop_name = relay_installation.get("shop_name") or installation.shop_name
     installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))
     installation.subscription_active = bool(relay_installation.get("subscription_active", False))
     installation.ai_enabled = bool(relay_installation.get("ai_enabled", False))
+    installation.sms_enabled = bool(relay_installation.get("sms_enabled", False))
     installation.subscription_ends_at = parse_relay_datetime(
         relay_installation.get("subscription_ends_at")
     )
@@ -701,6 +782,7 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
             "relay_enabled",
             "subscription_active",
             "ai_enabled",
+            "sms_enabled",
             "subscription_ends_at",
             "relay_public_api_url",
             "relay_connector_address",
@@ -708,6 +790,11 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
             "updated_at",
         ]
     )
+    if _entitlement_snapshot(installation) != entitlements_before:
+        # Devices read ai_available / sms_available with the session. Moving the
+        # permissions version makes every one of them re-read it now, instead of
+        # showing a feature the plan no longer has until someone signs in again.
+        caching.bump_perm_version()
     # The shop name is backend-owned; the line above mirrored the relay's current
     # copy. If the merchant renamed the shop while offline, our local name now
     # differs from that copy — push it up while we have the connection. Best-effort
@@ -715,6 +802,16 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     if push_shop_name:
         push_shop_name_to_relay(installation, client=relay_client)
     return installation
+
+
+def _entitlement_snapshot(installation):
+    return (
+        installation.relay_enabled,
+        installation.subscription_active,
+        installation.ai_enabled,
+        installation.sms_enabled,
+        installation.subscription_ends_at,
+    )
 
 
 def _mirror_relay_addresses(installation, config):

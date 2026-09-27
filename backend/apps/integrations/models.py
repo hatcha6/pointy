@@ -621,6 +621,32 @@ class IntegrationVoucherBrand(TimeStampedModel):
     #: provider prices every card in dinar whatever is printed on it.
     currency = models.CharField(max_length=8, default="LYD")
     logo_path = models.CharField(max_length=255, blank=True)
+    #: The ``logo_path`` whose picture the product shows (see
+    #: :mod:`apps.integrations.voucher_logos`); blank until one is in. It
+    #: differs from ``logo_path`` while the provider's newer logo is not.
+    logo_source = models.CharField(
+        max_length=255, blank=True, default="", db_default=""
+    )
+    #: When the provider was last asked for ``logo_path``, whatever it said.
+    #: Logos almost never change: one that is in is asked for again a month
+    #: later, one that is not an hour later.
+    logo_checked_at = models.DateTimeField(blank=True, null=True)
+    #: The receipt version of the logo (Qareeb's ``logo_print``): black on
+    #: white, drawn for a thermal head.
+    print_logo_path = models.CharField(
+        max_length=255, blank=True, default="", db_default=""
+    )
+    #: That logo as every receipt prints it: a small grayscale PNG (see
+    #: ``voucher_logos.print_ready``). Kept on the row, not as an attachment:
+    #: it travels inline in the receipt payloads, so a printout never waits on
+    #: a download, and it is nobody's picture to browse. Left out of the
+    #: sweep's own reads (``defer``), which never need it.
+    print_logo = models.BinaryField(blank=True, null=True, editable=False)
+    #: ``print_logo``'s own ``logo_source`` and ``logo_checked_at``.
+    print_logo_source = models.CharField(
+        max_length=255, blank=True, default="", db_default=""
+    )
+    print_logo_checked_at = models.DateTimeField(blank=True, null=True)
     product = models.OneToOneField(
         "catalog.Product",
         on_delete=models.SET_NULL,

@@ -184,6 +184,15 @@ class ShopSettings(TimeStampedModel):
         validators=[MinValueValidator(0)],
     )
     auto_print_kitchen_tickets = models.BooleanField(default=False)
+    # A provider's card that its operator redeems by dialling (Almadar's
+    # *112*PIN#, Libyana's call to 120 and the PIN) prints a QR code beside its
+    # PIN, so the customer scans it and the phone dials the card in for them.
+    # Shop-wide rather than per printer: every till prints the same card the
+    # same way. On by default — it only ever prints for such a card, and a
+    # shop that sells none never sees it. ``db_default`` as well as
+    # ``default``: an older backend still serving during a live update writes
+    # INSERTs that name no such column.
+    print_voucher_qr_codes = models.BooleanField(default=True, db_default=True)
     allow_overselling = models.BooleanField(default=False)
     prevent_selling_at_loss = models.BooleanField(default=True)
     low_stock_threshold = models.PositiveIntegerField(default=5)
@@ -285,6 +294,9 @@ class ShopSettings(TimeStampedModel):
     #: It never expires and never becomes the shop's — that is a legal question
     #: and not a product one, so the system's answer is deliberately *no*.
     consignment_unclaimed_payout_reminder_days = models.PositiveIntegerField(default=30)
+    # No longer what the consignor receives: SMS now leaves only as templates
+    # the provider approved (the ``consignment_sale`` kind in
+    # apps.messaging.sms_templates). Kept so a shop's own wording is not lost.
     consignment_sale_sms_template = models.TextField(
         blank=True, default=CONSIGNMENT_SALE_SMS_TEMPLATE
     )
@@ -765,6 +777,9 @@ class RelayInstallation(TimeStampedModel):
     relay_enabled = models.BooleanField(default=False)
     subscription_active = models.BooleanField(default=False)
     ai_enabled = models.BooleanField(default=False)
+    # SMS is sent through the relay on the company's provider account, so it is
+    # an entitlement like AI — mirrored here, decided on the relay.
+    sms_enabled = models.BooleanField(default=False, db_default=False)
     subscription_ends_at = models.DateTimeField(null=True, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
     last_pairing_issued_at = models.DateTimeField(null=True, blank=True)

@@ -285,12 +285,16 @@ class RegisterZReportPdfService {
   /// break across pages.
   List<pw.Widget> _integrationsSection(SessionIntegrations integrations) {
     const labels = ZReportIntegrationLabels.arabic();
+    // The provider's share and the shop's profit reach the reporting roles
+    // only. Anyone else's copy drops those columns outright — header, width
+    // and cell together — rather than printing a cost of nothing.
+    final showsCost = integrations.showsCost;
     List<String> moneyRow(String name, SessionIntegrationFigures figures) => [
       name,
       '${figures.transactionCount}',
       formatMoney(figures.sold),
-      formatMoney(figures.cost),
-      formatMoney(figures.margin),
+      if (showsCost) formatMoney(figures.cost ?? 0),
+      if (showsCost) formatMoney(figures.margin ?? 0),
     ];
 
     // A table rather than "HD Box — لم يُنفّذ بعد (1)" lines: the pdf shaper
@@ -315,7 +319,10 @@ class RegisterZReportPdfService {
             labels.providerName(figures.provider),
             labels.floatLost,
             '${figures.refundedAfterDelivery.count}',
-            formatMoney(figures.refundedAfterDelivery.cost),
+            switch (figures.refundedAfterDelivery.cost) {
+              final lost? => formatMoney(lost),
+              null => '',
+            },
           ],
       ],
     ];
@@ -328,10 +335,15 @@ class RegisterZReportPdfService {
           labels.provider,
           labels.transactionCount,
           labels.sold,
-          labels.cost,
-          labels.margin,
+          if (showsCost) labels.cost,
+          if (showsCost) labels.margin,
         ],
-        columnFlex: const [1.6, 0.9, 1.2, 1.2, 1.1],
+        columnFlex: [
+          1.6,
+          0.9,
+          1.2,
+          if (showsCost) ...[1.2, 1.1],
+        ],
         rows: [
           for (final figures in integrations.providers)
             moneyRow(labels.providerName(figures.provider), figures),
@@ -362,10 +374,10 @@ class RegisterZReportPdfService {
           labels.service,
           labels.subscriber,
           labels.price,
-          labels.transactionCost,
+          if (showsCost) labels.transactionCost,
           labels.status,
         ],
-        columnFlex: const [1.2, 1.9, 1.7, 1.45, 1.45, 1.5],
+        columnFlex: [1.2, 1.9, 1.7, 1.45, if (showsCost) 1.45, 1.5],
         rows: [
           for (final transaction in integrations.transactions)
             [
@@ -379,7 +391,7 @@ class RegisterZReportPdfService {
               ].join('\n'),
               transaction.subscriberRef,
               formatMoney(transaction.price),
-              formatMoney(transaction.cost),
+              if (showsCost) formatMoney(transaction.cost ?? 0),
               labels.transactionStatus(transaction),
             ],
         ],

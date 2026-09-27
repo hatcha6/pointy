@@ -8,8 +8,11 @@ import 'package:pointy_frontend/src/data/services/api_session.dart';
 /// order save, 21 on a register close, both against a server that answered
 /// clearly every time.
 void main() {
-  PosApiException failure(int status, String body) =>
-      PosApiException(message: 'failed', statusCode: status, responseBody: body);
+  PosApiException failure(int status, String body) => PosApiException(
+    message: 'failed',
+    statusCode: status,
+    responseBody: body,
+  );
 
   group('apiErrorDetail', () {
     test('reads a plain detail', () {
@@ -23,7 +26,9 @@ void main() {
 
     test('flattens per-field lists', () {
       expect(
-        apiErrorDetail(failure(400, '{"quantity":["Quantity must be positive."]}')),
+        apiErrorDetail(
+          failure(400, '{"quantity":["Quantity must be positive."]}'),
+        ),
         'Quantity must be positive.',
       );
     });
@@ -86,7 +91,9 @@ void main() {
   group('apiErrorCode', () {
     test('reads the code when the response named itself', () {
       expect(
-        apiErrorCode(failure(400, '{"code":"register_session_already_closed"}')),
+        apiErrorCode(
+          failure(400, '{"code":"register_session_already_closed"}'),
+        ),
         'register_session_already_closed',
       );
     });
@@ -95,6 +102,24 @@ void main() {
       expect(apiErrorCode(failure(400, '{"detail":"x"}')), isNull);
       expect(apiErrorCode(failure(400, '{"code":7}')), isNull);
       expect(apiErrorCode(Exception('nope')), isNull);
+    });
+  });
+
+  group('apiErrorHasField', () {
+    test('finds the field DRF keyed its refusal on', () {
+      // What a purchase order with a reused supplier invoice number gets back.
+      final refusal = failure(
+        400,
+        '{"supplier_invoice_number":["Supplier invoice number already exists '
+        'for this supplier."]}',
+      );
+      expect(apiErrorHasField(refusal, 'supplier_invoice_number'), isTrue);
+      expect(apiErrorHasField(refusal, 'lines'), isFalse);
+    });
+
+    test('is false for anything that is not an API refusal body', () {
+      expect(apiErrorHasField(failure(500, 'oops'), 'detail'), isFalse);
+      expect(apiErrorHasField(Exception('nope'), 'detail'), isFalse);
     });
   });
 

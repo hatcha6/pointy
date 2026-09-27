@@ -6,6 +6,39 @@ import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 
 void main() {
+  group('a unit cost goes to the server as a rate, not as money', () {
+    // A buyer keyed "15 loaves, 58.00": 3.8666… each. Sent to two places it
+    // was 3.87 and the order saved as 58.05 (field telemetry, 2026-09-22).
+    test('a divided total keeps the places that multiply back to it', () {
+      final line = const PurchaseOrderLineDraft(
+        variantId: 7,
+        quantity: 15,
+        unitCost: 58 / 15,
+      ).toJson();
+
+      expect(line['unit_cost'], '3.866667');
+    });
+
+    test('an ordinary cost still reads as money', () {
+      expect(unitCostJson(12.5), '12.50');
+      expect(unitCostJson(12), '12.00');
+      expect(unitCostJson(0), '0.00');
+      expect(unitCostJson(0.1 + 0.2), '0.30');
+      expect(unitCostJson(175 / 288), '0.607639');
+    });
+
+    test('an invoiced foreign cost is sent the same way', () {
+      final line = const PurchaseOrderLineDraft(
+        variantId: 7,
+        quantity: 3,
+        unitCost: 0,
+        unitCostInCurrency: 100 / 3,
+      ).toJson();
+
+      expect(line['unit_cost_in_currency'], '33.333333');
+    });
+  });
+
   test('purchase draft serializes named landed cost entries', () {
     final draft = PurchaseOrderDraft(
       supplierId: 14,

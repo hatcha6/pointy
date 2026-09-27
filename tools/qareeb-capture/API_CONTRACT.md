@@ -272,6 +272,22 @@ the returned `temp_token` to `/api/login_with_otp/` (steps 4–5 above).
 - Any **token-refresh** endpoint — `/api/token/refresh/` exists (SimpleJWT
   shape) but is unused; the driver re-logs-in by password on a 401.
 
-## Product image 404s are normal
-`GET /media/products/<n>.png|jpeg` frequently returns **404** (tiny HTML body) —
-those products simply have no uploaded image. Not an error to handle.
+## Brand logos, and why some 404
+Every brand carries `logo` (what the app draws on its tile) and `logo_print`
+(a receipt version: black line art on white, mostly 118–236 px), both paths
+like `/media/products/<n>.png|jpeg` on the API host. They are public: the app
+sends its usual headers and no bearer. Pointy uses both
+(`apps/integrations/voucher_logos.py`): `logo` becomes the card product's
+picture, and `logo_print`, trimmed, grey and at most 320 px, heads the card's
+slip on every receipt.
+
+`GET /media/products/…` frequently returns **404** (a 153-byte HTML body). The
+first capture read that as "no image uploaded"; it is mostly the **host move**:
+the two hosts serve different subsets of `/media/`. Probed 2026-09-26 (HEAD,
+every brand): of 135 `logo`s, 125 are on both hosts, 6 only on `api.qareeb.ly`,
+4 only on `api.qareb.ly`, none on neither; of 134 `logo_print`s, 39 exist only
+on the old host. The 152 media 404s in the capture were the app, then on the
+old host, re-asking for six logos only the new host had (the app caches what it
+gets and retries what it does not). The driver's `voucher_logo` asks the
+account's host, then the other one (`MEDIA_HOSTS`), before calling a logo
+missing; images are 148 px PNGs mostly, a few up to 1080 px / 1.2 MB.

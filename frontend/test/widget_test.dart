@@ -1372,6 +1372,61 @@ void main() {
     expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
   });
 
+  testWidgets('a cashier is told which lines are below cost, not by how much', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? checkoutBody;
+
+    // This preview still prices the line, as a server from before the cost
+    // rule does, so the till has to keep the loss off the screen itself.
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          currentUserRole: 'cashier',
+          currentUserDisplayName: 'كاشير الوردية',
+          currentUserPermissions: const [
+            'catalog.view_product',
+            'sales.add_order',
+            'sales.view_order',
+            'sales.add_registersession',
+            'sales.change_registersession',
+            'sales.view_registersession',
+          ],
+          saleDiscountPreviewHasLoss: true,
+          onCheckout: (request) {
+            checkoutBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+
+    await tester.tap(find.text('ادفع 3.50 د.ل'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تنبيه الخسارة'), findsOneWidget);
+    expect(find.text('قهوة البيت: أقل من التكلفة'), findsOneWidget);
+    expect(find.textContaining('الخسارة 1.00'), findsNothing);
+    expect(
+      find.text(
+        'بعض الأصناف أقل من تكلفتها، ولا تسمح إعدادات المتجر بالبيع بخسارة. '
+        'راجع المدير.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('تأكيد الدفع'), findsNothing);
+    expect(checkoutBody, isNull);
+  });
+
   testWidgets('register gate starts a session before showing POS', (
     WidgetTester tester,
   ) async {

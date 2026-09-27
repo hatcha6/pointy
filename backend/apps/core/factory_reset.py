@@ -320,7 +320,7 @@ KEPT_MODELS = {
     "surveillance.camera": "A configured camera.",
     "price_checker.pricecheckerdevice": "A configured kiosk.",
     "payments.cardterminal": "A configured card terminal.",
-    "messaging.messaginggateway": "SMS gateway credentials.",
+    "messaging.messaginggateway": "The shop's SMS switch, pace and quiet hours.",
     "attendance.biotimeconnection": "Attendance device credentials.",
     "integrations.integrationaccount": "Provider credentials and float.",
     "integrations.integrationoptionprice": "The provider's price list.",

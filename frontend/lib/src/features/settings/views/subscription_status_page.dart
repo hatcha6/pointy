@@ -14,8 +14,9 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/subscription_status_view_model.dart';
 
 /// Shop Settings sub-page surfacing the relay installation ID (so owners can
-/// send it to support) alongside the remote-access and AI subscription state —
-/// including how much AI usage is left. Read-only; the relay owns the truth.
+/// send it to support) alongside the remote-access, AI and SMS subscription
+/// state — including how much AI usage is left. Read-only; the relay owns the
+/// truth.
 class SubscriptionStatusPage extends StatefulWidget {
   const SubscriptionStatusPage({super.key, required this.viewModel});
 
@@ -126,6 +127,8 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
                 _RemoteAccessSection(status: status),
                 SizedBox(height: spacing.md),
                 _AiSection(status: status, usage: viewModel.usage),
+                SizedBox(height: spacing.md),
+                _SmsSection(status: status),
                 if (status.lastSyncedAt != null) ...[
                   SizedBox(height: spacing.md),
                   Text(
@@ -182,6 +185,14 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
           icon: Icons.auto_awesome_outlined,
           label: l10n.subscriptionAiPill(
             status.aiAvailable
+                ? l10n.subscriptionStateOn
+                : l10n.subscriptionStateOff,
+          ),
+        ),
+        PointyHeroPill(
+          icon: Icons.sms_outlined,
+          label: l10n.subscriptionSmsPill(
+            status.smsAvailable
                 ? l10n.subscriptionStateOn
                 : l10n.subscriptionStateOff,
           ),
@@ -443,6 +454,36 @@ class _AiSection extends StatelessWidget {
               ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// SMS state: whether the subscription includes it. Usage, the shop's own
+/// switch and the texts sent live on the SMS settings page, so this stays one
+/// sentence.
+class _SmsSection extends StatelessWidget {
+  const _SmsSection({required this.status});
+
+  final RelayInstallationStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final available = status.smsAvailable;
+
+    return PointyDetailSection(
+      icon: Icons.sms_outlined,
+      title: l10n.subscriptionSmsTitle,
+      child: PointyDetailCallout(
+        icon: available ? Icons.sms_outlined : Icons.lock_outlined,
+        tone: available ? PointyCalloutTone.success : PointyCalloutTone.neutral,
+        title: available
+            ? l10n.subscriptionSmsActiveTitle
+            : l10n.subscriptionSmsInactiveTitle,
+        message: available
+            ? l10n.subscriptionSmsActiveMessage
+            : l10n.subscriptionSmsInactiveMessage,
       ),
     );
   }

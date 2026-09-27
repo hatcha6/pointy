@@ -74,6 +74,7 @@ class PosUser {
     this.extraPermissionCount = 0,
     this.hasPermissionSnapshot = false,
     this.aiAvailable = false,
+    this.smsAvailable = false,
     this.allowCashierCustomerAccess = false,
     this.surveillanceEnabled = false,
     this.serializedInventoryEnabled = false,
@@ -121,6 +122,12 @@ class PosUser {
   /// the auth response's top-level `ai_available` flag, not a user attribute.
   final bool aiAvailable;
 
+  /// Whether this shop can send SMS right now: the service is in its
+  /// subscription and the shop has not switched it off. The auth response's
+  /// top-level `sms_available` flag, like [aiAvailable] — SMS is a paid add-on
+  /// sent through Daftar's relay.
+  final bool smsAvailable;
+
   /// Whether cashiers may look up customers and collect customer debt (a
   /// manager-controlled shop setting). Top-level auth-response flag, like
   /// [aiAvailable].
@@ -165,6 +172,7 @@ class PosUser {
       extraPermissionCount: _extraPermissionCount(json),
       hasPermissionSnapshot: _permissionPayload(json) != null,
       aiAvailable: json['ai_available'] == true,
+      smsAvailable: json['sms_available'] == true,
       allowCashierCustomerAccess: json['allow_cashier_customer_access'] == true,
       surveillanceEnabled: json['surveillance_enabled'] == true,
       serializedInventoryEnabled: json['serialized_inventory_enabled'] == true,

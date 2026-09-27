@@ -2474,7 +2474,27 @@
       }
     }
   },
-  "jobInvoiceNeedsRegister": "افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.",
+  "jobInvoiceNeedsRegister": "يُسجَّل المبلغ في جلسة درجك. إن لم تكن مفتوحة نفتحها لك قبل إصدار الفاتورة.",
+  "paymentDrawerTitle": "افتح جلسة درج لاستلام المبلغ",
+  "@paymentDrawerTitle": {
+    "description": "Title of the dialog that opens the user's own register session from a screen that takes money outside the POS (e.g. invoicing a repair job)."
+  },
+  "paymentDrawerMessage": "لا توجد جلسة درج مفتوحة باسمك، والمبلغ يُسجَّل في درج من يستلمه. افتح جلستك الآن ونكمل من حيث توقفت.",
+  "@paymentDrawerMessage": {
+    "description": "Explains why a register session must be opened before taking a payment outside the POS."
+  },
+  "paymentDrawerConfirm": "فتح الجلسة والمتابعة",
+  "@paymentDrawerConfirm": {
+    "description": "Button that opens the user's register session and then continues the interrupted payment."
+  },
+  "paymentDrawerNotAllowedMessage": "لا توجد جلسة درج مفتوحة باسمك، ولا تملك صلاحية فتحها. اطلب من المدير فتح جلسة لك أو إصدار الفاتورة.",
+  "@paymentDrawerNotAllowedMessage": {
+    "description": "Shown when a payment needs a register session but the user may not start one."
+  },
+  "paymentDrawerStartError": "تعذر فتح جلسة الدرج. تحقق من الاتصال وحاول مرة أخرى.",
+  "@paymentDrawerStartError": {
+    "description": "Inline error when starting a register session from the payment drawer dialog fails."
+  },
   "jobInvoicedBadge": "مفوترة — {receiptNumber}",
   "@jobInvoicedBadge": {
     "description": "Badge linking a job to its receipt.",
@@ -3039,6 +3059,15 @@
       }
     }
   },
+  "voucherQrSettingSummary": "رمز QR للكروت: {status}",
+  "@voucherQrSettingSummary": {
+    "description": "Voucher QR code setting summary in the shop settings index; only shown when the shop sells provider cards.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
   "registerSessionSettingsSummary": "نقدية الافتتاح: {status}، صلاحية الكاشير للإرجاع: {window}",
   "@registerSessionSettingsSummary": {
     "description": "Summary for register session settings in the shop settings index.",
@@ -3473,6 +3502,11 @@
   "autoPrintFloorEitherJoiner": "أو",
   "enableOnlineInvoicesLabel": "إظهار رابط وQR للفاتورة عبر الإنترنت",
   "enableOnlineInvoicesSubtitle": "بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.",
+  "printVoucherQrCodesLabel": "طباعة رمز QR على كروت الشحن",
+  "@printVoucherQrCodesLabel": {
+    "description": "Shop settings switch: print a QR code beside the PIN of a Libyana/Almadar card so the customer's phone dials it."
+  },
+  "printVoucherQrCodesSubtitle": "يُطبع بجانب الرقم السري لكروت ليبيانا والمدار، فيمسحه الزبون بكاميرا هاتفه ليُشحن الكرت. يسري على كل نقاط البيع في المتجر.",
   "allowOversellingLabel": "السماح بالبيع فوق المخزون",
   "warnLowStockBeforeSaleLabel": "تنبيه المخزون قبل البيع",
   "warnLowStockBeforeSaleSubtitle": "عند إيقافه يكتمل البيع فوق المخزون دون طلب تأكيد (يتطلب تفعيل «السماح بالبيع فوق المخزون»).",
@@ -5791,6 +5825,10 @@
     }
   },
   "purchaseDraftSubmitError": "تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.",
+  "purchaseSupplierInvoiceNumberTaken": "رقم فاتورة المورد هذا مسجّل من قبل على أمر شراء آخر لنفس المورد. صحّح الرقم أو امسحه ثم أرسل.",
+  "@purchaseSupplierInvoiceNumberTaken": {
+    "description": "Shown when a purchase order is refused because its supplier invoice number is already used on another order from the same supplier."
+  },
   "editPurchaseOrderTitle": "تعديل أمر الشراء",
   "@editPurchaseOrderTitle": {
     "description": "App-bar title when reopening a draft purchase order to edit it."
@@ -6327,6 +6365,15 @@
       }
     }
   },
+  "sessionIntegrationsRefundedAfterDeliveryCountNote": "{count, plural, =1{أُرجع للزبون ثمن عملية واحدة بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.} =2{أُرجع للزبائن ثمن عمليتين بعد أن نفّذهما المزوّد، فخُصمتا من رصيد الوكالة دون مقابل.} few{أُرجع للزبائن ثمن {count} عمليات بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.} other{أُرجع للزبائن ثمن {count} عملية بعد أن نفّذها المزوّد، فخُصمت من رصيد الوكالة دون مقابل.}}",
+  "@sessionIntegrationsRefundedAfterDeliveryCountNote": {
+    "description": "The same warning for a reader who is not shown what the float lost.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "sessionIntegrationsTransactionsToggle": "العمليات ({count})",
   "@sessionIntegrationsTransactionsToggle": {
     "placeholders": {
@@ -6549,6 +6596,16 @@
       }
     }
   },
+  "lossSaleBelowCostLine": "{productName}: أقل من التكلفة",
+  "@lossSaleBelowCostLine": {
+    "description": "A line sold below cost, named without its figures for a cashier who may not see cost.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "lossSaleBlockedAskManagerMessage": "بعض الأصناف أقل من تكلفتها، ولا تسمح إعدادات المتجر بالبيع بخسارة. راجع المدير.",
   "reviewCartButton": "مراجعة السلة",
   "continueSaleButton": "إتمام البيع",
   "paymentUnauthorizedMessage": "لا يملك هذا المستخدم صلاحية إتمام الدفع.",
@@ -10460,6 +10517,15 @@
       }
     }
   },
+  "subscriptionSmsPill": "الرسائل النصية · {state}",
+  "@subscriptionSmsPill": {
+    "description": "Hero pill summarising SMS state.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "subscriptionInstallationIdTitle": "معرّف التثبيت",
   "@subscriptionInstallationIdTitle": {
     "description": "Section title for the relay installation identifier."
@@ -10565,6 +10631,26 @@
   "@subscriptionAiUsageUnavailable": {
     "description": "Shown when AI usage data could not be fetched."
   },
+  "subscriptionSmsTitle": "الرسائل النصية",
+  "@subscriptionSmsTitle": {
+    "description": "Section title for the SMS subscription state."
+  },
+  "subscriptionSmsActiveTitle": "الرسائل النصية مشمولة في اشتراكك",
+  "@subscriptionSmsActiveTitle": {
+    "description": "Callout title when SMS is in the subscription."
+  },
+  "subscriptionSmsActiveMessage": "الاستهلاك وحدود الإرسال ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.",
+  "@subscriptionSmsActiveMessage": {
+    "description": "Callout body when SMS is in the subscription."
+  },
+  "subscriptionSmsInactiveTitle": "الرسائل النصية غير مشمولة",
+  "@subscriptionSmsInactiveTitle": {
+    "description": "Callout title when SMS is not in the subscription."
+  },
+  "subscriptionSmsInactiveMessage": "أضِف الرسائل النصية إلى اشتراكك لإرسال الفواتير والتذكيرات والعروض إلى عملائك. تواصل مع الدعم.",
+  "@subscriptionSmsInactiveMessage": {
+    "description": "Callout body when SMS is not in the subscription."
+  },
   "subscriptionLastSynced": "آخر تحديث للحالة: {time}",
   "@subscriptionLastSynced": {
     "description": "Caption showing when the snapshot was last refreshed from the relay.",
@@ -10621,32 +10707,45 @@
   "@smartReorderSeed": {
     "description": "Prompt auto-sent to the AI chat when the user confirms Smart Reorder; drives the reorder_plan tool flow."
   },
-  "messagingSettingsTitle": "إعدادات الرسائل",
-  "messagingSettingsSubtitle": "بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار",
-  "messagingHeroTitle": "بوابة الرسائل",
-  "messagingStatusInactive": "غير مُهيّأة",
-  "messagingConnectionTitle": "الاتصال بالجهاز",
-  "messagingBaseUrlLabel": "عنوان الجهاز (Base URL)",
-  "messagingUsernameLabel": "اسم المستخدم",
-  "messagingPasswordLabel": "كلمة المرور",
-  "messagingPasswordKeepHint": "اتركه فارغًا للإبقاء على كلمة المرور الحالية",
-  "messagingRateLabel": "رسائل/الدقيقة",
-  "messagingDailyCapLabel": "الحد اليومي (0 = بلا حد)",
-  "messagingSaveError": "تعذّر حفظ الإعدادات",
-  "messagingLoadError": "تعذّر تحميل إعدادات الرسائل",
-  "messagingTestTitle": "إرسال رسالة اختبار",
-  "messagingTestNeedsSaveTitle": "احفظ البوابة أولًا",
-  "messagingTestNeedsSaveMessage": "أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.",
-  "messagingTestPhoneLabel": "رقم الهاتف",
-  "messagingTestSendButton": "إرسال اختبار",
-  "messagingTestSentTitle": "تم الإرسال",
-  "messagingTestSentMessage": "غادرت رسالة الاختبار البوابة بنجاح.",
-  "messagingTestFailedTitle": "فشل الإرسال",
-  "messagingTestFailedMessage": "تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.",
-  "messagingStatusReady": "جاهزة — إرسال واستقبال",
-  "messagingStatusSendOnly": "إرسال فقط — لم تُفعّل",
-  "messagingLastSeenLabel": "آخر اتصال {when}",
+  "messagingSettingsTitle": "الرسائل النصية",
+  "@messagingSettingsTitle": {
+    "description": "Shop Settings tile and page title for the SMS service (relay-hosted, paid add-on)."
+  },
+  "messagingSettingsSubtitle": "خدمة الرسائل في اشتراكك: الاستهلاك وحدود الإرسال ونصوص الرسائل ورسالة اختبار",
+  "@messagingSettingsSubtitle": {
+    "description": "Shop Settings tile subtitle for the SMS page."
+  },
+  "messagingHeroTitle": "رسائل دفتر النصية",
+  "@messagingHeroTitle": {
+    "description": "Hero title on the SMS settings page."
+  },
+  "messagingStatusActive": "مفعّلة",
+  "@messagingStatusActive": {
+    "description": "Hero headline: SMS is in the subscription and switched on."
+  },
+  "messagingStatusDisabled": "موقوفة",
+  "@messagingStatusDisabled": {
+    "description": "Hero headline: the shop switched SMS off."
+  },
+  "messagingStatusNotSubscribed": "غير مشمولة",
+  "@messagingStatusNotSubscribed": {
+    "description": "Hero headline: SMS is not part of the shop's subscription (followed by messagingStatusNotSubscribedSubtitle)."
+  },
+  "messagingStatusNotSubscribedSubtitle": "في اشتراكك الحالي",
+  "@messagingStatusNotSubscribedSubtitle": {
+    "description": "Small text beside the not-subscribed hero headline."
+  },
+  "messagingStatusNotReady": "قيد التجهيز",
+  "@messagingStatusNotReady": {
+    "description": "Hero headline: entitled, but the service is not set up on Daftar's side yet."
+  },
+  "messagingTestModePill": "وضع تجريبي",
+  "@messagingTestModePill": {
+    "description": "Hero pill: the relay processes sends without delivering them."
+  },
+  "messagingLastSeenLabel": "آخر إرسال {when}",
   "@messagingLastSeenLabel": {
+    "description": "Hero pill: when the relay last accepted a send.",
     "placeholders": {
       "when": {
         "type": "String"
@@ -10654,45 +10753,54 @@
     }
   },
   "messagingUnsavedBadge": "تغييرات غير محفوظة",
-  "messagingSetupGuideTitle": "أين أجد هذه البيانات؟",
-  "messagingSetupGuideMessage": "على هاتف الرسائل: افتح تطبيق SMS Gate، فعّل «Local Server»، ثم اضغط زر الحالة في الأسفل حتى تصبح Online. سيعرض التطبيق عنوان الهاتف على الشبكة واسم المستخدم وكلمة المرور — انقلها هنا كما هي.",
-  "messagingBaseUrlHelper": "يكفي عنوان الهاتف على الشبكة؛ المنفذ الافتراضي 8080 يُضاف تلقائيًا.",
-  "messagingBaseUrlInvalid": "عنوان غير صالح. اكتب عنوان الهاتف على الشبكة، مثل 192.168.1.50",
-  "messagingBaseUrlNormalized": "سيُحفظ العنوان هكذا: {url}",
-  "@messagingBaseUrlNormalized": {
-    "placeholders": {
-      "url": {
-        "type": "String"
-      }
-    }
+  "messagingLoadError": "تعذّر تحميل إعدادات الرسائل",
+  "messagingNotSubscribedTitle": "الرسائل النصية خدمة إضافية مدفوعة",
+  "@messagingNotSubscribedTitle": {
+    "description": "Callout title when SMS is not in the subscription."
   },
-  "messagingRateHelper": "0 = بلا حد",
-  "messagingUnpacedTitle": "لا يوجد حد للإرسال في الدقيقة",
-  "messagingUnpacedMessage": "بدون حد، قد تُصنَّف الشريحة كمرسل مزعج فيُحظر الرقم. القيمة المقترحة 6 رسائل في الدقيقة.",
-  "messagingConnectButton": "حفظ وتفعيل",
-  "messagingActivateOnlyButton": "تفعيل الجهاز",
-  "messagingReactivateButton": "إعادة تسجيل الروابط",
-  "messagingConnectingLabel": "جارٍ التفعيل…",
-  "messagingConnectHint": "الحفظ يكفي للإرسال؛ التفعيل يضبط الهاتف ليُعيد إلينا الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي عليه.",
-  "messagingNotActivatedTitle": "لم يُفعّل الجهاز بعد",
-  "messagingNotActivatedMessage": "الإرسال يعمل، لكن الردود الواردة وتقارير التسليم لن تصل حتى تضغط «تفعيل الجهاز».",
-  "messagingConnectedTitle": "الجهاز جاهز",
-  "messagingConnectedMessage": "حُفظت الإعدادات وسُجّلت {count} روابط على الهاتف — الرسائل الواردة وتقارير التسليم تصل الآن تلقائيًا.",
-  "@messagingConnectedMessage": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
+  "messagingNotSubscribedMessage": "أرسل الفواتير وتذكيرات الديون والعروض إلى هواتف عملائك برسائل نصية تحمل اسم محلك، دون أي جهاز أو إعداد في المحل. الخدمة غير مشمولة في اشتراكك الحالي — تواصل مع الدعم لإضافتها.",
+  "@messagingNotSubscribedMessage": {
+    "description": "Callout body when SMS is not in the subscription."
   },
-  "messagingSavedNotActivatedTitle": "حُفظت الإعدادات — لم يُفعّل الجهاز",
-  "messagingSavedNotActivatedMessage": "تعذّر الوصول إلى الهاتف لتسجيل الروابط. تأكد أن الهاتف يعمل وأن «Local Server» في وضع Online على نفس الشبكة، ثم أعد المحاولة.",
-  "messagingReactivateFailedTitle": "حُفظت الإعدادات",
-  "messagingReactivateFailedMessage": "تعذّر الوصول إلى الهاتف الآن لإعادة تسجيل الروابط، والروابط المسجّلة سابقًا ما زالت تعمل.",
-  "messagingSaveFailedTitle": "تعذّر حفظ الإعدادات",
-  "messagingDeviceErrorTitle": "آخر خطأ من الجهاز",
-  "messagingDeviceErrorMessage": "{detail} — {when}",
-  "@messagingDeviceErrorMessage": {
+  "messagingDisabledTitle": "خدمة الرسائل موقوفة",
+  "@messagingDisabledTitle": {
+    "description": "Callout title when the shop switched SMS off."
+  },
+  "messagingDisabledMessage": "لن يُرسل من هذا المحل أي شيء: لا فواتير ولا تذكيرات ولا حملات. شغّل الخدمة من «إعدادات الإرسال» ثم احفظ.",
+  "@messagingDisabledMessage": {
+    "description": "Callout body when the shop switched SMS off."
+  },
+  "messagingNotReadyTitle": "خدمة الرسائل قيد التجهيز",
+  "@messagingNotReadyTitle": {
+    "description": "Callout title when the relay reports SMS as not configured."
+  },
+  "messagingNotReadyMessage": "الخدمة مشمولة في اشتراكك لكنها لم تُجهَّز بعد لدى دفتر. تواصل مع الدعم إن طال ذلك.",
+  "@messagingNotReadyMessage": {
+    "description": "Callout body when the relay reports SMS as not configured."
+  },
+  "messagingTestModeTitle": "الخدمة في وضع تجريبي",
+  "@messagingTestModeTitle": {
+    "description": "Callout title when the relay runs in test mode."
+  },
+  "messagingTestModeMessage": "تُعالَج الرسائل كاملة لكنها لا تصل فعليًا إلى هواتف العملاء، ولا تُحتسب من باقتك.",
+  "@messagingTestModeMessage": {
+    "description": "Callout body when the relay runs in test mode."
+  },
+  "messagingUsageUnavailableTitle": "تعذّر قراءة الاستهلاك",
+  "@messagingUsageUnavailableTitle": {
+    "description": "Callout title when this month's usage could not be read from the relay."
+  },
+  "messagingUsageUnavailableMessage": "تعذّر الوصول إلى خادم دفتر لقراءة استهلاك هذا الشهر. تحقّق من اتصال المحل بالإنترنت ثم أعد المحاولة.",
+  "@messagingUsageUnavailableMessage": {
+    "description": "Callout body when this month's usage could not be read from the relay."
+  },
+  "messagingLastErrorTitle": "آخر خطأ في الإرسال",
+  "@messagingLastErrorTitle": {
+    "description": "Callout title for the gateway's last send error."
+  },
+  "messagingLastErrorMessage": "{detail} — {when}",
+  "@messagingLastErrorMessage": {
+    "description": "The last send error and when it happened.",
     "placeholders": {
       "detail": {
         "type": "String"
@@ -10702,11 +10810,228 @@
       }
     }
   },
-  "messagingUnsavedTestHint": "احفظ التغييرات أولًا — الاختبار يجري على الإعدادات المحفوظة في الخادم، لا على ما تراه هنا.",
-  "messagingTestPhoneHelper": "استخدم رقمًا بين يديك الآن للتحقق من وصول الرسالة.",
+  "messagingUsageTitle": "استهلاك هذا الشهر",
+  "@messagingUsageTitle": {
+    "description": "Section title for this month's SMS usage."
+  },
+  "messagingUsageSentLabel": "الرسائل المُرسلة",
+  "@messagingUsageSentLabel": {
+    "description": "Label beside the monthly usage figure."
+  },
+  "messagingUsageUsedOfLimit": "{used} من {limit}",
+  "@messagingUsageUsedOfLimit": {
+    "description": "Messages used out of the monthly limit.",
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "messagingUsageUnlimited": "{used} — بلا حد شهري",
+  "@messagingUsageUnlimited": {
+    "description": "Messages used when the plan has no monthly limit.",
+    "placeholders": {
+      "used": {
+        "type": "int"
+      }
+    }
+  },
+  "messagingUsageRemaining": "المتبقي {remaining}",
+  "@messagingUsageRemaining": {
+    "description": "Messages left this month.",
+    "placeholders": {
+      "remaining": {
+        "type": "int"
+      }
+    }
+  },
+  "messagingUsageResets": "تتجدّد الباقة في {date}",
+  "@messagingUsageResets": {
+    "description": "When the monthly allowance resets.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingLimitReachedTitle": "بلغت الحد الشهري للرسائل",
+  "@messagingLimitReachedTitle": {
+    "description": "Callout title when the monthly cap is used up."
+  },
+  "messagingLimitReachedMessage": "لن تُرسل رسائل جديدة حتى تتجدّد الباقة. لزيادة الحد تواصل مع الدعم.",
+  "@messagingLimitReachedMessage": {
+    "description": "Callout body when the monthly cap is used up."
+  },
+  "messagingSettingsSectionTitle": "إعدادات الإرسال",
+  "@messagingSettingsSectionTitle": {
+    "description": "Section title for the shop's own SMS dials."
+  },
+  "messagingServiceSwitchLabel": "تشغيل خدمة الرسائل",
+  "@messagingServiceSwitchLabel": {
+    "description": "Switch that turns all SMS from this shop on or off."
+  },
+  "messagingServiceSwitchHelper": "عند الإيقاف لا يُرسل أي شيء من هذا المحل.",
+  "messagingRateLabel": "رسائل/الدقيقة",
+  "messagingRateHelper": "0 = بلا حد",
+  "messagingDailyCapLabel": "الحد اليومي",
+  "messagingQuietHoursLabel": "أوقات الهدوء للعروض",
+  "@messagingQuietHoursLabel": {
+    "description": "Label of the quiet-hours window for promotional SMS."
+  },
+  "messagingQuietHoursHelper": "تؤجَّل رسائل العروض والحملات الواقعة في هذه الفترة إلى ما بعدها. الفواتير والتذكيرات تُرسل في أي وقت.",
+  "messagingQuietHoursPickStart": "وقت البداية",
+  "@messagingQuietHoursPickStart": {
+    "description": "Button to pick the quiet-hours start while none is set."
+  },
+  "messagingQuietHoursPickEnd": "وقت النهاية",
+  "@messagingQuietHoursPickEnd": {
+    "description": "Button to pick the quiet-hours end while none is set."
+  },
+  "messagingQuietHoursFrom": "من {time}",
+  "@messagingQuietHoursFrom": {
+    "description": "Quiet-hours start button once a time is set.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingQuietHoursTo": "إلى {time}",
+  "@messagingQuietHoursTo": {
+    "description": "Quiet-hours end button once a time is set.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingQuietHoursClear": "إلغاء أوقات الهدوء",
+  "@messagingQuietHoursClear": {
+    "description": "Clears both quiet-hours times."
+  },
+  "messagingQuietHoursInvalid": "حدّد وقتي البداية والنهاية مختلفين، أو ألغِ أوقات الهدوء.",
+  "@messagingQuietHoursInvalid": {
+    "description": "Validation when only one quiet-hours time is set, or both are equal."
+  },
+  "messagingSaveFailedTitle": "تعذّر حفظ الإعدادات",
+  "messagingSaveError": "تحقّق من الاتصال ثم أعد المحاولة.",
+  "@messagingSaveError": {
+    "description": "Fallback body of the save-failed callout when the server gave no reason."
+  },
+  "messagingSavedMessage": "حُفظت إعدادات الرسائل",
+  "@messagingSavedMessage": {
+    "description": "Snackbar after the SMS settings were saved."
+  },
+  "messagingTestTitle": "إرسال رسالة اختبار",
+  "messagingTestPhoneLabel": "رقم الهاتف",
+  "messagingTestPhoneHint": "0912345678",
+  "@messagingTestPhoneHint": {
+    "description": "Example Libyan mobile number in the test-send field."
+  },
+  "messagingTestPhoneHelper": "رقم هاتف محمول ليبي بين يديك الآن، لتتأكد من وصول الرسالة.",
+  "messagingTestSendButton": "إرسال اختبار",
+  "messagingTestSentTitle": "تم الإرسال",
+  "messagingTestQueuedTitle": "قُبلت رسالة الاختبار وستُرسل خلال لحظات",
+  "@messagingTestQueuedTitle": {
+    "description": "Test send accepted but not out yet (queued behind pacing)."
+  },
+  "messagingTestSentBody": "النص المُرسل: {body}",
+  "@messagingTestSentBody": {
+    "description": "The exact text the test send delivered.",
+    "placeholders": {
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingTestFailedTitle": "فشل الإرسال",
+  "messagingTestFailedMessage": "تعذّر إرسال رسالة الاختبار. أعد المحاولة بعد قليل.",
+  "@messagingTestFailedMessage": {
+    "description": "Fallback when a test send failed without a known reason."
+  },
+  "messagingTemplatesTitle": "الرسائل التي يرسلها دفتر",
+  "@messagingTemplatesTitle": {
+    "description": "Section listing every SMS text Daftar sends to customers."
+  },
+  "messagingTemplatesIntro": "هذه نصوص الرسائل التي تصل إلى عملائك كما اعتمدها مزوّد الرسائل. تُرسل باسم دفتر، لذلك يظهر اسم محلك داخل كل رسالة.",
+  "messagingTemplateNotConfigured": "غير مفعّل بعد لدى المزوّد",
+  "@messagingTemplateNotConfigured": {
+    "description": "Badge on a message kind the provider has not approved/wired yet."
+  },
+  "messagingTemplateMarketingBadge": "ترويجية",
+  "@messagingTemplateMarketingBadge": {
+    "description": "Badge on promotional message kinds (they obey quiet hours and opt-outs)."
+  },
+  "messagingErrorNotEntitled": "خدمة الرسائل غير مشمولة في اشتراك المحل. تواصل مع الدعم لإضافتها.",
+  "@messagingErrorNotEntitled": {
+    "description": "SMS error code not_entitled."
+  },
+  "messagingErrorServiceDisabled": "خدمة الرسائل موقوفة من إعدادات الرسائل في المحل.",
+  "@messagingErrorServiceDisabled": {
+    "description": "SMS error code service_disabled."
+  },
+  "messagingErrorMonthlyLimit": "بلغ المحل الحد الشهري للرسائل. تتجدّد الباقة أول الشهر، أو تواصل مع الدعم لزيادتها.",
+  "@messagingErrorMonthlyLimit": {
+    "description": "SMS error code monthly_limit."
+  },
+  "messagingErrorRateLimited": "أُرسلت رسائل كثيرة في وقت قصير. انتظر دقيقة ثم أعد المحاولة.",
+  "@messagingErrorRateLimited": {
+    "description": "SMS error code rate_limited."
+  },
+  "messagingErrorTemplateNotConfigured": "نص هذه الرسالة لم يُعتمد بعد لدى مزوّد الرسائل. تواصل مع الدعم.",
+  "@messagingErrorTemplateNotConfigured": {
+    "description": "SMS error codes template_not_configured / unknown_kind."
+  },
+  "messagingErrorTemplateRequired": "لا تُرسل إلا النصوص المعتمدة لدى مزوّد الرسائل، وهذه الرسالة ليست منها.",
+  "@messagingErrorTemplateRequired": {
+    "description": "SMS error code template_required."
+  },
+  "messagingErrorInvalidPhone": "رقم الهاتف غير صالح. يلزم رقم محمول ليبي مثل 0912345678.",
+  "@messagingErrorInvalidPhone": {
+    "description": "SMS error codes invalid_phone / bad_number."
+  },
+  "messagingErrorProviderCredit": "نفد رصيد الرسائل لدى المزوّد مؤقتًا. أبلغ الدعم ليعيد شحنه.",
+  "@messagingErrorProviderCredit": {
+    "description": "SMS error code provider_credit (the company's provider wallet is empty)."
+  },
+  "messagingErrorProviderUnauthorized": "تعذّر الإرسال بسبب مشكلة في حساب دفتر لدى مزوّد الرسائل. أبلغ الدعم.",
+  "@messagingErrorProviderUnauthorized": {
+    "description": "SMS error code provider_unauthorized."
+  },
+  "messagingErrorProviderRejected": "رفض مزوّد الرسائل هذه الرسالة.",
+  "@messagingErrorProviderRejected": {
+    "description": "SMS error code provider_rejected."
+  },
+  "messagingErrorOutcomeUnknown": "تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.",
+  "@messagingErrorOutcomeUnknown": {
+    "description": "SMS error codes provider_error / outcome_unknown."
+  },
+  "messagingErrorSmsUnconfigured": "خدمة الرسائل غير مُجهّزة بعد لدى دفتر. تواصل مع الدعم.",
+  "@messagingErrorSmsUnconfigured": {
+    "description": "SMS error code sms_unconfigured."
+  },
+  "messagingErrorRelayUnreachable": "تعذّر الوصول إلى خادم دفتر. تحقّق من اتصال المحل بالإنترنت ثم أعد المحاولة.",
+  "@messagingErrorRelayUnreachable": {
+    "description": "SMS error code relay_unreachable."
+  },
+  "messagingErrorDriverError": "حدث خطأ أثناء الإرسال. أعد المحاولة، وإن تكرر أبلغ الدعم.",
+  "@messagingErrorDriverError": {
+    "description": "SMS error code driver_error."
+  },
+  "messagingErrorDeliveryFailed": "أُرسلت الرسالة لكنها لم تصل إلى هاتف العميل. تأكد أن الرقم صحيح وأن الهاتف يعمل.",
+  "@messagingErrorDeliveryFailed": {
+    "description": "SMS error code delivery_failed."
+  },
   "conversationsTitle": "المحادثات",
   "conversationsDrawerLabel": "المحادثات",
   "conversationsEmpty": "لا توجد محادثات بعد",
+  "conversationsEmptyMessage": "الرسائل تصل إلى هاتف العميل كرسائل نصية، وردوده لا تعود إلى التطبيق.",
+  "@conversationsEmptyMessage": {
+    "description": "Conversations empty state: SMS is one-way, replies never come back."
+  },
   "conversationsLoadError": "تعذّر تحميل المحادثات",
   "conversationsUnreadBadge": "{count} جديدة",
   "@conversationsUnreadBadge": {
@@ -10717,7 +11042,7 @@
     }
   },
   "conversationThreadEmpty": "لا توجد رسائل في هذه المحادثة",
-  "conversationReplyHint": "اكتب ردًا…",
+  "conversationReplyHint": "اكتب رسالة للعميل… ردوده لا تصل إلى التطبيق",
   "conversationSendTooltip": "إرسال",
   "conversationSendError": "تعذّر إرسال الرسالة",
   "conversationReadOnly": "ليس لديك صلاحية الرد على المحادثات",
@@ -13019,6 +13344,14 @@
   "@stockUnitPayoutOwed": {
     "description": ""
   },
+  "stockUnitPayoutFromSale": "حصة صاحبها من البيع",
+  "@stockUnitPayoutFromSale": {
+    "description": "What a consigned article's sale earned its owner, shown when an advance offsets it."
+  },
+  "stockUnitPayoutAdvance": "سبق صرفه لصاحبها",
+  "@stockUnitPayoutAdvance": {
+    "description": "Money already handed to the owner for this same consigned article."
+  },
   "stockUnitPayoutPaidOn": "صُرفت في",
   "@stockUnitPayoutPaidOn": {
     "description": ""
@@ -13825,6 +14158,15 @@
       }
     }
   },
+  "rechargeFloatMayNotCover": "رصيد الوكالة {balance} قد لا يغطّي هذا الشحن. سجّل البيع الآن وارصد الرصيد لاحقاً.",
+  "@rechargeFloatMayNotCover": {
+    "description": "Low-float warning for a cashier who is not shown what the top-up costs the agency.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeHistoryTitle": "سجلّ البطاقة",
   "@rechargeHistoryTitle": {
     "description": ""
@@ -14204,6 +14546,15 @@
       },
       "amount": {
         "type": "String"
+      }
+    }
+  },
+  "rechargeSubscriberPurchases": "{count, plural, one{عملية شحن واحدة} two{عمليتا شحن} few{{count} عمليات شحن} other{{count} عملية شحن}} لدى كل الوكلاء",
+  "@rechargeSubscriberPurchases": {
+    "description": "How often a card was topped up across every agency, for a reader who is not shown what the agencies paid.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   },

@@ -157,6 +157,37 @@ def build_integration_breakdown(orders) -> dict:
     }
 
 
+def without_costs(breakdown: dict) -> dict:
+    """``breakdown`` as a reader outside the reporting roles may see it.
+
+    The provider's share and the margin it leaves are the owner's figures, the
+    same as a sale's cost and profit; the counts and the money customers paid
+    or got back are the shift's, and stay. A new dict: the one passed in is
+    the shop-wide cached summary every reader shares.
+    """
+
+    def figures(rollup: dict) -> dict:
+        kept = {
+            key: value for key, value in rollup.items() if key not in ("cost", "margin")
+        }
+        for bucket in (*BUCKETS, "refunded_after_delivery"):
+            if isinstance(kept.get(bucket), dict):
+                kept[bucket] = {
+                    key: value for key, value in kept[bucket].items() if key != "cost"
+                }
+        return kept
+
+    return {
+        **breakdown,
+        "providers": [figures(row) for row in breakdown.get("providers", [])],
+        "totals": figures(breakdown.get("totals", {})),
+        "transactions": [
+            {key: value for key, value in row.items() if key != "cost"}
+            for row in breakdown.get("transactions", [])
+        ],
+    }
+
+
 def _provider_order(rollups: dict) -> list[str]:
     """The catalog's order, so a provider keeps its place from shift to shift;
     anything the catalog no longer lists goes last rather than vanishing."""

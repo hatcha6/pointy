@@ -20,14 +20,20 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import (
     ACCOUNTANT_GROUP,
     AUDITOR_GROUP,
     CASHIER_GROUP,
+    INVENTORY_CLERK_GROUP,
     MANAGER_GROUP,
+    PURCHASING_AGENT_GROUP,
     SUPERVISOR_GROUP,
+    TECHNICIAN_GROUP,
     ensure_role_groups,
 )
 from apps.inventory.models import StockItem
@@ -51,6 +57,14 @@ SCOPED_REPORTS = (
 )
 
 REPORTING_ROLES = (ACCOUNTANT_GROUP, AUDITOR_GROUP, SUPERVISOR_GROUP)
+# Every role whose work reads some of a report's sources — orders at the till,
+# stock on the shelf, purchase orders — without being one of the reporting roles.
+NON_REPORTING_ROLES = (
+    CASHIER_GROUP,
+    TECHNICIAN_GROUP,
+    INVENTORY_CLERK_GROUP,
+    PURCHASING_AGENT_GROUP,
+)
 
 
 class ReportingRoleVisibilityTests(TestCase):
@@ -124,14 +138,12 @@ class ReportingRoleVisibilityTests(TestCase):
         self.assertEqual(summary["net_sales"], "8.00")
         self.assertEqual(summary["gross_profit"], "5.00")
 
-    def test_a_cashier_still_sees_only_their_own_till(self):
-        """Scoping was never wrong for cashiers — only for reporting roles."""
-        other = self._user("roles-other-cashier", CASHIER_GROUP)
-        summary = self._summary(other, ReportRun.ReportType.SALES_SUMMARY)
-        self.assertEqual(summary["net_sales"], "0.00")
-
-        own = self._summary(self.cashier, ReportRun.ReportType.SALES_SUMMARY)
-        self.assertEqual(own["net_sales"], "8.00")
+    def test_a_cashier_cannot_run_one_even_for_their_own_till(self):
+        """A cashier used to get their own till's sales summary — gross profit
+        included. Reports are for the reporting roles now; see
+        ``OnlyTheReportingRolesRunReportsTests``."""
+        with self.assertRaises(ReportAccessDenied):
+            self._summary(self.cashier, ReportRun.ReportType.SALES_SUMMARY)
 
     def test_a_user_with_no_role_cannot_run_a_report_at_all(self):
         with self.assertRaises(ReportAccessDenied):
@@ -224,3 +236,76 @@ class MonthEndPackScopeTests(TestCase):
                 params={"preset": "month"},
                 user=self.cashier,
             )
+
+
+class OnlyTheReportingRolesRunReportsTests(TestCase):
+    """Reports are the shop's books — profit, cost, cash, what everyone owes —
+    and they open for the manager, the supervisor, the accountant and the
+    auditor, and for nobody else.
+
+    Holding a report's source permissions used to be enough on its own. Every
+    cashier reads orders and payments for the till, so every cashier could run
+    the sales summary and the product margins, gross profit included; a
+    storekeeper could price the whole shelf at cost.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+
+    def _user(self, role):
+        user = get_user_model().objects.create_user(
+            username=f"only-{role}", password="p"
+        )
+        user.groups.add(Group.objects.get(name=role))
+        return user
+
+    def test_no_other_role_may_run_any_report(self):
+        for role in NON_REPORTING_ROLES:
+            user = self._user(role)
+            for report_type, definition in REPORT_DEFINITIONS.items():
+                with self.subTest(role=role, report=report_type):
+                    self.assertFalse(definition.is_allowed(user))
+
+    def test_every_reporting_role_may_run_every_report(self):
+        for role in (MANAGER_GROUP, *REPORTING_ROLES):
+            user = self._user(role)
+            for report_type, definition in REPORT_DEFINITIONS.items():
+                with self.subTest(role=role, report=report_type):
+                    self.assertTrue(definition.is_allowed(user))
+
+    def test_their_catalog_is_empty_and_no_run_opens(self):
+        for role in NON_REPORTING_ROLES:
+            client = APIClient()
+            client.force_authenticate(user=self._user(role))
+            with self.subTest(role=role):
+                catalog = client.get(reverse("report-catalog"))
+                self.assertEqual(catalog.status_code, status.HTTP_200_OK)
+                self.assertEqual(catalog.data["reports"], [])
+                refused = client.post(
+                    reverse("report-export"),
+                    {"report_type": ReportRun.ReportType.INVENTORY_STATUS},
+                    format="json",
+                )
+                self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_run_they_made_before_is_not_theirs_to_reopen(self):
+        # Runs from when a cashier could still make them carry the figures
+        # this closes off, so the history closes with it.
+        cashier = self._user(CASHIER_GROUP)
+        run = ReportRun.objects.create(
+            requested_by=cashier,
+            report_type=ReportRun.ReportType.SALES_SUMMARY,
+            status=ReportRun.Status.SUCCESS,
+            payload={"summary": {"gross_profit": "5.00"}},
+        )
+        client = APIClient()
+        client.force_authenticate(user=cashier)
+
+        listed = client.get(reverse("report-list"))
+        opened = client.get(reverse("report-detail", args=[run.pk]))
+        exported = client.get(reverse("report-stored-csv", args=[run.pk]))
+
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(listed.data["results"], [])
+        self.assertEqual(opened.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(exported.status_code, status.HTTP_404_NOT_FOUND)

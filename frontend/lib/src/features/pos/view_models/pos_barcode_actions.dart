@@ -1,5 +1,14 @@
 part of 'pos_view_model.dart';
 
+/// Scan sources that arrive as keystrokes, and so land in the focused search
+/// field on their way to the scan listener: the counter scanner, and the
+/// counter camera and a paired phone, which type what they read the same way.
+const _typedScanSources = {
+  'hardware_scanner',
+  'camera_wedge',
+  'companion_camera',
+};
+
 extension PosBarcodeActions on PosViewModel {
   Future<bool> addVariantByBarcode(
     String barcode, {
@@ -22,8 +31,10 @@ extension PosBarcodeActions on PosViewModel {
     // a debounced search; clear the field and cancel that debounce now so the
     // barcode can't reappear in the field a moment later. Only for the wedge
     // path — the manual "type a term and press Enter" path must keep the typed
-    // search (it clears itself via onSubmitted only when it resolves).
-    if (source == 'hardware_scanner') {
+    // search (it clears itself via onSubmitted only when it resolves). The
+    // counter camera and a paired phone type their scans exactly like a wedge
+    // (ScanKeyboard), so they are on it too.
+    if (_typedScanSources.contains(source)) {
       _searchResetController.requestReset();
     }
     _notifyChanged();

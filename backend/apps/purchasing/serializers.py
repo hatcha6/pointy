@@ -35,6 +35,7 @@ from apps.fx import currencies as fx_currencies
 
 from . import currency as purchase_currency
 from .cost_guard import block_thresholds, find_cost_anomalies, warn_thresholds
+from .unit_costs import cost_string, quantize_cost
 from .models import (
     prime_supplier_balances,
     PurchaseLine,
@@ -71,6 +72,24 @@ def _quantity_read_field():
 def _quantity_input_field(**kwargs):
     """A writable purchase quantity (line entry, receiving, adjustments)."""
     return serializers.DecimalField(max_digits=12, decimal_places=3, **kwargs)
+
+
+class UnitCostField(serializers.DecimalField):
+    """A purchase unit cost: a rate to six places, not money to two.
+
+    Accepts the places a divided total needs — 58.00 over fifteen is
+    3.866667, and a two-place field could only take 3.87, which saved the
+    order as 58.05 — and renders without the trailing zeros, so an ordinary
+    cost still reads "12.50". See ``apps.purchasing.unit_costs``.
+    """
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("max_digits", 18)
+        kwargs.setdefault("decimal_places", 6)
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        return None if value is None else cost_string(value)
 
 
 class SupplierListSerializer(serializers.ListSerializer):
@@ -348,11 +367,16 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
-    net_unit_cost = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        read_only=True,
+    # Declared, not left to the model: the column's six places are for the
+    # arithmetic, and a two-place cost must still read "12.50", not
+    # "12.500000".
+    unit_cost = UnitCostField(min_value=Decimal("0.00"))
+    unit_cost_in_currency = UnitCostField(
+        min_value=Decimal("0.00"),
+        required=False,
+        allow_null=True,
     )
+    net_unit_cost = UnitCostField(read_only=True)
     effective_line_total = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -367,16 +391,8 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
-    landed_unit_cost = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        read_only=True,
-    )
-    effective_unit_cost = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        read_only=True,
-    )
+    landed_unit_cost = UnitCostField(read_only=True)
+    effective_unit_cost = UnitCostField(read_only=True)
     # Quantities are decimals: fractional units (half an egg tray, 2.5 kg)
     # purchase and receive in fractions; whole-number units are enforced by
     # validate() against the unit's allows_fractional flag.
@@ -495,22 +511,35 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         previous_cost = self._previous_unit_cost(line)
         return None if previous_cost is None else money_string(previous_cost)
 
+    # The comparison is made in money, as the previous cost is: a cost kept to
+    # six places (3.866667) against a previous one shown to two (3.87) is the
+    # same price, not a change of -0.003333.
+    @staticmethod
+    def _unit_cost_in_money(line):
+        return line.unit_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
     def get_unit_cost_change(self, line):
         previous_cost = self._previous_unit_cost(line)
         if previous_cost is None:
             return None
-        return money_string(line.unit_cost - previous_cost)
+        return money_string(self._unit_cost_in_money(line) - previous_cost)
 
     def get_unit_cost_change_percent(self, line):
         previous_cost = self._previous_unit_cost(line)
         if previous_cost in (None, Decimal("0.00")):
             return None
-        percent = ((line.unit_cost - previous_cost) / previous_cost * Decimal("100"))
+        percent = (
+            (self._unit_cost_in_money(line) - previous_cost)
+            / previous_cost
+            * Decimal("100")
+        )
         return money_string(percent)
 
     def get_unit_cost_changed(self, line):
         previous_cost = self._previous_unit_cost(line)
-        return False if previous_cost is None else line.unit_cost != previous_cost
+        if previous_cost is None:
+            return False
+        return self._unit_cost_in_money(line) != previous_cost
 
     _MISSING = object()
 
@@ -827,6 +856,9 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
         decimal_places=6,
         read_only=True,
     )
+    unit_cost = UnitCostField(read_only=True)
+    effective_unit_cost = UnitCostField(read_only=True)
+    landed_unit_cost = UnitCostField(read_only=True)
     base_unit_cost = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -1183,11 +1215,7 @@ class PurchaseDiscountPreviewLineSerializer(serializers.Serializer):
         queryset=ProductVariant.objects.select_related("product"),
     )
     quantity = _quantity_input_field(min_value=Decimal('0.001'))
-    unit_cost = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        min_value=Decimal("0.00"),
-    )
+    unit_cost = UnitCostField(min_value=Decimal("0.00"))
     # The purchase unit the buyer is typing in — blank for the product's base
     # unit. The editor has always sent it; the preview used to drop it on the
     # floor, which left every figure that crosses into base units unable to
@@ -1466,7 +1494,7 @@ def purchase_preview_line_payloads(
     for index, line in enumerate(lines):
         key = str(index)
         line_total = (line["unit_cost"] * Decimal(line["quantity"])).quantize(
-            Decimal("0.01")
+            Decimal("0.01"), rounding=ROUND_HALF_UP
         )
         net_totals_by_key[key] = (line_total - discounts_by_key[key]).quantize(
             Decimal("0.01")
@@ -1549,21 +1577,18 @@ def purchase_preview_line_payloads(
         variant = line["variant"]
         product = variant.product
         quantity = Decimal(line["quantity"])
-        line_total = (line["unit_cost"] * quantity).quantize(Decimal("0.01"))
+        line_total = (line["unit_cost"] * quantity).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         discount_amount = discounts_by_key[key]
         net_line_total = net_totals_by_key[key]
         allocated_landed_cost = landed_allocations.get(key, Decimal("0.00"))
-        # ROUND_HALF_UP, matching PurchaseOrder.recalculate() — this is the one
-        # per-unit figure the model rounds half-up rather than half-even, and a
-        # bare quantize() here previewed a net unit cost a cent under the one the
-        # save then wrote whenever the division landed on a half-cent.
-        net_unit_cost = (net_line_total / quantity).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
-        landed_unit_cost = (allocated_landed_cost / quantity).quantize(Decimal("0.01"))
-        effective_unit_cost = (net_unit_cost + landed_unit_cost).quantize(
-            Decimal("0.01")
-        )
+        # The same figures, rounded the same way, as PurchaseOrder.recalculate()
+        # writes: a preview that rounds differently from the save quotes costs
+        # the save then contradicts. Per-unit costs are rates (six places).
+        net_unit_cost = quantize_cost(net_line_total / quantity)
+        landed_unit_cost = quantize_cost(allocated_landed_cost / quantity)
+        effective_unit_cost = quantize_cost(net_unit_cost + landed_unit_cost)
         payloads.append(
             {
                 "product": product.pk,
@@ -1571,15 +1596,17 @@ def purchase_preview_line_payloads(
                 "product_name": product.name,
                 "variant_sku": variant.sku,
                 "variant_name": variant.display_name,
-                "quantity": int(quantity),
-                "unit_cost": f"{line['unit_cost']:.2f}",
+                # Not int(): a half tray truncated to 0 never matched its draft
+                # line, so the line lost its discount and landed-cost figures.
+                "quantity": f"{quantity.quantize(Decimal('0.001')):f}",
+                "unit_cost": cost_string(line["unit_cost"]),
                 "line_total": f"{line_total:.2f}",
                 "discount_amount": f"{discount_amount:.2f}",
                 "net_line_total": f"{net_line_total:.2f}",
-                "net_unit_cost": f"{net_unit_cost:.2f}",
+                "net_unit_cost": cost_string(net_unit_cost),
                 "allocated_landed_cost": f"{allocated_landed_cost:.2f}",
-                "landed_unit_cost": f"{landed_unit_cost:.2f}",
-                "effective_unit_cost": f"{effective_unit_cost:.2f}",
+                "landed_unit_cost": cost_string(landed_unit_cost),
+                "effective_unit_cost": cost_string(effective_unit_cost),
                 "effective_line_total": (
                     f"{(net_line_total + allocated_landed_cost):.2f}"
                 ),

@@ -32,6 +32,9 @@ class StockUnit {
     this.agreementId,
     this.declaredValue,
     this.consignorPaidAt,
+    this.payoutDue,
+    this.consignorAdvance,
+    this.netDue,
     this.warrantyExpiresOn,
     this.listPrice,
     this.soldPrice,
@@ -77,6 +80,16 @@ class StockUnit {
 
   /// When its owner actually collected. Null while the payout is still owed.
   final DateTime? consignorPaidAt;
+
+  /// What the counter owes this article's owner while [awaitsPayout]: what
+  /// the sale earned them, what they already took for this same article, and
+  /// what is left to hand over. Sent to whoever may see consignment
+  /// liabilities, and **absent** for anyone else and for any other article —
+  /// never a zero, which would read as "owed nothing". Not [incomingRate]:
+  /// that is a cost, masked from the very people who pay consignors out.
+  final double? payoutDue;
+  final double? consignorAdvance;
+  final double? netDue;
 
   /// Stamped at the sale, from the product's warranty days. Stored rather than
   /// derived so a corrected setting next month cannot silently re-cover a
@@ -151,6 +164,9 @@ class StockUnit {
       agreementId: _intOrNull(json['agreement']),
       declaredValue: _doubleOrNull(json['declared_value']),
       consignorPaidAt: _dateOrNull(json['consignor_paid_at']),
+      payoutDue: _doubleOrNull(json['payout_due']),
+      consignorAdvance: _doubleOrNull(json['consignor_advance']),
+      netDue: _doubleOrNull(json['net_due']),
       warrantyExpiresOn: _dateOrNull(json['warranty_expires_on']),
       listPrice: _doubleOrNull(json['list_price']),
       soldPrice: _doubleOrNull(json['sold_price']),

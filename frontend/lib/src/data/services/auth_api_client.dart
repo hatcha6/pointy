@@ -137,6 +137,10 @@ class AuthApiClient {
     if (decoded.containsKey('ai_available')) {
       userJson['ai_available'] = decoded['ai_available'];
     }
+    // SMS is the same kind of paid entitlement, and rides the same way.
+    if (decoded.containsKey('sms_available')) {
+      userJson['sms_available'] = decoded['sms_available'];
+    }
     // Same shape: the cashier customer-access shop flag rides alongside `user`.
     if (decoded.containsKey('allow_cashier_customer_access')) {
       userJson['allow_cashier_customer_access'] =

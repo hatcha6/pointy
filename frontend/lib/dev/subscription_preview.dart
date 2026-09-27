@@ -1,6 +1,6 @@
 // Dev-only preview harness for the subscription status page (Shop Settings).
 //
-// Renders the relay installation ID + remote-access / AI subscription page
+// Renders the relay installation ID + remote-access / AI / SMS subscription page
 // full-viewport, backed by an in-memory fake repository (no backend). Pick the
 // scenario with a `?screen=` query param and resize the browser to test
 // responsiveness. Run with:
@@ -130,6 +130,7 @@ class _FakeSubscriptionRepository extends SubscriptionRepository {
         relayEnabled: true,
         subscriptionActive: false,
         aiEnabled: true,
+        smsEnabled: true,
         subscriptionEndsAt: now.subtract(const Duration(days: 6)),
         lastSyncedAt: now.subtract(const Duration(hours: 2)),
         connectorLastSeenAt: now.subtract(const Duration(days: 7)),
@@ -160,6 +161,7 @@ class _FakeSubscriptionRepository extends SubscriptionRepository {
         relayEnabled: true,
         subscriptionActive: true,
         aiEnabled: true,
+        smsEnabled: true,
         subscriptionEndsAt: now.add(const Duration(days: 4)),
         lastSyncedAt: now.subtract(const Duration(minutes: 5)),
         connectorLastSeenAt: now.subtract(const Duration(minutes: 2)),
@@ -175,6 +177,7 @@ class _FakeSubscriptionRepository extends SubscriptionRepository {
         relayEnabled: true,
         subscriptionActive: true,
         aiEnabled: true,
+        smsEnabled: true,
         subscriptionEndsAt: now.add(const Duration(days: 318)),
         lastSyncedAt: now.subtract(const Duration(minutes: 5)),
         connectorLastSeenAt: now.subtract(const Duration(seconds: 40)),

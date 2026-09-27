@@ -33,15 +33,11 @@ from .models import StockAllocation, StockBatch
 
 ZERO = Decimal("0")
 
-#: The alert a customer receives. Short on purpose: it has to be readable on a
+#: The alert a customer receives is the approved ``batch_recall`` template
+#: (apps.messaging.sms_templates). Short on purpose: it has to be readable on a
 #: feature phone, and the only actions it asks for are *stop using it* and
 #: *come in*.
-RECALL_SMS_TEMPLATE = (
-    "تنبيه هام من {shop_name}:\n"
-    "نرجو التوقف عن استخدام المنتج {product_name} (دفعة رقم {batch_code}) "
-    "ومراجعة أقرب فرع فوراً للاسترجاع واسترداد كامل القيمة.\n"
-    "للاستفسار: {shop_phone}."
-)
+RECALL_SMS_KIND = "batch_recall"
 
 
 def lot_family(batch):
@@ -214,16 +210,18 @@ def notify_affected_customers(batch, *, settings=None, actor=None):
     from apps.core.models import ShopSettings
     from apps.messaging import services as messaging
     from apps.messaging.models import MessagingGateway, OutboundMessage
+    from apps.messaging.sms_templates import sms_template
 
     settings = settings or ShopSettings.load()
     report = recall_report(batch)
     shop_name = getattr(settings, "shop_name", "") or ""
     shop_phone = getattr(settings, "shop_phone", "") or ""
-    body = RECALL_SMS_TEMPLATE.format(
-        shop_name=shop_name,
-        product_name=report["product_name"],
-        batch_code=batch.code,
-        shop_phone=shop_phone,
+    template = sms_template(
+        RECALL_SMS_KIND,
+        shop_name,
+        report["product_name"],
+        batch.code,
+        shop_phone,
     )
 
     targets = {}
@@ -236,7 +234,7 @@ def notify_affected_customers(batch, *, settings=None, actor=None):
         try:
             message = messaging.enqueue_message(
                 to=phone,
-                body=body,
+                template=template,
                 consent_class=OutboundMessage.ConsentClass.TRANSACTIONAL,
                 channel=MessagingGateway.Channel.SMS,
                 dedup_key=f"recall_{batch.pk}_{customer_id}",
@@ -259,7 +257,7 @@ def notify_affected_customers(batch, *, settings=None, actor=None):
 
 
 __all__ = [
-    "RECALL_SMS_TEMPLATE",
+    "RECALL_SMS_KIND",
     "inward_provenance",
     "lot_family",
     "notify_affected_customers",

@@ -153,6 +153,7 @@ from apps.messaging.views import (
     DeliveryReceiptWebhookView,
     InboundWebhookView,
     MessagingGatewayViewSet,
+    MessagingStatusView,
 )
 from apps.notifications.views import BusinessNotificationViewSet
 from apps.payments.views import CardTerminalViewSet, PaymentViewSet
@@ -517,6 +518,11 @@ urlpatterns = [
         "api/price-checker/register/",
         price_checker_register_view,
         name="price-checker-register",
+    ),
+    path(
+        "api/messaging/status/",
+        MessagingStatusView.as_view(),
+        name="messaging-status",
     ),
     path(
         "api/messaging/inbound/<int:gateway_id>/",

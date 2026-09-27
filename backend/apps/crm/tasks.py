@@ -178,7 +178,7 @@ def generate_ai_suggestions_task():
     Campaign.objects.create(
         name="استرجاع العملاء المتعثّرين",
         body_template=(
-            "نفتقدك يا {{first_name}}! لديك عرض خاص بانتظارك في {{shop_name}}. "
+            "نفتقدك يا {{first_name}}! لديك عرض خاص بانتظارك. "
             "زُرنا قريبًا."
         ),
         status=Campaign.Status.DRAFT,

@@ -472,6 +472,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _requireOpeningCash;
   late bool _autoPrintReceipts;
   late bool _enableOnlineInvoices;
+  late bool _printVoucherQrCodes;
   late bool _allowOverselling;
   late bool _warnLowStockBeforeSale;
   late bool _preventSellingAtLoss;
@@ -559,6 +560,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
       _enableOnlineInvoices = widget.settings.enableOnlineInvoices;
+      _printVoucherQrCodes = widget.settings.printVoucherQrCodes;
       _allowOverselling = widget.settings.allowOverselling;
       _warnLowStockBeforeSale = widget.settings.warnLowStockBeforeSale;
       _preventSellingAtLoss = widget.settings.preventSellingAtLoss;
@@ -646,6 +648,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _requireOpeningCash = settings.requireOpeningCash;
     _autoPrintReceipts = settings.autoPrintReceipts;
     _enableOnlineInvoices = settings.enableOnlineInvoices;
+    _printVoucherQrCodes = settings.printVoucherQrCodes;
     _allowOverselling = settings.allowOverselling;
     _warnLowStockBeforeSale = settings.warnLowStockBeforeSale;
     _preventSellingAtLoss = settings.preventSellingAtLoss;
@@ -1075,8 +1078,19 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       l10n.receiptSettingsSummary(status),
       ?floor,
       l10n.onlineInvoiceSettingSummary(onlineStatus),
+      if (_sellsProviderCards)
+        l10n.voucherQrSettingSummary(
+          _printVoucherQrCodes
+              ? l10n.shopSettingsEnabledValue
+              : l10n.shopSettingsDisabledValue,
+        ),
     ].join('، ');
   }
+
+  /// Whether the voucher QR switch applies here at all: only a shop selling a
+  /// provider's cards prints one.
+  bool get _sellsProviderCards =>
+      (widget.viewModel.settings ?? widget.settings).sellsProviderCards;
 
   /// The auto-print floor, as the collapsed section shows it — null when the
   /// shop has set none, or when auto-print is off and a floor would hold back
@@ -1269,6 +1283,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         },
         onEnableOnlineInvoicesChanged: (value) {
           setState(() => _enableOnlineInvoices = value);
+          refresh();
+        },
+        printVoucherQrCodes: _sellsProviderCards ? _printVoucherQrCodes : null,
+        onPrintVoucherQrCodesChanged: (value) {
+          setState(() => _printVoucherQrCodes = value);
           refresh();
         },
       ),
@@ -2082,6 +2101,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       receiptHeader: _receiptHeaderController.text.trim(),
       receiptFooter: _receiptFooterController.text.trim(),
       enableOnlineInvoices: _enableOnlineInvoices,
+      printVoucherQrCodes: _printVoucherQrCodes,
       requireOpeningCash: _requireOpeningCash,
       autoPrintReceipts: _autoPrintReceipts,
       // Emptying either box clears that half of the floor, so both are passed

@@ -1,21 +1,28 @@
-// Dev-only preview harness for the SMS device settings page (Shop Settings).
+// Dev-only preview harness for the SMS settings page (Shop Settings).
 //
-// Renders the messaging gateway page full-viewport, backed by an in-memory fake
-// repository (no backend). Pick the scenario with a `?screen=` query param and
-// resize the browser to test responsiveness. Run with:
+// Renders the relay-hosted SMS status page full-viewport, backed by an
+// in-memory fake repository (no backend). Pick the scenario with a `?screen=`
+// query param and resize the browser to test responsiveness. Run with:
 //
-//   flutter run -d web-server --web-port 8080 -t lib/dev/messaging_preview.dart
+//   make frontend-messaging-preview
 //
-// Scenarios: configured | unconfigured | not_activated | device_error | error
-//            | test_fail | activate_fail
+// Scenarios: active | not_subscribed | disabled | limit_reached | unreachable
+//            | test_fail | test_ok
 //
-// See AGENTS.md ("UI preview harness") for the pattern. Not part of the shipping
-// app. Safe to delete.
+// The two test_* scenarios fire the test send on load, so the result callout
+// is on screen without a click (Flutter web paints to a canvas).
+//
+// See AGENTS.md ("UI Preview Harness") for the pattern. Not part of the
+// shipping app. Safe to delete.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/clock_time.dart';
 import 'package:pointy_frontend/src/data/models/messaging_gateway.dart';
+import 'package:pointy_frontend/src/data/models/messaging_status.dart';
 import 'package:pointy_frontend/src/data/repositories/messaging_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/settings/view_models/messaging_settings_view_model.dart';
@@ -23,10 +30,29 @@ import 'package:pointy_frontend/src/features/settings/views/messaging_settings_p
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
-void main() => runApp(const _PreviewApp());
+void main() {
+  final scenario = _screen();
+  final viewModel = MessagingSettingsViewModel(
+    _FakeMessagingRepository(scenario),
+  );
+  if (scenario.startsWith('test_')) {
+    // Fire the test once the page's own first load has landed.
+    void fire() {
+      if (viewModel.hasStatus && !viewModel.isBusy) {
+        viewModel.removeListener(fire);
+        unawaited(viewModel.sendTest('0912345678'));
+      }
+    }
+
+    viewModel.addListener(fire);
+  }
+  runApp(_PreviewApp(viewModel: viewModel));
+}
 
 class _PreviewApp extends StatelessWidget {
-  const _PreviewApp();
+  const _PreviewApp({required this.viewModel});
+
+  final MessagingSettingsViewModel viewModel;
 
   @override
   Widget build(BuildContext context) {
@@ -46,11 +72,7 @@ class _PreviewApp extends StatelessWidget {
         controller: PointyNavigationRailController(),
         child: child ?? const SizedBox.shrink(),
       ),
-      home: MessagingSettingsPage(
-        viewModel: MessagingSettingsViewModel(
-          _FakeMessagingRepository(_screen()),
-        ),
-      ),
+      home: MessagingSettingsPage(viewModel: viewModel),
     );
   }
 }
@@ -65,117 +87,191 @@ String _screen() {
   final parsed = Uri.tryParse(
     fragment.startsWith('/') ? fragment.substring(1) : fragment,
   );
-  return parsed?.queryParameters['screen'] ?? 'configured';
+  return parsed?.queryParameters['screen'] ?? 'active';
 }
 
-/// In-memory store backing the preview — returns a canned gateway (or none) and
-/// simulates a Test-send success/failure for the chosen scenario.
+/// In-memory stand-in for the backend: a canned status per scenario, a PATCH
+/// that applies the edit, and a test send that succeeds or fails.
 class _FakeMessagingRepository extends MessagingRepository {
   _FakeMessagingRepository(this.scenario) : super(PosApiService());
 
   final String scenario;
+  MessagingGateway? _saved;
 
-  /// Flipped by [activate] so the `not_activated` scenario can be walked all
-  /// the way through to a connected gateway.
-  bool _activated = false;
+  MessagingGateway get _gateway =>
+      _saved ??
+      MessagingGateway(
+        id: 1,
+        name: 'رسائل دفتر',
+        isDefault: true,
+        isActive: scenario != 'disabled',
+        maxMessagesPerMinute: 30,
+        quietHoursStart: const ClockTime(22, 0),
+        quietHoursEnd: const ClockTime(8, 0),
+        lastSeenAt: DateTime(2026, 9, 27, 10, 15),
+        lastError: switch (scenario) {
+          'limit_reached' => 'monthly_limit: monthly SMS limit reached',
+          'test_fail' =>
+            'provider_credit: wallet must have at least 0.15 LYD to send an sms',
+          _ => '',
+        },
+        lastErrorAt: scenario == 'limit_reached' || scenario == 'test_fail'
+            ? DateTime(2026, 9, 27, 9, 41)
+            : null,
+      );
 
   @override
-  Future<Result<List<MessagingGateway>>> loadGateways() async {
+  Future<Result<MessagingServiceStatus>> loadStatus() async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
-    return switch (scenario) {
-      'error' => Error(Exception('load failed')),
-      'unconfigured' => const Ok(<MessagingGateway>[]),
-      // Saved and able to send, but the device webhooks were never registered —
-      // the state the page exists to make visible.
-      'not_activated' => Ok([_gateway(activated: _activated)]),
-      'device_error' => Ok([
-        _gateway(
-          activated: true,
-          lastError: 'unreachable: Connection refused',
-          lastErrorAt: DateTime(2026, 8, 30, 9, 41),
-        ),
-      ]),
-      _ => Ok([_gateway(activated: true)]),
+    final entitled = scenario != 'not_subscribed';
+    final gateway = _gateway;
+    final usage = switch (scenario) {
+      'not_subscribed' || 'unreachable' => null,
+      'limit_reached' => _usage(used: 500),
+      'disabled' => _usage(used: 42),
+      _ => _usage(used: 137),
     };
-  }
-
-  static MessagingGateway _gateway({
-    required bool activated,
-    String lastError = '',
-    DateTime? lastErrorAt,
-  }) {
-    return MessagingGateway(
-      id: 1,
-      name: 'هاتف الرسائل',
-      provider: MessagingProvider.smsGate,
-      baseUrl: 'http://192.168.1.50:8080',
-      username: 'pointy',
-      isDefault: true,
-      isActive: true,
-      maxMessagesPerMinute: 6,
-      dailyCap: 200,
-      hasPassword: true,
-      isActivated: activated,
-      lastError: lastError,
-      lastErrorAt: lastErrorAt,
-      lastSeenAt: DateTime(2026, 8, 30, 10, 15),
+    return Ok(
+      MessagingServiceStatus(
+        entitled: entitled,
+        available: entitled && gateway.isActive,
+        testMode: scenario == 'test_fail' || scenario == 'test_ok',
+        gateway: gateway,
+        usage: usage,
+        usageError: switch (scenario) {
+          'not_subscribed' => 'not_entitled',
+          'unreachable' => 'relay_unreachable',
+          _ => '',
+        },
+        templates: _templates(
+          configured: entitled && scenario != 'unreachable',
+        ),
+      ),
     );
   }
 
-  @override
-  Future<Result<GatewayActivation>> activate(int id) async {
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (scenario == 'activate_fail') {
-      return const Ok(GatewayActivation(ok: false, registered: 0, total: 4));
-    }
-    _activated = true;
-    return const Ok(GatewayActivation(ok: true, registered: 4, total: 4));
-  }
-
-  @override
-  Future<Result<MessagingGateway>> createGateway(
-    MessagingGatewayDraft draft,
-  ) async {
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    return Ok(
-      MessagingGateway(
-        id: 1,
-        name: draft.name,
-        provider: draft.provider,
-        baseUrl: draft.baseUrl,
-        username: draft.username,
-        isDefault: true,
-        isActive: true,
-        maxMessagesPerMinute: draft.maxMessagesPerMinute,
-        dailyCap: draft.dailyCap,
-        hasPassword: true,
-        isActivated: _activated,
-      ),
+  static MessagingUsage _usage({required int used}) {
+    return MessagingUsage(
+      used: used,
+      limit: 500,
+      remaining: 500 - used,
+      periodStart: DateTime(2026, 9, 1),
+      resetsAt: DateTime(2026, 10, 1),
     );
   }
 
   @override
   Future<Result<MessagingGateway>> updateGateway(
     int id,
-    MessagingGatewayDraft draft,
-  ) => createGateway(draft);
+    MessagingGatewayUpdate update,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final current = _gateway;
+    _saved = MessagingGateway(
+      id: current.id,
+      name: current.name,
+      isDefault: true,
+      isActive: update.isActive,
+      maxMessagesPerMinute: update.maxMessagesPerMinute,
+      dailyCap: update.dailyCap,
+      quietHoursStart: update.quietHoursStart,
+      quietHoursEnd: update.quietHoursEnd,
+      lastSeenAt: current.lastSeenAt,
+    );
+    return Ok(_saved!);
+  }
 
   @override
   Future<Result<MessagingSendResult>> testSend({
     required int id,
     required String to,
-    String? body,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     if (scenario == 'test_fail') {
       return const Ok(
         MessagingSendResult(
           status: 'failed',
-          errorCode: 'unreachable',
-          errorDetail: 'تعذّر الوصول إلى الهاتف',
+          errorCode: 'invalid_phone',
+          errorDetail: 'LY phones must be made of 9 numbers',
         ),
       );
     }
-    return const Ok(MessagingSendResult(status: 'sent'));
+    return const Ok(
+      MessagingSendResult(
+        status: 'sent',
+        body: 'رسالة تجريبية من محل النور عبر دفتر: خدمة الرسائل تعمل بنجاح.',
+      ),
+    );
   }
+}
+
+/// The catalogue as the backend describes it (apps.messaging.sms_templates).
+/// [configured] false leaves the two free-text kinds unapproved, the way a
+/// fresh relay looks; null is "the relay could not be asked".
+List<MessagingTemplateInfo> _templates({required bool configured}) {
+  MessagingTemplateInfo item(
+    String kind,
+    String title,
+    String description,
+    String example, {
+    bool marketing = false,
+    bool approved = true,
+  }) {
+    return MessagingTemplateInfo(
+      kind: kind,
+      title: title,
+      description: description,
+      example: example,
+      consentClass: marketing ? 'marketing' : 'transactional',
+      configured: configured ? approved : null,
+    );
+  }
+
+  return [
+    item(
+      'test',
+      'رسالة تجريبية',
+      'تُرسل من صفحة إعدادات الرسائل للتأكد من أن الخدمة تعمل.',
+      'رسالة تجريبية من محل النور عبر دفتر: خدمة الرسائل تعمل بنجاح.',
+    ),
+    item(
+      'invoice_link',
+      'فاتورة بيع مع رابط',
+      'تُرسل للعميل عند الضغط على «إرسال كرسالة» في تفاصيل الفاتورة.',
+      'شكرًا لتسوقك من محل النور. فاتورتك رقم 000123 بقيمة 125.00 د.ل. '
+          'لعرضها: https://daftar.example/invoices/7Kq2mX',
+    ),
+    item(
+      'debt_reminder',
+      'تذكير بدين',
+      'تذكير للعميل بمبلغ مستحق عليه: يدويًا، أو يوميًا إذا فُعّل التذكير '
+          'التلقائي.',
+      'تذكير من محل النور: لديك مبلغ مستحق قدره 80.00 د.ل على الفاتورة رقم '
+          '000123. نرجو المبادرة بالسداد.',
+    ),
+    item(
+      'batch_recall',
+      'استدعاء دفعة',
+      'تُرسل لكل عميل اشترى من دفعة تم استدعاؤها.',
+      'تنبيه هام من محل النور: يرجى التوقف عن استخدام شراب سعال 100 مل '
+          '(دفعة رقم LOT-2291) ومراجعتنا فورًا لإرجاعه واسترداد قيمته كاملة. '
+          'للاستفسار: 0912345678',
+    ),
+    item(
+      'direct',
+      'رسالة مباشرة',
+      'رسالة يكتبها الموظف لعميل من شاشة المحادثات.',
+      'رسالة من محل النور: طلبك جاهز للاستلام.',
+      approved: false,
+    ),
+    item(
+      'marketing',
+      'عرض ترويجي',
+      'نص الحملات التسويقية، ولا يُرسل إلا بعد موافقة المدير.',
+      'عرض من محل النور: خصم 20% على العطور حتى نهاية الأسبوع! '
+          '(لإيقاف العروض أبلغ المحل)',
+      marketing: true,
+      approved: false,
+    ),
+  ];
 }

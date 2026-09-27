@@ -357,6 +357,7 @@ class NotificationTests(ConsignmentTestCase):
         MessagingGateway.objects.create(
             name="gate",
             channel=MessagingGateway.Channel.SMS,
+            provider=MessagingGateway.Provider.FAKE,
             is_active=True,
         )
 

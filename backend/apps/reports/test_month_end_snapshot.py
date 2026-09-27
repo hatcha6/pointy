@@ -148,7 +148,7 @@ class MonthEndSnapshotTests(TestCase):
         MessagingGateway.objects.create(
             name="بوابة",
             channel=MessagingGateway.Channel.SMS,
-            provider=MessagingGateway.Provider.SMS_GATE,
+            provider=MessagingGateway.Provider.FAKE,
             is_active=True,
         )
         self._settings(month_end_report_phone="0912345678")

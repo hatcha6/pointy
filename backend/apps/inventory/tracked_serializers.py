@@ -13,34 +13,115 @@ hidden cost read identically to a client, and only one of them is true.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
+from . import consignment as consignment_figures
 from .identity import IdentifierKind, check_identifier
 from .models import StockAllocation, StockBatch, StockBatchBalance, StockUnit
 
 #: The fields ``inventory.view_stockunit_cost`` guards.
 COST_FIELDS = ("incoming_rate", "refurb_cost", "total_cost")
+#: What a line of a unit's or a lot's history moved stock at, and by how much.
+ALLOCATION_COST_FIELDS = ("rate", "value_change")
+
+UNIT_COST_PERMISSION = "inventory.view_stockunit_cost"
+#: A lot's cost is what the shop paid for it, which anybody who reads purchase
+#: orders already sees on the order that bought it — the stock clerk and the
+#: buyer as much as the accountant. Hiding it from them here would protect
+#: nothing, so the lot mask stops only those who read no purchase at all: the
+#: cashier and the technician, whose own role opens the lots for the till's
+#: picker and never for what they cost.
+PURCHASE_COST_PERMISSION = "purchasing.view_purchaseorder"
+
+
+def user_sees_unit_cost(user) -> bool:
+    """Whether ``user`` may see what an identified unit cost."""
+    if user is None or not user.is_authenticated:
+        return False
+    return user.has_perm(UNIT_COST_PERMISSION)
+
+
+def user_sees_lot_cost(user) -> bool:
+    """Whether ``user`` may see what a lot cost: whoever may see a unit's cost,
+    and whoever reads purchase orders."""
+    if user is None or not user.is_authenticated:
+        return False
+    return user.has_perm(UNIT_COST_PERMISSION) or user.has_perm(
+        PURCHASE_COST_PERMISSION
+    )
+
+
+def _decided_once(context, key, decide) -> bool:
+    """Ask ``decide(user)`` once per response, keeping the answer in the
+    serializer context every row and nested serializer shares. No request in
+    the context means no reader, and no reader sees cost."""
+    if key not in context:
+        request = context.get("request")
+        context[key] = decide(getattr(request, "user", None))
+    return context[key]
+
+
+def reader_sees_unit_cost(context) -> bool:
+    return _decided_once(context, "_reader_sees_unit_cost", user_sees_unit_cost)
+
+
+def reader_sees_lot_cost(context) -> bool:
+    return _decided_once(context, "_reader_sees_lot_cost", user_sees_lot_cost)
+
+
+#: What the shop owes consignors. The counter holds it — the consignor turns up
+#: there to collect — and it is a different figure from a unit's cost even where
+#: the two coincide: a sold consignment's ``incoming_rate`` *is* its payout,
+#: but the cost mask exists for the price paid to a walk-in seller, and the
+#: person handing a consignor their money has to see what to hand over.
+CONSIGNMENT_LIABILITY_PERMISSION = "inventory.view_consignment_liability"
+
+
+def user_sees_consignment_liability(user) -> bool:
+    if user is None or not user.is_authenticated:
+        return False
+    return user.has_perm(CONSIGNMENT_LIABILITY_PERMISSION)
+
+
+def reader_sees_consignment_liability(context) -> bool:
+    return _decided_once(
+        context,
+        "_reader_sees_consignment_liability",
+        user_sees_consignment_liability,
+    )
 
 
 class CostMaskedSerializer(serializers.ModelSerializer):
-    """Drops the cost fields for a reader who may not see them."""
+    """Drops the cost fields for a reader who may not see them.
+
+    ``cost_fields`` are what goes, and ``_may_see_cost`` is who keeps them: an
+    identified unit's cost by default, overridden where the thing being read is
+    a lot.
+    """
+
+    cost_fields = COST_FIELDS
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not self._may_see_cost():
-            for field in COST_FIELDS:
+            for field in self.cost_fields:
                 data.pop(field, None)
         return data
 
     def _may_see_cost(self) -> bool:
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-        if user is None:
-            return False
-        return user.has_perm("inventory.view_stockunit_cost")
+        return reader_sees_unit_cost(self.context)
 
 
-class StockBatchBalanceSerializer(serializers.ModelSerializer):
+class LotCostMaskedSerializer(CostMaskedSerializer):
+    """The same mask for a lot, on the lot's own audience."""
+
+    def _may_see_cost(self) -> bool:
+        return reader_sees_lot_cost(self.context)
+
+
+class StockBatchBalanceSerializer(LotCostMaskedSerializer):
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
 
     class Meta:
@@ -117,6 +198,31 @@ class StockBatchSerializer(serializers.ModelSerializer):
         )
 
 
+def _awaits_payout(unit) -> bool:
+    """A sold consignment whose owner has not collected yet."""
+    return (
+        unit.is_consignment
+        and unit.status == StockUnit.Status.SOLD
+        and unit.consignor_paid_at is None
+    )
+
+
+def _payout_figures(unit) -> dict:
+    """What the counter hands this article's owner, and why, in the same three
+    figures the payables screen shows: what the sale earned them, what they
+    already took for this same article, and what is still owed. Read from
+    ``consignment``, where each has its one definition."""
+    return {
+        "payout_due": str(consignment_figures.consignor_payout_due(unit)),
+        "consignor_advance": str(
+            (unit.consignor_advance or Decimal("0")).quantize(Decimal("0.01"))
+        ),
+        # Floored at zero: an owner who already took more than this sale
+        # earned them is a receivable, never a negative payout.
+        "net_due": str(max(consignment_figures.net_due(unit), Decimal("0.00"))),
+    }
+
+
 class StockUnitSerializer(CostMaskedSerializer):
     product_name = serializers.CharField(
         source="variant.product.name", read_only=True
@@ -184,6 +290,12 @@ class StockUnitSerializer(CostMaskedSerializer):
             if field not in ("list_price", "attributes", "notes", "secondary_code")
         )
 
+    def to_representation(self, unit):
+        data = super().to_representation(unit)
+        if _awaits_payout(unit) and reader_sees_consignment_liability(self.context):
+            data.update(_payout_figures(unit))
+        return data
+
     def get_total_cost(self, unit):
         """What this article is worth to the shop: landed cost plus refurb.
 
@@ -243,8 +355,15 @@ class StockUnitLookupSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=120, trim_whitespace=True)
 
 
-class StockAllocationSerializer(serializers.ModelSerializer):
-    """One line of a unit's or a lot's life."""
+class StockAllocationSerializer(CostMaskedSerializer):
+    """One line of a unit's life.
+
+    Its rate *is* what the unit cost, so it sits behind the unit's own mask:
+    without it the history would hand back the figure the unit's payload
+    withholds.
+    """
+
+    cost_fields = ALLOCATION_COST_FIELDS
 
     batch_code = serializers.CharField(source="batch.display_code", read_only=True)
     unit_code = serializers.CharField(source="unit.code", read_only=True)
@@ -271,6 +390,13 @@ class StockAllocationSerializer(serializers.ModelSerializer):
             "note",
         )
         read_only_fields = fields
+
+
+class LotAllocationSerializer(StockAllocationSerializer):
+    """One line of a lot's life, on the lot's audience rather than the unit's."""
+
+    def _may_see_cost(self) -> bool:
+        return reader_sees_lot_cost(self.context)
 
 
 class IdentifyUnitSerializer(serializers.Serializer):
