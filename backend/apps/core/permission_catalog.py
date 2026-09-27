@@ -448,7 +448,11 @@ PERMISSION_CATALOG = [
             _perm("employees.change_compensationplan", "تعديل خطط الأجور", "تعديل خطة أجر قائمة."),
             _perm("employees.delete_compensationplan", "حذف خطط الأجور", "حذف خطة أجر."),
             _perm("employees.view_employeeloan", "عرض السلف", "الاطلاع على سلف الموظفين."),
-            _perm("employees.add_employeeloan", "تسجيل السلف", "تسجيل طلب سلفة لموظف."),
+            _perm(
+                "employees.add_employeeloan",
+                "تسجيل السلف",
+                "تسجيل سلفة لموظف؛ ومع صلاحية اعتماد السلف تُصرف في الخطوة نفسها.",
+            ),
             _perm("employees.change_employeeloan", "تعديل السلف", "تعديل مبلغ السلفة وأقساطها."),
             _perm(
                 "employees.approve_employeeloan",

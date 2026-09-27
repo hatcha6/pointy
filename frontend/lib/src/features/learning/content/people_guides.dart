@@ -117,7 +117,7 @@ const peopleGuides = <LearningGuide>[
     track: LearningTrack.people,
     level: LearningLevel.advanced,
     kind: LearningKind.walkthrough,
-    minutes: 3,
+    minutes: 4,
     capability: AppCapability.viewPayroll,
     keywords: ['payroll', 'salary', 'رواتب', 'موظفين', 'أجر', 'سلفة'],
     related: ['people.attendance', 'operations.board', 'money.expenses'],
@@ -157,6 +157,36 @@ const peopleGuides = <LearningGuide>[
             tone: LearningNoteTone.info,
             title: 'تحتاج خطة أجر واحدة على الأقل',
             message: 'لا يمكن إنشاء مسير قبل أن يكون لموظف واحد خطة أجر.',
+          ),
+        ],
+      ),
+      LearningSection(
+        title: 'السُّلَف',
+        blocks: [
+          LearningSteps([
+            LearningStep(
+              'من «السلف» اضغط «سلفة جديدة»، أو من حساب الموظف نفسه.',
+            ),
+            LearningStep(
+              'اختر الموظف، ثم المبلغ والقسط الشهري — أو عدد الأشهر '
+              'فيُحسب القسط.',
+            ),
+            LearningStep(
+              'اختر «سلّمها الآن» ومن أين يُصرف المبلغ، أو «سجّلها للاعتماد» '
+              'ليعتمدها لاحقًا من يملك ذلك.',
+            ),
+          ]),
+          LearningParagraph(
+            'يُخصم القسط في كل مسير رواتب حتى تُسدَّد. والموظف الذي له حساب '
+            'دخول يستطيع أن يطلب سلفة بنفسه، فيظهر طلبه في «طلبات سلف '
+            'بانتظار قرارك».',
+          ),
+          LearningNote(
+            tone: LearningNoteTone.info,
+            title: 'لا سلفة لموظف خارج المسير',
+            message:
+                'الموظف غير النشط أو المنتهية خدمته لا يدخل مسير الرواتب، '
+                'فلا شيء يسدّد سلفته.',
           ),
         ],
       ),

@@ -37,6 +37,10 @@ class Employee(TimeStampedModel):
         INTERN = "intern", "Intern"
         OTHER = "other", "Other"
 
+    #: Whom a payroll run pays, and so whom a loan's instalments can be taken
+    #: from. Inactive and terminated staff are left out of every run.
+    PAYROLL_STATUSES = (Status.ACTIVE, Status.ON_LEAVE)
+
     employee_number = models.CharField(max_length=32, unique=True, blank=True)
     full_name = models.CharField(max_length=255)
     phone = models.CharField(max_length=64, blank=True)

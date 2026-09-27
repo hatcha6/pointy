@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/employee.dart';
-import '../../../data/services/api_error_detail.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/payments/bank_account_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../treasury/view_models/bank_routing.dart';
+import 'loan_disbursement_picker.dart';
 
 /// The reject/approve pair shown against a loan request awaiting a decision.
 ///
@@ -125,11 +124,15 @@ class _LoanApprovalDialog extends StatefulWidget {
 }
 
 class _LoanApprovalDialogState extends State<_LoanApprovalDialog> {
-  LoanDisbursementSource _source = LoanDisbursementSource.cashBox;
-  int? _bankAccountId;
-  bool _bankAccountTouched = false;
+  final _disbursement = LoanDisbursementController();
   bool _isSaving = false;
   String? _error;
+
+  @override
+  void dispose() {
+    _disbursement.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
@@ -139,14 +142,7 @@ class _LoanApprovalDialogState extends State<_LoanApprovalDialog> {
       _error = null;
     });
     final failure = await widget.onApprove(
-      LoanDisbursement(
-        source: _source,
-        moneyAccountId: _source == LoanDisbursementSource.bank
-            ? (_bankAccountTouched
-                  ? _bankAccountId
-                  : BankAccountPicker.initialSelection(accounts))
-            : null,
-      ),
+      _disbursement.disbursementFor(accounts),
     );
     if (!mounted) {
       return;
@@ -157,26 +153,18 @@ class _LoanApprovalDialogState extends State<_LoanApprovalDialog> {
     }
     setState(() {
       _isSaving = false;
-      _error = _failureMessage(l10n, failure);
+      _error = loanFailureMessage(
+        l10n,
+        failure,
+        fallback: l10n.loanApproveError,
+      );
     });
-  }
-
-  String _failureMessage(AppLocalizations l10n, Exception failure) {
-    if (apiErrorCode(failure) == 'register_session_required') {
-      return l10n.loanApproveSessionRequiredError;
-    }
-    if (apiStatusCode(failure) == 403) {
-      return l10n.loanApprovePermissionError;
-    }
-    return l10n.loanApproveError;
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final accounts = BankRoutingScope.accountsOf(context);
     final loan = widget.loan;
 
     return AlertDialog(
@@ -197,37 +185,10 @@ class _LoanApprovalDialogState extends State<_LoanApprovalDialog> {
                 ),
               ),
               SizedBox(height: spacing.md),
-              Text(
-                l10n.loanDisbursementSourceLabel,
-                style: textTheme.titleSmall,
+              LoanDisbursementPicker(
+                controller: _disbursement,
+                enabled: !_isSaving,
               ),
-              SizedBox(height: spacing.xs),
-              for (final source in LoanDisbursementSource.values)
-                _SourceOption(
-                  key: ValueKey('loan_source_${source.name}'),
-                  title: _sourceLabel(l10n, source),
-                  hint: _sourceHint(l10n, source),
-                  icon: _sourceIcon(source),
-                  selected: _source == source,
-                  enabled: !_isSaving,
-                  onTap: () => setState(() => _source = source),
-                ),
-              if (_source == LoanDisbursementSource.bank &&
-                  BankAccountPicker.isUseful(accounts)) ...[
-                SizedBox(height: spacing.sm),
-                BankAccountPicker(
-                  accounts: accounts,
-                  selectedId: _bankAccountTouched
-                      ? _bankAccountId
-                      : BankAccountPicker.initialSelection(accounts),
-                  enabled: !_isSaving,
-                  dense: true,
-                  onChanged: (id) => setState(() {
-                    _bankAccountTouched = true;
-                    _bankAccountId = id;
-                  }),
-                ),
-              ],
               if (_error != null) ...[
                 SizedBox(height: spacing.sm),
                 PointyInlineMessage.error(message: _error!),
@@ -253,74 +214,6 @@ class _LoanApprovalDialogState extends State<_LoanApprovalDialog> {
           label: Text(l10n.employeeLoanApproveButton),
         ),
       ],
-    );
-  }
-
-  static String _sourceLabel(
-    AppLocalizations l10n,
-    LoanDisbursementSource source,
-  ) {
-    return switch (source) {
-      LoanDisbursementSource.drawer => l10n.loanSourceDrawer,
-      LoanDisbursementSource.cashBox => l10n.loanSourceCashBox,
-      LoanDisbursementSource.bank => l10n.loanSourceBank,
-    };
-  }
-
-  static String _sourceHint(
-    AppLocalizations l10n,
-    LoanDisbursementSource source,
-  ) {
-    return switch (source) {
-      LoanDisbursementSource.drawer => l10n.loanSourceDrawerHint,
-      LoanDisbursementSource.cashBox => l10n.loanSourceCashBoxHint,
-      LoanDisbursementSource.bank => l10n.loanSourceBankHint,
-    };
-  }
-
-  static IconData _sourceIcon(LoanDisbursementSource source) {
-    return switch (source) {
-      LoanDisbursementSource.drawer => Icons.point_of_sale_outlined,
-      LoanDisbursementSource.cashBox => Icons.inventory_2_outlined,
-      LoanDisbursementSource.bank => Icons.account_balance_outlined,
-    };
-  }
-}
-
-class _SourceOption extends StatelessWidget {
-  const _SourceOption({
-    super.key,
-    required this.title,
-    required this.hint,
-    required this.icon,
-    required this.selected,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final String title;
-  final String hint;
-  final IconData icon;
-  final bool selected;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.pointyColors;
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      enabled: enabled,
-      selected: selected,
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(hint),
-      trailing: Icon(
-        selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-        color: selected ? colors.primary : colors.mutedInk,
-      ),
-      onTap: onTap,
     );
   }
 }

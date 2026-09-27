@@ -31,6 +31,16 @@ enum AppCapability {
   manageOwnAccount,
   viewEmployeeLoans,
   manageEmployeeLoans,
+
+  /// Records a loan for an employee, rather than deciding one they asked for
+  /// from their own login. Also needs the employee list: the loan has to say
+  /// whose it is.
+  createEmployeeLoans,
+
+  /// Approves a loan, which hands its money over. [manageEmployeeLoans] is any
+  /// loan write at all; this is the one that moves cash, so a loan recorded
+  /// by someone without it waits for someone with it.
+  approveEmployeeLoans,
   viewPayroll,
   managePayroll,
   accessPos,
@@ -805,6 +815,21 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewEmployeeLoans)
           ..add(AppCapability.manageEmployeeLoans);
       }
+      // Write capabilities only: they gate a button on a screen the view
+      // permissions above already open.
+      if (_hasAny(user, const [
+            'add_employeeloan',
+            'employees.add_employeeloan',
+          ]) &&
+          _hasAny(user, const ['view_employee', 'employees.view_employee'])) {
+        capabilities.add(AppCapability.createEmployeeLoans);
+      }
+      if (_hasAny(user, const [
+        'approve_employeeloan',
+        'employees.approve_employeeloan',
+      ])) {
+        capabilities.add(AppCapability.approveEmployeeLoans);
+      }
       if (_hasAny(user, const [
         'add_employee',
         'change_employee',
@@ -1328,6 +1353,9 @@ class AuthorizationCapabilities {
   bool get canManageOwnAccount => allows(AppCapability.manageOwnAccount);
   bool get canViewEmployeeLoans => allows(AppCapability.viewEmployeeLoans);
   bool get canManageEmployeeLoans => allows(AppCapability.manageEmployeeLoans);
+  bool get canCreateEmployeeLoans => allows(AppCapability.createEmployeeLoans);
+  bool get canApproveEmployeeLoans =>
+      allows(AppCapability.approveEmployeeLoans);
   bool get canViewPayroll => allows(AppCapability.viewPayroll);
   bool get canManagePayroll => allows(AppCapability.managePayroll);
   bool get canViewAttendance => allows(AppCapability.viewAttendance);

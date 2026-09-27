@@ -40,6 +40,18 @@ bool apiErrorHasField(Object? error, String field) {
   return _decodedMap(error)?.containsKey(field) ?? false;
 }
 
+/// Whether the refusal is the period lock: a write dated inside books that
+/// have been closed. A 403 like a missing permission, told apart only by the
+/// server's sentence, since it carries no code.
+bool apiRefusedForClosedPeriod(Object? error) {
+  if (apiStatusCode(error) != 403) {
+    return false;
+  }
+  final detail = apiErrorDetail(error).toLowerCase();
+  return detail.contains('books are closed') ||
+      detail.contains('closed period');
+}
+
 /// A short human-readable reason, or empty when the body carried none.
 ///
 /// Empty rather than a placeholder on purpose — a caller that gets nothing back

@@ -81,9 +81,14 @@ class EmployeeRepository {
   Future<Result<EmployeeLoanPage>> loadEmployeeLoans({
     int page = 1,
     String status = '',
+    int? employeeId,
   }) {
     return Result.guard(
-      () => _service.fetchEmployeeLoans(page: page, status: status),
+      () => _service.fetchEmployeeLoans(
+        page: page,
+        status: status,
+        employeeId: employeeId,
+      ),
     );
   }
 
@@ -95,6 +100,21 @@ class EmployeeRepository {
     EmployeeLoanRequestDraft draft,
   ) {
     return Result.guard(() => _service.requestEmployeeLoan(draft));
+  }
+
+  /// Records a loan for [EmployeeLoanDraft.employeeId], left to be approved.
+  Future<Result<EmployeeLoan>> createEmployeeLoan(EmployeeLoanDraft draft) {
+    return Result.guard(() => _service.createEmployeeLoan(draft));
+  }
+
+  /// Records a loan and hands its money over from [disbursement], at once.
+  Future<Result<EmployeeLoan>> grantEmployeeLoan(
+    EmployeeLoanDraft draft, {
+    LoanDisbursement disbursement = LoanDisbursement.cashBox,
+  }) {
+    return Result.guard(
+      () => _service.grantEmployeeLoan(draft, disbursement: disbursement),
+    );
   }
 
   Future<Result<EmployeeLoan>> approveEmployeeLoan(

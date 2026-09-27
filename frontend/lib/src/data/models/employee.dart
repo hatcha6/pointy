@@ -344,6 +344,12 @@ class Employee {
   /// the balances.
   final EmployeeAccountBalance? accountBalance;
 
+  /// Payroll pays them — the server's `Employee.PAYROLL_STATUSES` — so it can
+  /// take a loan's instalments back. Inactive and terminated staff are left
+  /// out of every run, and the server refuses to lend to them.
+  bool get isOnPayroll =>
+      status == EmployeeStatus.active || status == EmployeeStatus.onLeave;
+
   factory Employee.fromJson(Map<String, Object?> json) {
     final plan = json['active_compensation_plan'];
     final balance = json['account_balance'];
@@ -611,6 +617,74 @@ class EmployeeLoanRequestDraft {
       if (purpose.trim().isNotEmpty) 'purpose': purpose.trim(),
     };
   }
+}
+
+/// A loan recorded for an employee by someone else — the owner or the
+/// accountant — rather than asked for from the employee's own login.
+class EmployeeLoanDraft {
+  const EmployeeLoanDraft({
+    required this.employeeId,
+    required this.amount,
+    required this.monthlyDeduction,
+    this.purpose = '',
+  });
+
+  final int employeeId;
+  final String amount;
+  final String monthlyDeduction;
+  final String purpose;
+
+  Map<String, Object?> toJson() {
+    return {
+      'employee': employeeId,
+      'amount': amount,
+      'monthly_deduction': monthlyDeduction,
+      if (purpose.trim().isNotEmpty) 'purpose': purpose.trim(),
+    };
+  }
+}
+
+/// How a loan of [amount] is repaid at [monthlyDeduction] a month: payroll
+/// takes the instalment each run until the last, smaller one clears it.
+class LoanRepayment {
+  const LoanRepayment._({
+    required this.months,
+    required this.monthlyDeduction,
+    required this.lastInstalment,
+  });
+
+  /// Null unless both figures are positive and the instalment fits the loan.
+  static LoanRepayment? of(double amount, double monthlyDeduction) {
+    if (amount <= 0 ||
+        monthlyDeduction <= 0 ||
+        monthlyDeduction > amount + 0.005) {
+      return null;
+    }
+    final months = (amount / monthlyDeduction - 0.0001).ceil();
+    final last = amount - monthlyDeduction * (months - 1);
+    return LoanRepayment._(
+      months: months < 1 ? 1 : months,
+      monthlyDeduction: monthlyDeduction,
+      lastInstalment: (last * 100).roundToDouble() / 100,
+    );
+  }
+
+  /// The instalment that clears [amount] in [months] runs: rounded up at the
+  /// second decimal, so the last run takes the remainder rather than leaving
+  /// a fraction over for a run nobody planned.
+  static double instalmentFor(double amount, int months) {
+    if (amount <= 0 || months < 1) {
+      return 0;
+    }
+    return (amount * 100 / months - 0.0001).ceil() / 100;
+  }
+
+  final int months;
+  final double monthlyDeduction;
+  final double lastInstalment;
+
+  /// The last run takes less than the others.
+  bool get hasSmallerLast => (monthlyDeduction - lastInstalment).abs() > 0.005;
 }
 
 class PayrollRun {

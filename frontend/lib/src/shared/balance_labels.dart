@@ -175,12 +175,9 @@ BalanceFailure classifyBalanceFailure(Object? error) {
   if (apiStatusCode(error) == 403) {
     // The period lock is a refusal to *this user*, like a missing permission,
     // and the server says which in its sentence rather than in a code.
-    final detail = apiErrorDetail(error).toLowerCase();
-    if (detail.contains('books are closed') ||
-        detail.contains('closed period')) {
-      return BalanceFailure.periodLocked;
-    }
-    return BalanceFailure.forbidden;
+    return apiRefusedForClosedPeriod(error)
+        ? BalanceFailure.periodLocked
+        : BalanceFailure.forbidden;
   }
   return BalanceFailure.generic;
 }

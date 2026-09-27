@@ -579,6 +579,23 @@ class EmployeeLoanSerializer(serializers.ModelSerializer):
                             )
                         }
                     )
+        employee = attrs.get("employee")
+        if (
+            employee is not None
+            and (loan is None or employee.pk != loan.employee_id)
+            and employee.status not in Employee.PAYROLL_STATUSES
+        ):
+            # Payroll is what takes a loan back, and it runs only for staff who
+            # are working or on leave: lent to anyone else, nothing would ever
+            # deduct it.
+            raise serializers.ValidationError(
+                {
+                    "employee": (
+                        "This employee is not on payroll, so nothing would "
+                        "repay the loan."
+                    )
+                }
+            )
         amount = Decimal(attrs.get("amount", getattr(self.instance, "amount", "0.00")))
         monthly_deduction = Decimal(
             attrs.get(

@@ -683,8 +683,13 @@ class PosApiService {
   Future<EmployeeLoanPage> fetchEmployeeLoans({
     int page = 1,
     String status = '',
+    int? employeeId,
   }) {
-    return _employees.fetchEmployeeLoans(page: page, status: status);
+    return _employees.fetchEmployeeLoans(
+      page: page,
+      status: status,
+      employeeId: employeeId,
+    );
   }
 
   Future<MyEmployeeLoans> fetchMyEmployeeLoans() {
@@ -693,6 +698,17 @@ class PosApiService {
 
   Future<EmployeeLoan> requestEmployeeLoan(EmployeeLoanRequestDraft draft) {
     return _employees.requestEmployeeLoan(draft);
+  }
+
+  Future<EmployeeLoan> createEmployeeLoan(EmployeeLoanDraft draft) {
+    return _employees.createEmployeeLoan(draft);
+  }
+
+  Future<EmployeeLoan> grantEmployeeLoan(
+    EmployeeLoanDraft draft, {
+    LoanDisbursement disbursement = LoanDisbursement.cashBox,
+  }) {
+    return _employees.grantEmployeeLoan(draft, disbursement: disbursement);
   }
 
   Future<EmployeeLoan> approveEmployeeLoan(

@@ -381,6 +381,59 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     );
   }
 
+  /// Lends [draft]'s employee money. With [handOver] the money leaves at
+  /// once, from where it says; without it the loan waits for an approval.
+  /// Returns null on success, or the refusal — the loan form says it back,
+  /// so it is not also raised as the screen's own save error.
+  Future<Exception?> giveLoan(
+    EmployeeLoanDraft draft, {
+    LoanDisbursement? handOver,
+  }) async {
+    _isSaving = true;
+    notifyListeners();
+
+    final result = handOver == null
+        ? await _repository.createEmployeeLoan(draft)
+        : await _repository.grantEmployeeLoan(draft, disbursement: handOver);
+    Exception? failure;
+    switch (result) {
+      case Ok<EmployeeLoan>(value: final loan):
+        _upsertLoan(loan);
+        _track(
+          handOver == null
+              ? 'employees.management.loan.created'
+              : 'employees.management.loan.granted',
+          'employee_loan',
+          loan.id,
+          {'employee': loan.employeeId, 'status': loan.status.name},
+        );
+      case Error<EmployeeLoan>(:final exception):
+        failure = exception;
+    }
+
+    _isSaving = false;
+    notifyListeners();
+    return failure;
+  }
+
+  /// [employeeId]'s loans, newest first: what a new loan is weighed against.
+  /// Null when they could not be read.
+  Future<List<EmployeeLoan>?> loansFor(int employeeId) async {
+    final result = await _repository.loadEmployeeLoans(employeeId: employeeId);
+    return switch (result) {
+      Ok<EmployeeLoanPage>(value: final page) => page.loans,
+      Error<EmployeeLoanPage>() => null,
+    };
+  }
+
+  /// One page of employees matching [search], to choose whose loan it is.
+  Future<Result<EmployeePage>> searchEmployees({
+    String search = '',
+    int page = 1,
+  }) {
+    return _repository.loadEmployees(search: search, page: page);
+  }
+
   Future<PayrollRun?> loadPayrollRunDetail(PayrollRun run) async {
     final result = await _repository.loadPayrollRun(run.id);
     switch (result) {

@@ -11,6 +11,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../contacts/views/balance_entries_section.dart';
 import '../view_models/employee_payroll_view_model.dart';
+import 'employee_loans_section.dart';
 import 'payroll_labels.dart';
 
 /// One employee's account: what they owe the shop and what it owes them —
@@ -102,6 +103,15 @@ class _EmployeeAccountScreenState extends State<EmployeeAccountScreen> {
                       // An entry moves what the next payroll run pays or
                       // deducts; the figures above are read again.
                       onChanged: _refresh,
+                    ),
+                  ],
+                  if (capabilities.canViewEmployeeLoans) ...[
+                    SizedBox(height: spacing.md),
+                    EmployeeLoansSection(
+                      key: ValueKey('employee_loans_${employee.id}'),
+                      viewModel: widget.viewModel,
+                      employee: employee,
+                      capabilities: capabilities,
                     ),
                   ],
                 ],

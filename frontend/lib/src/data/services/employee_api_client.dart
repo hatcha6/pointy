@@ -155,12 +155,14 @@ class EmployeeApiClient {
   Future<EmployeeLoanPage> fetchEmployeeLoans({
     int page = 1,
     String status = '',
+    int? employeeId,
   }) async {
     final response = await _session.get(
       'employee-loans/',
       query: {
         'page': '$page',
         if (status.trim().isNotEmpty) 'status': status.trim(),
+        if (employeeId != null) 'employee': '$employeeId',
       },
     );
     _session.ensureSuccess(
@@ -191,6 +193,42 @@ class EmployeeApiClient {
     _session.ensureSuccess(
       response,
       'Employee loan request failed with status',
+    );
+    return EmployeeLoan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Records a loan for an employee, left for someone who may approve it.
+  Future<EmployeeLoan> createEmployeeLoan(EmployeeLoanDraft draft) async {
+    final response = await _session.post(
+      'employee-loans/',
+      body: draft.toJson(),
+    );
+    // Kept whole: an employee off payroll is refused by name, and the form
+    // says so.
+    _session.throwApiException(
+      response,
+      'Employee loan create failed with status',
+    );
+    return EmployeeLoan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Records a loan and hands its money over in one step — the loan an owner
+  /// gives. Nothing is recorded when the hand-over is refused.
+  Future<EmployeeLoan> grantEmployeeLoan(
+    EmployeeLoanDraft draft, {
+    LoanDisbursement disbursement = LoanDisbursement.cashBox,
+  }) async {
+    final response = await _session.post(
+      'employee-loans/grant/',
+      body: {...draft.toJson(), ...disbursement.toJson()},
+    );
+    _session.throwApiException(
+      response,
+      'Employee loan grant failed with status',
     );
     return EmployeeLoan.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,

@@ -8218,7 +8218,7 @@
   "employeePayrollSaveError": "تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.",
   "employeesTabLabel": "الموظفون",
   "payrollRunsTabLabel": "مسيرات الرواتب",
-  "employeeLoansTabLabel": "طلبات السلفة",
+  "employeeLoansTabLabel": "السلف",
   "employeesLoadError": "تعذر تحميل الموظفين.",
   "emptyEmployees": "لا توجد سجلات موظفين بعد.",
   "employeeSystemAccessLabel": "دخول للنظام: {username}",
@@ -8303,8 +8303,8 @@
   "addCompensationPlanTooltip": "إضافة خطة أجر",
   "payrollRunsLoadError": "تعذر تحميل مسيرات الرواتب.",
   "emptyPayrollRuns": "لا توجد مسيرات رواتب بعد.",
-  "employeeLoansLoadError": "تعذر تحميل طلبات السلفة.",
-  "emptyEmployeeLoans": "لا توجد طلبات سلفة بعد.",
+  "employeeLoansLoadError": "تعذر تحميل السلف.",
+  "emptyEmployeeLoans": "لا توجد سلف بعد.",
   "employeeLoanStatusRequested": "بانتظار الاعتماد",
   "employeeLoanStatusApproved": "معتمد",
   "employeeLoanStatusRejected": "مرفوض",
@@ -16926,6 +16926,235 @@
   "loanDisbursedBankDefault": "حُوّلت مصرفيًا",
   "@loanDisbursedBankDefault": {
     "description": "Loan pill: transferred, bank not named."
+  },
+  "newEmployeeLoanTitle": "سلفة جديدة",
+  "@newEmployeeLoanTitle": {
+    "description": "Button and sheet title: record or give an employee a loan."
+  },
+  "newEmployeeLoanSubtitle": "تُخصم أقساطها من راتب الموظف كل شهر حتى تُسدَّد.",
+  "@newEmployeeLoanSubtitle": {
+    "description": "New loan sheet: one-line explanation under the title."
+  },
+  "loanEmployeeLabel": "الموظف",
+  "@loanEmployeeLabel": {
+    "description": "New loan sheet: the employee field label."
+  },
+  "loanEmployeePlaceholder": "اختر الموظف",
+  "@loanEmployeePlaceholder": {
+    "description": "New loan sheet: employee field before one is chosen."
+  },
+  "loanEmployeeRequiredError": "اختر الموظف الذي تُصرف له السلفة.",
+  "@loanEmployeeRequiredError": {
+    "description": "New loan sheet: submitted without an employee."
+  },
+  "employeePickerTitle": "اختر الموظف",
+  "@employeePickerTitle": {
+    "description": "Employee picker sheet title."
+  },
+  "employeePickerSearchHint": "ابحث بالاسم أو الرقم أو الهاتف",
+  "@employeePickerSearchHint": {
+    "description": "Employee picker search hint."
+  },
+  "employeePickerEmpty": "لا يوجد موظفون بعد.",
+  "@employeePickerEmpty": {
+    "description": "Employee picker: the shop has no employees."
+  },
+  "employeeOffPayrollLabel": "خارج مسير الرواتب",
+  "@employeeOffPayrollLabel": {
+    "description": "Pill: an inactive or terminated employee, whom payroll does not pay."
+  },
+  "loanTermsSection": "المبلغ والأقساط",
+  "@loanTermsSection": {
+    "description": "New loan sheet: amount and instalment section title."
+  },
+  "loanNoteLabel": "الغرض (اختياري)",
+  "@loanNoteLabel": {
+    "description": "New loan sheet: optional purpose field."
+  },
+  "loanRepayOverLabel": "تُسدَّد على",
+  "@loanRepayOverLabel": {
+    "description": "New loan sheet: label before the months chips."
+  },
+  "loanMonthsChip": "{count, plural, =1{شهر} =2{شهرين} few{{count} أشهر} many{{count} شهرًا} other{{count} شهر}}",
+  "@loanMonthsChip": {
+    "description": "Chip that spreads the loan over this many monthly instalments.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "loanRepaymentSummary": "{months, plural, =1{تُخصم كاملة من الراتب القادم.} =2{تُسدَّد خلال شهرين، {monthly} كل شهر.} few{تُسدَّد خلال {months} أشهر، {monthly} كل شهر.} many{تُسدَّد خلال {months} شهرًا، {monthly} كل شهر.} other{تُسدَّد خلال {months} شهر، {monthly} كل شهر.}}",
+  "@loanRepaymentSummary": {
+    "description": "New loan sheet: how long repayment takes, equal instalments.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      },
+      "monthly": {
+        "type": "String"
+      }
+    }
+  },
+  "loanRepaymentSummaryWithLast": "{months, plural, =2{تُسدَّد خلال شهرين: {monthly} ثم {last}.} few{تُسدَّد خلال {months} أشهر: {monthly} شهريًا، والقسط الأخير {last}.} many{تُسدَّد خلال {months} شهرًا: {monthly} شهريًا، والقسط الأخير {last}.} other{تُسدَّد خلال {months} شهر: {monthly} شهريًا، والقسط الأخير {last}.}}",
+  "@loanRepaymentSummaryWithLast": {
+    "description": "New loan sheet: how long repayment takes when the last instalment is smaller.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      },
+      "monthly": {
+        "type": "String"
+      },
+      "last": {
+        "type": "String"
+      }
+    }
+  },
+  "loanInstalmentAboveSalaryWarning": "القسط أكبر من راتبه الشهري ({salary})؛ يُخصم كل شهر ما يتسع له الراتب، فتطول مدة السداد.",
+  "@loanInstalmentAboveSalaryWarning": {
+    "description": "New loan sheet: the monthly instalment exceeds the employee's monthly salary.",
+    "placeholders": {
+      "salary": {
+        "type": "String"
+      }
+    }
+  },
+  "loanContextOpenTitle": "{count, plural, =1{عليه سلفة قائمة، متبقٍ منها {outstanding}} =2{عليه سلفتان قائمتان، متبقٍ منهما {outstanding}} few{عليه {count} سلف قائمة، متبقٍ منها {outstanding}} other{عليه {count} سلفة قائمة، متبقٍ منها {outstanding}}}",
+  "@loanContextOpenTitle": {
+    "description": "New loan sheet: the chosen employee already owes on earlier loans.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "outstanding": {
+        "type": "String"
+      }
+    }
+  },
+  "loanContextOpenMessage": "يُخصم منها {monthly} كل شهر، ويُضاف إليه قسط هذه السلفة.",
+  "@loanContextOpenMessage": {
+    "description": "New loan sheet: what the earlier loans already take each month.",
+    "placeholders": {
+      "monthly": {
+        "type": "String"
+      }
+    }
+  },
+  "loanContextPendingTitle": "{count, plural, =1{طلب سلفة ينتظر القرار: {amount}} =2{طلبا سلفة ينتظران القرار: {amount}} few{{count} طلبات سلفة تنتظر القرار: {amount}} other{{count} طلب سلفة تنتظر القرار: {amount}}}",
+  "@loanContextPendingTitle": {
+    "description": "New loan sheet: the chosen employee has loan requests awaiting a decision.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "loanContextPendingMessage": "راجِعه في قائمة السلف قبل تسجيل سلفة أخرى، كي لا يُصرف المبلغ مرتين.",
+  "@loanContextPendingMessage": {
+    "description": "New loan sheet: advice when a request is already pending."
+  },
+  "loanContextNoPlanWarning": "لا خطة أجر لهذا الموظف، فلن تُخصم الأقساط حتى تُحدَّد له.",
+  "@loanContextNoPlanWarning": {
+    "description": "New loan sheet: the employee has no pay plan, so payroll deducts nothing yet."
+  },
+  "loanHandOverSection": "التسليم",
+  "@loanHandOverSection": {
+    "description": "New loan sheet: hand-over section title."
+  },
+  "loanHandOverNow": "سلّمها الآن",
+  "@loanHandOverNow": {
+    "description": "New loan sheet: hand the money over now."
+  },
+  "loanHandOverLater": "سجّلها للاعتماد",
+  "@loanHandOverLater": {
+    "description": "New loan sheet: only record the loan; it is approved later."
+  },
+  "loanHandOverLaterNote": "تُسجَّل بانتظار الاعتماد، ولا يخرج مال قبل ذلك.",
+  "@loanHandOverLaterNote": {
+    "description": "New loan sheet: what recording without handing over means."
+  },
+  "loanRequestOnlyNote": "تُسجَّل بانتظار اعتماد من يملك صلاحية ذلك، ولا يخرج مال قبل الاعتماد.",
+  "@loanRequestOnlyNote": {
+    "description": "New loan sheet: for a user who may record a loan but not approve it."
+  },
+  "loanSummaryInstalments": "{count, plural, =1{قسط واحد} =2{قسطان} few{{count} أقساط} many{{count} قسطًا} other{{count} قسط}}",
+  "@loanSummaryInstalments": {
+    "description": "New loan sheet footer: number of monthly instalments.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "loanGrantButton": "صرف السلفة",
+  "@loanGrantButton": {
+    "description": "New loan sheet: record the loan and hand the money over."
+  },
+  "loanRecordButton": "تسجيل السلفة",
+  "@loanRecordButton": {
+    "description": "New loan sheet: record the loan for approval."
+  },
+  "loanGrantedSnack": "صُرفت سلفة {employee} بمبلغ {amount}.",
+  "@loanGrantedSnack": {
+    "description": "Snackbar: a loan was given and handed over.",
+    "placeholders": {
+      "employee": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "loanRecordedSnack": "سُجّلت سلفة {employee} بانتظار الاعتماد.",
+  "@loanRecordedSnack": {
+    "description": "Snackbar: a loan was recorded for approval.",
+    "placeholders": {
+      "employee": {
+        "type": "String"
+      }
+    }
+  },
+  "loanEmployeeOffPayrollError": "هذا الموظف خارج مسير الرواتب، فلا شيء يسدّد السلفة. أعِده إلى العمل أولًا.",
+  "@loanEmployeeOffPayrollError": {
+    "description": "Error: the server refused a loan for an inactive or terminated employee."
+  },
+  "loanPeriodLockedError": "الفترة الحالية مغلقة، فلا يُصرف فيها مال.",
+  "@loanPeriodLockedError": {
+    "description": "Error: the books are closed for today."
+  },
+  "loanSaveError": "تعذر حفظ السلفة. حاول مجددًا.",
+  "@loanSaveError": {
+    "description": "Error: recording or giving the loan failed."
+  },
+  "employeeLoansSectionTitle": "السلف",
+  "@employeeLoansSectionTitle": {
+    "description": "Employee account: the employee's loans section."
+  },
+  "employeeLoanOutstandingDetail": "المتبقي {amount}",
+  "@employeeLoanOutstandingDetail": {
+    "description": "Loan pill: what is left to repay.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "employeeNoLoans": "لا سلف على هذا الموظف.",
+  "@employeeNoLoans": {
+    "description": "Employee account: the employee has no loans."
+  },
+  "employeeLoansOffPayrollNote": "لا تُمنح سلفة لموظف خارج مسير الرواتب.",
+  "@employeeLoansOffPayrollNote": {
+    "description": "Employee account: why there is no new-loan button for this employee."
+  },
+  "emptyEmployeeLoansHint": "تظهر هنا سلف الموظفين: ما طلبوه بأنفسهم وما سُجّل لهم.",
+  "@emptyEmployeeLoansHint": {
+    "description": "Loans tab empty state: what appears here."
   },
   "treasuryComponentStaffLoans": "سلف الموظفين",
   "@treasuryComponentStaffLoans": {

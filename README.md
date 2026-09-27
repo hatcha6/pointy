@@ -269,6 +269,17 @@ box, or a bank transfer — so the money position (`staff_loans`), the drawer an
 the balance sheet all see it. Preview with `make frontend-balances-preview`
 (`?screen=customer|supplier|entry|refund|create|employee|loan`).
 
+A loan does not have to start as the employee's own request. The owner or the
+accountant (`employees.add_employeeloan`) gives one from «السلف» → «سلفة جديدة»,
+or from the employee's account, for anyone on payroll — logins or not — seeing
+what the employee already owes and any request still waiting. Whoever may also
+approve loans hands the money over in the same step (`POST
+/api/employee-loans/grant/`, which records and approves in one transaction, so
+a refused hand-over leaves no loan behind); anyone else records it for
+approval. Inactive and terminated staff are refused, since no payroll run would
+repay them. Preview with `make frontend-employee-loans-preview`
+(`?screen=new|request|payroll|account|picker`, `&theme=dark`).
+
 ## Learning Module
 
 `التعلّم` is an in-app library of short Arabic guides, one per operation the

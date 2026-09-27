@@ -35,6 +35,7 @@ from .services import (
     approve_employee_loan,
     approve_payroll_run,
     draft_monthly_payroll_run,
+    grant_employee_loan,
     mark_payroll_run_paid,
     record_employee_event,
     reject_employee_loan,
@@ -258,6 +259,8 @@ class EmployeeLoanViewSet(viewsets.ModelViewSet):
         "update": ("employees.change_employeeloan",),
         "partial_update": ("employees.change_employeeloan",),
         "destroy": ("employees.delete_employeeloan",),
+        # Recording a loan and handing it over: both rights, since it is both.
+        "grant": ("employees.add_employeeloan", "employees.approve_employeeloan"),
         "approve": ("employees.approve_employeeloan",),
         "reject": ("employees.reject_employeeloan",),
     }
@@ -352,6 +355,35 @@ class EmployeeLoanViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         loan = serializer.save()
+        return Response(
+            EmployeeLoanSerializer(loan, context=self.get_serializer_context()).data,
+            status=201,
+        )
+
+    @action(detail=False, methods=["post"])
+    def grant(self, request):
+        """A loan the owner gives, handed over as it is recorded.
+
+        The same fields a new loan takes, plus where its money comes from —
+        what approving one asks. ``create`` stays the way to record a loan for
+        someone else to approve.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        handover = EmployeeLoanApproveSerializer(data=request.data)
+        handover.is_valid(raise_exception=True)
+        terms = serializer.validated_data
+        loan = grant_employee_loan(
+            request=request,
+            employee=terms["employee"],
+            amount=terms["amount"],
+            monthly_deduction=terms["monthly_deduction"],
+            purpose=terms.get("purpose", ""),
+            review_notes=handover.validated_data.get("review_notes", ""),
+            disbursement_method=handover.validated_data["disbursement_method"],
+            money_account=handover.validated_data.get("money_account"),
+            pay_from_register=handover.validated_data["pay_from_register"],
+        )
         return Response(
             EmployeeLoanSerializer(loan, context=self.get_serializer_context()).data,
             status=201,

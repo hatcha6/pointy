@@ -266,7 +266,7 @@ def draft_monthly_payroll_run(
 def _monthly_payroll_line_inputs(period_start, period_end):
     line_inputs = []
     employees = Employee.objects.filter(
-        status__in=(Employee.Status.ACTIVE, Employee.Status.ON_LEAVE),
+        status__in=Employee.PAYROLL_STATUSES,
     ).select_related("user")
     for employee in employees:
         plan = _plan_for_period(employee, period_end)
@@ -727,6 +727,59 @@ def request_employee_loan(*, user, amount, monthly_deduction, purpose=""):
         },
     )
     return loan
+
+
+@transaction.atomic
+def grant_employee_loan(
+    *,
+    employee,
+    amount,
+    monthly_deduction,
+    purpose="",
+    request=None,
+    review_notes="",
+    disbursement_method=EmployeeLoan.DisbursementMethod.CASH,
+    money_account=None,
+    pay_from_register=False,
+):
+    """Lend an employee money and hand it over, in one step.
+
+    The loan an owner gives, rather than one an employee asked for: recorded
+    as the giver's own and approved at once, so its money leaves exactly the
+    way an approval sends it. One transaction, because a hand-over the server
+    refuses — no open drawer, a closed period, an account that is not a bank —
+    must leave no loan behind. Two calls would have left a request nobody
+    meant to make, and a retry would have made a second one.
+    """
+    actor = employee_created_by(request)
+    loan = EmployeeLoan(
+        employee=employee,
+        requested_by=actor,
+        amount=amount,
+        monthly_deduction=monthly_deduction,
+        purpose=purpose,
+    )
+    loan.full_clean()
+    loan.save()
+    record_employee_event(
+        name="employees.loan.created",
+        user=actor,
+        entity_type="employee_loan",
+        entity_id=loan.pk,
+        attributes={"employee": employee.pk, "status": loan.status, "granted": True},
+        metrics={
+            "amount": float(loan.amount),
+            "monthly_deduction": float(loan.monthly_deduction),
+        },
+    )
+    return approve_employee_loan(
+        loan,
+        request=request,
+        review_notes=review_notes,
+        disbursement_method=disbursement_method,
+        money_account=money_account,
+        pay_from_register=pay_from_register,
+    )
 
 
 @transaction.atomic

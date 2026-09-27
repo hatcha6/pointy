@@ -82,6 +82,14 @@
       "port": 8080
     },
     {
+      "name": "employee-loans-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-employee-loans-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "reports-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

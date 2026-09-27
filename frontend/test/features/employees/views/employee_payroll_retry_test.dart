@@ -88,10 +88,10 @@ void main() {
     await tester.pumpWidget(_payrollApp(viewModel, api.service));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('طلبات السلفة'));
+    await tester.tap(find.text('السلف'));
     await tester.pumpAndSettle();
 
-    expect(find.text('تعذر تحميل طلبات السلفة.'), findsOneWidget);
+    expect(find.text('تعذر تحميل السلف.'), findsOneWidget);
     final retry = find.byKey(const ValueKey('employee_loans_retry_button'));
     expect(retry, findsOneWidget);
 
@@ -100,7 +100,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(api.requestCount('employee-loans/'), before + 1);
-    expect(find.text('تعذر تحميل طلبات السلفة.'), findsNothing);
+    expect(find.text('تعذر تحميل السلف.'), findsNothing);
     expect(find.text('مريم'), findsWidgets);
   });
 

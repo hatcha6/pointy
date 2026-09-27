@@ -255,6 +255,10 @@ ACCOUNTANT_PERMISSION_CODES = (
     "employees.change_employee",
     "employees.view_employee",
     "employees.view_employeeloan",
+    # Recording a loan for an employee, not only deciding one they asked for:
+    # plenty of staff have no login to ask with, and the accountant already
+    # hands a loan's money over by approving it.
+    "employees.add_employeeloan",
     "employees.change_employeeloan",
     "employees.approve_employeeloan",
     "employees.reject_employeeloan",

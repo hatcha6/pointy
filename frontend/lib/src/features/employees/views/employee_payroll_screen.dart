@@ -17,6 +17,8 @@ import '../../attendance/views/attendance_review_tab.dart';
 import '../view_models/employee_payroll_view_model.dart';
 import 'employee_account_screen.dart';
 import 'employee_loan_review_actions.dart';
+import 'employee_loan_row.dart';
+import 'employee_loan_sheet.dart';
 import 'payroll_forms.dart';
 import 'payroll_labels.dart';
 import 'payroll_run_details_screen.dart';
@@ -948,7 +950,8 @@ class _LoansTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return PointyDataList<EmployeeLoan>(
+    final spacing = AdaptiveSpacing.of(context);
+    final list = PointyDataList<EmployeeLoan>(
       items: viewModel.loans,
       onLoadMore: viewModel.loadMoreLoans,
       hasMore: viewModel.hasMoreLoans,
@@ -968,44 +971,15 @@ class _LoansTab extends StatelessWidget {
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.account_balance_wallet_outlined,
         title: l10n.emptyEmployeeLoans,
+        message: l10n.emptyEmployeeLoansHint,
       ),
       padding: EdgeInsets.zero,
       framed: false,
       itemBuilder: (context, loan) {
-        final canReview =
-            capabilities.canManageEmployeeLoans && loan.status.canReview;
-        return PointyDataRow(
-          leading: const CircleAvatar(
-            child: Icon(Icons.account_balance_wallet_outlined),
-          ),
-          title: loan.employeeName,
-          subtitle: _loanSubtitle(l10n, loan),
-          trailing: Text(
-            formatMoney(loan.outstandingBalance),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          badges: [
-            PointyStatusPill(
-              label: loanStatusLabel(l10n, loan.status),
-              icon: loanStatusIcon(loan.status),
-              color: loanStatusColor(context, loan.status),
-            ),
-            PointyStatusPill(
-              label: l10n.employeeLoanMonthlyDeductionDetail(
-                formatMoney(loan.monthlyDeduction),
-              ),
-              icon: Icons.event_repeat_outlined,
-            ),
-            if (loan.disbursedAt != null)
-              PointyStatusPill(
-                label: _disbursementLabel(l10n, loan),
-                icon: loan.disbursementMethod == 'transfer'
-                    ? Icons.account_balance_outlined
-                    : Icons.payments_outlined,
-              ),
-          ],
+        return EmployeeLoanRow(
+          loan: loan,
           actions: [
-            if (canReview)
+            if (capabilities.canManageEmployeeLoans && loan.status.canReview)
               EmployeeLoanReviewActions(
                 loan: loan,
                 isSaving: viewModel.isSaving,
@@ -1017,26 +991,33 @@ class _LoansTab extends StatelessWidget {
         );
       },
     );
-  }
-
-  /// Where the loan's money came from when it was handed over.
-  String _disbursementLabel(AppLocalizations l10n, EmployeeLoan loan) {
-    if (loan.disbursementMethod == 'transfer') {
-      return loan.moneyAccountName.isEmpty
-          ? l10n.loanDisbursedBankDefault
-          : l10n.loanDisbursedBankValue(loan.moneyAccountName);
+    if (!capabilities.canCreateEmployeeLoans) {
+      return list;
     }
-    return loan.paidFromRegister
-        ? l10n.loanDisbursedDrawerValue
-        : l10n.loanDisbursedCashValue;
-  }
 
-  String _loanSubtitle(AppLocalizations l10n, EmployeeLoan loan) {
-    final parts = [
-      if (loan.employeeNumber.isNotEmpty) loan.employeeNumber,
-      l10n.employeeLoanAmountDetail(formatMoney(loan.amount)),
-      if (loan.purpose.trim().isNotEmpty) loan.purpose.trim(),
-    ];
-    return parts.join(' - ');
+    // The same place the employees tab keeps its "add": above the list.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: spacing.xs),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: FilledButton.icon(
+            key: const ValueKey('new_employee_loan_button'),
+            onPressed: viewModel.isSaving
+                ? null
+                : () => showEmployeeLoanSheet(
+                    context,
+                    viewModel: viewModel,
+                    capabilities: capabilities,
+                  ),
+            icon: const Icon(Icons.add),
+            label: Text(l10n.newEmployeeLoanTitle),
+          ),
+        ),
+        SizedBox(height: spacing.sm),
+        Expanded(child: list),
+      ],
+    );
   }
 }

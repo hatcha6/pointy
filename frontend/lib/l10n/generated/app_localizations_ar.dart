@@ -12959,7 +12959,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollRunsTabLabel => 'مسيرات الرواتب';
 
   @override
-  String get employeeLoansTabLabel => 'طلبات السلفة';
+  String get employeeLoansTabLabel => 'السلف';
 
   @override
   String get employeesLoadError => 'تعذر تحميل الموظفين.';
@@ -13022,10 +13022,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyPayrollRuns => 'لا توجد مسيرات رواتب بعد.';
 
   @override
-  String get employeeLoansLoadError => 'تعذر تحميل طلبات السلفة.';
+  String get employeeLoansLoadError => 'تعذر تحميل السلف.';
 
   @override
-  String get emptyEmployeeLoans => 'لا توجد طلبات سلفة بعد.';
+  String get emptyEmployeeLoans => 'لا توجد سلف بعد.';
 
   @override
   String get employeeLoanStatusRequested => 'بانتظار الاعتماد';
@@ -22357,6 +22357,205 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get loanDisbursedBankDefault => 'حُوّلت مصرفيًا';
+
+  @override
+  String get newEmployeeLoanTitle => 'سلفة جديدة';
+
+  @override
+  String get newEmployeeLoanSubtitle =>
+      'تُخصم أقساطها من راتب الموظف كل شهر حتى تُسدَّد.';
+
+  @override
+  String get loanEmployeeLabel => 'الموظف';
+
+  @override
+  String get loanEmployeePlaceholder => 'اختر الموظف';
+
+  @override
+  String get loanEmployeeRequiredError => 'اختر الموظف الذي تُصرف له السلفة.';
+
+  @override
+  String get employeePickerTitle => 'اختر الموظف';
+
+  @override
+  String get employeePickerSearchHint => 'ابحث بالاسم أو الرقم أو الهاتف';
+
+  @override
+  String get employeePickerEmpty => 'لا يوجد موظفون بعد.';
+
+  @override
+  String get employeeOffPayrollLabel => 'خارج مسير الرواتب';
+
+  @override
+  String get loanTermsSection => 'المبلغ والأقساط';
+
+  @override
+  String get loanNoteLabel => 'الغرض (اختياري)';
+
+  @override
+  String get loanRepayOverLabel => 'تُسدَّد على';
+
+  @override
+  String loanMonthsChip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شهر',
+      many: '$count شهرًا',
+      few: '$count أشهر',
+      two: 'شهرين',
+      one: 'شهر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String loanRepaymentSummary(int months, String monthly) {
+    String _temp0 = intl.Intl.pluralLogic(
+      months,
+      locale: localeName,
+      other: 'تُسدَّد خلال $months شهر، $monthly كل شهر.',
+      many: 'تُسدَّد خلال $months شهرًا، $monthly كل شهر.',
+      few: 'تُسدَّد خلال $months أشهر، $monthly كل شهر.',
+      two: 'تُسدَّد خلال شهرين، $monthly كل شهر.',
+      one: 'تُخصم كاملة من الراتب القادم.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String loanRepaymentSummaryWithLast(int months, String monthly, String last) {
+    String _temp0 = intl.Intl.pluralLogic(
+      months,
+      locale: localeName,
+      other: 'تُسدَّد خلال $months شهر: $monthly شهريًا، والقسط الأخير $last.',
+      many: 'تُسدَّد خلال $months شهرًا: $monthly شهريًا، والقسط الأخير $last.',
+      few: 'تُسدَّد خلال $months أشهر: $monthly شهريًا، والقسط الأخير $last.',
+      two: 'تُسدَّد خلال شهرين: $monthly ثم $last.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String loanInstalmentAboveSalaryWarning(String salary) {
+    return 'القسط أكبر من راتبه الشهري ($salary)؛ يُخصم كل شهر ما يتسع له الراتب، فتطول مدة السداد.';
+  }
+
+  @override
+  String loanContextOpenTitle(int count, String outstanding) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'عليه $count سلفة قائمة، متبقٍ منها $outstanding',
+      few: 'عليه $count سلف قائمة، متبقٍ منها $outstanding',
+      two: 'عليه سلفتان قائمتان، متبقٍ منهما $outstanding',
+      one: 'عليه سلفة قائمة، متبقٍ منها $outstanding',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String loanContextOpenMessage(String monthly) {
+    return 'يُخصم منها $monthly كل شهر، ويُضاف إليه قسط هذه السلفة.';
+  }
+
+  @override
+  String loanContextPendingTitle(int count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلب سلفة تنتظر القرار: $amount',
+      few: '$count طلبات سلفة تنتظر القرار: $amount',
+      two: 'طلبا سلفة ينتظران القرار: $amount',
+      one: 'طلب سلفة ينتظر القرار: $amount',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get loanContextPendingMessage =>
+      'راجِعه في قائمة السلف قبل تسجيل سلفة أخرى، كي لا يُصرف المبلغ مرتين.';
+
+  @override
+  String get loanContextNoPlanWarning =>
+      'لا خطة أجر لهذا الموظف، فلن تُخصم الأقساط حتى تُحدَّد له.';
+
+  @override
+  String get loanHandOverSection => 'التسليم';
+
+  @override
+  String get loanHandOverNow => 'سلّمها الآن';
+
+  @override
+  String get loanHandOverLater => 'سجّلها للاعتماد';
+
+  @override
+  String get loanHandOverLaterNote =>
+      'تُسجَّل بانتظار الاعتماد، ولا يخرج مال قبل ذلك.';
+
+  @override
+  String get loanRequestOnlyNote =>
+      'تُسجَّل بانتظار اعتماد من يملك صلاحية ذلك، ولا يخرج مال قبل الاعتماد.';
+
+  @override
+  String loanSummaryInstalments(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count قسط',
+      many: '$count قسطًا',
+      few: '$count أقساط',
+      two: 'قسطان',
+      one: 'قسط واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get loanGrantButton => 'صرف السلفة';
+
+  @override
+  String get loanRecordButton => 'تسجيل السلفة';
+
+  @override
+  String loanGrantedSnack(String employee, String amount) {
+    return 'صُرفت سلفة $employee بمبلغ $amount.';
+  }
+
+  @override
+  String loanRecordedSnack(String employee) {
+    return 'سُجّلت سلفة $employee بانتظار الاعتماد.';
+  }
+
+  @override
+  String get loanEmployeeOffPayrollError =>
+      'هذا الموظف خارج مسير الرواتب، فلا شيء يسدّد السلفة. أعِده إلى العمل أولًا.';
+
+  @override
+  String get loanPeriodLockedError =>
+      'الفترة الحالية مغلقة، فلا يُصرف فيها مال.';
+
+  @override
+  String get loanSaveError => 'تعذر حفظ السلفة. حاول مجددًا.';
+
+  @override
+  String get employeeLoansSectionTitle => 'السلف';
+
+  @override
+  String employeeLoanOutstandingDetail(String amount) {
+    return 'المتبقي $amount';
+  }
+
+  @override
+  String get employeeNoLoans => 'لا سلف على هذا الموظف.';
+
+  @override
+  String get employeeLoansOffPayrollNote =>
+      'لا تُمنح سلفة لموظف خارج مسير الرواتب.';
+
+  @override
+  String get emptyEmployeeLoansHint =>
+      'تظهر هنا سلف الموظفين: ما طلبوه بأنفسهم وما سُجّل لهم.';
 
   @override
   String get treasuryComponentStaffLoans => 'سلف الموظفين';

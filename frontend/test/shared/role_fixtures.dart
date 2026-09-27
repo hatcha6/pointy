@@ -88,6 +88,7 @@ const accountantPermissions = <String>{
   'employees.change_employee',
   'employees.view_employee',
   'employees.view_employeeloan',
+  'employees.add_employeeloan',
   'employees.change_employeeloan',
   'employees.approve_employeeloan',
   'employees.reject_employeeloan',

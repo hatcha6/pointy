@@ -22352,7 +22352,7 @@ abstract class AppLocalizations {
   /// No description provided for @employeeLoansTabLabel.
   ///
   /// In ar, this message translates to:
-  /// **'طلبات السلفة'**
+  /// **'السلف'**
   String get employeeLoansTabLabel;
 
   /// No description provided for @employeesLoadError.
@@ -22443,13 +22443,13 @@ abstract class AppLocalizations {
   /// No description provided for @employeeLoansLoadError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر تحميل طلبات السلفة.'**
+  /// **'تعذر تحميل السلف.'**
   String get employeeLoansLoadError;
 
   /// No description provided for @emptyEmployeeLoans.
   ///
   /// In ar, this message translates to:
-  /// **'لا توجد طلبات سلفة بعد.'**
+  /// **'لا توجد سلف بعد.'**
   String get emptyEmployeeLoans;
 
   /// No description provided for @employeeLoanStatusRequested.
@@ -38243,6 +38243,240 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حُوّلت مصرفيًا'**
   String get loanDisbursedBankDefault;
+
+  /// Button and sheet title: record or give an employee a loan.
+  ///
+  /// In ar, this message translates to:
+  /// **'سلفة جديدة'**
+  String get newEmployeeLoanTitle;
+
+  /// New loan sheet: one-line explanation under the title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُخصم أقساطها من راتب الموظف كل شهر حتى تُسدَّد.'**
+  String get newEmployeeLoanSubtitle;
+
+  /// New loan sheet: the employee field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظف'**
+  String get loanEmployeeLabel;
+
+  /// New loan sheet: employee field before one is chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الموظف'**
+  String get loanEmployeePlaceholder;
+
+  /// New loan sheet: submitted without an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الموظف الذي تُصرف له السلفة.'**
+  String get loanEmployeeRequiredError;
+
+  /// Employee picker sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الموظف'**
+  String get employeePickerTitle;
+
+  /// Employee picker search hint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو الرقم أو الهاتف'**
+  String get employeePickerSearchHint;
+
+  /// Employee picker: the shop has no employees.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد موظفون بعد.'**
+  String get employeePickerEmpty;
+
+  /// Pill: an inactive or terminated employee, whom payroll does not pay.
+  ///
+  /// In ar, this message translates to:
+  /// **'خارج مسير الرواتب'**
+  String get employeeOffPayrollLabel;
+
+  /// New loan sheet: amount and instalment section title.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ والأقساط'**
+  String get loanTermsSection;
+
+  /// New loan sheet: optional purpose field.
+  ///
+  /// In ar, this message translates to:
+  /// **'الغرض (اختياري)'**
+  String get loanNoteLabel;
+
+  /// New loan sheet: label before the months chips.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسدَّد على'**
+  String get loanRepayOverLabel;
+
+  /// Chip that spreads the loan over this many monthly instalments.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{شهر} =2{شهرين} few{{count} أشهر} many{{count} شهرًا} other{{count} شهر}}'**
+  String loanMonthsChip(int count);
+
+  /// New loan sheet: how long repayment takes, equal instalments.
+  ///
+  /// In ar, this message translates to:
+  /// **'{months, plural, =1{تُخصم كاملة من الراتب القادم.} =2{تُسدَّد خلال شهرين، {monthly} كل شهر.} few{تُسدَّد خلال {months} أشهر، {monthly} كل شهر.} many{تُسدَّد خلال {months} شهرًا، {monthly} كل شهر.} other{تُسدَّد خلال {months} شهر، {monthly} كل شهر.}}'**
+  String loanRepaymentSummary(int months, String monthly);
+
+  /// New loan sheet: how long repayment takes when the last instalment is smaller.
+  ///
+  /// In ar, this message translates to:
+  /// **'{months, plural, =2{تُسدَّد خلال شهرين: {monthly} ثم {last}.} few{تُسدَّد خلال {months} أشهر: {monthly} شهريًا، والقسط الأخير {last}.} many{تُسدَّد خلال {months} شهرًا: {monthly} شهريًا، والقسط الأخير {last}.} other{تُسدَّد خلال {months} شهر: {monthly} شهريًا، والقسط الأخير {last}.}}'**
+  String loanRepaymentSummaryWithLast(int months, String monthly, String last);
+
+  /// New loan sheet: the monthly instalment exceeds the employee's monthly salary.
+  ///
+  /// In ar, this message translates to:
+  /// **'القسط أكبر من راتبه الشهري ({salary})؛ يُخصم كل شهر ما يتسع له الراتب، فتطول مدة السداد.'**
+  String loanInstalmentAboveSalaryWarning(String salary);
+
+  /// New loan sheet: the chosen employee already owes on earlier loans.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عليه سلفة قائمة، متبقٍ منها {outstanding}} =2{عليه سلفتان قائمتان، متبقٍ منهما {outstanding}} few{عليه {count} سلف قائمة، متبقٍ منها {outstanding}} other{عليه {count} سلفة قائمة، متبقٍ منها {outstanding}}}'**
+  String loanContextOpenTitle(int count, String outstanding);
+
+  /// New loan sheet: what the earlier loans already take each month.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم منها {monthly} كل شهر، ويُضاف إليه قسط هذه السلفة.'**
+  String loanContextOpenMessage(String monthly);
+
+  /// New loan sheet: the chosen employee has loan requests awaiting a decision.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{طلب سلفة ينتظر القرار: {amount}} =2{طلبا سلفة ينتظران القرار: {amount}} few{{count} طلبات سلفة تنتظر القرار: {amount}} other{{count} طلب سلفة تنتظر القرار: {amount}}}'**
+  String loanContextPendingTitle(int count, String amount);
+
+  /// New loan sheet: advice when a request is already pending.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجِعه في قائمة السلف قبل تسجيل سلفة أخرى، كي لا يُصرف المبلغ مرتين.'**
+  String get loanContextPendingMessage;
+
+  /// New loan sheet: the employee has no pay plan, so payroll deducts nothing yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا خطة أجر لهذا الموظف، فلن تُخصم الأقساط حتى تُحدَّد له.'**
+  String get loanContextNoPlanWarning;
+
+  /// New loan sheet: hand-over section title.
+  ///
+  /// In ar, this message translates to:
+  /// **'التسليم'**
+  String get loanHandOverSection;
+
+  /// New loan sheet: hand the money over now.
+  ///
+  /// In ar, this message translates to:
+  /// **'سلّمها الآن'**
+  String get loanHandOverNow;
+
+  /// New loan sheet: only record the loan; it is approved later.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّلها للاعتماد'**
+  String get loanHandOverLater;
+
+  /// New loan sheet: what recording without handing over means.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل بانتظار الاعتماد، ولا يخرج مال قبل ذلك.'**
+  String get loanHandOverLaterNote;
+
+  /// New loan sheet: for a user who may record a loan but not approve it.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل بانتظار اعتماد من يملك صلاحية ذلك، ولا يخرج مال قبل الاعتماد.'**
+  String get loanRequestOnlyNote;
+
+  /// New loan sheet footer: number of monthly instalments.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{قسط واحد} =2{قسطان} few{{count} أقساط} many{{count} قسطًا} other{{count} قسط}}'**
+  String loanSummaryInstalments(int count);
+
+  /// New loan sheet: record the loan and hand the money over.
+  ///
+  /// In ar, this message translates to:
+  /// **'صرف السلفة'**
+  String get loanGrantButton;
+
+  /// New loan sheet: record the loan for approval.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل السلفة'**
+  String get loanRecordButton;
+
+  /// Snackbar: a loan was given and handed over.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرفت سلفة {employee} بمبلغ {amount}.'**
+  String loanGrantedSnack(String employee, String amount);
+
+  /// Snackbar: a loan was recorded for approval.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّلت سلفة {employee} بانتظار الاعتماد.'**
+  String loanRecordedSnack(String employee);
+
+  /// Error: the server refused a loan for an inactive or terminated employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الموظف خارج مسير الرواتب، فلا شيء يسدّد السلفة. أعِده إلى العمل أولًا.'**
+  String get loanEmployeeOffPayrollError;
+
+  /// Error: the books are closed for today.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفترة الحالية مغلقة، فلا يُصرف فيها مال.'**
+  String get loanPeriodLockedError;
+
+  /// Error: recording or giving the loan failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ السلفة. حاول مجددًا.'**
+  String get loanSaveError;
+
+  /// Employee account: the employee's loans section.
+  ///
+  /// In ar, this message translates to:
+  /// **'السلف'**
+  String get employeeLoansSectionTitle;
+
+  /// Loan pill: what is left to repay.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي {amount}'**
+  String employeeLoanOutstandingDetail(String amount);
+
+  /// Employee account: the employee has no loans.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا سلف على هذا الموظف.'**
+  String get employeeNoLoans;
+
+  /// Employee account: why there is no new-loan button for this employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تُمنح سلفة لموظف خارج مسير الرواتب.'**
+  String get employeeLoansOffPayrollNote;
+
+  /// Loans tab empty state: what appears here.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر هنا سلف الموظفين: ما طلبوه بأنفسهم وما سُجّل لهم.'**
+  String get emptyEmployeeLoansHint;
 
   /// Treasury component: loans paid out to employees.
   ///
