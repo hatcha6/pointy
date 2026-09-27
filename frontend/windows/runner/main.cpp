@@ -38,8 +38,11 @@ void ActivateRunningInstance() {
   if (existing == nullptr) {
     return;
   }
-  if (::IsIconic(existing)) {
-    ::ShowWindow(existing, SW_RESTORE);
+  // Opening the app again opens it maximized as well, even if it was
+  // minimized or restored down since it started. A window that is still
+  // hidden has not drawn its first frame yet, and shows itself maximized.
+  if (::IsWindowVisible(existing)) {
+    ::ShowWindow(existing, SW_SHOWMAXIMIZED);
   }
   ::SetForegroundWindow(existing);
 }

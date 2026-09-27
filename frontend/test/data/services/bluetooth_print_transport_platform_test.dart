@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/services/bluetooth_print_transport_io.dart';
@@ -29,6 +31,52 @@ void main() {
 
   setUp(BluetoothPrintTransport.resetPluginAvailability);
   tearDown(BluetoothPrintTransport.resetPluginAvailability);
+
+  // First on purpose: the plugin is a per-process singleton that subscribes to
+  // its channels once, in its constructor, so only the first construction in a
+  // process could show the bug.
+  test('building and using the transport never touches the plugin\'s '
+      'channels on a platform with no implementation', () async {
+    if (hasImplementation) {
+      return;
+    }
+    // What the Linux back office logged on every launch: the plugin's
+    // constructor asks its state, connection and data channels to `listen`,
+    // and the failures go straight to FlutterError.onError, where no
+    // try/catch of ours can reach them.
+    const channels = [
+      'com.flutter_bluetooth_classic.plugin/flutter_bluetooth_classic_state',
+      'com.flutter_bluetooth_classic.plugin/flutter_bluetooth_classic_connection',
+      'com.flutter_bluetooth_classic.plugin/flutter_bluetooth_classic_data',
+    ];
+    final calls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    for (final name in channels) {
+      messenger.setMockMethodCallHandler(MethodChannel(name), (call) async {
+        calls.add('$name ${call.method}');
+        return null;
+      });
+    }
+    addTearDown(() {
+      for (final name in channels) {
+        messenger.setMockMethodCallHandler(MethodChannel(name), null);
+      }
+    });
+    final reported = <FlutterErrorDetails>[];
+    final previousOnError = FlutterError.onError;
+    FlutterError.onError = reported.add;
+    addTearDown(() => FlutterError.onError = previousOnError);
+
+    final transport = BluetoothPrintTransport();
+    await transport.discover();
+    await transport.status(endpoint);
+    await transport.printBytes(bytes: const [0x1b, 0x40], endpoint: endpoint);
+    await pumpEventQueue();
+
+    expect(calls, isEmpty);
+    expect(reported, isEmpty);
+  });
 
   test('discovery is silent on a platform with no implementation', () async {
     if (hasImplementation) {

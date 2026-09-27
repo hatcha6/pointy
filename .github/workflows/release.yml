@@ -424,8 +424,9 @@ jobs:
       # <name>_plugin CMake target — so `flutter build linux` fails at CMake
       # configure. Strip the `linux:` platform from the cached package's
       # pubspec so the Flutter tool skips it on this platform. Safe at runtime:
-      # BluetoothPrintTransport catches the missing plugin and simply offers no
-      # Bluetooth printers on Linux (serial/USB/Wi-Fi printing still work).
+      # BluetoothPrintTransport never constructs the plugin on Linux (its
+      # constructor binds channels that do not exist there) and simply offers
+      # no Bluetooth printers (serial/USB/Wi-Fi printing still work).
       # A local Linux dev build needs this same tweak until upstream fixes it.
       - name: Work around broken Bluetooth plugin Linux support
         shell: bash

@@ -17,12 +17,24 @@ class BluetoothPrintTransport extends PrintTransport {
     FlutterBluetoothClassic? bluetooth,
     PrintWriteQueue? queue,
   }) : _encoder = encoder,
-       _bluetooth = bluetooth ?? FlutterBluetoothClassic(),
+       _injectedBluetooth = bluetooth,
        _queue = queue ?? PrintWriteQueue();
 
   final EscPosReceiptEncoder _encoder;
-  final FlutterBluetoothClassic _bluetooth;
+  final FlutterBluetoothClassic? _injectedBluetooth;
   final PrintWriteQueue _queue;
+
+  /// Built on first use, never in the constructor. The plugin's own singleton
+  /// constructor subscribes to its state, connection and data EventChannels,
+  /// and on a platform with no native side each of those `listen` calls fails
+  /// inside the framework, which reports it straight to `FlutterError.onError`
+  /// — no `try`, zone or `onError` of ours can catch it. The app builds this
+  /// transport at startup, so the Linux back office logged exactly three
+  /// `MissingPluginException`s on every launch. Every use below sits behind
+  /// [_pluginUnavailable], which starts true on those platforms, so there the
+  /// plugin is never constructed at all.
+  late final FlutterBluetoothClassic _bluetooth =
+      _injectedBluetooth ?? FlutterBluetoothClassic();
 
   @override
   Future<List<PrinterEndpoint>> discover() async {
@@ -223,12 +235,11 @@ class BluetoothPrintTransport extends PrintTransport {
             address: device.address,
           );
         },
-        // Without this the stream's error has nowhere to go and becomes an
-        // unhandled zone error. On a platform where the plugin is only a
-        // template stub, binding this EventChannel fails every single time
-        // with MissingPluginException: 867 of the app's 1,116 reported Flutter
-        // errors were this one line. Bluetooth discovery is best-effort —
-        // paired devices are still listed — so a failure is not news.
+        // Defensive: a stream error with no handler becomes an unhandled zone
+        // error. (The Linux `MissingPluginException`s once blamed on this line
+        // came from constructing the plugin — see [_bluetooth].) Discovery is
+        // best-effort — paired devices are still listed — so a failure is not
+        // news.
         onError: (Object error) {
           _pluginUnavailable = _pluginUnavailable || _looksUnimplemented(error);
         },

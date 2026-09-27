@@ -134,8 +134,12 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  // Maximized from creation while it is still hidden, so Flutter lays out its
+  // first frame at the size the window appears at instead of redrawing at a
+  // new size the moment it is shown. |origin| and |size| become the bounds
+  // the window restores down to.
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      window_class, title.c_str(), WS_OVERLAPPEDWINDOW | WS_MAXIMIZE,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -150,7 +154,10 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // Always maximized, whatever the launching shortcut asked for:
+  // SW_SHOWNORMAL would restore the window out of the maximized state it was
+  // created in.
+  return ShowWindow(window_handle_, SW_SHOWMAXIMIZED);
 }
 
 // static
