@@ -372,14 +372,14 @@ class CapabilityTests(TestCase):
         recorder = Recorder(brand=Recorder.Brand.DIRECT_RTSP, host="192.168.1.100")
         self.assertEqual(
             recorder.driver_capabilities,
-            {"playback": False, "search": False, "snapshot": False},
+            {"playback": False, "search": False, "snapshot": False, "live": True},
         )
 
     def test_a_dahua_still_advertises_everything(self):
         recorder = Recorder(brand=Recorder.Brand.DAHUA, host="192.168.1.64")
         self.assertEqual(
             recorder.driver_capabilities,
-            {"playback": True, "search": True, "snapshot": True},
+            {"playback": True, "search": True, "snapshot": True, "live": True},
         )
 
     def test_the_detected_brand_wins_over_the_chosen_one(self):

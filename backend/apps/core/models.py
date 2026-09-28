@@ -457,6 +457,15 @@ class ShopSettings(TimeStampedModel):
         db_default=40,
         validators=[MaxValueValidator(600)],
     )
+    # How long invoice footage uploaded over FTP is kept on this server (see
+    # SURVEILLANCE_FTP_PLAN.md). An upper bound, not a promise: the archive is
+    # also held to a share of the disk, and the oldest clips go first when the
+    # disk is needed for the database.
+    surveillance_archive_retention_days = models.PositiveSmallIntegerField(
+        default=30,
+        db_default=30,
+        validators=[MinValueValidator(1), MaxValueValidator(3650)],
+    )
     # --- Multi-currency ---------------------------------------------------
     # ``currency_code`` above IS the base currency: the currency every total,
     # balance, report and stored money column in this product is denominated

@@ -546,13 +546,37 @@ duration() { printf '%dm%02ds' $(($1 / 60)) $(($1 % 60)); }
 # minutes, and the tests drive this loop with a clock of their own.
 now() { date +%s; }
 
+# The FTP upload server (`ftp`) is the one service a shop can trade without, and
+# the one whose port — 21, plus a passive range — some other program on this
+# machine may already hold. Compose fails the WHOLE `up` when a single container
+# cannot bind its port, so a taken port 21 would fail the install and roll a
+# restart-path update back. When everything but `ftp` comes up, that is a
+# working shop: say what is missing, and carry on.
+compose_up() {
+  local rest port
+  compose up -d && return 0
+  rest="$(compose config --services 2>/dev/null | grep -vx ftp | tr '\n' ' ' || true)"
+  [ -n "${rest// /}" ] || return 1
+  # shellcheck disable=SC2086 # a list of service names, split on purpose
+  compose up -d $rest || return 1
+  # The first `up` may have failed for a reason that has since passed; only a
+  # server that is really not running is worth a warning.
+  compose ps --status running --services 2>/dev/null | grep -qx ftp && return 0
+  port="$(env_value POINTY_FTP_PUBLIC_PORT)"
+  echo "WARNING: everything is up except the FTP upload server. Most likely another" >&2
+  echo "         program holds port ${port:-21} or the passive range 50000-50019. FTP" >&2
+  echo "         camera setups receive nothing until it is freed (then run:" >&2
+  echo "         docker compose up -d ftp); the rest of Pointy is unaffected." >&2
+  return 0
+}
+
 start_stack() {
   local timeout started elapsed pending last restarts restarts_from attempt=1 idle=0 next_note=60 out
   timeout="${POINTY_STACK_START_TIMEOUT:-$(env_value POINTY_STACK_START_TIMEOUT)}"
   case "$timeout" in ''|*[!0-9]*) timeout=1200 ;; esac
   started="$(now)"
 
-  compose up -d && return 0
+  compose_up && return 0
 
   echo "==> Compose stopped waiting, but the stack can still be coming up: usually the"
   echo "    backend applying this release's database migrations. Waiting for it and"
@@ -594,7 +618,10 @@ start_stack() {
     fi
     sleep 10
     attempt=$((attempt + 1))
-    if compose up -d >"$out" 2>&1; then
+    if compose_up >"$out" 2>&1; then
+      # A missing FTP server is worth repeating here: compose's own chatter
+      # stays in the scratch file, but that warning is for the installer.
+      sed -n '/^WARNING:/,$p' "$out" >&2
       rm -f "$out"
       echo "==> The stack is up, $(duration $(($(now) - started))) after starting it (compose tried ${attempt} times)."
       return 0

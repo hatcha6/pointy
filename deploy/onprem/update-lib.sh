@@ -495,6 +495,10 @@ pu_apply_live() {
   pu_log "updating background workers, relay connector and web app…"
   pu_recreate celery-worker celery-beat >/dev/null 2>&1 \
     || pu_warn "background workers did not restart cleanly; check 'compose ps'"
+  # The FTP upload server. A DVR retries an upload the restart interrupts, and
+  # the ingest resumes from the rows it left: nothing it had is lost.
+  pu_recreate ftp >/dev/null 2>&1 \
+    || pu_warn "FTP upload server did not restart cleanly; check 'compose ps'"
   pu_recreate connector >/dev/null 2>&1 \
     || pu_warn "relay connector did not restart cleanly; check 'compose ps'"
   pu_recreate web >/dev/null 2>&1 \

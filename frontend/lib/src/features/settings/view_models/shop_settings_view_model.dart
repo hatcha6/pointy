@@ -134,6 +134,19 @@ class ShopSettingsViewModel extends ChangeNotifier {
     );
   }
 
+  /// How long invoice footage uploaded over FTP is kept, in days.
+  Future<bool> setSurveillanceArchiveRetentionDays(int days) async {
+    final current = _settings;
+    if (current == null) {
+      return false;
+    }
+    return updateSettings(
+      ShopSettingsDraft.fromSettings(
+        current,
+      ).copyWith(surveillanceArchiveRetentionDays: days),
+    );
+  }
+
   /// True when the last save was held back because the user changed how stock
   /// is costed and has not yet confirmed it. The screen answers by showing the
   /// warning dialog and re-saving with an acknowledgement.

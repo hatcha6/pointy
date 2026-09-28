@@ -52,6 +52,10 @@ class CameraPlayerViewModel extends ChangeNotifier {
 
   bool get isLive => mode == CameraPlayerMode.live;
 
+  /// False for a camera that only exists as footage uploaded over FTP: there
+  /// is nothing live to switch to.
+  bool get canGoLive => camera.supportsLive;
+
   /// Whether to offer the listen button. Optimistic when the channel has never
   /// been measured — the first tap is what measures it — and false only once
   /// the server has looked and found no microphone.

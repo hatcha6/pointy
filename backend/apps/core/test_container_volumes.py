@@ -31,7 +31,7 @@ DOCKERFILE_PATH = REPO_ROOT / "backend" / "Dockerfile"
 #: Services built from backend/Dockerfile, and therefore running as `pointy`.
 #: Other services (the relay connector, nginx) carry their own images and
 #: their own users, and are not this file's business.
-BACKEND_SERVICES = frozenset({"backend", "celery-worker", "celery-beat"})
+BACKEND_SERVICES = frozenset({"backend", "celery-worker", "celery-beat", "ftp"})
 
 
 def _named_volume_targets(service) -> set[str]:

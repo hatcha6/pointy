@@ -68,9 +68,11 @@ test_live_update_replaces_the_remaining_services_after_the_tills_are_safe() {
   pu_apply_live 1.1.0 >/dev/null 2>&1
   local order; order="$(_order)"
   assert_contains "$order" 'recreate:celery-worker celery-beat'
+  assert_contains "$order" 'recreate:ftp'
   assert_contains "$order" 'recreate:connector'
   assert_contains "$order" 'recreate:web'
   assert_order 'flip:backend' 'recreate:web'
+  assert_order 'flip:backend' 'recreate:ftp'
 }
 
 test_live_update_publishes_client_installers_and_reports_staged_infra() {
@@ -187,6 +189,15 @@ test_background_workers_that_do_not_restart_do_not_fail_the_update() {
   local out; out="$(pu_apply_live 1.1.0 2>&1)"; local rc=$?
   assert_eq '0' "$rc"
   assert_contains "$out" 'background workers did not restart cleanly'
+}
+
+test_an_ftp_server_that_does_not_restart_does_not_fail_the_update() {
+  # DVRs retry uploads; a shop's till must not wait on its camera inbox.
+  _mock_deps
+  pu_recreate() { record "recreate:$*"; case "$1" in ftp) return 1 ;; esac; return 0; }
+  local out; out="$(pu_apply_live 1.1.0 2>&1)"; local rc=$?
+  assert_eq '0' "$rc"
+  assert_contains "$out" 'FTP upload server did not restart cleanly'
 }
 
 test_a_connector_that_does_not_restart_does_not_fail_the_update() {

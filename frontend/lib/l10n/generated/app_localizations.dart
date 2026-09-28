@@ -38507,6 +38507,282 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مبلغ على الموظف أو له خارج مسير الرواتب — مكافأة، عجز، مصروف دفعه عن المحل. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ويُحتسب ضمن تكلفة الرواتب يوم تسجيله.'**
   String get balanceEntryEmployeeAdjustmentHint;
+
+  /// Title of the sheet that asks how a new recorder connects.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف يتصل جهاز التسجيل بدفتر؟'**
+  String get recorderConnectionChoiceTitle;
+
+  /// Connection choice: the server dials the recorder.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتصال مباشر'**
+  String get recorderConnectionDirectTitle;
+
+  /// Explains the direct connection choice.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتصل دفتر بجهاز التسجيل على الشبكة: عرض مباشر، وتشغيل التسجيلات من قرص الجهاز نفسه.'**
+  String get recorderConnectionDirectBody;
+
+  /// Connection choice: the recorder uploads footage to Pointy.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفع التسجيلات عبر FTP'**
+  String get recorderConnectionFtpTitle;
+
+  /// Explains the FTP upload choice.
+  ///
+  /// In ar, this message translates to:
+  /// **'يرفع جهاز التسجيل لقطاته إلى دفتر، ويُحفظ منها وقت الفواتير فقط. يعمل مع أي جهاز فيه صفحة FTP، ويبقى محفوظاً بعد أن يمسح الجهاز قرصه. بلا عرض مباشر.'**
+  String get recorderConnectionFtpBody;
+
+  /// Title of the form that creates or edits an FTP upload setup.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد رفع FTP'**
+  String get ftpFormTitle;
+
+  /// Intro text on the FTP setup form.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب اسماً لهذا الجهاز ثم احفظ، لتظهر بيانات الدخول التي تُكتب في صفحة FTP على جهاز التسجيل.'**
+  String get ftpFormIntro;
+
+  /// Button that creates an FTP setup and its credentials.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء بيانات الدخول'**
+  String get ftpFormCreateAction;
+
+  /// Title of the page showing an FTP setup's credentials and status.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات اتصال FTP'**
+  String get ftpConnectionTitle;
+
+  /// Instruction above the FTP credentials.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح إعدادات الشبكة ثم FTP في جهاز التسجيل، واكتب هذه القيم كما هي.'**
+  String get ftpConnectionIntro;
+
+  /// Label: the FTP server address to type into the DVR.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان الخادم'**
+  String get ftpServerLabel;
+
+  /// Label: the FTP port.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنفذ'**
+  String get ftpPortLabel;
+
+  /// Label: the FTP username.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get ftpUsernameLabel;
+
+  /// Label: the FTP password.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get ftpPasswordLabel;
+
+  /// Shown instead of the FTP password to a user who may not change recorders.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تملك صلاحية عرض كلمة المرور.'**
+  String get ftpPasswordHidden;
+
+  /// Tooltip of the copy button beside an FTP credential.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get ftpCopyTooltip;
+
+  /// Snackbar after copying an FTP credential.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم النسخ'**
+  String get ftpCopiedMessage;
+
+  /// Shown when this device cannot tell the server's LAN address (e.g. connected through the relay).
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح هذه الصفحة من جهاز داخل المحل ليظهر عنوان الخادم.'**
+  String get ftpAddressUnknown;
+
+  /// Note about the FTP passive port range.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج جهاز التسجيل أيضاً إلى الوصول إلى المنافذ {ports} على الخادم.'**
+  String ftpPassivePortsHint(String ports);
+
+  /// Heading of the DVR-side setup steps.
+  ///
+  /// In ar, this message translates to:
+  /// **'في جهاز التسجيل'**
+  String get ftpStepsTitle;
+
+  /// DVR setup step 1.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل FTP، واكتب عنوان الخادم والمنفذ واسم المستخدم وكلمة المرور.'**
+  String get ftpStepEnter;
+
+  /// DVR setup step 2.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر رفع التسجيلات لكاميرات الكاشير على مدار اليوم — أو الصور إن كان الجهاز لا يرفع غيرها.'**
+  String get ftpStepSchedule;
+
+  /// DVR setup step 3.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط «اختبار» ثم احفظ. تظهر حالة الاتصال هنا خلال ثوانٍ.'**
+  String get ftpStepTest;
+
+  /// FTP status: nothing has connected yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار أول اتصال من جهاز التسجيل'**
+  String get ftpStatusWaiting;
+
+  /// FTP status: the DVR logged in but has uploaded nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتصل جهاز التسجيل {time} ولم يرفع شيئاً بعد — تأكد من تفعيل الرفع وجدوله.'**
+  String ftpStatusLoggedIn(String time);
+
+  /// FTP status: uploads are arriving.
+  ///
+  /// In ar, this message translates to:
+  /// **'يصل الرفع — آخر ملف {time}'**
+  String ftpStatusReceiving(String time);
+
+  /// FTP status: uploads stopped a while ago.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصل أي ملف منذ {time}'**
+  String ftpStatusStale(String time);
+
+  /// FTP warning: repeated wrong password.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز على {address} يحاول الدخول بكلمة مرور خاطئة.'**
+  String ftpStatusWrongPassword(String address);
+
+  /// FTP warning: a login with an unknown username.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز على {address} حاول الدخول باسم مستخدم غير معروف «{username}».'**
+  String ftpStatusUnknownUser(String address, String username);
+
+  /// FTP warning: repeated wrong password, when the server cannot tell the device's address (a Windows server forwards every device through one address).
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز يحاول الدخول بكلمة مرور خاطئة.'**
+  String get ftpStatusWrongPasswordNoAddress;
+
+  /// FTP warning: a login with an unknown username, when the server cannot tell the device's address.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز حاول الدخول باسم مستخدم غير معروف «{username}».'**
+  String ftpStatusUnknownUserNoAddress(String username);
+
+  /// FTP error: the FTP service is not running.
+  ///
+  /// In ar, this message translates to:
+  /// **'خادم FTP لا يعمل الآن على الخادم. أعد تشغيل خدمات دفتر أو تواصل مع الدعم.'**
+  String get ftpStatusServerDown;
+
+  /// FTP warning: uploads refused because the disk is at its floor.
+  ///
+  /// In ar, this message translates to:
+  /// **'قرص الخادم شبه ممتلئ، لذلك يرفض الخادم الرفع مؤقتاً.'**
+  String get ftpStatusRefusingDisk;
+
+  /// FTP warning: uploads refused because the inbox backed up.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتراكم ملفات بانتظار المعالجة، لذلك يرفض الخادم الرفع مؤقتاً.'**
+  String get ftpStatusRefusingInbox;
+
+  /// FTP warning: some uploads could not be read.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت قراءة بعض الملفات المرفوعة: {error}'**
+  String ftpStatusUnreadable(String error);
+
+  /// FTP counters: files received, kept, discarded.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل {received} · حُفظ {kept} · حُذف {discarded}'**
+  String ftpStatsLine(String received, String kept, String discarded);
+
+  /// Button that regenerates the FTP password.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة مرور جديدة'**
+  String get ftpRegenerateAction;
+
+  /// Confirmation title before regenerating the FTP password.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء كلمة مرور جديدة؟'**
+  String get ftpRegenerateConfirmTitle;
+
+  /// Confirmation body before regenerating the FTP password.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتوقف كلمة المرور الحالية خلال ثوانٍ، ويجب كتابة الجديدة في جهاز التسجيل.'**
+  String get ftpRegenerateConfirmBody;
+
+  /// Recorder card action that opens the FTP credentials page.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات الاتصال'**
+  String get ftpDetailsAction;
+
+  /// Camera row note for an FTP (archive-only) camera.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا بث مباشر — تُحفظ لحظات الفواتير'**
+  String get ftpArchiveOnlyLabel;
+
+  /// Recorder card note: an FTP setup's cameras appear after they upload.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر الكاميرات هنا بعد أول رفع منها.'**
+  String get ftpNoCamerasYet;
+
+  /// Label of the archive retention setting.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة حفظ لقطات الفواتير'**
+  String get ftpRetentionLabel;
+
+  /// The archive retention in days.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{يوم واحد} =2{يومان} few{{count} أيام} many{{count} يوماً} other{{count} يوم}}'**
+  String ftpRetentionValue(num count);
+
+  /// Hint under the retention setting.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحذف الأقدم أولاً إن احتاج القرص المساحة.'**
+  String get ftpRetentionHint;
+
+  /// Validation message for the retention days.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب عدداً من 1 إلى 3650.'**
+  String get ftpRetentionInvalid;
 }
 
 class _AppLocalizationsDelegate

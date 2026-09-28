@@ -79,6 +79,25 @@ x-backend-environment: &backend-environment
   POINTY_SURVEILLANCE_MAX_FFMPEG: "${POINTY_SURVEILLANCE_MAX_FFMPEG:-12}"
   POINTY_SURVEILLANCE_STILL_FPS: "${POINTY_SURVEILLANCE_STILL_FPS:-2}"
   POINTY_SURVEILLANCE_STILL_WIDTH: "${POINTY_SURVEILLANCE_STILL_WIDTH:-640}"
+  # FTP upload setups (SURVEILLANCE_FTP_PLAN.md). The `ftp` service receives and
+  # keeps the invoice footage; the backend plays it back from the same volume.
+  POINTY_FOOTAGE_ROOT: /var/lib/pointy/footage
+  # The port a DVR is told to dial — the host side of the `ftp` service's
+  # mapping below. The passive range is published 1:1, so the same value is
+  # both the container's setting and the host's ports.
+  POINTY_FTP_PUBLIC_PORT: "${POINTY_FTP_PUBLIC_PORT:-21}"
+  POINTY_FTP_PASSIVE_PORTS: "${POINTY_FTP_PASSIVE_PORTS:-30000-30019}"
+  # Leave empty: PASV announces the server address the installer was shown in
+  # the app. Set it only when DVRs reach this server by an address the tills
+  # do not (a second network card, a NAT).
+  POINTY_FTP_PASSIVE_ADDRESS: "${POINTY_FTP_PASSIVE_ADDRESS:-}"
+  # auto = on WSL, where every DVR arrives through the Windows portproxy from
+  # one address, so lockouts go per username. true/false to say so outright.
+  POINTY_FTP_BEHIND_PROXY: "${POINTY_FTP_BEHIND_PROXY:-auto}"
+  # The disk floor below which uploads are refused and the oldest kept footage
+  # is pruned — the database on the same disk comes first.
+  POINTY_FOOTAGE_MIN_FREE_GB: "${POINTY_FOOTAGE_MIN_FREE_GB:-10}"
+  POINTY_FOOTAGE_MAX_SHARE: "${POINTY_FOOTAGE_MAX_SHARE:-0.4}"
   POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
   # Companion camera: a staff phone paired to a till over the shop LAN, so the
   # 2-D codes a laser scanner cannot read (payment-terminal receipts) and the
@@ -353,6 +372,8 @@ services:
       - pointy-static:/var/lib/pointy/staticfiles
       - pointy-backups:/var/lib/pointy/backups
       - pointy-clients:/var/lib/pointy/clients
+      # Kept invoice footage, written by the `ftp` service, played back here.
+      - pointy-footage:/var/lib/pointy/footage
       - pointy-backup-staging:/tmp/pointy-backup-staging
       - pointy-migration-staging:/var/lib/pointy/migration
       - pointy-tmp:/var/tmp/pointy
@@ -482,6 +503,55 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
     stop_grace_period: 45s
+    logging: *pointy-logging
+
+  # FTP upload setups (SURVEILLANCE_FTP_PLAN.md): DVRs and NVRs upload footage
+  # here, and this same process keeps only the invoice moments of it — the
+  # service that owns the inbox is the one that empties it, so nothing about it
+  # waits behind a backup holding the Celery worker. It runs whether or not a
+  # setup exists: with no account it accepts no login, and it is what makes
+  # "FTP upload" in the camera settings simply work. The backend image, a
+  # different role; no image of its own in the offline bundle.
+  #
+  # 2121 inside (the process is unprivileged), the host's 21 outside. The
+  # passive range is published 1:1 because PASV tells the DVR which port to
+  # dial, and that number has to be the same on both sides.
+  ftp:
+    image: "${POINTY_BACKEND_IMAGE:-pointy-backend:local}"
+    command: ["ftp"]
+    restart: always
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: "${POINTY_FTP_MEM_LIMIT:-512m}"
+    cpus: "${POINTY_FTP_CPUS:-1}"
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *backend-environment
+    ports:
+      - "${POINTY_FTP_HOST_BIND:-0.0.0.0}:${POINTY_FTP_PUBLIC_PORT:-21}:2121"
+      - "${POINTY_FTP_HOST_BIND:-0.0.0.0}:${POINTY_FTP_PASSIVE_PORTS:-30000-30019}:${POINTY_FTP_PASSIVE_PORTS:-30000-30019}"
+    volumes:
+      - pointy-footage:/var/lib/pointy/footage
+      - pointy-tmp:/var/tmp/pointy
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 2121), 3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
+    # Long enough to flush queued upload events; a DVR retries an upload the
+    # stop interrupted.
+    stop_grace_period: 30s
     logging: *pointy-logging
 
   connector:
@@ -650,6 +720,9 @@ volumes:
   pointy-celerybeat:
   pointy-connector-state:
   pointy-clients:
+  # Footage DVRs uploaded over FTP: the raw inbox (transient) and the kept
+  # invoice clips. Held to a share of the disk by the `ftp` service itself.
+  pointy-footage:
   # TMPDIR for the backend and the Celery containers. A volume rather than a
   # tmpfs: what lands here is request bodies and upload spools measured in
   # gigabytes, and RAM is the one thing a shop's server has least of.

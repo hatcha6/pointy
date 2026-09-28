@@ -671,6 +671,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "enable_surveillance",
             "surveillance_pre_roll_seconds",
             "surveillance_post_roll_seconds",
+            # How long invoice footage uploaded over FTP is kept.
+            "surveillance_archive_retention_days",
             # Multi-currency. Off by default: a shop with no foreign exposure
             # never sees a currency picker anywhere in the app.
             "fx_enabled",

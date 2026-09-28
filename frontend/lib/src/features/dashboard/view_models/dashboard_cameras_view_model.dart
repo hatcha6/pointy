@@ -114,7 +114,12 @@ class DashboardCamerasViewModel extends ChangeNotifier {
     }
     final camerasResult = await _repository.loadCameras(enabledOnly: true);
     if (camerasResult case Ok<List<Camera>>()) {
-      _cameras = camerasResult.value;
+      // Stills come from a live camera; one that only uploads over FTP has
+      // none to give.
+      _cameras = [
+        for (final camera in camerasResult.value)
+          if (camera.supportsLive) camera,
+      ];
     }
 
     _isLoading = false;

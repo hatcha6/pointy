@@ -79,6 +79,7 @@ class ShopSettings {
     this.enableSurveillance = false,
     this.surveillancePreRollSeconds = 20,
     this.surveillancePostRollSeconds = 40,
+    this.surveillanceArchiveRetentionDays = 30,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
@@ -234,6 +235,9 @@ class ShopSettings {
   /// How much footage the invoice player opens either side of the sale.
   final int surveillancePreRollSeconds;
   final int surveillancePostRollSeconds;
+
+  /// How long invoice footage uploaded over FTP is kept on the server.
+  final int surveillanceArchiveRetentionDays;
 
   /// How stock is costed. See [InventoryValuationMethod].
   final InventoryValuationMethod inventoryValuationMethod;
@@ -419,6 +423,10 @@ class ShopSettings {
         json['surveillance_post_roll_seconds'],
         40,
       ),
+      surveillanceArchiveRetentionDays: _intFromJson(
+        json['surveillance_archive_retention_days'],
+        30,
+      ),
       inventoryValuationMethod: InventoryValuationMethod.fromWire(
         json['inventory_valuation_method'],
       ),
@@ -491,6 +499,7 @@ class ShopSettingsDraft {
     this.enableSurveillance = false,
     this.surveillancePreRollSeconds = 20,
     this.surveillancePostRollSeconds = 40,
+    this.surveillanceArchiveRetentionDays = 30,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.valuationMethodChangeAcknowledged = false,
   });
@@ -538,6 +547,7 @@ class ShopSettingsDraft {
   final bool enableSurveillance;
   final int surveillancePreRollSeconds;
   final int surveillancePostRollSeconds;
+  final int surveillanceArchiveRetentionDays;
   final InventoryValuationMethod inventoryValuationMethod;
 
   /// Every editable field, copied from a loaded [ShopSettings].
@@ -587,6 +597,8 @@ class ShopSettingsDraft {
       enableSurveillance: settings.enableSurveillance,
       surveillancePreRollSeconds: settings.surveillancePreRollSeconds,
       surveillancePostRollSeconds: settings.surveillancePostRollSeconds,
+      surveillanceArchiveRetentionDays:
+          settings.surveillanceArchiveRetentionDays,
       inventoryValuationMethod: settings.inventoryValuationMethod,
     );
   }
@@ -653,6 +665,7 @@ class ShopSettingsDraft {
     bool? enableSurveillance,
     int? surveillancePreRollSeconds,
     int? surveillancePostRollSeconds,
+    int? surveillanceArchiveRetentionDays,
     InventoryValuationMethod? inventoryValuationMethod,
     bool? valuationMethodChangeAcknowledged,
   }) {
@@ -730,6 +743,9 @@ class ShopSettingsDraft {
           surveillancePreRollSeconds ?? this.surveillancePreRollSeconds,
       surveillancePostRollSeconds:
           surveillancePostRollSeconds ?? this.surveillancePostRollSeconds,
+      surveillanceArchiveRetentionDays:
+          surveillanceArchiveRetentionDays ??
+          this.surveillanceArchiveRetentionDays,
       inventoryValuationMethod:
           inventoryValuationMethod ?? this.inventoryValuationMethod,
       valuationMethodChangeAcknowledged:
@@ -788,6 +804,7 @@ class ShopSettingsDraft {
       'enable_surveillance': enableSurveillance,
       'surveillance_pre_roll_seconds': surveillancePreRollSeconds,
       'surveillance_post_roll_seconds': surveillancePostRollSeconds,
+      'surveillance_archive_retention_days': surveillanceArchiveRetentionDays,
       'inventory_valuation_method': inventoryValuationMethod.wireValue,
       // Only sent when the user has actually confirmed, so an ordinary save
       // can never carry a stale acknowledgement.

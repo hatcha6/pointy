@@ -896,6 +896,50 @@ POINTY_SURVEILLANCE_STILL_FPS = env("POINTY_SURVEILLANCE_STILL_FPS")
 # than this is passed through as it is. 0 means "whatever the stream is".
 POINTY_SURVEILLANCE_STILL_WIDTH = env("POINTY_SURVEILLANCE_STILL_WIDTH")
 
+# --- FTP upload setups (SURVEILLANCE_FTP_PLAN.md) ---------------------------
+# Where uploaded footage lives: ``inbox/`` holds raw uploads until they are
+# decided on, ``archive/`` the invoice clips that were kept. Shared by the `ftp`
+# service (which writes both) and the backend (which plays the archive back),
+# so on the appliance it is a volume mounted into both.
+POINTY_FOOTAGE_ROOT = env(
+    "POINTY_FOOTAGE_ROOT", default=str(Path(MEDIA_ROOT).parent / "footage")
+)
+# Where the FTP server listens. 2121 rather than 21 because the container runs
+# unprivileged; compose publishes it on the host's 21.
+POINTY_FTP_BIND = env("POINTY_FTP_BIND", default="0.0.0.0")
+POINTY_FTP_PORT = env.int("POINTY_FTP_PORT", default=2121)
+# The port a DVR is told to use, which is the host side of that mapping.
+POINTY_FTP_PUBLIC_PORT = env.int("POINTY_FTP_PUBLIC_PORT", default=POINTY_FTP_PORT)
+# Passive data ports. Published 1:1 by compose — PASV announces the port the
+# DVR must dial, so the number inside and outside has to be the same. Below
+# both ephemeral ranges (Linux 32768+, Windows 49152+) on purpose: on Windows,
+# Hyper-V reserves random blocks of its range at boot, and a forward into WSL
+# cannot bind inside one.
+POINTY_FTP_PASSIVE_PORTS = env("POINTY_FTP_PASSIVE_PORTS", default="30000-30019")
+# Normally empty: PASV announces the address the installer was shown. Set it
+# only when the DVR reaches this server by an address the tills do not.
+POINTY_FTP_PASSIVE_ADDRESS = env("POINTY_FTP_PASSIVE_ADDRESS", default="")
+# LAN-only by default: a login from a public address is refused outright.
+POINTY_FTP_ALLOW_PUBLIC_PEERS = env.bool("POINTY_FTP_ALLOW_PUBLIC_PEERS", default=False)
+# Whether every DVR arrives through one forwarding hop, so the address cannot
+# tell DVRs apart (apps.surveillance.ftp.server). auto = on WSL, where the
+# Windows portproxy is the only way in; true/false to say so outright.
+POINTY_FTP_BEHIND_PROXY = env("POINTY_FTP_BEHIND_PROXY", default="auto")
+# One upload larger than this is cut off. An hour of 4K main stream is ~2-4 GB.
+POINTY_FTP_MAX_FILE_MB = env.int("POINTY_FTP_MAX_FILE_MB", default=4096)
+# The disk floor. Below it uploads are refused (the DVR retries later) and the
+# oldest kept clips are pruned: the database on the same disk outranks footage.
+# The effective floor is the larger of this and POINTY_FOOTAGE_MIN_FREE_SHARE.
+POINTY_FOOTAGE_MIN_FREE_GB = env.float("POINTY_FOOTAGE_MIN_FREE_GB", default=10.0)
+POINTY_FOOTAGE_MIN_FREE_SHARE = env.float("POINTY_FOOTAGE_MIN_FREE_SHARE", default=0.05)
+# The most of the disk the kept archive may occupy, as a share, and optionally
+# as an absolute cap (0 = none). Oldest clips are pruned past either.
+POINTY_FOOTAGE_MAX_SHARE = env.float("POINTY_FOOTAGE_MAX_SHARE", default=0.4)
+POINTY_FOOTAGE_MAX_GB = env.float("POINTY_FOOTAGE_MAX_GB", default=0.0)
+# Raw uploads waiting for a decision. Past this the ingest has fallen behind
+# (or died), and new uploads are refused rather than piled up.
+POINTY_FOOTAGE_INBOX_MAX_SHARE = env.float("POINTY_FOOTAGE_INBOX_MAX_SHARE", default=0.15)
+
 POINTY_ATTACHMENT_STORAGE_ROOT = env(
     "POINTY_ATTACHMENT_STORAGE_ROOT",
     default=str(MEDIA_ROOT),

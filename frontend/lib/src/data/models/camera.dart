@@ -94,6 +94,25 @@ enum RecorderStatus {
   }
 }
 
+/// How a recorder reaches Pointy.
+///
+/// [direct]: the server dials the DVR — live view, and its own recordings
+/// played back. [ftp]: the DVR uploads footage to Pointy's FTP server and only
+/// the invoice moments are kept; no live view. Chosen once, when the recorder
+/// is added. See SURVEILLANCE_FTP_PLAN.md.
+enum RecorderConnection {
+  direct('direct'),
+  ftp('ftp');
+
+  const RecorderConnection(this.wireValue);
+
+  final String wireValue;
+
+  static RecorderConnection fromWire(Object? value) {
+    return value?.toString() == ftp.wireValue ? ftp : direct;
+  }
+}
+
 class Camera {
   const Camera({
     required this.id,
@@ -111,11 +130,23 @@ class Camera {
     this.recorderName = '',
     this.lastFrameAt,
     this.hasAudio,
+    this.supportsLive = true,
+    this.hasFootage,
   });
 
   final int id;
   final int recorderId;
   final String recorderName;
+
+  /// False for a camera that only exists as footage its recorder uploads over
+  /// FTP: there is no stream of it to watch, so live surfaces leave it out and
+  /// the player offers no way to "go live".
+  final bool supportsLive;
+
+  /// On an invoice's footage: whether this camera is known to hold the window
+  /// (an FTP camera knows exactly what it kept), or `null` when it can only be
+  /// found out by playing.
+  final bool? hasFootage;
 
   /// The channel number on the recorder. Read-only: it describes hardware.
   final int channel;
@@ -165,6 +196,11 @@ class Camera {
       // Absent and explicit null mean the same thing — not measured yet — so
       // this must not collapse to false the way the other flags do.
       hasAudio: json['has_audio'] is bool ? json['has_audio'] as bool : null,
+      // An older backend has no archive-only cameras, so absent means live.
+      supportsLive: json['supports_live'] != false,
+      hasFootage: json['has_footage'] is bool
+          ? json['has_footage'] as bool
+          : null,
     );
   }
 
@@ -194,6 +230,148 @@ class Camera {
       status: status,
       lastFrameAt: lastFrameAt,
       hasAudio: hasAudio,
+      supportsLive: supportsLive,
+      hasFootage: hasFootage,
+    );
+  }
+}
+
+/// A login attempt with a username no FTP setup has — the typo an installer
+/// makes on the DVR's keyboard, reported so the setup screen can say so.
+class FtpUnknownLogin {
+  const FtpUnknownLogin({required this.username, required this.peer, this.at});
+
+  final String username;
+  final String peer;
+  final DateTime? at;
+
+  factory FtpUnknownLogin.fromJson(Map<String, Object?> json) {
+    return FtpUnknownLogin(
+      username: json['username']?.toString() ?? '',
+      peer: json['peer']?.toString() ?? '',
+      at: DateTime.tryParse(json['at']?.toString() ?? ''),
+    );
+  }
+}
+
+/// The FTP service itself: whether it is running, and where DVRs reach it.
+class FtpServerInfo {
+  const FtpServerInfo({
+    this.running = false,
+    this.port = 21,
+    this.passivePorts = '',
+    this.accepting = false,
+    this.refusingReason = '',
+    this.recentUnknownLogins = const [],
+  });
+
+  final bool running;
+
+  /// The port a DVR is told to dial.
+  final int port;
+  final String passivePorts;
+
+  /// False when the server is refusing uploads — the disk is at its floor or
+  /// the inbox has backed up. [refusingReason] says which.
+  final bool accepting;
+  final String refusingReason;
+  final List<FtpUnknownLogin> recentUnknownLogins;
+
+  factory FtpServerInfo.fromJson(Map<String, Object?> json) {
+    final unknown = json['recent_unknown_logins'];
+    return FtpServerInfo(
+      running: json['running'] == true,
+      port: (json['port'] as num?)?.toInt() ?? 21,
+      passivePorts: json['passive_ports']?.toString() ?? '',
+      accepting: json['accepting'] == true,
+      refusingReason: json['refusing_reason']?.toString() ?? '',
+      recentUnknownLogins: unknown is List
+          ? unknown
+                .whereType<Map<String, Object?>>()
+                .map(FtpUnknownLogin.fromJson)
+                .toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+/// What an FTP setup's DVR types in, and how its uploads are going.
+class FtpAccountInfo {
+  const FtpAccountInfo({
+    required this.username,
+    this.password,
+    this.host = '',
+    this.server = const FtpServerInfo(),
+    this.lastLoginAt,
+    this.lastLoginPeer = '',
+    this.lastUploadAt,
+    this.lastUploadPeer = '',
+    this.lastUploadName = '',
+    this.failedLoginCount = 0,
+    this.failedLoginAt,
+    this.failedLoginPeer = '',
+    this.filesReceived = 0,
+    this.filesKept = 0,
+    this.filesDiscarded = 0,
+    this.filesUnreadable = 0,
+    this.lastIngestError = '',
+    this.lastIngestErrorAt,
+  });
+
+  final String username;
+
+  /// `null` for a user who may view recorders but not change them: the
+  /// backend only sends it to someone who could give it to a DVR.
+  final String? password;
+
+  /// The server address last shown for this setup — what the DVR was told.
+  final String host;
+  final FtpServerInfo server;
+  final DateTime? lastLoginAt;
+  final String lastLoginPeer;
+  final DateTime? lastUploadAt;
+  final String lastUploadPeer;
+  final String lastUploadName;
+
+  /// Wrong-password attempts with this username since the last good login.
+  final int failedLoginCount;
+  final DateTime? failedLoginAt;
+  final String failedLoginPeer;
+  final int filesReceived;
+  final int filesKept;
+  final int filesDiscarded;
+  final int filesUnreadable;
+  final String lastIngestError;
+  final DateTime? lastIngestErrorAt;
+
+  bool get hasUploaded => lastUploadAt != null;
+
+  factory FtpAccountInfo.fromJson(Map<String, Object?> json) {
+    final server = json['server'];
+    int count(String key) => (json[key] as num?)?.toInt() ?? 0;
+    DateTime? moment(String key) =>
+        DateTime.tryParse(json[key]?.toString() ?? '');
+    return FtpAccountInfo(
+      username: json['username']?.toString() ?? '',
+      password: json['password']?.toString(),
+      host: json['host']?.toString() ?? '',
+      server: server is Map<String, Object?>
+          ? FtpServerInfo.fromJson(server)
+          : const FtpServerInfo(),
+      lastLoginAt: moment('last_login_at'),
+      lastLoginPeer: json['last_login_peer']?.toString() ?? '',
+      lastUploadAt: moment('last_upload_at'),
+      lastUploadPeer: json['last_upload_peer']?.toString() ?? '',
+      lastUploadName: json['last_upload_name']?.toString() ?? '',
+      failedLoginCount: count('failed_login_count'),
+      failedLoginAt: moment('failed_login_at'),
+      failedLoginPeer: json['failed_login_peer']?.toString() ?? '',
+      filesReceived: count('files_received'),
+      filesKept: count('files_kept'),
+      filesDiscarded: count('files_discarded'),
+      filesUnreadable: count('files_unreadable'),
+      lastIngestError: json['last_ingest_error']?.toString() ?? '',
+      lastIngestErrorAt: moment('last_ingest_error_at'),
     );
   }
 }
@@ -222,11 +400,19 @@ class Recorder {
     this.lastError = '',
     this.lastSeenAt,
     this.cameras = const [],
+    this.connection = RecorderConnection.direct,
+    this.ftp,
   });
 
   final int id;
   final String name;
   final RecorderBrand brand;
+  final RecorderConnection connection;
+
+  /// Only for [RecorderConnection.ftp].
+  final FtpAccountInfo? ftp;
+
+  bool get isFtp => connection == RecorderConnection.ftp;
 
   /// What probing actually found, which wins over [brand] when they disagree.
   final String detectedBrand;
@@ -253,10 +439,19 @@ class Recorder {
   final DateTime? lastSeenAt;
   final List<Camera> cameras;
 
-  String get displayName => name.isNotEmpty ? name : '$host:$port';
+  String get displayName {
+    if (name.isNotEmpty) {
+      return name;
+    }
+    if (isFtp) {
+      return 'FTP ${ftp?.username ?? id}';
+    }
+    return '$host:$port';
+  }
 
   factory Recorder.fromJson(Map<String, Object?> json) {
     final cameras = json['cameras'];
+    final ftp = json['ftp'];
     return Recorder(
       id: (json['id'] as num?)?.toInt() ?? 0,
       name: json['name']?.toString() ?? '',
@@ -285,6 +480,8 @@ class Recorder {
                 .map(Camera.fromJson)
                 .toList(growable: false)
           : const [],
+      connection: RecorderConnection.fromWire(json['connection']),
+      ftp: ftp is Map<String, Object?> ? FtpAccountInfo.fromJson(ftp) : null,
     );
   }
 }
@@ -305,11 +502,22 @@ class RecorderDraft {
     this.isEnabled = true,
     this.rtspPathTemplate = '',
     this.channelCount = 0,
+    this.connection = RecorderConnection.direct,
+    this.ftpHost = '',
   });
 
   final int? id;
   final String name;
   final RecorderBrand brand;
+
+  /// Fixed once the recorder exists; the backend refuses a change.
+  final RecorderConnection connection;
+
+  /// FTP only: the server address this device shows the installer, sent so
+  /// the FTP server announces the same one (see `set_ftp_address`).
+  final String ftpHost;
+
+  bool get isFtp => connection == RecorderConnection.ftp;
   final String host;
   final int port;
   final int rtspPort;
@@ -346,6 +554,8 @@ class RecorderDraft {
       isEnabled: recorder.isEnabled,
       rtspPathTemplate: recorder.rtspPathTemplate,
       channelCount: recorder.channelCount,
+      connection: recorder.connection,
+      ftpHost: recorder.ftp?.host ?? '',
     );
   }
 
@@ -361,6 +571,8 @@ class RecorderDraft {
     bool? isEnabled,
     String? rtspPathTemplate,
     int? channelCount,
+    RecorderConnection? connection,
+    String? ftpHost,
   }) {
     return RecorderDraft(
       id: id,
@@ -375,11 +587,24 @@ class RecorderDraft {
       isEnabled: isEnabled ?? this.isEnabled,
       rtspPathTemplate: rtspPathTemplate ?? this.rtspPathTemplate,
       channelCount: channelCount ?? this.channelCount,
+      connection: connection ?? this.connection,
+      ftpHost: ftpHost ?? this.ftpHost,
     );
   }
 
   Map<String, Object?> toJson() {
+    if (isFtp) {
+      // Nothing of ours dials an FTP recorder, so it has no address, port or
+      // login to send — only what it is called and whether it is on.
+      return {
+        'connection': connection.wireValue,
+        'name': name,
+        'is_enabled': isEnabled,
+        if (ftpHost.isNotEmpty) 'ftp_host': ftpHost,
+      };
+    }
     return {
+      'connection': connection.wireValue,
       'name': name,
       'brand': brand.wireValue,
       'host': host,
@@ -529,6 +754,7 @@ class SurveillanceStatus {
     this.maxLiveFps = 8,
     this.maxPlaybackFps = 0,
     this.smoothLiveAvailable = false,
+    this.ftpServer = const FtpServerInfo(),
   });
 
   final bool configured;
@@ -548,7 +774,11 @@ class SurveillanceStatus {
   final int maxPlaybackFps;
   final bool smoothLiveAvailable;
 
+  /// The FTP upload server, for FTP setups.
+  final FtpServerInfo ftpServer;
+
   factory SurveillanceStatus.fromJson(Map<String, Object?> json) {
+    final ftpServer = json['ftp_server'];
     return SurveillanceStatus(
       configured: json['configured'] == true,
       recorderCount: (json['recorder_count'] as num?)?.toInt() ?? 0,
@@ -562,6 +792,9 @@ class SurveillanceStatus {
       maxLiveFps: (json['max_live_fps'] as num?)?.toInt() ?? 8,
       maxPlaybackFps: (json['max_playback_fps'] as num?)?.toInt() ?? 0,
       smoothLiveAvailable: json['smooth_live_available'] == true,
+      ftpServer: ftpServer is Map<String, Object?>
+          ? FtpServerInfo.fromJson(ftpServer)
+          : const FtpServerInfo(),
     );
   }
 }

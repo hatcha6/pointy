@@ -488,6 +488,48 @@ def open_mjpeg_from_h264(
     return _spawn(args, slot, stdin=subprocess.PIPE)
 
 
+def open_mjpeg_from_file(
+    path: str,
+    *,
+    seek: float = 0.0,
+    duration: float | None = None,
+    fps: int = 8,
+    quality: int = 6,
+    width: int = 0,
+    readrate: float | None = None,
+) -> tuple[subprocess.Popen, _Slot]:
+    """The same JPEG pipe as :func:`open_mjpeg_stream`, from a file on our disk.
+
+    For footage kept from FTP uploads. Its own function rather than a URL
+    handed to the RTSP one because every RTSP-only flag there (``-rtsp_transport``
+    above all) makes ffmpeg refuse a file input outright. ``seek`` is in the
+    file's own timeline and placed before ``-i``: ffmpeg jumps to the keyframe
+    before it and decodes forward to the exact frame, so playback opens on the
+    moment asked for without decoding the file from the top.
+    """
+    ffmpeg = ffmpeg_path()
+    if not ffmpeg:
+        raise TranscodeUnavailable(
+            "Video playback needs ffmpeg, which is not installed on this server."
+        )
+    slot = reserve_slot()
+    args = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin"]
+    if readrate is not None and probe()["supports_readrate"]:
+        args += ["-readrate", f"{readrate:g}"]
+    elif readrate is not None:
+        args += ["-re"]
+    if seek > 0:
+        args += ["-ss", f"{seek:.3f}"]
+    args += ["-i", str(path)]
+    if duration is not None:
+        args += ["-t", f"{max(duration, 0.04):.3f}"]
+    args += ["-an", "-f", "mjpeg", "-q:v", str(int(quality)), "-r", str(int(fps))]
+    if width:
+        args += ["-vf", f"scale='min({int(width)},iw)':-2"]
+    args += ["pipe:1"]
+    return _spawn(args, slot)
+
+
 def open_mp4_stream(url: str) -> tuple[subprocess.Popen, _Slot]:
     """Remux an RTSP playback stream into a downloadable MP4, without re-encoding.
 
@@ -514,6 +556,132 @@ def open_mp4_stream(url: str) -> tuple[subprocess.Popen, _Slot]:
         "+genpts",
         "-avoid_negative_ts",
         "make_zero",
+        "-f",
+        "mp4",
+        "-movflags",
+        "frag_keyframe+empty_moov+default_base_moof",
+        "pipe:1",
+    ]
+    return _spawn(args, slot)
+
+
+_video_encoder_cache: str | None = None
+
+
+def video_encoder() -> str:
+    """The encoder a picture-only export is built with: H.264 if we have it.
+
+    Kept footage is copied, never re-encoded — except a run of stills, which has
+    to become a video to be a file anyone can open. ``mpeg4`` is ffmpeg's own
+    encoder and exists in every build, so there is always an answer.
+    """
+    global _video_encoder_cache
+    if _video_encoder_cache is not None:
+        return _video_encoder_cache
+    path = ffmpeg_path()
+    choice = "mpeg4"
+    if path:
+        try:
+            completed = subprocess.run(
+                [path, "-hide_banner", "-encoders"],
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if re.search(r"^\s*V\S*\s+libx264\s", completed.stdout.decode("utf-8", "replace"), re.M):
+                choice = "libx264"
+        except (OSError, subprocess.SubprocessError):
+            pass
+    _video_encoder_cache = choice
+    return choice
+
+
+def open_mp4_from_concat(
+    list_path: str, *, with_audio: bool, hevc: bool = False
+) -> tuple[subprocess.Popen, _Slot]:
+    """Kept video clips, joined, as a fragmented MP4 on a pipe.
+
+    ``list_path`` is an ffconcat file naming each clip with its in/out points.
+    Video is copied; sound, when every clip has it, is re-encoded to AAC —
+    recorders record G.711, which MP4 cannot hold, and the exported file has to
+    open on any phone.
+    """
+    ffmpeg = ffmpeg_path()
+    if not ffmpeg:
+        raise TranscodeUnavailable(
+            "Exporting video needs ffmpeg, which is not installed on this server."
+        )
+    slot = reserve_slot()
+    args = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(list_path),
+        "-map",
+        "0:v:0",
+    ]
+    if with_audio:
+        args += ["-map", "0:a:0", "-c:a", "aac", "-b:a", "64k"]
+    else:
+        args += ["-an"]
+    args += ["-c:v", "copy"]
+    if hevc:
+        # Apple's players only open HEVC in MP4 under this tag.
+        args += ["-tag:v", "hvc1"]
+    args += [
+        "-fflags",
+        "+genpts",
+        "-avoid_negative_ts",
+        "make_zero",
+        "-f",
+        "mp4",
+        "-movflags",
+        "frag_keyframe+empty_moov+default_base_moof",
+        "pipe:1",
+    ]
+    return _spawn(args, slot)
+
+
+def open_mp4_from_pictures(list_path: str) -> tuple[subprocess.Popen, _Slot]:
+    """A run of kept stills as a video file, each shown for as long as it lasted."""
+    ffmpeg = ffmpeg_path()
+    if not ffmpeg:
+        raise TranscodeUnavailable(
+            "Exporting video needs ffmpeg, which is not installed on this server."
+        )
+    slot = reserve_slot()
+    encoder = video_encoder()
+    args = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(list_path),
+        "-vf",
+        "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
+        "-r",
+        "5",
+        "-c:v",
+        encoder,
+    ]
+    if encoder == "mpeg4":
+        args += ["-q:v", "4"]
+    else:
+        args += ["-preset", "veryfast", "-crf", "26"]
+    args += [
         "-f",
         "mp4",
         "-movflags",

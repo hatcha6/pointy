@@ -65,6 +65,7 @@ void main() {
     'enable_surveillance': false,
     'surveillance_pre_roll_seconds': 20,
     'surveillance_post_roll_seconds': 40,
+    'surveillance_archive_retention_days': 30,
     'inventory_valuation_method': 'moving_average',
   };
 
@@ -109,6 +110,7 @@ void main() {
     'enable_surveillance': true,
     'surveillance_pre_roll_seconds': 35,
     'surveillance_post_roll_seconds': 75,
+    'surveillance_archive_retention_days': 90,
     'inventory_valuation_method': 'fifo',
   };
 

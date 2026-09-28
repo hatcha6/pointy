@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import '../../core/result.dart';
 import '../models/camera.dart';
+import '../services/lan_interfaces.dart';
+import '../services/machine_lan_address.dart';
 import '../services/pos_api_service.dart';
 import '../services/surveillance_api_client.dart';
 
@@ -9,9 +11,45 @@ import '../services/surveillance_api_client.dart';
 /// repository. The frame streams are deliberately *not* wrapped: a video stream
 /// fails mid-flight, not once, so its errors belong on the stream.
 class SurveillanceRepository {
-  const SurveillanceRepository(this._service);
+  const SurveillanceRepository(
+    this._service, {
+    MachineAddressReader readAddresses = readMachineIpv4Addresses,
+  }) : _readAddresses = readAddresses;
 
   final PosApiService _service;
+  final MachineAddressReader _readAddresses;
+
+  /// The address a DVR on the shop network reaches the Pointy server at, or
+  /// null when this device cannot tell.
+  ///
+  /// It is the address this device reaches the backend on — with loopback
+  /// swapped for the machine's own LAN address on the server PC itself, the
+  /// same swap the companion QR makes. The backend cannot work this out: it
+  /// runs in a container that sees none of the shop's network. Null over the
+  /// relay, where the address is the relay's, not the shop's.
+  Future<String?> ftpServerAddress() async {
+    try {
+      final url = await lanReachableUrl(
+        _service.baseUrl,
+        readAddresses: _readAddresses,
+      );
+      return lanIpv4HostOf(url);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<Result<Recorder>> loadRecorder(int id) {
+    return Result.guard(() => _service.fetchRecorder(id));
+  }
+
+  Future<Result<Recorder>> regenerateFtpPassword(int id) {
+    return Result.guard(() => _service.regenerateFtpPassword(id));
+  }
+
+  Future<Result<Recorder>> setFtpAddress(int id, String host) {
+    return Result.guard(() => _service.setFtpAddress(id, host));
+  }
 
   Future<Result<SurveillanceStatus>> loadStatus() {
     return Result.guard(() => _service.fetchSurveillanceStatus());

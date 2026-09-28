@@ -894,16 +894,29 @@ foreach ($task in @($TaskName, $ProbeTask)) {
         Write-TextFile -Path (Join-Path $Work "windows\task-$task.xml") -Text $xml
     } catch { }
 }
+# What the supervisor's last reconcile found, including the FTP ports it
+# forwarded for camera uploads (21 and 30000-30019 unless the .env moved them).
+$bridgeState = $null
+$ftpPorts = @(21) + @(30000..30019)
+try {
+    $bridgeState = Get-Content -Raw (Join-Path $InstallRoot "bridge-state.json") -ErrorAction Stop | ConvertFrom-Json
+    if ($bridgeState.ftp_port -and $bridgeState.ftp_passive_ports) {
+        $bounds = @("$($bridgeState.ftp_passive_ports)" -split '-')
+        $ftpPorts = @([int]$bridgeState.ftp_port) + @([int]$bounds[0]..[int]$bounds[-1])
+    }
+} catch { }
 Save-Section "windows\network.txt" {
     "## portproxy (the LAN bridge)"
     (Invoke-Native "netsh.exe" @("interface", "portproxy", "show", "v4tov4")).Output
-    "## listeners on the Pointy ports"
-    foreach ($port in @(8000, 80)) {
-        Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-            Select-Object LocalAddress, LocalPort, OwningProcess,
-                @{ n = "Process"; e = { (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName } } |
-            Format-Table -AutoSize
-    }
+    "## listeners on the Pointy ports (tills: 8000 and 80; FTP camera uploads: $($ftpPorts[0]) and the data ports)"
+    $watched = @(8000, 80) + $ftpPorts
+    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $watched -contains [int]$_.LocalPort } | Sort-Object LocalPort |
+        Select-Object LocalAddress, LocalPort, OwningProcess,
+            @{ n = "Process"; e = { (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName } } |
+        Format-Table -AutoSize
+    "## port ranges Windows keeps from programs (Hyper-V's NAT takes blocks at boot; * = an operator's own)"
+    (Invoke-Native "netsh.exe" @("interface", "ipv4", "show", "excludedportrange", "protocol=tcp")).Output
     "## IPv4 addresses"
     Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Select-Object InterfaceAlias, IPAddress, PrefixLength, AddressState | Format-Table -AutoSize
@@ -913,7 +926,10 @@ Save-Section "windows\network.txt" {
     Get-NetFirewallProfile -PolicyStore ActiveStore -ErrorAction SilentlyContinue |
         Select-Object Name, Enabled, DefaultInboundAction, AllowLocalFirewallRules | Format-Table -AutoSize
     Get-NetFirewallRule -DisplayName "Pointy*" -ErrorAction SilentlyContinue |
-        Select-Object DisplayName, Enabled, Direction, Action, Profile | Format-Table -AutoSize
+        Select-Object DisplayName, Enabled, Direction, Action, Profile,
+            @{ n = "Ports"; e = { ($_ | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue).LocalPort -join "," } },
+            @{ n = "From"; e = { ($_ | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue).RemoteAddress -join "," } } |
+        Format-Table -AutoSize
     "## security products"
     Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName AntiVirusProduct -ErrorAction SilentlyContinue |
         Select-Object displayName, productState | Format-Table -AutoSize
@@ -1211,6 +1227,10 @@ if ($before.State -eq "stopped") {
 if (-not $vmBefore) { Add-Finding "!! The WSL VM itself was not running (no vmmem process)." }
 if ($before.State -eq "running" -and $probes["http://127.0.0.1:8000/healthz-edge"] -ne "200") {
     Add-Finding "!  The distro was running but http://127.0.0.1:8000/healthz-edge answered: $($probes['http://127.0.0.1:8000/healthz-edge'])."
+}
+if ($bridgeState -and $bridgeState.ftp_verified -eq $false) {
+    Add-Finding ("!  The last bridge check found FTP camera uploads unreachable from the LAN (ports $($bridgeState.ftp_port) " +
+                 "and $($bridgeState.ftp_passive_ports)); bootstrap.log names the broken hop.")
 }
 if ($gaps.Count) {
     Add-Finding "!  bootstrap.log shows $($gaps.Count) stretch(es) of over 11 minutes with no $TaskName run (listed below)."

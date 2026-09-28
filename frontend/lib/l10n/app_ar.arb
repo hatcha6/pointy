@@ -17180,5 +17180,248 @@
   "balanceEntryEmployeeAdjustmentHint": "مبلغ على الموظف أو له خارج مسير الرواتب — مكافأة، عجز، مصروف دفعه عن المحل. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ويُحتسب ضمن تكلفة الرواتب يوم تسجيله.",
   "@balanceEntryEmployeeAdjustmentHint": {
     "description": "Entry dialog hint: an employee balance adjustment."
+  },
+  "recorderConnectionChoiceTitle": "كيف يتصل جهاز التسجيل بدفتر؟",
+  "@recorderConnectionChoiceTitle": {
+    "description": "Title of the sheet that asks how a new recorder connects."
+  },
+  "recorderConnectionDirectTitle": "اتصال مباشر",
+  "@recorderConnectionDirectTitle": {
+    "description": "Connection choice: the server dials the recorder."
+  },
+  "recorderConnectionDirectBody": "يتصل دفتر بجهاز التسجيل على الشبكة: عرض مباشر، وتشغيل التسجيلات من قرص الجهاز نفسه.",
+  "@recorderConnectionDirectBody": {
+    "description": "Explains the direct connection choice."
+  },
+  "recorderConnectionFtpTitle": "رفع التسجيلات عبر FTP",
+  "@recorderConnectionFtpTitle": {
+    "description": "Connection choice: the recorder uploads footage to Pointy."
+  },
+  "recorderConnectionFtpBody": "يرفع جهاز التسجيل لقطاته إلى دفتر، ويُحفظ منها وقت الفواتير فقط. يعمل مع أي جهاز فيه صفحة FTP، ويبقى محفوظاً بعد أن يمسح الجهاز قرصه. بلا عرض مباشر.",
+  "@recorderConnectionFtpBody": {
+    "description": "Explains the FTP upload choice."
+  },
+  "ftpFormTitle": "إعداد رفع FTP",
+  "@ftpFormTitle": {
+    "description": "Title of the form that creates or edits an FTP upload setup."
+  },
+  "ftpFormIntro": "اكتب اسماً لهذا الجهاز ثم احفظ، لتظهر بيانات الدخول التي تُكتب في صفحة FTP على جهاز التسجيل.",
+  "@ftpFormIntro": {
+    "description": "Intro text on the FTP setup form."
+  },
+  "ftpFormCreateAction": "إنشاء بيانات الدخول",
+  "@ftpFormCreateAction": {
+    "description": "Button that creates an FTP setup and its credentials."
+  },
+  "ftpConnectionTitle": "بيانات اتصال FTP",
+  "@ftpConnectionTitle": {
+    "description": "Title of the page showing an FTP setup's credentials and status."
+  },
+  "ftpConnectionIntro": "افتح إعدادات الشبكة ثم FTP في جهاز التسجيل، واكتب هذه القيم كما هي.",
+  "@ftpConnectionIntro": {
+    "description": "Instruction above the FTP credentials."
+  },
+  "ftpServerLabel": "عنوان الخادم",
+  "@ftpServerLabel": {
+    "description": "Label: the FTP server address to type into the DVR."
+  },
+  "ftpPortLabel": "المنفذ",
+  "@ftpPortLabel": {
+    "description": "Label: the FTP port."
+  },
+  "ftpUsernameLabel": "اسم المستخدم",
+  "@ftpUsernameLabel": {
+    "description": "Label: the FTP username."
+  },
+  "ftpPasswordLabel": "كلمة المرور",
+  "@ftpPasswordLabel": {
+    "description": "Label: the FTP password."
+  },
+  "ftpPasswordHidden": "لا تملك صلاحية عرض كلمة المرور.",
+  "@ftpPasswordHidden": {
+    "description": "Shown instead of the FTP password to a user who may not change recorders."
+  },
+  "ftpCopyTooltip": "نسخ",
+  "@ftpCopyTooltip": {
+    "description": "Tooltip of the copy button beside an FTP credential."
+  },
+  "ftpCopiedMessage": "تم النسخ",
+  "@ftpCopiedMessage": {
+    "description": "Snackbar after copying an FTP credential."
+  },
+  "ftpAddressUnknown": "افتح هذه الصفحة من جهاز داخل المحل ليظهر عنوان الخادم.",
+  "@ftpAddressUnknown": {
+    "description": "Shown when this device cannot tell the server's LAN address (e.g. connected through the relay)."
+  },
+  "ftpPassivePortsHint": "يحتاج جهاز التسجيل أيضاً إلى الوصول إلى المنافذ {ports} على الخادم.",
+  "@ftpPassivePortsHint": {
+    "description": "Note about the FTP passive port range.",
+    "placeholders": {
+      "ports": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStepsTitle": "في جهاز التسجيل",
+  "@ftpStepsTitle": {
+    "description": "Heading of the DVR-side setup steps."
+  },
+  "ftpStepEnter": "فعّل FTP، واكتب عنوان الخادم والمنفذ واسم المستخدم وكلمة المرور.",
+  "@ftpStepEnter": {
+    "description": "DVR setup step 1."
+  },
+  "ftpStepSchedule": "اختر رفع التسجيلات لكاميرات الكاشير على مدار اليوم — أو الصور إن كان الجهاز لا يرفع غيرها.",
+  "@ftpStepSchedule": {
+    "description": "DVR setup step 2."
+  },
+  "ftpStepTest": "اضغط «اختبار» ثم احفظ. تظهر حالة الاتصال هنا خلال ثوانٍ.",
+  "@ftpStepTest": {
+    "description": "DVR setup step 3."
+  },
+  "ftpStatusWaiting": "بانتظار أول اتصال من جهاز التسجيل",
+  "@ftpStatusWaiting": {
+    "description": "FTP status: nothing has connected yet."
+  },
+  "ftpStatusLoggedIn": "اتصل جهاز التسجيل {time} ولم يرفع شيئاً بعد — تأكد من تفعيل الرفع وجدوله.",
+  "@ftpStatusLoggedIn": {
+    "description": "FTP status: the DVR logged in but has uploaded nothing.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStatusReceiving": "يصل الرفع — آخر ملف {time}",
+  "@ftpStatusReceiving": {
+    "description": "FTP status: uploads are arriving.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStatusStale": "لم يصل أي ملف منذ {time}",
+  "@ftpStatusStale": {
+    "description": "FTP status: uploads stopped a while ago.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStatusWrongPassword": "جهاز على {address} يحاول الدخول بكلمة مرور خاطئة.",
+  "@ftpStatusWrongPassword": {
+    "description": "FTP warning: repeated wrong password.",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStatusUnknownUser": "جهاز على {address} حاول الدخول باسم مستخدم غير معروف «{username}».",
+  "@ftpStatusUnknownUser": {
+    "description": "FTP warning: a login with an unknown username.",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStatusWrongPasswordNoAddress": "جهاز يحاول الدخول بكلمة مرور خاطئة.",
+  "@ftpStatusWrongPasswordNoAddress": {
+    "description": "FTP warning: repeated wrong password, when the server cannot tell the device's address (a Windows server forwards every device through one address)."
+  },
+  "ftpStatusUnknownUserNoAddress": "جهاز حاول الدخول باسم مستخدم غير معروف «{username}».",
+  "@ftpStatusUnknownUserNoAddress": {
+    "description": "FTP warning: a login with an unknown username, when the server cannot tell the device's address.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStatusServerDown": "خادم FTP لا يعمل الآن على الخادم. أعد تشغيل خدمات دفتر أو تواصل مع الدعم.",
+  "@ftpStatusServerDown": {
+    "description": "FTP error: the FTP service is not running."
+  },
+  "ftpStatusRefusingDisk": "قرص الخادم شبه ممتلئ، لذلك يرفض الخادم الرفع مؤقتاً.",
+  "@ftpStatusRefusingDisk": {
+    "description": "FTP warning: uploads refused because the disk is at its floor."
+  },
+  "ftpStatusRefusingInbox": "تتراكم ملفات بانتظار المعالجة، لذلك يرفض الخادم الرفع مؤقتاً.",
+  "@ftpStatusRefusingInbox": {
+    "description": "FTP warning: uploads refused because the inbox backed up."
+  },
+  "ftpStatusUnreadable": "تعذّرت قراءة بعض الملفات المرفوعة: {error}",
+  "@ftpStatusUnreadable": {
+    "description": "FTP warning: some uploads could not be read.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpStatsLine": "وصل {received} · حُفظ {kept} · حُذف {discarded}",
+  "@ftpStatsLine": {
+    "description": "FTP counters: files received, kept, discarded.",
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "kept": {
+        "type": "String"
+      },
+      "discarded": {
+        "type": "String"
+      }
+    }
+  },
+  "ftpRegenerateAction": "كلمة مرور جديدة",
+  "@ftpRegenerateAction": {
+    "description": "Button that regenerates the FTP password."
+  },
+  "ftpRegenerateConfirmTitle": "إنشاء كلمة مرور جديدة؟",
+  "@ftpRegenerateConfirmTitle": {
+    "description": "Confirmation title before regenerating the FTP password."
+  },
+  "ftpRegenerateConfirmBody": "تتوقف كلمة المرور الحالية خلال ثوانٍ، ويجب كتابة الجديدة في جهاز التسجيل.",
+  "@ftpRegenerateConfirmBody": {
+    "description": "Confirmation body before regenerating the FTP password."
+  },
+  "ftpDetailsAction": "بيانات الاتصال",
+  "@ftpDetailsAction": {
+    "description": "Recorder card action that opens the FTP credentials page."
+  },
+  "ftpArchiveOnlyLabel": "بلا بث مباشر — تُحفظ لحظات الفواتير",
+  "@ftpArchiveOnlyLabel": {
+    "description": "Camera row note for an FTP (archive-only) camera."
+  },
+  "ftpNoCamerasYet": "تظهر الكاميرات هنا بعد أول رفع منها.",
+  "@ftpNoCamerasYet": {
+    "description": "Recorder card note: an FTP setup's cameras appear after they upload."
+  },
+  "ftpRetentionLabel": "مدة حفظ لقطات الفواتير",
+  "@ftpRetentionLabel": {
+    "description": "Label of the archive retention setting."
+  },
+  "ftpRetentionValue": "{count, plural, =1{يوم واحد} =2{يومان} few{{count} أيام} many{{count} يوماً} other{{count} يوم}}",
+  "@ftpRetentionValue": {
+    "description": "The archive retention in days.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "ftpRetentionHint": "تُحذف الأقدم أولاً إن احتاج القرص المساحة.",
+  "@ftpRetentionHint": {
+    "description": "Hint under the retention setting."
+  },
+  "ftpRetentionInvalid": "اكتب عدداً من 1 إلى 3650.",
+  "@ftpRetentionInvalid": {
+    "description": "Validation message for the retention days."
   }
 }

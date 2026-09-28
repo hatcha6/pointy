@@ -15,7 +15,8 @@
       within seconds if WSL stops it (a WSL update, `wsl --shutdown`, a crash);
     - it asks the distro's own watchdog to bring the stack up;
     - it points the LAN forward (netsh portproxy) at the VM's current address,
-      and checks the path a till takes every minute.
+      and checks the path a till takes every minute. The DVRs' FTP ports
+      (camera uploads) are forwarded alongside.
 
   It runs only while Windows is signed in to the account that owns the Pointy
   distro, so that account should sign in automatically after a restart.
@@ -394,16 +395,51 @@ function Set-PortProxy {
 }
 
 # The same rule names the Pointy installer uses, so nothing is duplicated.
+# -Port is one port or a range; -RemoteAddress narrows who may connect.
 function Add-FirewallRule {
-    param([string]$Name, [int]$Port)
+    param([string]$Name, [string]$Port, [string[]]$RemoteAddress = @())
     try {
         if (Get-NetFirewallRule -DisplayName $Name -ErrorAction SilentlyContinue) { return }
-        New-NetFirewallRule -DisplayName $Name -Direction Inbound -Action Allow `
-            -Protocol TCP -LocalPort $Port -Profile Any -ErrorAction Stop | Out-Null
+        $rule = @{ DisplayName = $Name; Direction = "Inbound"; Action = "Allow"; Protocol = "TCP"
+                   LocalPort = $Port; Profile = "Any"; ErrorAction = "Stop" }
+        if ($RemoteAddress) { $rule.RemoteAddress = $RemoteAddress }
+        New-NetFirewallRule @rule | Out-Null
         Write-Log "opened the firewall for inbound TCP ${Port}"
     } catch {
         Write-Log "could not add firewall rule '${Name}': $($_.Exception.Message)" "WARN"
     }
+}
+
+# FTP upload setups: the ports DVRs upload to, as the stack's .env sets them
+# (lines of `grep ^POINTY_FTP_`), with docker-compose.yml's defaults. The same
+# reading as bootstrap-wsl.ps1's; $null when they must not be forwarded.
+function ConvertFrom-FtpEnv {
+    param([string]$Text)
+    $port = 21; $low = 30000; $high = 30019
+    foreach ($line in (($Text -replace "`0", "") -split "`r?`n")) {
+        if ($line -match '^\s*POINTY_FTP_PUBLIC_PORT\s*=\s*["'']?(\d{1,5})["'']?\s*(#.*)?$') {
+            $port = [int]$Matches[1]
+        } elseif ($line -match '^\s*POINTY_FTP_PASSIVE_PORTS\s*=\s*["'']?(\d{1,5}(-\d{1,5})?)["'']?\s*(#.*)?$') {
+            $bounds = @($Matches[1] -split '-')
+            $low = [int]$bounds[0]
+            $high = [int]$bounds[-1]
+        }
+    }
+    if ($port -lt 1 -or $port -gt 65535 -or $low -lt 1024 -or $high -lt $low -or $high -gt 65535 -or
+        ($port -ge $low -and $port -le $high) -or ($high - $low + 1 -gt 100)) {
+        Write-Log ("the FTP ports in ${GuestDir}/.env (POINTY_FTP_PUBLIC_PORT=${port}, POINTY_FTP_PASSIVE_PORTS=" +
+                   "${low}-${high}) cannot be forwarded (at most 100 data ports); FTP camera uploads are not bridged") "ERROR"
+        return $null
+    }
+    $range = "$low"
+    if ($high -gt $low) { $range = "${low}-${high}" }
+    return [pscustomobject]@{ Port = $port; Passive = @($low..$high); Range = $range }
+}
+
+function Get-FtpPorts {
+    # Exit 1 is "no such line" and 2 "no .env yet": both leave the defaults.
+    $r = Invoke-Guest "grep '^POINTY_FTP_' '${GuestDir}/.env'" -TimeoutSec 60
+    return (ConvertFrom-FtpEnv -Text $r.Output)
 }
 
 function Update-LanBridge {
@@ -412,6 +448,16 @@ function Update-LanBridge {
     foreach ($port in @($ApiPort, $WebPort)) { Set-PortProxy -Port $port -Target $WslIp -Force:$Force }
     Add-FirewallRule -Name "Pointy API (TCP $ApiPort)" -Port $ApiPort
     Add-FirewallRule -Name "Pointy Web (TCP $WebPort)" -Port $WebPort
+    # DVRs uploading over FTP dial this PC too: the control port, and a data
+    # port per transfer, each forwarded 1:1. Private addresses only, since the
+    # backend sees every DVR as this PC and cannot tell a stranger from one.
+    $ftp = Get-FtpPorts
+    if ($ftp) {
+        foreach ($port in @($ftp.Port) + @($ftp.Passive)) { Set-PortProxy -Port $port -Target $WslIp -Force:$Force }
+        $lan = @("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
+        Add-FirewallRule -Name "Pointy FTP (TCP $($ftp.Port))" -Port "$($ftp.Port)" -RemoteAddress $lan
+        Add-FirewallRule -Name "Pointy FTP data (TCP $($ftp.Range))" -Port $ftp.Range -RemoteAddress $lan
+    }
 }
 
 # One of OUR front doors answering, not whatever else holds the port. No proxy:

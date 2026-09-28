@@ -35,6 +35,10 @@ dependencies = [
   # reading its amount, so a source install without tesseract still works.
   "pytesseract>=0.3,<1",
   "requests>=2.32,<3",
+  # The FTP server DVRs upload footage to (apps.surveillance.ftp). Pure
+  # Python, MIT; on 3.12+ it brings pyasyncore/pyasynchat, the stdlib modules
+  # it was built on before they were removed.
+  "pyftpdlib>=2.2,<3",
   # Reads a barcode out of a PHOTOGRAPH, for the companion camera. The phone
   # decodes in the browser first (instant, no network), but that decoder is
   # jsQR: clean-image only, and QR only — so on an iPhone, which has no

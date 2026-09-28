@@ -265,6 +265,12 @@ WIPED_MODELS = (
     # catalogue of deleted products must come back through the login screen,
     # not carry on. The account running the reset is signed in again at the end.
     "sessions.session",
+    # surveillance — footage kept from FTP uploads is footage OF the invoices
+    # this wipes (its files go with it, see _stored_files_to_discard), and the
+    # uploads still waiting for a decision would be decided against sales that
+    # no longer exist. The recorders, cameras and FTP logins are configuration.
+    "surveillance.footageclip",
+    "surveillance.footageupload",
     # treasury — counts and transfers. The money accounts are the seeded chart.
     "treasury.moneycount",
     "treasury.moneytransfer",
@@ -318,6 +324,7 @@ KEPT_MODELS = {
     "scales.scale": "A configured weighing scale.",
     "surveillance.recorder": "A configured DVR.",
     "surveillance.camera": "A configured camera.",
+    "surveillance.ftpaccount": "The FTP login a DVR has been configured with.",
     "price_checker.pricecheckerdevice": "A configured kiosk.",
     "payments.cardterminal": "A configured card terminal.",
     "messaging.messaginggateway": "The shop's SMS switch, pace and quiet hours.",
@@ -605,6 +612,17 @@ def _stored_files_to_discard() -> list:
                 "factory reset could not resolve the file for attachment %s",
                 attachment.pk,
             )
+
+    # Kept invoice footage. The cameras survive the reset, so nothing else
+    # would ever notice a clip file whose row a TRUNCATE took.
+    from apps.surveillance.archive import storage as footage_storage
+    from apps.surveillance.models import FootageClip
+
+    for relative in FootageClip.objects.values_list("path", flat=True).iterator():
+        try:
+            paths.append(footage_storage.archive_file(relative))
+        except Exception:  # noqa: BLE001
+            logger.warning("factory reset could not resolve footage clip %s", relative)
     return paths
 
 

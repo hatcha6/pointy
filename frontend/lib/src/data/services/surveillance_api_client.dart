@@ -93,6 +93,46 @@ class SurveillanceApiClient {
     );
   }
 
+  Future<Recorder> fetchRecorder(int id) async {
+    final response = await _session.get('surveillance/recorders/$id/');
+    _session.ensureSuccess(response, 'Recorder request failed with status');
+    return _recorderFrom(response);
+  }
+
+  /// A new FTP password for the DVR. The old one stops working within seconds,
+  /// so the caller shows the new one straight away.
+  Future<Recorder> regenerateFtpPassword(int id) async {
+    final response = await _session.post(
+      'surveillance/recorders/$id/ftp/password/',
+    );
+    _session.ensureSuccess(
+      response,
+      'Regenerating the FTP password failed with status',
+    );
+    return _recorderFrom(response);
+  }
+
+  /// Records the server address this device is showing the installer, so the
+  /// FTP server announces that same address to the DVR.
+  Future<Recorder> setFtpAddress(int id, String host) async {
+    final response = await _session.post(
+      'surveillance/recorders/$id/ftp/address/',
+      body: {'host': host},
+    );
+    _session.ensureSuccess(
+      response,
+      'Saving the FTP server address failed with status',
+    );
+    return _recorderFrom(response);
+  }
+
+  Recorder _recorderFrom(dynamic response) {
+    final decoded = _session.decodedBody(response);
+    return Recorder.fromJson(
+      decoded is Map<String, Object?> ? decoded : const {},
+    );
+  }
+
   Future<List<Camera>> fetchCameras({bool enabledOnly = false}) async {
     final response = await _session.get(
       'surveillance/cameras/',
@@ -575,7 +615,6 @@ class MjpegParser {
     return -1;
   }
 }
-
 
 /// Thrown when the server has measured a channel and found no microphone.
 ///

@@ -112,7 +112,10 @@ PowerShell on Windows, with internet access). You only need:
    `bootstrap-wsl.ps1` adds both rules for you. **UDP 47777** (LAN discovery)
    is worth opening on Linux hosts; on Windows it cannot help, because
    broadcasts do not cross the WSL VM's NAT — the tills fall back to an HTTP
-   subnet sweep instead and find the server anyway.
+   subnet sweep instead and find the server anyway. For DVRs that upload over
+   FTP, also **TCP 21** and **TCP 30000-30019** (`POINTY_FTP_PUBLIC_PORT`,
+   `POINTY_FTP_PASSIVE_PORTS`), from the shop network only; on Windows the
+   bootstrap adds those rules too.
 
 The backend runs migrations on startup, then serves the API on port 8000 (and
 redeems the license first when licensing is enabled). Celery and the relay
@@ -334,6 +337,37 @@ Two consequences worth knowing:
   unaffected, but the per-IP login throttle (`DJANGO_THROTTLE_LOGIN`, default
   `30/min`) becomes a *shop-wide* ceiling instead of a per-device one. Raise it
   in `.env` for a busy shop with many tills.
+
+#### Windows: DVRs uploading over FTP
+
+FTP upload setups (`SURVEILLANCE_FTP_PLAN.md`) cross the same bridge. Every
+`-Boot` run reads `POINTY_FTP_PUBLIC_PORT` and `POINTY_FTP_PASSIVE_PORTS` from
+the stack's `.env` (21 and 30000-30019 by default), forwards the control port
+and **each passive port on its own** (a DVR is told to dial them one by one),
+and adds the firewall rules *Pointy FTP (TCP 21)* and *Pointy FTP data (TCP
+30000-30019)*, open to private addresses only. It then proves them: the `ftp`
+service's own greeting from Windows to the VM and on each LAN address, and a
+listening forward for every passive port. Anything broken is named in
+`bootstrap.log`, and the result is kept in `bridge-state.json`
+(`ftp_verified`); a broken FTP bridge never counts against the tills'.
+
+The usual culprits, and their fixes:
+
+- **Something already holds port 21** — most often IIS's FTP server (service
+  `ftpsvc`; the log names it). Stop it, or set `POINTY_FTP_PUBLIC_PORT` to a
+  free port in `.env`, re-run `install.sh` inside the distro, and type the new
+  port into each DVR.
+- **Windows reserved the passive ports.** Hyper-V's NAT takes random blocks of
+  the dynamic range (49152 and up) at every boot; `netsh interface ipv4 show
+  excludedportrange protocol=tcp` lists them. The default range sits below it
+  for that reason. If the log names a reserved block, move
+  `POINTY_FTP_PASSIVE_PORTS` out of it and re-run `install.sh`.
+
+Every DVR reaches the `ftp` service from the Windows host's own address, so on
+WSL the service locks out a *username* after repeated wrong passwords rather
+than that shared address, and records no DVR address (the setup page says "a
+device" instead). `POINTY_FTP_BEHIND_PROXY=auto` detects WSL; set it to `true`
+or `false` to override.
 
 #### Windows: what the installer changes on the PC
 

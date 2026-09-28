@@ -21,6 +21,7 @@ from datetime import timedelta, timezone as dt_timezone
 
 from django.conf import settings
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+from django.db import transaction
 from django.db.models import Count
 from django.core.handlers.asgi import ASGIRequest
 from django.http import Http404, HttpResponse, StreamingHttpResponse
@@ -41,12 +42,17 @@ from apps.sales.models import Order
 
 from . import breaker, budget, services, transcode
 from . import telemetry
+from .archive import playback as archive_playback
+from .archive import storage as archive_storage
 from .drivers import RecorderError, StreamQuality
+from .ftp import accounts as ftp_accounts
+from .ftp import status as ftp_status
 from .models import Camera, Recorder
 from .permissions import HasSurveillancePermission
 from .serializers import (
     CameraSerializer,
     DetectedChannelSerializer,
+    FtpHostSerializer,
     InvoiceFootageCameraSerializer,
     RecorderSerializer,
     RecorderTestSerializer,
@@ -439,6 +445,25 @@ def _breaker_response(exc):
     return response
 
 
+def _archive_only_response(camera):
+    """409: this camera exists only as footage its recorder uploaded.
+
+    Structural, like a recorder with no snapshot endpoint: nothing to retry and
+    nothing to back off from. A distinct ``code`` so a client that asked anyway
+    (an older till) can stop asking.
+    """
+    return Response(
+        {
+            "detail": (
+                f"{camera.display_name}: لا يوجد بث مباشر لهذه الكاميرا — "
+                "المسجل يرفع التسجيلات عبر FTP وتُحفظ لحظات الفواتير فقط."
+            ),
+            "code": "camera_archive_only",
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -454,19 +479,30 @@ class RecorderViewSet(viewsets.ModelViewSet):
         "destroy": ("surveillance.delete_recorder",),
         "test_connection": ("surveillance.change_recorder",),
         "sync": ("surveillance.change_recorder",),
+        "regenerate_ftp_password": ("surveillance.change_recorder",),
+        "set_ftp_address": ("surveillance.change_recorder",),
     }
-    queryset = Recorder.objects.annotate(camera_count=Count("cameras")).prefetch_related(
-        "cameras"
+    queryset = (
+        Recorder.objects.annotate(camera_count=Count("cameras"))
+        .select_related("ftp_account")
+        .prefetch_related("cameras")
     )
 
     def perform_create(self, serializer):
         recorder = serializer.save()
+        if recorder.is_ftp:
+            # Nothing to dial: the DVR connects to us. Its inbox exists from
+            # now, so its first upload lands without a race on the folder.
+            archive_storage.ensure_inbox(recorder.pk)
+            return
         # Connect immediately: a recorder saved and then silently never probed
         # leaves the shop looking at an empty camera list with no clue why.
         self._connect(recorder)
 
     def perform_update(self, serializer):
         recorder = serializer.save()
+        if recorder.is_ftp:
+            return
         # Address, port or credentials may have just been corrected, so whatever
         # tripped the breaker no longer describes this recorder. Cleared before
         # the re-probe so the shop's next look at the wall is a real attempt.
@@ -476,6 +512,18 @@ class RecorderViewSet(viewsets.ModelViewSet):
         # explicit limit on the form wins anyway; this only drops the guess.
         budget.forget(recorder.pk)
         self._connect(recorder)
+
+    def perform_destroy(self, instance):
+        camera_ids = list(instance.cameras.values_list("pk", flat=True))
+        recorder_id = instance.pk
+        is_ftp = instance.is_ftp
+        instance.delete()
+        if is_ftp or camera_ids:
+            # The rows are gone; the footage must go with them, and only once
+            # the delete has actually committed.
+            transaction.on_commit(
+                lambda: archive_storage.remove_recorder_files(recorder_id, camera_ids)
+            )
 
     def _connect(self, recorder):
         result = services.probe_recorder(recorder.as_target(), recorder.brand)
@@ -490,6 +538,14 @@ class RecorderViewSet(viewsets.ModelViewSet):
         commits — which is the difference between a confident install and a
         support call.
         """
+        if request.data.get("connection") == Recorder.Connection.FTP:
+            return Response(
+                {
+                    "ok": False,
+                    "error": "An FTP setup is not dialled: the recorder connects to Pointy.",
+                },
+                status=status.HTTP_200_OK,
+            )
         payload = RecorderTestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         data = payload.validated_data
@@ -530,6 +586,13 @@ class RecorderViewSet(viewsets.ModelViewSet):
     def sync(self, request, pk=None):
         """Re-probe a saved recorder and reconcile its channel list."""
         recorder = self.get_object()
+        if recorder.is_ftp:
+            # Its channels are whatever it uploads; there is nothing to probe.
+            # Answering with the current state keeps an older client's "sync"
+            # button harmless.
+            return Response(
+                RecorderSerializer(recorder, context=self.get_serializer_context()).data
+            )
         # An explicit re-probe is a person saying "try it now" — usually right
         # after fixing the thing that broke. Clear any cooldown first so the
         # answer they get is about the recorder, not about our backoff.
@@ -539,6 +602,43 @@ class RecorderViewSet(viewsets.ModelViewSet):
         services.apply_connection_result(recorder, result)
         recorder = self.get_queryset().get(pk=recorder.pk)
         return Response(RecorderSerializer(recorder).data)
+
+    def _ftp_account(self, recorder):
+        account = getattr(recorder, "ftp_account", None) if recorder.is_ftp else None
+        if account is None:
+            raise ValidationError({"connection": "This recorder is not an FTP setup."})
+        return account
+
+    @action(detail=True, methods=["post"], url_path="ftp/password")
+    def regenerate_ftp_password(self, request, pk=None):
+        """A new password for the DVR, for when the old one got out.
+
+        The old one stops working within one account refresh of the FTP
+        service (seconds), so the DVR must be given the new one straight away.
+        """
+        recorder = self.get_object()
+        ftp_accounts.regenerate_password(self._ftp_account(recorder))
+        recorder = self.get_queryset().get(pk=recorder.pk)
+        return Response(RecorderSerializer(recorder, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="ftp/address")
+    def set_ftp_address(self, request, pk=None):
+        """Store the server address the setup screen is showing.
+
+        The client works it out (it is on the shop's network; this container is
+        not) and reports it whenever it differs, so PASV keeps announcing the
+        address the DVR was actually configured with — including after the
+        server's IP changed and the installer typed the new one in.
+        """
+        recorder = self.get_object()
+        account = self._ftp_account(recorder)
+        payload = FtpHostSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        host = payload.validated_data["host"]
+        if host != account.advertised_host:
+            type(account).objects.filter(pk=account.pk).update(advertised_host=host)
+        recorder = self.get_queryset().get(pk=recorder.pk)
+        return Response(RecorderSerializer(recorder, context=self.get_serializer_context()).data)
 
 
 class CameraViewSet(
@@ -566,7 +666,13 @@ class CameraViewSet(
     def get_queryset(self):
         queryset = super().get_queryset()
         if self.action == "list" and self.request.query_params.get("enabled") == "true":
-            return queryset.filter(is_enabled=True, recorder__is_enabled=True)
+            # ``enabled=true`` is what the live surfaces ask for — the wall and
+            # the dashboard band — so it leaves out cameras that only exist as
+            # uploaded footage. Filtering here rather than in the client is what
+            # keeps an older till from drawing a tile that can only fail.
+            return queryset.filter(is_enabled=True, recorder__is_enabled=True).exclude(
+                recorder__connection=Recorder.Connection.FTP
+            )
         return queryset
 
 
@@ -605,6 +711,7 @@ class SurveillanceStatusView(APIView):
                 "max_live_fps": MAX_FPS if probe["available"] else MAX_SNAPSHOT_FPS,
                 "max_playback_fps": MAX_FPS if probe["available"] else 0,
                 "smooth_live_available": probe["available"],
+                "ftp_server": ftp_status.summary(),
                 "recorders": [
                     {
                         "id": recorder.pk,
@@ -612,6 +719,7 @@ class SurveillanceStatusView(APIView):
                         "status": recorder.status,
                         "last_error": recorder.last_error,
                         "brand": recorder.effective_brand,
+                        "connection": recorder.connection,
                     }
                     for recorder in recorders
                 ],
@@ -647,6 +755,8 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
 
     def get(self, request, pk):
         camera = self.get_camera(pk)
+        if camera.recorder.is_ftp:
+            return _archive_only_response(camera)
         quality = StreamQuality.normalize(
             request.query_params.get("quality") or camera.live_quality
         )
@@ -773,13 +883,6 @@ class CameraPlaybackStreamView(_CameraViewMixin, APIView):
 
     def get(self, request, pk):
         camera = self.get_camera(pk)
-        if not transcode.ffmpeg_available():
-            return _stream_error_response(
-                transcode.TranscodeUnavailable(
-                    "Playback needs ffmpeg, which is not installed on this server."
-                ),
-                code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
         start = _parse_moment(request.query_params.get("start"), "start")
         end = _parse_moment(request.query_params.get("end"), "end")
         try:
@@ -789,7 +892,10 @@ class CameraPlaybackStreamView(_CameraViewMixin, APIView):
         except ValueError as exc:
             raise ValidationError({"end": str(exc)}) from exc
 
-        speed = float(request.query_params.get("speed") or 1.0)
+        try:
+            speed = float(request.query_params.get("speed") or 1.0)
+        except (TypeError, ValueError):
+            speed = 1.0
         speed = max(0.25, min(speed, 16.0))
         fps = _parse_int(
             request.query_params.get("fps"),
@@ -797,10 +903,19 @@ class CameraPlaybackStreamView(_CameraViewMixin, APIView):
             minimum=1,
             maximum=MAX_FPS,
         )
+        width = _parse_int(request.query_params.get("width"), 0, minimum=0, maximum=1920)
+        if camera.recorder.is_ftp:
+            return _archive_playback(request, camera, start, end, speed=speed, fps=fps, width=width)
+        if not transcode.ffmpeg_available():
+            return _stream_error_response(
+                transcode.TranscodeUnavailable(
+                    "Playback needs ffmpeg, which is not installed on this server."
+                ),
+                code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         quality = StreamQuality.normalize(
             request.query_params.get("quality") or camera.playback_quality
         )
-        width = _parse_int(request.query_params.get("width"), 0, minimum=0, maximum=1920)
         key = services.stream_key(
             camera,
             mode=f"playback@{fps}x{width}",
@@ -871,6 +986,41 @@ class CameraPlaybackStreamView(_CameraViewMixin, APIView):
         return _stream_response(request, started.frames())
 
 
+def _archive_playback(request, camera, start, end, *, speed, fps, width):
+    """Kept footage for a window, through the same broker and wire format.
+
+    No breaker and no recorder budget: nothing here talks to the recorder.
+    """
+    key = services.stream_key(
+        camera,
+        mode=f"archive@{fps}x{width}",
+        quality="archive",
+        window=(start, end),
+        speed=speed,
+    )
+    report = telemetry.StreamReport(
+        camera_id=camera.pk,
+        recorder_id=camera.recorder_id,
+        brand="ftp",
+        mode="archive",
+        quality="archive",
+        requested_fps=fps,
+    )
+
+    def build_source():
+        return archive_playback.ArchiveSource(
+            camera, start, end, fps=fps, width=width, speed=speed, label=str(camera)
+        )
+
+    try:
+        started = _start_stream(key, build_source, report=report)
+    except transcode.TranscodeUnavailable as exc:
+        return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except StreamError as exc:
+        return _stream_error_response(exc, code=status.HTTP_404_NOT_FOUND)
+    return _stream_response(request, started.frames())
+
+
 class CameraSnapshotView(_CameraViewMixin, APIView):
     """One JPEG, now — the poster frame a tile shows before its stream opens."""
 
@@ -879,6 +1029,8 @@ class CameraSnapshotView(_CameraViewMixin, APIView):
 
     def get(self, request, pk):
         camera = self.get_camera(pk)
+        if camera.recorder.is_ftp:
+            return _archive_only_response(camera)
         quality = StreamQuality.normalize(
             request.query_params.get("quality") or camera.live_quality
         )
@@ -928,6 +1080,18 @@ class CameraStillView(_CameraViewMixin, APIView):
 
     def get(self, request, pk):
         camera = self.get_camera(pk)
+        if camera.recorder.is_ftp:
+            at = _parse_moment(request.query_params.get("at"), "at")
+            try:
+                payload = archive_playback.still(camera, at)
+            except StreamError as exc:
+                return _stream_error_response(exc, code=status.HTTP_404_NOT_FOUND)
+            response = HttpResponse(payload, content_type="image/jpeg")
+            stamp = at.astimezone(dt_timezone.utc).strftime("%Y%m%d-%H%M%S")
+            response["Content-Disposition"] = (
+                f'attachment; filename="camera-{camera.pk}-{stamp}.jpg"'
+            )
+            return response
         if not transcode.ffmpeg_available():
             return _stream_error_response(
                 transcode.TranscodeUnavailable(
@@ -1003,36 +1167,48 @@ class CameraExportView(_CameraViewMixin, APIView):
         quality = StreamQuality.normalize(
             request.query_params.get("quality") or camera.playback_quality
         )
-
-        driver = None
-        try:
-            driver = services.open_driver(camera.recorder)
-            url = driver.playback_rtsp_url(camera.channel, start, end, quality=quality)
-        except RecorderError as exc:
-            return _stream_error_response(exc)
-        finally:
-            if driver is not None:
-                driver.close()
-
-        try:
-            process, slot = transcode.open_mp4_stream(url)
-        except transcode.TranscodeUnavailable as exc:
-            return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
-
         stamp = start.astimezone(dt_timezone.utc).strftime("%Y%m%d-%H%M%S")
         filename = f"camera-{camera.pk}-{stamp}.mp4"
 
-        def chunks():
+        if camera.recorder.is_ftp:
             try:
-                while True:
-                    chunk = process.stdout.read(64 * 1024)
-                    if not chunk:
-                        return
-                    yield chunk
+                export = archive_playback.start_export(camera, start, end)
+            except transcode.TranscodeUnavailable as exc:
+                return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except StreamError as exc:
+                return _stream_error_response(exc, code=status.HTTP_404_NOT_FOUND)
+            try:
+                export.prime()
+            except StreamError as exc:
+                return _stream_error_response(exc)
+            stream = export.chunks()
+        else:
+            driver = None
+            try:
+                driver = services.open_driver(camera.recorder)
+                url = driver.playback_rtsp_url(camera.channel, start, end, quality=quality)
+            except RecorderError as exc:
+                return _stream_error_response(exc)
             finally:
-                transcode.stop(process, slot)
+                if driver is not None:
+                    driver.close()
 
-        stream = chunks()
+            try:
+                process, slot = transcode.open_mp4_stream(url)
+            except transcode.TranscodeUnavailable as exc:
+                return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            def chunks():
+                try:
+                    while True:
+                        chunk = process.stdout.read(64 * 1024)
+                        if not chunk:
+                            return
+                        yield chunk
+                finally:
+                    transcode.stop(process, slot)
+
+            stream = chunks()
         django_request = getattr(request, "_request", request)
         if isinstance(django_request, ASGIRequest):
             # Bounded: a remux outruns a relay-tunnel client easily, and an
@@ -1059,18 +1235,25 @@ class CameraRecordingsView(_CameraViewMixin, APIView):
         camera = self.get_camera(pk)
         start = _parse_moment(request.query_params.get("start"), "start")
         end = _parse_moment(request.query_params.get("end"), "end")
-        driver = None
-        try:
-            driver = services.open_driver(camera.recorder)
-            segments = driver.search_recordings(camera.channel, start, end)
-        except RecorderError as exc:
-            return _stream_error_response(exc)
-        finally:
-            if driver is not None:
-                driver.close()
+        if camera.recorder.is_ftp:
+            # Our own archive always knows: an empty list here really does
+            # mean nothing was kept, unlike a recorder that would not say.
+            segments = archive_playback.recording_segments(camera, start, end)
+            known = True
+        else:
+            driver = None
+            try:
+                driver = services.open_driver(camera.recorder)
+                segments = driver.search_recordings(camera.channel, start, end)
+            except RecorderError as exc:
+                return _stream_error_response(exc)
+            finally:
+                if driver is not None:
+                    driver.close()
+            known = bool(segments)
         return Response(
             {
-                "known": bool(segments),
+                "known": known,
                 "segments": RecordingSegmentSerializer(
                     [
                         {
@@ -1084,6 +1267,36 @@ class CameraRecordingsView(_CameraViewMixin, APIView):
                 ).data,
             }
         )
+
+
+def _footage_cameras(start, end):
+    """The checkout cameras for a window, the ones known to hold it first.
+
+    An FTP camera knows exactly what it kept, so it can say "I have this
+    invoice" or "I do not"; a direct recorder can only be asked by playing.
+    Known footage first, then the recorders that might have it, then the ones
+    known not to — the client opens on the first, so this is the difference
+    between a replay and a "no footage" message.
+    """
+    cameras = list(services.checkout_cameras())
+    for camera in cameras:
+        camera.has_footage = (
+            archive_playback.has_footage(camera, start, end)
+            if camera.recorder.is_ftp
+            else None
+        )
+    rank = {True: 0, None: 1, False: 2}
+    cameras.sort(key=lambda camera: rank[camera.has_footage])
+    return cameras
+
+
+def _playback_available(cameras) -> bool:
+    if not transcode.ffmpeg_available():
+        return False
+    return any(
+        camera.recorder.driver_capabilities["playback"] and camera.has_footage is not False
+        for camera in cameras
+    )
 
 
 class MomentFootageView(APIView):
@@ -1122,10 +1335,8 @@ class MomentFootageView(APIView):
         )
         start = anchor - timedelta(seconds=pre)
         end = anchor + timedelta(seconds=post)
-        cameras = list(services.checkout_cameras())
-        playback_available = transcode.ffmpeg_available() and any(
-            camera.recorder.driver_capabilities["playback"] for camera in cameras
-        )
+        cameras = _footage_cameras(start, end)
+        playback_available = _playback_available(cameras)
         return Response(
             {
                 "subject": subject,
@@ -1179,14 +1390,12 @@ class InvoiceFootageView(APIView):
             Order.objects.only("id", "created_at", "receipt_number"), pk=order_id
         )
         start, end = services.invoice_window(order)
-        cameras = list(services.checkout_cameras())
+        cameras = _footage_cameras(start, end)
         # ffmpeg is necessary but not sufficient: a recorder can be perfectly
         # reachable and still have no way to hand back stored video (a
         # Direct-RTSP box has no control protocol at all). Answering on ffmpeg
         # alone offered a player that could only fail.
-        playback_available = transcode.ffmpeg_available() and any(
-            camera.recorder.driver_capabilities["playback"] for camera in cameras
-        )
+        playback_available = _playback_available(cameras)
         return Response(
             {
                 "order_id": order.pk,
@@ -1256,6 +1465,8 @@ def _resolve_audio(camera) -> bool:
     """
     if camera.has_audio is not None:
         return camera.has_audio
+    if camera.recorder.is_ftp:
+        return False
     driver = services.open_driver(camera.recorder)
     try:
         url = driver.live_rtsp_url(camera.channel, quality=camera.live_quality)
@@ -1301,6 +1512,8 @@ class CameraAudioTicketView(_CameraViewMixin, APIView):
 
     def post(self, request, pk):
         camera = self.get_camera(pk)
+        if camera.recorder.is_ftp:
+            return _archive_only_response(camera)
         if not transcode.audio_available():
             return _stream_error_response(
                 transcode.TranscodeUnavailable(

@@ -93,6 +93,35 @@ Check "anchor not v069" ($line -like "*--exec /bin/sleep infinity*") $false
 # Arabic title
 Check "arabic" (ConvertFrom-CodePoint @(0x62F,0x641,0x62A,0x631)) ([string]::new([char[]]@([char]0x62F,[char]0x641,[char]0x62A,[char]0x631)))
 
+# FTP upload setups: the keeper forwards the DVRs' ports with the tills', read
+# from the stack's .env the same way bootstrap-wsl.ps1 does (bridge.ps1 tests
+# that reading in depth).
+$GuestDir = "/opt/pointy"; $ApiPort = 8000; $WebPort = 80
+$ftp = ConvertFrom-FtpEnv -Text ""
+Check "ftp default port" $ftp.Port 21
+Check "ftp default data ports" ("{0} {1} {2} {3}" -f $ftp.Passive[0], $ftp.Passive[-1], @($ftp.Passive).Count, $ftp.Range) "30000 30019 20 30000-30019"
+$ftp = ConvertFrom-FtpEnv -Text "POINTY_FTP_PUBLIC_PORT=2121`r`nPOINTY_FTP_PASSIVE_PORTS=`"31000-31004`" # off IIS`r`n"
+Check "ftp moved" ("{0} {1}" -f $ftp.Port, $ftp.Range) "2121 31000-31004"
+Check "ftp too wide" ($null -eq (ConvertFrom-FtpEnv -Text "POINTY_FTP_PASSIVE_PORTS=30000-40000")) $true
+
+$script:Forwarded = [System.Collections.ArrayList]::new()
+$script:Rules = [System.Collections.ArrayList]::new()
+$script:GuestCommand = ""
+function Enable-IpHelper { }
+function Set-PortProxy { param([int]$Port, [string]$Target, [switch]$Force) [void]$script:Forwarded.Add("${Port}>${Target}") }
+function Add-FirewallRule { param([string]$Name, [string]$Port, [string[]]$RemoteAddress = @())
+    [void]$script:Rules.Add("${Name}|${Port}|$($RemoteAddress -join ',')") }
+function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
+    $script:GuestCommand = $Command
+    return [pscustomobject]@{ ExitCode = 1; Output = "" } }
+Update-LanBridge -WslIp "172.28.150.9"
+$expected = @("8000>172.28.150.9", "80>172.28.150.9", "21>172.28.150.9") + @(30000..30019 | ForEach-Object { "${_}>172.28.150.9" })
+Check "keeper forwards the tills' and the DVRs' ports" ($script:Forwarded -join ",") ($expected -join ",")
+Check "keeper reads the .env with one plain grep" $script:GuestCommand "grep '^POINTY_FTP_' '/opt/pointy/.env'"
+Check "keeper opens FTP to private addresses only" (@($script:Rules | Where-Object {
+    $_ -like "Pointy FTP (TCP 21)|21|*192.168.0.0/16*" -or $_ -like "Pointy FTP data (TCP 30000-30019)|30000-30019|*10.0.0.0/8*" }).Count) 2
+Check "keeper leaves the tills' rules open to all" (@($script:Rules | Where-Object { $_ -eq "Pointy API (TCP 8000)|8000|" }).Count) 1
+
 Remove-Item -Recurse -Force $tmp
 Write-Host ("# keeper: {0} passed, {1} failed" -f $pass, $fail)
 if ($fail) { exit 1 }

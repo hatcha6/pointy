@@ -22575,4 +22575,184 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get balanceEntryEmployeeAdjustmentHint =>
       'مبلغ على الموظف أو له خارج مسير الرواتب — مكافأة، عجز، مصروف دفعه عن المحل. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ويُحتسب ضمن تكلفة الرواتب يوم تسجيله.';
+
+  @override
+  String get recorderConnectionChoiceTitle => 'كيف يتصل جهاز التسجيل بدفتر؟';
+
+  @override
+  String get recorderConnectionDirectTitle => 'اتصال مباشر';
+
+  @override
+  String get recorderConnectionDirectBody =>
+      'يتصل دفتر بجهاز التسجيل على الشبكة: عرض مباشر، وتشغيل التسجيلات من قرص الجهاز نفسه.';
+
+  @override
+  String get recorderConnectionFtpTitle => 'رفع التسجيلات عبر FTP';
+
+  @override
+  String get recorderConnectionFtpBody =>
+      'يرفع جهاز التسجيل لقطاته إلى دفتر، ويُحفظ منها وقت الفواتير فقط. يعمل مع أي جهاز فيه صفحة FTP، ويبقى محفوظاً بعد أن يمسح الجهاز قرصه. بلا عرض مباشر.';
+
+  @override
+  String get ftpFormTitle => 'إعداد رفع FTP';
+
+  @override
+  String get ftpFormIntro =>
+      'اكتب اسماً لهذا الجهاز ثم احفظ، لتظهر بيانات الدخول التي تُكتب في صفحة FTP على جهاز التسجيل.';
+
+  @override
+  String get ftpFormCreateAction => 'إنشاء بيانات الدخول';
+
+  @override
+  String get ftpConnectionTitle => 'بيانات اتصال FTP';
+
+  @override
+  String get ftpConnectionIntro =>
+      'افتح إعدادات الشبكة ثم FTP في جهاز التسجيل، واكتب هذه القيم كما هي.';
+
+  @override
+  String get ftpServerLabel => 'عنوان الخادم';
+
+  @override
+  String get ftpPortLabel => 'المنفذ';
+
+  @override
+  String get ftpUsernameLabel => 'اسم المستخدم';
+
+  @override
+  String get ftpPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get ftpPasswordHidden => 'لا تملك صلاحية عرض كلمة المرور.';
+
+  @override
+  String get ftpCopyTooltip => 'نسخ';
+
+  @override
+  String get ftpCopiedMessage => 'تم النسخ';
+
+  @override
+  String get ftpAddressUnknown =>
+      'افتح هذه الصفحة من جهاز داخل المحل ليظهر عنوان الخادم.';
+
+  @override
+  String ftpPassivePortsHint(String ports) {
+    return 'يحتاج جهاز التسجيل أيضاً إلى الوصول إلى المنافذ $ports على الخادم.';
+  }
+
+  @override
+  String get ftpStepsTitle => 'في جهاز التسجيل';
+
+  @override
+  String get ftpStepEnter =>
+      'فعّل FTP، واكتب عنوان الخادم والمنفذ واسم المستخدم وكلمة المرور.';
+
+  @override
+  String get ftpStepSchedule =>
+      'اختر رفع التسجيلات لكاميرات الكاشير على مدار اليوم — أو الصور إن كان الجهاز لا يرفع غيرها.';
+
+  @override
+  String get ftpStepTest =>
+      'اضغط «اختبار» ثم احفظ. تظهر حالة الاتصال هنا خلال ثوانٍ.';
+
+  @override
+  String get ftpStatusWaiting => 'بانتظار أول اتصال من جهاز التسجيل';
+
+  @override
+  String ftpStatusLoggedIn(String time) {
+    return 'اتصل جهاز التسجيل $time ولم يرفع شيئاً بعد — تأكد من تفعيل الرفع وجدوله.';
+  }
+
+  @override
+  String ftpStatusReceiving(String time) {
+    return 'يصل الرفع — آخر ملف $time';
+  }
+
+  @override
+  String ftpStatusStale(String time) {
+    return 'لم يصل أي ملف منذ $time';
+  }
+
+  @override
+  String ftpStatusWrongPassword(String address) {
+    return 'جهاز على $address يحاول الدخول بكلمة مرور خاطئة.';
+  }
+
+  @override
+  String ftpStatusUnknownUser(String address, String username) {
+    return 'جهاز على $address حاول الدخول باسم مستخدم غير معروف «$username».';
+  }
+
+  @override
+  String get ftpStatusWrongPasswordNoAddress =>
+      'جهاز يحاول الدخول بكلمة مرور خاطئة.';
+
+  @override
+  String ftpStatusUnknownUserNoAddress(String username) {
+    return 'جهاز حاول الدخول باسم مستخدم غير معروف «$username».';
+  }
+
+  @override
+  String get ftpStatusServerDown =>
+      'خادم FTP لا يعمل الآن على الخادم. أعد تشغيل خدمات دفتر أو تواصل مع الدعم.';
+
+  @override
+  String get ftpStatusRefusingDisk =>
+      'قرص الخادم شبه ممتلئ، لذلك يرفض الخادم الرفع مؤقتاً.';
+
+  @override
+  String get ftpStatusRefusingInbox =>
+      'تتراكم ملفات بانتظار المعالجة، لذلك يرفض الخادم الرفع مؤقتاً.';
+
+  @override
+  String ftpStatusUnreadable(String error) {
+    return 'تعذّرت قراءة بعض الملفات المرفوعة: $error';
+  }
+
+  @override
+  String ftpStatsLine(String received, String kept, String discarded) {
+    return 'وصل $received · حُفظ $kept · حُذف $discarded';
+  }
+
+  @override
+  String get ftpRegenerateAction => 'كلمة مرور جديدة';
+
+  @override
+  String get ftpRegenerateConfirmTitle => 'إنشاء كلمة مرور جديدة؟';
+
+  @override
+  String get ftpRegenerateConfirmBody =>
+      'تتوقف كلمة المرور الحالية خلال ثوانٍ، ويجب كتابة الجديدة في جهاز التسجيل.';
+
+  @override
+  String get ftpDetailsAction => 'بيانات الاتصال';
+
+  @override
+  String get ftpArchiveOnlyLabel => 'بلا بث مباشر — تُحفظ لحظات الفواتير';
+
+  @override
+  String get ftpNoCamerasYet => 'تظهر الكاميرات هنا بعد أول رفع منها.';
+
+  @override
+  String get ftpRetentionLabel => 'مدة حفظ لقطات الفواتير';
+
+  @override
+  String ftpRetentionValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count يوم',
+      many: '$count يوماً',
+      few: '$count أيام',
+      two: 'يومان',
+      one: 'يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ftpRetentionHint => 'تُحذف الأقدم أولاً إن احتاج القرص المساحة.';
+
+  @override
+  String get ftpRetentionInvalid => 'اكتب عدداً من 1 إلى 3650.';
 }

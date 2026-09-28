@@ -12,6 +12,8 @@ frontend/.flutter-plugins-dependencies
 frontend/build/
 frontend/coverage/
 backend/media/
+# Uploaded DVR footage (FTP inbox + kept invoice clips) in development.
+backend/footage/
 relay/.gocache/
 relay/.gomodcache/
 relay/data/

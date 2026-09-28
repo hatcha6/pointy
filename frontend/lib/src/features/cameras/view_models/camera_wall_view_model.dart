@@ -96,7 +96,12 @@ class CameraWallViewModel extends ChangeNotifier {
     final camerasResult = await _repository.loadCameras(enabledOnly: true);
     switch (camerasResult) {
       case Ok<List<Camera>>():
-        _cameras = camerasResult.value;
+        // The server already leaves archive-only cameras out of this list;
+        // a live wall must never draw a tile that can only fail.
+        _cameras = [
+          for (final camera in camerasResult.value)
+            if (camera.supportsLive) camera,
+        ];
         _hasLoadError = false;
       case Error<List<Camera>>():
         _hasLoadError = true;

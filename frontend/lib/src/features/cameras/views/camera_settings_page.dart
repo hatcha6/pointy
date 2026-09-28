@@ -10,8 +10,10 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../data/services/recorder_discovery.dart';
+import '../ftp_setup_state.dart';
 import '../view_models/camera_settings_view_model.dart';
 import '../../../shared/formatters.dart';
+import 'ftp_setup_pages.dart';
 
 /// Where a shop wires its DVR up, and the only place that ever touches
 /// credentials.
@@ -25,6 +27,8 @@ class CameraSettingsPage extends StatefulWidget {
     required this.viewModel,
     required this.enableSurveillance,
     required this.onToggleEnabled,
+    this.archiveRetentionDays,
+    this.onArchiveRetentionChanged,
   });
 
   final CameraSettingsViewModel viewModel;
@@ -34,11 +38,19 @@ class CameraSettingsPage extends StatefulWidget {
   final bool enableSurveillance;
   final Future<void> Function(bool enabled) onToggleEnabled;
 
+  /// `ShopSettings.surveillanceArchiveRetentionDays`: how long invoice footage
+  /// uploaded over FTP is kept. Offered only once an FTP setup exists, and
+  /// only when the caller can save it.
+  final int? archiveRetentionDays;
+  final Future<bool> Function(int days)? onArchiveRetentionChanged;
+
   @override
   State<CameraSettingsPage> createState() => _CameraSettingsPageState();
 }
 
 class _CameraSettingsPageState extends State<CameraSettingsPage> {
+  late int? _retentionDays = widget.archiveRetentionDays;
+
   @override
   void initState() {
     super.initState();
@@ -129,6 +141,9 @@ class _CameraSettingsPageState extends State<CameraSettingsPage> {
                     onEdit: () => _openRecorderForm(context, recorder),
                     onSync: () =>
                         unawaited(viewModel.syncRecorder(recorder.id)),
+                    onDetails: recorder.isFtp
+                        ? () => _openFtpConnection(context, recorder)
+                        : null,
                     onDelete: () => _confirmDelete(context, recorder),
                     onCameraChanged:
                         ({
@@ -155,6 +170,22 @@ class _CameraSettingsPageState extends State<CameraSettingsPage> {
                 PointyInlineMessage(
                   message: l10n.cameraSettingsCoversCheckoutHint,
                 ),
+              if (_retentionDays != null &&
+                  widget.onArchiveRetentionChanged != null &&
+                  viewModel.recorders.any((recorder) => recorder.isFtp)) ...[
+                const SizedBox(height: PointyDimensions.sectionGap),
+                PointySettingsSection(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.history_toggle_off),
+                      title: Text(l10n.ftpRetentionLabel),
+                      subtitle: Text(l10n.ftpRetentionHint),
+                      trailing: Text(l10n.ftpRetentionValue(_retentionDays!)),
+                      onTap: () => unawaited(_editRetention(context)),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -166,6 +197,27 @@ class _CameraSettingsPageState extends State<CameraSettingsPage> {
     BuildContext context,
     Recorder? recorder,
   ) async {
+    final connection =
+        recorder?.connection ?? await showRecorderConnectionChoice(context);
+    if (connection == null || !context.mounted) {
+      return;
+    }
+    if (connection == RecorderConnection.ftp) {
+      final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => FtpRecorderFormPage(
+            viewModel: widget.viewModel,
+            initial: recorder == null
+                ? const RecorderDraft(connection: RecorderConnection.ftp)
+                : RecorderDraft.fromRecorder(recorder),
+          ),
+        ),
+      );
+      if (saved == true && mounted) {
+        await widget.viewModel.load();
+      }
+      return;
+    }
     widget.viewModel.clearTestResult();
     // A fresh form starts with a fresh sweep rather than whatever the last one
     // found; the form re-runs it for a recorder being added.
@@ -182,6 +234,49 @@ class _CameraSettingsPageState extends State<CameraSettingsPage> {
     );
     if (saved == true && mounted) {
       await widget.viewModel.load();
+    }
+  }
+
+  Future<void> _openFtpConnection(
+    BuildContext context,
+    Recorder recorder,
+  ) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => FtpConnectionPage(
+          create: () => widget.viewModel.ftpSetupFor(recorder),
+        ),
+      ),
+    );
+    if (mounted) {
+      await widget.viewModel.load();
+    }
+  }
+
+  Future<void> _editRetention(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final save = widget.onArchiveRetentionChanged;
+    final current = _retentionDays;
+    if (save == null || current == null) {
+      return;
+    }
+    final value = await showDialog<double>(
+      context: context,
+      builder: (_) => PointyNumberEntryDialog(
+        title: l10n.ftpRetentionLabel,
+        initialValue: '$current',
+        icon: Icons.history_toggle_off,
+        message: l10n.ftpRetentionHint,
+        isValid: (value) =>
+            value == value.roundToDouble() && value >= 1 && value <= 3650,
+      ),
+    );
+    if (value == null || !mounted) {
+      return;
+    }
+    final days = value.round();
+    if (await save(days) && mounted) {
+      setState(() => _retentionDays = days);
     }
   }
 
@@ -220,6 +315,7 @@ class _RecorderCard extends StatelessWidget {
     required this.onSync,
     required this.onDelete,
     required this.onCameraChanged,
+    this.onDetails,
   });
 
   final Recorder recorder;
@@ -230,11 +326,20 @@ class _RecorderCard extends StatelessWidget {
   final VoidCallback onDelete;
   final _CameraChanged onCameraChanged;
 
+  /// FTP setups only: opens the credentials and live status. Takes the place
+  /// of "sync", which has nothing to probe on a recorder that dials us.
+  final VoidCallback? onDetails;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
     final drift = _clockDriftMinutes();
+    final ftpAccount = recorder.ftp;
+    final ftpStatus = ftpAccount == null
+        ? null
+        : ftpSetupStatusOf(ftpAccount, now: DateTime.now());
+    final secondaryAction = onDetails;
     return Card(
       margin: EdgeInsets.zero,
       child: Column(
@@ -249,24 +354,44 @@ class _RecorderCard extends StatelessWidget {
               return ListTile(
                 isThreeLine: true,
                 leading: Icon(
-                  Icons.dvr_outlined,
-                  color: switch (recorder.status) {
-                    RecorderStatus.ok => colors.success,
-                    RecorderStatus.error => colors.danger,
-                    RecorderStatus.never => colors.mutedInk,
-                  },
+                  recorder.isFtp
+                      ? Icons.cloud_upload_outlined
+                      : Icons.dvr_outlined,
+                  color: ftpStatus != null
+                      ? switch (ftpStatus.health) {
+                          FtpSetupHealth.receiving => colors.success,
+                          FtpSetupHealth.serverDown ||
+                          FtpSetupHealth.wrongPassword => colors.danger,
+                          _ => colors.mutedInk,
+                        }
+                      : switch (recorder.status) {
+                          RecorderStatus.ok => colors.success,
+                          RecorderStatus.error => colors.danger,
+                          RecorderStatus.never => colors.mutedInk,
+                        },
                 ),
                 title: Text(recorder.displayName),
-                subtitle: Text(_subtitle(l10n, drift)),
+                subtitle: Text(
+                  ftpStatus != null
+                      ? _ftpSubtitle(l10n, ftpStatus)
+                      : _subtitle(l10n, drift),
+                ),
                 trailing: roomy
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          IconButton(
-                            tooltip: l10n.recorderSyncAction,
-                            onPressed: isBusy ? null : onSync,
-                            icon: const Icon(Icons.sync),
-                          ),
+                          if (secondaryAction != null)
+                            IconButton(
+                              tooltip: l10n.ftpDetailsAction,
+                              onPressed: secondaryAction,
+                              icon: const Icon(Icons.key_outlined),
+                            )
+                          else
+                            IconButton(
+                              tooltip: l10n.recorderSyncAction,
+                              onPressed: isBusy ? null : onSync,
+                              icon: const Icon(Icons.sync),
+                            ),
                           IconButton(
                             tooltip: l10n.recorderFormTitle,
                             onPressed: isBusy ? null : onEdit,
@@ -282,13 +407,31 @@ class _RecorderCard extends StatelessWidget {
                     : _RecorderMenu(
                         isBusy: isBusy,
                         onSync: onSync,
+                        onDetails: onDetails,
                         onEdit: onEdit,
                         onDelete: onDelete,
                       ),
               );
             },
           ),
-          if (recorder.status == RecorderStatus.error &&
+          if (ftpStatus != null && !ftpStatus.isHealthy)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: ftpStatusMessages(l10n, ftpStatus),
+              ),
+            ),
+          if (recorder.isFtp && cameras.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(
+                l10n.ftpNoCamerasYet,
+                style: TextStyle(color: colors.mutedInk),
+              ),
+            ),
+          if (!recorder.isFtp &&
+              recorder.status == RecorderStatus.error &&
               recorder.lastError.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -299,7 +442,9 @@ class _RecorderCard extends StatelessWidget {
           // terms and needs no explaining; the offset is worth a warning only
           // when it disagrees with the till's own clock, because that is when
           // invoice playback would land on the wrong minute if we trusted it.
-          if (drift != null && drift != 0)
+          // Not for an FTP setup: its offset is measured from every upload and
+          // applied to every one, so a DVR on the wrong zone costs nothing.
+          if (!recorder.isFtp && drift != null && drift != 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: PointyInlineMessage.warning(
@@ -334,6 +479,14 @@ class _RecorderCard extends StatelessWidget {
     return recorder.clockOffsetMinutes - here;
   }
 
+  String _ftpSubtitle(AppLocalizations l10n, FtpSetupStatus status) {
+    return [
+      l10n.recorderConnectionFtpTitle,
+      ftpStatusSummary(l10n, status),
+      if (cameras.isNotEmpty) l10n.cameraChannelCountLabel(cameras.length),
+    ].join(' · ');
+  }
+
   String _subtitle(AppLocalizations l10n, int? drift) {
     final parts = <String>[
       switch (recorder.status) {
@@ -361,12 +514,14 @@ class _RecorderMenu extends StatelessWidget {
     required this.onSync,
     required this.onEdit,
     required this.onDelete,
+    this.onDetails,
   });
 
   final bool isBusy;
   final VoidCallback onSync;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -376,15 +531,26 @@ class _RecorderMenu extends StatelessWidget {
       enabled: !isBusy,
       onSelected: (action) => action(),
       itemBuilder: (context) => [
-        PopupMenuItem(
-          value: onSync,
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.sync),
-            title: Text(l10n.recorderSyncAction),
+        if (onDetails case final details?)
+          PopupMenuItem(
+            value: details,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.key_outlined),
+              title: Text(l10n.ftpDetailsAction),
+            ),
+          )
+        else
+          PopupMenuItem(
+            value: onSync,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.sync),
+              title: Text(l10n.recorderSyncAction),
+            ),
           ),
-        ),
         PopupMenuItem(
           value: onEdit,
           child: ListTile(
@@ -430,12 +596,14 @@ class _CameraRow extends StatelessWidget {
       ),
       title: Text(camera.displayName),
       subtitle: Text(
-        camera.deviceName.isNotEmpty
-            // The channel the recorder knows it by, then whatever the recorder
-            // calls it — both matter during setup, when the name above is the
-            // shop's own and matches neither.
-            ? '${l10n.cameraChannelLabel('${camera.channel}')} · ${camera.deviceName}'
-            : l10n.cameraChannelLabel('${camera.channel}'),
+        [
+          // The channel the recorder knows it by, then whatever the recorder
+          // calls it — both matter during setup, when the name above is the
+          // shop's own and matches neither.
+          l10n.cameraChannelLabel('${camera.channel}'),
+          if (camera.deviceName.isNotEmpty) camera.deviceName,
+          if (!camera.supportsLive) l10n.ftpArchiveOnlyLabel,
+        ].join(' · '),
       ),
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       children: [
@@ -456,20 +624,24 @@ class _CameraRow extends StatelessWidget {
               : (value) => onChanged(camera: camera, coversCheckout: value),
           title: Text(l10n.cameraSettingsCoversCheckoutLabel),
         ),
-        _QualityPicker(
-          label: l10n.cameraSettingsLiveQualityLabel,
-          value: camera.liveQuality,
-          onChanged: isBusy
-              ? null
-              : (value) => onChanged(camera: camera, liveQuality: value),
-        ),
-        _QualityPicker(
-          label: l10n.cameraSettingsPlaybackQualityLabel,
-          value: camera.playbackQuality,
-          onChanged: isBusy
-              ? null
-              : (value) => onChanged(camera: camera, playbackQuality: value),
-        ),
+        // An uploaded camera's footage is whatever the DVR sent; there is no
+        // track to choose between.
+        if (camera.supportsLive) ...[
+          _QualityPicker(
+            label: l10n.cameraSettingsLiveQualityLabel,
+            value: camera.liveQuality,
+            onChanged: isBusy
+                ? null
+                : (value) => onChanged(camera: camera, liveQuality: value),
+          ),
+          _QualityPicker(
+            label: l10n.cameraSettingsPlaybackQualityLabel,
+            value: camera.playbackQuality,
+            onChanged: isBusy
+                ? null
+                : (value) => onChanged(camera: camera, playbackQuality: value),
+          ),
+        ],
       ],
     );
   }
@@ -608,7 +780,9 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
     text: widget.initial.rtspPathTemplate,
   );
   late final TextEditingController _channelCount = TextEditingController(
-    text: widget.initial.channelCount > 0 ? '${widget.initial.channelCount}' : '',
+    text: widget.initial.channelCount > 0
+        ? '${widget.initial.channelCount}'
+        : '',
   );
 
   @override
@@ -647,7 +821,8 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
   /// installer knows what brand is on the sticker and never the URL. Mirrors
   /// ``TEMPLATE_PRESETS`` in apps.surveillance.drivers.generic_rtsp.
   static const Map<String, String> _rtspPresets = {
-    'XMEye': '/user={username}&password={password}&channel={channel}&stream={stream}.sdp?',
+    'XMEye':
+        '/user={username}&password={password}&channel={channel}&stream={stream}.sdp?',
     'Uniview': '/unicast/c{channel}/s{stream}/live',
     'ch/stream': '/ch{channel}/{stream}',
     'live': '/live/ch{channel0}_{stream}',

@@ -9,6 +9,7 @@ reason video is proxied rather than pulled directly by the tills.
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models import TimeStampedModel
 
@@ -22,6 +23,14 @@ class Recorder(TimeStampedModel):
     so this is not a singleton even though most installs will hold exactly one
     row.
     """
+
+    class Connection(models.TextChoices):
+        # We dial the box: live view, and its own recordings played back.
+        DIRECT = "direct", "Direct connection"
+        # The box dials us: it uploads footage to our FTP server and we keep
+        # the invoice moments. No live view; playback is from our own disk.
+        # See SURVEILLANCE_FTP_PLAN.md.
+        FTP = "ftp", "FTP upload"
 
     class Brand(models.TextChoices):
         AUTO = "auto", "Detect automatically"
@@ -44,6 +53,15 @@ class Recorder(TimeStampedModel):
         ERROR = "error", "Last attempt failed"
 
     name = models.CharField(max_length=120, blank=True)
+    # Fixed at creation. ``db_default`` so the previous release, still serving
+    # for a minute during a live update, can keep inserting direct recorders
+    # without naming a column it has never heard of.
+    connection = models.CharField(
+        max_length=8,
+        choices=Connection.choices,
+        default=Connection.DIRECT,
+        db_default=Connection.DIRECT,
+    )
     brand = models.CharField(
         max_length=16,
         choices=Brand.choices,
@@ -55,7 +73,9 @@ class Recorder(TimeStampedModel):
     # failing against a stale guess.
     detected_brand = models.CharField(max_length=16, blank=True)
 
-    host = models.CharField(max_length=120)
+    # Required for a direct recorder (the serializer says so); an FTP recorder
+    # has no address of ours to dial — it is the one that connects.
+    host = models.CharField(max_length=120, blank=True)
     port = models.PositiveIntegerField(
         default=80,
         validators=[MinValueValidator(1), MaxValueValidator(65535)],
@@ -115,17 +135,31 @@ class Recorder(TimeStampedModel):
     class Meta:
         ordering = ["name", "host"]
         constraints = [
+            # Only a direct recorder has an endpoint. Two FTP setups both carry
+            # a blank host, and that is not two recorders at one address.
             models.UniqueConstraint(
                 fields=["host", "port"],
+                condition=Q(connection="direct"),
                 name="unique_recorder_endpoint",
             )
         ]
 
     def __str__(self):
-        return self.name or f"{self.host}:{self.port}"
+        if self.name:
+            return self.name
+        if self.is_ftp:
+            account = getattr(self, "ftp_account", None)
+            return f"FTP {account.username}" if account else f"FTP #{self.pk}"
+        return f"{self.host}:{self.port}"
+
+    @property
+    def is_ftp(self):
+        return self.connection == self.Connection.FTP
 
     @property
     def is_configured(self):
+        if self.is_ftp:
+            return True
         return bool(self.host and self.username)
 
     @property
@@ -148,16 +182,23 @@ class Recorder(TimeStampedModel):
         no playback control, rather than a control that fails when pressed.
         ONVIF is the one brand whose answer here is a floor rather than the
         truth — Profile G is discovered per device, so a probe may widen it.
+
+        An FTP recorder is the mirror image of Direct RTSP: everything it has
+        is on our own disk, so it plays back and is searchable, and it has no
+        live picture at all.
         """
+        if self.is_ftp:
+            return {"playback": True, "search": True, "snapshot": False, "live": False}
         from .drivers.registry import driver_class_for_brand
 
         driver_class = driver_class_for_brand(self.effective_brand)
         if driver_class is None:
-            return {"playback": False, "search": False, "snapshot": False}
+            return {"playback": False, "search": False, "snapshot": False, "live": False}
         return {
             "playback": driver_class.supports_playback,
             "search": driver_class.supports_search,
             "snapshot": driver_class.supports_snapshot,
+            "live": True,
         }
 
     def as_target(self) -> RecorderTarget:
@@ -204,6 +245,11 @@ class Camera(TimeStampedModel):
     channel = models.PositiveSmallIntegerField()
     name = models.CharField(max_length=120, blank=True)
     device_name = models.CharField(max_length=120, blank=True)
+    # FTP recorders only: which upload source this camera is, as read from the
+    # uploaded paths — ``ch:3`` for a numbered channel, ``dir:front door`` for a
+    # DVR that names its folders after cameras. Empty on a direct recorder,
+    # whose channel number is its identity. See archive/naming.py.
+    source_key = models.CharField(max_length=160, blank=True, db_default="")
     is_enabled = models.BooleanField(default=True)
     display_order = models.PositiveSmallIntegerField(default=0)
 
@@ -251,7 +297,12 @@ class Camera(TimeStampedModel):
             models.UniqueConstraint(
                 fields=["recorder", "channel"],
                 name="unique_camera_channel_per_recorder",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["recorder", "source_key"],
+                condition=~Q(source_key=""),
+                name="unique_camera_source_per_recorder",
+            ),
         ]
         permissions = [
             # Watching, scrubbing history, and taking a copy away are three
@@ -269,3 +320,178 @@ class Camera(TimeStampedModel):
     @property
     def display_name(self):
         return self.name or self.device_name or f"قناة {self.channel}"
+
+    @property
+    def supports_live(self):
+        """Whether any live surface can show this camera.
+
+        False for a camera on an FTP recorder: it exists because footage was
+        uploaded, and there is no stream of it anywhere to watch.
+        """
+        return not self.recorder.is_ftp
+
+
+class FtpAccount(TimeStampedModel):
+    """The credentials one FTP recorder logs in with, and what it has done.
+
+    One per FTP recorder. The password is stored as generated rather than
+    hashed: the installer has to be shown it again when they come back to
+    finish configuring the DVR, and what it protects is write access to one
+    camera inbox on the shop's own network. Only users who may change recorders
+    ever see it (see RecorderSerializer).
+    """
+
+    recorder = models.OneToOneField(
+        Recorder,
+        on_delete=models.CASCADE,
+        related_name="ftp_account",
+    )
+    username = models.CharField(max_length=32, unique=True)
+    password = models.CharField(max_length=64)
+    # The server address the installer was shown — the address the DVR was
+    # configured with — and therefore the one PASV has to announce. Inside
+    # Docker the FTP server only knows a container address, which the DVR
+    # cannot reach. Supplied by the client, which can see the shop's network.
+    advertised_host = models.CharField(max_length=64, blank=True)
+
+    last_login_at = models.DateTimeField(blank=True, null=True)
+    last_login_peer = models.CharField(max_length=64, blank=True)
+    last_upload_at = models.DateTimeField(blank=True, null=True)
+    last_upload_peer = models.CharField(max_length=64, blank=True)
+    last_upload_name = models.CharField(max_length=255, blank=True)
+    # Wrong password with this username, since the last good login. A DVR with
+    # a typo in its password retries forever, and "a device at 192.168.1.108
+    # keeps using the wrong password" is the sentence that ends the support call.
+    failed_login_count = models.PositiveIntegerField(default=0)
+    failed_login_at = models.DateTimeField(blank=True, null=True)
+    failed_login_peer = models.CharField(max_length=64, blank=True)
+
+    files_received = models.BigIntegerField(default=0)
+    bytes_received = models.BigIntegerField(default=0)
+    files_kept = models.BigIntegerField(default=0)
+    files_discarded = models.BigIntegerField(default=0)
+    files_unreadable = models.BigIntegerField(default=0)
+    last_ingest_error = models.TextField(blank=True)
+    last_ingest_error_at = models.DateTimeField(blank=True, null=True)
+
+    # A proposed LOWER clock offset and when it was first seen. Raising the
+    # offset is proven by a single upload (nothing arrives before it was
+    # recorded); lowering it is what a DVR catching up on a backlog would also
+    # look like, so it waits for sustained agreement. See archive/clock.py.
+    clock_lower_minutes = models.SmallIntegerField(blank=True, null=True)
+    clock_lower_since = models.DateTimeField(blank=True, null=True)
+
+    def __str__(self):
+        return self.username
+
+
+class FootageUpload(models.Model):
+    """A file a recorder uploaded that has not been decided on yet.
+
+    Transient by design: the row exists from the moment the upload completes
+    until the ingest pass keeps or discards the file, then it is deleted. A DVR
+    sending a picture a second per channel would otherwise grow this table by
+    hundreds of thousands of rows a day for no reader.
+    """
+
+    class Kind(models.TextChoices):
+        VIDEO = "video", "Video"
+        PICTURE = "picture", "Picture"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Waiting for its decision time"
+        CLAIMED = "claimed", "Being processed"
+
+    recorder = models.ForeignKey(
+        Recorder,
+        on_delete=models.CASCADE,
+        related_name="footage_uploads",
+    )
+    # Relative to the recorder's inbox, with forward slashes.
+    path = models.CharField(max_length=1024)
+    kind = models.CharField(max_length=8, choices=Kind.choices)
+    status = models.CharField(
+        max_length=8, choices=Status.choices, default=Status.PENDING
+    )
+    # False when the transfer broke off. Such a file is held longer in case the
+    # DVR resumes it, and never used to measure the recorder's clock: it
+    # "arrived" when the connection dropped, not when its footage ended.
+    complete = models.BooleanField(default=True)
+    size_bytes = models.BigIntegerField(default=0)
+    received_at = models.DateTimeField()
+    # How long the transfer itself took. A DVR that uploads a finished segment
+    # starts sending right after the segment ends, so ``received_at`` minus
+    # this is when the footage ended — however slow the link. One that streams
+    # a file while recording takes about as long as the footage lasts, and
+    # then ``received_at`` itself is the end. See archive/clock.py.
+    transfer_seconds = models.FloatField(default=0)
+    peer = models.CharField(max_length=64, blank=True)
+
+    # What the path says, read once when the upload lands.
+    source_key = models.CharField(max_length=160, blank=True)
+    source_label = models.CharField(max_length=120, blank=True)
+    channel = models.PositiveSmallIntegerField(blank=True, null=True)
+    # The DEVICE's wall clock, stored as if it were UTC. Converted with the
+    # recorder's clock offset at decision time, not here, because the offset is
+    # measured from these very uploads and may have moved in between.
+    wall_start = models.DateTimeField(blank=True, null=True)
+    wall_end = models.DateTimeField(blank=True, null=True)
+
+    decide_after = models.DateTimeField()
+    claim_token = models.CharField(max_length=32, blank=True)
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recorder", "path"],
+                name="unique_footage_upload_path",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["status", "decide_after"],
+                name="surv_upload_due_idx",
+            )
+        ]
+
+    def __str__(self):
+        return self.path
+
+
+class FootageClip(TimeStampedModel):
+    """A stretch of footage we decided to keep, on our own disk.
+
+    ``start``/``end`` are UTC and describe what the file depicts; for a
+    picture they are the same moment. ``path`` is relative to the archive
+    root, so moving the footage volume moves nothing in the database.
+    """
+
+    class Kind(models.TextChoices):
+        VIDEO = "video", "Video"
+        PICTURE = "picture", "Picture"
+
+    camera = models.ForeignKey(
+        Camera,
+        on_delete=models.CASCADE,
+        related_name="footage_clips",
+    )
+    kind = models.CharField(max_length=8, choices=Kind.choices)
+    start = models.DateTimeField()
+    end = models.DateTimeField()
+    path = models.CharField(max_length=512, unique=True)
+    size_bytes = models.BigIntegerField(default=0)
+
+    class Meta:
+        ordering = ["start", "id"]
+        indexes = [
+            models.Index(fields=["camera", "start"], name="surv_clip_camera_start_idx"),
+            # Retention deletes by age, and the disk budget deletes oldest first.
+            models.Index(fields=["end"], name="surv_clip_end_idx"),
+        ]
+
+    def __str__(self):
+        return self.path

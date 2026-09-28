@@ -50,6 +50,12 @@ def main():
         require_secret("DJANGO_SECRET_KEY")
         wait_for_dependencies()
         exec_process(beat_command(args))
+    if command == "ftp":
+        # The FTP server DVRs upload footage to, and the ingest that keeps only
+        # the invoice moments of it. See SURVEILLANCE_FTP_PLAN.md.
+        require_secret("DJANGO_SECRET_KEY")
+        wait_for_dependencies()
+        exec_process(["python", "manage.py", "run_ftp_server", *args])
     if command == "migrate":
         require_secret("DJANGO_SECRET_KEY")
         wait_for_dependencies()

@@ -158,6 +158,7 @@ RUN groupadd --system pointy \
         /var/lib/pointy/backups \
         /var/lib/pointy/celerybeat \
         /var/lib/pointy/clients \
+        /var/lib/pointy/footage \
         /var/lib/pointy/media \
         /var/lib/pointy/migration \
         /var/lib/pointy/staticfiles \
@@ -210,6 +211,11 @@ WORKDIR /app/backend
 
 EXPOSE 8000
 EXPOSE 47777/udp
+# The `ftp` role: DVRs upload footage here (apps.surveillance.ftp). 2121 because
+# the process is unprivileged; compose publishes it as the host's 21, and the
+# passive range 1:1.
+EXPOSE 2121
+EXPOSE 30000-30019
 
 ENTRYPOINT ["python", "/app/backend/docker/entrypoint.py"]
 CMD ["web"]

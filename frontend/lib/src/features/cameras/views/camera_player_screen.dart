@@ -573,7 +573,8 @@ class _TopBar extends StatelessWidget {
               ),
               if (viewModel.canOfferAudio && listen.isOffered)
                 _ListenButton(listen: listen, onAction: onAction),
-              if (viewModel.playbackAvailable)
+              if (viewModel.playbackAvailable &&
+                  (viewModel.isLive || viewModel.canGoLive))
                 IconButton(
                   tooltip: viewModel.isLive
                       ? l10n.cameraOpenPlaybackTooltip

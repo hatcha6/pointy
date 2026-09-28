@@ -24,6 +24,8 @@
 #   up_blocks          seconds the FIRST `compose up` waits before failing, as
 #                      compose does while a dependency is inside its start period
 #   up_always_fails    `compose up` fails whatever the health (a port in use)
+#   ftp_port_taken     only the `ftp` service cannot bind: an `up` of every
+#                      service fails, an `up` of the others succeeds
 _knob() { printf '%s\n' "$2" >"${PU_TEST_DIR}/fake/$1"; }
 
 _fake_stack() {
@@ -65,6 +67,13 @@ if [ "${1:-}" = compose ]; then
 fi
 
 case "$*" in
+  "compose config --services")
+    printf 'postgres\npgbouncer\nredis\nbackend\ncelery-worker\ncelery-beat\nftp\nconnector\nedge\nweb\n' ;;
+  "compose up -d postgres pgbouncer redis backend celery-worker celery-beat connector edge web")
+    if [ -n "$(knob ftp_port_taken)" ] && backend_ready; then
+      touch "${fake}/up_ok"; echo " Container pointy-celery-worker-1 Started"; exit 0
+    fi
+    exit 1 ;;
   "compose up -d")
     ups=$(( $(knob ups || echo 0) + 1 )); echo "$ups" >"${fake}/ups"
     if [ "$ups" = 1 ] && [ -n "$(knob up_blocks)" ]; then
@@ -72,6 +81,9 @@ case "$*" in
     fi
     if [ -n "$(knob up_always_fails)" ]; then
       echo "Error response from daemon: Bind for 0.0.0.0:80 failed: port is already allocated" >&2; exit 1
+    fi
+    if [ -n "$(knob ftp_port_taken)" ] && backend_ready; then
+      echo "Error response from daemon: Bind for 0.0.0.0:21 failed: port is already allocated" >&2; exit 1
     fi
     if ! postgres_ready; then
       echo "dependency failed to start: container pointy-postgres-1 is unhealthy" >&2; exit 1
@@ -287,6 +299,32 @@ test_a_failure_that_nothing_is_starting_for_is_not_retried_for_twenty_minutes() 
   assert_contains "$(_out)" "port is already allocated"
   local clock; clock="$(_clock)"
   [ "$clock" -le 60 ] || _fail "retried for ${clock}s with nothing coming up"
+}
+
+test_a_taken_ftp_port_does_not_fail_the_install() {
+  # Port 21 held by some other program on the shop's machine: compose fails
+  # the whole `up` for the one container that cannot bind. The shop can trade
+  # without FTP uploads; it cannot trade without the rest.
+  _seed_deploy
+  _knob backend_ready_at 0
+  _knob ftp_port_taken 1
+  assert_ok _install
+  assert_contains "$(_out)" "everything is up except the FTP upload server"
+  assert_called docker 'compose * up -d postgres pgbouncer redis backend celery-worker celery-beat connector edge web'
+  assert_called docker 'compose * cp clients/*'
+}
+
+test_a_taken_ftp_port_still_waits_for_a_migrating_backend() {
+  # Without the FTP fallback telling the two apart, a slow migration and a
+  # taken port 21 would look alike; the backend must still be waited for.
+  _seed_deploy
+  _knob backend_ready_at 300
+  _knob ftp_port_taken 1
+  assert_ok _install
+  assert_contains "$(_out)" "Compose stopped waiting"
+  assert_contains "$(_out)" "everything is up except the FTP upload server"
+  local clock; clock="$(_clock)"
+  [ "$clock" -ge 300 ] || _fail "gave up waiting at ${clock}s, before the backend was ready"
 }
 
 test_a_backend_that_is_gone_is_not_waited_for() {

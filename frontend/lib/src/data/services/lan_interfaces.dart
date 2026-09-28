@@ -90,6 +90,18 @@ List<String> subnetHostsIpv4(List<int> raw) {
   return [for (final host in order) '$prefix.$host'];
 }
 
+/// The host of [url] when it is a private LAN IPv4 — the kind of address a
+/// DVR on the same network can dial — else null (a relay URL, a hostname,
+/// loopback).
+String? lanIpv4HostOf(String url) {
+  final host = Uri.tryParse(url)?.host ?? '';
+  final octets = ipv4Octets(host);
+  if (octets == null || !isUsableLanIpv4(octets)) {
+    return null;
+  }
+  return host;
+}
+
 /// True for a host that names this machine itself: `localhost`, 127.0.0.0/8,
 /// or `::1`. A URL on such a host works only on the machine that built it.
 bool isLoopbackHost(String host) {

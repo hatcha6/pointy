@@ -21,6 +21,9 @@
 //
 // Screens: board | wall | wall-single | wall-empty | playback | live-player
 //          | settings | invoice | grey-pixels
+//          | connection-choice | ftp-form | settings-ftp
+//          | ftp-connection (&state=receiving|waiting|logged-in|wrong-password
+//                            |unknown-user|server-down|disk|stale|relay)
 // Params:  source=synthetic|rig|rig-clean|rig-broken   rig=<base url>
 //
 // See AGENTS.md ("UI preview harness"). Not part of the shipping app.
@@ -47,6 +50,7 @@ import 'package:pointy_frontend/src/features/cameras/view_models/camera_wall_vie
 import 'package:pointy_frontend/src/features/cameras/views/camera_player_screen.dart';
 import 'package:pointy_frontend/src/data/services/recorder_discovery.dart';
 import 'package:pointy_frontend/src/features/cameras/views/camera_settings_page.dart';
+import 'package:pointy_frontend/src/features/cameras/views/ftp_setup_pages.dart';
 import 'package:pointy_frontend/src/features/cameras/views/cameras_screen.dart';
 import 'package:pointy_frontend/src/features/dashboard/view_models/dashboard_cameras_view_model.dart';
 import 'package:pointy_frontend/src/features/dashboard/views/dashboard_cameras_band.dart';
@@ -163,6 +167,29 @@ class _PreviewRouter extends StatelessWidget {
         return _invoice();
       case 'grey-pixels':
         return const _GreyPixelsBoard();
+      case 'connection-choice':
+        return const _ConnectionChoiceHost();
+      case 'ftp-form':
+        return FtpRecorderFormPage(
+          viewModel: CameraSettingsViewModel(
+            _FakeSurveillanceRepository(withFtp: true),
+            sweep: () async => const [],
+          ),
+          initial: const RecorderDraft(connection: RecorderConnection.ftp),
+        );
+      case 'ftp-connection':
+        return _ftpConnection(_param('state') ?? 'receiving');
+      case 'settings-ftp':
+        return CameraSettingsPage(
+          viewModel: CameraSettingsViewModel(
+            _FakeSurveillanceRepository(withFtp: true, cameraCount: 3),
+            sweep: () async => const [],
+          ),
+          enableSurveillance: true,
+          onToggleEnabled: (_) async {},
+          archiveRetentionDays: 30,
+          onArchiveRetentionChanged: (_) async => true,
+        );
       case 'wall':
       default:
         return _wall();
@@ -493,11 +520,37 @@ class _FakeSurveillanceRepository extends SurveillanceRepository {
     this.cameraCount = 6,
     this.audioFails = false,
     this.audioUrl = '',
+    this.withFtp = false,
+    this.ftpState = 'receiving',
   }) : super(PosApiService());
 
   final int cameraCount;
   final bool audioFails;
   final String audioUrl;
+
+  /// Adds an FTP upload setup beside the direct recorder.
+  final bool withFtp;
+  final String ftpState;
+
+  @override
+  Future<String?> ftpServerAddress() async =>
+      ftpState == 'relay' ? null : '192.168.1.10';
+
+  @override
+  Future<Result<Recorder>> loadRecorder(int id) async =>
+      Ok(_ftpPreviewRecorder(ftpState));
+
+  @override
+  Future<Result<Recorder>> setFtpAddress(int id, String host) async =>
+      Ok(_ftpPreviewRecorder(ftpState));
+
+  @override
+  Future<Result<Recorder>> regenerateFtpPassword(int id) async =>
+      Ok(_ftpPreviewRecorder(ftpState, password: 'q8n3v7ha2mcx'));
+
+  @override
+  Future<Result<Recorder>> saveRecorder(RecorderDraft draft) async =>
+      Ok(_ftpPreviewRecorder('waiting'));
 
   @override
   Future<Uri> audioStreamUri(int cameraId) async {
@@ -514,8 +567,10 @@ class _FakeSurveillanceRepository extends SurveillanceRepository {
         '$cameraId/audio/?ticket=preview');
   }
 
-  List<Camera> get _cameras =>
-      List.generate(cameraCount, (index) => _fakeCamera(index + 1));
+  List<Camera> get _cameras => [
+    ...List.generate(cameraCount, (index) => _fakeCamera(index + 1)),
+    if (withFtp) ..._ftpPreviewCameras,
+  ];
 
   @override
   Future<Result<SurveillanceStatus>> loadStatus() async {
@@ -547,6 +602,7 @@ class _FakeSurveillanceRepository extends SurveillanceRepository {
       return const Ok([]);
     }
     return Ok([
+      if (withFtp) _ftpPreviewRecorder(ftpState),
       Recorder(
         id: 1,
         name: 'جهاز المحل',
@@ -961,5 +1017,137 @@ class _RigTile extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FTP upload setups
+// ---------------------------------------------------------------------------
+
+const _ftpPreviewCameras = [
+  Camera(
+    id: 101,
+    recorderId: 9,
+    channel: 1,
+    name: 'الكاشير',
+    deviceName: '',
+    displayName: 'الكاشير',
+    isEnabled: true,
+    displayOrder: 1,
+    coversCheckout: true,
+    liveQuality: CameraQuality.sub,
+    playbackQuality: CameraQuality.main,
+    status: CameraStatus.online,
+    supportsLive: false,
+  ),
+  Camera(
+    id: 102,
+    recorderId: 9,
+    channel: 2,
+    name: '',
+    deviceName: '',
+    displayName: 'القناة 2',
+    isEnabled: true,
+    displayOrder: 2,
+    coversCheckout: false,
+    liveQuality: CameraQuality.sub,
+    playbackQuality: CameraQuality.main,
+    status: CameraStatus.online,
+    supportsLive: false,
+  ),
+];
+
+/// One FTP setup in the state a `&state=` names.
+Recorder _ftpPreviewRecorder(String state, {String? password}) {
+  final now = DateTime.now().toUtc();
+  String ago(Duration duration) => now.subtract(duration).toIso8601String();
+  final json = <String, Object?>{
+    'username': 'cam4829',
+    'password': password ?? 'k7m2p9x4w3tq',
+    'host': '192.168.1.10',
+    'server': {
+      'running': state != 'server-down',
+      'port': 21,
+      'passive_ports': '30000-30019',
+      'accepting': state != 'disk',
+      'refusing_reason': state == 'disk' ? 'disk_floor' : '',
+      'recent_unknown_logins': [
+        if (state == 'unknown-user')
+          {
+            'username': 'admin',
+            'peer': '192.168.1.108',
+            'at': ago(const Duration(minutes: 1)),
+          },
+      ],
+    },
+    'last_login_at': switch (state) {
+      'waiting' || 'unknown-user' || 'relay' => null,
+      _ => ago(const Duration(minutes: 3)),
+    },
+    'last_login_peer': '192.168.1.108',
+    'last_upload_at': switch (state) {
+      'receiving' || 'server-down' || 'disk' => ago(const Duration(minutes: 2)),
+      'stale' => ago(const Duration(days: 3)),
+      _ => null,
+    },
+    'last_upload_peer': '192.168.1.108',
+    'failed_login_count': state == 'wrong-password' ? 4 : 0,
+    'failed_login_at': state == 'wrong-password'
+        ? ago(const Duration(seconds: 30))
+        : null,
+    'failed_login_peer': '192.168.1.108',
+    'files_received': state == 'receiving' ? 1840 : 0,
+    'files_kept': state == 'receiving' ? 212 : 0,
+    'files_discarded': state == 'receiving' ? 1628 : 0,
+  };
+  return Recorder.fromJson({
+    'id': 9,
+    'name': 'مسجل المخزن',
+    'connection': 'ftp',
+    'brand': 'auto',
+    'host': '',
+    'status': 'ok',
+    'is_enabled': true,
+    'cameras': const [],
+    'ftp': json,
+  });
+}
+
+Widget _ftpConnection(String state) {
+  final repository = _FakeSurveillanceRepository(
+    withFtp: true,
+    ftpState: state,
+  );
+  return FtpConnectionPage(
+    create: () => CameraSettingsViewModel(
+      repository,
+      sweep: () async => const [],
+    ).ftpSetupFor(_ftpPreviewRecorder(state)),
+  );
+}
+
+/// Opens the "how does it connect" dialog on load, so it can be screenshotted
+/// without a click (Flutter web draws to a canvas the tools cannot click into).
+class _ConnectionChoiceHost extends StatefulWidget {
+  const _ConnectionChoiceHost();
+
+  @override
+  State<_ConnectionChoiceHost> createState() => _ConnectionChoiceHostState();
+}
+
+class _ConnectionChoiceHostState extends State<_ConnectionChoiceHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(showRecorderConnectionChoice(context));
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _settings();
   }
 }

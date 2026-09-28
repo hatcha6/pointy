@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../data/models/camera.dart';
 import '../../../data/repositories/surveillance_repository.dart';
 import '../../../data/services/recorder_discovery.dart';
+import 'ftp_setup_view_model.dart';
 
 /// Recorder setup and per-camera configuration.
 ///
@@ -135,6 +136,40 @@ class CameraSettingsViewModel extends ChangeNotifier {
       final result = await _repository.saveRecorder(draft);
       return result is Ok<Recorder>;
     });
+  }
+
+  /// Creates an FTP upload setup and returns it, credentials and all, so the
+  /// caller can put them in front of the installer straight away.
+  Future<Recorder?> createFtpRecorder({
+    required String name,
+    bool isEnabled = true,
+  }) async {
+    _isMutating = true;
+    notifyListeners();
+    final address = await _repository.ftpServerAddress();
+    final result = await _repository.saveRecorder(
+      RecorderDraft(
+        name: name,
+        connection: RecorderConnection.ftp,
+        isEnabled: isEnabled,
+        ftpHost: address ?? '',
+      ),
+    );
+    _isMutating = false;
+    switch (result) {
+      case Ok<Recorder>():
+        await load();
+        return result.value;
+      case Error<Recorder>():
+        notifyListeners();
+        return null;
+    }
+  }
+
+  /// The live view model behind one FTP setup's connection page. The page
+  /// owns it and disposes it.
+  FtpSetupViewModel ftpSetupFor(Recorder recorder) {
+    return FtpSetupViewModel(_repository, recorder: recorder);
   }
 
   Future<bool> deleteRecorder(int id) {

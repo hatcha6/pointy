@@ -1883,6 +1883,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
               widget.viewModel.settings?.enableSurveillance ?? false,
           onToggleEnabled: (enabled) =>
               widget.viewModel.setSurveillanceEnabled(enabled),
+          archiveRetentionDays:
+              widget.viewModel.settings?.surveillanceArchiveRetentionDays,
+          onArchiveRetentionChanged: (days) =>
+              widget.viewModel.setSurveillanceArchiveRetentionDays(days),
         ),
       ),
     );

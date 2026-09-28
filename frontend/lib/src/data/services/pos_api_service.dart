@@ -2963,6 +2963,16 @@ class PosApiService {
 
   Future<Recorder> syncRecorder(int id) => _surveillance.syncRecorder(id);
 
+  Future<Recorder> fetchRecorder(int id) => _surveillance.fetchRecorder(id);
+
+  Future<Recorder> regenerateFtpPassword(int id) {
+    return _surveillance.regenerateFtpPassword(id);
+  }
+
+  Future<Recorder> setFtpAddress(int id, String host) {
+    return _surveillance.setFtpAddress(id, host);
+  }
+
   Future<List<Camera>> fetchCameras({bool enabledOnly = false}) {
     return _surveillance.fetchCameras(enabledOnly: enabledOnly);
   }

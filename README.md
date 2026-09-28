@@ -851,6 +851,25 @@ every camera surface stays hidden until then. Camera names are the shop's own an
 pushed to the DVR. Mark the cameras that watch the counter as *covering
 checkout* to have them offered on invoices.
 
+**FTP upload setups** are the second way to connect a recorder, for boxes whose
+recordings Pointy cannot search or play over the network — which is most OEM
+DVRs, and every Hikvision whose FTP page only uploads pictures. Adding a
+recorder asks *direct connection or FTP upload*; an FTP setup generates a
+username and password and shows the server address and port to type into the
+DVR's FTP page. The `ftp` service (`make backend-ftp` in development, port 2121;
+the host's port 21 plus passive ports 30000-30019 on the appliance) receives the
+uploads and keeps **only the stretches around invoices and returns** — the rest
+is deleted as soon as every invoice that could want it exists. Kept clips are
+held for `surveillance_archive_retention_days` (30 by default) and to at most
+40% of the disk, oldest first, so camera footage can never fill the disk the
+database lives on. FTP cameras have no live view; invoice replay, the timeline,
+stills and export play from Pointy's own disk. Design and the reasoning behind
+every threshold: `SURVEILLANCE_FTP_PLAN.md`. On a Windows (WSL) server
+`bootstrap-wsl.ps1 -Boot` forwards and firewalls the FTP ports like the tills'
+(private addresses only), proves them every five minutes, and the `ftp` service
+switches to per-username lockouts because every DVR arrives from the Windows
+host's own address (`POINTY_FTP_BEHIND_PROXY`).
+
 Permissions are three, because shops ask for the distinction: watching live
 (`surveillance.view_live`), reviewing recordings (`surveillance.view_playback`),
 and taking a copy away (`surveillance.export_footage`). Managers hold all three;

@@ -688,8 +688,19 @@ function Get-PortListeners {
     } catch { return @() }   # Get-NetTCPConnection throws when nothing is listening
 }
 
+# The services running inside a process. "svchost" alone says nothing: the IP
+# Helper that carries our forwards lives in one, and so does IIS's FTP service.
+function Get-ServicesInProcess {
+    param([int]$ProcessId)
+    try {
+        return @(Get-CimInstance -ClassName Win32_Service -Filter "ProcessId=$ProcessId" -ErrorAction Stop |
+            ForEach-Object { "$($_.Name)" })
+    } catch { return @() }
+}
+
+# -Fix replaces the generic advice for a port whose owner knows better.
 function Write-PortDiagnosis {
-    param([int]$Port)
+    param([int]$Port, [string]$Fix = "")
     $listeners = @(Get-PortListeners -Port $Port)
     if ($listeners.Count -eq 0) {
         Write-Log ("  nothing is listening on port ${Port}: the IP Helper service has not opened the " +
@@ -697,7 +708,10 @@ function Write-PortDiagnosis {
         return
     }
     foreach ($listener in $listeners) {
-        Write-Log ("  {0}:{1} is held by {2} (PID {3})" -f $listener.Address, $Port, $listener.Name, $listener.ProcessId) "ERROR"
+        $services = @(Get-ServicesInProcess -ProcessId $listener.ProcessId)
+        $hosted = ""
+        if ($services.Count -gt 0) { $hosted = ": " + ($services -join ", ") }
+        Write-Log ("  {0}:{1} is held by {2} (PID {3}{4})" -f $listener.Address, $Port, $listener.Name, $listener.ProcessId, $hosted) "ERROR"
     }
     if (@($listeners | Where-Object { $_.Name -like "wslrelay*" }).Count -gt 0) {
         # See Write-WslConfig: this is the install-order race, already turned off
@@ -705,6 +719,8 @@ function Write-PortDiagnosis {
         Write-Log ("  wslrelay is WSL's localhost forwarding. It took port ${Port} before the LAN forward " +
                    "could, so the forward cannot bind. It is switched off in .wslconfig from now on; " +
                    "restart Windows once to apply that.") "ERROR"
+    } elseif ($Fix) {
+        Write-Log "  Fix: $Fix" "ERROR"
     } elseif ($Port -eq $WebPort) {
         # Windows very often already has something on :80 - IIS, the World Wide
         # Web Publishing Service, a vendor's print or label server. HTTP.sys
@@ -770,11 +786,14 @@ function Confirm-LanBridge {
 # Two things no check on this machine can see, because its requests to its own
 # LAN address never pass the inbound firewall. Name them instead.
 function Write-FirewallWarnings {
+    param($Ftp = $null)
+    $ports = "${ApiPort} and ${WebPort}"
+    if ($Ftp) { $ports = "${ApiPort}, ${WebPort}, $($Ftp.Port) and $($Ftp.Range) (FTP camera uploads)" }
     try {
         foreach ($fwProfile in @(Get-NetFirewallProfile -PolicyStore ActiveStore -ErrorAction Stop)) {
             if ("$($fwProfile.Enabled)" -eq "True" -and "$($fwProfile.AllowLocalFirewallRules)" -eq "False") {
                 Write-Log ("Group Policy makes the '$($fwProfile.Name)' firewall profile ignore local rules, so " +
-                           "the Pointy allow rules do nothing there. Allow inbound TCP ${ApiPort} and ${WebPort} " +
+                           "the Pointy allow rules do nothing there. Allow inbound TCP ${ports} " +
                            "in that policy instead.") "WARN"
             }
         }
@@ -782,21 +801,265 @@ function Write-FirewallWarnings {
     try {
         foreach ($product in @(Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName FirewallProduct -ErrorAction Stop)) {
             Write-Log ("a third-party firewall is installed ($($product.displayName)). If other devices cannot " +
-                       "connect, allow inbound TCP ${ApiPort} and ${WebPort} in it too.") "WARN"
+                       "connect, allow inbound TCP ${ports} in it too.") "WARN"
         }
     } catch { }   # Windows Server has no Security Center
 }
 
+# -Port is one port or a range ("30000-30019"). -RemoteAddress narrows who may
+# connect; without it, anyone the profile lets through.
 function Add-FirewallRule {
-    param([string]$Name, [int]$Port)
+    param([string]$Name, [string]$Port, [string[]]$RemoteAddress = @())
     try {
         if (Get-NetFirewallRule -DisplayName $Name -ErrorAction SilentlyContinue) { return }
-        New-NetFirewallRule -DisplayName $Name -Direction Inbound -Action Allow `
-            -Protocol TCP -LocalPort $Port -Profile Any -ErrorAction Stop | Out-Null
+        $rule = @{ DisplayName = $Name; Direction = "Inbound"; Action = "Allow"; Protocol = "TCP"
+                   LocalPort = $Port; Profile = "Any"; ErrorAction = "Stop" }
+        if ($RemoteAddress) { $rule.RemoteAddress = $RemoteAddress }
+        New-NetFirewallRule @rule | Out-Null
         Write-Log "opened the firewall for inbound TCP ${Port} ('${Name}')"
     } catch {
         Write-Log "could not add firewall rule '${Name}': $($_.Exception.Message)" "WARN"
     }
+}
+
+
+# ---------------------------------------------------------------------------
+# The DVRs' side of the bridge: FTP upload setups (SURVEILLANCE_FTP_PLAN.md).
+#
+# A DVR uploads to the `ftp` service on a control port (21) and opens its data
+# connections on a passive range (30000-30019), and every one of those ports
+# must cross the bridge like the tills' two. PASV hands the DVR this PC's LAN
+# address - the one the installer was shown - so each passive port is forwarded
+# 1:1. The ports come from the stack's own .env, so a shop that moved them (IIS
+# already holding 21, say) is followed without anyone re-running this by hand.
+#
+# Two differences from the tills' ports. No HTTP health path proves them: the
+# control port is proven by the server's greeting, and the passive ports - dark
+# between transfers - by their forwards' listeners. And a broken FTP bridge
+# stops camera uploads, not selling, so it is reported and never makes the
+# till bridge count as broken.
+#
+# The firewall rules admit the private ranges only: the backend refuses public
+# addresses itself on Linux, but behind a portproxy every DVR arrives from this
+# PC's own address, so here the firewall is the only thing that can.
+# ---------------------------------------------------------------------------
+
+# 30000,30001,30002,30005 -> "30000-30002, 30005"
+function Format-PortList {
+    param([int[]]$Ports)
+    $sorted = @($Ports | Sort-Object -Unique)
+    $parts = @()
+    $i = 0
+    while ($i -lt $sorted.Count) {
+        $j = $i
+        while ($j + 1 -lt $sorted.Count -and $sorted[$j + 1] -eq $sorted[$j] + 1) { $j++ }
+        if ($j -gt $i) { $parts += "$($sorted[$i])-$($sorted[$j])" } else { $parts += "$($sorted[$i])" }
+        $i = $j + 1
+    }
+    return ($parts -join ", ")
+}
+
+# The FTP ports as the stack's .env sets them (lines of `grep ^POINTY_FTP_`),
+# with docker-compose.yml's defaults for anything it leaves out. $null, and
+# logged, when the .env names something the bridge must not forward.
+function ConvertFrom-FtpEnv {
+    param([string]$Text)
+    $port = 21; $low = 30000; $high = 30019
+    foreach ($line in (($Text -replace "`0", "") -split "`r?`n")) {
+        if ($line -match '^\s*POINTY_FTP_PUBLIC_PORT\s*=\s*["'']?(\d{1,5})["'']?\s*(#.*)?$') {
+            $port = [int]$Matches[1]
+        } elseif ($line -match '^\s*POINTY_FTP_PASSIVE_PORTS\s*=\s*["'']?(\d{1,5}(-\d{1,5})?)["'']?\s*(#.*)?$') {
+            $bounds = @($Matches[1] -split '-')
+            $low = [int]$bounds[0]
+            $high = [int]$bounds[-1]
+        }
+    }
+    if ($port -lt 1 -or $port -gt 65535 -or $low -lt 1024 -or $high -lt $low -or $high -gt 65535 -or
+        ($port -ge $low -and $port -le $high)) {
+        Write-Log ("the FTP ports in ${GuestDir}/.env (POINTY_FTP_PUBLIC_PORT=${port}, POINTY_FTP_PASSIVE_PORTS=" +
+                   "${low}-${high}) are not usable; FTP camera uploads are not bridged to the LAN") "ERROR"
+        return $null
+    }
+    # One portproxy rule per port: a range meant for a Linux host (thousands of
+    # ports) would bury the IP Helper.
+    if ($high - $low + 1 -gt 100) {
+        Write-Log ("POINTY_FTP_PASSIVE_PORTS in ${GuestDir}/.env spans $($high - $low + 1) ports; the Windows " +
+                   "bridge forwards each port on its own and stops at 100. Narrow it (30000-30019 is plenty) and " +
+                   "re-run install.sh; FTP camera uploads are not bridged until then") "ERROR"
+        return $null
+    }
+    $range = "$low"
+    if ($high -gt $low) { $range = "${low}-${high}" }
+    return [pscustomobject]@{ Port = $port; Passive = @($low..$high); Range = $range }
+}
+
+function Get-FtpPorts {
+    # Exit 1 is "no such line" and 2 "no .env yet": both leave the defaults.
+    $r = Invoke-Guest "grep '^POINTY_FTP_' '${GuestDir}/.env'"
+    return (ConvertFrom-FtpEnv -Text $r.Output)
+}
+
+# What a server says on connect, or "" when nothing answered in time.
+function Get-FtpGreeting {
+    param([string]$Address, [int]$Port, [int]$TimeoutMs = 4000)
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $pending = $client.BeginConnect($Address, $Port, $null, $null)
+        if (-not $pending.AsyncWaitHandle.WaitOne($TimeoutMs)) { return "" }
+        $client.EndConnect($pending)
+        $stream = $client.GetStream()
+        $stream.ReadTimeout = $TimeoutMs
+        $buffer = New-Object byte[] 256
+        $text = ""
+        while ($text -notmatch "`n" -and $text.Length -lt 256) {
+            $read = $stream.Read($buffer, 0, $buffer.Length)
+            if ($read -le 0) { break }
+            $text += [System.Text.Encoding]::ASCII.GetString($buffer, 0, $read)
+        }
+        return $text.Trim()
+    } catch {
+        return ""
+    } finally {
+        $client.Close()
+    }
+}
+
+# Ours greets with "220 Pointy camera upload ready." - so, like the HTTP health
+# paths, a pass cannot come from IIS's FTP service holding the port instead.
+function Test-PointyFtp {
+    param([string]$Address, [int]$Port)
+    return ((Get-FtpGreeting -Address $Address -Port $Port) -like "220*Pointy*")
+}
+
+# The ports the IP Helper - which carries out every portproxy forward - is
+# listening on right now, as a set; $null when that cannot be told.
+function Get-ForwardListeningPorts {
+    try {
+        $helper = Get-CimInstance -ClassName Win32_Service -Filter "Name='iphlpsvc'" -ErrorAction Stop
+        $helperPid = [int]$helper.ProcessId
+        $ports = @{}
+        if ($helperPid -le 0) { return $ports }
+        foreach ($connection in @(Get-NetTCPConnection -State Listen -ErrorAction Stop)) {
+            if ([int]$connection.OwningProcess -eq $helperPid) { $ports[[int]$connection.LocalPort] = $true }
+        }
+        return $ports
+    } catch { return $null }
+}
+
+# Port ranges Windows keeps from programs, from
+# `netsh interface ipv4 show excludedportrange protocol=tcp`. Hyper-V's NAT,
+# which WSL runs on, takes blocks of the dynamic range (49152 and up) at every
+# boot, and a forward inside one cannot listen: netsh still says it worked.
+# Administered (*) ranges are an operator's own reservations, which a program
+# may still listen on.
+function Get-ExcludedPortRanges {
+    $r = Invoke-Native -File "netsh.exe" -Arguments @("interface", "ipv4", "show", "excludedportrange", "protocol=tcp")
+    $ranges = @()
+    foreach ($line in ($r.Output -split "`r?`n")) {
+        if ($line -match '^\s*(\d+)\s+(\d+)\s*(\*?)\s*$') {
+            $ranges += [pscustomobject]@{ Start = [int]$Matches[1]; End = [int]$Matches[2]; Administered = ($Matches[3] -eq "*") }
+        }
+    }
+    return $ranges
+}
+
+function Write-FtpPassiveDiagnosis {
+    param([int[]]$Ports)
+    $named = $false
+    foreach ($range in @(Get-ExcludedPortRanges | Where-Object { -not $_.Administered })) {
+        $inside = @($Ports | Where-Object { $_ -ge $range.Start -and $_ -le $range.End })
+        if ($inside.Count -gt 0) {
+            Write-Log ("  Windows has reserved TCP $($range.Start)-$($range.End) (Hyper-V's NAT, which WSL runs on, " +
+                       "takes blocks like it at boot), so nothing can listen on $(Format-PortList $inside)") "ERROR"
+            $named = $true
+        }
+    }
+    foreach ($port in $Ports) {
+        foreach ($listener in @(Get-PortListeners -Port $port)) {
+            Write-Log ("  {0}:{1} is held by {2} (PID {3})" -f $listener.Address, $port, $listener.Name, $listener.ProcessId) "ERROR"
+            $named = $true
+        }
+    }
+    if (-not $named) {
+        Write-Log ("  nothing else holds them: the IP Helper service has not opened the forwards. Check " +
+                   "'Get-Service iphlpsvc' and 'netsh interface portproxy show v4tov4'.") "ERROR"
+        return
+    }
+    Write-Log ("  Fix: set POINTY_FTP_PASSIVE_PORTS in ${GuestDir}/.env to a free range below 49152 (30000-30019 " +
+               "by default), re-run install.sh inside the distro, then this script with -Boot -Once. " +
+               "'netsh interface ipv4 show excludedportrange protocol=tcp' lists what Windows holds.") "ERROR"
+}
+
+# Forward every FTP port at the VM and open the firewall for them. Returns
+# $true when a forward was (re)pointed.
+function Update-FtpBridge {
+    param([string]$WslIp, $Ftp)
+    $changed = $false
+    foreach ($port in @($Ftp.Port) + @($Ftp.Passive)) {
+        if (Set-PortProxy -Port $port -Target $WslIp) { $changed = $true }
+    }
+    $lan = @("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
+    Add-FirewallRule -Name "Pointy FTP (TCP $($Ftp.Port))" -Port "$($Ftp.Port)" -RemoteAddress $lan
+    Add-FirewallRule -Name "Pointy FTP data (TCP $($Ftp.Range))" -Port $Ftp.Range -RemoteAddress $lan
+    return $changed
+}
+
+# The DVRs' path, walked like the tills' (Confirm-LanBridge). $true when it
+# answers, $false when a hop is broken, $null when the FTP service itself is
+# not answering yet - nothing to judge, and nothing to repair.
+function Confirm-FtpBridge {
+    param([string]$WslIp, $Ftp)
+    $port = $Ftp.Port
+
+    # 1. The service, from Windows to the VM.
+    if (-not (Test-PointyFtp -Address $WslIp -Port $port)) {
+        Write-Log ("FTP port ${port}: the camera upload service does not answer at ${WslIp}:${port} yet, so FTP " +
+                   "upload setups cannot connect ('docker compose ps ftp' in ${GuestDir} says why)") "WARN"
+        return $null
+    }
+
+    # 2. The control port on this machine's own addresses, the way a DVR dials it.
+    $targets = @("127.0.0.1") + @(Get-LanIPv4)
+    $dead = @($targets | Where-Object { -not (Test-PointyFtp -Address $_ -Port $port) })
+    if ($dead.Count -gt 0) {
+        Write-Log "FTP port ${port}: the LAN forward does not answer on $($dead -join ', '); re-creating it" "WARN"
+        Set-PortProxy -Port $port -Target $WslIp -Force | Out-Null
+        Start-Sleep -Seconds 2
+        $dead = @($targets | Where-Object { -not (Test-PointyFtp -Address $_ -Port $port) })
+        if ($dead.Count -gt 0) {
+            Write-Log "FTP port ${port}: still unreachable on $($dead -join ', ') after re-creating the forward" "ERROR"
+            Write-PortDiagnosis -Port $port -Fix ("stop that service (IIS's FTP server is 'ftpsvc'), or set " +
+                "POINTY_FTP_PUBLIC_PORT in ${GuestDir}/.env to a free port, re-run install.sh inside the distro, " +
+                "and type the new port into each DVR's FTP settings.")
+            return $false
+        }
+        Write-Log "FTP port ${port}: the re-created forward answers"
+    }
+
+    # 3. The passive range: a listener per forward, or a DVR logs in and then
+    #    cannot send a byte. The control port's forward has just answered, so
+    #    its listener must be in the set; if it is not, this machine hides who
+    #    listens, and a data port missing from the set would prove nothing -
+    #    re-creating twenty working forwards every cycle is worse than not
+    #    looking.
+    $listening = Get-ForwardListeningPorts
+    if ($null -eq $listening -or -not $listening.ContainsKey($port)) { return $true }
+    $missing = @($Ftp.Passive | Where-Object { -not $listening.ContainsKey($_) })
+    if ($missing.Count -gt 0) {
+        Write-Log "FTP data ports: no forward is listening on $(Format-PortList $missing); re-creating them" "WARN"
+        foreach ($p in $missing) { Set-PortProxy -Port $p -Target $WslIp -Force | Out-Null }
+        Start-Sleep -Seconds 2
+        $listening = Get-ForwardListeningPorts
+        if ($null -ne $listening) { $missing = @($missing | Where-Object { -not $listening.ContainsKey($_) }) }
+        if ($missing.Count -gt 0) {
+            Write-Log ("FTP data ports: still nothing listening on $(Format-PortList $missing), so a DVR can log in " +
+                       "but not upload") "ERROR"
+            Write-FtpPassiveDiagnosis -Ports $missing
+            return $false
+        }
+        Write-Log "FTP data ports: the re-created forwards listen"
+    }
+    return $true
 }
 
 # One reconcile pass. Returns $true when the bridge was (re)pointed at the
@@ -844,19 +1107,36 @@ function Invoke-BootReconcile {
         $result = Confirm-LanBridge -WslIp $ip -Port $entry.Port -HealthPath $entry.HealthPath
         if ($result -ne $true) { $verified = $false }
     }
+
+    # The DVRs' ports, judged apart: see "The DVRs' side of the bridge".
+    $ftp = Get-FtpPorts
+    $ftpVerified = $null
+    if ($ftp) {
+        if (Update-FtpBridge -WslIp $ip -Ftp $ftp) { $changed = $true }
+        $ftpVerified = Confirm-FtpBridge -WslIp $ip -Ftp $ftp
+    }
     # Once per boot is enough: these only change when someone changes the machine.
-    if ($changed) { Write-FirewallWarnings }
+    if ($changed) { Write-FirewallWarnings -Ftp $ftp }
 
     $lan = @(Get-LanIPv4)
     try {
-        @{ wsl_ip = $ip; lan_ips = $lan; api_port = $ApiPort; web_port = $WebPort
-           verified = $verified; updated_at = (Get-Date -Format "o") } |
-            ConvertTo-Json | Set-Content -Path $StateFile -Encoding UTF8
+        $state = @{ wsl_ip = $ip; lan_ips = $lan; api_port = $ApiPort; web_port = $WebPort
+                    verified = $verified; updated_at = (Get-Date -Format "o") }
+        if ($ftp) {
+            $state.ftp_port = $ftp.Port; $state.ftp_passive_ports = $ftp.Range; $state.ftp_verified = $ftpVerified
+        }
+        $state | ConvertTo-Json | Set-Content -Path $StateFile -Encoding UTF8
     } catch { }
 
     $where = if ($lan.Count) { " - tills reach it at " + (($lan | ForEach-Object { "http://${_}:${ApiPort}" }) -join ", ") } else { "" }
-    if ($changed) { Write-Log "LAN bridge reconciled onto ${ip}${where}" }
-    elseif ($verified) { Write-Log "LAN bridge already correct and answering (${ip}); nothing to do" }
+    if ($changed) {
+        Write-Log "LAN bridge reconciled onto ${ip}${where}"
+        if ($ftp -and $lan.Count) {
+            Write-Log ("DVRs upload over FTP to " + (($lan | ForEach-Object { "${_}:$($ftp.Port)" }) -join ", ") +
+                       " (data ports $($ftp.Range))")
+        }
+    }
+    elseif ($verified -and $ftpVerified -ne $false) { Write-Log "LAN bridge already correct and answering (${ip}); nothing to do" }
     else { Write-Log "LAN bridge configured for ${ip}, but not every hop answered; see above" "WARN" }
     return $true
 }
