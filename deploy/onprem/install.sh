@@ -553,7 +553,7 @@ now() { date +%s; }
 # restart-path update back. When everything but `ftp` comes up, that is a
 # working shop: say what is missing, and carry on.
 compose_up() {
-  local rest port
+  local rest port passive
   compose up -d && return 0
   rest="$(compose config --services 2>/dev/null | grep -vx ftp | tr '\n' ' ' || true)"
   [ -n "${rest// /}" ] || return 1
@@ -563,8 +563,9 @@ compose_up() {
   # server that is really not running is worth a warning.
   compose ps --status running --services 2>/dev/null | grep -qx ftp && return 0
   port="$(env_value POINTY_FTP_PUBLIC_PORT)"
+  passive="$(env_value POINTY_FTP_PASSIVE_PORTS)"
   echo "WARNING: everything is up except the FTP upload server. Most likely another" >&2
-  echo "         program holds port ${port:-21} or the passive range 50000-50019. FTP" >&2
+  echo "         program holds port ${port:-21} or the passive range ${passive:-30000-30019}. FTP" >&2
   echo "         camera setups receive nothing until it is freed (then run:" >&2
   echo "         docker compose up -d ftp); the rest of Pointy is unaffected." >&2
   return 0

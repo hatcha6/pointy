@@ -310,6 +310,9 @@ test_a_taken_ftp_port_does_not_fail_the_install() {
   _knob ftp_port_taken 1
   assert_ok _install
   assert_contains "$(_out)" "everything is up except the FTP upload server"
+  # The range compose publishes, not the one it had before it moved below
+  # Hyper-V's reserved blocks.
+  assert_contains "$(_out)" "passive range 30000-30019"
   assert_called docker 'compose * up -d postgres pgbouncer redis backend celery-worker celery-beat connector edge web'
   assert_called docker 'compose * cp clients/*'
 }
