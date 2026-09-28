@@ -14,6 +14,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/shared/components/components.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
+import 'package:pointy_frontend/src/shared/product_status_pill.dart';
 import 'package:pointy_frontend/src/shared/theme/theme_controller.dart';
 import 'package:pointy_frontend/src/shared/theme/theme_mode_controls.dart';
 
@@ -206,6 +207,43 @@ class _Gallery extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 24),
+              // Selected fills sit on primaryContainer, which flips per palette.
+              Text('التحديد · Selection', style: text.titleMedium),
+              const SizedBox(height: 12),
+              PointyDataRow(
+                selected: true,
+                leading: Icon(
+                  Icons.point_of_sale_outlined,
+                  color: colors.primaryStrong,
+                ),
+                title: 'صف محدد',
+                subtitle: 'سطر وصفي ثانوي',
+                badges: const [
+                  PointyStatusPill(label: 'مفتوحة', icon: Icons.lock_open),
+                ],
+                trailing: const PointyDisclosureChevron(),
+                onTap: () {},
+              ),
+              const SizedBox(height: 8),
+              PointyDataRow(
+                leading: Icon(Icons.lock_outline, color: colors.primaryStrong),
+                title: 'صف غير محدد',
+                subtitle: 'سطر وصفي ثانوي',
+                trailing: const PointyDisclosureChevron(),
+                onTap: () {},
+              ),
+              const SizedBox(height: 12),
+              const Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ProductStatusPill(isActive: true),
+                  ProductStatusPill(isActive: false),
+                  ProductStatusPill(isActive: true, isArchived: true),
+                  ProductStatusPill(isActive: true, compact: true),
+                ],
               ),
               const SizedBox(height: 20),
               Wrap(

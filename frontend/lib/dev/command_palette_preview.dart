@@ -2,7 +2,8 @@
 //
 // Mounts the CommandPaletteScope over a stub home with the navigation drawer,
 // and auto-opens the palette so it can be screenshotted. Also reachable via the
-// on-screen button, the drawer's "search" tile, or Ctrl/⌘+K. Run with:
+// on-screen button, the drawer's "search" tile, or Ctrl/⌘+K. Add
+// `?theme=dark` to check it against the dark palette. Run with:
 //
 //   flutter run -d web-server --web-port 8080 -t lib/dev/command_palette_preview.dart
 //
@@ -28,6 +29,8 @@ final PosUser _managerUser = PosUser.fromJson(const {
 
 final AppNavigation _navigation = _FakeNavigation();
 
+bool _isDark() => Uri.base.queryParameters['theme'] == 'dark';
+
 class _PreviewApp extends StatelessWidget {
   const _PreviewApp();
 
@@ -43,7 +46,7 @@ class _PreviewApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: PointyTheme.light(),
+      theme: _isDark() ? PointyTheme.dark() : PointyTheme.light(),
       builder: (context, child) => PointyNavigationRailScope(
         isActive: false,
         controller: PointyNavigationRailController(),

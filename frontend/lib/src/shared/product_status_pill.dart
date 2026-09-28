@@ -31,7 +31,7 @@ class ProductStatusPill extends StatelessWidget {
       foreground = colorScheme.onTertiaryContainer;
       label = l10n.archivedStatus;
     } else if (isActive) {
-      background = PointyColors.primaryContainer;
+      background = colors.primaryContainer;
       foreground = colors.primaryDark;
       label = l10n.activeStatus;
     } else {

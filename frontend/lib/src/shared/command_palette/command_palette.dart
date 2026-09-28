@@ -848,7 +848,7 @@ class _CommandRow extends StatelessWidget {
     final foreground = selected ? colors.primaryDark : colors.ink;
 
     return Material(
-      color: selected ? PointyColors.primaryContainer : Colors.transparent,
+      color: selected ? colors.primaryContainer : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         onHover: (hovering) {
@@ -907,7 +907,7 @@ class _CommandRow extends StatelessWidget {
                   ),
                   style: i == actionFocusIndex
                       ? IconButton.styleFrom(
-                          backgroundColor: PointyColors.primaryContainer,
+                          backgroundColor: colors.primaryContainer,
                         )
                       : null,
                   tooltip: item.actions[i].tooltip,

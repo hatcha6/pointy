@@ -34,7 +34,7 @@ class PointyDataRow extends StatelessWidget {
     final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
     final radius = BorderRadius.circular(PointyRadii.card);
-    final rowColor = selected ? PointyColors.primaryContainer : colors.surface;
+    final rowColor = selected ? colors.primaryContainer : colors.surface;
 
     // Not clipped: a clipped Material is a PhysicalShape, one saveLayer per
     // row while a list scrolls. The ink is bounded by the InkWell's own
