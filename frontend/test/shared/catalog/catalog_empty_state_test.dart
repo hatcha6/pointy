@@ -19,18 +19,18 @@ void main() {
   testWidgets('names the search term and offers a clear action', (
     tester,
   ) async {
-    var cleared = 0;
+    ProductQuery? cleared;
     await _pumpEmptyState(
       tester,
       query: const ProductQuery(search: 'شيبس'),
-      onClear: () => cleared++,
+      onClear: (query) => cleared = query,
     );
 
     expect(find.textContaining('شيبس'), findsOneWidget);
     expect(find.text('لا توجد منتجات'), findsNothing);
 
     await tester.tap(find.text('مسح البحث والفلاتر'));
-    expect(cleared, 1);
+    expect(cleared?.search, isEmpty);
   });
 
   testWidgets('explains a category filter with no search term', (tester) async {
@@ -69,6 +69,41 @@ void main() {
       expect(find.text('أضف منتجًا'), findsNothing);
     });
   }
+
+  // The till and purchasing pin "active only" themselves; the user never set
+  // it and could not clear it — the screen puts it straight back.
+  testWidgets('availability the screen pins is not a filter to clear', (
+    tester,
+  ) async {
+    await _pumpEmptyState(
+      tester,
+      query: const ProductQuery(availability: ProductAvailabilityFilter.active),
+      allowAvailabilityFilter: false,
+    );
+
+    expect(find.text('لا توجد منتجات'), findsOneWidget);
+    expect(find.text('مسح البحث والفلاتر'), findsNothing);
+  });
+
+  testWidgets('clearing leaves availability the screen pins alone', (
+    tester,
+  ) async {
+    ProductQuery? cleared;
+    await _pumpEmptyState(
+      tester,
+      query: const ProductQuery(
+        search: 'شيبس',
+        availability: ProductAvailabilityFilter.active,
+      ),
+      allowAvailabilityFilter: false,
+      onClear: (query) => cleared = query,
+    );
+
+    await tester.tap(find.text('مسح البحث والفلاتر'));
+
+    expect(cleared?.search, isEmpty);
+    expect(cleared?.availability, ProductAvailabilityFilter.active);
+  });
 
   testWidgets('shows the create action only on a genuinely empty catalog', (
     tester,
@@ -153,7 +188,8 @@ void main() {
 Future<void> _pumpEmptyState(
   WidgetTester tester, {
   required ProductQuery query,
-  VoidCallback? onClear,
+  ValueChanged<ProductQuery>? onClear,
+  bool allowAvailabilityFilter = true,
   Widget? emptyAction,
 }) async {
   await tester.pumpWidget(
@@ -168,7 +204,8 @@ Future<void> _pumpEmptyState(
           child: CatalogEmptyState(
             query: query,
             emptyMessage: 'لا توجد منتجات',
-            onClear: onClear ?? () {},
+            onClear: onClear ?? (_) {},
+            allowAvailabilityFilter: allowAvailabilityFilter,
             emptyAction: emptyAction,
           ),
         ),

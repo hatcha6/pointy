@@ -171,9 +171,7 @@ class ProductList extends StatelessWidget {
               emptyBuilder: (context) => CatalogEmptyState(
                 query: viewModel.query,
                 emptyMessage: l10n.emptyCatalog,
-                onClear: () => viewModel.applyQuery(
-                  CatalogEmptyState.cleared(viewModel.query),
-                ),
+                onClear: viewModel.applyQuery,
                 emptyAction: capabilities.canCreateProduct
                     ? FilledButton.icon(
                         onPressed: onCreateProduct,

@@ -17,12 +17,21 @@ class CatalogEmptyState extends StatelessWidget {
     required this.query,
     required this.emptyMessage,
     required this.onClear,
+    this.allowAvailabilityFilter = true,
     this.emptyAction,
   });
 
   final ProductQuery query;
   final String emptyMessage;
-  final VoidCallback onClear;
+
+  /// Receives [query] with every user-set filter stripped (see [cleared]).
+  final ValueChanged<ProductQuery> onClear;
+
+  /// Whether [ProductQuery.availability] is the user's to choose here, as it is
+  /// for the screen's `ProductQueryControls`. The till and the purchasing
+  /// catalog pin it to active products themselves: an "active only" query is
+  /// where they start, not a filter to explain or clear.
+  final bool allowAvailabilityFilter;
 
   /// Shown only when the list is genuinely empty — never alongside the
   /// "clear filters" escape, where inviting the user to create a product they
@@ -31,23 +40,34 @@ class CatalogEmptyState extends StatelessWidget {
 
   /// Whether the user narrowed the listing themselves. [ProductQuery.stock] and
   /// [ProductQuery.preferredSupplierId] are deliberately excluded: the app sets
-  /// those, so the user has nothing to clear.
-  static bool isFiltered(ProductQuery query) {
+  /// those, so the user has nothing to clear. So is [ProductQuery.availability]
+  /// unless [allowAvailabilityFilter].
+  static bool isFiltered(
+    ProductQuery query, {
+    bool allowAvailabilityFilter = true,
+  }) {
     return query.search.trim().isNotEmpty ||
         query.categories.isNotEmpty ||
-        query.availability != ProductAvailabilityFilter.all ||
+        (allowAvailabilityFilter &&
+            query.availability != ProductAvailabilityFilter.all) ||
         query.archived == ProductArchivedFilter.onlyArchived ||
         query.supplierId != null;
   }
 
   /// Strips every user-set filter, leaving app-set ones ([ProductQuery.stock],
-  /// [ProductQuery.system], [ProductQuery.preferredSupplierId]) and the chosen
-  /// ordering intact.
-  static ProductQuery cleared(ProductQuery query) {
+  /// [ProductQuery.system], [ProductQuery.preferredSupplierId], and
+  /// [ProductQuery.availability] unless [allowAvailabilityFilter]) and the
+  /// chosen ordering intact.
+  static ProductQuery cleared(
+    ProductQuery query, {
+    bool allowAvailabilityFilter = true,
+  }) {
     return query.withSupplier().copyWith(
       search: '',
       categories: const [],
-      availability: ProductAvailabilityFilter.all,
+      availability: allowAvailabilityFilter
+          ? ProductAvailabilityFilter.all
+          : query.availability,
       archived: ProductArchivedFilter.excludeArchived,
     );
   }
@@ -57,7 +77,7 @@ class CatalogEmptyState extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final search = query.search.trim();
 
-    if (!isFiltered(query)) {
+    if (!isFiltered(query, allowAvailabilityFilter: allowAvailabilityFilter)) {
       return PointyEmptyState(
         icon: Icons.inventory_2_outlined,
         title: emptyMessage,
@@ -80,7 +100,9 @@ class CatalogEmptyState extends StatelessWidget {
         ProductSearchMode.name => l10n.catalogNoResultsNameModeMessage,
       },
       action: FilledButton.tonalIcon(
-        onPressed: onClear,
+        onPressed: () => onClear(
+          cleared(query, allowAvailabilityFilter: allowAvailabilityFilter),
+        ),
         icon: const Icon(Icons.filter_alt_off_outlined),
         label: Text(l10n.catalogClearSearchAndFiltersButton),
       ),

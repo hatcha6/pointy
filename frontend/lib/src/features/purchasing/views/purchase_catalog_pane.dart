@@ -88,9 +88,8 @@ class PurchaseCatalogPane extends StatelessWidget {
             emptyBuilder: (context) => CatalogEmptyState(
               query: viewModel.query,
               emptyMessage: l10n.emptyCatalog,
-              onClear: () => viewModel.applyQuery(
-                CatalogEmptyState.cleared(viewModel.query),
-              ),
+              allowAvailabilityFilter: false,
+              onClear: viewModel.applyQuery,
             ),
             gridDelegate: PointyProductCardGrid.delegateFor(
               width: constraints.maxWidth,

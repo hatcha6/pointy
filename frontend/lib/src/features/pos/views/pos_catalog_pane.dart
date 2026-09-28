@@ -163,8 +163,8 @@ class _PosCatalogProducts extends StatelessWidget {
         Widget emptyState(BuildContext context) => CatalogEmptyState(
           query: viewModel.query,
           emptyMessage: emptyMessage,
-          onClear: () =>
-              viewModel.applyQuery(CatalogEmptyState.cleared(viewModel.query)),
+          allowAvailabilityFilter: false,
+          onClear: viewModel.applyQuery,
         );
 
         Widget item(BuildContext context, Product product) {
