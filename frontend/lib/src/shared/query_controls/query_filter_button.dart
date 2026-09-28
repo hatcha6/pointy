@@ -29,7 +29,7 @@ class QueryFilterButton extends StatelessWidget {
       child: Material(
         color: onPressed == null
             ? colors.surfaceSunken
-            : PointyColors.primaryContainer,
+            : colors.primaryContainer,
         borderRadius: BorderRadius.circular(8),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -90,12 +90,12 @@ class _ActiveCountBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.pointyColors;
+    final theme = Theme.of(context);
 
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: PointyColors.primary,
-        borderRadius: BorderRadius.all(Radius.circular(PointyRadii.pill)),
+      decoration: BoxDecoration(
+        color: context.pointyColors.primary,
+        borderRadius: const BorderRadius.all(Radius.circular(PointyRadii.pill)),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 22),
@@ -104,9 +104,11 @@ class _ActiveCountBadge extends StatelessWidget {
           child: Text(
             '$count',
             textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: colors.surface),
+            // onPrimary, not the surface colour: the teal stays put in dark
+            // mode while the surface goes dark, and dark-on-teal barely reads.
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onPrimary,
+            ),
           ),
         ),
       ),

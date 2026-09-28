@@ -503,6 +503,7 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
             query: viewModel.query,
             catalogRepository: viewModel.catalogRepository,
             allowAvailabilityFilter: false,
+            defaultOrdering: PosViewModel.defaultOrdering,
             searchHint: l10n.posProductLookupHint,
             searchFieldKey: const ValueKey('product_lookup_field'),
             searchFocusNode: _searchFocusNode,

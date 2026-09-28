@@ -436,14 +436,17 @@ class PosViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Cashiers browse "most bought" first so the fast-movers are one tap away.
+  /// The search bar's filter badge counts the sort only once it leaves this.
+  static const defaultOrdering = ProductOrdering.mostBought;
+
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
     // Overselling is disabled by default, so start by hiding out-of-stock
     // products; this is reconciled against the real shop setting once the
     // checkout settings load.
     stock: ProductStockFilter.inStockOnly,
-    // Cashiers browse "most bought" first so the fast-movers are one tap away.
-    ordering: ProductOrdering.mostBought,
+    ordering: defaultOrdering,
     // A provider's cards (Qareeb) are sold from the catalog like anything
     // else; the recharge service products stay hidden.
     system: ProductSystemFilter.sellable,

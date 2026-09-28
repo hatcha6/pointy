@@ -27,6 +27,7 @@ class ProductQueryControls extends StatefulWidget {
     required this.onQueryChanged,
     this.contactRepository,
     this.allowAvailabilityFilter = true,
+    this.defaultOrdering = ProductOrdering.name,
     this.onSearchSubmitted,
     this.onOpenCameraScanner,
     this.searchHint,
@@ -44,6 +45,13 @@ class ProductQueryControls extends StatefulWidget {
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<ProductQuery> onQueryChanged;
   final bool allowAvailabilityFilter;
+
+  /// The sort the screen opens on. The filter badge counts the sort only once
+  /// it moves off this one, and the filter sheet's reset returns to it: the
+  /// till opens on most-bought, and that is where it starts, not a filter
+  /// the cashier set.
+  final ProductOrdering defaultOrdering;
+
   final FutureOr<bool> Function(String value)? onSearchSubmitted;
   final VoidCallback? onOpenCameraScanner;
   final String? searchHint;
@@ -151,7 +159,7 @@ class _ProductQueryControlsState extends State<ProductQueryControls> {
             : 0) +
         (query.categories.isEmpty ? 0 : 1) +
         (query.supplierId == null ? 0 : 1) +
-        (query.ordering == ProductOrdering.name ? 0 : 1);
+        (query.ordering == widget.defaultOrdering ? 0 : 1);
   }
 
   Future<void> _showFilters(BuildContext context) async {
@@ -164,6 +172,7 @@ class _ProductQueryControlsState extends State<ProductQueryControls> {
           catalogRepository: widget.catalogRepository,
           contactRepository: widget.contactRepository,
           allowAvailabilityFilter: widget.allowAvailabilityFilter,
+          defaultOrdering: widget.defaultOrdering,
         );
       },
     );

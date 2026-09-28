@@ -18,11 +18,15 @@ class ProductFilterSheet extends StatefulWidget {
     required this.catalogRepository,
     required this.allowAvailabilityFilter,
     this.contactRepository,
+    this.defaultOrdering = ProductOrdering.name,
   });
 
   final ProductQuery query;
   final CatalogRepository catalogRepository;
   final bool allowAvailabilityFilter;
+
+  /// The screen's own sort, which reset returns to.
+  final ProductOrdering defaultOrdering;
 
   /// When provided, the sheet shows a "supplier" filter (products supplied by
   /// the chosen supplier, resolved through their purchase orders). Omitted for
@@ -205,8 +209,9 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
       _selectedCategories = [];
       // Reset to the surface's own default sort (most-bought on POS/catalog,
       // A–Z elsewhere) rather than hard-coding A–Z, which would drop the
-      // most-bought default whenever a cashier taps Reset.
-      _ordering = widget.query.ordering;
+      // most-bought default whenever a cashier taps Reset — nor keep the sort
+      // in force, which would leave the filter badge counting it.
+      _ordering = widget.defaultOrdering;
       _supplierId = null;
       _supplierName = null;
     });

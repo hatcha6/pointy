@@ -565,6 +565,7 @@ class _CatalogActionBar extends StatelessWidget {
                 query: query,
                 catalogRepository: catalogRepository,
                 contactRepository: contactRepository,
+                defaultOrdering: CatalogViewModel.defaultOrdering,
                 searchFieldKey: const ValueKey('catalog_product_lookup_field'),
                 onSearchChanged: onSearchChanged,
                 onSearchSubmitted: onBarcodeSubmitted,

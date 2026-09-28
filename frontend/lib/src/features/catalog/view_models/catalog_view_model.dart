@@ -90,15 +90,19 @@ class CatalogViewModel extends ChangeNotifier {
   // Duplicate SKU/barcode findings from the last failed create, so the product
   // form can mark the offending field instead of printing one red line.
   List<CatalogIdentityConflict> _saveConflicts = const [];
-  // Browse "most bought" first by default (A–Z stays available in the filters).
-  //
+
+  /// Browse "most bought" first by default (A–Z stays available in the
+  /// filters). The search bar's filter badge counts the sort only once it
+  /// leaves this.
+  static const defaultOrdering = ProductOrdering.mostBought;
+
   // The back office is the ONE listing that asks for system products — the
   // recharge service product per provider. They are hidden from the till and
   // the price checker because they are priced per line and would read as
   // «0.00 د.ل», but this is where an owner renames one or reads what it
   // earned, so hiding them here would hide them everywhere.
   ProductQuery _query = const ProductQuery(
-    ordering: ProductOrdering.mostBought,
+    ordering: defaultOrdering,
     system: ProductSystemFilter.includeSystem,
   );
 
