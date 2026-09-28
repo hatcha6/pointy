@@ -7098,6 +7098,18 @@ abstract class AppLocalizations {
   /// **'يُسجَّل المبلغ في جلسة درجك. إن لم تكن مفتوحة نفتحها لك قبل إصدار الفاتورة.'**
   String get jobInvoiceNeedsRegister;
 
+  /// First line of the job invoice dialog when the jobs board opens it on the way to the job's last stage (or a stage that requires payment).
+  ///
+  /// In ar, this message translates to:
+  /// **'قبل نقل المهمة إلى «{stageName}»، أصدر فاتورتها واستلم المبلغ.'**
+  String jobFinishInvoiceLead(String stageName);
+
+  /// Invoice dialog button, offered only where the server allows it, that finishes the job's move without issuing an invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة بدون فاتورة'**
+  String get jobFinishWithoutInvoiceAction;
+
   /// Title of the dialog that opens the user's own register session from a screen that takes money outside the POS (e.g. invoicing a repair job).
   ///
   /// In ar, this message translates to:

@@ -8,6 +8,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import 'job_invoice_flow.dart';
 
 /// Moving a job to any stage of its workflow — the next one, three ahead, or
 /// back to the bench when the test fails — shared by the board and the job
@@ -16,6 +17,7 @@ import '../../../shared/responsive/responsive.dart';
 /// The server holds the gates; this only asks up front what a gate on the way
 /// will want, so the counter answers a question instead of reading a refusal:
 /// the price the customer approved when the move passes the approval stage,
+/// the invoice when it finishes the job (for a screen that can take money),
 /// and who is collecting when it hands the item back.
 
 /// How a move ended.
@@ -94,6 +96,10 @@ Future<WorkflowStage?> showJobStagePicker(
 /// Moves [job] to [target], asking on the way only what the stages it passes
 /// require. [recordApprovedPrice] saves the price the customer agreed;
 /// [moveTo] asks the server to move the job.
+///
+/// [billFirst], when given, bills a job that has no invoice yet before a move
+/// that finishes it or enters a stage requiring settlement — `mustSettle`
+/// says which, since only the second refuses a job that goes on unbilled.
 Future<JobMoveOutcome> runJobStageMove(
   BuildContext context, {
   required OperationsJob job,
@@ -105,6 +111,7 @@ Future<JobMoveOutcome> runJobStageMove(
     String collector,
   )
   moveTo,
+  Future<JobInvoiceOutcome> Function({required bool mustSettle})? billFirst,
 }) async {
   final l10n = AppLocalizations.of(context)!;
   final span = jobStageSpan(job, stages, target);
@@ -142,6 +149,32 @@ Future<JobMoveOutcome> runJobStageMove(
     }
     if (!context.mounted) {
       return const JobMoveOutcome(JobMoveResult.cancelled);
+    }
+  }
+
+  // Finishing the job, or handing its item back, is when the money is due —
+  // so it is asked for on the way, not refused after the tap. Before the
+  // handover question, because the counter takes the money and then gives
+  // the phone back; and before the move, because a finished job leaves the
+  // board, and billing it afterwards meant digging it out of the history.
+  final mustSettle = span.entered.any((stage) => stage.requiresSettlement);
+  if (billFirst != null &&
+      job.order == null &&
+      (target.isTerminal || mustSettle)) {
+    final billing = await billFirst(mustSettle: mustSettle);
+    if (!context.mounted) {
+      return const JobMoveOutcome(JobMoveResult.cancelled);
+    }
+    switch (billing.result) {
+      case JobInvoiceResult.cancelled:
+        return const JobMoveOutcome(JobMoveResult.cancelled);
+      // Work that holds nothing of the customer's — a kitchen order, a work
+      // order — is finished by being paid for. There is no move left to make.
+      case JobInvoiceResult.invoiced when billing.job?.isOpen == false:
+        return const JobMoveOutcome(JobMoveResult.moved);
+      case JobInvoiceResult.invoiced:
+      case JobInvoiceResult.skipped:
+        break;
     }
   }
 

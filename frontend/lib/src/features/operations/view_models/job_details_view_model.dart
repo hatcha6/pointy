@@ -195,8 +195,10 @@ class JobDetailsViewModel extends ChangeNotifier {
     return updated != null;
   }
 
-  Future<OperationsJob?> invoice(JobInvoiceDraft draft) async {
-    return _mutate(
+  /// Bills the job, reported the way the shared invoice flow wants it: the
+  /// job as the invoice left it, or the refusal when there is one.
+  Future<JobInvoiceAttempt> invoice(JobInvoiceDraft draft) async {
+    final invoiced = await _mutate(
       () => _repository.invoiceJob(
         jobId,
         draft,
@@ -204,6 +206,7 @@ class JobDetailsViewModel extends ChangeNotifier {
       ),
       eventName: 'operations.job.invoiced',
     );
+    return (invoiced: invoiced, refusal: _lastRefusal);
   }
 
   /// The customer said yes: record the price they agreed to, then move the

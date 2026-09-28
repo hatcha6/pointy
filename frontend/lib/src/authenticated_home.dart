@@ -487,6 +487,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         operationsRepository: dependencies.operationsRepository,
         catalogRepository: dependencies.catalogRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
+        registerSessionRepository: dependencies.registerSessionRepository,
         printActions: _jobPrintActions(),
         recipesViewModel: RecipesViewModel(
           dependencies.operationsRepository,

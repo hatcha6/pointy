@@ -1,4 +1,5 @@
 import '../services/api_session.dart';
+import 'operations_job.dart';
 
 /// Why the backend refused a job action, when it refused for a reason the app
 /// can act on rather than merely report.
@@ -85,3 +86,7 @@ bool _legacyNoDrawerDetail(Object? detail) {
 /// One attempted stage move: whether it happened, and — when the server said
 /// no for a reason the screen can act on — why.
 typedef JobMoveAttempt = ({bool moved, JobRefusal? refusal});
+
+/// One attempted job invoice: the job as the invoice left it, or — when the
+/// server said no for a reason the screen can act on — why.
+typedef JobInvoiceAttempt = ({OperationsJob? invoiced, JobRefusal? refusal});

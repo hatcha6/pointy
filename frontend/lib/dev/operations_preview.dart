@@ -11,7 +11,7 @@
 //          | recipes | assets | assets-empty | asset-details
 //          | details-decision | details-declined | details-handed-back
 //          | decline-sheet | repair-ticket-settings | repair-ticket-terms
-//          | labor | stage-picker
+//          | labor | stage-picker | board-invoice | board-invoice-free
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -47,6 +47,7 @@ import 'package:pointy_frontend/src/features/operations/views/job_decline_sheet.
 import 'package:pointy_frontend/src/features/operations/views/job_details_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_history_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_intake_wizard.dart';
+import 'package:pointy_frontend/src/features/operations/views/job_invoice_flow.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_labor_dialog.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_stage_move.dart';
 import 'package:pointy_frontend/src/features/operations/views/jobs_screen.dart';
@@ -113,6 +114,10 @@ class _Router extends StatelessWidget {
         return const _DetailsDialogHost(openLabor: true);
       case 'stage-picker':
         return const _DetailsDialogHost(openLabor: false);
+      case 'board-invoice':
+        return const _BoardInvoiceHost(free: false);
+      case 'board-invoice-free':
+        return const _BoardInvoiceHost(free: true);
       case 'intake-no-customers':
         return _intake(canCreateCustomers: false);
       case 'history':
@@ -217,6 +222,52 @@ class _DetailsDialogHostState extends State<_DetailsDialogHost> {
 
   @override
   Widget build(BuildContext context) => _details(_richJob);
+}
+
+/// The invoice the board asks for on the way to a repair's handover, opened on
+/// load over the board, for a screenshot. [free] shows a warranty fix: nothing
+/// to pay, so the dialog offers going on without an invoice.
+class _BoardInvoiceHost extends StatefulWidget {
+  const _BoardInvoiceHost({required this.free});
+
+  final bool free;
+
+  @override
+  State<_BoardInvoiceHost> createState() => _BoardInvoiceHostState();
+}
+
+class _BoardInvoiceHostState extends State<_BoardInvoiceHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final l10n = AppLocalizations.of(context)!;
+      unawaited(
+        runJobInvoice(
+          context,
+          job: _job(
+            id: 6,
+            jobNumber: 'REP-099',
+            currentStage: 6,
+            nextStage: _repairStages[6],
+            customerName: 'هدى سالم',
+            approvedPrice: widget.free ? 0 : 250,
+            materialsTotal: widget.free ? 0 : 120,
+          ),
+          invoice: (_) async => (invoiced: null, refusal: null),
+          capabilities: _managerCaps,
+          lead: l10n.jobFinishInvoiceLead(_repairStages[6].name),
+          skipLabel: widget.free ? l10n.jobFinishWithoutInvoiceAction : null,
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => _board();
 }
 
 /// The repair receipt settings as the operations settings page shows them,

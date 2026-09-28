@@ -468,6 +468,20 @@ class OperationsJob {
   bool get owesDeclineFee =>
       isDeclined && (declineFee ?? 0) > 0 && order == null;
 
+  /// Whether there is money on this job at all — the server's own test
+  /// (`job_has_anything_to_bill`) for letting a job with no invoice into a
+  /// stage that requires settlement. A warranty fix with nothing fitted, no
+  /// service and no agreed price costs the customer nothing, and is handed
+  /// back without an invoice.
+  bool get hasAnythingToBill {
+    if (isDeclined) {
+      return (declineFee ?? 0) > 0;
+    }
+    return materials.any((material) => material.isConsumed) ||
+        services.isNotEmpty ||
+        (approvedPrice ?? 0) > 0;
+  }
+
   factory OperationsJob.fromJson(Map<String, Object?> json) {
     final assetsJson = (json['assets'] as List<Object?>?) ?? const [];
     final materialsJson = (json['materials'] as List<Object?>?) ?? const [];

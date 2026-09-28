@@ -9,7 +9,6 @@ import '../../../data/models/employee.dart';
 import '../../../data/models/job_refusal.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/models/pos_user.dart';
-import '../../../data/models/sale_order.dart';
 import '../../../data/models/workflow.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/operations_repository.dart';
@@ -26,11 +25,11 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/job_details_view_model.dart';
 import 'job_decline_sheet.dart';
 import 'job_declined_callout.dart';
+import 'job_invoice_flow.dart';
 import 'job_labor_dialog.dart';
 import 'job_stage_move.dart';
 import 'jobs_screen.dart' show formatQuantity, unitLabel;
 import '../../assets/views/assets_ui.dart';
-import '../../register_sessions/views/open_register_session_dialog.dart';
 import 'operations_ui.dart';
 import 'variant_picker_sheet.dart';
 
@@ -520,12 +519,8 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     );
   }
 
-  bool _canInvoice(OperationsJob job) {
-    return job.order == null &&
-        job.status != OperationsJobStatus.cancelled &&
-        job.jobType != OperationsJobType.production &&
-        widget.capabilities.canCheckoutSale;
-  }
+  bool _canInvoice(OperationsJob job) =>
+      canInvoiceJob(job, widget.capabilities);
 
   Widget _headerCard(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -1704,106 +1699,15 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
 
   /// Whether the job ended up invoiced.
   Future<bool> _openInvoiceDialog(OperationsJob job) async {
-    final draft = await showDialog<JobInvoiceDraft>(
-      context: context,
-      builder: (dialogContext) => _JobInvoiceDialog(job: job),
+    final outcome = await runJobInvoice(
+      context,
+      job: job,
+      invoice: widget.viewModel.invoice,
+      capabilities: widget.capabilities,
+      registerSessionRepository: widget.registerSessionRepository,
+      shopSettingsRepository: widget.shopSettingsRepository,
     );
-    if (draft == null || !mounted) {
-      return false;
-    }
-    return _submitInvoice(draft);
-  }
-
-  Future<bool> _submitInvoice(
-    JobInvoiceDraft draft, {
-    bool drawerJustOpened = false,
-  }) async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final invoiced = await widget.viewModel.invoice(draft);
-    if (!mounted) {
-      return false;
-    }
-    if (invoiced != null) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(l10n.jobInvoiceSuccess(invoiced.orderReceiptNumber)),
-        ),
-      );
-      return true;
-    }
-
-    // The money needs the person's own drawer and none is open — typically a
-    // manager finishing a repair after the cashier closed up. Open it here and
-    // send the same invoice again; the alternative was a job that could be
-    // neither invoiced nor, because of that, handed back.
-    final refusal = widget.viewModel.lastRefusal;
-    // Asked once: a drawer we have just opened that the server still cannot
-    // see is a fault to report, not a question to repeat.
-    if (refusal?.kind == JobRefusalKind.registerSessionRequired &&
-        !drawerJustOpened) {
-      final sessions = widget.registerSessionRepository;
-      if (sessions == null) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.paymentDrawerNotAllowedMessage)),
-        );
-        return false;
-      }
-      final opened = await openRegisterSessionForPayment(
-        context,
-        repository: sessions,
-        capabilities: widget.capabilities,
-        shopSettingsRepository: widget.shopSettingsRepository,
-      );
-      if (!opened || !mounted) {
-        return false;
-      }
-      return _submitInvoice(draft, drawerJustOpened: true);
-    }
-
-    // Billing above what the customer agreed to is a real thing that happens —
-    // the part turned out worse than the diagnosis said — so it is a question,
-    // not a failure. Asking it here, with both numbers on screen, is the point
-    // of the guard: someone has to have said yes.
-    if (refusal?.kind == JobRefusalKind.overApprovedPrice) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          icon: const Icon(Icons.price_change_outlined),
-          title: Text(l10n.jobOverQuoteTitle),
-          content: Text(
-            l10n.jobOverQuoteMessage(
-              refusal!.approvedPrice,
-              refusal.invoiceTotal,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(l10n.cancelButton),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(l10n.jobOverQuoteConfirm),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true && mounted) {
-        return _submitInvoice(
-          JobInvoiceDraft(
-            laborTotal: draft.laborTotal,
-            payments: draft.payments,
-            onCredit: draft.onCredit,
-            dueDate: draft.dueDate,
-            acknowledgeOverQuote: true,
-          ),
-        );
-      }
-      return false;
-    }
-    messenger.showSnackBar(SnackBar(content: Text(l10n.operationsActionError)));
-    return false;
+    return outcome.result == JobInvoiceResult.invoiced;
   }
 }
 
@@ -2220,216 +2124,6 @@ class _PromptDialogState extends State<_PromptDialog> {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
           child: Text(widget.confirmLabel),
-        ),
-      ],
-    );
-  }
-}
-
-/// The invoice dialog: labour, payment method, and — for آجل — how much of the
-/// total is landing in the drawer right now.
-///
-/// A widget rather than a `StatefulBuilder` in the calling method because the
-/// two [TextEditingController]s have to outlive `showDialog`'s await.
-/// `showDialog` completes when the route is *popped*, while the exit animation
-/// is still running and both fields are still mounted; disposing the
-/// controllers there means the next frame rebuilds a `TextField` against a dead
-/// one, throwing "A TextEditingController was used after being disposed" and
-/// then taking the screen down with a framework assertion. The State's
-/// `dispose()` runs when the route is actually gone, which is the point.
-///
-/// The dialog's own answer-in-progress — the method, the credit switch, whether
-/// the cashier has touched the amount-now box — moved in here with them.
-class _JobInvoiceDialog extends StatefulWidget {
-  const _JobInvoiceDialog({required this.job});
-
-  final OperationsJob job;
-
-  @override
-  State<_JobInvoiceDialog> createState() => _JobInvoiceDialogState();
-}
-
-class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
-  // A declined job bills its diagnosis fee and nothing else: no parts were
-  // fitted, no work was done, and there is no labour to type.
-  late final bool _feeOnly = widget.job.isDeclined;
-
-  // Parts and services are already priced on the job; the labour box is for
-  // the one-off amount that has no catalog line behind it.
-  late final double _lineTotal = _feeOnly
-      ? (widget.job.declineFee ?? 0)
-      : widget.job.billableTotal;
-  late final TextEditingController _laborController = TextEditingController(
-    text: _feeOnly || widget.job.approvedPrice == null
-        ? ''
-        : (widget.job.approvedPrice! - _lineTotal)
-              .clamp(0, double.infinity)
-              .toStringAsFixed(2),
-  );
-  final TextEditingController _paidNowController = TextEditingController();
-  var _method = PaymentMethod.cash;
-  var _onCredit = false;
-  // Seeded once the cashier switches to آجل, so the common "pay it all now
-  // anyway" case does not need retyping the total.
-  var _paidNowTouched = false;
-
-  @override
-  void dispose() {
-    _laborController.dispose();
-    _paidNowController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final job = widget.job;
-    final labor = _feeOnly
-        ? 0.0
-        : double.tryParse(_laborController.text.trim()) ?? 0;
-    final total = _lineTotal + labor;
-    final paidNow = _onCredit
-        ? (double.tryParse(_paidNowController.text.trim()) ?? 0)
-        : total;
-    final balance = (total - paidNow).clamp(0.0, double.infinity);
-    final needsCustomer = _onCredit && job.customer == null;
-    final overpaid = paidNow > total;
-
-    return AlertDialog(
-      icon: const Icon(Icons.receipt_long_outlined),
-      title: Text(_feeOnly ? l10n.jobCollectFeeTitle : l10n.jobInvoiceTitle),
-      content: SizedBox(
-        width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                _feeOnly
-                    ? l10n.jobCollectFeeExplainer
-                    : l10n.jobInvoiceExplainer,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              if (_feeOnly)
-                Text(l10n.jobCollectFeeAmountLabel(formatMoney(_lineTotal)))
-              else ...[
-                Text(
-                  l10n.jobMaterialsTotalLabel(formatMoney(job.materialsTotal)),
-                ),
-                if (job.servicesTotal > 0)
-                  Text(
-                    '${l10n.jobInvoiceServicesLabel}: '
-                    '${formatMoney(job.servicesTotal)}',
-                  ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _laborController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [DecimalTextInputFormatter()],
-                  decoration: InputDecoration(
-                    labelText: l10n.jobLaborTotalLabel,
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ],
-              const SizedBox(height: 12),
-              SegmentedButton<PaymentMethod>(
-                segments: [
-                  ButtonSegment(
-                    value: PaymentMethod.cash,
-                    label: Text(l10n.paymentMethodCash),
-                  ),
-                  ButtonSegment(
-                    value: PaymentMethod.card,
-                    label: Text(l10n.paymentMethodCard),
-                  ),
-                  ButtonSegment(
-                    value: PaymentMethod.transfer,
-                    label: Text(l10n.paymentMethodTransfer),
-                  ),
-                ],
-                selected: {_method},
-                onSelectionChanged: (selection) {
-                  setState(() => _method = selection.first);
-                },
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _onCredit,
-                title: Text(l10n.jobInvoiceOnCreditLabel),
-                subtitle: Text(l10n.jobInvoiceOnCreditExplainer),
-                onChanged: (value) => setState(() {
-                  _onCredit = value;
-                  if (value && !_paidNowTouched) {
-                    _paidNowController.text = total.toStringAsFixed(2);
-                  }
-                }),
-              ),
-              if (_onCredit) ...[
-                TextField(
-                  controller: _paidNowController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [DecimalTextInputFormatter()],
-                  decoration: InputDecoration(
-                    labelText: l10n.jobInvoiceAmountNowLabel,
-                  ),
-                  onChanged: (_) => setState(() {
-                    _paidNowTouched = true;
-                  }),
-                ),
-                const SizedBox(height: 8),
-                Text(l10n.jobBalanceDueLabel(formatMoney(balance))),
-                if (needsCustomer)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: PointyInlineMessage.warning(
-                      message: l10n.jobInvoiceNeedsCustomerForCredit,
-                      icon: Icons.person_off_outlined,
-                    ),
-                  ),
-              ],
-              const SizedBox(height: 12),
-              Text(
-                l10n.jobInvoiceTotalLabel(formatMoney(total)),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.jobInvoiceNeedsRegister,
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
-        FilledButton(
-          onPressed: total <= 0 || needsCustomer || overpaid
-              ? null
-              : () => Navigator.of(context).pop(
-                  JobInvoiceDraft(
-                    laborTotal: labor,
-                    onCredit: _onCredit,
-                    payments: [
-                      if (paidNow > 0)
-                        JobInvoicePayment(method: _method, amount: paidNow),
-                    ],
-                  ),
-                ),
-          child: Text(
-            _feeOnly ? l10n.jobCollectFeeButton : l10n.jobInvoiceButton,
-          ),
         ),
       ],
     );

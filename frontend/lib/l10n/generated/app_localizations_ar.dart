@@ -4050,6 +4050,14 @@ class AppLocalizationsAr extends AppLocalizations {
       'يُسجَّل المبلغ في جلسة درجك. إن لم تكن مفتوحة نفتحها لك قبل إصدار الفاتورة.';
 
   @override
+  String jobFinishInvoiceLead(String stageName) {
+    return 'قبل نقل المهمة إلى «$stageName»، أصدر فاتورتها واستلم المبلغ.';
+  }
+
+  @override
+  String get jobFinishWithoutInvoiceAction => 'متابعة بدون فاتورة';
+
+  @override
   String get paymentDrawerTitle => 'افتح جلسة درج لاستلام المبلغ';
 
   @override

@@ -227,6 +227,44 @@ class JobsBoardViewModel extends ChangeNotifier {
     return result is Ok<OperationsJob>;
   }
 
+  /// [jobId] as it stands now, or null when it cannot be read. A board row
+  /// can be minutes old — a part fitted at the bench since, a price agreed a
+  /// moment ago on the way here — and an invoice bills what is on the job.
+  Future<OperationsJob?> loadJob(int jobId) async {
+    final result = await _repository.loadJob(jobId);
+    return switch (result) {
+      Ok<OperationsJob>(:final value) => value,
+      Error<OperationsJob>() => null,
+    };
+  }
+
+  /// Bills [job] from the board: the invoice a move to its last stage asks
+  /// for. When paying for it finished the job — work that holds nothing of the
+  /// customer's — no move follows to refresh the board, so this does.
+  Future<JobInvoiceAttempt> invoiceJob(
+    OperationsJob job,
+    JobInvoiceDraft draft,
+  ) async {
+    final result = await _repository.invoiceJob(
+      job.id,
+      draft,
+      idempotencyKey: 'operations-job:${generateAnalyticsEventId()}',
+    );
+    switch (result) {
+      case Ok<OperationsJob>(value: final invoiced):
+        _trackJobEvent('operations.job.invoiced', invoiced);
+        if (!invoiced.isOpen) {
+          await loadJobs();
+        }
+        return (invoiced: invoiced, refusal: null);
+      case Error<OperationsJob>():
+        return (
+          invoiced: null,
+          refusal: jobRefusalFromException(result.exception),
+        );
+    }
+  }
+
   Future<OperationsJob?> createJob(OperationsJobDraft draft) async {
     _isMutating = true;
     _hasMutationError = false;

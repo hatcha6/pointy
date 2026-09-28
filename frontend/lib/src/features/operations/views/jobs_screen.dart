@@ -11,6 +11,7 @@ import '../../../data/models/workflow.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/operations_repository.dart';
+import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/units.dart';
@@ -24,6 +25,7 @@ import '../view_models/jobs_board_view_model.dart';
 import '../view_models/recipes_view_model.dart';
 import 'job_awaiting_hand_back_strip.dart';
 import 'job_intake_wizard.dart';
+import 'job_invoice_flow.dart';
 import 'job_stage_move.dart';
 import 'operations_ui.dart';
 import 'recipes_page.dart';
@@ -46,6 +48,7 @@ class JobsScreen extends StatefulWidget {
     required this.onOpenJob,
     required this.onOpenHistory,
     this.shopSettingsRepository,
+    this.registerSessionRepository,
     this.printActions,
   });
 
@@ -61,6 +64,11 @@ class JobsScreen extends StatefulWidget {
   /// Handed to the intake wizard so it can open on the kind of item this shop
   /// works on. Optional: the preview harness and tests do without it.
   final ShopSettingsRepository? shopSettingsRepository;
+
+  /// Opens the person's own drawer when the invoice a finishing move asks for
+  /// is refused for want of one. Optional: without it that refusal is
+  /// explained instead.
+  final RegisterSessionRepository? registerSessionRepository;
   final ValueChanged<OperationsJob> onOpenJob;
 
   /// Opens the finished-work list. The board deliberately cannot show it: what
@@ -345,7 +353,8 @@ class _JobsScreenState extends State<JobsScreen> {
   }
 
   /// Moves [job] to [target] — the next stage from the card's button, or any
-  /// stage from its "move to" sheet.
+  /// stage from its "move to" sheet. A move that finishes the job bills it on
+  /// the way, here on the board, for whoever can take the money.
   Future<void> _moveJob(
     OperationsJob job,
     WorkflowTemplate template,
@@ -353,6 +362,7 @@ class _JobsScreenState extends State<JobsScreen> {
   ) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    var billed = false;
     final outcome = await runJobStageMove(
       context,
       job: job,
@@ -360,25 +370,29 @@ class _JobsScreenState extends State<JobsScreen> {
       target: target,
       recordApprovedPrice: (price) =>
           widget.viewModel.recordApprovedPrice(job, price),
-      // The card spins only while the server is being asked — not while the
-      // counter is still answering a question about it.
-      moveTo: (stage, collector) async {
-        setState(() => _advancingJobIds.add(job.id));
-        try {
-          return await widget.viewModel.moveJob(
-            job,
-            stage,
-            handedOverTo: collector,
-          );
-        } finally {
-          if (mounted) {
-            setState(() => _advancingJobIds.remove(job.id));
-          }
-        }
-      },
+      billFirst: canInvoiceJob(job, widget.capabilities)
+          ? ({required mustSettle}) async {
+              final billing = await _billFirst(
+                job,
+                target,
+                mustSettle: mustSettle,
+              );
+              billed = billing.result == JobInvoiceResult.invoiced;
+              return billing;
+            }
+          : null,
+      moveTo: (stage, collector) => _whileAsking(
+        job,
+        () => widget.viewModel.moveJob(job, stage, handedOverTo: collector),
+      ),
     );
     if (!mounted) {
       return;
+    }
+    // Paid for, but still where it was — the handover question was dismissed,
+    // or the move refused. The card has to say it is paid.
+    if (billed && outcome.result != JobMoveResult.moved) {
+      unawaited(widget.viewModel.loadJobs());
     }
     switch (outcome.result) {
       case JobMoveResult.moved:
@@ -396,8 +410,73 @@ class _JobsScreenState extends State<JobsScreen> {
     }
   }
 
-  /// The board cannot take the money; the job screen can. So a handover the
-  /// server refused for want of payment is explained here, with the way on.
+  /// The invoice a move to [target] is due, taken here on the board — the job
+  /// screen's own dialog, opened on the job as it stands now rather than on
+  /// the card's copy of it.
+  Future<JobInvoiceOutcome> _billFirst(
+    OperationsJob job,
+    WorkflowStage target, {
+    required bool mustSettle,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final current = await _whileAsking(
+      job,
+      () => widget.viewModel.loadJob(job.id),
+    );
+    if (!mounted) {
+      return const JobInvoiceOutcome(JobInvoiceResult.cancelled);
+    }
+    if (current == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.operationsActionError)),
+      );
+      return const JobInvoiceOutcome(JobInvoiceResult.cancelled);
+    }
+    // Billed meanwhile, at the bench or at another till: nothing is due here.
+    if (!canInvoiceJob(current, widget.capabilities)) {
+      return const JobInvoiceOutcome(JobInvoiceResult.skipped);
+    }
+    return runJobInvoice(
+      context,
+      job: current,
+      invoice: (draft) =>
+          _whileAsking(job, () => widget.viewModel.invoiceJob(current, draft)),
+      capabilities: widget.capabilities,
+      registerSessionRepository: widget.registerSessionRepository,
+      shopSettingsRepository: widget.shopSettingsRepository,
+      lead: l10n.jobFinishInvoiceLead(target.name),
+      // Going on unbilled is offered wherever the server lets the job through
+      // without an invoice: a stage that asks for no settlement, or a job with
+      // nothing on it to pay for — a warranty fix goes home free. Anywhere
+      // else the button would only ever be refused.
+      skipLabel: mustSettle && current.hasAnythingToBill
+          ? null
+          : l10n.jobFinishWithoutInvoiceAction,
+    );
+  }
+
+  /// Spins [job]'s card while the server is being asked something about it —
+  /// never while the counter is still answering a question.
+  Future<T> _whileAsking<T>(
+    OperationsJob job,
+    Future<T> Function() request,
+  ) async {
+    if (mounted) {
+      setState(() => _advancingJobIds.add(job.id));
+    }
+    try {
+      return await request();
+    } finally {
+      if (mounted) {
+        setState(() => _advancingJobIds.remove(job.id));
+      }
+    }
+  }
+
+  /// A handover the server still refused for want of payment — typically an
+  /// invoice already issued with a balance and nobody named to owe it — is
+  /// explained here, with the way on: the job screen.
   Future<void> _explainUnsettledHandover(OperationsJob job) async {
     final l10n = AppLocalizations.of(context)!;
     final open = await showDialog<bool>(
