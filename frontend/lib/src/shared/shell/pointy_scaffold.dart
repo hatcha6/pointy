@@ -91,6 +91,9 @@ class _PointyScaffoldState extends State<PointyScaffold> {
     final usesNavigationRail =
         navigationDrawer is AppNavigationDrawer &&
         AppBreakpoints.of(context).index >= AppBreakpoint.desktop.index;
+    final railExpanded = navigationRailController.isExpandedFor(
+      MediaQuery.sizeOf(context).width,
+    );
 
     // The rail, the app bar and the body each own a layer. Ink ripples and
     // hover highlights paint on the nearest Material and dirty the nearest
@@ -102,10 +105,7 @@ class _PointyScaffoldState extends State<PointyScaffold> {
       resolvedBody = Row(
         children: [
           RepaintBoundary(
-            child: navigationDrawer.buildRail(
-              context,
-              extended: navigationRailController.isExpanded,
-            ),
+            child: navigationDrawer.buildRail(context, extended: railExpanded),
           ),
           const VerticalDivider(width: 1),
           Expanded(child: resolvedBody),
@@ -126,6 +126,7 @@ class _PointyScaffoldState extends State<PointyScaffold> {
     return PointyNavigationRailScope(
       isActive: usesNavigationRail,
       controller: navigationRailController,
+      isExpanded: railExpanded,
       // Pass the app shell's store through so the drawer/rail surfaces (below
       // this re-wrap) keep their scroll offsets across page changes.
       navigationScrollStore: navigationScrollStore,

@@ -44,6 +44,16 @@ class AdaptiveSpacing {
     return EdgeInsetsDirectional.all(md);
   }
 
+  /// Padding around a pane of a catalog-and-order workspace — the till,
+  /// purchasing: [compactPadding], with the top and bottom stepped down to
+  /// [sm] on a short screen (`AppBreakpoints.isShortHeight`), where the height
+  /// belongs to the products and the order lines.
+  EdgeInsetsDirectional panePadding({required bool short}) {
+    return short
+        ? EdgeInsetsDirectional.symmetric(horizontal: md, vertical: sm)
+        : compactPadding;
+  }
+
   static AdaptiveSpacing of(BuildContext context) {
     return fromWidth(MediaQuery.sizeOf(context).width);
   }

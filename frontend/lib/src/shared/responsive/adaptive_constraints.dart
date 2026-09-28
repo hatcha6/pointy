@@ -42,6 +42,21 @@ class AppPaneWidths {
   static const double widePos = 520;
   static const double minPrimary = 280;
 
+  /// The order pane — the till's cart, purchasing's draft — in a tablet-class
+  /// catalog-and-order workspace. See [orderPaneMaxWidthFor].
+  static const double compactOrder = 360;
+
+  /// The widest the order pane beside a product catalog may be in a workspace
+  /// [workspaceWidth] wide.
+  ///
+  /// A tablet-class workspace — a 1024×768 screen once the navigation rail
+  /// has taken its 88px — caps it at [compactOrder] so the catalog beside it
+  /// holds three product cards across instead of two oversized ones. Wider
+  /// workspaces keep the shared two-pane widths.
+  static double orderPaneMaxWidthFor(double workspaceWidth) {
+    return workspaceWidth < AppBreakpoints.desktopMin ? compactOrder : widePos;
+  }
+
   static double trailingPaneForWidth(
     double availableWidth, {
     double minWidth = compact,

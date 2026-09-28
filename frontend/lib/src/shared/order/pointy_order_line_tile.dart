@@ -44,11 +44,18 @@ class PointyOrderLineTile extends StatelessWidget {
   final VoidCallback? onRemove;
   final VoidCallback? onQuantityTap;
 
+  /// Narrowest line that sets the stepper beside the name rather than under
+  /// it: 64 of image, ~140 of name, 250 of actions and the gaps between.
+  static const double wideLayoutMinWidth = 480;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 360;
+        // One row only once the name keeps a readable column beside the image
+        // and the 250px of total, stepper and remove. At the old 360 cut-off a
+        // 1366px till's cart gave the name ~40px, one or two letters a line.
+        final isCompact = constraints.maxWidth < wideLayoutMinWidth;
         final content = _LineContent(
           title: title,
           subtitle: subtitle,

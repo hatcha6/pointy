@@ -65,7 +65,7 @@ void main() {
 
     await _pumpShell(
       tester,
-      width: 1200,
+      width: 1400,
       height: 1600,
       child: PointyScaffold(
         drawer: _navigationDrawer(
@@ -92,7 +92,7 @@ void main() {
     (tester) async {
       await _pumpShell(
         tester,
-        width: 1200,
+        width: 1400,
         child: PointyScaffold(
           drawer: _navigationDrawer(),
           appBar: AppBar(
@@ -150,7 +150,7 @@ void main() {
 
     await _pumpShell(
       tester,
-      width: 1200,
+      width: 1400,
       child: PointyNavigationRailScope(
         isActive: false,
         controller: controller,
@@ -208,6 +208,60 @@ void main() {
           .extended,
       isFalse,
     );
+  });
+
+  testWidgets(
+    'a 1024px window opens the rail folded, and the operator\'s choice holds',
+    (tester) async {
+      await _pumpShell(
+        tester,
+        width: 1024,
+        height: 768,
+        child: PointyScaffold(
+          drawer: _navigationDrawer(),
+          appBar: AppBar(
+            leading: const PointyNavigationMenuButton(),
+            title: const Text('الصفحة'),
+          ),
+          body: const Text('المحتوى'),
+        ),
+      );
+
+      bool railExtended() => tester
+          .widget<PointyNavigationRailSurface>(
+            find.byType(PointyNavigationRailSurface),
+          )
+          .extended;
+
+      // Extended, the labels would take 240 of the 1024 — the till's catalog
+      // was left one card across. Folded, it keeps the room.
+      expect(railExtended(), isFalse);
+
+      await tester.tap(find.byTooltip('توسيع التنقل'));
+      await tester.pumpAndSettle();
+      expect(railExtended(), isTrue);
+
+      // The choice outlives a window resize; only the default follows width.
+      tester.view.physicalSize = const Size(1100, 768);
+      await tester.pumpAndSettle();
+      expect(railExtended(), isTrue);
+    },
+  );
+
+  test('the rail opens extended only where the window has room for it', () {
+    final controller = PointyNavigationRailController();
+    addTearDown(controller.dispose);
+
+    expect(controller.isExpandedFor(1024), isFalse);
+    expect(controller.isExpandedFor(1263), isFalse);
+    expect(controller.isExpandedFor(1264), isTrue);
+    expect(controller.isExpandedFor(1920), isTrue);
+
+    controller.setExpanded(false);
+    expect(controller.isExpandedFor(1920), isFalse);
+
+    controller.setExpanded(true);
+    expect(controller.isExpandedFor(1024), isTrue);
   });
 
   testWidgets('AppNavigationDrawer keeps sections and destinations ordered', (

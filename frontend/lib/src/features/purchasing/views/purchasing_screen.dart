@@ -286,6 +286,7 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
           if (AppBreakpoints.usesTwoPane(width)) {
             return TwoPaneLayout(
               minPrimaryWidth: 390,
+              secondaryPaneMaxWidth: AppPaneWidths.orderPaneMaxWidthFor(width),
               primaryPane: PurchaseCatalogPane(
                 viewModel: viewModel,
                 capabilities: widget.capabilities,

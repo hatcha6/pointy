@@ -10,6 +10,7 @@ class QueryFilterButton extends StatelessWidget {
     required this.onPressed,
     this.tooltip,
     this.showLabel = true,
+    this.extent = 56,
   });
 
   final String label;
@@ -17,6 +18,9 @@ class QueryFilterButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final String? tooltip;
   final bool showLabel;
+
+  /// Height, and least width: the button is square without its label.
+  final double extent;
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +39,10 @@ class QueryFilterButton extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minWidth: 56,
-              minHeight: 56,
-              maxHeight: 56,
+            constraints: BoxConstraints(
+              minWidth: extent,
+              minHeight: extent,
+              maxHeight: extent,
             ),
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: showLabel ? 14 : 10),

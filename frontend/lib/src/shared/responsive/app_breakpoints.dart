@@ -18,6 +18,17 @@ class AppBreakpoints {
   /// viewport-tier threshold would disable dual-pane exactly where it helps.
   static const double masterDetailMin = 900;
 
+  /// Below this window height a screen is short. A 1024×768 or 1366×768 till,
+  /// maximized above the Windows taskbar, leaves the app ~700px and the body
+  /// under the app bar ~650, so the till and purchasing tighten their vertical
+  /// rhythm there: the products and the cart get the height, not the chrome.
+  /// A portrait phone is never short; a landscape tablet usually is.
+  static const double shortHeightMax = 800;
+
+  static bool isShortHeight(BuildContext context) {
+    return MediaQuery.sizeOf(context).height < shortHeightMax;
+  }
+
   static AppBreakpoint of(BuildContext context) {
     return forWidth(MediaQuery.sizeOf(context).width);
   }

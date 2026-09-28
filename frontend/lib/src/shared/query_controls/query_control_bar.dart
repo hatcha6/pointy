@@ -142,13 +142,17 @@ class _QueryActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
+    // As tall as the search field beside them. The field follows the theme's
+    // visual density — 48 under a desktop's compact density, ~56 on touch —
+    // and a fixed 56 stood a head taller than it on every Windows till.
+    final extent = 56 + Theme.of(context).visualDensity.baseSizeAdjustment.dy;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (hasScanner) ...[
           SizedBox.square(
-            dimension: 56,
+            dimension: extent,
             child: IconButton.filledTonal(
               tooltip: openCameraScannerTooltip,
               onPressed: enabled ? onOpenCameraScanner : null,
@@ -163,6 +167,7 @@ class _QueryActions extends StatelessWidget {
           activeCount: activeFilterCount,
           onPressed: enabled ? onOpenFilters : null,
           showLabel: showFilterLabel,
+          extent: extent,
         ),
       ],
     );

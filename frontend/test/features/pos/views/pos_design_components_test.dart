@@ -12,6 +12,7 @@ import 'package:pointy_frontend/src/shared/catalog/catalog.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/order/order.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
+import 'package:pointy_frontend/src/shared/responsive/responsive.dart';
 
 void main() {
   test('product card grid keeps catalog card proportions consistent', () {
@@ -24,6 +25,78 @@ void main() {
     final wide = PointyProductCardGrid.delegateFor(width: 1400, spacing: 20);
     expect(wide.crossAxisCount, PointyProductCardGrid.maxColumnCount);
     expect(wide.mainAxisExtent, PointyProductCardGrid.wideTileMainExtent);
+  });
+
+  test('a 1024×768 till fits three product cards beside a 360 cart', () {
+    // 1024 − the folded rail (89) leaves a 935 workspace: a tablet-class one,
+    // so the cart is capped and the catalog keeps the rest.
+    expect(AppPaneWidths.orderPaneMaxWidthFor(935), AppPaneWidths.compactOrder);
+    expect(AppPaneWidths.orderPaneMaxWidthFor(1111), AppPaneWidths.widePos);
+
+    // What the grid is handed there: 935 − 360 − the divider, less the pane
+    // padding (16 a side), the grid surface's border and short padding.
+    const gridWidth = 935.0 - 360 - 1 - 32 - 2 - 12;
+    final grid = PointyProductCardGrid.delegateFor(
+      width: gridWidth,
+      spacing: 20,
+      short: true,
+    );
+    expect(grid.crossAxisCount, 3);
+    expect(grid.mainAxisExtent, PointyProductCardGrid.shortTileMainExtent);
+
+    // A tall screen keeps the full card, whatever its width.
+    final tall = PointyProductCardGrid.delegateFor(
+      width: gridWidth,
+      spacing: 20,
+    );
+    expect(tall.mainAxisExtent, PointyProductCardGrid.tileMainExtent);
+  });
+
+  testWidgets('a short catalog card keeps its name, code and price', (
+    tester,
+  ) async {
+    await _pumpAtWidth(
+      tester,
+      width: 1024,
+      child: SizedBox(
+        width: 156,
+        height: PointyProductCardGrid.shortTileMainExtent,
+        child: ProductTile(product: _longNameProduct, onTap: () {}),
+      ),
+    );
+
+    expect(find.textContaining('قهوة عربية'), findsOneWidget);
+    expect(find.text('COFFEE-LONG-001'), findsOneWidget);
+    expect(find.text('12.75 د.ل'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a cart line too narrow for a name column stacks its stepper', (
+    tester,
+  ) async {
+    // A 1366 till's cart: wide enough for the old one-row cut-off (360), which
+    // left the name ~40px beside the image and the actions.
+    await _pumpAtWidth(
+      tester,
+      width: 1366,
+      child: SizedBox(
+        width: 400,
+        child: CartLineTile(
+          line: _cartLine,
+          onAdd: () {},
+          onRemove: () {},
+          onDelete: () {},
+        ),
+      ),
+    );
+
+    final name = find.textContaining('قهوة عربية');
+    expect(tester.getSize(name).width, greaterThan(200));
+    expect(
+      tester.getTopLeft(find.byTooltip('إضافة عنصر')).dy,
+      greaterThan(tester.getBottomLeft(name).dy),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   for (final width in [390.0, 768.0, 1366.0]) {

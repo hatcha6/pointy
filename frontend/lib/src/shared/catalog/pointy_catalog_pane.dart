@@ -67,9 +67,14 @@ class PointyCatalogPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
+    // On a short screen every vertical gap steps down once, which hands the
+    // grid ~36px — a fifth of a card row on a 1024×768 till.
+    final short = AppBreakpoints.isShortHeight(context);
+    final sectionGap = short ? spacing.sm : spacing.md;
+    final rowGap = short ? spacing.xs : spacing.sm;
 
     return Padding(
-      padding: spacing.compactPadding,
+      padding: spacing.panePadding(short: short),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -80,23 +85,22 @@ class PointyCatalogPane extends StatelessWidget {
             isLoading: isLoading,
             action: headerAction,
           ),
-          if (notice != null) ...[SizedBox(height: spacing.sm), notice!],
-          SizedBox(height: spacing.md),
+          if (notice != null) ...[SizedBox(height: rowGap), notice!],
+          SizedBox(height: sectionGap),
           search,
           if (categoryStrip != null) ...[
-            SizedBox(height: spacing.sm),
+            SizedBox(height: rowGap),
             categoryStrip!,
           ],
           if (suggestionStrip != null) ...[
-            SizedBox(height: spacing.sm),
+            SizedBox(height: rowGap),
             suggestionStrip!,
           ],
-          if (statusLine != null) ...[
-            SizedBox(height: spacing.sm),
-            statusLine!,
-          ],
-          SizedBox(height: spacing.md),
-          Expanded(child: _CatalogGridSurface(child: grid)),
+          if (statusLine != null) ...[SizedBox(height: rowGap), statusLine!],
+          SizedBox(height: sectionGap),
+          Expanded(
+            child: _CatalogGridSurface(short: short, child: grid),
+          ),
         ],
       ),
     );
@@ -201,8 +205,9 @@ class _CountPill extends StatelessWidget {
 /// The framed white surface that holds the product grid, lifting it off the
 /// warm page background.
 class _CatalogGridSurface extends StatelessWidget {
-  const _CatalogGridSurface({required this.child});
+  const _CatalogGridSurface({required this.short, required this.child});
 
+  final bool short;
   final Widget child;
 
   @override
@@ -217,7 +222,7 @@ class _CatalogGridSurface extends StatelessWidget {
         borderRadius: BorderRadius.circular(PointyRadii.card),
       ),
       child: Padding(
-        padding: EdgeInsetsDirectional.all(spacing.sm),
+        padding: EdgeInsetsDirectional.all(short ? spacing.xs : spacing.sm),
         child: child,
       ),
     );

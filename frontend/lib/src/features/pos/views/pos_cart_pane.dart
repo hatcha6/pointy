@@ -72,6 +72,9 @@ class PosCartPane extends StatelessWidget {
         final isCartLocked = viewModel.isCheckingOut || !canCheckout;
         final spacing = AdaptiveSpacing.of(context);
         final colors = context.pointyColors;
+        // A short till spends its height on cart lines, not on the margins
+        // around them — the same step down the catalog beside it takes.
+        final short = AppBreakpoints.isShortHeight(context);
 
         // Publish the current checkout closure so the workspace's Ctrl/Cmd+Enter
         // shortcut runs the exact same flow as the footer button.
@@ -86,7 +89,7 @@ class PosCartPane extends StatelessWidget {
         return ColoredBox(
           color: colors.page,
           child: Padding(
-            padding: spacing.compactPadding,
+            padding: spacing.panePadding(short: short),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -115,10 +118,11 @@ class PosCartPane extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(height: spacing.sm),
+                SizedBox(height: short ? spacing.xs : spacing.sm),
                 _CheckoutFooter(
                   viewModel: viewModel,
                   capabilities: capabilities,
+                  short: short,
                   onCheckout: () => _checkout(context),
                 ),
               ],
@@ -1299,11 +1303,16 @@ class _CheckoutFooter extends StatelessWidget {
   const _CheckoutFooter({
     required this.viewModel,
     required this.capabilities,
+    required this.short,
     required this.onCheckout,
   });
 
   final PosViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+
+  /// A short screen: the pay button drops to the theme's standard button
+  /// height, still the largest target on the till.
+  final bool short;
   final VoidCallback onCheckout;
 
   @override
@@ -1314,7 +1323,7 @@ class _CheckoutFooter extends StatelessWidget {
 
     return PointyStickyActionFooter(
       padding: EdgeInsetsDirectional.fromSTEB(spacing.sm, 6, spacing.sm, 6),
-      primaryActionHeight: 52,
+      primaryActionHeight: short ? PointyDimensions.buttonHeight : 52,
       summary: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

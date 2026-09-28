@@ -11,8 +11,10 @@ import 'dart:async';
 //   flutter run -d web-server --web-port 8080 -t lib/dev/pos_preview.dart
 //
 // Screens: pos | purchase | pos-empty | purchase-empty | board
-// Add `&theme=dark` to check either surface against the dark palette, and
-// `&picker=on` for the search-mode picker a device can turn on (code / name).
+// Add `&theme=dark` to check either surface against the dark palette,
+// `&picker=on` for the search-mode picker a device can turn on (code / name),
+// and `&rail=collapsed|expanded` to pin the desktop navigation rail (left
+// alone, the window width picks it, as in the app).
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -50,6 +52,7 @@ import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dar
 import 'package:pointy_frontend/src/features/pos/views/pos_catalog_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_shortcuts_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/unit_quantity_sheet.dart';
+import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
 import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
 import 'package:pointy_frontend/src/features/purchasing/view_models/purchase_view_model.dart';
@@ -86,7 +89,7 @@ class _PreviewApp extends StatelessWidget {
         controller: _searchModes,
         child: PointyNavigationRailScope(
           isActive: false,
-          controller: PointyNavigationRailController(),
+          controller: _railController,
           child: child ?? const SizedBox.shrink(),
         ),
       ),
@@ -96,6 +99,17 @@ class _PreviewApp extends StatelessWidget {
 }
 
 bool _isDark() => Uri.base.queryParameters['theme'] == 'dark';
+
+// One controller for the page's life, so the menu button's toggle sticks.
+// Left alone the window width decides, as in the app; `&rail=collapsed` or
+// `&rail=expanded` pins where a reload starts it.
+final _railController = PointyNavigationRailController(
+  isExpanded: switch (Uri.base.queryParameters['rail']) {
+    'collapsed' => false,
+    'expanded' => true,
+    _ => null,
+  },
+);
 
 // Never loaded from storage: the query string alone decides, so a preview
 // never inherits a setting from the browser it runs in.
@@ -215,9 +229,16 @@ class _PosSurfaceState extends State<_PosSurface> {
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
         return PointyScaffold(
+          // The real drawer, so a desktop-width preview spends the same 88px
+          // on the navigation rail the till does — without it the panes get
+          // a width no cashier ever sees.
+          drawer: const AppNavigationDrawer(
+            selectedDestination: AppNavigationDestination.pos,
+            navigation: _PreviewNavigation(),
+          ),
           appBar: PointyAppBar(
             style: PointyAppBarStyle.highFocus,
-            leading: const Icon(Icons.point_of_sale_outlined),
+            leading: const PointyNavigationMenuButton(),
             title: Text(l10n.appTitle),
             actions: [
               IconButton(
@@ -263,9 +284,12 @@ class _PosWorkspace extends StatelessWidget {
         if (AppBreakpoints.usesTwoPane(width)) {
           return TwoPaneLayout(
             minPrimaryWidth: 390,
+            secondaryPaneMaxWidth: AppPaneWidths.orderPaneMaxWidthFor(width),
             primaryPane: PosCatalogPane(
               viewModel: viewModel,
               capabilities: capabilities,
+              rechargeProviders: _previewRechargeProviders,
+              onRecharge: (_) {},
             ),
             secondaryPane: PosCartPane(
               viewModel: viewModel,
@@ -282,6 +306,8 @@ class _PosWorkspace extends StatelessWidget {
               child: PosCatalogPane(
                 viewModel: viewModel,
                 capabilities: capabilities,
+                rechargeProviders: _previewRechargeProviders,
+                onRecharge: (_) {},
               ),
             ),
             PointyCompactOrderLauncher(
@@ -364,8 +390,14 @@ class _PurchaseSurfaceState extends State<_PurchaseSurface> {
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
         return PointyScaffold(
+          // The real rail, as on the till surface: the purchasing screen
+          // spends the same 88px on it at desktop widths.
+          drawer: const AppNavigationDrawer(
+            selectedDestination: AppNavigationDestination.purchasing,
+            navigation: _PreviewNavigation(),
+          ),
           appBar: PointyAppBar(
-            leading: const Icon(Icons.inventory_2_outlined),
+            leading: const PointyNavigationMenuButton(),
             title: Text(l10n.newPurchaseOrderTitle),
             actions: [
               IconButton(
@@ -408,6 +440,7 @@ class _PurchaseWorkspace extends StatelessWidget {
         if (AppBreakpoints.usesTwoPane(width)) {
           return TwoPaneLayout(
             minPrimaryWidth: 390,
+            secondaryPaneMaxWidth: AppPaneWidths.orderPaneMaxWidthFor(width),
             primaryPane: PurchaseCatalogPane(
               viewModel: viewModel,
               capabilities: _managerCaps,
@@ -800,6 +833,39 @@ final PosUser _managerUser = PosUser.fromJson(const {
 
 final AuthorizationCapabilities _managerCaps =
     AuthorizationCapabilities.forUser(_managerUser);
+
+/// Two top-up providers, so the catalog header carries the widest thing a
+/// reseller's till puts there: the "شحن اشتراك" menu beside the layout toggle.
+const List<String> _previewRechargeProviders = ['hdbox', 'lnet'];
+
+/// Feeds the real navigation rail; every destination is a no-op here.
+class _PreviewNavigation implements AppNavigation {
+  const _PreviewNavigation();
+
+  @override
+  PosUser get currentUser => _managerUser;
+
+  @override
+  AuthorizationCapabilities get capabilities => _managerCaps;
+
+  @override
+  void navigateTo(
+    BuildContext context,
+    AppNavigationDestination destination, {
+    AppNavigationDestination? from,
+  }) {}
+
+  @override
+  void openAiChat(
+    BuildContext context, {
+    String? seedPrompt,
+    bool autoSend = false,
+    AppNavigationDestination? from,
+  }) {}
+
+  @override
+  void logout(BuildContext context) {}
+}
 
 class _FakeCatalogRepository extends CatalogRepository {
   _FakeCatalogRepository({this.empty = false}) : super(PosApiService());

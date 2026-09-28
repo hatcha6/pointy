@@ -144,11 +144,15 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
     final isEditing = viewModel.isEditing;
+    // The till's cart pane takes the same step down on a short screen: the
+    // height goes to the lines being costed, not to the margins around them.
+    final short = AppBreakpoints.isShortHeight(context);
+    final gap = short ? spacing.xs : spacing.sm;
 
     return ColoredBox(
       color: colors.page,
       child: Padding(
-        padding: spacing.compactPadding,
+        padding: spacing.panePadding(short: short),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -165,21 +169,21 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
               ),
             ),
             if (viewModel.selectedSupplier == null) ...[
-              SizedBox(height: spacing.sm),
+              SizedBox(height: gap),
               PointyInlineMessage.warning(
                 message: l10n.purchaseSupplierRequiredHint,
                 compact: true,
               ),
             ],
             if (viewModel.isEditingReceivedOrder) ...[
-              SizedBox(height: spacing.sm),
+              SizedBox(height: gap),
               PointyInlineMessage(
                 message: l10n.purchaseEditReceivedOrderNotice,
                 compact: true,
               ),
             ],
             if (isEditing && viewModel.unresolvedEditLineNames.isNotEmpty) ...[
-              SizedBox(height: spacing.sm),
+              SizedBox(height: gap),
               PointyInlineMessage.warning(
                 message: l10n.purchaseEditUnresolvedLines(
                   viewModel.unresolvedEditLineNames.length,
@@ -193,13 +197,13 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
             // the save rebuilds its expected stock, so the dates are due now.
             if ((!isEditing || viewModel.isEditingCommittedOrder) &&
                 viewModel.hasMissingExpiryDates) ...[
-              SizedBox(height: spacing.sm),
+              SizedBox(height: gap),
               PointyInlineMessage.warning(
                 message: l10n.purchaseExpiryDatesRequired,
                 compact: true,
               ),
             ],
-            SizedBox(height: spacing.sm),
+            SizedBox(height: gap),
             PointyStickyActionFooter(
               padding: EdgeInsetsDirectional.fromSTEB(
                 spacing.sm,
@@ -207,7 +211,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 spacing.sm,
                 6,
               ),
-              primaryActionHeight: 52,
+              primaryActionHeight: short ? PointyDimensions.buttonHeight : 52,
               summary: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1973,6 +1977,9 @@ class PurchaseDraftLineTile extends StatefulWidget {
   /// quantity for this product, which is most of the time.
   final Widget? quantityHint;
 
+  /// Narrowest line that still draws the product thumbnail beside the name.
+  static const double thumbnailMinWidth = 320;
+
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
 }
@@ -2148,35 +2155,48 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     final selectedUnitCode = line.isBaseUnit
         ? unitOptions.first.code
         : line.unitCode;
-    final unitField = unitOptions.length <= 1 || widget.onUnitChanged == null
-        ? null
-        : DropdownButtonFormField<String>(
-            initialValue: selectedUnitCode,
-            isDense: true,
-            decoration: InputDecoration(
-              labelText: l10n.purchaseLineUnitLabel,
-              isDense: true,
-              prefixIcon: const Icon(Icons.straighten_outlined),
+    final hasUnitChoice =
+        unitOptions.length > 1 && widget.onUnitChanged != null;
+    // [compact] beside the stepper on a narrow line: there, at ~150px, the
+    // icon left "كرتونة" 21px under touch density, so the icon goes and a
+    // long unit name is cut short instead of overflowing the field.
+    Widget unitField({required bool compact}) {
+      return DropdownButtonFormField<String>(
+        initialValue: selectedUnitCode,
+        isDense: true,
+        isExpanded: compact,
+        decoration: InputDecoration(
+          labelText: l10n.purchaseLineUnitLabel,
+          isDense: true,
+          prefixIcon: compact ? null : const Icon(Icons.straighten_outlined),
+        ),
+        items: [
+          for (final option in unitOptions)
+            DropdownMenuItem(
+              value: option.code,
+              child: Text(
+                option.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            items: [
-              for (final option in unitOptions)
-                DropdownMenuItem(value: option.code, child: Text(option.label)),
-            ],
-            onChanged: widget.enabled
-                ? (value) {
-                    final option = unitOptions.firstWhere(
-                      (option) => option.code == value,
-                      orElse: () => unitOptions.first,
-                    );
-                    widget.onUnitChanged!(
-                      option.isBase ? '' : option.code,
-                      option.label,
-                      option.factorToBase,
-                      option.allowsFractional,
-                    );
-                  }
-                : null,
-          );
+        ],
+        onChanged: widget.enabled
+            ? (value) {
+                final option = unitOptions.firstWhere(
+                  (option) => option.code == value,
+                  orElse: () => unitOptions.first,
+                );
+                widget.onUnitChanged!(
+                  option.isBase ? '' : option.code,
+                  option.label,
+                  option.factorToBase,
+                  option.allowsFractional,
+                );
+              }
+            : null,
+      );
+    }
 
     // For a pack unit, show how many base units the line resolves to.
     final baseEquivalent = line.isBaseUnit
@@ -2255,30 +2275,42 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  PointyProductImageFrame(
-                    imageUrl: imageUrl,
-                    fallbackText: line.variant.displayLabel,
-                    width: 54,
-                    height: 54,
-                    padding: const EdgeInsets.all(6),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: info),
-                  const SizedBox(width: 10),
-                  totalText,
-                  if (widget.onChangePrices != null) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: l10n.pricingSheetTooltip,
-                      icon: const Icon(Icons.sell_outlined, size: 20),
-                      onPressed: widget.enabled ? widget.onChangePrices : null,
-                    ),
+              // The thumbnail only where the line can spare its 66px. In the
+              // 360px draft pane of a 1024×768 screen it left the name and the
+              // price warning ~96px and cut "سعر البيع لا يغطي…" off mid-phrase.
+              // A draft is read by name and code; the pictures are in the
+              // catalog beside it.
+              LayoutBuilder(
+                builder: (context, constraints) => Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (constraints.maxWidth >=
+                        PurchaseDraftLineTile.thumbnailMinWidth) ...[
+                      PointyProductImageFrame(
+                        imageUrl: imageUrl,
+                        fallbackText: line.variant.displayLabel,
+                        width: 54,
+                        height: 54,
+                        padding: const EdgeInsets.all(6),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(child: info),
+                    const SizedBox(width: 10),
+                    totalText,
+                    if (widget.onChangePrices != null) ...[
+                      const SizedBox(width: 4),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: l10n.pricingSheetTooltip,
+                        icon: const Icon(Icons.sell_outlined, size: 20),
+                        onPressed: widget.enabled
+                            ? widget.onChangePrices
+                            : null,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
               const SizedBox(height: 12),
               // Cost, unit and quantity on one row only while the pane is wide
@@ -2289,7 +2321,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
-                  final needsSecondRow = unitField != null && width < 430;
+                  final needsSecondRow = hasUnitChoice && width < 430;
                   if (!needsSecondRow) {
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2303,11 +2335,11 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                             ),
                           ),
                         ),
-                        if (unitField != null) ...[
+                        if (hasUnitChoice) ...[
                           const SizedBox(width: 12),
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 150),
-                            child: unitField,
+                            child: unitField(compact: false),
                           ),
                         ],
                         const SizedBox(width: 12),
@@ -2315,19 +2347,25 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                       ],
                     );
                   }
+                  // Too narrow for all three, so the cost keeps a row of its
+                  // own: shared with the stepper, a 360px pane left it ~150px
+                  // and cut off the per-piece helper — the line that says a
+                  // "20" is the carton's cost, not the piece's. The unit goes
+                  // beside the stepper instead, where the two read together
+                  // as the quantity: 4 × كرتون.
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      costField,
+                      const SizedBox(height: 12),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(child: costField),
+                          Expanded(child: unitField(compact: true)),
                           const SizedBox(width: 12),
                           stepper,
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      unitField,
                     ],
                   );
                 },

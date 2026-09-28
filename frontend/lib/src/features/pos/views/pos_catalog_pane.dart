@@ -224,6 +224,7 @@ class _PosCatalogProducts extends StatelessWidget {
               gridDelegate: PointyProductCardGrid.delegateFor(
                 width: constraints.maxWidth,
                 spacing: spacing.gutter,
+                short: AppBreakpoints.isShortHeight(context),
               ),
               itemBuilder: item,
             );

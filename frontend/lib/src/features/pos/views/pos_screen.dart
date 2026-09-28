@@ -715,6 +715,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
           if (AppBreakpoints.usesTwoPane(width)) {
             return TwoPaneLayout(
               minPrimaryWidth: 390,
+              secondaryPaneMaxWidth: AppPaneWidths.orderPaneMaxWidthFor(width),
               primaryPane: PosCatalogPane(
                 viewModel: viewModel,
                 capabilities: capabilities,
