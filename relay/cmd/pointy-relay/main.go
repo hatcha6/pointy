@@ -89,6 +89,8 @@ func run(args []string) error {
 		return runFleet(args[1:])
 	case "sms":
 		return runSMS(args[1:])
+	case "integrations":
+		return runIntegrations(args[1:])
 	case "artifacts":
 		return runArtifacts(args[1:])
 	case "migrate":
@@ -3535,6 +3537,7 @@ func printUsage() {
   pointy-relay enrollment mint [--count N] [--relay] [--ai] [--subscription DUR]
   pointy-relay fleet <status|set-version|rollout|pause|pin|unpin|channel> [args]
   pointy-relay sms <usage|log|config> [flags]
+  pointy-relay integrations <status|disable|enable> [provider] [flags]
   pointy-relay artifacts upload --version X --bundle pointy-onprem-X.zip
   pointy-relay provision [flags]
   pointy-relay migrate [flags]
@@ -3580,6 +3583,11 @@ Commands:
                    log [--installation ID] [--status S] [--limit N] [--json]
                                              recent sends, newest first
                    config [--json]           templates, test mode, limits (no token)
+  integrations   Fleet-wide switch per provider integration (hdbox, lnet, qareeb):
+                   status [--json]           which are off, since when, by whom, why
+                   disable <provider> --reason "..."
+                                             off in every shop (a cease-and-desist)
+                   enable <provider> [--reason "..."]   back on in every shop
   artifacts      upload --version X --bundle pointy-onprem-X.zip   serve a bundle
   provision      Create an installation directly against the database (host-side).
   migrate        Apply relay PostgreSQL migrations.

@@ -357,6 +357,21 @@ CREATE INDEX IF NOT EXISTS relay_sms_messages_created_idx
 	ON relay_sms_messages (created_at);
 `,
 	},
+	{
+		version: 14,
+		name:    "integration switches",
+		sql: `
+-- One row per provider integration the operator has switched off (or back
+-- on) for the whole fleet; see control.IntegrationSwitch.
+CREATE TABLE IF NOT EXISTS relay_integration_switches (
+	provider text PRIMARY KEY,
+	disabled boolean NOT NULL DEFAULT false,
+	reason text NOT NULL DEFAULT '',
+	actor text NOT NULL DEFAULT '',
+	updated_at timestamptz NOT NULL
+);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

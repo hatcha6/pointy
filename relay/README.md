@@ -438,6 +438,45 @@ own clock at issue, next to `expires_at`. A device compares it with its clock at
 receipt and schedules its refresh off the ticket's real lifetime, so a phone
 whose clock runs ahead does not read every fresh ticket as already due.
 
+### Provider integration kill switch
+
+Switch one provider integration (HD Box, LNET, Qareeb) off for **every shop at
+once** — how a provider's request to stop, such as a cease-and-desist letter, is
+honoured in one command rather than shop by shop:
+
+```sh
+pointy-relay integrations disable qareeb --reason "Qareeb letter of 2026-10-02"
+pointy-relay integrations status     # every switch: state, since when, by whom, why
+pointy-relay integrations enable qareeb --reason "written consent received"
+```
+
+It is fleet-wide on purpose: an objection is to the software, not to one shop,
+and a shop enrolled after the switch comes up with it already off. `--reason` is
+required to disable, and the relay keeps who threw the switch, when and why.
+
+Each shop reads the switch off its own status read (`GET /v1/installations/{id}`,
+field `integrations_disabled`), which its backend syncs every five minutes, so a
+switch reaches every online shop within about five minutes. There the provider:
+
+- is sent nothing — every driver call is refused with `switched_off` before any
+  network, whichever path asked: the till, a background sweep, a pending charge;
+- leaves the till — its top-up button and its cards disappear, and a cart built
+  before the switch is refused at checkout;
+- shows as «متوقف مؤقتاً» in Shop Settings → Integrations, with a line telling
+  the owner why; recording float top-ups and disconnecting still work.
+
+Credentials, sales and float history stay as they are, so `enable` brings
+everything back with nothing needed from the shop. A top-up sold but not yet
+performed when the switch lands is not performed; it surfaces as unperformed so
+the shop can refund it. A shop that cannot reach the relay keeps what it last
+heard — and a relay that cannot read its switch table leaves the field out
+rather than sending an empty list — so an outage never switches a stopped
+provider back on.
+
+API (admin token): `GET /v1/fleet/integrations` lists every switch;
+`PUT /v1/fleet/integrations/{provider}` with `{"disabled": true, "reason": "…"}`
+throws one.
+
 ## Relay-Hosted AI
 
 The relay hosts AI chat so the OpenRouter key, the model catalog, and tier

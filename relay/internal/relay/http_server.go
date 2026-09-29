@@ -576,6 +576,19 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleSetChannelTarget)
+	case r.URL.Path == "/v1/fleet/integrations" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleListIntegrationSwitches)
+	case strings.HasPrefix(r.URL.Path, "/v1/fleet/integrations/") && r.Method == http.MethodPut:
+		// The kill switch: one provider integration off (or on) in every shop.
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleSetIntegrationSwitch)
 	case strings.HasPrefix(r.URL.Path, "/v1/artifacts/"):
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -1359,7 +1372,12 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 			writeStoreError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, adminInstallationPayload(installation, s.clock().Now()))
+		// The status read is what every shop's backend syncs from, so it also
+		// carries the fleet's switched-off integrations down to it.
+		writeJSON(w, http.StatusOK, s.withDisabledIntegrations(
+			r,
+			adminInstallationPayload(installation, s.clock().Now()),
+		))
 		return
 	}
 	if len(parts) == 2 && parts[1] == "status" && r.Method == http.MethodGet {
