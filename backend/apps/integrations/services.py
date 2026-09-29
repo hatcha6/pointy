@@ -11,7 +11,7 @@ import logging
 
 from django.utils import timezone
 
-from . import catalog
+from . import catalog, switches
 from .models import IntegrationAccount, IntegrationOptionPrice
 from .providers import provider_for
 from .providers.base import ERROR_NOT_CONFIGURED, RECHARGE_TOPUP, ProbeResult
@@ -85,7 +85,9 @@ def refresh_float_balances() -> dict:
     """
     checked = 0
     connected = 0
-    for account in IntegrationAccount.objects.filter(is_active=True):
+    # A provider switched off for the fleet is not read at all: its last known
+    # float stays as it was, not overwritten with a refusal every hour.
+    for account in switches.running(IntegrationAccount.objects.filter(is_active=True)):
         spec = account.spec
         if spec is None or catalog.CAPABILITY_BALANCE not in spec.capabilities:
             continue

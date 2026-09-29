@@ -2421,12 +2421,14 @@ class PosApiService {
     String providerKey, {
     required double amount,
     int? fromAccountId,
+    bool fromOutside = false,
     String reference = '',
     String note = '',
   }) => _integrations.recordTopUp(
     providerKey,
     amount: amount,
     fromAccountId: fromAccountId,
+    fromOutside: fromOutside,
     reference: reference,
     note: note,
   );

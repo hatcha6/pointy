@@ -789,6 +789,10 @@ class RelayInstallation(TimeStampedModel):
     # SMS is sent through the relay on the company's provider account, so it is
     # an entitlement like AI — mirrored here, decided on the relay.
     sms_enabled = models.BooleanField(default=False, db_default=False)
+    # Provider integrations the operator switched off for every shop at once
+    # (`pointy-relay integrations disable qareeb`), as the relay last said.
+    # Mirrored like the entitlements above; apps.integrations.switches acts on it.
+    integrations_disabled = models.JSONField(default=list, blank=True, db_default=[])
     subscription_ends_at = models.DateTimeField(null=True, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
     last_pairing_issued_at = models.DateTimeField(null=True, blank=True)

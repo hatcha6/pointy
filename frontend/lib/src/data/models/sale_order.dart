@@ -1064,6 +1064,7 @@ class SaleLineIntegration {
     this.attemptCount = 0,
     this.receipt = const {},
     this.receiptLogo = '',
+    this.providerLogo = '',
   });
 
   final String provider;
@@ -1102,9 +1103,13 @@ class SaleLineIntegration {
   /// The provider's own printed slip, ready to reprint beside our invoice.
   final Map<String, String> receipt;
 
-  /// A card's brand logo as receipts print it (a base64 PNG, grey on white),
-  /// for the head of its slip. Empty for a top-up and for a brand without one.
+  /// The logo the line's slip opens on, as receipts print it (a base64 PNG,
+  /// grey on white): a card's brand logo, else the provider's own.
   final String receiptLogo;
+
+  /// The provider's own mark, printed beside a card's brand logo. Empty when
+  /// the slip already opens on it (a top-up, a brand without a logo).
+  final String providerLogo;
 
   bool get isConfirmed => status == 'confirmed';
   bool get isPending => status == 'pending';
@@ -1142,6 +1147,7 @@ class SaleLineIntegration {
           entry.key: entry.value?.toString() ?? '',
       },
       receiptLogo: json['receipt_logo']?.toString() ?? '',
+      providerLogo: json['provider_logo']?.toString() ?? '',
     );
   }
 
@@ -1170,6 +1176,7 @@ class SaleLineIntegration {
     attemptCount: attemptCount,
     receipt: receipt ?? this.receipt,
     receiptLogo: receiptLogo,
+    providerLogo: providerLogo,
   );
 }
 

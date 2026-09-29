@@ -55,7 +55,7 @@ from django.utils.dateparse import parse_datetime
 from apps.catalog.models import Product, ProductAlias, ProductVariant
 from apps.core import caching
 
-from . import catalog, shelf_category, voucher_logos
+from . import catalog, shelf_category, switches, voucher_logos
 from .models import IntegrationAccount, IntegrationVoucher, IntegrationVoucherBrand
 from .providers import provider_for
 from .providers.base import VoucherBrand, in_parallel
@@ -121,8 +121,9 @@ def sells_vouchers(account) -> bool:
 
 
 def voucher_accounts():
-    """Every connected account whose provider sells off a shelf."""
-    for account in IntegrationAccount.objects.filter(is_active=True):
+    """Every connected account whose provider sells off a shelf and is not
+    switched off (see :mod:`.switches`)."""
+    for account in switches.running(IntegrationAccount.objects.filter(is_active=True)):
         if sells_vouchers(account) and account.spec.is_available and account.is_configured:
             yield account
 
@@ -131,7 +132,8 @@ def sync_all() -> dict:
     """The periodic sweep: every voucher account; one failure never stops the rest.
 
     Also takes the shelf off the till for an account that has been switched
-    off or disconnected: its cards must not stay on sale behind it.
+    off or disconnected, or whose provider the operator switched off for the
+    fleet: its cards must not stay on sale behind it.
     """
     reports = []
     live = set()

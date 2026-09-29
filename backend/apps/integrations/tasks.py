@@ -91,10 +91,13 @@ def sync_voucher_catalog_task(self, account_id):
     shop's till has its cards within seconds rather than over the next hour —
     and then every brand's logo, once the cards are already on sale.
     """
+    from . import switches
     from .models import IntegrationAccount
     from .vouchers import sells_vouchers, sync_account
 
     account = IntegrationAccount.objects.filter(pk=account_id, is_active=True).first()
     if account is None or not sells_vouchers(account) or not account.is_configured:
+        return {"skipped": True}
+    if switches.is_switched_off(account.provider):
         return {"skipped": True}
     return sync_account(account, refresh_limit=1000, logo_limit=1000).as_dict()

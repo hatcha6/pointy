@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
+from apps.integrations import switches
+
 # --- error codes ------------------------------------------------------------
 ERROR_NOT_CONFIGURED = "not_configured"      # credentials missing
 ERROR_UNAVAILABLE = "unavailable"            # provider is planned, not built
@@ -60,6 +62,10 @@ ERROR_BUSY = "busy"
 #: from the one the owner chose. Nothing was bought: paying from the wrong
 #: shop's float is worse than not paying at all.
 ERROR_PROFILE_MISMATCH = "profile_mismatch"
+#: The operator switched this provider off for every shop (see
+#: ``apps.integrations.switches``). Nothing was sent, and nothing will be until
+#: it is switched back on — not a fault a shop or a retry can fix.
+ERROR_SWITCHED_OFF = "switched_off"
 
 
 @dataclass(frozen=True)
@@ -751,6 +757,81 @@ class PlannedProvider(IntegrationProvider):
         return ProbeResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
 
+class SwitchedOffProvider(IntegrationProvider):
+    """A provider the operator switched off: answers everything, sends nothing.
+
+    Every call that would reach the provider refuses with ``switched_off``
+    before any network — the whole point, since the switch is for the day a
+    provider asks for its system to be left alone. Not registered, so it
+    records no telemetry either: a switched-off provider is not a failing one.
+
+    The pure methods still answer as the real driver would. They never reach
+    the network, and an option's label must go on hiding what the provider
+    charges wherever it is shown.
+    """
+
+    def __init__(self, account, driver_cls: type[IntegrationProvider] = PlannedProvider):
+        super().__init__(account)
+        self.key = account.provider
+        self._offline = driver_cls(account)
+        self.history_kinds = self._offline.history_kinds
+
+    def quote(self, option_code: str):
+        return self._offline.quote(option_code)
+
+    def option_label(self, label: str) -> str:
+        return self._offline.option_label(label)
+
+    def option_for_payment(self, amount):
+        return self._offline.option_for_payment(amount)
+
+    def probe(self) -> ProbeResult:
+        return ProbeResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def lookup(self, card_no: str, *, search_by: str = "") -> LookupResult:
+        return LookupResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def purchase_history(self, card_no: str, *, limit: int = 10, offset: int = 0):
+        return HistoryResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def status_history(self, card_no: str, *, limit: int = 10, offset: int = 0):
+        return HistoryResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def payment_report_page(self, *, offset: int = 0) -> PaymentReportPage:
+        return PaymentReportPage(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def offers(self, card_no: str, *, resolved: "CardInfo | None" = None) -> OfferResult:
+        return OfferResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def subscriber_profile(self, card_no: str, *, resolved: "CardInfo | None" = None):
+        return ProfileResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+        # Definite, not indeterminate: nothing left the machine.
+        return RechargeResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def voucher_catalog(self) -> VoucherCatalogResult:
+        return VoucherCatalogResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def voucher_brand(self, brand_code: str) -> VoucherCatalogResult:
+        return VoucherCatalogResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def voucher_logo(self, logo_path: str) -> VoucherLogo:
+        return VoucherLogo(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def profiles(self) -> ProfilesResult:
+        return ProfilesResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def start_verification(self) -> VerificationChallenge:
+        return VerificationChallenge(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def send_verification_code(self, challenge_ref: str, answer: str):
+        return VerificationResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def confirm_verification(self, code: str) -> VerificationResult:
+        return VerificationResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+
 _REGISTRY: dict[str, type[IntegrationProvider]] = {}
 
 
@@ -826,10 +907,15 @@ def in_parallel(calls):
     if len(calls) < 2:
         return [call() for call in calls]
     identity = _current_identity()
+    # Read here, where the ORM may be used: each worker's provider_for() is
+    # answered from this rather than from a query of its own.
+    switched_off = switches.switched_off_providers()
     with ThreadPoolExecutor(
         max_workers=len(calls), thread_name_prefix="integration"
     ) as pool:
-        futures = [pool.submit(_isolated, call, identity) for call in calls]
+        futures = [
+            pool.submit(_isolated, call, identity, switched_off) for call in calls
+        ]
         return [future.result() for future in futures]
 
 
@@ -839,21 +925,31 @@ def _current_identity() -> dict:
     return context.current_identity()
 
 
-def _isolated(call, identity: dict):
+def _isolated(call, identity: dict, switched_off: frozenset[str]):
     from django.db import close_old_connections
 
     from apps.analytics import buffer, context
 
     try:
-        with context.request_identity(identity), buffer.held():
+        with (
+            context.request_identity(identity),
+            buffer.held(),
+            switches.pinned(switched_off),
+        ):
             return call()
     finally:
         close_old_connections()
 
 
 def provider_for(account) -> IntegrationProvider:
-    """The driver for an account; a planned-provider stub if none is registered."""
+    """The driver for an account; a planned-provider stub if none is registered.
+
+    A provider the operator switched off gets :class:`SwitchedOffProvider`
+    whichever path asked, so no caller can reach it by forgetting to check.
+    """
     cls = _REGISTRY.get(account.provider, PlannedProvider)
+    if switches.is_switched_off(account.provider):
+        return SwitchedOffProvider(account, cls)
     return cls(account)
 
 

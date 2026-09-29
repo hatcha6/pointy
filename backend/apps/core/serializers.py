@@ -440,8 +440,11 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
     def _connected_accounts(self):
         cached = getattr(self, "_connected_integration_accounts", None)
         if cached is None:
+            from apps.integrations import switches
             from apps.integrations.models import IntegrationAccount
 
+            # Connected and usable: a provider the operator switched off for
+            # the fleet leaves the till with everything else about it.
             cached = [
                 account
                 for account in IntegrationAccount.objects.filter(
@@ -449,6 +452,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
                 ).order_by("provider")
                 if account.is_configured
             ]
+            if cached:
+                off = switches.switched_off_providers()
+                cached = [account for account in cached if account.provider not in off]
             self._connected_integration_accounts = cached
         return cached
 

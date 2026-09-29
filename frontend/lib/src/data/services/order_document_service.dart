@@ -2543,6 +2543,7 @@ List<ReceiptProviderSlip> _saleProviderSlips(
           months: integration.months,
           printQrCodes: settings?.printVoucherQrCodes ?? true,
           logo: integration.receiptLogo,
+          providerLogo: integration.providerLogo,
         ),
   ];
 }

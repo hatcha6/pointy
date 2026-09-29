@@ -195,10 +195,17 @@ class IntegrationsApiClient {
     );
   }
 
+  /// Records money paid into a provider float.
+  ///
+  /// [fromAccountId] is the cash box or bank the money left. Leave it null and
+  /// the server takes it from the shop's default cash box. Money from outside
+  /// the shop is only ever [fromOutside], so a stray null can never record a
+  /// top-up as money from nowhere.
   Future<IntegrationFloat> recordTopUp(
     String providerKey, {
     required double amount,
     int? fromAccountId,
+    bool fromOutside = false,
     String reference = '',
     String note = '',
   }) async {
@@ -207,6 +214,7 @@ class IntegrationsApiClient {
       body: {
         'amount': amount.toStringAsFixed(2),
         'from_account': ?fromAccountId,
+        if (fromOutside) 'from_outside': true,
         if (reference.isNotEmpty) 'reference': reference,
         if (note.isNotEmpty) 'note': note,
       },

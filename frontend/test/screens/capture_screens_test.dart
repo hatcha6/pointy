@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
+import 'package:pointy_frontend/src/data/models/money_position.dart';
 import 'package:pointy_frontend/src/data/models/integration_provider.dart';
 import 'package:pointy_frontend/src/data/models/integration_recent_search.dart';
 import 'package:pointy_frontend/src/data/repositories/integrations_repository.dart';
@@ -866,6 +867,11 @@ class _FloatRepo extends IntegrationsRepository {
         reportedBalance: 505,
         drift: -275,
         moneyAccountName: 'رصيد HDBOX — Alnassim',
+        sourceAccounts: [
+          MoneyAccount(id: 1, name: 'الخزينة', kind: MoneyAccountKind.cash),
+          MoneyAccount(id: 2, name: 'المصرف', kind: MoneyAccountKind.bank),
+        ],
+        defaultSourceAccountId: 1,
       ),
     );
   }

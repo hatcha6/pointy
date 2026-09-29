@@ -39,7 +39,7 @@ from django.utils import timezone
 
 from apps.core.timeutils import business_timezone
 
-from . import catalog
+from . import catalog, switches
 from .models import IntegrationAccount, ProviderPayment
 from .providers import provider_for
 from .providers.base import (
@@ -362,7 +362,7 @@ def sweep_all(*, now=None) -> dict:
     """
     now = now or timezone.now()
     results = []
-    for account in IntegrationAccount.objects.filter(is_active=True):
+    for account in switches.running(IntegrationAccount.objects.filter(is_active=True)):
         if not supports_payment_report(account) or not account.is_configured:
             continue
         lock = _SWEEP_LOCK.format(account=account.pk)

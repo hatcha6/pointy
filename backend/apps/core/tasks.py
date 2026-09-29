@@ -99,9 +99,11 @@ def sync_relay_installation_task():
     """Best-effort periodic reconcile with the relay.
 
     Pulls entitlement changes (so a shop the operator just activated notices its
-    subscription within the interval, not only on a manual sync) and pushes the
-    shop name if it drifted while offline. This is the automatic "on reconnect"
-    path: it no-ops when there's no relay installation or the shop is offline, and
+    subscription within the interval, not only on a manual sync) and the fleet's
+    integration switches (a provider switched off stops here within minutes),
+    and pushes the shop name if it drifted while offline. This is the automatic
+    "on reconnect" path: it no-ops when there's no relay installation or the
+    shop is offline, and
     the next tick retries — so a shop that rarely connects syncs whenever it next
     reaches the internet.
     """

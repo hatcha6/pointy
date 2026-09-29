@@ -19,6 +19,7 @@ import '../../shared/printing/print_qr_code.dart';
 /// Labels the renderers print around a slip's PIN and its dial string.
 const String receiptPinLabel = 'الرقم السري';
 const String receiptScanToRedeem = 'امسح الرمز بكاميرا الهاتف للشحن';
+const String receiptScanToCopyPin = 'امسح الرمز لنسخ الرقم السري';
 const String receiptDialToRedeem = 'للشحن اطلب:';
 const String receiptOrDial = 'أو اطلب:';
 
@@ -30,17 +31,25 @@ class ReceiptProviderSlip {
     this.pin = '',
     this.dial = '',
     this.qrData,
+    this.qrCaption = '',
     this.rows = const [],
     this.logo = '',
+    this.providerLogo = '',
   });
 
   /// What was sold, as the invoice's item list names the line.
   final String title;
 
-  /// The card's brand logo as receipts print it — a base64 PNG, grey on
-  /// white, trimmed to its ink — at the head of the slip; empty for a top-up
-  /// and a brand without one. See [receiptSlipLogoBytes].
+  /// The logo the slip opens on, as receipts print it — a base64 PNG, grey
+  /// on white, trimmed to its ink: a card's brand logo, or the provider's own
+  /// for a top-up and a brand without one. Empty when the server sent none.
+  /// See [receiptSlipLogoBytes].
   final String logo;
+
+  /// The provider's own mark, small beside [logo], for a card bought off a
+  /// provider's shelf: its buyer knows it by its brand, and the help line on
+  /// the slip is the provider's. Empty when [logo] is the provider's already.
+  final String providerLogo;
 
   /// Set when the provider did not confirm; the slip then prints this and
   /// nothing that could pass for a card someone can use.
@@ -53,9 +62,14 @@ class ReceiptProviderSlip {
   /// redeems by dialling (Almadar's `*112*PIN#`, Libyana's `120PIN`).
   final String dial;
 
-  /// The QR code to print beside the PIN — a `tel:` link to [dial] — or null
-  /// when the shop prints none or the card is not dialled.
+  /// The QR code to print beside the PIN, or null when the shop prints none
+  /// or the slip has no PIN: a `tel:` link to [dial] for a card its operator
+  /// redeems by dialling, else the PIN itself, for the customer's phone to
+  /// copy ([pinQrData]).
   final String? qrData;
+
+  /// What to print under [qrData]: what scanning it does. Empty with no code.
+  final String qrCaption;
 
   /// Everything else, a printed line each: a card's serial and expiry, a
   /// top-up's line, term and reference, the provider's help line.
@@ -69,28 +83,47 @@ class ReceiptProviderSlip {
       other.pin == pin &&
       other.dial == dial &&
       other.qrData == qrData &&
+      other.qrCaption == qrCaption &&
       other.logo == logo &&
+      other.providerLogo == providerLogo &&
       _sameRows(other.rows, rows);
 
   @override
-  int get hashCode =>
-      Object.hash(title, notice, pin, dial, qrData, logo, Object.hashAll(rows));
+  int get hashCode => Object.hash(
+    title,
+    notice,
+    pin,
+    dial,
+    qrData,
+    qrCaption,
+    logo,
+    providerLogo,
+    Object.hashAll(rows),
+  );
 
   @override
   String toString() =>
       'ReceiptProviderSlip($title, notice: $notice, pin: $pin, dial: $dial, '
-      'qr: $qrData, rows: $rows, logo: ${logo.length} chars)';
+      'qr: $qrData ($qrCaption), rows: $rows, logo: ${logo.length} chars, '
+      'provider logo: ${providerLogo.length} chars)';
 }
 
 /// The slip's logo as image bytes, or null when it has none or it is not
 /// valid base64. The renderers still decode the picture itself defensively: a
 /// logo that cannot be drawn costs the slip its logo, never the receipt.
-Uint8List? receiptSlipLogoBytes(ReceiptProviderSlip slip) {
-  if (slip.logo.isEmpty) {
+Uint8List? receiptSlipLogoBytes(ReceiptProviderSlip slip) =>
+    _base64Picture(slip.logo);
+
+/// The provider's mark as image bytes, like [receiptSlipLogoBytes].
+Uint8List? receiptSlipProviderLogoBytes(ReceiptProviderSlip slip) =>
+    _base64Picture(slip.providerLogo);
+
+Uint8List? _base64Picture(String encoded) {
+  if (encoded.isEmpty) {
     return null;
   }
   try {
-    final bytes = base64Decode(slip.logo);
+    final bytes = base64Decode(encoded);
     return bytes.isEmpty ? null : bytes;
   } on FormatException {
     return null;
@@ -144,6 +177,7 @@ List<ReceiptProviderSlip> receiptProviderSlipsFromPayload(
         },
         printQrCodes: printQrCodes,
         logo: _text(raw['receipt_logo']),
+        providerLogo: _text(raw['provider_logo']),
       ),
     );
   }
@@ -165,17 +199,21 @@ ReceiptProviderSlip receiptProviderSlip({
   int months = 0,
   bool printQrCodes = true,
   String logo = '',
+  String providerLogo = '',
 }) {
   String field(String key) => (printed[key] ?? '').trim();
   final isVoucher = kind == 'voucher';
-  // Only a card has a brand to show; whatever became of it, the slip opens
-  // on the logo the customer knows the card by.
-  final brandLogo = isVoucher ? logo.trim() : '';
+  // Whatever became of it, the slip opens on the logo the customer knows it
+  // by: the card's brand, or the provider who topped their line up — and a
+  // card carries its provider's mark as well, never the same picture twice.
+  final slipLogo = logo.trim();
+  final mark = providerLogo.trim() == slipLogo ? '' : providerLogo.trim();
 
   if (status != 'confirmed') {
     return ReceiptProviderSlip(
       title: title,
-      logo: brandLogo,
+      logo: slipLogo,
+      providerLogo: mark,
       notice: switch (status) {
         // Sent, and the answer never came: whoever reads this must not try
         // again — a second attempt may be a second charge.
@@ -190,14 +228,24 @@ ReceiptProviderSlip receiptProviderSlip({
     final pin = field('code');
     // Only a card with a PIN is dialled; the server sends the string, and it
     // is checked again here before a phone is told to call it.
-    final dial = pin.isEmpty ? '' : field('dial');
-    final qrData = dial.isEmpty ? null : dialQrData(dial);
+    final dialLink = pin.isEmpty ? null : dialQrData(field('dial'));
+    final dial = dialLink == null ? '' : field('dial');
+    // Every card with a PIN gets a code: one that dials it where its operator
+    // redeems by dialling, else the PIN itself, to copy rather than type.
+    final pinCopy = pinQrData(pin);
+    final qrData = !printQrCodes ? null : dialLink ?? pinCopy;
     return ReceiptProviderSlip(
       title: title,
-      logo: brandLogo,
+      logo: slipLogo,
+      providerLogo: mark,
       pin: pin,
-      dial: qrData == null ? '' : dial,
-      qrData: printQrCodes ? qrData : null,
+      dial: dial,
+      qrData: qrData,
+      qrCaption: qrData == null
+          ? ''
+          : dialLink != null
+          ? receiptScanToRedeem
+          : receiptScanToCopyPin,
       rows: [
         if (field('serial').isNotEmpty) 'الرقم التسلسلي: ${field('serial')}',
         if (field('ccv').isNotEmpty) 'CCV: ${field('ccv')}',
@@ -205,7 +253,7 @@ ReceiptProviderSlip receiptProviderSlip({
         // The provider's own "how to use it" only where there is no dial
         // string: beside one it is a second, differently worded instruction
         // (Qareeb's Libyana slip even names a different code).
-        if (qrData == null && field('instructions').isNotEmpty)
+        if (dial.isEmpty && field('instructions').isNotEmpty)
           'طريقة الشحن: ${field('instructions')}',
         if (field('help').isNotEmpty) field('help'),
       ],
@@ -232,19 +280,26 @@ ReceiptProviderSlip receiptProviderSlip({
   if (termMonths > 0) {
     rows.add('المدة: $termMonths شهر');
   }
-  final start = field('start_date');
-  final end = field('end_date');
-  if (start.isNotEmpty && end.isNotEmpty) {
-    rows.add('من $start إلى $end');
-  } else if (end.isNotEmpty) {
-    rows.add('ينتهي: $end');
+  // The term as two facts, not one "from … to …" run: two dates inside one
+  // Arabic sentence is where a PDF's bidi reverses them, and two short facts
+  // share a line anyway.
+  if (field('start_date').isNotEmpty) {
+    rows.add('يبدأ: ${field('start_date')}');
+  }
+  if (field('end_date').isNotEmpty) {
+    rows.add('ينتهي: ${field('end_date')}');
   }
   if (field('serial').isNotEmpty) {
     rows.add('الرقم التسلسلي: ${field('serial')}');
   } else if (reference.isNotEmpty) {
     rows.add('المرجع: $reference');
   }
-  return ReceiptProviderSlip(title: title, rows: rows);
+  return ReceiptProviderSlip(
+    title: title,
+    logo: slipLogo,
+    providerLogo: mark,
+    rows: rows,
+  );
 }
 
 /// No bidi isolates anywhere in these strings, deliberately: a thermal

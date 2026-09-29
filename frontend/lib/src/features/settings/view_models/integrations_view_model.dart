@@ -339,10 +339,14 @@ class IntegrationsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// [fromAccountId] is the cash box or bank the money left. When it is null
+  /// the server uses the shop's default cash box. [fromOutside] records money
+  /// that never came from the shop's accounts, such as the owner's own pocket.
   Future<bool> recordTopUp(
     IntegrationProviderKey key, {
     required double amount,
     int? fromAccountId,
+    bool fromOutside = false,
     String reference = '',
     String note = '',
   }) async {
@@ -357,6 +361,7 @@ class IntegrationsViewModel extends ChangeNotifier {
       providerKey,
       amount: amount,
       fromAccountId: fromAccountId,
+      fromOutside: fromOutside,
       reference: reference,
       note: note,
     );

@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from . import catalog
+from . import catalog, switches
 from .fulfillment import fulfillment_kind
 from .models import IntegrationAccount
 from .redeem import printed_receipt
@@ -81,10 +81,15 @@ class ProviderSerializer(serializers.Serializer):
     currency = serializers.CharField()
     default_base_url = serializers.CharField()
     is_configurable = serializers.BooleanField()
+    switched_off = serializers.BooleanField()
     account = IntegrationAccountSerializer(allow_null=True)
 
     @classmethod
-    def payload(cls, spec: catalog.ProviderSpec, account) -> dict:
+    def payload(
+        cls, spec: catalog.ProviderSpec, account, *, switched_off: bool | None = None
+    ) -> dict:
+        if switched_off is None:
+            switched_off = switches.is_switched_off(spec.key)
         return {
             "key": spec.key,
             "availability": spec.availability,
@@ -118,6 +123,10 @@ class ProviderSerializer(serializers.Serializer):
             # driver actually registered. They should agree, and a mismatch is a
             # packaging bug we would rather surface than paper over.
             "is_configurable": spec.is_available and is_implemented(spec.key),
+            # The operator switched it off for every shop (apps.integrations.
+            # switches): nothing reaches the provider, and the screen says why
+            # rather than showing a connection that no longer does anything.
+            "switched_off": switched_off,
             "account": IntegrationAccountSerializer(account).data if account else None,
         }
 
@@ -364,9 +373,15 @@ class TopUpWriteSerializer(serializers.Serializer):
     amount = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=Decimal("0.01")
     )
-    #: The cash box or bank it came out of. Optional: a shop that paid from a
-    #: pocket should still be able to write the top-up down.
+    #: The cash box or bank it came out of. Absent or null means the routed
+    #: cash box: every client before the source picker sent nothing, and
+    #: meant exactly that.
     from_account = serializers.IntegerField(required=False, allow_null=True)
+    #: The money came from outside the shop, e.g. the owner's own pocket. The
+    #: treasury then counts it as money added to the shop. It has to be said in
+    #: so many words: a null that slips through must not turn a cash-box top-up
+    #: back into money from nowhere.
+    from_outside = serializers.BooleanField(required=False, default=False)
     moved_at = serializers.DateField(required=False)
     reference = serializers.CharField(
         max_length=128, required=False, allow_blank=True, default=""
@@ -382,10 +397,19 @@ def float_payload(account) -> dict:
 
     position = float_ledger.position(account)
     money_account = account.money_account
+    default_source = float_ledger.default_source_account()
     return {
         **position,
         "money_account_id": money_account.id if money_account else None,
         "money_account_name": money_account.name if money_account else "",
+        # Where a top-up can be paid from. Sent here, not read from the
+        # treasury, because a purchasing agent may record a top-up without
+        # the right to read the treasury. Names and kinds only, no balances.
+        "source_accounts": [
+            {"id": source.id, "name": source.name, "kind": source.kind}
+            for source in float_ledger.source_accounts()
+        ],
+        "default_source_account_id": default_source.id if default_source else None,
         # Pointy's arithmetic against the provider's own number. A gap means
         # somebody spent the float outside Pointy — which is the single most
         # useful thing this whole integration can tell a shop owner.

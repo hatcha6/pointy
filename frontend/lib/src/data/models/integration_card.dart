@@ -11,6 +11,7 @@
 library;
 
 import 'integration_provider.dart';
+import 'money_position.dart';
 
 double? _toDouble(Object? value) {
   if (value == null) return null;
@@ -723,6 +724,7 @@ class IntegrationFloat {
   const IntegrationFloat({
     this.expectedBalance = 0,
     this.toppedUp = 0,
+    this.returned = 0,
     this.drawn = 0,
     this.committed = 0,
     this.reportedBalance,
@@ -730,11 +732,18 @@ class IntegrationFloat {
     this.drift,
     this.moneyAccountId,
     this.moneyAccountName = '',
+    this.sourceAccounts = const [],
+    this.defaultSourceAccountId,
   });
 
-  /// Opening + top-ups − confirmed draws.
+  /// Opening + top-ups − money taken back − confirmed draws: the same figure
+  /// الخزينة shows for this float.
   final double expectedBalance;
   final double toppedUp;
+
+  /// Taken back out of the float, e.g. a provider's refund into the cash box.
+  /// Zero from a server that predates it.
+  final double returned;
 
   /// Only what the provider is known to have performed.
   final double drawn;
@@ -749,6 +758,15 @@ class IntegrationFloat {
   final int? moneyAccountId;
   final String moneyAccountName;
 
+  /// The cash boxes and banks a top-up can be paid from. They come with the
+  /// float because a purchasing agent can record a top-up but cannot read the
+  /// treasury. Empty from a server that predates the source picker.
+  final List<MoneyAccount> sourceAccounts;
+
+  /// The cash box untagged cash lands in. It is also where the server takes
+  /// a top-up from when the client does not say.
+  final int? defaultSourceAccountId;
+
   bool get hasDrift => drift != null && drift!.abs() >= 1;
 
   /// The provider holds less than Pointy expects — money left the float
@@ -759,6 +777,7 @@ class IntegrationFloat {
     return IntegrationFloat(
       expectedBalance: _toDouble(json['expected_balance']) ?? 0,
       toppedUp: _toDouble(json['topped_up']) ?? 0,
+      returned: _toDouble(json['returned']) ?? 0,
       drawn: _toDouble(json['drawn']) ?? 0,
       committed: _toDouble(json['committed']) ?? 0,
       reportedBalance: _toDouble(json['reported_balance']),
@@ -768,6 +787,13 @@ class IntegrationFloat {
           ? json['money_account_id'] as int
           : int.tryParse(json['money_account_id']?.toString() ?? ''),
       moneyAccountName: json['money_account_name']?.toString() ?? '',
+      sourceAccounts: (json['source_accounts'] as List<Object?>? ?? const [])
+          .whereType<Map<String, Object?>>()
+          .map(MoneyAccount.fromJson)
+          .toList(growable: false),
+      defaultSourceAccountId: json['default_source_account_id'] == null
+          ? null
+          : _toInt(json['default_source_account_id']),
     );
   }
 }

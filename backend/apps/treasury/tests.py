@@ -507,6 +507,42 @@ class TreasuryApiTests(TreasuryTestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_one_providers_float_cannot_fund_anothers(self):
+        # LNET does not pay HD Box. The money comes back to the shop and goes
+        # out again, and each of those is its own transfer on its own day.
+        hdbox = MoneyAccount.objects.create(
+            name="رصيد HDBOX", kind=MoneyAccount.Kind.PROVIDER
+        )
+        lnet = MoneyAccount.objects.create(
+            name="رصيد LNET", kind=MoneyAccount.Kind.PROVIDER
+        )
+
+        response = self.client.post(
+            reverse("money-transfer-list"),
+            {"from_account": hdbox.pk, "to_account": lnet.pk, "amount": "10.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(MoneyTransfer.objects.exists())
+
+    def test_a_float_can_be_topped_up_from_and_refunded_into_the_cash_box(self):
+        lnet = MoneyAccount.objects.create(
+            name="رصيد LNET", kind=MoneyAccount.Kind.PROVIDER
+        )
+        for source, target in ((self.cash, lnet), (lnet, self.cash)):
+            with self.subTest(source=source.name, target=target.name):
+                response = self.client.post(
+                    reverse("money-transfer-list"),
+                    {
+                        "from_account": source.pk,
+                        "to_account": target.pk,
+                        "amount": "10.00",
+                    },
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 201)
+
     def test_a_cashier_cannot_read_the_money_position(self):
         cashier = User.objects.create_user(username="till", password="pw")
         client = APIClient()

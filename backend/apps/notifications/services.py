@@ -1331,9 +1331,11 @@ def _integration_notifications(now):
         )
 
     # 3 and 4 both read the same accounts, so they share one pass over them.
-    from apps.integrations import float_ledger
+    # A provider switched off for the fleet is left out: nobody reads its float
+    # any more, so the balance on file is a memory, not a reading to warn on.
+    from apps.integrations import float_ledger, switches
 
-    for account in IntegrationAccount.objects.filter(is_active=True):
+    for account in switches.running(IntegrationAccount.objects.filter(is_active=True)):
         if account.balance is None:
             # Never probed, or probed and refused. Nothing below can say
             # anything honest about a float nobody has read.

@@ -760,6 +760,7 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
         installation.installation_id, timeout=timeout
     )
     entitlements_before = _entitlement_snapshot(installation)
+    switches_before = list(installation.integrations_disabled or [])
     # Entitlements are relay-owned, so mirror them down.
     installation.shop_name = relay_installation.get("shop_name") or installation.shop_name
     installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))
@@ -769,6 +770,9 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     installation.subscription_ends_at = parse_relay_datetime(
         relay_installation.get("subscription_ends_at")
     )
+    switched_off = _switched_off_integrations(relay_installation)
+    if switched_off is not None:
+        installation.integrations_disabled = switched_off
     # The relay's addresses are deployment config, mirrored onto the row when
     # it was enrolled — and then never again. A relay that moved (a new
     # platform environment, a custom domain) left every shop handing phones
@@ -783,6 +787,7 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
             "subscription_active",
             "ai_enabled",
             "sms_enabled",
+            "integrations_disabled",
             "subscription_ends_at",
             "relay_public_api_url",
             "relay_connector_address",
@@ -795,6 +800,8 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
         # permissions version makes every one of them re-read it now, instead of
         # showing a feature the plan no longer has until someone signs in again.
         caching.bump_perm_version()
+    if installation.integrations_disabled != switches_before:
+        _apply_integration_switches(switches_before, installation.integrations_disabled)
     # The shop name is backend-owned; the line above mirrored the relay's current
     # copy. If the merchant renamed the shop while offline, our local name now
     # differs from that copy — push it up while we have the connection. Best-effort
@@ -802,6 +809,34 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     if push_shop_name:
         push_shop_name_to_relay(installation, client=relay_client)
     return installation
+
+
+def _switched_off_integrations(relay_installation):
+    """The provider keys the relay has switched off, or ``None`` for no news.
+
+    The relay leaves the field out when it could not read its switches (and an
+    older relay never sends it). That must not read as "every provider is
+    back on", so only a list replaces what this shop last heard.
+    """
+    keys = relay_installation.get("integrations_disabled")
+    if not isinstance(keys, list):
+        return None
+    return sorted({key.strip().lower() for key in keys if isinstance(key, str) and key.strip()})
+
+
+def _apply_integration_switches(before, after):
+    """Act on a switch change now; enforcement never waits on this.
+
+    The mirrored list is already saved, and every path to a provider reads it,
+    so a failure here costs only promptness — the next voucher sweep takes
+    the cards off anyway.
+    """
+    from apps.integrations import switches
+
+    try:
+        switches.apply_change(before, after)
+    except Exception:  # noqa: BLE001 - see the docstring
+        logger.exception("could not apply integration switches %s -> %s", before, after)
 
 
 def _entitlement_snapshot(installation):

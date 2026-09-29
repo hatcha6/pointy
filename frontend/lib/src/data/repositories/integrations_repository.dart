@@ -209,6 +209,7 @@ class IntegrationsRepository {
     String providerKey, {
     required double amount,
     int? fromAccountId,
+    bool fromOutside = false,
     String reference = '',
     String note = '',
   }) {
@@ -217,6 +218,7 @@ class IntegrationsRepository {
         providerKey,
         amount: amount,
         fromAccountId: fromAccountId,
+        fromOutside: fromOutside,
         reference: reference,
         note: note,
       ),

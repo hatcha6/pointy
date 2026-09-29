@@ -18,7 +18,7 @@ import requests
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from PIL import Image, ImageDraw
@@ -32,7 +32,8 @@ from apps.printing.services import build_receipt_payload
 from apps.sales.models import Order, RegisterSession
 
 from . import voucher_logos, vouchers
-from .models import IntegrationVoucher, IntegrationVoucherBrand
+from .catalog import PROVIDERS
+from .models import IntegrationFulfillment, IntegrationVoucher, IntegrationVoucherBrand
 from .providers import provider_for
 from .providers import qareeb as qareeb_driver
 from .providers.base import ERROR_NOT_FOUND, ERROR_UNREACHABLE, VoucherLogo
@@ -520,16 +521,27 @@ class ReceiptLogoPayloadTests(TestCase):
     def test_a_card_line_carries_its_brands_receipt_logo(self):
         response = self.sell(LIBYANA_5)
         expected = base64.b64encode(self.logo).decode("ascii")
-        # What the invoice (A4, roll) is printed from...
-        self.assertEqual(response.data["lines"][0]["integration"]["receipt_logo"], expected)
-        # ...and what a thermal receipt is.
+        qareeb = voucher_logos.provider_receipt_logo("qareeb")
         payload = build_receipt_payload(Order.objects.get(pk=response.data["id"]))
-        self.assertEqual(payload["order"]["lines"][0]["integration"]["receipt_logo"], expected)
+        # What the invoice (A4, roll) is printed from, and what a thermal
+        # receipt is: the brand's logo, and Qareeb's own mark beside it.
+        for integration in (
+            response.data["lines"][0]["integration"],
+            payload["order"]["lines"][0]["integration"],
+        ):
+            self.assertEqual(integration["receipt_logo"], expected)
+            self.assertEqual(integration["provider_logo"], qareeb)
 
-    def test_a_brand_without_a_receipt_logo_prints_none(self):
+    def test_a_brand_without_a_receipt_logo_prints_its_providers(self):
         IntegrationVoucherBrand.objects.filter(code="30").update(print_logo=None)
         response = self.sell(LIBYANA_5)
-        self.assertIsNone(response.data["lines"][0]["integration"]["receipt_logo"])
+        integration = response.data["lines"][0]["integration"]
+        self.assertEqual(
+            integration["receipt_logo"],
+            voucher_logos.provider_receipt_logo("qareeb"),
+        )
+        # Opening on Qareeb's logo already, the slip does not print it twice.
+        self.assertIsNone(integration["provider_logo"])
 
     def test_one_read_per_brand_however_many_of_its_cards_are_sold(self):
         response = self.sell(LIBYANA_5, LIBYANA_5, LIBYANA_10)
@@ -545,3 +557,36 @@ class ReceiptLogoPayloadTests(TestCase):
             {line["integration"]["receipt_logo"] for line in payload["order"]["lines"]},
             {base64.b64encode(self.logo).decode("ascii")},
         )
+
+
+# --- the provider's own logo, for a top-up and a brand without one --------------------------
+class ProviderReceiptLogoTests(SimpleTestCase):
+    def test_every_provider_has_a_receipt_logo_ready_to_print(self):
+        for spec in PROVIDERS:
+            with self.subTest(provider=spec.key):
+                encoded = voucher_logos.provider_receipt_logo(spec.key)
+                self.assertIsNotNone(encoded, f"receipt_logos/{spec.key}.png is missing")
+                image = _decoded(base64.b64decode(encoded))
+                self.assertEqual(image.format, "PNG")
+                grey = image.convert("L")
+                # Two levels, as a thermal head prints: no grey left for a
+                # threshold to guess at.
+                self.assertEqual(sum(grey.histogram()[1:255]), 0)
+                self.assertLessEqual(max(grey.size), voucher_logos.PRINT_LOGO_MAX_DIMENSION)
+                # Trimmed to its ink, so every provider fills its slip's box.
+                ink = grey.point(lambda level: 255 if level < 128 else 0).getbbox()
+                self.assertEqual(ink, (0, 0, *grey.size))
+
+    def test_a_top_up_opens_on_its_providers_logo(self):
+        for provider in ("hdbox", "lnet"):
+            with self.subTest(provider=provider):
+                top_up = IntegrationFulfillment(provider=provider, subscriber_ref="210906803499")
+                self.assertEqual(
+                    voucher_logos.receipt_logos_for(top_up),
+                    (voucher_logos.provider_receipt_logo(provider), None),
+                )
+
+    def test_only_a_provider_the_catalog_knows_is_looked_up(self):
+        for key in ("", "nobody", "../catalog", "hdbox/../lnet"):
+            with self.subTest(key=key):
+                self.assertIsNone(voucher_logos.provider_receipt_logo(key))

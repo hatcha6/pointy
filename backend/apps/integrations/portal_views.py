@@ -21,7 +21,7 @@ from apps.core.timeutils import business_local_date
 from apps.customers.models import Customer
 from apps.treasury.models import MoneyAccount
 
-from . import catalog, payment_report, portal_sales
+from . import catalog, payment_report, portal_sales, switches
 from .models import IntegrationAccount, IntegrationSubscriber
 
 RECORD = ("integrations.record_portal_payment",)
@@ -44,6 +44,12 @@ def _account_for(provider: str):
     if spec is None:
         return None, Response(
             {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+        )
+    # Switched off for the fleet: its report is neither read nor acted on.
+    if switches.is_switched_off(provider):
+        return None, Response(
+            {"code": "switched_off", "detail": "switched_off"},
+            status=status.HTTP_409_CONFLICT,
         )
     account = IntegrationAccount.objects.filter(provider=provider, is_active=True).first()
     if (

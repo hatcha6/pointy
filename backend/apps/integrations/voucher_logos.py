@@ -8,8 +8,10 @@ the cart and the product screens show it with nothing new to learn.
 The provider also draws every logo for receipts, black on white for a thermal
 head (Qareeb's ``logo_print``). That one is kept on the brand, ready to print
 (:func:`print_ready`), and every receipt payload carries it inline
-(:func:`receipt_logo_for`), so the slip of every card sold opens on its brand's
-logo and a printout never waits on a download.
+(:func:`receipt_logos_for`), so the slip of every card sold opens on its brand's
+logo and a printout never waits on a download. The provider's own logo, shipped
+with the app (``receipt_logos/``), prints beside it as a small mark, and a
+top-up, which has no brand, opens on it.
 
 **Fetched once, then left alone.** Logos almost never change, so a brand's logo
 is asked for again only a month after it was last read (``LOGO_MAX_AGE``), or as
@@ -30,12 +32,14 @@ attachment's URL, which a rewrite keeps, so it would go on showing the old logo.
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
 import io
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 
 from django.db import transaction
 from django.db.models import F, Q
@@ -48,6 +52,7 @@ from apps.attachments.image_search import RemoteImageUpload, remote_image_filena
 from apps.attachments.models import Attachment
 from apps.attachments.services import active_attachments_for, store_uploaded_attachment
 
+from .catalog import spec_for
 from .models import IntegrationVoucherBrand
 from .providers import provider_for
 from .providers.base import ERROR_UNEXPECTED, VoucherLogo, in_parallel
@@ -81,6 +86,9 @@ PRINT_PAPER_LEVEL = 212
 #: How a stored picture says it is a provider's logo, as an internet search
 #: import says ``internet_search``. A changed logo retires only its own kind.
 IMPORTED_FROM = "provider_logo"
+#: Each provider's own logo as receipts print it, one PNG per provider key:
+#: black ink on white, already trimmed (see the README there).
+PROVIDER_RECEIPT_LOGOS = Path(__file__).resolve().parent / "receipt_logos"
 
 
 def sync_logos(account, *, limit: int = LOGO_FETCHES_PER_SWEEP) -> int:
@@ -110,15 +118,39 @@ def sync_logos(account, *, limit: int = LOGO_FETCHES_PER_SWEEP) -> int:
 
 
 def receipt_logo_for(fulfillment, *, memo: dict | None = None) -> str | None:
-    """The receipt logo of the brand a card line sold, as base64, or ``None``.
+    """The logo a provider line's slip opens on, as base64, or ``None``.
 
-    Only a card has a brand; a top-up of somebody's line has none. ``memo`` is
-    shared by one payload's lines, so ten cards of three brands read three rows.
+    A card opens on its brand's logo — Libyana's, LNET's — the one its buyer
+    knows it by. A top-up has no brand, and a brand may have no receipt logo
+    yet, so both open on the provider's own. ``memo`` is shared by one
+    payload's lines, so ten cards of three brands read three rows.
     """
     from .fulfillment import fulfillment_kind
 
-    if fulfillment is None or fulfillment_kind(fulfillment) != "voucher":
+    if fulfillment is None:
         return None
+    if fulfillment_kind(fulfillment) == "voucher":
+        brand = _brand_receipt_logo(fulfillment, memo)
+        if brand:
+            return brand
+    return provider_receipt_logo(fulfillment.provider)
+
+
+def receipt_logos_for(fulfillment, *, memo: dict | None = None) -> tuple[str | None, str | None]:
+    """The logo a provider line's slip opens on, and the provider's mark beside it.
+
+    A card off a provider's shelf opens on its brand's logo and carries the
+    provider's own mark as well: the customer knows the card by its brand, and
+    the shop bought it from the provider, whose help line the slip prints. A
+    top-up, or a brand with no logo, already opens on the provider's logo, so
+    the mark is ``None`` rather than the same picture twice.
+    """
+    logo = receipt_logo_for(fulfillment, memo=memo)
+    mark = None if fulfillment is None else provider_receipt_logo(fulfillment.provider)
+    return logo, (mark if mark != logo else None)
+
+
+def _brand_receipt_logo(fulfillment, memo: dict | None) -> str | None:
     key = (fulfillment.account_id, (fulfillment.package_id or "").strip())
     if not key[1]:
         return None
@@ -133,6 +165,22 @@ def receipt_logo_for(fulfillment, *, memo: dict | None = None) -> str | None:
     if memo is not None:
         memo[key] = encoded
     return encoded
+
+
+@functools.cache
+def provider_receipt_logo(provider: str) -> str | None:
+    """A provider's own receipt logo as base64, or ``None`` when it has none.
+
+    Read from disk once per process. Only a provider the catalog knows is
+    looked up, so a key can never name a file outside ``receipt_logos/``.
+    """
+    if spec_for(provider) is None:
+        return None
+    try:
+        data = (PROVIDER_RECEIPT_LOGOS / f"{provider}.png").read_bytes()
+    except OSError:
+        return None
+    return base64.b64encode(data).decode("ascii") if data else None
 
 
 def print_ready(data: bytes) -> bytes | None:

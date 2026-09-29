@@ -197,6 +197,19 @@ class MoneyTransferSerializer(serializers.ModelSerializer):
             )
         if source is not None and target is not None and source.pk == target.pk:
             raise serializers.ValidationError("لا يمكن التحويل إلى نفس الحساب.")
+        if (
+            source is not None
+            and target is not None
+            and source.kind == MoneyAccount.Kind.PROVIDER
+            and target.kind == MoneyAccount.Kind.PROVIDER
+        ):
+            # One provider's credit cannot pay another: LNET does not pay HD
+            # Box. The money comes back to the shop and goes out again, each
+            # its own transfer on its own day. The top-up screen refuses the
+            # same thing.
+            raise serializers.ValidationError(
+                "لا يمكن التحويل من رصيد مزوّد إلى رصيد مزوّد آخر."
+            )
         return attrs
 
     def create(self, validated_data):

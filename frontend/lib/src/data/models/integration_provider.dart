@@ -173,6 +173,10 @@ abstract final class IntegrationErrorCode {
 
   /// The login is acting as a different profile (shop) than the chosen one.
   static const profileMismatch = 'profile_mismatch';
+
+  /// Pointy's operator switched this provider off for every shop. Nothing was
+  /// sent, and nothing will be until it is switched back on.
+  static const switchedOff = 'switched_off';
 }
 
 double? _toDouble(Object? value) {
@@ -345,6 +349,7 @@ class IntegrationProvider {
     this.currency = 'LYD',
     this.defaultBaseUrl = '',
     this.isConfigurable = false,
+    this.switchedOff = false,
     this.account,
   });
 
@@ -373,6 +378,11 @@ class IntegrationProvider {
   /// Availability *and* a registered driver. The only flag the UI should gate
   /// the credentials form on.
   final bool isConfigurable;
+
+  /// Switched off for every shop by Pointy's operator: nothing reaches the
+  /// provider, so the card says so instead of offering to connect or test.
+  /// What stays local — the float ledger, disconnecting — still works.
+  final bool switchedOff;
   final IntegrationAccount? account;
 
   bool get isConnected =>
@@ -408,6 +418,7 @@ class IntegrationProvider {
       currency: json['currency']?.toString() ?? 'LYD',
       defaultBaseUrl: json['default_base_url']?.toString() ?? '',
       isConfigurable: json['is_configurable'] == true,
+      switchedOff: json['switched_off'] == true,
       account: account is Map<String, Object?>
           ? IntegrationAccount.fromJson(account)
           : null,

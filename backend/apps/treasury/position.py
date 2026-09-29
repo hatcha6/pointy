@@ -766,6 +766,15 @@ def record_count(*, account, counted_amount, note="", created_by=None):
     )
 
 
+def routed_account(kind):
+    """The active account of ``kind`` that untagged money events land in.
+
+    ``None`` when the shop has no active account of that kind.
+    """
+    accounts = list(MoneyAccount.objects.filter(is_active=True, kind=kind))
+    return _default_account_ids(accounts).get(kind)
+
+
 def account_is_routed(account):
     """True when this account receives the money events nothing has tagged.
 
@@ -773,8 +782,7 @@ def account_is_routed(account):
     holds the payments that named it. What this answers is narrower — where an
     untagged card payment, a bank expense, or a consignor payout lands.
     """
-    accounts = list(MoneyAccount.objects.filter(is_active=True))
-    default = _default_account_ids(accounts).get(account.kind)
+    default = routed_account(account.kind)
     return bool(default and default.pk == account.pk)
 
 
@@ -785,6 +793,7 @@ __all__ = [
     "expected_balance_for",
     "outside_money_totals",
     "record_count",
+    "routed_account",
     "treasury_position",
     "treasury_statement",
     "COMPONENT_OPENING",

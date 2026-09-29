@@ -720,13 +720,16 @@ CELERY_BEAT_SCHEDULE = {
         "task": "holidays.sync_holidays",
         "schedule": crontab(minute=30, hour=0),
     },
-    # Best-effort hourly reconcile with the relay: pull entitlement changes and
-    # push the shop name if it drifted while offline. Short cadence so a shop with
-    # no subscription — usually offline — syncs whenever it next reaches the
+    # Best-effort reconcile with the relay: pull entitlement changes and the
+    # fleet's integration switches, and push the shop name if it drifted while
+    # offline. Every five minutes because a provider switched off for the fleet
+    # (apps.integrations.switches) must stop in every shop within minutes; the
+    # read is one small GET. Short cadence also means a shop with no
+    # subscription — usually offline — syncs whenever it next reaches the
     # internet, not only when a manager opens the Subscription status screen.
     "core.sync-relay-installation": {
         "task": "core.sync_relay_installation",
-        "schedule": crontab(minute=0),
+        "schedule": crontab(minute="*/5"),
     },
     # Keep retrying license-key redemption until it lands (an offline install
     # enrolls the moment the shop first reaches the internet, activating its

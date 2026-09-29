@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/integration_card.dart';
 import '../../../data/models/integration_provider.dart';
+import '../../../data/models/money_position.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../treasury/views/treasury_ui.dart';
 import '../view_models/integrations_view_model.dart';
 import 'integration_presentation.dart';
 
@@ -55,6 +58,12 @@ class _IntegrationFloatFormState extends State<IntegrationFloatForm> {
   final _amount = TextEditingController();
   final _reference = TextEditingController();
 
+  /// The source somebody picked, where null is outside the shop. Until they
+  /// pick, [_sourceOf] follows the float's default, which only arrives once
+  /// the float has loaded.
+  int? _pickedSource;
+  bool _hasPickedSource = false;
+
   @override
   void dispose() {
     _amount.dispose();
@@ -62,12 +71,30 @@ class _IntegrationFloatFormState extends State<IntegrationFloatForm> {
     super.dispose();
   }
 
+  /// Where the money left. Starts on the cash box untagged cash lands in, so
+  /// the usual case needs no touch. Outside the shop is never the default.
+  int? _sourceOf(IntegrationFloat float) {
+    if (_hasPickedSource) return _pickedSource;
+    final preferred = float.defaultSourceAccountId;
+    if (float.sourceAccounts.any((account) => account.id == preferred)) {
+      return preferred;
+    }
+    return float.sourceAccounts.firstOrNull?.id;
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final amount = double.tryParse(_amount.text.trim()) ?? 0;
+    final float = widget.viewModel.providerFloat;
+    // No list means an older server, or a float that did not load. Then say
+    // nothing, and the server takes the money from the shop's cash box.
+    final offersSource = float != null && float.sourceAccounts.isNotEmpty;
+    final source = offersSource ? _sourceOf(float) : null;
     final ok = await widget.viewModel.recordTopUp(
       widget.providerKey,
       amount: amount,
+      fromAccountId: source,
+      fromOutside: offersSource && source == null,
       reference: _reference.text.trim(),
     );
     if (!mounted || !ok) return;
@@ -146,6 +173,11 @@ class _IntegrationFloatFormState extends State<IntegrationFloatForm> {
                                 label: l10n.integrationFloatToppedUp,
                                 value: formatMoney(float.toppedUp),
                               ),
+                              if (float.returned > 0)
+                                PointySummaryRow(
+                                  label: l10n.integrationFloatReturned,
+                                  value: formatMoney(float.returned),
+                                ),
                               PointySummaryRow(
                                 label: l10n.integrationFloatDrawn,
                                 value: formatMoney(float.drawn),
@@ -170,6 +202,18 @@ class _IntegrationFloatFormState extends State<IntegrationFloatForm> {
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                         SizedBox(height: spacing.sm),
+                        if (float != null &&
+                            float.sourceAccounts.isNotEmpty) ...[
+                          _TopUpSourceField(
+                            accounts: float.sourceAccounts,
+                            value: _sourceOf(float),
+                            onChanged: (value) => setState(() {
+                              _pickedSource = value;
+                              _hasPickedSource = true;
+                            }),
+                          ),
+                          SizedBox(height: spacing.sm),
+                        ],
                         TextFormField(
                           controller: _amount,
                           textDirection: TextDirection.ltr,
@@ -236,6 +280,92 @@ class _IntegrationFloatFormState extends State<IntegrationFloatForm> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Where the money for a top-up left: one of the shop's cash boxes or banks,
+/// or outside the shop. The last choice is explained under the field, because
+/// the treasury then counts the amount as money added to the shop.
+class _TopUpSourceField extends StatelessWidget {
+  const _TopUpSourceField({
+    required this.accounts,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<MoneyAccount> accounts;
+
+  /// The chosen account, or null for outside the shop.
+  final int? value;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    MoneyAccount? selected;
+    for (final account in accounts) {
+      if (account.id == value) selected = account;
+    }
+
+    return DropdownButtonFormField<int?>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: l10n.integrationTopUpSource,
+        prefixIcon: Icon(
+          selected == null
+              ? Icons.person_outline
+              : treasuryAccountIcon(selected),
+        ),
+        helperText: value == null
+            ? l10n.integrationTopUpSourceOutsideHint
+            : null,
+        helperMaxLines: 2,
+      ),
+      // The closed field shows the name only; its icon is the prefix, lined
+      // up with the amount and reference fields beneath it.
+      selectedItemBuilder: (context) => [
+        for (final account in accounts)
+          Text(account.name, overflow: TextOverflow.ellipsis),
+        Text(l10n.integrationTopUpSourceNone),
+      ],
+      items: [
+        for (final account in accounts)
+          DropdownMenuItem<int?>(
+            value: account.id,
+            child: _SourceOption(
+              icon: treasuryAccountIcon(account),
+              label: account.name,
+            ),
+          ),
+        DropdownMenuItem<int?>(
+          value: null,
+          child: _SourceOption(
+            icon: Icons.person_outline,
+            label: l10n.integrationTopUpSourceNone,
+          ),
+        ),
+      ],
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _SourceOption extends StatelessWidget {
+  const _SourceOption({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 8),
+        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+      ],
     );
   }
 }

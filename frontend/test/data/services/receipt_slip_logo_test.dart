@@ -9,15 +9,17 @@ import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/order_document_service.dart';
 import 'package:pointy_frontend/src/data/services/performed_recharges.dart';
+import 'package:pointy_frontend/src/data/services/provider_slip_raster.dart';
 import 'package:pointy_frontend/src/data/services/receipt_provider_slips.dart';
 import 'package:pointy_frontend/src/shared/branding_assets.dart';
 import 'package:pointy_frontend/src/shared/pdf/pdf.dart';
 
 /// A card's slip opens on its brand's logo: the receipt version the provider
 /// draws for it, which the server keeps ready to print and sends inline with
-/// the sale (`receipt_logo`). These pin that the thermal slip and both PDFs
-/// print it at the head of the card's slip, sized to the slip, and that a
-/// logo which cannot be drawn costs the slip its logo, never the receipt.
+/// the sale (`receipt_logo`); a top-up's opens on its provider's own. These
+/// pin that the thermal slip (drawn, or as text) and both PDFs print it at
+/// the head of the slip, sized to the slip, and that a logo which cannot be
+/// drawn costs the slip its logo, never the receipt.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -43,15 +45,17 @@ void main() {
       }
     });
 
-    test('a top-up has no brand logo to print', () {
+    test('a top-up opens on its provider\'s logo, printed once', () {
       final slip = receiptProviderSlip(
         title: 'HD Box',
         kind: 'recharge',
         status: 'confirmed',
         printed: const {'card_no': '1234'},
         logo: logo,
+        providerLogo: logo,
       );
-      expect(slip.logo, isEmpty);
+      expect(slip.logo, logo);
+      expect(slip.providerLogo, isEmpty);
     });
 
     test('the thermal payload names the logo beside the PIN', () {
@@ -104,7 +108,11 @@ void main() {
   });
 
   group('the thermal slip', () {
-    const encoder = EscPosReceiptEncoder(brandLogoLoader: _NoBrandLogo());
+    // The slip as text: what a till prints when it cannot draw it.
+    const encoder = EscPosReceiptEncoder(
+      brandLogoLoader: _NoBrandLogo(),
+      slipRasterizer: TextOnlySlipRasterizer(),
+    );
     const endpoint = PrinterEndpoint(
       kind: PrintTransportKind.fake,
       name: 'till',
@@ -135,9 +143,25 @@ void main() {
       },
     };
 
+    test('drawn, the logo is part of the slip\'s own picture', () async {
+      const drawing = EscPosReceiptEncoder(brandLogoLoader: _NoBrandLogo());
+      for (final cardLogo in [logo, broken, '']) {
+        final bytes = await drawing.encodePayload(
+          payload: payload(cardLogo),
+          endpoint: endpoint,
+        );
+        final rasters = _rasters(bytes);
+        // One card, 360 dots wide, drawn whole before the invoice's text; an
+        // undrawable logo costs the drawing its logo and nothing else.
+        expect(rasters, isNotEmpty);
+        expect(rasters.map((r) => r.widthBytes).toSet(), {45});
+        expect(rasters.last.offset, lessThan(_indexOf(bytes, 'RECEIPT: R-1')));
+      }
+    });
+
     for (final compact in [false, true]) {
       test(
-        'the logo heads the slip, above its title (compact: $compact)',
+        'as text, the logo heads the slip, above its title (compact: $compact)',
         () async {
           final bytes = await encoder.encodePayload(
             payload: payload(logo),
@@ -149,16 +173,17 @@ void main() {
           final mark = rasters.first;
           expect(mark.offset, lessThan(_indexOf(bytes, 'LIBYANA 5')));
           expect(_indexOf(bytes, 'LIBYANA 5'), lessThan(rasters.last.offset));
-          // Fitted into the slip's box: 12 mm tall (9 mm compact), at most half
-          // the 384-dot head across, proportions kept (120 x 90 -> 128 x 96).
-          expect(mark.height, compact ? 72 : 96);
-          expect(mark.widthBytes * 8, compact ? 96 : 128);
+          // Fitted into the slip's box: 9 mm tall (7 mm compact), at most half
+          // the 384-dot head across, proportions kept (120 x 90 -> 96 x 72;
+          // compact 75 x 56 on 80 dots of paper).
+          expect(mark.height, compact ? 56 : 72);
+          expect(mark.widthBytes * 8, compact ? 80 : 96);
           expect(mark.widthBytes * 8, lessThanOrEqualTo(192));
         },
       );
     }
 
-    test('no logo, no picture: the slip prints as it did', () async {
+    test('as text, no logo, no picture: the slip prints as it did', () async {
       final bytes = await encoder.encodePayload(
         payload: payload(''),
         endpoint: endpoint,
@@ -167,7 +192,7 @@ void main() {
     });
 
     test(
-      'a logo that cannot be drawn costs the logo, not the receipt',
+      'as text, a logo that cannot be drawn costs the logo, not the receipt',
       () async {
         final bytes = await encoder.encodePayload(
           payload: payload(broken),

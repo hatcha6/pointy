@@ -11523,6 +11523,10 @@
   "@treasuryTransferSameAccount": {
     "description": "Validation message when both sides are the same account."
   },
+  "treasuryTransferBetweenFloats": "لا يمكن التحويل من رصيد مزوّد إلى رصيد مزوّد آخر.",
+  "@treasuryTransferBetweenFloats": {
+    "description": "Validation message when both sides of a transfer are provider floats (e.g. LNET to HD Box): one provider's credit cannot pay another."
+  },
   "treasuryAmountInvalid": "أدخل مبلغًا صحيحًا.",
   "@treasuryAmountInvalid": {
     "description": "Validation message for an invalid money amount."
@@ -14472,6 +14476,10 @@
   "@integrationFloatToppedUp": {
     "description": ""
   },
+  "integrationFloatReturned": "مُسترَد من المزوّد",
+  "@integrationFloatReturned": {
+    "description": "Float summary row: money taken back out of the provider float, e.g. a refund into the cash box. Subtracted from the expected balance."
+  },
   "integrationFloatDrawn": "المسحوب المؤكَّد",
   "@integrationFloatDrawn": {
     "description": ""
@@ -14512,11 +14520,15 @@
   },
   "integrationTopUpSource": "خرج من",
   "@integrationTopUpSource": {
-    "description": ""
+    "description": "Label of the picker for the cash box or bank a provider float top-up was paid from."
   },
-  "integrationTopUpSourceNone": "بدون تحديد",
+  "integrationTopUpSourceNone": "خارج المحل",
   "@integrationTopUpSourceNone": {
-    "description": ""
+    "description": "Top-up source option: the money did not come from any of the shop's accounts (e.g. the owner's own pocket)."
+  },
+  "integrationTopUpSourceOutsideHint": "لن يُخصم المبلغ من الخزينة، ويُحسب مالاً دخل المحل من خارجه.",
+  "@integrationTopUpSourceOutsideHint": {
+    "description": "Shown under the source picker when 'outside the shop' is chosen: nothing is deducted from the treasury and the amount counts as money added to the shop."
   },
   "integrationTopUpReference": "رقم الحوالة أو الإيصال",
   "@integrationTopUpReference": {
@@ -15753,6 +15765,18 @@
   "integrationErrorProfileMismatch": "حساب المزوّد يعمل الآن بملف غير الذي اخترته. اجعل ملفك النشط في تطبيق المزوّد أو اختر الملف النشط.",
   "@integrationErrorProfileMismatch": {
     "description": "Integration error: the login is acting as a different profile (shop) than the one chosen."
+  },
+  "integrationErrorSwitchedOff": "هذا التكامل متوقف مؤقتاً لجميع المحلات، ولم يُرسَل أي طلب إلى المزوّد.",
+  "@integrationErrorSwitchedOff": {
+    "description": "Integration error: the operator switched this provider off for every shop; nothing was sent."
+  },
+  "integrationStatusSwitchedOff": "متوقف مؤقتاً",
+  "@integrationStatusSwitchedOff": {
+    "description": "Status pill on a provider card the operator switched off for every shop."
+  },
+  "integrationSwitchedOffMessage": "أُوقف هذا التكامل مؤقتاً لجميع المحلات من طرف دفتر، ولن يتصل النظام بهذا المزوّد حتى يُعاد تشغيله. بيانات الحساب وسجلّ المبيعات محفوظة كما هي.",
+  "@integrationSwitchedOffMessage": {
+    "description": "Provider card notice when the operator switched the integration off for every shop."
   },
   "integrationCapabilityVouchers": "كروت في الكتالوج",
   "@integrationCapabilityVouchers": {

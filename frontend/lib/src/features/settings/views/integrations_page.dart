@@ -375,6 +375,13 @@ class IntegrationProviderCard extends StatelessWidget {
         color: colors.mutedInk,
       );
     }
+    if (provider.switchedOff) {
+      return PointyStatusPill(
+        label: l10n.integrationStatusSwitchedOff,
+        icon: Icons.block_outlined,
+        color: colors.warning,
+      );
+    }
     final account = provider.account;
     if (account == null || !account.isConfigured) {
       return PointyStatusPill(
@@ -453,14 +460,30 @@ class IntegrationProviderCard extends StatelessWidget {
       ];
     }
 
+    // Said before anything else on the card: the owner did nothing wrong, and
+    // nothing here will make it work until it is switched back on.
+    final switchedOff = [
+      if (provider.switchedOff) ...[
+        SizedBox(height: spacing.sm),
+        // Not compact: its two-line clamp would cut off the part that says
+        // the shop's record is safe.
+        PointyInlineMessage.warning(
+          message: l10n.integrationSwitchedOffMessage,
+          icon: Icons.block_outlined,
+        ),
+      ],
+    ];
+
     final account = provider.account;
     if (account == null || !account.isConfigured) {
-      return const [];
+      return switchedOff;
     }
 
-    final widgets = <Widget>[SizedBox(height: spacing.sm)];
+    final widgets = <Widget>[...switchedOff, SizedBox(height: spacing.sm)];
 
-    if (account.hasFailed) {
+    // A switched-off provider is not asked anything, so its last error is old
+    // news beside the reason above.
+    if (account.hasFailed && !provider.switchedOff) {
       widgets.add(
         PointyInlineMessage.error(
           message: integrationErrorText(account.lastErrorCode, l10n),
@@ -539,8 +562,16 @@ class IntegrationProviderCard extends StatelessWidget {
       return const [];
     }
     final isConfigured = provider.isConfigured;
+    // Switched off for every shop: only what never reaches the provider stays
+    // — the float ledger, and letting go of the stored login.
+    final live = !provider.switchedOff;
+    if (!live && !isConfigured) {
+      return const [];
+    }
     final needsVerification =
-        isConfigured && (provider.account?.needsDeviceVerification ?? false);
+        live &&
+        isConfigured &&
+        (provider.account?.needsDeviceVerification ?? false);
     return [
       SizedBox(height: spacing.md),
       Wrap(
@@ -555,14 +586,15 @@ class IntegrationProviderCard extends StatelessWidget {
               icon: const Icon(Icons.verified_user_outlined),
               label: Text(l10n.integrationVerifyAction),
             ),
-          FilledButton.icon(
-            onPressed: isBusy ? null : onEdit,
-            icon: Icon(isConfigured ? Icons.edit_outlined : Icons.link),
-            label: Text(
-              isConfigured ? l10n.integrationEdit : l10n.integrationConnect,
+          if (live)
+            FilledButton.icon(
+              onPressed: isBusy ? null : onEdit,
+              icon: Icon(isConfigured ? Icons.edit_outlined : Icons.link),
+              label: Text(
+                isConfigured ? l10n.integrationEdit : l10n.integrationConnect,
+              ),
             ),
-          ),
-          if (isConfigured)
+          if (live && isConfigured)
             OutlinedButton.icon(
               onPressed: isBusy ? null : onTest,
               icon: isBusy && busyKind == IntegrationBusyKind.probing
@@ -579,7 +611,7 @@ class IntegrationProviderCard extends StatelessWidget {
               icon: const Icon(Icons.account_balance_wallet_outlined),
               label: Text(l10n.integrationFloatAction),
             ),
-          if (isConfigured && provider.hasProfiles)
+          if (live && isConfigured && provider.hasProfiles)
             OutlinedButton.icon(
               onPressed: isBusy ? null : onProfile,
               icon: const Icon(Icons.storefront_outlined),
@@ -587,7 +619,7 @@ class IntegrationProviderCard extends StatelessWidget {
             ),
           // A provider's cards are priced by the provider and sold from the
           // catalog; there is no price list of the shop's own to edit.
-          if (isConfigured && !provider.sellsVouchers)
+          if (live && isConfigured && !provider.sellsVouchers)
             OutlinedButton.icon(
               onPressed: isBusy ? null : onPrices,
               icon: const Icon(Icons.price_change_outlined),

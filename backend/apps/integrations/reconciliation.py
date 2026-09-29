@@ -40,6 +40,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from . import switches
 from .fulfillment import fulfillment_kind
 from .models import IntegrationAccount, IntegrationFulfillment, ProviderPayment
 from .providers import provider_for
@@ -76,9 +77,9 @@ VOUCHER_MATCH_AFTER = timedelta(minutes=15)
 
 
 def reconcile_all(*, lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> dict:
-    """Reconcile every configured provider. Never raises."""
+    """Reconcile every configured provider still switched on. Never raises."""
     results = []
-    for account in IntegrationAccount.objects.filter(is_active=True):
+    for account in switches.running(IntegrationAccount.objects.filter(is_active=True)):
         if not account.is_configured:
             continue
         try:

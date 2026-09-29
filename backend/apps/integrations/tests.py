@@ -27,6 +27,7 @@ from apps.core.roles import (
     ACCOUNTANT_GROUP,
     CASHIER_GROUP,
     MANAGER_GROUP,
+    PURCHASING_AGENT_GROUP,
     ensure_role_groups,
 )
 from apps.analytics import buffer as analytics_buffer
@@ -42,7 +43,11 @@ from apps.sales.models import Order, OrderLine, RegisterSession
 from apps.sales.services import checkout_order
 from apps.treasury.models import MoneyAccount, MoneyTransfer
 from apps.treasury.movements import account_movements
-from apps.treasury.position import treasury_position, treasury_statement
+from apps.treasury.position import (
+    outside_money_totals,
+    treasury_position,
+    treasury_statement,
+)
 
 import json
 
@@ -2041,6 +2046,92 @@ class FloatLedgerTests(TestCase):
             Decimal("0.00"),
         )
 
+    def test_money_taken_back_out_of_a_float_leaves_it(self):
+        """A provider refunding part of the float was subtracted in الخزينة
+        and not here, so the float sheet overstated the float and the drift
+        alert blamed money that had come home."""
+        float_ledger.record_top_up(
+            self.account, amount=Decimal("1000.00"), from_account=self.cash
+        )
+        self._fulfilment("220.00", status=IntegrationFulfillment.Status.CONFIRMED,
+                         when=timezone.now())
+        MoneyTransfer.objects.create(
+            from_account=self.account.money_account,
+            to_account=self.cash,
+            amount=Decimal("300.00"),
+            reason="استرداد من المزوّد",
+        )
+
+        self.assertEqual(float_ledger.returned(self.account), Decimal("300.00"))
+        # What the shop put in is still what it put in.
+        self.assertEqual(float_ledger.topped_up(self.account), Decimal("1000.00"))
+        self.assertEqual(
+            float_ledger.expected_balance(self.account), Decimal("480.00")
+        )
+        self.assertEqual(
+            self._float_row(treasury_position()["accounts"])["expected_balance"],
+            Decimal("480.00"),
+        )
+
+    def test_the_float_and_the_treasury_agree_on_every_movement(self):
+        """Every way money moves through a float, and both definitions of its
+        balance give the same figure on every day."""
+        today = timezone.localdate()
+        float_ledger.record_top_up(
+            self.account,
+            amount=Decimal("1000.00"),
+            from_account=self.cash,
+            moved_at=today - timedelta(days=6),
+        )
+        money_account = self.account.money_account
+        # Refunded into the cash box, then some taken by the owner outright.
+        MoneyTransfer.objects.create(
+            from_account=money_account,
+            to_account=self.cash,
+            amount=Decimal("150.00"),
+            moved_at=today - timedelta(days=4),
+        )
+        MoneyTransfer.objects.create(
+            from_account=money_account,
+            amount=Decimal("50.00"),
+            moved_at=today - timedelta(days=2),
+        )
+        # Capital put straight into the float, and a top-up dated tomorrow.
+        MoneyTransfer.objects.create(
+            to_account=money_account,
+            amount=Decimal("80.00"),
+            moved_at=today - timedelta(days=1),
+        )
+        MoneyTransfer.objects.create(
+            from_account=self.cash,
+            to_account=money_account,
+            amount=Decimal("500.00"),
+            moved_at=today + timedelta(days=1),
+        )
+        noon = day_range_start(today - timedelta(days=3)) + timedelta(hours=12)
+        self._fulfilment(
+            "220.00", status=IntegrationFulfillment.Status.CONFIRMED, when=noon
+        )
+
+        for days_ago in (7, 5, 3, 1, 0):
+            day = today - timedelta(days=days_ago)
+            with self.subTest(day=day):
+                self.assertEqual(
+                    float_ledger.expected_balance(self.account, end=day),
+                    self._float_row(treasury_position(as_of=day)["accounts"])[
+                        "expected_balance"
+                    ],
+                )
+        # Today, as the float sheet and the drift alert read it. Tomorrow's
+        # top-up is not in the float yet, just as it is not in الخزينة.
+        self.assertEqual(
+            float_ledger.expected_balance(self.account), Decimal("660.00")
+        )
+        position = float_ledger.position(self.account)
+        self.assertEqual(position["expected_balance"], Decimal("660.00"))
+        self.assertEqual(position["topped_up"], Decimal("1080.00"))
+        self.assertEqual(position["returned"], Decimal("200.00"))
+
     def test_a_statement_moves_the_float_by_the_draws_in_its_window(self):
         today = self._drawn_on_two_earlier_days()
 
@@ -2259,6 +2350,145 @@ class FloatApiTests(TestCase):
         resp = self.client.get("/api/integrations/hdbox/float/")
         self.assertEqual(resp.data["reported_balance"], Decimal("25.00"))
         self.assertEqual(resp.data["drift"], Decimal("-975.00"))
+
+    def _post_top_up(self, body, *, user=None):
+        self.client.force_authenticate(user or self.manager)
+        return self.client.post("/api/integrations/hdbox/float/", body, format="json")
+
+    def test_a_top_up_sent_without_a_source_comes_out_of_the_cash_box(self):
+        """The float sheet never sent a source, so every top-up it recorded
+        was money arriving from outside the shop. The cash box kept the money
+        it had paid the provider, and the shop's money grew by each top-up."""
+        before = treasury_position()["totals"]
+
+        # Exactly the body every build before the source picker sends.
+        resp = self._post_top_up({"amount": "1000.00", "reference": "8891"})
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(MoneyTransfer.objects.get().from_account, self.cash)
+        after = treasury_position()["totals"]
+        self.assertEqual(after["cash"], before["cash"] - Decimal("1000.00"))
+        self.assertEqual(
+            after["provider_float"], before["provider_float"] + Decimal("1000.00")
+        )
+        today = timezone.localdate()
+        self.assertEqual(
+            outside_money_totals(start=today, end=today)["added"], Decimal("0.00")
+        )
+
+    def test_a_null_source_is_still_the_cash_box(self):
+        # A null that slips through a client must not become money from
+        # nowhere again: outside money is only ever said in so many words.
+        resp = self._post_top_up({"amount": "50.00", "from_account": None})
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(MoneyTransfer.objects.get().from_account, self.cash)
+
+    def test_money_from_outside_cannot_also_name_a_source(self):
+        resp = self._post_top_up(
+            {"amount": "50.00", "from_outside": True, "from_account": self.cash.id}
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(MoneyTransfer.objects.exists())
+
+    def test_a_top_up_from_outside_the_shop_is_said_on_purpose(self):
+        before = treasury_position()["totals"]
+
+        resp = self._post_top_up({"amount": "200.00", "from_outside": True})
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertIsNone(MoneyTransfer.objects.get().from_account)
+        after = treasury_position()["totals"]
+        self.assertEqual(after["total"], before["total"])
+        self.assertEqual(
+            after["provider_float"], before["provider_float"] + Decimal("200.00")
+        )
+        today = timezone.localdate()
+        self.assertEqual(
+            outside_money_totals(start=today, end=today)["added"], Decimal("200.00")
+        )
+
+    def test_a_top_up_paid_by_bank_comes_out_of_that_bank(self):
+        bank = MoneyAccount.objects.filter(kind=MoneyAccount.Kind.BANK).first()
+        before = treasury_position()["totals"]
+
+        resp = self._post_top_up({"amount": "300.00", "from_account": bank.id})
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(MoneyTransfer.objects.get().from_account, bank)
+        after = treasury_position()["totals"]
+        self.assertEqual(after["bank"], before["bank"] - Decimal("300.00"))
+        self.assertEqual(after["cash"], before["cash"])
+
+    def test_the_float_says_where_a_top_up_can_come_from(self):
+        # A purchasing agent records top-ups without the right to read the
+        # treasury, so the choices have to arrive with the float itself.
+        agent = get_user_model().objects.create_user(username="agent", password="x")
+        agent.groups.add(Group.objects.get(name=PURCHASING_AGENT_GROUP))
+        self.assertFalse(agent.has_perm("treasury.view_moneyaccount"))
+        bank = MoneyAccount.objects.filter(kind=MoneyAccount.Kind.BANK).first()
+        closed = MoneyAccount.objects.create(
+            name="صندوق قديم", kind=MoneyAccount.Kind.CASH, is_active=False
+        )
+        self._post_top_up({"amount": "10.00"})
+        self.account.refresh_from_db()
+
+        self.client.force_authenticate(agent)
+        resp = self.client.get("/api/integrations/hdbox/float/")
+
+        self.assertEqual(resp.status_code, 200)
+        sources = {row["id"]: row for row in resp.data["source_accounts"]}
+        self.assertEqual(sources[self.cash.id]["kind"], MoneyAccount.Kind.CASH)
+        self.assertEqual(sources[bank.id]["kind"], MoneyAccount.Kind.BANK)
+        self.assertNotIn(closed.id, sources)
+        self.assertNotIn(self.account.money_account_id, sources)
+        self.assertEqual(resp.data["default_source_account_id"], self.cash.id)
+
+    def test_a_top_up_cannot_be_backdated_into_closed_books(self):
+        from apps.core.models import ShopSettings
+
+        today = timezone.localdate()
+        settings_row = ShopSettings.load()
+        settings_row.books_locked_through = today - timedelta(days=10)
+        settings_row.save(update_fields=["books_locked_through"])
+        accountant = get_user_model().objects.create_user(username="acct4", password="x")
+        accountant.groups.add(Group.objects.get(name=ACCOUNTANT_GROUP))
+
+        resp = self._post_top_up(
+            {
+                "amount": "100.00",
+                "from_account": self.cash.id,
+                "moved_at": (today - timedelta(days=15)).isoformat(),
+            },
+            user=accountant,
+        )
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(MoneyTransfer.objects.exists())
+        resp = self._post_top_up(
+            {"amount": "100.00", "from_account": self.cash.id}, user=accountant
+        )
+        self.assertEqual(resp.status_code, 201)
+
+    def test_money_taken_back_is_its_own_figure(self):
+        self._post_top_up({"amount": "1000.00", "from_account": self.cash.id})
+        self.account.refresh_from_db()
+        MoneyTransfer.objects.create(
+            from_account=self.account.money_account,
+            to_account=self.cash,
+            amount=Decimal("300.00"),
+        )
+        self.account.balance = Decimal("700.00")
+        self.account.save(update_fields=["balance"])
+
+        resp = self.client.get("/api/integrations/hdbox/float/")
+
+        self.assertEqual(resp.data["topped_up"], Decimal("1000.00"))
+        self.assertEqual(resp.data["returned"], Decimal("300.00"))
+        self.assertEqual(resp.data["expected_balance"], Decimal("700.00"))
+        # HD Box says 700 too: nothing left the float behind Pointy's back.
+        self.assertEqual(resp.data["drift"], Decimal("0.00"))
 
     def test_a_float_cannot_fund_another_float(self):
         self.client.force_authenticate(self.manager)
@@ -2660,6 +2890,49 @@ class LowFloatNotificationTests(TestCase):
         self.assertIn(
             "integrations.refresh-float-balances", settings.CELERY_BEAT_SCHEDULE
         )
+
+
+class FloatDriftNotificationTests(TestCase):
+    """The drift alert: the provider's own number against Pointy's."""
+
+    def setUp(self):
+        self.account = make_account(username="Alnassim")
+        cash = MoneyAccount.objects.filter(
+            kind=MoneyAccount.Kind.CASH
+        ).first() or MoneyAccount.objects.create(
+            name="الخزينة", kind=MoneyAccount.Kind.CASH, is_default=True
+        )
+        float_ledger.record_top_up(
+            self.account, amount=Decimal("1000.00"), from_account=cash
+        )
+        # Part of the float refunded into the cash box on the treasury screen.
+        MoneyTransfer.objects.create(
+            from_account=self.account.money_account,
+            to_account=cash,
+            amount=Decimal("400.00"),
+            reason="استرداد من المزوّد",
+        )
+
+    def _report(self, amount):
+        self.account.balance = Decimal(amount)
+        self.account.balance_at = timezone.now()
+        self.account.save(update_fields=["balance", "balance_at"])
+        sync_business_notifications()
+        return BusinessNotification.objects.filter(
+            code="integrations.float_drift",
+            status=BusinessNotification.Status.ACTIVE,
+        ).first()
+
+    def test_a_refund_recorded_in_the_treasury_is_not_drift(self):
+        self.assertIsNone(self._report("600.00"))
+
+    def test_money_missing_from_the_float_still_is(self):
+        alert = self._report("450.00")
+
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.payload["direction"], "short")
+        self.assertEqual(alert.payload["amount"], "150.00")
+        self.assertEqual(alert.payload["expected"], "600.00")
 
 
 class LowFloatThresholdSettingTests(TestCase):

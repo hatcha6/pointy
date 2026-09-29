@@ -8,6 +8,7 @@ import 'package:pointy_frontend/src/data/repositories/integrations_repository.da
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/settings/view_models/integrations_view_model.dart';
 import 'package:pointy_frontend/src/features/settings/views/integration_credentials_sheet.dart';
+import 'package:pointy_frontend/src/features/settings/views/integration_presentation.dart';
 import 'package:pointy_frontend/src/features/settings/views/integrations_page.dart';
 
 /// What this screen must never get wrong.
@@ -82,6 +83,61 @@ void main() {
     expect(
       find.text('رفض المزوّد اسم المستخدم أو كلمة المرور'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('a provider switched off for every shop says why', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      harness(
+        IntegrationsViewModel(_FakeRepo(connected: true, switchedOff: true)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Not "failed": the owner did nothing wrong, and pressing Test would not
+    // tell them anything the card cannot.
+    expect(find.text('متوقف مؤقتاً'), findsOneWidget);
+    expect(find.text('متصل'), findsNothing);
+    expect(
+      find.textContaining('أُوقف هذا التكامل مؤقتاً لجميع المحلات'),
+      findsOneWidget,
+    );
+    // Nothing that would reach the provider...
+    expect(find.text('تعديل البيانات'), findsNothing);
+    expect(find.text('اختبار الاتصال'), findsNothing);
+    // ...and what stays local: the float ledger, and letting go of the login.
+    expect(
+      find.ancestor(
+        of: find.text('الرصيد'),
+        matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('فصل الحساب'), findsOneWidget);
+  });
+
+  test('the switch arrives as a flag and a refusal code', () {
+    final provider = IntegrationProvider.fromJson(const {
+      'key': 'qareeb',
+      'availability': 'available',
+      'switched_off': true,
+    });
+    expect(provider.switchedOff, isTrue);
+    expect(
+      IntegrationProvider.fromJson(const {
+        'key': 'qareeb',
+        'availability': 'available',
+      }).switchedOff,
+      isFalse,
+    );
+    expect(
+      integrationErrorText(
+        IntegrationErrorCode.switchedOff,
+        lookupAppLocalizations(const Locale('ar')),
+      ),
+      'هذا التكامل متوقف مؤقتاً لجميع المحلات، ولم يُرسَل أي طلب إلى المزوّد.',
     );
   });
 
@@ -198,9 +254,7 @@ void main() {
     );
   });
 
-  testWidgets('clearing a setting leaves the stored one alone', (
-    tester,
-  ) async {
+  testWidgets('clearing a setting leaves the stored one alone', (tester) async {
     // Blank has always *read* as "leave it alone" — but it was being sent, and
     // the server refuses a blank, so emptying the box failed the whole save.
     final submitted = await pumpFormAndSave(tester, typeThreshold: '');
@@ -224,7 +278,10 @@ void main() {
   });
 }
 
-IntegrationProvider _provider({required bool connected}) {
+IntegrationProvider _provider({
+  required bool connected,
+  bool switchedOff = false,
+}) {
   return IntegrationProvider(
     key: IntegrationProviderKey.hdbox,
     availability: IntegrationAvailability.available,
@@ -246,6 +303,7 @@ IntegrationProvider _provider({required bool connected}) {
     secretFields: const [IntegrationField.password],
     defaultBaseUrl: 'http://cas.example:18688',
     isConfigurable: true,
+    switchedOff: switchedOff,
     account: connected
         ? IntegrationAccount(
             provider: IntegrationProviderKey.hdbox,
@@ -262,15 +320,17 @@ IntegrationProvider _provider({required bool connected}) {
 }
 
 class _FakeRepo extends IntegrationsRepository {
-  _FakeRepo({this.connected = false, this.probeError}) : super(PosApiService());
+  _FakeRepo({this.connected = false, this.probeError, this.switchedOff = false})
+    : super(PosApiService());
 
   final bool connected;
   final String? probeError;
+  final bool switchedOff;
 
   @override
   Future<Result<List<IntegrationProvider>>> loadProviders() async {
     return Ok([
-      _provider(connected: connected),
+      _provider(connected: connected, switchedOff: switchedOff),
       const IntegrationProvider(
         key: IntegrationProviderKey.lnet,
         availability: IntegrationAvailability.planned,

@@ -1,24 +1,27 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/order_document_service.dart';
+import 'package:pointy_frontend/src/data/services/provider_slip_raster.dart';
 import 'package:pointy_frontend/src/data/services/receipt_provider_slips.dart';
 import 'package:pointy_frontend/src/shared/branding_assets.dart';
 import 'package:pointy_frontend/src/shared/pdf/pdf.dart';
 import 'package:pointy_frontend/src/shared/printing/print_qr_code.dart';
 
 /// Everything a provider did for a sale prints once, at the top of its
-/// receipt, a block per line: a card's PIN (and, for a card its operator
-/// redeems by dialling, the string to dial and its QR code), a top-up's line
-/// and term. These pin that the thermal slip and the PDF (A4 and roll) print
-/// it there and not beneath the line, that the QR code follows the shop's
-/// setting, and that a provider that did not confirm is never printed as if
-/// it had.
+/// receipt, a block per line: a card's PIN and QR code (and, for a card its
+/// operator redeems by dialling, the string to dial), a top-up's line and
+/// term, each under its logo. These pin that the thermal slip and the PDF
+/// (A4 and roll) print it there and not beneath the line, that the QR code
+/// follows the shop's setting, and that a provider that did not confirm is
+/// never printed as if it had.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -48,6 +51,7 @@ void main() {
       expect(slip.pin, pin);
       expect(slip.dial, libyanaDial);
       expect(slip.qrData, 'tel:$libyanaDial');
+      expect(slip.qrCaption, receiptScanToRedeem);
       expect(slip.rows, [
         'الرقم التسلسلي: 123456789012345',
         'لاي استفسارات الرجاء الاتصال',
@@ -78,7 +82,8 @@ void main() {
       expect(slip.pin, pin);
     });
 
-    test('a card nobody dials keeps the provider\'s own instructions', () {
+    test('a card nobody dials codes its PIN, to copy, and keeps the '
+        'provider\'s own instructions', () {
       final slip = receiptProviderSlip(
         title: 'LTT - 10 دينار',
         kind: 'voucher',
@@ -86,11 +91,36 @@ void main() {
         printed: const {'code': pin, 'instructions': 'من موقع LTT'},
       );
       expect(slip.dial, isEmpty);
-      expect(slip.qrData, isNull);
+      expect(slip.qrData, pin);
+      expect(slip.qrCaption, receiptScanToCopyPin);
       expect(slip.rows, ['طريقة الشحن: من موقع LTT']);
     });
 
-    test('a dial string that is not one is neither printed nor coded', () {
+    test('every card with a PIN a phone can read gets a code', () {
+      for (final code in ['481246145737', 'X4K9-2LMQ-77ZP-QQ01', 'AB CD 12']) {
+        final slip = receiptProviderSlip(
+          title: 'X',
+          kind: 'voucher',
+          status: 'confirmed',
+          printed: {'code': code},
+        );
+        expect(slip.qrData, code, reason: code);
+      }
+      // Arabic-Indic digits, and a code too long for a receipt: none.
+      for (final code in ['١٢٣٤٥٦٧٨', 'A' * 65, '12']) {
+        final slip = receiptProviderSlip(
+          title: 'X',
+          kind: 'voucher',
+          status: 'confirmed',
+          printed: {'code': code},
+        );
+        expect(slip.qrData, isNull, reason: code);
+        expect(slip.pin, code);
+      }
+    });
+
+    test('a dial string that is not one is not printed; the PIN is coded '
+        'instead', () {
       for (final dial in ['tel:120', 'call 120', '*112* 1111#']) {
         final slip = receiptProviderSlip(
           title: 'X',
@@ -99,8 +129,44 @@ void main() {
           printed: {'code': pin, 'dial': dial},
         );
         expect(slip.dial, isEmpty, reason: dial);
-        expect(slip.qrData, isNull, reason: dial);
+        expect(slip.qrData, pin, reason: dial);
       }
+    });
+
+    test('a card opens on its brand with its provider\'s mark beside it; '
+        'a top-up on its provider, once', () {
+      final card = receiptProviderSlip(
+        title: 'ليبيانا - 5 دينار',
+        kind: 'voucher',
+        status: 'confirmed',
+        logo: 'BRAND',
+        providerLogo: 'QAREEB',
+        printed: const {'code': pin},
+      );
+      expect(card.logo, 'BRAND');
+      expect(card.providerLogo, 'QAREEB');
+
+      final topUp = receiptProviderSlip(
+        title: 'شحن HD Box',
+        kind: 'recharge',
+        status: 'confirmed',
+        logo: 'HDBOX',
+        providerLogo: 'HDBOX',
+        printed: const {'card_no': '210906803499'},
+      );
+      expect(topUp.logo, 'HDBOX');
+      expect(topUp.providerLogo, isEmpty);
+
+      // Whatever became of the card, the slip keeps both.
+      final failed = receiptProviderSlip(
+        title: 'ليبيانا - 5 دينار',
+        kind: 'voucher',
+        status: 'failed',
+        logo: 'BRAND',
+        providerLogo: 'QAREEB',
+        printed: const {},
+      );
+      expect((failed.logo, failed.providerLogo), ('BRAND', 'QAREEB'));
     });
 
     test('a card nobody confirmed says so and prints nothing usable', () {
@@ -146,7 +212,8 @@ void main() {
       expect(hdbox.rows, [
         'رقم الكرت: 210906803499',
         'المدة: 1 شهر',
-        'من 2026-09-20 إلى 2026-10-20',
+        'يبدأ: 2026-09-20',
+        'ينتهي: 2026-10-20',
       ]);
 
       final lnet = receiptProviderSlip(
@@ -178,7 +245,13 @@ void main() {
   });
 
   group('the thermal slip', () {
+    // The slips drawn as pictures, as every till prints them...
     const encoder = EscPosReceiptEncoder(brandLogoLoader: _NoBrandLogo());
+    // ...and as text, what a till prints when drawing fails.
+    const textEncoder = EscPosReceiptEncoder(
+      brandLogoLoader: _NoBrandLogo(),
+      slipRasterizer: TextOnlySlipRasterizer(),
+    );
     const endpoint = PrinterEndpoint(
       kind: PrintTransportKind.fake,
       name: 'till',
@@ -229,9 +302,27 @@ void main() {
     };
 
     for (final compact in [false, true]) {
-      test('prints the card above the invoice, not beneath its line '
+      test('draws the card as a framed picture above the invoice '
           '(compact: $compact)', () async {
         final bytes = await encoder.encodePayload(
+          payload: payload(),
+          endpoint: endpoint.copyWith(compactReceipt: compact),
+        );
+        final slip = _SlipLines.parse(bytes);
+
+        // One slip, 360 dots wide (the 58 mm head less 3 mm), before any
+        // text of the invoice; its PIN is in the picture, never in the text.
+        expect(slip.rasters, isNotEmpty);
+        expect(slip.rasters.map((r) => r[4] | r[5] << 8).toSet(), {45});
+        expect(slip.firstRasterLine, 1);
+        expect(slip.text[slip.firstRasterLine], contains('RECEIPT: R-1'));
+        expect(slip.text.where((l) => l.contains(pin)), isEmpty);
+        expect(slip.text.last, isNot(contains(pin)));
+      });
+
+      test('as text, prints the card above the invoice, not beneath its '
+          'line (compact: $compact)', () async {
+        final bytes = await textEncoder.encodePayload(
           payload: payload(),
           endpoint: endpoint.copyWith(compactReceipt: compact),
         );
@@ -260,26 +351,24 @@ void main() {
       });
     }
 
-    test(
-      'the QR code is the dial link, as big as a 58 mm head takes',
-      () async {
-        final bytes = await encoder.encodePayload(
-          payload: payload(),
-          endpoint: endpoint,
-        );
-        final rasters = _SlipLines.parse(bytes).rasters;
+    test('as text, the QR code is the dial link at 8 dots a module', () async {
+      final bytes = await textEncoder.encodePayload(
+        payload: payload(),
+        endpoint: endpoint,
+      );
+      final rasters = _SlipLines.parse(bytes).rasters;
 
-        final expected = escPosQrRaster(
-          PrintQrCode.tryEncode('tel:$libyanaDial')!,
-          // A 25-module symbol + quiet zone = 33 modules: 10 dots fit 360.
-          moduleDots: 10,
-        );
-        expect(rasters, [expected]);
-      },
-    );
+      final expected = escPosQrRaster(
+        PrintQrCode.tryEncode('tel:$libyanaDial')!,
+        // A 25-module symbol + quiet zone = 33 modules: 10 dots would fit
+        // 360, and 8 (a millimetre) is the most a slip gives a code.
+        moduleDots: 8,
+      );
+      expect(rasters, [expected]);
+    });
 
-    test('an 80 mm roll prints the same code at 10 dots a module', () async {
-      final bytes = await encoder.encodePayload(
+    test('as text, an 80 mm roll prints the same code at 8 dots', () async {
+      final bytes = await textEncoder.encodePayload(
         payload: payload(
           integration: {
             'kind': 'voucher',
@@ -292,15 +381,15 @@ void main() {
       expect(_SlipLines.parse(bytes).rasters, [
         escPosQrRaster(
           PrintQrCode.tryEncode('tel:*112*$pin%23')!,
-          moduleDots: 10,
+          moduleDots: 8,
         ),
       ]);
     });
 
     test(
-      'a shop that turned QR codes off gets the dial string alone',
+      'as text, a shop that turned QR codes off gets the dial string alone',
       () async {
-        final bytes = await encoder.encodePayload(
+        final bytes = await textEncoder.encodePayload(
           payload: payload(printQr: false),
           endpoint: endpoint,
         );
@@ -311,39 +400,75 @@ void main() {
       },
     );
 
-    test('a top-up prints its line and term in the same place', () async {
-      final bytes = await encoder.encodePayload(
-        payload: payload(
-          integration: {
-            'kind': 'recharge',
-            'status': 'confirmed',
-            'subscriber_ref': '210906803499',
-            'printed': {'card_no': '210906803499', 'months': '1'},
-          },
-        ),
-        endpoint: endpoint,
-      );
-      final slip = _SlipLines.parse(bytes);
-      expect(slip.rasters, isEmpty);
-      final cardAt = slip.text.indexOf('رقم الكرت: 210906803499');
-      expect(cardAt, greaterThanOrEqualTo(0), reason: '${slip.text}');
-      expect(
-        cardAt,
-        lessThan(slip.text.indexWhere((l) => l.contains('RECEIPT: R-1'))),
-      );
-    });
+    test(
+      'as text, a top-up prints its line and term in the same place',
+      () async {
+        final bytes = await textEncoder.encodePayload(
+          payload: payload(
+            integration: {
+              'kind': 'recharge',
+              'status': 'confirmed',
+              'subscriber_ref': '210906803499',
+              'printed': {'card_no': '210906803499', 'months': '1'},
+            },
+          ),
+          endpoint: endpoint,
+        );
+        final slip = _SlipLines.parse(bytes);
+        expect(slip.rasters, isEmpty);
+        final cardAt = slip.text.indexOf('رقم الكرت: 210906803499');
+        expect(cardAt, greaterThanOrEqualTo(0), reason: '${slip.text}');
+        expect(
+          cardAt,
+          lessThan(slip.text.indexWhere((l) => l.contains('RECEIPT: R-1'))),
+        );
+      },
+    );
 
     test('a receipt with no provider line is laid out as it was', () async {
       final ordinary = payload();
       final order = ordinary['order']! as Map<String, Object?>;
       order['lines'] = [(order['lines']! as List).first];
-      final bytes = await encoder.encodePayload(
-        payload: ordinary,
+      for (final withEncoder in [encoder, textEncoder]) {
+        final bytes = await withEncoder.encodePayload(
+          payload: ordinary,
+          endpoint: endpoint,
+        );
+        final slip = _SlipLines.parse(bytes);
+        expect(slip.rasters, isEmpty);
+        expect(slip.text.where((l) => l.startsWith('=')), isEmpty);
+      }
+    });
+
+    test('as text, a card prints its logo with its provider\'s mark beside '
+        'it, as one picture', () async {
+      String png(int width, int height) {
+        final picture = img.Image(width: width, height: height);
+        img.fill(picture, color: img.ColorRgb8(0, 0, 0));
+        return base64Encode(img.encodePng(picture));
+      }
+
+      final bytes = await textEncoder.encodePayload(
+        payload: payload(
+          integration: {
+            'kind': 'voucher',
+            'status': 'confirmed',
+            'receipt_logo': png(118, 118),
+            'provider_logo': png(80, 60),
+            'printed': {'code': pin, 'dial': libyanaDial},
+          },
+        ),
         endpoint: endpoint,
       );
-      final slip = _SlipLines.parse(bytes);
-      expect(slip.rasters, isEmpty);
-      expect(slip.text.where((l) => l.startsWith('=')), isEmpty);
+      final rasters = _SlipLines.parse(bytes).rasters;
+      // The logos, then the QR code: two pictures, not three.
+      expect(rasters, hasLength(2));
+      final logos = rasters.first;
+      final widthDots = (logos[4] | logos[5] << 8) * 8;
+      final height = logos[6] | logos[7] << 8;
+      // 72 dots tall: the brand's box; the mark beside it, not above it.
+      expect(height, 72);
+      expect(widthDots, greaterThan(72 + 24));
     });
   });
 
@@ -411,34 +536,126 @@ void main() {
     for (final pageSize in PdfPageSize.values) {
       test('renders the slip on $pageSize', () async {
         const service = OrderDocumentService(fontLoader: _TestFontLoader());
-        final withSlip = await service.buildSaleInvoiceRender(
+        final withQr = await service.buildSaleInvoiceRender(
           order: order(),
           pageSize: pageSize,
         );
         final withoutQr = await service.buildSaleInvoiceRender(
-          order: order(dial: ''),
+          order: order(),
           pageSize: pageSize,
+          shopSettings: _settings(printVoucherQrCodes: false),
         );
-        expect(withSlip.bytes, isNotEmpty);
-        // On a roll the page is as tall as its content: the code takes paper.
-        if (withSlip.mediaHeightMm != null) {
+        expect(withQr.bytes, isNotEmpty);
+        // On a roll the page is as tall as its content, and the code sits
+        // beside the PIN: it costs a little paper, not a code's height.
+        if (withQr.mediaHeightMm != null) {
+          expect(withQr.mediaHeightMm!, greaterThan(withoutQr.mediaHeightMm!));
           expect(
-            withSlip.mediaHeightMm!,
-            greaterThan(withoutQr.mediaHeightMm! + 25),
+            withQr.mediaHeightMm!,
+            lessThan(withoutQr.mediaHeightMm! + 25),
           );
         }
       });
     }
+
+    // POINTY_SLIP_DUMP=<dir> writes the invoice of a sale with a card and a
+    // top-up on every page size, in the real fonts, to rasterise and look at
+    // (`pdftoppm -png -r 203`). POINTY_SLIP_LOGOS=<dir> supplies the logos.
+    final dumpDir = Platform.environment['POINTY_SLIP_DUMP'];
+    test('dumps the slips to look at', skip: dumpDir == null, () async {
+      String logo(String name) {
+        final file = File(
+          '${Platform.environment['POINTY_SLIP_LOGOS']}/$name.png',
+        );
+        return file.existsSync() ? base64Encode(file.readAsBytesSync()) : '';
+      }
+
+      final sale = SaleOrder.fromJson({
+        'id': 8,
+        'receipt_number': 'R-8',
+        'status': 'paid',
+        'subtotal': '60.00',
+        'discount_total': '0',
+        'total': '60.00',
+        'lines': [
+          {
+            'id': 1,
+            'product': 2,
+            'variant': 3,
+            'product_name': 'المدار',
+            'variant_name': '10 دينار',
+            'quantity': '1',
+            'returned_quantity': '0',
+            'returnable_quantity': '1',
+            'unit_price': '10.00',
+            'line_total': '10.00',
+            'integration': {
+              'provider': 'qareeb',
+              'kind': 'voucher',
+              'subscriber_ref': '',
+              'status': 'confirmed',
+              'receipt_logo': logo('almadar'),
+              'provider_logo': logo('qareeb'),
+              'receipt': {
+                'code': pin,
+                'serial': '439882298872854',
+                'dial': almadarDial,
+                'help':
+                    'لاي استفسارات الرجاء الاتصال على الرقم التالي 0946358319',
+              },
+            },
+          },
+          {
+            'id': 2,
+            'product': 4,
+            'variant': 5,
+            'product_name': 'شحن LNET',
+            'variant_name': '',
+            'quantity': '1',
+            'returned_quantity': '0',
+            'returnable_quantity': '1',
+            'unit_price': '50.00',
+            'line_total': '50.00',
+            'integration': {
+              'provider': 'lnet',
+              'kind': 'recharge',
+              'subscriber_ref': 'basheir.shop',
+              'status': 'confirmed',
+              'receipt_logo': logo('lnet'),
+              'receipt': {
+                'username': 'basheir.shop',
+                'amount': '50',
+                'serial': '26071138019',
+                'package': 'Home 4G 20M',
+              },
+            },
+          },
+        ],
+        'payments': [],
+      });
+      const service = OrderDocumentService(fontLoader: _FileFontLoader());
+      Directory(dumpDir!).createSync(recursive: true);
+      for (final pageSize in PdfPageSize.values) {
+        final render = await service.buildSaleInvoiceRender(
+          order: sale,
+          pageSize: pageSize,
+        );
+        File(
+          '$dumpDir/invoice-${pageSize.name}.pdf',
+        ).writeAsBytesSync(render.bytes);
+      }
+    });
   });
 }
 
 /// A thermal slip read back: its text lines, and its raster images whole.
 class _SlipLines {
-  _SlipLines(this.text, this.rasters);
+  _SlipLines(this.text, this.rasters, this.firstRasterLine);
 
   factory _SlipLines.parse(List<int> bytes) {
     final lines = <String>[];
     final rasters = <List<int>>[];
+    int? firstRasterLine;
     var current = <int>[];
     void endLine() {
       final line = _decode(current).trim();
@@ -458,6 +675,7 @@ class _SlipLines {
         final end = i + 8 + widthBytes * height;
         rasters.add(bytes.sublist(i, end));
         endLine();
+        firstRasterLine ??= lines.length;
         i = end;
         continue;
       }
@@ -482,11 +700,14 @@ class _SlipLines {
       i++;
     }
     endLine();
-    return _SlipLines(lines, rasters);
+    return _SlipLines(lines, rasters, firstRasterLine ?? -1);
   }
 
   final List<String> text;
   final List<List<int>> rasters;
+
+  /// How many text lines print before the first picture.
+  final int firstRasterLine;
 }
 
 /// A line is either Latin-1 (through the code page) or UTF-8 (Arabic).
@@ -547,6 +768,20 @@ class _NoBrandLogo extends PointyBrandLogoLoader {
 
   @override
   Future<Uint8List?> load() async => null;
+}
+
+class _FileFontLoader extends PointyPdfFontLoader {
+  const _FileFontLoader();
+
+  @override
+  Future<PointyPdfFontData> loadData() async => TtfPointyPdfFontData(
+    base: ByteData.sublistView(
+      File('assets/fonts/IBMPlexSansArabic-Regular.ttf').readAsBytesSync(),
+    ),
+    bold: ByteData.sublistView(
+      File('assets/fonts/IBMPlexSansArabic-Bold.ttf').readAsBytesSync(),
+    ),
+  );
 }
 
 class _TestFontLoader extends PointyPdfFontLoader {

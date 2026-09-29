@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 from dataclasses import replace
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.filters import SearchFilter
 from rest_framework.generics import ListAPIView
@@ -19,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.period_lock import assert_period_open
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
 
@@ -26,11 +28,13 @@ from . import catalog
 from . import payment_report
 from . import quotes
 from . import recharge
+from . import switches
 from .models import IntegrationAccount, IntegrationFulfillment, IntegrationSearch
 from .providers import provider_for
 from .providers.base import (
     ERROR_NOT_CONFIGURED,
     ERROR_NOT_FOUND,
+    ERROR_SWITCHED_OFF,
     ERROR_UNAVAILABLE,
     in_parallel,
 )
@@ -77,9 +81,12 @@ TOP_UP = "integrations.record_integration_topup"
 
 def _catalog_payload() -> dict:
     accounts = accounts_by_provider()
+    off = switches.switched_off_providers()
     return {
         "providers": [
-            ProviderSerializer.payload(spec, accounts.get(spec.key))
+            ProviderSerializer.payload(
+                spec, accounts.get(spec.key), switched_off=spec.key in off
+            )
             for spec in catalog.PROVIDERS
         ]
     }
@@ -141,6 +148,13 @@ class IntegrationAccountView(APIView):
         if not spec.is_available:
             return Response(
                 {"detail": "provider not available", "blocked_reason": spec.blocked_reason},
+                status=status.HTTP_409_CONFLICT,
+            )
+        # Switched off for the fleet: nothing is connected to it until it is
+        # back on. What is already stored stays, and disconnecting still works.
+        if switches.is_switched_off(provider):
+            return Response(
+                {"detail": "provider switched off", "error_code": ERROR_SWITCHED_OFF},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -257,6 +271,16 @@ class IntegrationProbeView(APIView):
             return Response(
                 {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
             )
+        # Answered here rather than probed: a refusal written onto the
+        # account would outlive the switch as a stale error.
+        if switches.is_switched_off(provider):
+            return Response(
+                {
+                    "ok": False,
+                    "error_code": ERROR_SWITCHED_OFF,
+                    "provider": _provider_payload(spec),
+                }
+            )
         account = IntegrationAccount.objects.filter(provider=provider).first()
         if account is None:
             return Response(
@@ -294,6 +318,8 @@ class IntegrationLookupView(APIView):
             return Response(
                 {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
             )
+        if switches.is_switched_off(provider):
+            return Response({"ok": False, "error_code": ERROR_SWITCHED_OFF})
         account = IntegrationAccount.objects.filter(
             provider=provider, is_active=True
         ).first()
@@ -327,6 +353,8 @@ def _usable_account(provider: str):
         return None, None, "unknown_provider"
     if not spec.is_available:
         return None, spec, ERROR_UNAVAILABLE
+    if switches.is_switched_off(provider):
+        return None, spec, ERROR_SWITCHED_OFF
     account = IntegrationAccount.objects.filter(
         provider=provider, is_active=True
     ).first()
@@ -798,14 +826,27 @@ class IntegrationFloatView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        from_account = None
-        raw_from = data.get("from_account")
-        if raw_from:
-            from apps.treasury.models import MoneyAccount
+        # A top-up is a MoneyTransfer with a backdatable day, so it answers to
+        # the same closed-books lock as the treasury's own transfers.
+        moved_at = data.get("moved_at") or timezone.localdate()
+        assert_period_open(
+            moved_at,
+            user=request.user,
+            entity_type="money_transfer",
+            action="integrations.top_up",
+        )
 
-            from_account = MoneyAccount.objects.filter(
-                pk=raw_from, is_active=True
-            ).exclude(kind=MoneyAccount.Kind.PROVIDER).first()
+        if data["from_outside"]:
+            if data.get("from_account"):
+                return Response(
+                    {"from_outside": "money from outside has no source account"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            from_account = None
+        elif data.get("from_account"):
+            from_account = (
+                float_ledger.source_accounts().filter(pk=data["from_account"]).first()
+            )
             if from_account is None:
                 # A float cannot fund a float, and a closed account cannot
                 # fund anything — say which, rather than silently dropping it.
@@ -813,12 +854,16 @@ class IntegrationFloatView(APIView):
                     {"from_account": "not a usable source account"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+        else:
+            # No client sent a source before the float sheet asked for one,
+            # and every one of them meant the shop's own cash box.
+            from_account = float_ledger.default_source_account()
 
         float_ledger.record_top_up(
             account,
             amount=data["amount"],
             from_account=from_account,
-            moved_at=data.get("moved_at"),
+            moved_at=moved_at,
             reference=data.get("reference", ""),
             note=data.get("note", ""),
             user=request.user,
@@ -941,6 +986,8 @@ def _verifiable_account(provider: str):
         return None, None, Response(
             {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
         )
+    if switches.is_switched_off(provider):
+        return None, spec, Response({"ok": False, "error_code": ERROR_SWITCHED_OFF})
     account = IntegrationAccount.objects.filter(provider=provider).first()
     if account is None or not account.is_configured:
         return None, spec, Response({"ok": False, "error_code": ERROR_NOT_CONFIGURED})
@@ -1065,6 +1112,8 @@ class IntegrationProfilesView(APIView):
             )
         if catalog.CAPABILITY_PROFILES not in spec.capabilities:
             return None, spec, Response({"ok": False, "error_code": ERROR_UNAVAILABLE})
+        if switches.is_switched_off(provider):
+            return None, spec, Response({"ok": False, "error_code": ERROR_SWITCHED_OFF})
         account = IntegrationAccount.objects.filter(provider=provider).first()
         if account is None or not account.is_configured:
             return None, spec, Response({"ok": False, "error_code": ERROR_NOT_CONFIGURED})

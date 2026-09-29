@@ -11,7 +11,8 @@ library;
 
 import 'package:qr/qr.dart';
 
-/// What a card's QR code holds: a `tel:` link a phone's camera offers to dial.
+/// What a dialled card's QR code holds: a `tel:` link a phone's camera offers
+/// to dial.
 ///
 /// `#` is escaped as `%23`. Left bare it starts a URI fragment, and the phone
 /// dials the code without it — `*112*…` instead of `*112*…#` — which the
@@ -27,6 +28,24 @@ String? dialQrData(String dial) {
 }
 
 final RegExp _dialString = RegExp(r'^[0-9*#]{3,40}$');
+
+/// What the QR code of a card nobody dials holds: its PIN, exactly as printed.
+///
+/// An ISP's card is typed into a portal and a gift card into a store, and a
+/// sixteen-character code copied off a phone's camera is one nobody mistypes
+/// — so the code is the PIN itself, which every phone offers to copy. Never a
+/// guessed redemption link: a wrong one sends the customer somewhere else with
+/// a card they paid for. Null for a PIN a phone could misread (anything but
+/// printable ASCII) or too long for a receipt code.
+String? pinQrData(String pin) {
+  final value = pin.trim();
+  if (value.length < 4 ||
+      value.length > 64 ||
+      !_printableAscii.hasMatch(value)) {
+    return null;
+  }
+  return value;
+}
 
 final RegExp _printableAscii = RegExp(r'^[\x20-\x7E]+$');
 

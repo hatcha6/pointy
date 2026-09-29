@@ -17525,6 +17525,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get treasuryTransferSameAccount => 'لا يمكن التحويل إلى نفس الحساب.';
 
   @override
+  String get treasuryTransferBetweenFloats =>
+      'لا يمكن التحويل من رصيد مزوّد إلى رصيد مزوّد آخر.';
+
+  @override
   String get treasuryAmountInvalid => 'أدخل مبلغًا صحيحًا.';
 
   @override
@@ -20519,6 +20523,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get integrationFloatToppedUp => 'مجموع الشحن';
 
   @override
+  String get integrationFloatReturned => 'مُسترَد من المزوّد';
+
+  @override
   String get integrationFloatDrawn => 'المسحوب المؤكَّد';
 
   @override
@@ -20548,7 +20555,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get integrationTopUpSource => 'خرج من';
 
   @override
-  String get integrationTopUpSourceNone => 'بدون تحديد';
+  String get integrationTopUpSourceNone => 'خارج المحل';
+
+  @override
+  String get integrationTopUpSourceOutsideHint =>
+      'لن يُخصم المبلغ من الخزينة، ويُحسب مالاً دخل المحل من خارجه.';
 
   @override
   String get integrationTopUpReference => 'رقم الحوالة أو الإيصال';
@@ -21501,6 +21512,17 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get integrationErrorProfileMismatch =>
       'حساب المزوّد يعمل الآن بملف غير الذي اخترته. اجعل ملفك النشط في تطبيق المزوّد أو اختر الملف النشط.';
+
+  @override
+  String get integrationErrorSwitchedOff =>
+      'هذا التكامل متوقف مؤقتاً لجميع المحلات، ولم يُرسَل أي طلب إلى المزوّد.';
+
+  @override
+  String get integrationStatusSwitchedOff => 'متوقف مؤقتاً';
+
+  @override
+  String get integrationSwitchedOffMessage =>
+      'أُوقف هذا التكامل مؤقتاً لجميع المحلات من طرف دفتر، ولن يتصل النظام بهذا المزوّد حتى يُعاد تشغيله. بيانات الحساب وسجلّ المبيعات محفوظة كما هي.';
 
   @override
   String get integrationCapabilityVouchers => 'كروت في الكتالوج';

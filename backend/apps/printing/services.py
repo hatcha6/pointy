@@ -329,17 +329,20 @@ def receipt_integration_payload(line, *, receipt_logos=None):
     provider did not confirm — a slip that looks complete for a card nobody
     bought would be worse than no slip. ``printed.dial`` is what to dial to
     redeem a card whose operator redeems by dialling (see
-    :mod:`apps.integrations.redeem`). ``receipt_logo`` is a card's brand logo
-    as receipts print it (base64 PNG), for the head of its slip; ``receipt_logos``
-    shares its reads between one receipt's lines.
+    :mod:`apps.integrations.redeem`). ``receipt_logo`` is the logo the slip
+    opens on, as receipts print it (base64 PNG): a card's brand logo, else the
+    provider's own; ``provider_logo`` is the provider's mark beside a brand
+    logo, ``None`` when the slip already opens on it. ``receipt_logos`` shares
+    its reads between one receipt's lines.
     """
     from apps.integrations.fulfillment import fulfillment_kind
     from apps.integrations.redeem import printed_receipt
-    from apps.integrations.voucher_logos import receipt_logo_for
+    from apps.integrations.voucher_logos import receipt_logos_for
 
     fulfillment = getattr(line, "integration_fulfillment", None)
     if fulfillment is None:
         return None
+    receipt_logo, provider_logo = receipt_logos_for(fulfillment, memo=receipt_logos)
     return {
         "provider": fulfillment.provider,
         "kind": fulfillment_kind(fulfillment),
@@ -349,7 +352,8 @@ def receipt_integration_payload(line, *, receipt_logos=None):
         "months": fulfillment.months,
         "reference": fulfillment.provider_reference,
         "printed": printed_receipt(fulfillment),
-        "receipt_logo": receipt_logo_for(fulfillment, memo=receipt_logos),
+        "receipt_logo": receipt_logo,
+        "provider_logo": provider_logo,
     }
 
 

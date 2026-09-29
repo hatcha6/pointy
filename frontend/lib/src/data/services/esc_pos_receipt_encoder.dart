@@ -11,6 +11,7 @@ import '../../shared/formatters.dart' show formatPrintedQuantity;
 import '../../shared/printing/print_qr_code.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
+import 'provider_slip_raster.dart';
 import 'receipt_provider_slips.dart';
 
 part 'esc_pos_repair_ticket.dart';
@@ -18,19 +19,22 @@ part 'esc_pos_repair_ticket.dart';
 /// Sendable bundle for the ESC/POS isolate: payload + endpoint are plain data,
 /// the capability profile is loaded on the caller isolate and passed across, and
 /// the brand-mark bytes for the closing tagline (a bundled asset) are loaded up
-/// front too so the isolate never touches the asset bundle.
+/// front too so the isolate never touches the asset bundle. So are the provider
+/// slips' drawings, which need the engine the isolate does not have.
 class _EscPosEncodeRequest {
   const _EscPosEncodeRequest({
     required this.payload,
     required this.endpoint,
     required this.profile,
     this.brandLogoBytes,
+    this.slipRasters,
   });
 
   final Map<String, Object?> payload;
   final PrinterEndpoint endpoint;
   final CapabilityProfile profile;
   final Uint8List? brandLogoBytes;
+  final List<ProviderSlipRaster>? slipRasters;
 }
 
 /// Top-level isolate entry point. The encoder is stateless, so a const instance
@@ -59,11 +63,17 @@ String _receiptCurrencySymbol = 'د.ل';
 class EscPosReceiptEncoder {
   const EscPosReceiptEncoder({
     this.brandLogoLoader = const PointyBrandLogoLoader(),
+    this.slipRasterizer = const ProviderSlipRasterizer(),
   });
 
   /// Loads the brand mark rendered in the closing tagline. Injectable so tests
   /// can stub it; the default reads the bundled asset (best-effort).
   final PointyBrandLogoLoader brandLogoLoader;
+
+  /// Draws the providers' slips (a card's PIN and QR code, a top-up's term)
+  /// as the printer's own dots. Best-effort: when it draws nothing, the slips
+  /// print as text.
+  final ProviderSlipRasterizer slipRasterizer;
 
   Future<List<int>> encodeJob({
     required PrintJob job,
@@ -128,6 +138,7 @@ class EscPosReceiptEncoder {
       endpoint: endpoint,
       profile: profile,
       brandLogoBytes: brandLogoBytes,
+      slipRasters: await _slipRasters(payload, endpoint),
     );
     // Encoding (text layout, QR generation, and logo raster) is heavy and fully
     // synchronous; run it in a background isolate so a checkout never blocks the
@@ -137,6 +148,41 @@ class EscPosReceiptEncoder {
     }
     return compute(_encodeEscPosResolved, request);
   }
+
+  /// The providers' slips of a sale receipt, drawn; null for any other ticket,
+  /// a sale no provider performed for, or a drawing that failed or took too
+  /// long — the slips then print as text, which is never worth a receipt.
+  Future<List<ProviderSlipRaster>?> _slipRasters(
+    Map<String, Object?> payload,
+    PrinterEndpoint endpoint,
+  ) async {
+    if (_string(payload['kind']).isNotEmpty) {
+      return null;
+    }
+    final slips = receiptProviderSlipsFromPayload(
+      _map(payload['order'])['lines'],
+      printQrCodes: _map(payload['shop'])['print_voucher_qr_codes'] != false,
+    );
+    if (slips.isEmpty) {
+      return null;
+    }
+    try {
+      return await slipRasterizer
+          .render(
+            slips,
+            widthDots: _slipWidthDots(endpoint.paperWidthMm),
+            dense: endpoint.compactReceipt,
+          )
+          .timeout(const Duration(seconds: 5));
+    } on Object {
+      return null;
+    }
+  }
+
+  /// A drawn slip's width: the head's, less 3 mm, as the QR code has always
+  /// kept — some rolls sold as 58 mm print narrower than the 384 dots the
+  /// generator assumes, and an image wider than the head is dropped.
+  int _slipWidthDots(int paperWidthMm) => _paperSize(paperWidthMm).width - 24;
 
   /// The requested code table if this printer's profile defines it, else the
   /// best Arabic one it does — and failing that, none at all.
@@ -277,6 +323,7 @@ class EscPosReceiptEncoder {
               endpoint: endpoint,
               codeTable: codeTable,
               dense: dense,
+              rasters: request.slipRasters,
             ),
     );
     final headerStyles = PosStyles(align: PosAlign.right, codeTable: codeTable);
@@ -1023,21 +1070,35 @@ class EscPosReceiptEncoder {
     return generator.rawBytes([0x1b, 0x33, 26]);
   }
 
-  /// The providers' answers, a ruled block each: title, then a card's PIN and
-  /// how to redeem it, or a top-up's line and term.
+  /// The providers' answers, between the masthead and the invoice: a card's
+  /// PIN and how to redeem it, a top-up's line and term.
   ///
-  /// Laid out to survive a worn head as much as to stand out: Font A and
-  /// full line spacing even on a compact slip, the PIN double size in one
-  /// unbroken run, the dial string on a line of its own (an Arabic word
-  /// beside it would hand the line to the printer's own bidi), and a card's
-  /// QR code as a whole-dot raster ([_qrRaster]).
+  /// Drawn slips ([rasters], one a slip) print as drawn, a framed card each
+  /// (see [ProviderSlipRasterizer]). Without them each slip prints as text,
+  /// a ruled block laid out to survive a worn head as much as to stand out:
+  /// Font A and full line spacing even on a compact slip, the PIN double size
+  /// in one unbroken run, the dial string on a line of its own (an Arabic
+  /// word beside it would hand the line to the printer's own bidi), and a
+  /// card's QR code as a whole-dot raster ([_qrRaster]).
   List<int> _providerSlips(
     Generator generator,
     List<ReceiptProviderSlip> slips, {
     required PrinterEndpoint endpoint,
     required String? codeTable,
     required bool dense,
+    List<ProviderSlipRaster>? rasters,
   }) {
+    if (rasters != null && rasters.length == slips.length) {
+      return [
+        ...generator.setStyles(const PosStyles(align: PosAlign.center)),
+        for (final raster in rasters) ...[
+          // `ESC J 12`: a millimetre and a half of paper above each card.
+          ...generator.rawBytes([0x1B, 0x4A, 12]),
+          ...escPosSlipRaster(raster),
+        ],
+        ...generator.rawBytes([0x1B, 0x4A, 12]),
+      ];
+    }
     final columns = _charsPerLine(endpoint.paperWidthMm);
     PosStyles style({
       PosAlign align = PosAlign.center,
@@ -1096,7 +1157,12 @@ class EscPosReceiptEncoder {
           : _qrRaster(generator, slip.qrData!, endpoint);
       if (qr.isNotEmpty) {
         bytes.addAll(qr);
-        bytes.addAll(_text(generator, receiptScanToRedeem, styles: style()));
+        for (final line in _wrap(
+          slip.qrCaption.isEmpty ? receiptScanToRedeem : slip.qrCaption,
+          columns,
+        )) {
+          bytes.addAll(_text(generator, line, styles: style()));
+        }
       }
       if (slip.dial.isNotEmpty) {
         bytes.addAll(
@@ -1114,11 +1180,19 @@ class EscPosReceiptEncoder {
           ),
         );
       }
-      for (final row in slip.rows) {
-        for (final line in _wrap(row, columns)) {
-          bytes.addAll(
-            _text(generator, line, styles: style(align: PosAlign.right)),
-          );
+      // Short facts two to a line, as the invoice header pairs its own.
+      final rowStyles = style(align: PosAlign.right);
+      for (var r = 0; r < slip.rows.length; r++) {
+        final shared = r + 1 < slip.rows.length
+            ? _sharedLine(slip.rows[r], slip.rows[r + 1], columns)
+            : null;
+        if (shared != null) {
+          bytes.addAll(_text(generator, shared, styles: rowStyles));
+          r++;
+          continue;
+        }
+        for (final line in _wrap(slip.rows[r], columns)) {
+          bytes.addAll(_text(generator, line, styles: rowStyles));
         }
       }
     }
@@ -1133,9 +1207,9 @@ class EscPosReceiptEncoder {
   /// many of the cheap heads in the field have none, or ignore the module
   /// size and error correction asked of them, where a raster prints on every
   /// one of them exactly as encoded. Modules are as big as the head allows,
-  /// up to 10 dots (1.25 mm): a dead heating element leaves a one-dot white
-  /// line down the whole slip, and a module ten dots wide still reads as
-  /// black on either side of it. Nothing at all when even 4-dot modules would
+  /// up to 8 dots (1 mm): a dead heating element leaves a one-dot white line
+  /// down the whole slip, and a module eight dots wide still reads as black
+  /// on either side of it. Nothing at all when even 4-dot modules would
   /// not fit — the dial string beneath still prints.
   List<int> _qrRaster(
     Generator generator,
@@ -1163,10 +1237,11 @@ class EscPosReceiptEncoder {
     ];
   }
 
-  static const int _maxQrModuleDots = 10;
+  static const int _maxQrModuleDots = 8;
   static const int _minQrModuleDots = 4;
 
-  /// A card's brand logo, centred at the head of its slip, then a 2 mm gap.
+  /// The slip's logo, centred at its head — with a card's provider's mark
+  /// beside it — then a 1 mm gap.
   ///
   /// Scaled into a box [_slipLogoHeightDots] tall (less in a compact slip)
   /// and at most half the roll wide, so a square mark and a long wordmark
@@ -1179,36 +1254,54 @@ class EscPosReceiptEncoder {
     required bool dense,
   }) {
     final bytes = receiptSlipLogoBytes(slip);
-    if (bytes == null) {
+    final markBytes = receiptSlipProviderLogoBytes(slip);
+    if (bytes == null && markBytes == null) {
       return const [];
     }
     try {
-      final image = _slipLogoFor(
-        slip.logo,
-        bytes,
-        maxWidth: math.min(
-          _paperSize(endpoint.paperWidthMm).width ~/ 2,
-          _slipLogoMaxWidthDots,
-        ),
-        maxHeight: dense ? _slipLogoHeightDotsDense : _slipLogoHeightDots,
+      final maxWidth = math.min(
+        _paperSize(endpoint.paperWidthMm).width ~/ 2,
+        _slipLogoMaxWidthDots,
       );
+      final maxHeight = dense ? _slipLogoHeightDotsDense : _slipLogoHeightDots;
+      final logo = bytes == null
+          ? null
+          : _slipLogoFor(
+              slip.logo,
+              bytes,
+              maxWidth: maxWidth,
+              maxHeight: maxHeight,
+            );
+      // The provider's mark beside a card's brand logo, smaller, at the far
+      // edge — one picture, so it costs the slip no line of its own.
+      final mark = markBytes == null
+          ? null
+          : _slipLogoFor(
+              slip.providerLogo,
+              markBytes,
+              maxWidth: maxWidth ~/ 2,
+              maxHeight: maxHeight * 5 ~/ 9,
+            );
+      final image = logo == null || mark == null
+          ? logo ?? mark
+          : _sideBySide(mark, logo, gap: 24);
       if (image == null) {
         return const [];
       }
       return [
         ...generator.imageRaster(image, align: PosAlign.center),
-        // `ESC J 16`: print, then feed 16 dots, so the title's glyphs, which
+        // `ESC J 8`: print, then feed 8 dots, so the title's glyphs, which
         // sit at the top of their line, do not touch the logo.
-        ...generator.rawBytes([0x1B, 0x4A, 16]),
+        ...generator.rawBytes([0x1B, 0x4A, 8]),
       ];
     } on Object {
       return const [];
     }
   }
 
-  /// 12 mm at 203 dpi; 9 mm on a compact slip.
-  static const int _slipLogoHeightDots = 96;
-  static const int _slipLogoHeightDotsDense = 72;
+  /// 9 mm at 203 dpi; 7 mm on a compact slip.
+  static const int _slipLogoHeightDots = 72;
+  static const int _slipLogoHeightDotsDense = 56;
   static const int _slipLogoMaxWidthDots = 256;
 
   /// Enlarged-text height for headings/totals: double height normally, single
@@ -1530,6 +1623,28 @@ img.Image? _slipLogoFor(
   }
   _slipLogoCache[cacheKey] = fitted;
   return fitted;
+}
+
+/// [left] and [right] on one strip of white paper, [gap] dots apart, each
+/// centred on the taller one's height; the width a whole number of bytes.
+img.Image _sideBySide(img.Image left, img.Image right, {required int gap}) {
+  final height = math.max(left.height, right.height);
+  final canvas = img.Image(
+    width: (left.width + gap + right.width + 7) ~/ 8 * 8,
+    height: height,
+  );
+  img.fill(canvas, color: img.ColorRgb8(255, 255, 255));
+  img.compositeImage(
+    canvas,
+    left.convert(format: img.Format.uint8, numChannels: 4),
+    dstY: (height - left.height) ~/ 2,
+  );
+  return img.compositeImage(
+    canvas,
+    right.convert(format: img.Format.uint8, numChannels: 4),
+    dstX: canvas.width - right.width,
+    dstY: (height - right.height) ~/ 2,
+  );
 }
 
 /// [logo] centred on white paper whose width is a whole number of bytes.

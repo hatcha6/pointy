@@ -212,6 +212,7 @@ String integrationErrorText(String code, AppLocalizations l10n) {
     IntegrationErrorCode.busy => l10n.integrationErrorBusy,
     IntegrationErrorCode.profileMismatch =>
       l10n.integrationErrorProfileMismatch,
+    IntegrationErrorCode.switchedOff => l10n.integrationErrorSwitchedOff,
     _ => l10n.integrationErrorUnexpected,
   };
 }

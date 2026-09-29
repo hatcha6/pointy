@@ -25,7 +25,7 @@ from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers
 
-from . import catalog, quotes
+from . import catalog, quotes, switches
 from .models import (
     IntegrationAccount,
     IntegrationFulfillment,
@@ -105,6 +105,12 @@ def resolve_line_integration(payload: dict, variant):
     if spec is None or not spec.is_available:
         raise serializers.ValidationError(
             {"integration": "Unknown or unavailable provider."}
+        )
+    # Switched off for the fleet (see .switches). A cart built before the
+    # switch reached this shop must not sell what can no longer be performed.
+    if switches.is_switched_off(provider):
+        raise serializers.ValidationError(
+            {"integration": "This provider has been switched off."}
         )
 
     if catalog.CAPABILITY_VOUCHERS in spec.capabilities:

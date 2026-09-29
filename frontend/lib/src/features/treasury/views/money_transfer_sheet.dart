@@ -72,6 +72,13 @@ class _MoneyTransferSheetState extends State<_MoneyTransferSheet> {
     super.dispose();
   }
 
+  /// Whether [id] is a provider float. One provider's credit cannot pay
+  /// another's. The server refuses it, and saying so here saves the trip.
+  bool _isFloat(int? id) =>
+      id != null &&
+      widget.viewModel.accountById(id)?.account.kind ==
+          MoneyAccountKind.provider;
+
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!(_formKey.currentState?.validate() ?? false)) {
@@ -87,6 +94,12 @@ class _MoneyTransferSheetState extends State<_MoneyTransferSheet> {
     if (_fromAccountId != null && _fromAccountId == _toAccountId) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.treasuryTransferSameAccount)),
+      );
+      return;
+    }
+    if (_isFloat(_fromAccountId) && _isFloat(_toAccountId)) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.treasuryTransferBetweenFloats)),
       );
       return;
     }

@@ -13,7 +13,7 @@ from apps.integrations.fulfillment import (
     voucher_line_payload,
 )
 from apps.integrations.redeem import printed_receipt
-from apps.integrations.voucher_logos import receipt_logo_for
+from apps.integrations.voucher_logos import receipt_logos_for
 from apps.catalog.units import (
     UnitConversionError,
     resolve_unit,
@@ -378,6 +378,10 @@ class OrderLineSerializer(serializers.ModelSerializer):
         if fulfillment is None:
             return None
         subscriber = fulfillment.subscriber
+        receipt_logo, provider_logo = receipt_logos_for(
+            fulfillment,
+            memo=self.context.setdefault("voucher_receipt_logos", {}),
+        )
         return {
             "provider": fulfillment.provider,
             # ``voucher`` for a card off a provider's shelf — its PIN is in
@@ -402,12 +406,13 @@ class OrderLineSerializer(serializers.ModelSerializer):
             # worth reprinting beside Pointy's invoice — plus, for a card its
             # operator redeems by dialling, the ``dial`` string to redeem it.
             "receipt": printed_receipt(fulfillment),
-            # A card's brand logo as receipts print it (base64 PNG), for the
-            # head of its slip; read once per brand for the whole response.
-            "receipt_logo": receipt_logo_for(
-                fulfillment,
-                memo=self.context.setdefault("voucher_receipt_logos", {}),
-            ),
+            # The logo its slip opens on, as receipts print it (base64 PNG): a
+            # card's brand logo, else the provider's own. A brand is read once
+            # for the whole response.
+            "receipt_logo": receipt_logo,
+            # The provider's own mark, printed beside a card's brand logo;
+            # None when the slip already opens on it.
+            "provider_logo": provider_logo,
             # Why the last attempt did not land, as a code the client can act
             # on — "top up the float" is a different screen from "try again".
             "error_code": fulfillment.last_error_code,

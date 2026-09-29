@@ -39,9 +39,10 @@ from django.utils import timezone
 
 from apps.core.state_version import bump
 
+from . import switches
 from .models import IntegrationFulfillment
 from .providers import provider_for
-from .providers.base import ERROR_INDETERMINATE, RechargeResult
+from .providers.base import ERROR_INDETERMINATE, ERROR_SWITCHED_OFF, RechargeResult
 
 # --- outcomes ---------------------------------------------------------------
 #: The provider confirmed it. Money left the float, time landed on the card.
@@ -90,6 +91,19 @@ def charge(fulfillment_id: int, *, user=None) -> ChargeOutcome:
             "integrations.recharge.charge() must not run inside a transaction: "
             "the claim has to be committed before the provider is called."
         )
+
+    # A provider the operator switched off is not even claimed for: nothing
+    # will be sent, so the line stays merely sold — neither an attempt nor a
+    # refusal on its record — for a refund, or for when it is back on.
+    off = switches.switched_off_providers()
+    if off:
+        current = IntegrationFulfillment.objects.filter(pk=fulfillment_id).first()
+        if current is not None and current.provider in off:
+            return ChargeOutcome(
+                outcome=OUTCOME_REFUSED,
+                fulfillment=current,
+                error_code=ERROR_SWITCHED_OFF,
+            )
 
     claimed = _claim(fulfillment_id)
     if claimed is None:

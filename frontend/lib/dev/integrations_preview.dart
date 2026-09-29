@@ -7,6 +7,8 @@
 //   flutter run -d web-server --web-port 8080 -t lib/dev/integrations_preview.dart
 //
 // Scenarios: catalog | connected | failed | unconfigured | error | board
+//            switched_off (HD Box switched off for the fleet by the operator)
+//            float (the HD Box float sheet, opened on load)
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -14,10 +16,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/integration_card.dart';
 import 'package:pointy_frontend/src/data/models/integration_provider.dart';
+import 'package:pointy_frontend/src/data/models/money_position.dart';
 import 'package:pointy_frontend/src/data/repositories/integrations_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/settings/view_models/integrations_view_model.dart';
+import 'package:pointy_frontend/src/features/settings/views/integration_float_sheet.dart';
 import 'package:pointy_frontend/src/features/settings/views/integrations_page.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
@@ -46,15 +51,44 @@ class _PreviewApp extends StatelessWidget {
         controller: PointyNavigationRailController(),
         child: child ?? const SizedBox.shrink(),
       ),
-      home: screen == 'board'
-          ? const _Board()
-          : IntegrationsPage(
-              viewModel: IntegrationsViewModel(
-                _FakeIntegrationsRepository(screen),
-              ),
-            ),
+      home: switch (screen) {
+        'board' => const _Board(),
+        'float' => const _FloatHost(),
+        _ => IntegrationsPage(
+          viewModel: IntegrationsViewModel(_FakeIntegrationsRepository(screen)),
+        ),
+      },
     );
   }
+}
+
+/// Opens the real float sheet on load, so no click is needed to review it.
+class _FloatHost extends StatefulWidget {
+  const _FloatHost();
+
+  @override
+  State<_FloatHost> createState() => _FloatHostState();
+}
+
+class _FloatHostState extends State<_FloatHost> {
+  final _viewModel = IntegrationsViewModel(
+    _FakeIntegrationsRepository('connected'),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showIntegrationFloatSheet(
+        context: context,
+        providerKey: IntegrationProviderKey.hdbox,
+        viewModel: _viewModel,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold();
 }
 
 String _screen() {
@@ -76,7 +110,13 @@ class _Board extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const scenarios = ['catalog', 'connected', 'failed', 'unconfigured'];
+    const scenarios = [
+      'catalog',
+      'connected',
+      'failed',
+      'unconfigured',
+      'switched_off',
+    ];
     return Scaffold(
       backgroundColor: context.pointyColors.surfaceSunken,
       body: SingleChildScrollView(
@@ -171,6 +211,32 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
     return Ok(_hdbox('unconfigured'));
   }
 
+  @override
+  Future<Result<IntegrationFloat>> loadFloat(String providerKey) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    return const Ok(
+      IntegrationFloat(
+        expectedBalance: 780,
+        toppedUp: 1000,
+        drawn: 220,
+        committed: 65,
+        reportedBalance: 780,
+        drift: 0,
+        moneyAccountName: 'رصيد HDBOX — Alnassim',
+        // The seeded pair every install starts with, one renamed by its owner.
+        sourceAccounts: [
+          MoneyAccount(id: 1, name: 'الخزينة', kind: MoneyAccountKind.cash),
+          MoneyAccount(
+            id: 2,
+            name: 'مصرف الجمهورية — الفرع الرئيسي',
+            kind: MoneyAccountKind.bank,
+          ),
+        ],
+        defaultSourceAccountId: 1,
+      ),
+    );
+  }
+
   static IntegrationProvider _hdbox(String scenario) {
     final account = switch (scenario) {
       'unconfigured' => null,
@@ -228,6 +294,7 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
       ],
       defaultBaseUrl: 'http://cas.hdboxly.com:18688',
       isConfigurable: true,
+      switchedOff: scenario == 'switched_off',
       account: scenario == 'catalog' ? null : account,
     );
   }

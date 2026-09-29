@@ -30138,6 +30138,12 @@ abstract class AppLocalizations {
   /// **'لا يمكن التحويل إلى نفس الحساب.'**
   String get treasuryTransferSameAccount;
 
+  /// Validation message when both sides of a transfer are provider floats (e.g. LNET to HD Box): one provider's credit cannot pay another.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن التحويل من رصيد مزوّد إلى رصيد مزوّد آخر.'**
+  String get treasuryTransferBetweenFloats;
+
   /// Validation message for an invalid money amount.
   ///
   /// In ar, this message translates to:
@@ -35166,6 +35172,12 @@ abstract class AppLocalizations {
   /// **'مجموع الشحن'**
   String get integrationFloatToppedUp;
 
+  /// Float summary row: money taken back out of the provider float, e.g. a refund into the cash box. Subtracted from the expected balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُسترَد من المزوّد'**
+  String get integrationFloatReturned;
+
   ///
   ///
   /// In ar, this message translates to:
@@ -35208,17 +35220,23 @@ abstract class AppLocalizations {
   /// **'المبلغ المدفوع'**
   String get integrationTopUpAmount;
 
-  ///
+  /// Label of the picker for the cash box or bank a provider float top-up was paid from.
   ///
   /// In ar, this message translates to:
   /// **'خرج من'**
   String get integrationTopUpSource;
 
-  ///
+  /// Top-up source option: the money did not come from any of the shop's accounts (e.g. the owner's own pocket).
   ///
   /// In ar, this message translates to:
-  /// **'بدون تحديد'**
+  /// **'خارج المحل'**
   String get integrationTopUpSourceNone;
+
+  /// Shown under the source picker when 'outside the shop' is chosen: nothing is deducted from the treasury and the amount counts as money added to the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يُخصم المبلغ من الخزينة، ويُحسب مالاً دخل المحل من خارجه.'**
+  String get integrationTopUpSourceOutsideHint;
 
   ///
   ///
@@ -36857,6 +36875,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حساب المزوّد يعمل الآن بملف غير الذي اخترته. اجعل ملفك النشط في تطبيق المزوّد أو اختر الملف النشط.'**
   String get integrationErrorProfileMismatch;
+
+  /// Integration error: the operator switched this provider off for every shop; nothing was sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا التكامل متوقف مؤقتاً لجميع المحلات، ولم يُرسَل أي طلب إلى المزوّد.'**
+  String get integrationErrorSwitchedOff;
+
+  /// Status pill on a provider card the operator switched off for every shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف مؤقتاً'**
+  String get integrationStatusSwitchedOff;
+
+  /// Provider card notice when the operator switched the integration off for every shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُوقف هذا التكامل مؤقتاً لجميع المحلات من طرف دفتر، ولن يتصل النظام بهذا المزوّد حتى يُعاد تشغيله. بيانات الحساب وسجلّ المبيعات محفوظة كما هي.'**
+  String get integrationSwitchedOffMessage;
 
   /// Integration capability chip: sells cards from the till's catalog.
   ///
