@@ -20,6 +20,7 @@ import 'package:pointy_frontend/src/data/models/modifier_group.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_page.dart';
+import 'package:pointy_frontend/src/data/models/product_search_outcome.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
@@ -3259,6 +3260,94 @@ void _registerTillBlindSpotTests() {
         expect(search.attributes['has_results'], isTrue);
         expect(search.metrics['result_count'], greaterThan(0));
         expect(search.severity, AnalyticsEventSeverity.info);
+      },
+    );
+
+    test(
+      'how the server found the results rides along and is recorded',
+      () async {
+        final sink = _FakeAnalyticsSink();
+        final engine = engineWith(sink, 'search-outcome');
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            onFetchProducts: (query, page) => ProductPage(
+              products: [Product.fromVariant(_coffeeVariant)],
+              hasMore: false,
+              searchOutcome: const ProductSearchOutcome(
+                match: ProductSearchMatch.corrected,
+                correctedQuery: 'عصير',
+                categoryFallback: true,
+              ),
+            ),
+          ),
+          analyticsEngine: engine,
+        );
+        addTearDown(viewModel.dispose);
+        addTearDown(engine.dispose);
+
+        await viewModel.updateSearch('عصبر');
+        await _settle();
+        await engine.flush();
+
+        expect(viewModel.searchOutcome?.correctedQuery, 'عصير');
+        final search = sink.acceptedEvents.firstWhere(
+          (event) => event.name == 'catalog.search',
+        );
+        expect(search.attributes['match'], 'corrected');
+        expect(search.attributes['category_fallback'], isTrue);
+      },
+    );
+
+    test(
+      'a phone number typed into the search is not recorded as typed',
+      () async {
+        final sink = _FakeAnalyticsSink();
+        final engine = engineWith(sink, 'search-phone');
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            onFetchProducts: (query, page) =>
+                const ProductPage(products: [], hasMore: false),
+          ),
+          analyticsEngine: engine,
+        );
+        addTearDown(viewModel.dispose);
+        addTearDown(engine.dispose);
+
+        await viewModel.updateSearch('091 234 5678');
+        await _settle();
+        await engine.flush();
+
+        final search = sink.acceptedEvents.firstWhere(
+          (event) => event.name == 'catalog.search',
+        );
+        expect(search.attributes['term'], '[phone]');
+      },
+    );
+
+    test(
+      'Enter on a typed name searches instead of looking up a barcode',
+      () async {
+        final sink = _FakeAnalyticsSink();
+        final engine = engineWith(sink, 'enter-name');
+        final viewModel = _viewModel(
+          _FakePosApiService(),
+          analyticsEngine: engine,
+        );
+        addTearDown(viewModel.dispose);
+        addTearDown(engine.dispose);
+
+        final handled = await viewModel.submitLookup('حليب');
+        await _settle();
+        await engine.flush();
+
+        expect(handled, isFalse, reason: 'the field runs the text as a search');
+        expect(viewModel.barcodeScanStatus, BarcodeScanStatus.idle);
+        expect(
+          sink.acceptedEvents.where(
+            (event) => event.name == 'pos.scan.unmatched',
+          ),
+          isEmpty,
+        );
       },
     );
 

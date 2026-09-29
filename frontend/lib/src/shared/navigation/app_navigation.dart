@@ -19,6 +19,7 @@ enum AppNavigationDestination {
   campaigns,
   catalog,
   categories,
+  searchMisses,
   stockCount,
   warehouses,
   stockTransfers,
@@ -63,6 +64,9 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.campaigns => AppCapability.manageCampaigns,
     AppNavigationDestination.catalog => AppCapability.viewCatalogManagement,
     AppNavigationDestination.categories => AppCapability.manageCategories,
+    // Teaching the catalogue a word is editing products: the server asks
+    // catalog.change_product for the list and for every action on it.
+    AppNavigationDestination.searchMisses => AppCapability.changeProduct,
     AppNavigationDestination.stockCount => AppCapability.countStock,
     // Their own view rights, never shop settings: the stock roles hold these
     // and not core.change_shopsettings, and a settings tile was the only way

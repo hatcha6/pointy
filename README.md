@@ -196,6 +196,19 @@ Screens are reviewed without a backend through dev-only preview harnesses under
 (`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
 repositories, so there is no server, no login, and no shop data involved.
 
+## Searched but not found
+
+A product search that finds nothing is counted per word (`/api/search-misses/`),
+and the owner works through those words in «عمليات بحث بلا نتائج» — from the
+products screen's toolbar, the drawer, or ⌘K — most typed first. «هذا المنتج…»
+picks the product the word meant and keeps the word as a name of it, so the
+next search finds it; «تجاهل» sets a slip aside (with an undo), and the
+«تم ربطها» / «متجاهلة» filters reopen either kind. Every action needs
+`catalog.change_product`. Preview with `make frontend-search-misses-preview`
+(`?screen=open|resolved|all|empty`, `&theme=dark`), or render the same surfaces
+to PNG with `POINTY_CAPTURE_SCREENS=1 flutter test
+test/screens/search_misses_capture_test.dart --update-goldens`.
+
 ## Device Printers
 
 Each till keeps its own list of printers (Device Settings → الطابعات), and every
@@ -975,6 +988,29 @@ flag does nothing. It is not the default on purpose either: a kept database is
 only as correct as the last time it was built, and a migration edited in place
 leaves a schema that no longer matches the tree while the run still goes green.
 Iterate with it, prove with `make backend-test-pg`.
+
+### Product search: does it find what people meant?
+
+Product search folds Arabic spelling on both sides (أ/إ/آ, ة/ه, ى/ي, both digit
+sets, harakat, a size glued to a name), matches every typed word anywhere in a
+product's name, variant names, aliases, SKU and barcodes, and — only when
+nothing matched — forgives: the till's category chip is lifted, a word typed on
+the wrong keyboard layout is retyped, slips and run-together words are
+corrected against the shop's own vocabulary, and Libyan loanword spellings are
+matched by sound. See `backend/apps/catalog/search_filters.py`.
+
+Measure it on real data rather than guessing:
+
+```sh
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/pointy_copy make backend-search-eval
+```
+
+It replays the searches cashiers typed in the field that found nothing
+(`backend/apps/catalog/search_eval_cases.json`) plus generated variants of the
+catalogue's own names (words reversed, no hamza, sizes typed apart), and prints
+how often the meant product lands in the top 1 / 5 / 10 and on the first page,
+with timings. Searches that still find nothing are counted per word for the
+owner (`/api/search-misses/`), who can link each to the product that was meant.
 
 ### Identified stock: the oracle and the invariants
 

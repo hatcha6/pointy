@@ -11785,6 +11785,36 @@ abstract class AppLocalizations {
   /// **'مسح البحث والفلاتر'**
   String get catalogClearSearchAndFiltersButton;
 
+  /// Till empty state title when the search matched products that are hidden because they are out of stock.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتجات مطابقة نفدت من المخزون: {count}'**
+  String catalogOutOfStockMatchesTitle(int count);
+
+  /// Till empty state explanation when every match was hidden for being out of stock.
+  ///
+  /// In ar, this message translates to:
+  /// **'موجودة في الكتالوج لكن كميتها صفر، لذلك لا تظهر في نقطة البيع. سجّل فاتورة الشراء أو عدّل المخزون لتظهر.'**
+  String get catalogOutOfStockMatchesMessage;
+
+  /// Till notice above search results when nothing matched inside the selected category chip, so results come from all categories.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا نتائج في القسم المختار، فهذه من كل الأقسام'**
+  String get posSearchOtherCategoriesNotice;
+
+  /// Till notice above search results when the server corrected the typed words (a slip, words run together, or the wrong keyboard layout).
+  ///
+  /// In ar, this message translates to:
+  /// **'لا نتائج لما كُتب، فهذه نتائج «{query}»'**
+  String posSearchCorrectedNotice(String query);
+
+  /// Till notice above search results when only near misses (similar spellings) matched.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تطابق تام، فهذه أقرب النتائج'**
+  String get posSearchFuzzyNotice;
+
   /// No description provided for @productListTitle.
   ///
   /// In ar, this message translates to:
@@ -14136,6 +14166,216 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر البحث عن الباركود. حاول مرة أخرى.'**
   String get barcodeScanError;
+
+  /// Navigation entry for the owner's worklist of catalog searches that found nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات بحث بلا نتائج'**
+  String get searchMissesDrawerLabel;
+
+  /// App bar title of the searched-but-not-found worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات بحث بلا نتائج'**
+  String get searchMissesTitle;
+
+  /// Tooltip of the catalog app bar button that opens the searched-but-not-found worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات بحث بلا نتائج'**
+  String get searchMissesTooltip;
+
+  /// Tooltip of the worklist's refresh button.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث'**
+  String get searchMissesRefreshTooltip;
+
+  /// One-line explanation above the open searched-but-not-found rows.
+  ///
+  /// In ar, this message translates to:
+  /// **'اربط كل كلمة بالمنتج الذي قصده من بحث عنها، فيجده البحث من الآن.'**
+  String get searchMissesHint;
+
+  /// Filter chip: words still waiting for the owner.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوحة'**
+  String get searchMissesFilterOpen;
+
+  /// Filter chip: words already linked to a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم ربطها'**
+  String get searchMissesFilterResolved;
+
+  /// Filter chip: words the owner dismissed.
+  ///
+  /// In ar, this message translates to:
+  /// **'متجاهلة'**
+  String get searchMissesFilterDismissed;
+
+  /// Filter chip: every word, whatever its status.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get searchMissesFilterAll;
+
+  /// Empty state title of the open searched-but-not-found worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات بحث بلا نتائج'**
+  String get searchMissesEmptyTitle;
+
+  /// Empty state explanation: the list fills when a till search finds nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمتلئ هذه القائمة عندما يبحث أحد في شاشة البيع عن كلمة فلا يجد منتجاً. اربط الكلمة بالمنتج المقصود ليجده البحث في المرة القادمة.'**
+  String get searchMissesEmptyMessage;
+
+  /// Empty state when no word has been linked to a product yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُربط أي كلمة بمنتج بعد.'**
+  String get searchMissesEmptyResolved;
+
+  /// Empty state when no word has been dismissed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كلمات متجاهلة.'**
+  String get searchMissesEmptyDismissed;
+
+  /// Shown when the worklist, or a further page of it, fails to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل عمليات البحث بلا نتائج.'**
+  String get searchMissesLoadError;
+
+  /// How many searches for the word found nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{بُحث عنها مرة واحدة} =2{بُحث عنها مرتين} few{بُحث عنها {count} مرات} many{بُحث عنها {count} مرة} other{بُحث عنها {count} مرة}}'**
+  String searchMissCount(int count);
+
+  /// When the word was last searched, today.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخرها اليوم {time}'**
+  String searchMissLastSeenToday(String time);
+
+  /// When the word was last searched, yesterday.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخرها أمس {time}'**
+  String searchMissLastSeenYesterday(String time);
+
+  /// When the word was last searched, before yesterday.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخرها {date}'**
+  String searchMissLastSeenOn(String date);
+
+  /// Where the word was searched: the till.
+  ///
+  /// In ar, this message translates to:
+  /// **'في شاشة البيع'**
+  String get searchMissSurfacePos;
+
+  /// Where the word was searched: the product catalog.
+  ///
+  /// In ar, this message translates to:
+  /// **'في المنتجات'**
+  String get searchMissSurfaceCatalog;
+
+  /// Where the word was searched: purchasing.
+  ///
+  /// In ar, this message translates to:
+  /// **'في المشتريات'**
+  String get searchMissSurfacePurchasing;
+
+  /// Row action: pick the product the word meant.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المنتج…'**
+  String get searchMissResolveButton;
+
+  /// Tooltip of the row action that links the word to a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المنتج الذي قصده من بحث عن هذه الكلمة'**
+  String get searchMissResolveTooltip;
+
+  /// Row action: set the word aside.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل'**
+  String get searchMissDismissButton;
+
+  /// Row action: put a linked or dismissed word back on the open list.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة فتح'**
+  String get searchMissReopenButton;
+
+  /// Title of the product picker opened from a row.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما المنتج الذي قصده من بحث عن «{term}»؟'**
+  String searchMissPickProductTitle(String term);
+
+  /// Product picker empty state.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد منتج بهذا الاسم. جرّب اسماً آخر أو الرمز.'**
+  String get searchMissPickProductEmpty;
+
+  /// Snackbar after linking a word to a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيجد البحث عن «{term}» المنتج «{product}» من الآن'**
+  String searchMissResolvedMessage(String term, String product);
+
+  /// Snackbar after dismissing a word; offers undo.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تجاهل «{term}»'**
+  String searchMissDismissedMessage(String term);
+
+  /// Snackbar after reopening a word.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُعيدت «{term}» إلى القائمة المفتوحة'**
+  String searchMissReopenedMessage(String term);
+
+  /// The server refused the picked product (a system product, or one archived meanwhile).
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن ربط كلمة بهذا المنتج. اختر منتجاً آخر.'**
+  String get searchMissProductRefused;
+
+  /// A row action failed; the row stays.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ التغيير. حاول مرة أخرى.'**
+  String get searchMissActionError;
+
+  /// Badge on a linked word: the product a search for it now finds.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجد الآن «{product}»'**
+  String searchMissLinkedTo(String product);
+
+  /// Badge on a linked word whose product is no longer known.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم ربطها'**
+  String get searchMissStatusResolved;
+
+  /// Badge on a dismissed word in the all-words view.
+  ///
+  /// In ar, this message translates to:
+  /// **'متجاهلة'**
+  String get searchMissStatusDismissed;
 
   /// No description provided for @manageScaleRulesTooltip.
   ///

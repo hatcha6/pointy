@@ -48,6 +48,7 @@ class CatalogScreen extends StatefulWidget {
     required this.navigation,
     required this.capabilities,
     this.analyticsEngine,
+    this.onOpenSearchMisses,
   });
 
   final CatalogViewModel viewModel;
@@ -65,6 +66,10 @@ class CatalogScreen extends StatefulWidget {
   final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
+
+  /// Opens the words searched for and not found. Null hides the button: for
+  /// someone who may not change products, or where nothing can open it.
+  final VoidCallback? onOpenSearchMisses;
 
   @override
   State<CatalogScreen> createState() => _CatalogScreenState();
@@ -169,6 +174,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   icon: const Icon(Icons.scale_outlined),
                 ),
               ),
+              if (widget.onOpenSearchMisses case final openSearchMisses?)
+                ProductChangeGuard(
+                  capabilities: capabilities,
+                  child: IconButton(
+                    tooltip: l10n.searchMissesTooltip,
+                    onPressed: openSearchMisses,
+                    icon: const Icon(Icons.search_off_outlined),
+                  ),
+                ),
             ],
           ),
           body: CatalogManagementGuard(

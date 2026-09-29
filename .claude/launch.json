@@ -332,6 +332,14 @@
       "port": 8080
     },
     {
+      "name": "search-misses-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-search-misses-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "learning-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

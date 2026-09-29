@@ -75,10 +75,14 @@ extension PosCatalogActions on PosViewModel {
         _products = result.value.products;
         _hasMoreProducts = result.value.hasMore;
         _nextProductPage = 2;
+        _searchOutcome = querySnapshot.search.trim().isEmpty
+            ? null
+            : result.value.searchOutcome;
       case Error<ProductPage>():
         _products = _catalogRepository.sampleProducts(querySnapshot);
         _hasMoreProducts = false;
         _errorMessage = 'sample_catalog_notice';
+        _searchOutcome = null;
     }
 
     _isLoading = false;
@@ -117,6 +121,7 @@ extension PosCatalogActions on PosViewModel {
       return;
     }
     final resultCount = _products.length;
+    final outcome = _searchOutcome;
     unawaited(
       _analyticsEngine?.trackUsage(
             AnalyticsEventName.catalogSearch,
@@ -129,9 +134,19 @@ extension PosCatalogActions on PosViewModel {
             attributes: {
               // The term itself: without it the event says a search failed and
               // not what for, which is the only actionable half. It names a
-              // product in the shop's own catalog.
-              'term': _truncatedSearchTerm(term),
+              // product in the shop's own catalog — unless it is a phone
+              // number: staff type customers' numbers into this box, and those
+              // are somebody's personal data, not a product name.
+              'term': looksLikePhoneNumber(term)
+                  ? redactedPhoneTerm
+                  : _truncatedSearchTerm(term),
               'has_results': resultCount > 0,
+              // What the server did to find them — typed as is, corrected,
+              // retyped from the other layout, near misses — and whether it
+              // had to look outside the selected category.
+              if (outcome != null) 'match': outcome.match.name,
+              if (outcome != null && outcome.categoryFallback)
+                'category_fallback': true,
               'failed': failed,
               'register_session_id': _activeRegisterSession?.id,
               // Whether a category chip was narrowing the search. A term that
@@ -144,6 +159,10 @@ extension PosCatalogActions on PosViewModel {
             },
             metrics: {
               'result_count': resultCount,
+              // Matches the stock filter hid: an empty search that is a
+              // stock problem, not a search problem.
+              if (outcome != null && outcome.hiddenOutOfStock > 0)
+                'hidden_out_of_stock': outcome.hiddenOutOfStock,
               'term_length': term.length,
               'duration_ms': elapsed.inMicroseconds / 1000,
             },
@@ -187,6 +206,7 @@ extension PosCatalogActions on PosViewModel {
 
     final refreshed = <Product>[];
     var hasMore = _hasMoreProducts;
+    var outcome = _searchOutcome;
     for (var page = 1; page <= pagesToRead; page++) {
       final result = await _catalogRepository.loadProducts(
         query: querySnapshot,
@@ -204,6 +224,9 @@ extension PosCatalogActions on PosViewModel {
         case Ok<ProductPage>():
           refreshed.addAll(result.value.products);
           hasMore = result.value.hasMore;
+          if (page == 1 && querySnapshot.search.trim().isNotEmpty) {
+            outcome = result.value.searchOutcome;
+          }
         case Error<ProductPage>():
           return; // Keep what is on screen.
       }
@@ -211,6 +234,7 @@ extension PosCatalogActions on PosViewModel {
 
     _products = refreshed;
     _hasMoreProducts = hasMore;
+    _searchOutcome = outcome;
     _nextProductPage = pagesToRead + 1;
     _notifyChanged();
   }

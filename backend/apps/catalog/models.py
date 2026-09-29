@@ -14,6 +14,7 @@ from django.utils import timezone
 from apps.core.models import TimeStampedModel
 
 from . import scale_barcodes
+from .search_sql import SearchFold, SearchSkeleton
 
 
 def normalize_sku(value: str | None) -> str:
@@ -261,6 +262,21 @@ class Product(TimeStampedModel):
     # (most bought first) and the tiebreak for search relevance — read straight off
     # this indexed column so ordering by demand costs zero extra queries.
     popularity = models.PositiveIntegerField(default=0, db_index=True)
+    # The name as search reads it (``search_text.fold``) and its loanword key
+    # (``search_text.skeleton``). Computed by the database on every write —
+    # bulk imports and restores included — so they can never drift from the
+    # name, and trigram-indexed (migration 0036) so every-word search stays an
+    # index scan instead of re-folding each name per query.
+    search_name = models.GeneratedField(
+        expression=SearchFold("name"),
+        output_field=models.TextField(),
+        db_persist=True,
+    )
+    search_skeleton = models.GeneratedField(
+        expression=SearchSkeleton("name"),
+        output_field=models.TextField(),
+        db_persist=True,
+    )
     # Base (stock-keeping) unit the product is counted in. Stock, recipes, and
     # job materials all use this unit. Its value is a ``UnitOfMeasure.code``; the
     # built-in codes below stay the defaults, but the unit list is now editable so
@@ -503,6 +519,12 @@ class ProductAlias(TimeStampedModel):
     # The normalized comparison key (Arabic-folded, diacritic-stripped, casefolded),
     # indexed so the matcher can look up an exact alias hit cheaply.
     normalized = models.CharField(max_length=255, db_index=True)
+    # The alias as product search reads it; see ``Product.search_name``.
+    search_alias = models.GeneratedField(
+        expression=SearchFold("alias"),
+        output_field=models.TextField(),
+        db_persist=True,
+    )
     source = models.CharField(
         max_length=16,
         choices=Source.choices,
@@ -550,6 +572,73 @@ class ProductAlias(TimeStampedModel):
             defaults={"alias": text[:255], "source": source},
         )
         return obj
+
+
+class SearchMiss(TimeStampedModel):
+    """A word someone searched the catalogue for and found nothing.
+
+    Counted per folded term (``search_text.fold``), so «ارز» and «أرز» are one
+    row and a word typed forty times a week sorts above a slip typed once. The
+    owner's worklist turns a row into an alias of the product that was meant —
+    the next search for that word finds it — or dismisses it. Codes, phone
+    numbers and anything shorter than three letters are never recorded (see
+    ``search_misses.record_search_miss``).
+    """
+
+    class Surface(models.TextChoices):
+        POS = "pos", "Till"
+        CATALOG = "catalog", "Catalogue"
+        PURCHASING = "purchasing", "Purchasing"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED = "resolved", "Resolved"
+        DISMISSED = "dismissed", "Dismissed"
+
+    # As typed the most recent time.
+    term = models.CharField(max_length=120)
+    normalized = models.CharField(max_length=120, unique=True)
+    # Where it was typed the most recent time.
+    surface = models.CharField(
+        max_length=16, choices=Surface.choices, default=Surface.OTHER
+    )
+    count = models.PositiveIntegerField(default=1)
+    last_seen_at = models.DateTimeField(default=timezone.now, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.OPEN, db_index=True
+    )
+    # The product the owner said was meant.
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+    # The alias resolving it created, so reopening can take exactly that back
+    # (and nothing that was there before).
+    alias = models.ForeignKey(
+        ProductAlias,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-count", "-last_seen_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.term} ×{self.count}"
 
 
 class ProductUnitQuerySet(models.QuerySet):
@@ -900,6 +989,12 @@ class ProductVariantQuerySet(models.QuerySet):
 class ProductVariant(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="variants")
     name = models.CharField(max_length=160, blank=True)
+    # The variant name as search reads it; see ``Product.search_name``.
+    search_name = models.GeneratedField(
+        expression=SearchFold("name"),
+        output_field=models.TextField(),
+        db_persist=True,
+    )
     sku = models.CharField(max_length=64, unique=True)
     barcode = models.CharField(max_length=64, blank=True, db_index=True)
     # GS1 trade-item number, when the pack carries one. A GTIN identifies a

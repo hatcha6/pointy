@@ -84,10 +84,15 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
   Timer? _debounce;
   int _inputRevision = 0;
 
+  /// The value this field and its owner last agreed on: what the field last
+  /// reported, or an outside value it last took in. See [didUpdateWidget].
+  late String _lastSynced;
+
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value);
+    _lastSynced = widget.value;
     widget.resetSignal?.addListener(_handleReset);
   }
 
@@ -98,9 +103,18 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
       oldWidget.resetSignal?.removeListener(_handleReset);
       widget.resetSignal?.addListener(_handleReset);
     }
-    if (widget.value != oldWidget.value) {
+    // The owner echoing back what this field itself reported is not a new
+    // value, and must not be written back into the field. The report is
+    // trimmed, so «هريسة » came back as «هريسة»; writing that in ate the space
+    // the cashier had just typed and the next word glued on — «هريسةمنز» was
+    // 11% of a grocery till's empty searches. It also landed on top of
+    // whatever was typed after the report. Only a value from outside (a
+    // cleared filter, a restored query) replaces the text, and cancels a
+    // debounce it would otherwise race.
+    if (widget.value != oldWidget.value && widget.value != _lastSynced) {
       _inputRevision++;
       _debounce?.cancel();
+      _lastSynced = widget.value;
       if (widget.value != _controller.text) {
         _setControllerText(widget.value);
       }
@@ -128,7 +142,7 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        widget.onChanged('');
+        _report('');
       }
     });
   }
@@ -238,7 +252,7 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
     _debounce?.cancel();
     _debounce = Timer(widget.debounceDuration, () {
       if (revision == _inputRevision) {
-        widget.onChanged(nextValue);
+        _report(nextValue);
       }
     });
   }
@@ -246,7 +260,12 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
   void _emitNow(String value) {
     _inputRevision++;
     _debounce?.cancel();
-    widget.onChanged(value.trim());
+    _report(value.trim());
+  }
+
+  void _report(String value) {
+    _lastSynced = value;
+    widget.onChanged(value);
   }
 
   void _submitCurrent() => _emitSubmitted(_controller.text);
@@ -261,7 +280,7 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
 
     final onSubmitted = widget.onSubmitted;
     if (onSubmitted == null || submittedValue.isEmpty) {
-      widget.onChanged(submittedValue);
+      _report(submittedValue);
       return;
     }
 
@@ -271,9 +290,9 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
     }
     if (shouldClear) {
       _setControllerText('');
-      widget.onChanged('');
+      _report('');
     } else {
-      widget.onChanged(submittedValue);
+      _report(submittedValue);
     }
   }
 }

@@ -11,6 +11,7 @@ from apps.core.discovery import request_is_relayed
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
+from apps.core.search_filters import FOLDING_FILTER_BACKENDS
 from apps.customers.models import Asset, AssetOwnership, AssetType
 from apps.employees.models import Employee
 from apps.sales.models import RegisterSession
@@ -165,6 +166,9 @@ class JobViewSet(
         "customer",
         "workflow_template",
     )
+    # The counter finds a job by the customer's name or number as they say it
+    # (apps.core.search_filters).
+    filter_backends = FOLDING_FILTER_BACKENDS
     search_fields = (
         "job_number",
         "customer__full_name",

@@ -876,3 +876,27 @@ class KioskNeverPublishesCostTests(TestCase):
         unit.save(update_fields=["status", "updated_at"])
 
         self.assertFalse(lookup_price("358240051111110").found)
+
+
+class ArabicLayoutScanTests(TestCase):
+    """A kiosk scanner left on the Arabic keyboard layout types a Latin code as
+    Arabic letters; the lookup reads the code the keys meant."""
+
+    def test_a_barcode_scanned_on_the_arabic_layout_is_found(self):
+        from decimal import Decimal
+
+        from apps.catalog.models import Product, ProductVariant
+        from apps.price_checker.pricing import lookup_price
+
+        product = Product.objects.create(name="Widget")
+        ProductVariant.objects.create(
+            product=product,
+            sku="W-LAYOUT-1",
+            barcode="AB123",
+            unit_price=Decimal("5.00"),
+            is_default=True,
+        )
+
+        result = lookup_price("شلا123")
+
+        self.assertTrue(result.found)

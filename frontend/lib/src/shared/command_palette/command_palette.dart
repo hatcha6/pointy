@@ -12,6 +12,7 @@ import '../navigation/app_navigation.dart';
 import '../navigation/navigation_catalog.dart';
 import '../responsive/responsive.dart';
 import '../components/pointy_progress.dart';
+import '../search/search_text.dart';
 
 /// Module-global handle to the mounted palette, so any screen — including
 /// routes pushed over the home route, which are not descendants of the scope —
@@ -55,14 +56,16 @@ class CommandItem {
   /// Runs when the item is chosen. Receives the scope's (home-route) context.
   final void Function(BuildContext context) onSelect;
 
-  bool matches(String query) {
-    if (query.isEmpty) return true;
-    final q = query.toLowerCase();
-    if (title.toLowerCase().contains(q)) return true;
-    for (final keyword in keywords) {
-      if (keyword.toLowerCase().contains(q)) return true;
-    }
-    return false;
+  bool matches(String query) => matchesTokens(searchTokens(query));
+
+  /// Whether every one of [queryTokens] (see [searchTokens]) appears in the
+  /// title or a keyword, both folded the way search folds text — so
+  /// «اعدادات» finds «إعدادات المتجر», and so does «المتجر اعدادات». No
+  /// tokens, an empty query or one that folds away, matches everything.
+  bool matchesTokens(List<String> queryTokens) {
+    if (queryTokens.isEmpty) return true;
+    final searchable = foldSearchText([title, ...keywords].join(' '));
+    return queryTokens.every(searchable.contains);
   }
 }
 
@@ -188,7 +191,10 @@ class NavigationCommandSource extends CommandSource {
     if (query.isEmpty) {
       return items;
     }
-    return items.where((item) => item.matches(query)).toList(growable: false);
+    final tokens = searchTokens(query);
+    return items
+        .where((item) => item.matchesTokens(tokens))
+        .toList(growable: false);
   }
 }
 
@@ -237,7 +243,10 @@ class StaticCommandSource extends CommandSource {
     if (query.isEmpty) {
       return items;
     }
-    return items.where((item) => item.matches(query)).toList(growable: false);
+    final tokens = searchTokens(query);
+    return items
+        .where((item) => item.matchesTokens(tokens))
+        .toList(growable: false);
   }
 }
 

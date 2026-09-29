@@ -7,10 +7,12 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../core/typed_lookup_text.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/integration_card.dart';
 import '../../../data/models/modifier_group.dart';
+import '../../../data/models/product_search_outcome.dart';
 import '../../../shared/barcode/scale_barcode.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/formatters.dart';
@@ -345,6 +347,9 @@ class PosViewModel extends ChangeNotifier {
   List<TrackedScanWarning> _trackedScanWarnings = const [];
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
+  // How the server found the current search results (corrected, from other
+  // categories, out of stock). Null while browsing or before the first page.
+  ProductSearchOutcome? _searchOutcome;
   String? _errorMessage;
   String? _lastScannedBarcode;
   String? _lastScannedProductName;
@@ -630,6 +635,10 @@ class PosViewModel extends ChangeNotifier {
       _onInteractionSettled = callback;
 
   bool get hasMoreProducts => _hasMoreProducts;
+
+  /// How the server found what the grid shows for the current search — see
+  /// [ProductSearchOutcome]. Null while browsing.
+  ProductSearchOutcome? get searchOutcome => _searchOutcome;
   String? get errorMessage => _errorMessage;
   String get couponCode => _couponCode;
 

@@ -29,6 +29,8 @@ import 'features/catalog/view_models/catalog_view_model.dart';
 import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
 import 'features/catalog/views/catalog_screen.dart';
+import 'features/catalog/view_models/search_misses_view_model.dart';
+import 'features/catalog/views/search_misses_screen.dart';
 import 'features/contacts/views/contact_management_screen.dart';
 import 'features/crm/views/campaigns_screen.dart';
 import 'features/crm/views/conversations_screen.dart';
@@ -347,6 +349,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.campaigns => campaignsRouteBuilder,
       AppNavigationDestination.catalog => catalogRouteBuilder,
       AppNavigationDestination.categories => categoryRouteBuilder,
+      AppNavigationDestination.searchMisses => searchMissesRouteBuilder,
       AppNavigationDestination.stockCount => stockCountRouteBuilder,
       AppNavigationDestination.warehouses => warehousesRouteBuilder,
       AppNavigationDestination.stockTransfers => stockTransfersRouteBuilder,
@@ -596,6 +599,34 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         analyticsEngine: dependencies.analyticsEngine,
         navigation: this,
+        // Pushed over the catalog rather than replacing it, so back returns
+        // to the products the owner was looking at.
+        onOpenSearchMisses: capabilities.actionFor(
+          AppCapability.changeProduct,
+          () => push(
+            routeContext,
+            (context) =>
+                searchMissesRouteBuilder(context, showBackButton: true),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget searchMissesRouteBuilder(
+    BuildContext routeContext, {
+    bool showBackButton = false,
+  }) {
+    return _screen(
+      'search_misses',
+      SearchMissesScreen(
+        viewModel: SearchMissesViewModel(
+          dependencies.searchMissRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        catalogRepository: dependencies.catalogRepository,
+        navigation: this,
+        showBackButton: showBackButton,
       ),
     );
   }

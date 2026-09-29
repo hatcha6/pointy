@@ -36,6 +36,7 @@ import 'data/repositories/treasury_repository.dart';
 import 'features/treasury/view_models/bank_routing.dart';
 import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/scales_repository.dart';
+import 'data/repositories/search_miss_repository.dart';
 import 'data/repositories/surveillance_repository.dart';
 import 'features/dashboard/view_models/dashboard_cameras_view_model.dart';
 import 'features/dashboard/view_models/dashboard_fx_view_model.dart';
@@ -169,6 +170,7 @@ class PointyAppDependencies {
     priceCheckerRepository = PriceCheckerRepository(service);
     surveillanceRepository = SurveillanceRepository(service);
     scalesRepository = ScalesRepository(service);
+    searchMissRepository = SearchMissRepository(service);
     dashboardCamerasViewModel = DashboardCamerasViewModel(
       surveillanceRepository,
     );
@@ -419,6 +421,7 @@ class PointyAppDependencies {
   late final PriceCheckerRepository priceCheckerRepository;
   late final SurveillanceRepository surveillanceRepository;
   late final ScalesRepository scalesRepository;
+  late final SearchMissRepository searchMissRepository;
 
   /// The dashboard's camera strip. Long-lived so the per-device selection and
   /// the snapshot thumbnails survive navigating away and back, rather than

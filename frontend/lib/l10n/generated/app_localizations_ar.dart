@@ -6740,6 +6740,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get catalogClearSearchAndFiltersButton => 'مسح البحث والفلاتر';
 
   @override
+  String catalogOutOfStockMatchesTitle(int count) {
+    return 'منتجات مطابقة نفدت من المخزون: $count';
+  }
+
+  @override
+  String get catalogOutOfStockMatchesMessage =>
+      'موجودة في الكتالوج لكن كميتها صفر، لذلك لا تظهر في نقطة البيع. سجّل فاتورة الشراء أو عدّل المخزون لتظهر.';
+
+  @override
+  String get posSearchOtherCategoriesNotice =>
+      'لا نتائج في القسم المختار، فهذه من كل الأقسام';
+
+  @override
+  String posSearchCorrectedNotice(String query) {
+    return 'لا نتائج لما كُتب، فهذه نتائج «$query»';
+  }
+
+  @override
+  String get posSearchFuzzyNotice => 'لا تطابق تام، فهذه أقرب النتائج';
+
+  @override
   String get productListTitle => 'قائمة المنتجات';
 
   @override
@@ -8069,6 +8090,143 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get barcodeScanError => 'تعذر البحث عن الباركود. حاول مرة أخرى.';
+
+  @override
+  String get searchMissesDrawerLabel => 'عمليات بحث بلا نتائج';
+
+  @override
+  String get searchMissesTitle => 'عمليات بحث بلا نتائج';
+
+  @override
+  String get searchMissesTooltip => 'عمليات بحث بلا نتائج';
+
+  @override
+  String get searchMissesRefreshTooltip => 'تحديث';
+
+  @override
+  String get searchMissesHint =>
+      'اربط كل كلمة بالمنتج الذي قصده من بحث عنها، فيجده البحث من الآن.';
+
+  @override
+  String get searchMissesFilterOpen => 'مفتوحة';
+
+  @override
+  String get searchMissesFilterResolved => 'تم ربطها';
+
+  @override
+  String get searchMissesFilterDismissed => 'متجاهلة';
+
+  @override
+  String get searchMissesFilterAll => 'الكل';
+
+  @override
+  String get searchMissesEmptyTitle => 'لا توجد عمليات بحث بلا نتائج';
+
+  @override
+  String get searchMissesEmptyMessage =>
+      'تمتلئ هذه القائمة عندما يبحث أحد في شاشة البيع عن كلمة فلا يجد منتجاً. اربط الكلمة بالمنتج المقصود ليجده البحث في المرة القادمة.';
+
+  @override
+  String get searchMissesEmptyResolved => 'لم تُربط أي كلمة بمنتج بعد.';
+
+  @override
+  String get searchMissesEmptyDismissed => 'لا توجد كلمات متجاهلة.';
+
+  @override
+  String get searchMissesLoadError => 'تعذر تحميل عمليات البحث بلا نتائج.';
+
+  @override
+  String searchMissCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'بُحث عنها $count مرة',
+      many: 'بُحث عنها $count مرة',
+      few: 'بُحث عنها $count مرات',
+      two: 'بُحث عنها مرتين',
+      one: 'بُحث عنها مرة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String searchMissLastSeenToday(String time) {
+    return 'آخرها اليوم $time';
+  }
+
+  @override
+  String searchMissLastSeenYesterday(String time) {
+    return 'آخرها أمس $time';
+  }
+
+  @override
+  String searchMissLastSeenOn(String date) {
+    return 'آخرها $date';
+  }
+
+  @override
+  String get searchMissSurfacePos => 'في شاشة البيع';
+
+  @override
+  String get searchMissSurfaceCatalog => 'في المنتجات';
+
+  @override
+  String get searchMissSurfacePurchasing => 'في المشتريات';
+
+  @override
+  String get searchMissResolveButton => 'هذا المنتج…';
+
+  @override
+  String get searchMissResolveTooltip =>
+      'اختر المنتج الذي قصده من بحث عن هذه الكلمة';
+
+  @override
+  String get searchMissDismissButton => 'تجاهل';
+
+  @override
+  String get searchMissReopenButton => 'إعادة فتح';
+
+  @override
+  String searchMissPickProductTitle(String term) {
+    return 'ما المنتج الذي قصده من بحث عن «$term»؟';
+  }
+
+  @override
+  String get searchMissPickProductEmpty =>
+      'لا يوجد منتج بهذا الاسم. جرّب اسماً آخر أو الرمز.';
+
+  @override
+  String searchMissResolvedMessage(String term, String product) {
+    return 'سيجد البحث عن «$term» المنتج «$product» من الآن';
+  }
+
+  @override
+  String searchMissDismissedMessage(String term) {
+    return 'تم تجاهل «$term»';
+  }
+
+  @override
+  String searchMissReopenedMessage(String term) {
+    return 'أُعيدت «$term» إلى القائمة المفتوحة';
+  }
+
+  @override
+  String get searchMissProductRefused =>
+      'لا يمكن ربط كلمة بهذا المنتج. اختر منتجاً آخر.';
+
+  @override
+  String get searchMissActionError => 'تعذر حفظ التغيير. حاول مرة أخرى.';
+
+  @override
+  String searchMissLinkedTo(String product) {
+    return 'يجد الآن «$product»';
+  }
+
+  @override
+  String get searchMissStatusResolved => 'تم ربطها';
+
+  @override
+  String get searchMissStatusDismissed => 'متجاهلة';
 
   @override
   String get manageScaleRulesTooltip => 'إعداد ملصقات الميزان';

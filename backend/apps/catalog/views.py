@@ -86,8 +86,13 @@ from .serializers import (
     VariantOptionSerializer,
     VariantOptionValueSerializer,
 )
+from . import search_text
 from .pricing import set_base_price
-from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
+from .search_filters import (
+    CatalogRelevanceFilter,
+    VariantRelevanceFilter,
+    search_outcome,
+)
 from .sku_series import next_variant_sku
 from .system_products import (
     refuse_system_category,
@@ -123,6 +128,25 @@ class ProductCategoryFilter(django_filters.FilterSet):
 
     def filter_root(self, queryset, name, value):
         return queryset.filter(parent__isnull=bool(value))
+
+
+def scanned_code_readings(value):
+    """See :func:`search_text.code_readings`."""
+    return search_text.code_readings(value)
+
+
+def _with_search_outcome(request, response):
+    """Add what the search did (corrected? out of stock? other categories?) to
+    a list page. In the body rather than a header: tills replay a cached body
+    on a 304, and a header would not survive that."""
+    outcome = search_outcome(request)
+    if (
+        outcome is not None
+        and response.status_code == status.HTTP_200_OK
+        and isinstance(getattr(response, "data", None), dict)
+    ):
+        response.data["search"] = outcome.as_payload()
+    return response
 
 
 def requested_category_ids(query_params):
@@ -181,8 +205,9 @@ class ProductVariantFilter(django_filters.FilterSet):
         # A scan may carry a *unit* barcode (the carton EAN): resolve it to the
         # product's variants too, so the POS/purchasing lookup lands on the
         # product and the client picks the matched unit from the payload.
+        codes = scanned_code_readings(value)
         return queryset.filter(
-            Q(barcode=value) | Q(product__units__barcodes__barcode=value)
+            Q(barcode__in=codes) | Q(product__units__barcodes__barcode__in=codes)
         ).distinct()
 
 
@@ -446,13 +471,27 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             attach_catalog_version(response, version)
         return response
 
-    def _catalog_queryset(self):
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return _with_search_outcome(request, response)
+
+    def search_base_queryset(self, *, category=True, stock=True):
+        """This list's queryset with the category chip and/or the stock filter
+        lifted, the other list filters kept — for ``CatalogRelevanceFilter``
+        when a search found nothing and it wants to know why (or look wider).
+        """
+        queryset = self._catalog_queryset(category=category, stock=stock)
+        return DjangoFilterBackend().filter_queryset(self.request, queryset, self)
+
+    def _catalog_queryset(self, *, category=True, stock=True):
         queryset = self._with_variant_rollups(super().get_queryset())
-        queryset = self._filter_by_category(queryset)
+        if category:
+            queryset = self._filter_by_category(queryset)
         queryset = self._filter_by_barcode(queryset)
         queryset = self._filter_by_archived(queryset)
         queryset = self._filter_by_system(queryset)
-        queryset = self._filter_by_stock(queryset)
+        if stock:
+            queryset = self._filter_by_stock(queryset)
         queryset = self._filter_by_supplier(queryset)
         queryset = self._annotate_supplier_boost(queryset)
         # Default ("most bought" first) for any no-ordering API caller; the client
@@ -552,9 +591,10 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         barcode = self.request.query_params.get("barcode")
         if not barcode:
             return queryset
+        codes = scanned_code_readings(barcode)
         # Unit (carton/box) barcodes resolve to their product too.
         return queryset.filter(
-            Q(variants__barcode=barcode) | Q(units__barcodes__barcode=barcode)
+            Q(variants__barcode__in=codes) | Q(units__barcodes__barcode__in=codes)
         ).distinct()
 
     def _filter_by_supplier(self, queryset):
@@ -1148,6 +1188,10 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     # Consumed by VariantRelevanceFilter now (kept for reference / discoverability).
     search_fields = ("sku", "barcode", "name", "product__name")
     ordering_fields = ("product__name", "name", "sku", "unit_price", "created_at")
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return _with_search_outcome(request, response)
 
     def get_queryset(self):
         # Variants of archived products never appear in the purchasing picker

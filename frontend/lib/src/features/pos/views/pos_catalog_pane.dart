@@ -24,6 +24,7 @@ import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
 import '../view_models/pos_view_model.dart';
 import 'modifier_sheet.dart';
+import 'pos_search_outcome_line.dart';
 import 'pos_unit_picker_sheet.dart';
 import 'pos_variant_picker_sheet.dart';
 import 'pos_voucher_picker_sheet.dart';
@@ -110,7 +111,7 @@ class PosCatalogPane extends StatelessWidget {
       ),
       statusLine: viewModel.barcodeScanStatus != BarcodeScanStatus.idle
           ? _BarcodeScanStatusLine(viewModel: viewModel)
-          : null,
+          : _searchOutcomeLine(l10n, viewModel),
       grid: _PosCatalogProducts(
         viewModel: viewModel,
         capabilities: capabilities,
@@ -119,6 +120,20 @@ class PosCatalogPane extends StatelessWidget {
         cartQuantities: _cartQuantitiesByProduct(viewModel.cart),
       ),
     );
+  }
+
+  /// How the search results were found, when it is not simply as typed —
+  /// only while there are results to explain (the empty state speaks for
+  /// itself).
+  static Widget? _searchOutcomeLine(
+    AppLocalizations l10n,
+    PosViewModel viewModel,
+  ) {
+    if (viewModel.isLoading || viewModel.products.isEmpty) {
+      return null;
+    }
+    final message = posSearchOutcomeMessage(l10n, viewModel.searchOutcome);
+    return message == null ? null : PosSearchOutcomeLine(message: message);
   }
 
   /// Sums cart quantities per product so each catalog card can show how many
@@ -164,6 +179,7 @@ class _PosCatalogProducts extends StatelessWidget {
           query: viewModel.query,
           emptyMessage: emptyMessage,
           allowAvailabilityFilter: false,
+          hiddenOutOfStock: viewModel.searchOutcome?.hiddenOutOfStock ?? 0,
           onClear: viewModel.applyQuery,
         );
 
@@ -524,7 +540,7 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
                 canCheckout &&
                     !viewModel.isCheckingOut &&
                     !viewModel.isResolvingBarcode
-                ? viewModel.addVariantByBarcode
+                ? viewModel.submitLookup
                 : null,
             onQueryChanged: viewModel.applyQuery,
           ),

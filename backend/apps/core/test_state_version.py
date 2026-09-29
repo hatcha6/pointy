@@ -297,13 +297,16 @@ class CatalogVersionCompositeTests(CommitsMixin, TestCase):
         cache.clear()
 
     def test_catalog_senders_are_exactly_defs_plus_stock_plus_scale_rules(self):
-        from apps.catalog.models import ScaleBarcodeRule
+        # Plus aliases: no payload carries them, but a new alias changes what a
+        # search finds, and tills cache search pages by the catalog version.
+        from apps.catalog.models import ProductAlias, ScaleBarcodeRule
         from apps.catalog.signals import _SENDERS
 
         expected = {
             *state_version.resolve_models("catalog_defs"),
             *state_version.resolve_models("stock"),
             ScaleBarcodeRule,
+            ProductAlias,
         }
         self.assertEqual(set(_SENDERS), expected)
 

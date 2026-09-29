@@ -17,6 +17,7 @@ from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
+from apps.core.search_filters import FOLDING_FILTER_BACKENDS
 from apps.sales.models import (
     Order,
     OrderAdjustment,
@@ -109,6 +110,9 @@ class CustomerViewSet(viewsets.ModelViewSet):
         # Filter the contacts list by RFM rank (?rfm_segment=champion).
         "rfm_segment",
     )
+    # «احمد» finds «أحمد», and a number typed «+218 91-234 5678» finds the
+    # customer saved as «0912345678».
+    filter_backends = FOLDING_FILTER_BACKENDS
     search_fields = (
         "customer_number",
         "full_name",

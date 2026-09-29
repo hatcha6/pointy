@@ -39,6 +39,7 @@ from apps.catalog.views import (
     VariantOptionValueViewSet,
     VariantOptionViewSet,
 )
+from apps.catalog.search_misses import SearchMissViewSet
 from apps.channels.views import SalesChannelViewSet
 from apps.documents.views import DocumentEventViewSet
 from apps.customers.views import CustomerViewSet, PaymentCardViewSet
@@ -203,6 +204,7 @@ router.register("variant-option-values", VariantOptionValueViewSet)
 router.register("modifier-groups", ModifierGroupViewSet)
 router.register("units-of-measure", UnitOfMeasureViewSet)
 router.register("scale-barcode-rules", ScaleBarcodeRuleViewSet)
+router.register("search-misses", SearchMissViewSet, basename="search-miss")
 router.register("scales", ScaleViewSet)
 router.register("scale-plus", ScalePluViewSet)
 router.register("stock", StockItemViewSet)

@@ -144,6 +144,7 @@ import 'modifier_group_api_client.dart';
 import 'prep_station_api_client.dart';
 import 'scale_barcode_rule_api_client.dart';
 import 'scales_api_client.dart';
+import 'search_miss_api_client.dart';
 import 'unit_of_measure_api_client.dart';
 import 'fx_api_client.dart';
 import 'sales_channel_api_client.dart';
@@ -198,6 +199,7 @@ class PosApiService {
     _unitsOfMeasure = UnitOfMeasureApiClient(_session);
     _scaleBarcodeRules = ScaleBarcodeRuleApiClient(_session);
     _scales = ScalesApiClient(_session);
+    _searchMisses = SearchMissApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
     _messaging = MessagingApiClient(_session);
@@ -285,6 +287,7 @@ class PosApiService {
   late final UnitOfMeasureApiClient _unitsOfMeasure;
   late final ScaleBarcodeRuleApiClient _scaleBarcodeRules;
   late final ScalesApiClient _scales;
+  late final SearchMissApiClient _searchMisses;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
   late final MessagingApiClient _messaging;
@@ -2315,6 +2318,9 @@ class PosApiService {
   }
 
   ScalesApiClient get scales => _scales;
+
+  /// The catalogue's "searched but not found" worklist.
+  SearchMissApiClient get searchMisses => _searchMisses;
 
   Future<UnitOfMeasure> createUnitOfMeasure(UnitOfMeasureDraft draft) {
     return _unitsOfMeasure.createUnit(draft);

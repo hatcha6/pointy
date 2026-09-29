@@ -139,6 +139,73 @@ void main() {
     expect(find.text(l10n.dashboardDrawerLabel), findsNothing);
   });
 
+  testWidgets('screens match Arabic typed without hamza, in any word order', (
+    tester,
+  ) async {
+    final navigation = _RecordingNavigation();
+    await tester.pumpWidget(_harness([NavigationCommandSource(navigation)]));
+    final l10n = AppLocalizations.of(tester.element(find.text('open')))!;
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    // Nobody types the hamza on a till keyboard: «اعدادات» is «إعدادات».
+    await tester.enterText(find.byType(TextField), 'اعدادات');
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.settingsDrawerLabel), findsOneWidget);
+    expect(find.text(l10n.deviceSettingsDrawerLabel), findsOneWidget);
+    expect(find.text(l10n.dashboardDrawerLabel), findsNothing);
+
+    // Every word must be there, in whatever order it was typed.
+    await tester.enterText(find.byType(TextField), 'المتجر اعدادات');
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.settingsDrawerLabel), findsOneWidget);
+    expect(find.text(l10n.deviceSettingsDrawerLabel), findsNothing);
+
+    await tester.tap(find.text(l10n.settingsDrawerLabel));
+    await tester.pumpAndSettle();
+    expect(navigation.navigated, [AppNavigationDestination.settings]);
+  });
+
+  group('CommandItem.matches', () {
+    CommandItem item(String title, {List<String> keywords = const []}) {
+      return CommandItem(
+        id: title,
+        icon: Icons.circle_outlined,
+        title: title,
+        keywords: keywords,
+        onSelect: (_) {},
+      );
+    }
+
+    test('folds hamza, taa marbuta and marks on both sides', () {
+      expect(item('إعدادات المتجر').matches('اعدادات'), isTrue);
+      expect(item('قائمة الأسعار').matches('قائمه'), isTrue);
+      expect(item('مُعَلَّبات').matches('معلبات'), isTrue);
+      expect(item('شاي').matches('شَاي'), isTrue);
+    });
+
+    test('needs every word, in any order', () {
+      final settings = item('إعدادات المتجر');
+      expect(settings.matches('المتجر اعدادات'), isTrue);
+      expect(settings.matches('اعداد متج'), isTrue);
+      expect(settings.matches('اعدادات الجهاز'), isFalse);
+    });
+
+    test('words may come from the title and different keywords', () {
+      final pos = item('شاشة البيع', keywords: const ['pos', 'cashier']);
+      expect(pos.matches('POS'), isTrue);
+      expect(pos.matches('cashier البيع'), isTrue);
+      expect(pos.matches('cashier pos'), isTrue);
+      expect(pos.matches('cashier invoice'), isFalse);
+    });
+
+    test('a query that folds away matches everything', () {
+      expect(item('إعدادات المتجر').matches(''), isTrue);
+      expect(item('إعدادات المتجر').matches(' ؟ '), isTrue);
+    });
+  });
+
   testWidgets('debounced entity search renders an async results section', (
     tester,
   ) async {

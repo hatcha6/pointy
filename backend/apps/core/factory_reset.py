@@ -113,6 +113,9 @@ WIPED_MODELS = (
     "catalog.productunitbarcode",
     "catalog.productvariant",
     "catalog.scaleplu",
+    # Words searched for and not found: about the catalogue being wiped, and
+    # pointing at its products.
+    "catalog.searchmiss",
     # companion — a phone used as a till camera. Not kept despite being a
     # "peripheral": a pairing is a QR scan away, it is scoped to one register
     # session, and the pairing rows cascade off the user accounts this removes.

@@ -13,12 +13,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.attachments.models import Attachment
 from apps.attachments.services import sign_attachment_content_token
 from apps.catalog import scale_rules
 from apps.catalog.models import ProductUnitBarcode, ProductVariant, normalize_barcode
+from apps.catalog.search_text import code_readings
 from apps.catalog.scale_quantity import resolve_scale_quantity
 from apps.discounts.models import DiscountRule
 from apps.discounts.services import (
@@ -156,11 +158,14 @@ def lookup_price(
     code = normalize_barcode(barcode)
     if not code:
         return PriceResult.not_found(code)
+    # A kiosk scanner left on the Arabic keyboard layout types a Latin code as
+    # Arabic letters; each reading is still an exact match.
+    readings = code_readings(code)
 
     variant = (
         ProductVariant.objects.select_related("product")
         .filter(
-            barcode=code,
+            barcode__in=readings,
             is_active=True,
             product__is_active=True,
             product__archived_at__isnull=True,
@@ -178,10 +183,13 @@ def lookup_price(
         # barcode at all, so a printed SKU is often the only code on the item.
         # Costs one indexed lookup, and only on the path that was already about
         # to answer "not found".
+        sku_matches = Q()
+        for reading in readings:
+            sku_matches |= Q(sku__iexact=reading)
         variant = (
             ProductVariant.objects.select_related("product")
             .filter(
-                sku__iexact=code,
+                sku_matches,
                 is_active=True,
                 product__is_active=True,
                 product__archived_at__isnull=True,
@@ -198,7 +206,7 @@ def lookup_price(
                 "product_unit__product",
             )
             .filter(
-                barcode=code,
+                barcode__in=readings,
                 product_unit__product__is_active=True,
                 product_unit__product__archived_at__isnull=True,
             )

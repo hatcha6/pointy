@@ -192,6 +192,25 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['categories', 'تصنيفات', 'فئات'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.searchMisses,
+          icon: Icons.search_off_outlined,
+          selectedIcon: Icons.search_off,
+          label: l10n.searchMissesDrawerLabel,
+          // What an owner would type wondering why a product "is not there":
+          // the till could not find it, so it is missing, or needs a name.
+          keywords: const [
+            'search',
+            'not found',
+            'missing',
+            'alias',
+            'لم يجد',
+            'غير موجود',
+            'مفقود',
+            'كلمات',
+            'اسم بديل',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.purchasing,
           icon: Icons.add_shopping_cart_outlined,
           selectedIcon: Icons.add_shopping_cart,

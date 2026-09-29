@@ -22,17 +22,19 @@ from django.dispatch import receiver
 from apps.core.state_version import resolve_models
 
 from .cache import bump_catalog_version
-from .models import Product, ScaleBarcodeRule
+from .models import Product, ProductAlias, ScaleBarcodeRule
 
 # Definitions + quantities, from the single registry. Scale barcode rules are
 # not part of any payload the version keys, but a rule change reshapes how a
 # scanned weight label resolves to a product, so it has always invalidated
 # alongside — kept explicit rather than folded into a domain it does not
-# belong to.
+# belong to. Aliases likewise: no payload carries them, but a new alias
+# changes what a search finds, and tills cache search pages by this version.
 _SENDERS = (
     *resolve_models("catalog_defs"),
     *resolve_models("stock"),
     ScaleBarcodeRule,
+    ProductAlias,
 )
 
 

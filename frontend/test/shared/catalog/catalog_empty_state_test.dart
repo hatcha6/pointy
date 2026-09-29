@@ -7,6 +7,20 @@ import 'package:pointy_frontend/src/shared/catalog/catalog.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
 void main() {
+  testWidgets('says the matches ran out instead of blaming the spelling', (
+    tester,
+  ) async {
+    await _pumpEmptyState(
+      tester,
+      query: const ProductQuery(search: 'حليب النسيم'),
+      allowAvailabilityFilter: false,
+      hiddenOutOfStock: 2,
+    );
+
+    expect(find.text('منتجات مطابقة نفدت من المخزون: 2'), findsOneWidget);
+    expect(find.textContaining('تحقق من الكتابة'), findsNothing);
+  });
+
   testWidgets('falls back to the plain message when nothing is filtered', (
     tester,
   ) async {
@@ -191,6 +205,7 @@ Future<void> _pumpEmptyState(
   ValueChanged<ProductQuery>? onClear,
   bool allowAvailabilityFilter = true,
   Widget? emptyAction,
+  int hiddenOutOfStock = 0,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -207,6 +222,7 @@ Future<void> _pumpEmptyState(
             onClear: onClear ?? (_) {},
             allowAvailabilityFilter: allowAvailabilityFilter,
             emptyAction: emptyAction,
+            hiddenOutOfStock: hiddenOutOfStock,
           ),
         ),
       ),

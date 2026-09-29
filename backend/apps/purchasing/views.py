@@ -30,6 +30,7 @@ from apps.catalog.models import Product, ProductVariant, VariantOptionValue
 from apps.core.idempotency import run_idempotent_request
 from apps.core.pagination import UncountedPageNumberPagination
 from apps.core.permissions import HasPointyPermission
+from apps.core.search_filters import FOLDING_FILTER_BACKENDS
 from apps.inventory.models import StockLedgerEntry
 from apps.inventory.opening_balance import opening_cost_entries
 from .models import (
@@ -106,6 +107,8 @@ class SupplierViewSet(viewsets.ModelViewSet):
     }
     queryset = Supplier.objects.all()
     filterset_fields = ("is_active",)
+    # Folded names and phone numbers in any spelling (apps.core.search_filters).
+    filter_backends = FOLDING_FILTER_BACKENDS
     search_fields = ("name", "contact_name", "phone", "email", "address")
     ordering_fields = ("name", "created_at", "updated_at")
 

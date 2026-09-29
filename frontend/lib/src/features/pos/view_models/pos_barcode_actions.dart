@@ -10,6 +10,21 @@ const _typedScanSources = {
 };
 
 extension PosBarcodeActions on PosViewModel {
+  /// What Enter in the till's lookup box does.
+  ///
+  /// A code — digits, or a Latin code a scanner typed (on the Arabic layout
+  /// it arrives as Arabic letters, still without spaces and with digits) — is
+  /// looked up exactly, as before. A NAME is not: «حليب» + Enter used to go to
+  /// the barcode lookup, fail, sound the not-found chime and say «لم يتم العثور
+  /// على منتج للباركود حليب». Returning false hands the text back to the
+  /// search box, which runs the search at once instead.
+  Future<bool> submitLookup(String text) {
+    if (looksLikeTypedName(text)) {
+      return Future<bool>.value(false);
+    }
+    return addVariantByBarcode(text);
+  }
+
   Future<bool> addVariantByBarcode(
     String barcode, {
     double quantity = 1,
@@ -226,7 +241,11 @@ extension PosBarcodeActions on PosViewModel {
             attributes: {
               // The code itself, because the whole value of the event is the
               // list of codes to add. It describes a product, not a person.
-              'barcode': barcode,
+              // A phone number typed into the lookup box is somebody's
+              // personal data, not an unregistered product code.
+              'barcode': looksLikePhoneNumber(barcode)
+                  ? redactedPhoneTerm
+                  : barcode,
               // `hardware_scanner` separates a real scanner miss from a cashier
               // typing a code in by hand, which are different problems.
               'source': source,

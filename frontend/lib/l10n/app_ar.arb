@@ -4110,6 +4110,36 @@
   "@catalogClearSearchAndFiltersButton": {
     "description": "Catalog empty state action that clears the search term and every active filter."
   },
+  "catalogOutOfStockMatchesTitle": "منتجات مطابقة نفدت من المخزون: {count}",
+  "@catalogOutOfStockMatchesTitle": {
+    "description": "Till empty state title when the search matched products that are hidden because they are out of stock.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "catalogOutOfStockMatchesMessage": "موجودة في الكتالوج لكن كميتها صفر، لذلك لا تظهر في نقطة البيع. سجّل فاتورة الشراء أو عدّل المخزون لتظهر.",
+  "@catalogOutOfStockMatchesMessage": {
+    "description": "Till empty state explanation when every match was hidden for being out of stock."
+  },
+  "posSearchOtherCategoriesNotice": "لا نتائج في القسم المختار، فهذه من كل الأقسام",
+  "@posSearchOtherCategoriesNotice": {
+    "description": "Till notice above search results when nothing matched inside the selected category chip, so results come from all categories."
+  },
+  "posSearchCorrectedNotice": "لا نتائج لما كُتب، فهذه نتائج «{query}»",
+  "@posSearchCorrectedNotice": {
+    "description": "Till notice above search results when the server corrected the typed words (a slip, words run together, or the wrong keyboard layout).",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "posSearchFuzzyNotice": "لا تطابق تام، فهذه أقرب النتائج",
+  "@posSearchFuzzyNotice": {
+    "description": "Till notice above search results when only near misses (similar spellings) matched."
+  },
   "productListTitle": "قائمة المنتجات",
   "addProductButton": "إضافة منتج",
   "productTableProductColumn": "المنتج",
@@ -4879,6 +4909,194 @@
     }
   },
   "barcodeScanError": "تعذر البحث عن الباركود. حاول مرة أخرى.",
+  "searchMissesDrawerLabel": "عمليات بحث بلا نتائج",
+  "@searchMissesDrawerLabel": {
+    "description": "Navigation entry for the owner's worklist of catalog searches that found nothing."
+  },
+  "searchMissesTitle": "عمليات بحث بلا نتائج",
+  "@searchMissesTitle": {
+    "description": "App bar title of the searched-but-not-found worklist."
+  },
+  "searchMissesTooltip": "عمليات بحث بلا نتائج",
+  "@searchMissesTooltip": {
+    "description": "Tooltip of the catalog app bar button that opens the searched-but-not-found worklist."
+  },
+  "searchMissesRefreshTooltip": "تحديث",
+  "@searchMissesRefreshTooltip": {
+    "description": "Tooltip of the worklist's refresh button."
+  },
+  "searchMissesHint": "اربط كل كلمة بالمنتج الذي قصده من بحث عنها، فيجده البحث من الآن.",
+  "@searchMissesHint": {
+    "description": "One-line explanation above the open searched-but-not-found rows."
+  },
+  "searchMissesFilterOpen": "مفتوحة",
+  "@searchMissesFilterOpen": {
+    "description": "Filter chip: words still waiting for the owner."
+  },
+  "searchMissesFilterResolved": "تم ربطها",
+  "@searchMissesFilterResolved": {
+    "description": "Filter chip: words already linked to a product."
+  },
+  "searchMissesFilterDismissed": "متجاهلة",
+  "@searchMissesFilterDismissed": {
+    "description": "Filter chip: words the owner dismissed."
+  },
+  "searchMissesFilterAll": "الكل",
+  "@searchMissesFilterAll": {
+    "description": "Filter chip: every word, whatever its status."
+  },
+  "searchMissesEmptyTitle": "لا توجد عمليات بحث بلا نتائج",
+  "@searchMissesEmptyTitle": {
+    "description": "Empty state title of the open searched-but-not-found worklist."
+  },
+  "searchMissesEmptyMessage": "تمتلئ هذه القائمة عندما يبحث أحد في شاشة البيع عن كلمة فلا يجد منتجاً. اربط الكلمة بالمنتج المقصود ليجده البحث في المرة القادمة.",
+  "@searchMissesEmptyMessage": {
+    "description": "Empty state explanation: the list fills when a till search finds nothing."
+  },
+  "searchMissesEmptyResolved": "لم تُربط أي كلمة بمنتج بعد.",
+  "@searchMissesEmptyResolved": {
+    "description": "Empty state when no word has been linked to a product yet."
+  },
+  "searchMissesEmptyDismissed": "لا توجد كلمات متجاهلة.",
+  "@searchMissesEmptyDismissed": {
+    "description": "Empty state when no word has been dismissed."
+  },
+  "searchMissesLoadError": "تعذر تحميل عمليات البحث بلا نتائج.",
+  "@searchMissesLoadError": {
+    "description": "Shown when the worklist, or a further page of it, fails to load."
+  },
+  "searchMissCount": "{count, plural, =1{بُحث عنها مرة واحدة} =2{بُحث عنها مرتين} few{بُحث عنها {count} مرات} many{بُحث عنها {count} مرة} other{بُحث عنها {count} مرة}}",
+  "@searchMissCount": {
+    "description": "How many searches for the word found nothing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchMissLastSeenToday": "آخرها اليوم {time}",
+  "@searchMissLastSeenToday": {
+    "description": "When the word was last searched, today.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissLastSeenYesterday": "آخرها أمس {time}",
+  "@searchMissLastSeenYesterday": {
+    "description": "When the word was last searched, yesterday.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissLastSeenOn": "آخرها {date}",
+  "@searchMissLastSeenOn": {
+    "description": "When the word was last searched, before yesterday.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissSurfacePos": "في شاشة البيع",
+  "@searchMissSurfacePos": {
+    "description": "Where the word was searched: the till."
+  },
+  "searchMissSurfaceCatalog": "في المنتجات",
+  "@searchMissSurfaceCatalog": {
+    "description": "Where the word was searched: the product catalog."
+  },
+  "searchMissSurfacePurchasing": "في المشتريات",
+  "@searchMissSurfacePurchasing": {
+    "description": "Where the word was searched: purchasing."
+  },
+  "searchMissResolveButton": "هذا المنتج…",
+  "@searchMissResolveButton": {
+    "description": "Row action: pick the product the word meant."
+  },
+  "searchMissResolveTooltip": "اختر المنتج الذي قصده من بحث عن هذه الكلمة",
+  "@searchMissResolveTooltip": {
+    "description": "Tooltip of the row action that links the word to a product."
+  },
+  "searchMissDismissButton": "تجاهل",
+  "@searchMissDismissButton": {
+    "description": "Row action: set the word aside."
+  },
+  "searchMissReopenButton": "إعادة فتح",
+  "@searchMissReopenButton": {
+    "description": "Row action: put a linked or dismissed word back on the open list."
+  },
+  "searchMissPickProductTitle": "ما المنتج الذي قصده من بحث عن «{term}»؟",
+  "@searchMissPickProductTitle": {
+    "description": "Title of the product picker opened from a row.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissPickProductEmpty": "لا يوجد منتج بهذا الاسم. جرّب اسماً آخر أو الرمز.",
+  "@searchMissPickProductEmpty": {
+    "description": "Product picker empty state."
+  },
+  "searchMissResolvedMessage": "سيجد البحث عن «{term}» المنتج «{product}» من الآن",
+  "@searchMissResolvedMessage": {
+    "description": "Snackbar after linking a word to a product.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      },
+      "product": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissDismissedMessage": "تم تجاهل «{term}»",
+  "@searchMissDismissedMessage": {
+    "description": "Snackbar after dismissing a word; offers undo.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissReopenedMessage": "أُعيدت «{term}» إلى القائمة المفتوحة",
+  "@searchMissReopenedMessage": {
+    "description": "Snackbar after reopening a word.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissProductRefused": "لا يمكن ربط كلمة بهذا المنتج. اختر منتجاً آخر.",
+  "@searchMissProductRefused": {
+    "description": "The server refused the picked product (a system product, or one archived meanwhile)."
+  },
+  "searchMissActionError": "تعذر حفظ التغيير. حاول مرة أخرى.",
+  "@searchMissActionError": {
+    "description": "A row action failed; the row stays."
+  },
+  "searchMissLinkedTo": "يجد الآن «{product}»",
+  "@searchMissLinkedTo": {
+    "description": "Badge on a linked word: the product a search for it now finds.",
+    "placeholders": {
+      "product": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMissStatusResolved": "تم ربطها",
+  "@searchMissStatusResolved": {
+    "description": "Badge on a linked word whose product is no longer known."
+  },
+  "searchMissStatusDismissed": "متجاهلة",
+  "@searchMissStatusDismissed": {
+    "description": "Badge on a dismissed word in the all-words view."
+  },
   "manageScaleRulesTooltip": "إعداد ملصقات الميزان",
   "scaleRulesTitle": "ملصقات الميزان",
   "scaleRulesIntroTitle": "كيف يقرأ الصندوق ملصق الميزان",

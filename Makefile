@@ -130,7 +130,7 @@ ENDURANCE_WORKERS ?= 4
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
 	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run backend-run-remote \
 	backend-load-test backend-stress-test backend-endurance-test \
-	backend-tracked-simulation backend-stock-integrity backend-contract-gate \
+	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview \
@@ -306,6 +306,13 @@ backend-test-slowest: backend-env backend-install ## Run backend tests and print
 backend-check: backend-env backend-install ## Run Django system checks.
 	$(MANAGE) check
 
+# Product search relevance on whatever catalogue DATABASE_URL points at (best: a
+# copy of a shop's data). Recorded field misses + SEARCH_EVAL_SYNTHETIC generated
+# ones; reports how often the meant product is in the top 1/5/10 and on page one.
+SEARCH_EVAL_SYNTHETIC ?= 200
+backend-search-eval: backend-env backend-install ## Measure whether product search finds what people meant.
+	$(MANAGE) search_eval --synthetic $(SEARCH_EVAL_SYNTHETIC)
+
 backend-celery: backend-env backend-install ## Run a Celery worker.
 	cd "$(BACKEND_DIR)" && .venv/bin/celery -A pointy worker -l info
 
@@ -413,6 +420,10 @@ frontend-units-preview: frontend-install ## Run the units-of-measure management 
 
 frontend-scales-preview: frontend-install ## Run the weighing-scale (label rules + PLU push) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/scales_preview.dart
+
+.PHONY: frontend-search-misses-preview
+frontend-search-misses-preview: frontend-install ## Run the searched-but-not-found worklist UI preview harness (?screen=open|resolved|all|empty) as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/search_misses_preview.dart
 
 frontend-camera-wedge-preview: frontend-install ## Run the counter-camera UI preview harness (F8 panel + settings; ?screen=board|panel|settings).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/camera_wedge_preview.dart

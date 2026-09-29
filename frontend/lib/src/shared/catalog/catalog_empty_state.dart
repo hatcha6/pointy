@@ -19,6 +19,7 @@ class CatalogEmptyState extends StatelessWidget {
     required this.onClear,
     this.allowAvailabilityFilter = true,
     this.emptyAction,
+    this.hiddenOutOfStock = 0,
   });
 
   final ProductQuery query;
@@ -37,6 +38,11 @@ class CatalogEmptyState extends StatelessWidget {
   /// "clear filters" escape, where inviting the user to create a product they
   /// may well already own would be the wrong advice.
   final Widget? emptyAction;
+
+  /// Products the search DID match but the screen's stock filter hid (the
+  /// till hides what is out of stock). When there are any, the honest answer
+  /// is "it exists and has run out", not "check your spelling".
+  final int hiddenOutOfStock;
 
   /// Whether the user narrowed the listing themselves. [ProductQuery.stock] and
   /// [ProductQuery.preferredSupplierId] are deliberately excluded: the app sets
@@ -82,6 +88,15 @@ class CatalogEmptyState extends StatelessWidget {
         icon: Icons.inventory_2_outlined,
         title: emptyMessage,
         action: emptyAction,
+      );
+    }
+
+    if (search.isNotEmpty && hiddenOutOfStock > 0) {
+      return PointyEmptyState(
+        key: const ValueKey('catalog_empty_out_of_stock'),
+        icon: Icons.production_quantity_limits,
+        title: l10n.catalogOutOfStockMatchesTitle(hiddenOutOfStock),
+        message: l10n.catalogOutOfStockMatchesMessage,
       );
     }
 
