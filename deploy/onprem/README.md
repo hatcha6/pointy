@@ -194,22 +194,27 @@ works. The import installs Docker from Docker's own apt repository, because
 (`/mnt/<letter>`) and names each one it changed. `make onprem-move-test` runs the
 whole move between two throwaway Docker-in-Docker machines.
 
-## WSL Stopgap: Keeping The Server Up From The Signed-In Session
+## WSL: Keeping The Server Up From The Signed-In Session
 
 WSL powers the distro off about 15 s after its last Windows-side `wsl.exe`
 exits, and the session-0 `PointyWSL` boot task has not been reliable in the
-field. `wsl\keep-pointy-running.ps1 -Install` (elevated, as the Windows user that
-installed Pointy) replaces it with a minimised "Pointy server" window that opens
-at every sign-in:
+field. What works is what shop staff did by hand: a PowerShell window with
+`wsl` running in it, left open. `wsl\keep-pointy-running.ps1` is that window,
+automated, and the Windows installer sets it up. A minimised "Pointy server"
+window opens at every sign-in of the Windows user that installed Pointy:
 
 - It holds the distro open, and restarts it when WSL stops it.
 - It asks the distro's watchdog to bring the stack up.
 - It re-points the LAN forward at the VM, and checks the path a till takes
   every minute.
+- It copies each release update's Windows-side files out of the distro, itself
+  included, and hands over to a newer copy of itself.
 
-It needs Windows to sign in automatically. `-Uninstall` puts the boot task back.
-This is a bridge for shops that are moving to Linux, not a supported way to run
-a server.
+It needs Windows to sign in automatically (Sysinternals Autologon). A shop
+installed before the installer did this runs `wsl\keep-pointy-running.ps1
+-Install` once, elevated, as the Windows user that installed Pointy, from a new
+bundle. `-Uninstall` puts the `PointyWSL` boot task back. Running the server on
+WSL remains a bridge for shops moving to Linux, not a supported way to run one.
 
 ## Security
 

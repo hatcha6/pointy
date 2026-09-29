@@ -44,17 +44,52 @@ void main() {
       );
     });
 
+    test("WSL's own address becomes the LAN address", () async {
+      // Seen in the field: the till on the server PC reached the backend at
+      // the VM's address, and the FTP page told the DVR to dial it.
+      expect(
+        await lanReachableUrl(
+          'http://172.28.241.235:8000/api',
+          readAddresses: _machine([
+            (
+              interfaceName: 'vEthernet (WSL (Hyper-V firewall))',
+              address: '172.28.240.1',
+            ),
+            (interfaceName: 'Ethernet', address: '192.168.1.20'),
+          ]),
+        ),
+        'http://192.168.1.20:8000/api',
+      );
+      expect(
+        await lanReachableUrl(
+          'http://192.168.183.42:8000/c/#X',
+          readAddresses: serverPc,
+        ),
+        'http://192.168.1.20:8000/c/#X',
+      );
+    });
+
     test('an address that is already on the LAN is left alone', () async {
+      expect(
+        await lanReachableUrl(
+          'http://192.168.1.5:8000/c/#X',
+          readAddresses: serverPc,
+        ),
+        'http://192.168.1.5:8000/c/#X',
+      );
+    });
+
+    test('a hostname is left alone without enumerating adapters', () async {
       var read = false;
       final url = await lanReachableUrl(
-        'http://192.168.1.5:8000/c/#X',
+        'https://shop.relay.example/api',
         readAddresses: () async {
           read = true;
           return const [];
         },
       );
-      expect(url, 'http://192.168.1.5:8000/c/#X');
-      expect(read, isFalse, reason: 'no reason to enumerate adapters');
+      expect(url, 'https://shop.relay.example/api');
+      expect(read, isFalse, reason: 'a name means the same on every device');
     });
 
     test('with no LAN address the URL is kept rather than invented', () async {

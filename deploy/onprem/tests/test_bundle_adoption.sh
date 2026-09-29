@@ -176,6 +176,18 @@ test_adopt_creates_the_wsl_subdirectory_for_an_older_deployment() {
   assert_file_contains wsl/timezone-map.txt 'from 1.1.0'
 }
 
+test_adopt_carries_the_wsl_keeper_and_the_mover() {
+  # keep-pointy-running.ps1 is what keeps a WSL shop's server up, and it
+  # updates itself from this copy; move-server.sh is what its -ExportTo runs.
+  # v0.7.0 and v0.7.1 shipped neither, so no shop could run either one.
+  installed_deploy 1.0.0
+  make_bundle "${PU_TEST_DIR}/b" 1.1.0
+  pu_adopt_bundle "${PU_TEST_DIR}/b" 1.1.0
+  assert_file_contains wsl/keep-pointy-running.ps1 'from 1.1.0'
+  assert_file_contains move-server.sh 'from 1.1.0'
+  [ -x move-server.sh ] || _fail 'move-server.sh is not executable after adoption'
+}
+
 test_adopt_skips_files_the_bundle_does_not_carry() {
   installed_deploy 1.0.0
   printf 'local customisation\n' >migrate-fahd.sh

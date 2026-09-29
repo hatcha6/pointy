@@ -9,13 +9,18 @@ instead, registered by register-autostart.sh. The reply only needs to point the
 client at the API base URL: the client then calls ``GET /api/discovery/service/``
 on it, which serves the full authoritative payload from the backend itself.
 
-WINDOWS: this responder is registered but is never reached. The stack runs
+WINDOWS: no other device on the LAN ever reaches this responder. The stack runs
 inside a WSL2 distro, and broadcast frames do not cross the VM's NAT — a second
 boundary this cannot forward across. That is not a fault to fix here: the
 clients race three discovery paths (the stored IP, UDP, and an HTTP /24 subnet
 sweep) and the sweep finds the backend at the Windows host's LAN address, which
 wsl/bootstrap-wsl.ps1 forwards into the VM. Leaving the unit registered means it
 starts working by itself if a host is ever switched to WSL mirrored networking.
+The one client it does hear is a till on that Windows PC itself: its broadcast
+also leaves on WSL's own adapter, and the answer names the VM's address. That
+serves that till, but no other device can use it, so the client swaps it for
+the PC's LAN address before putting it in a QR or on the FTP setup page
+(``lanReachableUrl`` in the frontend).
 
 Configuration (environment, all optional):
   POINTY_DISCOVERY_UDP_PORT      listen port           (default 47777)

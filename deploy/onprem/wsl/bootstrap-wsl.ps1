@@ -6,16 +6,21 @@
   because three jobs cannot be done from Linux:
 
     1. INSTALL  - enabling the Windows features, installing WSL, importing the
-                  distro, and registering the boot task.
-    2. -Boot    - KEEPING THE DISTRO ALIVE. WSL powers a distro off about 15 s
-                  after its last Windows-side client (a wsl.exe) exits, and
-                  systemd running inside does not count. So the boot task holds
-                  one hidden wsl.exe open for as long as Windows is up, and
+                  distro, and setting up what keeps it alive.
+    2. KEEPING THE DISTRO ALIVE. WSL powers a distro off about 15 s after its
+                  last Windows-side client (a wsl.exe) exits, and systemd
+                  running inside does not count. What shops found works is a
+                  PowerShell window with `wsl` running in it, left open. The
+                  install sets that up: keep-pointy-running.ps1 opens it,
+                  minimised, at every sign-in, holds a hidden wsl.exe open, and
                   starts the distro again the moment that client dies (a
-                  `wsl --shutdown`, Windows Update servicing WSL, a logoff).
+                  `wsl --shutdown`, Windows Update servicing WSL). -Boot, the
+                  session-0 supervisor of the PointyWSL task, does the same
+                  from boot with no one signed in; it has not been reliable in
+                  the field, so it is registered off and is only the fallback.
     3. -Boot    - bridging the Windows LAN into the NAT'd WSL VM (portproxy +
                   firewall), which must be re-done every time the VM starts
-                  because its IP changes each time.
+                  because its IP changes each time. (The keeper does this too.)
 
   It deliberately contains NO deployment logic. It hands off to install.sh
   inside the distro and never duplicates it.
@@ -64,6 +69,9 @@ $LogDir      = Join-Path $InstallRoot "logs"
 $LogFile     = Join-Path $LogDir "bootstrap.log"
 $StateFile   = Join-Path $InstallRoot "bridge-state.json"
 $TaskName    = "PointyWSL"
+# keep-pointy-running.ps1's task. While it is on, it keeps the distro alive and
+# the PointyWSL supervisor stands down: two keepers fight over one distro.
+$KeeperTaskName = "PointyKeepAlive"
 $GuestDir    = "/opt/pointy"
 # First line of the .wslconfig this script writes; how -Boot tells its own file
 # from one an operator wrote by hand.
@@ -1412,16 +1420,15 @@ function Write-WslConfig {
         "guiApplications=false",
         "nestedVirtualization=false"
     )
+    # No sparseVhd and no autoMemoryReclaim, on purpose: WSL 2.5.6+ refuses
+    # sparse disks over a data-corruption risk, and "gradual" reclaim breaks the
+    # Docker daemon running as a service. keep-pointy-running.ps1 removes both
+    # from a file an older bootstrap wrote, so the two scripts agree on it.
     if ($modern) {
         $lines += @(
             "# Never idle-stop the VM: it is a server, not a developer shell. This keeps",
-            "# the empty VM; what keeps the DISTRO is the boot task's keep-alive client.",
-            "vmIdleTimeout=-1",
-            "[experimental]",
-            "# Let the virtual disk hand free space back to Windows. Without this the",
-            "# vhdx only ever grows - a year of image churn silently fills C:.",
-            "sparseVhd=true",
-            "autoMemoryReclaim=gradual"
+            "# the empty VM; what keeps the DISTRO is the keep-alive client.",
+            "vmIdleTimeout=-1"
         )
     }
     if ($null -ne $version -and $version -ge [version]"2.5.4") {
@@ -1591,7 +1598,7 @@ function Invoke-GuestInstall {
 # stable path and run that.
 function Install-BootstrapToStablePath {
     New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-    foreach ($name in @("bootstrap-wsl.ps1", "collect-diagnostics.ps1", "timezone-map.txt")) {
+    foreach ($name in @("bootstrap-wsl.ps1", "keep-pointy-running.ps1", "collect-diagnostics.ps1", "timezone-map.txt")) {
         $src = Join-Path $PSScriptRoot $name
         if (Test-Path $src) { Copy-Item -Force $src (Join-Path $InstallRoot $name) }
     }
@@ -1617,7 +1624,7 @@ function Update-BootstrapFromGuest {
     if ($guestHash -eq $localHash) { return $false }
 
     Write-Log "a newer bootstrap arrived with a release update; promoting it"
-    foreach ($name in @("bootstrap-wsl.ps1", "collect-diagnostics.ps1", "timezone-map.txt")) {
+    foreach ($name in @("bootstrap-wsl.ps1", "keep-pointy-running.ps1", "collect-diagnostics.ps1", "timezone-map.txt")) {
         $win = (Join-Path $InstallRoot $name) -replace '\\', '/'
         $mnt = "/mnt/" + $win.Substring(0,1).ToLower() + $win.Substring(2)
         Invoke-Guest "test -f '${GuestDir}/wsl/${name}' && cp -f '${GuestDir}/wsl/${name}' '${mnt}'" | Out-Null
@@ -1653,6 +1660,10 @@ function Register-BootTask {
     # watchdog, the update agent and the stack), holds it open, and re-points
     # the LAN bridge. Everything else that used to be a Windows scheduled task
     # is now a systemd unit inside Linux.
+    #
+    # -Disabled registers it off, in one step, so its 5-minute trigger cannot
+    # start a supervisor beside the keeper that replaces it (see Install-Keeper).
+    param([switch]$Disabled)
     $stable = Join-Path $InstallRoot "bootstrap-wsl.ps1"
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument (
         "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$stable`" " +
@@ -1675,7 +1686,8 @@ function Register-BootTask {
         -StartWhenAvailable `
         -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
         -ExecutionTimeLimit ([TimeSpan]::Zero) `
-        -MultipleInstances IgnoreNew
+        -MultipleInstances IgnoreNew `
+        -Disable:$Disabled
 
     # S4U runs as this user WITHOUT an interactive session and WITHOUT storing a
     # password. That is the whole point of the migration: Docker Desktop could
@@ -1689,13 +1701,21 @@ function Register-BootTask {
         $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType S4U -RunLevel Highest
         Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($atStartup, $everyFiveMinutes) `
             -Principal $principal -Settings $settings -Force -ErrorAction Stop | Out-Null
-        Write-Log "registered scheduled task '${TaskName}' as ${userId} (LogonType=S4U): at startup, and every 5 minutes"
+        $when = "at startup, and every 5 minutes"
+        if ($Disabled) { $when += "; registered OFF, the keeper replaces it (its -Uninstall turns this back on)" }
+        Write-Log "registered scheduled task '${TaskName}' as ${userId} (LogonType=S4U): ${when}"
     } catch {
         # We deliberately do NOT prompt for the password and store it ourselves.
         # Task Scheduler asks for it in its own secure dialog and keeps it in the
         # protected credential store; routing it through this script would put
         # the shop's password in a PowerShell variable for no benefit.
         Write-Log "could not register '${TaskName}' automatically: $($_.Exception.Message)" "ERROR"
+        # Registered off, it is only the keeper's fallback: not worth stopping
+        # the install that sets the keeper up.
+        if ($Disabled) {
+            Write-Log "carrying on: the keeper keeps the distro alive, and '${TaskName}' would only be its fallback" "WARN"
+            return
+        }
         Die ("Create the task by hand in Task Scheduler (taskschd.msc):`n" +
              "  Name    : ${TaskName}`n" +
              "  Run as  : ${userId}   <- must be THIS user; WSL distros are per-user`n" +
@@ -1705,6 +1725,61 @@ function Register-BootTask {
              "            for 3650 days; settings: no time limit, do not start a new instance`n" +
              "  Action  : powershell.exe`n" +
              "  Args    : -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$stable`" -Boot")
+    }
+}
+
+function Enable-BootTask {
+    try {
+        Enable-ScheduledTask -TaskName $TaskName -ErrorAction Stop | Out-Null
+        Write-Log "turned the '${TaskName}' task on: with no keeper, its supervisor keeps the distro alive"
+    } catch {
+        Write-Log "could not turn the '${TaskName}' task on: $($_.Exception.Message)" "ERROR"
+    }
+}
+
+# What keeps a shop's distro alive: keep-pointy-running.ps1, a minimised window
+# in the signed-in session holding a wsl.exe open. Shop staff found that by
+# hand - a PowerShell window running `wsl`, left open - and it is the one
+# arrangement proven on shop PCs. Its -Install registers the PointyKeepAlive
+# task for this user, turns PointyWSL off, and starts the window now. $false
+# when it could not be installed; the caller then falls back to PointyWSL.
+function Install-Keeper {
+    param([string]$Path)
+    Write-Log "setting up the keeper: $Path -Install"
+    $r = Invoke-Native -File "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $Path,
+        "-Install", "-Distro", $Distro, "-ApiPort", "$ApiPort", "-WebPort", "$WebPort")
+    # Its own log lines (keepalive.log has them too), for the operator watching.
+    foreach ($line in @("$($r.Output)" -split "`r?`n")) { if ($line.Trim()) { Write-Host "    $line" } }
+    if ($r.ExitCode -ne 0) {
+        Write-Log "the keeper could not be set up (exit $($r.ExitCode)); the '${TaskName}' task keeps the distro alive instead" "ERROR"
+        return $false
+    }
+    return $true
+}
+
+# Is keep-pointy-running.ps1 installed and switched on? Then it keeps the
+# distro alive, and the supervisor must not run beside it.
+function Test-KeeperInstalled {
+    try {
+        $task = Get-ScheduledTask -TaskName $KeeperTaskName -ErrorAction Stop
+        return ("$($task.State)" -ne "Disabled")
+    } catch { return $false }
+}
+
+# After a one-off pass the distro must outlive the operator's window: start
+# whichever keeps it alive here.
+function Start-KeepAliveTask {
+    if (-not (Test-KeeperInstalled)) { return (Start-SupervisorTask) }
+    try {
+        $task = Get-ScheduledTask -TaskName $KeeperTaskName -ErrorAction Stop
+        if ("$($task.State)" -eq "Running") { return $true }
+        Start-ScheduledTask -TaskName $KeeperTaskName -ErrorAction Stop
+        Write-Log "started the '${KeeperTaskName}' task; its window holds the distro open from here on"
+        return $true
+    } catch {
+        Write-Log ("could not start the '${KeeperTaskName}' task: $($_.Exception.Message). It starts by itself " +
+                   "within a minute while its Windows user is signed in.") "WARN"
+        return $false
     }
 }
 
@@ -1719,11 +1794,18 @@ if ($Boot) {
     }
     if ($Once) {
         # One pass for an operator at the keyboard: start the distro if it is
-        # down, re-point and prove the bridge, and make sure the supervisor
-        # task is up so the distro outlives this window.
+        # down, re-point and prove the bridge, and make sure the keeper (or
+        # the supervisor) is up so the distro outlives this window.
         $ok = Invoke-BootReconcile
-        Start-SupervisorTask | Out-Null
+        Start-KeepAliveTask | Out-Null
         if ($ok) { exit 0 } else { exit 1 }
+    }
+    if (Test-KeeperInstalled) {
+        # Turned back on by hand, or started in the moment before the keeper
+        # turned it off: either way the keeper holds the distro, and two
+        # keepers fight over it.
+        Write-Log "the '${KeeperTaskName}' task (keep-pointy-running.ps1) keeps the distro alive here; the supervisor stands down"
+        exit 0
     }
     if (Enter-SupervisorLock) {
         Invoke-Supervise
@@ -1744,15 +1826,24 @@ if ((Write-WslConfig) -and $reinstall) { Restart-WslVm }
 Import-Distro
 # From here to the end the distro must stay up: with no client attached, WSL
 # would power it off 15 s after each step below returns, and the next step
-# would boot it again. The supervisor started at the end adopts this anchor.
+# would boot it again. It stays attached until this user signs out, so the
+# distro is up while the keeper (or the supervisor) attaches its own.
 Start-AnchorIfMissing | Out-Null
 Set-GuestTimezone
 Copy-BundleIntoGuest
 Invoke-GuestInstall
 Install-BootstrapToStablePath
-Register-BootTask
+# The keeper keeps the distro alive whenever the bundle has it; PointyWSL is
+# registered beside it, off, for its -Uninstall to fall back to.
+$keeperScript = Join-Path $PSScriptRoot "keep-pointy-running.ps1"
+$useKeeper = Test-Path $keeperScript
+Register-BootTask -Disabled:$useKeeper
 Invoke-BootReconcile | Out-Null
-Start-SupervisorTask | Out-Null
+$keeperInstalled = $useKeeper -and (Install-Keeper -Path $keeperScript)
+if (-not $keeperInstalled) {
+    if ($useKeeper) { Enable-BootTask }
+    Start-SupervisorTask | Out-Null
+}
 Write-FirewallWarnings
 
 $ip = Get-WslIp
@@ -1761,8 +1852,14 @@ if ($lan.Count -eq 0) { $lan = @("<this-pc-lan-ip>") }
 
 Write-Log ""
 Write-Log "Done. The stack runs inside WSL distro '${Distro}' (VM address ${ip})."
-Write-Log "The '${TaskName}' task holds the distro open from boot to shutdown, no logon needed,"
-Write-Log "and starts it again within seconds if WSL is shut down or updated."
+if ($keeperInstalled) {
+    Write-Log "A minimised 'Pointy server' window holds the distro open whenever ${env:USERNAME} is signed in,"
+    Write-Log "and starts it again within seconds if WSL is shut down or updated. After a restart the server"
+    Write-Log "stays down until ${env:USERNAME} signs in, so let Windows sign in by itself (Sysinternals Autologon)."
+} else {
+    Write-Log "The '${TaskName}' task holds the distro open from boot to shutdown, no logon needed,"
+    Write-Log "and starts it again within seconds if WSL is shut down or updated."
+}
 Write-Log ""
 foreach ($address in $lan) {
     Write-Log "  Tills reach it at : http://${address}:${ApiPort}"
@@ -1771,7 +1868,11 @@ foreach ($address in $lan) {
 Write-Log "  Shell in          : wsl -d ${Distro} -u root --cd ${GuestDir}"
 Write-Log "  Stack status      : wsl -d ${Distro} -u root --cd ${GuestDir} -- docker compose ps"
 Write-Log "  Watchdog log      : wsl -d ${Distro} -u root -- journalctl -u pointy-watchdog -f"
-Write-Log "  Supervisor        : Get-ScheduledTask ${TaskName}; $(Join-Path $InstallRoot 'supervisor-state.json')"
+if ($keeperInstalled) {
+    Write-Log "  Keeper            : Get-ScheduledTask ${KeeperTaskName}; $(Join-Path $env:ProgramData 'Pointy\logs\keepalive.log')"
+} else {
+    Write-Log "  Supervisor        : Get-ScheduledTask ${TaskName}; $(Join-Path $InstallRoot 'supervisor-state.json')"
+}
 Write-Log "  If it misbehaves  : powershell -ExecutionPolicy Bypass -File `"$(Join-Path $InstallRoot 'collect-diagnostics.ps1')`""
 Write-Log ""
 Write-Log "Everything from here on is Linux. There is no second set of Windows scripts:"

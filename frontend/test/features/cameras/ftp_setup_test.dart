@@ -214,6 +214,44 @@ void main() {
     });
   });
 
+  group('ftpServerAddress', () {
+    // The server PC from the field report: WSL's switch and the shop LAN.
+    Future<List<LanAddressCandidate>> serverPc() async => const [
+      (
+        interfaceName: 'vEthernet (WSL (Hyper-V firewall))',
+        address: '172.28.240.1',
+      ),
+      (interfaceName: 'Ethernet', address: '192.168.1.20'),
+    ];
+
+    Future<String?> addressFor(String baseUrl) => SurveillanceRepository(
+      PosApiService(baseUrl: baseUrl),
+      readAddresses: serverPc,
+    ).ftpServerAddress();
+
+    test(
+      "on the server PC the DVR is given the LAN address, not WSL's",
+      () async {
+        expect(
+          await addressFor('http://172.28.241.235:8000/api'),
+          '192.168.1.20',
+        );
+        expect(await addressFor('http://127.0.0.1:8000/api'), '192.168.1.20');
+      },
+    );
+
+    test(
+      'a till elsewhere on the LAN passes on the address it reached',
+      () async {
+        expect(await addressFor('http://192.168.1.5:8000/api'), '192.168.1.5');
+      },
+    );
+
+    test('over the relay there is no address to give', () async {
+      expect(await addressFor('https://shop.relay.example/api'), isNull);
+    });
+  });
+
   group('ftpSetupStatusOf', () {
     FtpSetupStatus statusFor(Map<String, Object?> json) {
       return ftpSetupStatusOf(FtpAccountInfo.fromJson(json), now: _now);

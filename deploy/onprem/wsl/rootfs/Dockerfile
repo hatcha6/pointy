@@ -13,10 +13,10 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# systemd is what keeps the distro alive: with `systemd=true` in /etc/wsl.conf
-# it becomes PID 1, so the VM does not shut down the moment the last shell
-# exits, and the watchdog/update-agent timers written by register-autostart.sh
-# have something to run under.
+# systemd: with `systemd=true` in /etc/wsl.conf it becomes PID 1, so the
+# watchdog/update-agent timers written by register-autostart.sh have something
+# to run under. It does not keep the distro alive - WSL powers it off ~15 s
+# after the last Windows-side wsl.exe exits - which is keep-pointy-running.ps1's job.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         systemd systemd-sysv dbus \
         ca-certificates curl gnupg \

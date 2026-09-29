@@ -116,28 +116,82 @@ bool isLoopbackHost(String host) {
 /// One IPv4 address as the OS reports it, with the adapter that holds it.
 typedef LanAddressCandidate = ({String interfaceName, String address});
 
-const _virtualAdapterFragments = [
+const _hostOnlyAdapterFragments = [
   // Windows friendly names. WSL's and Hyper-V's adapters are all `vEthernet
   // (...)`, and WSL's often sits in 192.168.x, the very range a shop router
   // hands out, so the address range alone cannot tell it from the real LAN.
-  'vethernet', 'wsl', 'hyper-v', 'virtualbox', 'vmware', 'vpn', 'tailscale',
-  'zerotier', 'wireguard',
+  'vethernet', 'wsl', 'hyper-v', 'virtualbox', 'vmware',
 ];
 
-const _virtualAdapterPrefixes = [
-  // Linux/macOS interface names: container and VM bridges, tunnels.
+const _hostOnlyAdapterPrefixes = [
+  // Linux/macOS interface names: container and VM bridges.
   'docker', 'br-', 'veth', 'virbr', 'vboxnet', 'vmnet', 'lxcbr', 'lxdbr',
-  'tun', 'tap', 'utun', 'wg', 'zt',
 ];
+
+// Tunnels lead to someone else's network, not to one inside this machine.
+const _tunnelAdapterFragments = ['vpn', 'tailscale', 'zerotier', 'wireguard'];
+const _tunnelAdapterPrefixes = ['tun', 'tap', 'utun', 'wg', 'zt'];
+
+/// Whether an adapter carries a network between this machine and its own VMs
+/// or containers: WSL's switch, a VM host-only network, a Docker bridge.
+bool isHostOnlyAdapterName(String interfaceName) {
+  final name = interfaceName.toLowerCase();
+  return _hostOnlyAdapterFragments.any(name.contains) ||
+      _hostOnlyAdapterPrefixes.any(name.startsWith);
+}
 
 /// Whether an adapter belongs to a VM, container or VPN rather than the shop
 /// LAN. Used to rank, never to exclude: a machine whose only LAN address sits on
 /// such an adapter (a Hyper-V external switch) still gets it.
 bool isVirtualAdapterName(String interfaceName) {
   final name = interfaceName.toLowerCase();
-  return _virtualAdapterFragments.any(name.contains) ||
-      _virtualAdapterPrefixes.any(name.startsWith);
+  return isHostOnlyAdapterName(name) ||
+      _tunnelAdapterFragments.any(name.contains) ||
+      _tunnelAdapterPrefixes.any(name.startsWith);
 }
+
+/// Whether [host] sits on a network that exists only inside this machine, so
+/// no other device on the shop network can dial it.
+///
+/// On a WSL server PC the till can reach the backend at the VM's own address
+/// (`172.28.241.235`); an FTP address or QR built from it is dead on every
+/// other device. The OS reports no netmasks here, so this leans on how those
+/// networks are made: WSL's and Hyper-V's NAT switches are /20s picked clear of
+/// every network the machine is on, and container bridges are larger. A host
+/// sharing a /24 with an adapter on the shop's side is never host-only, so the
+/// /20 guess around a VirtualBox adapter cannot claim a real server next door.
+/// The adapter holding [bestLanIpv4] counts as the shop's side whatever its
+/// name, because on a Hyper-V external switch the LAN itself is `vEthernet`.
+bool isHostOnlyIpv4(String host, List<LanAddressCandidate> candidates) {
+  final target = ipv4Octets(host);
+  if (target == null || !isUsableLanIpv4(target)) {
+    return false;
+  }
+  final lanAddress = bestLanIpv4(candidates);
+  var hostOnly = false;
+  for (final candidate in candidates) {
+    final own = ipv4Octets(candidate.address);
+    if (own == null) {
+      continue;
+    }
+    final isHostOnlyAdapter =
+        candidate.address != lanAddress &&
+        isHostOnlyAdapterName(candidate.interfaceName);
+    if (!isHostOnlyAdapter && _sameSlash24(own, target)) {
+      return false;
+    }
+    if (isHostOnlyAdapter && _sameSlash20(own, target)) {
+      hostOnly = true;
+    }
+  }
+  return hostOnly;
+}
+
+bool _sameSlash24(List<int> a, List<int> b) =>
+    a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
+
+bool _sameSlash20(List<int> a, List<int> b) =>
+    a[0] == b[0] && a[1] == b[1] && (a[2] >> 4) == (b[2] >> 4);
 
 /// The address another device on the shop network most likely reaches this
 /// machine at: a real adapter before a virtual one, then the ranges shop

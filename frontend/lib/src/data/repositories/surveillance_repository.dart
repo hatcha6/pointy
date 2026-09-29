@@ -22,11 +22,12 @@ class SurveillanceRepository {
   /// The address a DVR on the shop network reaches the Pointy server at, or
   /// null when this device cannot tell.
   ///
-  /// It is the address this device reaches the backend on — with loopback
-  /// swapped for the machine's own LAN address on the server PC itself, the
-  /// same swap the companion QR makes. The backend cannot work this out: it
-  /// runs in a container that sees none of the shop's network. Null over the
-  /// relay, where the address is the relay's, not the shop's.
+  /// It is the address this device reaches the backend on — on the server PC
+  /// itself, loopback or WSL's own address swapped for the machine's LAN
+  /// address, the same swap the companion QR makes (see [lanReachableUrl]).
+  /// The backend cannot work this out: it runs in a container that sees none
+  /// of the shop's network. Null over the relay, where the address is the
+  /// relay's, not the shop's.
   Future<String?> ftpServerAddress() async {
     try {
       final url = await lanReachableUrl(

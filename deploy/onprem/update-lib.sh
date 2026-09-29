@@ -237,20 +237,21 @@ pu_install_file() {
 # .env, the volumes, the backups, the front door's upstream pointer — is
 # deliberately absent.
 #
-# wsl/bootstrap-wsl.ps1 is here for a reason that is easy to miss: on a Windows
-# host it owns the LAN bridge (the netsh portproxy that lets the tills reach the
-# NAT'd WSL VM at all) and the supervisor that keeps the distro alive. If
-# updates did not carry it, a shop would keep whatever bootstrap it was
-# installed with forever, and no fix to either could ever reach it. The
-# supervisor promotes the adopted copy to Windows by itself. The diagnostics
-# collector travels the same way. The distro rootfs is NOT adopted — it is a
-# one-time install input, it is enormous, and the distro it produced already
-# exists.
+# The wsl/ scripts are here for a reason that is easy to miss: on a Windows
+# host they own the LAN bridge (the netsh portproxy that lets the tills reach
+# the NAT'd WSL VM at all) and the keep-alive that stops WSL powering the
+# distro off (keep-pointy-running.ps1, or bootstrap-wsl.ps1's supervisor). If
+# updates did not carry them, a shop would keep whatever it was installed with
+# forever, and no fix to either could ever reach it. Whichever of the two runs
+# copies the adopted files out to Windows by itself. The diagnostics collector
+# travels the same way. The distro rootfs is NOT adopted — it is a one-time
+# install input, it is enormous, and the distro it produced already exists.
 POINTY_ADOPT_FILES="docker-compose.yml install.sh watchdog.sh
 register-autostart.sh update.sh update-agent.sh update-lib.sh
-discovery-responder.py migrate-fahd.sh
+discovery-responder.py migrate-fahd.sh move-server.sh
 disable-watchdog.sh
-wsl/bootstrap-wsl.ps1 wsl/collect-diagnostics.ps1 wsl/timezone-map.txt
+wsl/bootstrap-wsl.ps1 wsl/keep-pointy-running.ps1 wsl/collect-diagnostics.ps1
+wsl/timezone-map.txt
 .env.example VERSION.txt INSTALL.md README.md"
 
 # Which strategy the release itself asks for. A release whose migrations cannot

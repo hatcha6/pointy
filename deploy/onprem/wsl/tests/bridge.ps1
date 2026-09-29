@@ -205,11 +205,14 @@ check "a fresh .wslconfig turns WSL's localhost relay off" {
     $changed -and ($text -match '(?m)^localhostForwarding=false$') -and ($text -notmatch 'localhostForwarding=true')
 }
 check "every key sits in the section WSL reads it from" {
-    # sparseVhd under [wsl2] is a warning on every wsl.exe call and nothing
-    # else; the vhdx keeps growing.
     $text = Get-Content -Raw $script:WslConfigPath
-    ((sectionOf $text "localhostForwarding") -eq "wsl2") -and ((sectionOf $text "vmIdleTimeout") -eq "wsl2") -and
-        ((sectionOf $text "sparseVhd") -eq "experimental") -and ((sectionOf $text "autoMemoryReclaim") -eq "experimental")
+    ((sectionOf $text "localhostForwarding") -eq "wsl2") -and ((sectionOf $text "vmIdleTimeout") -eq "wsl2")
+}
+check "no sparse disk and no memory reclaim, in any section" {
+    # WSL 2.5.6+ refuses sparse disks over a data-corruption risk, and
+    # "gradual" reclaim breaks the Docker daemon running as a service.
+    $text = Get-Content -Raw $script:WslConfigPath
+    ($text -notmatch '(?m)^sparseVhd') -and ($text -notmatch '(?m)^autoMemoryReclaim') -and ($text -notmatch '\[experimental\]')
 }
 check "instanceIdleTimeout is not written for a WSL that would only warn about it (2.3.26)" {
     $text = Get-Content -Raw $script:WslConfigPath
@@ -231,7 +234,7 @@ check "an installed shop's generated .wslconfig is converged at boot" {
     $script:Log.Clear()
     Update-GeneratedWslConfig
     $text = Get-Content -Raw $script:WslConfigPath
-    ($text -match '(?m)^localhostForwarding=false$') -and ((sectionOf $text "sparseVhd") -eq "experimental") -and
+    ($text -match '(?m)^localhostForwarding=false$') -and ((sectionOf $text "sparseVhd") -eq "") -and
         (logged "next time Windows restarts")
 }
 check "a converged .wslconfig is not rewritten (or logged) again on the next cycle" {
@@ -244,6 +247,27 @@ check "an operator's own .wslconfig is never rewritten" {
     [IO.File]::WriteAllText($script:WslConfigPath, $own)
     Update-GeneratedWslConfig
     (Get-Content -Raw $script:WslConfigPath) -eq $own
+}
+
+# The keeper edits .wslconfig too, every time it starts. If it changed what
+# the installer writes, each reinstall would write the file back - and a
+# reinstall restarts WSL whenever the file changed.
+$keeperAst = [System.Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path (Join-Path $PSScriptRoot ".." "keep-pointy-running.ps1")).Path, [ref]$null, [ref]$null)
+Invoke-Expression ($keeperAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+    $n.Name -eq "Update-WslConfig" }, $false)).Extent.Text
+check "the keeper leaves the installer's .wslconfig exactly as written, on every WSL version" {
+    $same = $true
+    foreach ($version in @("WSL version: 2.3.26.0", "WSL version: 2.5.10.0")) {
+        $script:WslVersionText = $version
+        Remove-Item $script:WslConfigPath -ErrorAction SilentlyContinue
+        Write-WslConfig | Out-Null
+        $written = Get-Content -Raw $script:WslConfigPath
+        if (Update-WslConfig -Path $script:WslConfigPath) { $same = $false }
+        if ((Get-Content -Raw $script:WslConfigPath) -ne $written) { $same = $false }
+    }
+    $script:WslVersionText = "WSL version: 2.3.26.0"
+    $same
 }
 Remove-Item -Recurse -Force $script:ProfileDir -ErrorAction SilentlyContinue
 

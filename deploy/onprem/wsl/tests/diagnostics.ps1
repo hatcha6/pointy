@@ -78,9 +78,13 @@ check "reads a .wslconfig key only from its own section" {
     ((Get-WslConfigValue $generated "wsl2" "sparseVhd") -eq "true") -and
     ((Get-WslConfigValue "[General]`r`nInstanceIdleTimeout = -1  # a server`r`n" "general" "instanceIdleTimeout") -eq "-1")
 }
+# Both clients count: keep-pointy-running.ps1's (what the installer sets up)
+# sleeps 2147483647, the PointyWSL supervisor's sleeps infinity.
 check "the keep-alive client is told apart from every other wsl.exe" {
     (Test-AnchorCommandLine 'wsl.exe -d Pointy -u root --exec /bin/sleep infinity' "Pointy") -and
     (Test-AnchorCommandLine '"C:\Program Files\WSL\wsl.exe" -d Pointy -u root --exec /bin/sleep infinity' "Pointy") -and
+    (Test-AnchorCommandLine '"C:\Program Files\WSL\wsl.exe" -d Pointy -u root --exec /bin/sleep 2147483647' "Pointy") -and
+    -not (Test-AnchorCommandLine 'wsl.exe -d Pointy -u root --exec /bin/sleep 2147483647000' "Pointy") -and
     -not (Test-AnchorCommandLine 'wsl.exe -d Pointy -u root -- bash -lc true' "Pointy") -and
     -not (Test-AnchorCommandLine 'wsl.exe -d Pointy2 -u root --exec /bin/sleep infinity' "Pointy") -and
     -not (Test-AnchorCommandLine 'wsl.exe -d Ubuntu --exec /bin/sleep infinity' "Pointy") -and

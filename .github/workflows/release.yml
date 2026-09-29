@@ -652,11 +652,15 @@ jobs:
              deploy/onprem/disable-watchdog.sh \
              deploy/onprem/discovery-responder.py \
              deploy/onprem/migrate-fahd.sh \
+             deploy/onprem/move-server.sh \
              deploy/onprem/INSTALL.md deploy/onprem/README.md "${BUNDLE}/"
 
+          # keep-pointy-running.ps1 is what keeps a WSL shop's server up: the
+          # installer sets it up, and it must be in the zip for that to happen.
           echo "==> Staging the Windows (WSL) bootstrap…"
           mkdir -p "${BUNDLE}/wsl"
           cp deploy/onprem/wsl/bootstrap-wsl.ps1 \
+             deploy/onprem/wsl/keep-pointy-running.ps1 \
              deploy/onprem/wsl/collect-diagnostics.ps1 \
              deploy/onprem/wsl/timezone-map.txt "${BUNDLE}/wsl/"
           mv wsl-rootfs/pointy-wsl-rootfs.tar.gz "${BUNDLE}/wsl/"
@@ -672,7 +676,8 @@ jobs:
              "${BUNDLE}/register-autostart.sh" "${BUNDLE}/update-agent.sh" \
              "${BUNDLE}/update.sh" "${BUNDLE}/update-lib.sh" \
              "${BUNDLE}/discovery-responder.py" \
-             "${BUNDLE}/migrate-fahd.sh" "${BUNDLE}/disable-watchdog.sh"
+             "${BUNDLE}/migrate-fahd.sh" "${BUNDLE}/disable-watchdog.sh" \
+             "${BUNDLE}/move-server.sh"
 
           # The bundle is unzipped on Windows and streamed into the distro. Any
           # CRLF that sneaks in makes bash fail with "\r: command not found", and

@@ -5,7 +5,7 @@ happens inside the distro (`../tests/run-tests.sh`). They fake `wsl.exe`,
 `msiexec` and `netsh`, so they prove the decisions are right — not that Windows
 does what it says.
 
-These nine steps are the part only a real machine can answer. Each one ends in a
+These ten steps are the part only a real machine can answer. Each one ends in a
 command that proves it, because several of these fail *silently*: `netsh` reports
 success for a forward that never binds, and Docker creates a missing bind mount
 as an empty directory rather than refusing.
@@ -17,6 +17,7 @@ Budget ~45 minutes on any spare Windows 10/11 box. Do it the night before.
 **0. Start from nothing.** If the box has a previous attempt on it:
 
     wsl --unregister Pointy
+    schtasks /delete /tn PointyKeepAlive /f
     schtasks /delete /tn PointyWSL /f
     netsh interface portproxy reset
 
@@ -27,6 +28,9 @@ Budget ~45 minutes on any spare Windows 10/11 box. Do it the night before.
 Expect either a clean run or `exit 2` asking for a reboot. Both are correct.
 *Reboot and run the exact same command again* — that second run is itself a test:
 the script is meant to be idempotent, and this is the path a real shop takes.
+A clean run ends by opening a minimised window titled *Pointy server*: the
+keeper. It warns if Windows does not sign in by itself; set that up now with
+Sysinternals Autologon, because step 9 depends on it.
 
 **2. The features are on.** `dism /online /get-featureinfo /featurename:VirtualMachinePlatform`
 must say `State : Enabled`.
@@ -81,23 +85,38 @@ not the server, whose loopback would pass regardless:
 This is the only step that proves the whole chain. If 1-7 pass and this fails,
 it is the bridge or the firewall, not the stack.
 
-**9. It survives a reboot, a logoff and a `wsl --shutdown`.** Reboot the box,
-log in to nothing, wait ~2 minutes, and run step 8 again from the other
-machine. This proves the scheduled task, the supervisor and the watchdog — the
-difference between an install and a demo. Then, on the box:
+**9. It survives a reboot, a `wsl --shutdown` and a closed window.** Reboot
+the box, touch nothing, wait ~2 minutes, and run step 8 again from the other
+machine. Windows must have signed in by itself and the *Pointy server* window
+must be on the taskbar. This proves auto sign-in, the keeper and the watchdog —
+the difference between an install and a demo. Then, on the box:
 
-    Get-ScheduledTask PointyWSL | Select-Object State                 # Running - and it stays Running
+    Get-ScheduledTask PointyKeepAlive | Select-Object State           # Running - and it stays Running
+    Get-ScheduledTask PointyWSL | Select-Object State                 # Disabled: the keeper replaces it
     Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" | Select-Object SessionId, CommandLine
-    Get-Content $env:ProgramData\Pointy\supervisor-state.json
+    Get-Content $env:ProgramData\Pointy\keepalive-state.json
 
-The keep-alive client (`--exec /bin/sleep infinity`) must be listed, in
-session 0, and the heartbeat must be under 5 minutes old. WSL powers a distro
-off 15 s after its last `wsl.exe` exits, whatever systemd inside is doing, so
-this client is the whole reason the server is up with nobody logged in. Now
-log in, run `wsl --shutdown`, log out, wait a minute, and run step 8 again: the
-supervisor must have started the distro again by itself, and `bootstrap.log`
-must show the "keep-alive client exited" line followed by a fresh bridge
-reconcile. This is the step that used to fail.
+The keep-alive client (`--exec /bin/sleep 2147483647`) must be listed, and the
+heartbeat must be under 2 minutes old. WSL powers a distro off 15 s after its
+last `wsl.exe` exits, whatever systemd inside is doing, so this client is the
+whole reason the server is up with no WSL window open. Now run
+`wsl --shutdown`, wait a minute, and run step 8 again: the keeper must have
+started the distro again by itself, and `logs\keepalive.log` must show "WSL
+stopped the distro ... starting it again". Last, end the window's
+`powershell.exe` in Task Manager: step 8 must keep passing (the client is a
+separate process), and the window must be back within a minute. This is the
+step that used to fail.
+
+**10. It follows an update.** Change the keeper inside the distro, the way a
+release update does, then end the window's `powershell.exe` again so the next
+one starts at once:
+
+    wsl -d Pointy -u root -- sh -c "echo '# dry run' >> /opt/pointy/wsl/keep-pointy-running.ps1"
+
+Within two minutes `keepalive.log` must show "updated ...keep-pointy-running.ps1"
+and then "handing over", the window must come back, and
+`%ProgramData%\Pointy\keep-pointy-running.ps1` must end with `# dry run`.
+Step 8 passes throughout.
 
 ---
 
@@ -108,7 +127,8 @@ reconcile. This is the step that used to fail.
 | PowerShell will not parse the script | confirm it still has a BOM: `Format-Hex .\wsl\bootstrap-wsl.ps1 \| Select -First 1` — first bytes `EF BB BF` |
 | WSL install "fails" instantly | re-run it; if it now passes, the retry window was too short — raise `$attempts` |
 | stack up, till cannot connect | read `bootstrap.log`: it names the failed hop and who holds the port. Then step 7, the firewall rule, then `-Boot -Once` to re-point the bridge |
-| the server is up only while a PowerShell window is open | the supervisor is not holding the distro: `Get-ScheduledTask PointyWSL` must say *Running* and `supervisor-state.json` must be fresh. `bootstrap.log` says why it is not (task never started, distro not visible to the task, ...) |
+| the server is up only while a PowerShell window is open | the keeper is not holding the distro: `Get-ScheduledTask PointyKeepAlive` must say *Running* while its user is signed in, and `keepalive-state.json` must be fresh; `keepalive.log` says why not. No such task: run `wsl\keep-pointy-running.ps1 -Install` once, elevated, as the user that installed Pointy |
+| the server is down after a restart until someone signs in | Windows does not sign in by itself. Turn on automatic sign-in for the user that installed Pointy (Sysinternals Autologon) |
 | the server's own till works, no other device finds the server | WSL's localhost forwarding took the ports before the LAN forward. Restart Windows once (or re-run the installer), then check step 7 again |
 | the companion QR points at `127.0.0.1` | the till predates the fix that swaps loopback for the PC's LAN address; update the till app |
 | backend cannot reach the database | put it back on direct Postgres: `sed -i 's\|@pgbouncer:5432\|@postgres:5432\|' .env && docker compose --env-file .env -f docker-compose.yml up -d backend` |

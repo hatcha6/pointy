@@ -25,24 +25,37 @@ Future<List<LanAddressCandidate>> readMachineIpv4Addresses() async {
 ///
 /// A link or QR this app shows is built from the address it reaches the backend
 /// on. Normally that is already the server's LAN address. On the server machine
-/// itself it is loopback (`127.0.0.1`, `localhost`), which on any other device
-/// means *that* device. App and server share the machine, so the machine's own
-/// LAN address is the server's LAN address: swap it in, keeping the scheme,
-/// port, path and fragment.
+/// itself it may be one no other device can use: loopback (`127.0.0.1`,
+/// `localhost`), which on any other device means *that* device, or on a WSL
+/// install the VM's own address, which exists only inside this PC (see
+/// [isHostOnlyIpv4]). App and server share the machine, so the machine's own
+/// LAN address is the server's LAN address (WSL's port forward carries it on
+/// into the VM): swap it in, keeping the scheme, port, path and fragment.
 ///
 /// The backend cannot make this swap itself: inside Docker (and inside WSL on
 /// Windows) it sees only its own private networks, never the shop's. Returns
-/// [url] unchanged when it is not loopback or no LAN address is found.
+/// [url] unchanged when it names a hostname or an address already on the LAN,
+/// or when no LAN address is found.
 Future<String> lanReachableUrl(
   String url, {
   MachineAddressReader readAddresses = readMachineIpv4Addresses,
 }) async {
   final uri = Uri.tryParse(url);
-  if (uri == null || !isLoopbackHost(uri.host)) {
+  if (uri == null) {
+    return url;
+  }
+  final isLoopback = isLoopbackHost(uri.host);
+  if (!isLoopback && ipv4Octets(uri.host) == null) {
+    // A name — the relay's, or one the shop's own DNS answers — means the same
+    // thing on every device.
     return url;
   }
   try {
-    final lanHost = bestLanIpv4(await readAddresses());
+    final addresses = await readAddresses();
+    if (!isLoopback && !isHostOnlyIpv4(uri.host, addresses)) {
+      return url;
+    }
+    final lanHost = bestLanIpv4(addresses);
     return lanHost == null ? url : uri.replace(host: lanHost).toString();
   } on Object {
     return url;

@@ -122,6 +122,109 @@ Check "keeper opens FTP to private addresses only" (@($script:Rules | Where-Obje
     $_ -like "Pointy FTP (TCP 21)|21|*192.168.0.0/16*" -or $_ -like "Pointy FTP data (TCP 30000-30019)|30000-30019|*10.0.0.0/8*" }).Count) 2
 Check "keeper leaves the tills' rules open to all" (@($script:Rules | Where-Object { $_ -eq "Pointy API (TCP 8000)|8000|" }).Count) 1
 
+# --- updates: the release's Windows-side files, copied out of the distro -----
+# The real list, lifted from the script, so what is tested is what ships.
+Invoke-Expression ($ast.Find({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+    "$($n.Left)" -eq '$PromotedFiles' }, $false)).Extent.Text
+Check "promotes the keeper itself" ($PromotedFiles["wsl/keep-pointy-running.ps1"]) "keep-pointy-running.ps1"
+Check "promotes the bootstrap, the collector and the mover" (@($PromotedFiles.Values) -join ",") `
+    "keep-pointy-running.ps1,bootstrap-wsl.ps1,collect-diagnostics.ps1,timezone-map.txt,move-server.sh"
+
+$InstallRoot = Join-Path $tmp "ProgramData-Pointy"
+New-Item -ItemType Directory -Path $InstallRoot | Out-Null
+$script:RefusedHashes = @{}
+$script:Logged = [System.Collections.ArrayList]::new()
+function Write-Log { param([string]$Message, [string]$Level = "INFO") [void]$script:Logged.Add("${Level}: ${Message}") }
+function logged([string]$needle) { return [bool]($script:Logged | Where-Object { $_ -like "*$needle*" }) }
+function sha256([byte[]]$Bytes) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { return (-join ($sha.ComputeHash($Bytes) | ForEach-Object { $_.ToString("x2") })) } finally { $sha.Dispose() } }
+function bytes([string]$Text) { return ,([Text.Encoding]::UTF8.GetBytes($Text)) }
+
+# The distro as the fake wsl.exe sees it: files under /opt/pointy, a path whose
+# read fails, and a path sha256sum reports the wrong hash for.
+$script:GuestFiles = @{}
+$script:BrokenReads = @{}
+$script:LyingHashes = @{}
+function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
+    if ($Command -like "cd '/opt/pointy' && sha256sum *") {
+        $lines = @(foreach ($p in $script:GuestFiles.Keys) {
+            $h = $script:LyingHashes[$p]
+            if (-not $h) { $h = sha256 $script:GuestFiles[$p] }
+            "$h  $p" })
+        # sha256sum exits 1 when any listed file is missing; the lines still count.
+        return [pscustomobject]@{ ExitCode = 1; Output = ($lines -join "`n") } }
+    if ($Command -match "^base64 -w0 '/opt/pointy/(.+)'$") {
+        $p = $Matches[1]
+        if ($script:BrokenReads.ContainsKey($p) -or -not $script:GuestFiles.ContainsKey($p)) {
+            return [pscustomobject]@{ ExitCode = 1; Output = "" } }
+        return [pscustomobject]@{ ExitCode = 0; Output = [Convert]::ToBase64String($script:GuestFiles[$p]) } }
+    return [pscustomobject]@{ ExitCode = 1; Output = "" } }
+
+$keeperV2 = bytes "# keeper v2`r`nWrite-Host 'v2'`r`n"
+$script:GuestFiles["wsl/keep-pointy-running.ps1"] = $keeperV2
+$script:GuestFiles["wsl/timezone-map.txt"] = bytes "Libya Standard Time=Africa/Tripoli`n"
+$script:GuestFiles["move-server.sh"] = bytes "#!/usr/bin/env bash`necho move`n"
+Update-FromGuest
+$local = Join-Path $InstallRoot "keep-pointy-running.ps1"
+Check "copies out the release's keeper, byte for byte (CRLF kept)" (sha256 ([IO.File]::ReadAllBytes($local))) (sha256 $keeperV2)
+Check "copies out the other files the release carries" ((Test-Path (Join-Path $InstallRoot "timezone-map.txt")) -and
+    (Test-Path (Join-Path $InstallRoot "move-server.sh"))) $true
+Check "leaves what the release lacks alone" (Test-Path (Join-Path $InstallRoot "bootstrap-wsl.ps1")) $false
+Check "leaves no staged copies behind" (@(Get-ChildItem $InstallRoot -Filter "*.new").Count) 0
+
+$script:Logged.Clear()
+Update-FromGuest
+Check "an identical file is not copied again" (logged "updated") $false
+
+# A keeper that does not parse would leave nothing to start WSL: refused, once.
+$script:GuestFiles["wsl/keep-pointy-running.ps1"] = bytes "function Broken {`n"
+$script:Logged.Clear()
+Update-FromGuest
+Check "a keeper that does not parse is refused" (logged "refused (it does not parse)") $true
+Check "and the running one is kept" (sha256 ([IO.File]::ReadAllBytes($local))) (sha256 $keeperV2)
+$script:Logged.Clear()
+Update-FromGuest
+Check "a refused copy is logged once, not every round" (logged "refused") $false
+
+# A copy that does not match what sha256sum said is refused too.
+$script:LyingHashes["wsl/timezone-map.txt"] = ("0" * 64)
+$script:GuestFiles["wsl/timezone-map.txt"] = bytes "changed`n"
+$script:Logged.Clear()
+Update-FromGuest
+Check "a copy that does not match the distro's hash is refused" (logged "does not match the distro's") $true
+
+# WSL being busy is not a verdict on the file: the next round tries again.
+$script:GuestFiles["wsl/collect-diagnostics.ps1"] = bytes "Write-Host 'collector'`n"
+$script:BrokenReads["wsl/collect-diagnostics.ps1"] = $true
+Update-FromGuest
+$collector = Join-Path $InstallRoot "collect-diagnostics.ps1"
+$firstTry = Test-Path $collector
+$script:BrokenReads.Clear()
+Update-FromGuest
+Check "a failed read is retried next round" ("{0} {1}" -f $firstTry, (Test-Path $collector)) "False True"
+
+Check "sha256sum lines parse in text and binary mode" (& {
+    function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)
+        return [pscustomobject]@{ ExitCode = 0; Output = ("{0}  wsl/bootstrap-wsl.ps1`r`n{1} *move-server.sh`nsha256sum: x: No such file" -f ("a" * 64), ("b" * 64)) } }
+    $h = Get-GuestFileHashes
+    "{0} {1} {2}" -f $h["wsl/bootstrap-wsl.ps1"].Substring(0, 3), $h["move-server.sh"].Substring(0, 3), $h.Count
+}) "aaa bbb 2"
+
+# Handing over: only to a different keeper that parses, and only by the
+# installed copy (a run from elsewhere started with no hash).
+$StableScript = $local
+[IO.File]::WriteAllText($StableScript, "Write-Host 'one'`n")
+$startedHash = Get-FileSha256 $StableScript
+Check "no handover while the file is unchanged" (Test-KeeperReplaced -StartedHash $startedHash) $false
+Check "no handover by a copy run from elsewhere" (Test-KeeperReplaced -StartedHash "") $false
+[IO.File]::WriteAllText($StableScript, "Write-Host 'two'`n")
+Check "a newer keeper at its path takes over" (Test-KeeperReplaced -StartedHash $startedHash) $true
+[IO.File]::WriteAllText($StableScript, "function Broken {`n")
+Check "never to one that does not parse" (Test-KeeperReplaced -StartedHash $startedHash) $false
+Remove-Item $StableScript
+Check "nor to a missing one" (Test-KeeperReplaced -StartedHash $startedHash) $false
+
 Remove-Item -Recurse -Force $tmp
 Write-Host ("# keeper: {0} passed, {1} failed" -f $pass, $fail)
 if ($fail) { exit 1 }

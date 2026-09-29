@@ -148,6 +148,84 @@ void main() {
     });
   });
 
+  test('a tunnel is virtual but not host-only', () {
+    expect(isHostOnlyAdapterName('vEthernet (WSL)'), isTrue);
+    expect(isHostOnlyAdapterName('docker0'), isTrue);
+    expect(isHostOnlyAdapterName('wg0'), isFalse);
+    expect(isHostOnlyAdapterName('Tailscale'), isFalse);
+    expect(isHostOnlyAdapterName('Ethernet'), isFalse);
+  });
+
+  group('isHostOnlyIpv4', () {
+    // The field case: WSL's switch in 172.16/12, the shop LAN on Ethernet.
+    const wslServerPc = [
+      (
+        interfaceName: 'vEthernet (WSL (Hyper-V firewall))',
+        address: '172.28.240.1',
+      ),
+      (interfaceName: 'Ethernet', address: '192.168.1.20'),
+    ];
+
+    test("WSL's VM, and Windows' end of its switch, exist only here", () {
+      expect(isHostOnlyIpv4('172.28.241.235', wslServerPc), isTrue);
+      expect(isHostOnlyIpv4('172.28.240.1', wslServerPc), isTrue);
+    });
+
+    test("WSL's switch inside the shop's own range still is not the LAN", () {
+      const machine = [
+        (interfaceName: 'vEthernet (WSL)', address: '192.168.176.1'),
+        (interfaceName: 'Ethernet', address: '192.168.1.20'),
+      ];
+      expect(isHostOnlyIpv4('192.168.183.42', machine), isTrue);
+      expect(isHostOnlyIpv4('192.168.1.5', machine), isFalse);
+      expect(isHostOnlyIpv4('192.168.1.20', machine), isFalse);
+    });
+
+    test('a Docker bridge on a Linux server is host-only', () {
+      const machine = [
+        (interfaceName: 'docker0', address: '172.17.0.1'),
+        (interfaceName: 'enp3s0', address: '192.168.1.20'),
+      ];
+      expect(isHostOnlyIpv4('172.17.0.1', machine), isTrue);
+      expect(isHostOnlyIpv4('172.17.0.3', machine), isTrue);
+    });
+
+    test("a real server on the till's /24 is never host-only", () {
+      // 192.168.50.10 falls inside the /20 guessed around VirtualBox's
+      // 192.168.56.1, but it shares a /24 with the Ethernet adapter.
+      const machine = [
+        (
+          interfaceName: 'VirtualBox Host-Only Network',
+          address: '192.168.56.1',
+        ),
+        (interfaceName: 'Ethernet', address: '192.168.50.20'),
+      ];
+      expect(isHostOnlyIpv4('192.168.50.10', machine), isFalse);
+    });
+
+    test('a Hyper-V external switch is the LAN, not a host-only network', () {
+      const machine = [
+        (interfaceName: 'vEthernet (External)', address: '192.168.1.50'),
+      ];
+      expect(isHostOnlyIpv4('192.168.1.60', machine), isFalse);
+    });
+
+    test('a server across a VPN or a router is not on this machine', () {
+      const machine = [
+        (interfaceName: 'wg0', address: '10.8.0.2'),
+        (interfaceName: 'Ethernet', address: '192.168.1.20'),
+      ];
+      expect(isHostOnlyIpv4('10.8.0.1', machine), isFalse);
+      expect(isHostOnlyIpv4('192.168.2.9', machine), isFalse);
+    });
+
+    test('only a private IPv4 can be host-only', () {
+      expect(isHostOnlyIpv4('localhost', wslServerPc), isFalse);
+      expect(isHostOnlyIpv4('203.0.113.9', wslServerPc), isFalse);
+      expect(isHostOnlyIpv4('shop.relay.example', wslServerPc), isFalse);
+    });
+  });
+
   group('preferredLanIpv4Octets', () {
     test('filters junk and orders real LAN before VPN', () {
       final ranked = preferredLanIpv4Octets([

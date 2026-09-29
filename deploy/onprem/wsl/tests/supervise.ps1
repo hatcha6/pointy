@@ -229,12 +229,15 @@ function New-ScheduledTaskTrigger { param([switch]$AtStartup, [switch]$Once, $At
     $kind = "clock"; if ($AtStartup) { $kind = "startup" }
     return [pscustomobject]@{ Kind = $kind; Delay = ""; RepetitionInterval = $RepetitionInterval; RepetitionDuration = $RepetitionDuration } }
 function New-ScheduledTaskSettingsSet { param([switch]$AllowStartIfOnBatteries, [switch]$DontStopIfGoingOnBatteries,
-        [switch]$StartWhenAvailable, $RestartCount, $RestartInterval, $ExecutionTimeLimit, $MultipleInstances)
+        [switch]$StartWhenAvailable, $RestartCount, $RestartInterval, $ExecutionTimeLimit, $MultipleInstances, [switch]$Disable)
     return [pscustomobject]@{ ExecutionTimeLimit = $ExecutionTimeLimit; MultipleInstances = $MultipleInstances
-                              StartWhenAvailable = [bool]$StartWhenAvailable; RestartCount = $RestartCount } }
+                              StartWhenAvailable = [bool]$StartWhenAvailable; RestartCount = $RestartCount
+                              Enabled = (-not $Disable) } }
 function New-ScheduledTaskPrincipal { param($UserId, $LogonType, $RunLevel)
     return [pscustomobject]@{ UserId = $UserId; LogonType = $LogonType; RunLevel = $RunLevel } }
+$script:RegisterThrows = $false
 function Register-ScheduledTask { param($TaskName, $Action, $Trigger, $Principal, $Settings, [switch]$Force, $ErrorAction)
+    if ($script:RegisterThrows) { throw "Access is denied." }
     $script:Registered = [pscustomobject]@{ TaskName = $TaskName; Action = $Action; Triggers = @($Trigger)
                                             Principal = $Principal; Settings = $Settings } }
 function Get-ScheduledTask { param($TaskName, $ErrorAction)
@@ -256,7 +259,23 @@ check "the task fires at startup AND on the clock, runs the supervisor, and is n
         ($t.Action.Argument -like '*-File "C:\ProgramData\Pointy\bootstrap-wsl.ps1"*' -or $t.Action.Argument -like "*bootstrap-wsl.ps1*") -and
         ($t.Principal.LogonType -eq "S4U") -and ($t.Principal.RunLevel -eq "Highest") -and
         ($t.Settings.ExecutionTimeLimit -eq [TimeSpan]::Zero) -and ($t.Settings.MultipleInstances -eq "IgnoreNew") -and
-        $t.Settings.StartWhenAvailable -and (logged "at startup, and every 5 minutes")
+        $t.Settings.StartWhenAvailable -and $t.Settings.Enabled -and (logged "at startup, and every 5 minutes")
+}
+# With the keeper in the bundle, PointyWSL is registered OFF in the same step:
+# registered on and turned off after, its 5-minute trigger could start a
+# supervisor beside the keeper in between.
+check "beside the keeper the task is registered off, in one step" {
+    $script:Log.Clear()
+    Register-BootTask -Disabled
+    $t = $script:Registered
+    ($t.TaskName -eq "PointyWSL") -and (-not $t.Settings.Enabled) -and ($t.Principal.LogonType -eq "S4U") -and
+        (logged "registered OFF")
+}
+check "a task that cannot be registered does not stop an install that sets up the keeper" {
+    $script:Log.Clear(); $script:RegisterThrows = $true
+    Register-BootTask -Disabled
+    $script:RegisterThrows = $false
+    (logged "could not register 'PointyWSL' automatically") -and (logged "carrying on: the keeper keeps the distro alive")
 }
 check "a running supervisor is stopped before the install, and only then" {
     $script:TaskStopped = $false; $script:TaskState = "Running"
@@ -280,6 +299,59 @@ check "the supervisor task is started when idle and left alone when running" {
     $script:Log.Clear(); $script:TaskState = $null
     $c = Start-SupervisorTask
     $a -and $b -and (-not $c) -and $startedWhenReady -and -not $startedWhenRunning -and (logged "could not start the 'PointyWSL' task")
+}
+
+# --- the keeper: what keeps the distro alive once the installer sets it up ---
+$KeeperPath = (Resolve-Path (Join-Path $PSScriptRoot ".." "keep-pointy-running.ps1")).Path
+check "the install sets the keeper up with its own -Install, for this distro and these ports" {
+    $script:Log.Clear(); $script:NativeLog.Clear()
+    $ok = Install-Keeper -Path $KeeperPath
+    $ok -and (called "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $KeeperPath -Install -Distro Pointy -ApiPort 8000 -WebPort 80")
+}
+check "a keeper that could not be set up reports it, so the install falls back to PointyWSL" {
+    function Invoke-Native { param([string]$File, [string[]]$Arguments)
+        return [pscustomobject]@{ ExitCode = 1; Output = "2026-09-29 10:00:00 ERROR the 'Pointy' distro is not registered" } }
+    $script:Log.Clear()
+    $ok = Install-Keeper -Path $KeeperPath
+    (-not $ok) -and (logged "the keeper could not be set up (exit 1)")
+}
+
+# Per-task states from here on: the keeper and PointyWSL are told apart.
+$script:TaskStates = @{}
+$script:StartedTasks = [System.Collections.ArrayList]::new()
+function Get-ScheduledTask { param($TaskName, $ErrorAction)
+    if (-not $script:TaskStates.ContainsKey($TaskName)) {
+        throw "No MSFT_ScheduledTask objects found with property 'TaskName' equal to '$TaskName'." }
+    return [pscustomobject]@{ TaskName = $TaskName; State = $script:TaskStates[$TaskName] } }
+function Start-ScheduledTask { param($TaskName, $ErrorAction) [void]$script:StartedTasks.Add($TaskName) }
+
+check "only a keeper task that exists and is not disabled counts as installed" {
+    $script:TaskStates = @{}
+    $absent = Test-KeeperInstalled
+    $script:TaskStates = @{ PointyKeepAlive = "Disabled" }
+    $disabled = Test-KeeperInstalled
+    $script:TaskStates = @{ PointyKeepAlive = "Ready" }
+    $ready = Test-KeeperInstalled
+    (-not $absent) -and (-not $disabled) -and $ready
+}
+check "an operator's one-off pass starts the keeper where there is one, never PointyWSL beside it" {
+    $script:StartedTasks.Clear()
+    $script:TaskStates = @{ PointyKeepAlive = "Ready"; PointyWSL = "Disabled" }
+    $ok = Start-KeepAliveTask
+    $ok -and (($script:StartedTasks -join ",") -eq "PointyKeepAlive")
+}
+check "a running keeper is left alone" {
+    $script:StartedTasks.Clear()
+    $script:TaskStates = @{ PointyKeepAlive = "Running"; PointyWSL = "Disabled" }
+    (Start-KeepAliveTask) -and ($script:StartedTasks.Count -eq 0)
+}
+check "with no keeper, or a disabled one, the one-off pass starts PointyWSL as before" {
+    $script:StartedTasks.Clear()
+    $script:TaskStates = @{ PointyWSL = "Ready" }
+    $a = Start-KeepAliveTask
+    $script:TaskStates = @{ PointyKeepAlive = "Disabled"; PointyWSL = "Ready" }
+    $b = Start-KeepAliveTask
+    $a -and $b -and (($script:StartedTasks -join ",") -eq "PointyWSL,PointyWSL")
 }
 
 # --- power ------------------------------------------------------------------

@@ -30,8 +30,8 @@
     * registers PointyProbe, a task that appends one line a minute to
       %ProgramData%\Pointy\logs\probe.csv: is the distro running, is the WSL
       VM up, is the keep-alive client attached, does the stack answer, when
-      did PointyWSL last run. It only asks WSL for a list; it never starts
-      the distro.
+      did the keep-alive task (PointyKeepAlive, else PointyWSL) last run. It
+      only asks WSL for a list; it never starts the distro.
 #>
 [CmdletBinding()]
 param(
@@ -58,6 +58,13 @@ $env:WSL_UTF8 = "1"
 [System.Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 
 $TaskName    = "PointyWSL"
+# keep-pointy-running.ps1's task: what keeps the distro alive once the
+# installer (or its own -Install) set it up. PointyWSL is then off on purpose,
+# and the findings about it do not apply.
+$KeeperTaskName = "PointyKeepAlive"
+$KeeperLog   = Join-Path $InstallRoot "logs\keepalive.log"
+$KeeperState = Join-Path $InstallRoot "keepalive-state.json"
+$MovedFile   = Join-Path $InstallRoot "MOVED-TO-LINUX.txt"
 $ProbeTask   = "PointyProbe"
 $ProbeScript = Join-Path $InstallRoot "pointy-probe.ps1"
 $ProbeLog    = Join-Path $InstallRoot "logs\probe.csv"
@@ -377,9 +384,10 @@ try {
     if ($vm.Count) { $vmStarted = $vm[0].CreationDate.ToString("s"); $vmMb = [int]($vm[0].WorkingSetSize / 1MB) }
     $clients = @(Get-CimInstance Win32_Process -Filter "Name='wsl.exe' OR Name='wslhost.exe'")
     $sessions = (@($clients | ForEach-Object { $_.SessionId }) | Sort-Object -Unique) -join " "
-    # The supervisor's keep-alive client: the one wsl.exe that must always be
-    # here, because WSL powers the distro off ~15 s after the last one exits.
-    $anchors = @($clients | Where-Object { "$($_.CommandLine)" -like "*--exec /bin/sleep infinity*" -and
+    # The keep-alive client: the one wsl.exe that must always be here, because
+    # WSL powers the distro off ~15 s after the last one exits. The keeper's
+    # sleeps 2147483647, the PointyWSL supervisor's sleeps infinity.
+    $anchors = @($clients | Where-Object { "$($_.CommandLine)" -match '--exec /bin/sleep (infinity|2147483647)(\s|$)' -and
         "$($_.CommandLine)" -match "(^|\s)-d\s+$([regex]::Escape($Distro))(\s|$)" }).Count
 } catch { }
 
@@ -392,8 +400,10 @@ try {
 
 $taskState = ""; $taskRun = ""; $taskResult = ""
 try {
-    $task = Get-ScheduledTask -TaskName "PointyWSL"
-    $taskState = "$($task.State)"
+    # Whichever keeps the distro alive: the keeper when it is installed.
+    $task = Get-ScheduledTask -TaskName "PointyKeepAlive"
+    if (-not $task) { $task = Get-ScheduledTask -TaskName "PointyWSL" }
+    if ($task) { $taskState = "$($task.TaskName):$($task.State)" }
     $info = $task | Get-ScheduledTaskInfo
     $taskRun = $info.LastRunTime.ToString("s")
     $taskResult = "0x{0:X}" -f $info.LastTaskResult
@@ -502,14 +512,15 @@ function Test-SameAccount {
     return ((($A -split '\\')[-1]) -ieq (($B -split '\\')[-1]))
 }
 
-# Is this wsl.exe the supervisor's keep-alive client? bootstrap-wsl.ps1 -Boot
-# holds `wsl.exe -d <distro> -u root --exec /bin/sleep infinity` open for as
-# long as Windows is up, because WSL powers a distro off ~15 s after the last
-# Windows-side client exits, whatever systemd inside is doing.
+# Is this wsl.exe a keep-alive client? keep-pointy-running.ps1 holds
+# `wsl.exe -d <distro> -u root --exec /bin/sleep 2147483647` open while its
+# user is signed in; bootstrap-wsl.ps1 -Boot holds `... /bin/sleep infinity`.
+# WSL powers a distro off ~15 s after the last Windows-side client exits,
+# whatever systemd inside is doing.
 function Test-AnchorCommandLine {
     param([string]$CommandLine, [string]$DistroName)
     return ($CommandLine -match "(^|\s)-d\s+$([regex]::Escape($DistroName))(\s|$)" -and
-            $CommandLine -like "*--exec /bin/sleep infinity*")
+            $CommandLine -match '--exec /bin/sleep (infinity|2147483647)(\s|$)')
 }
 
 # Where an account's profile (and so its .wslconfig) really is. Not
@@ -727,8 +738,14 @@ if (-not $isAdmin) {
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
 $me = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $pointyTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+$keeperTask = Get-ScheduledTask -TaskName $KeeperTaskName -ErrorAction SilentlyContinue
+# When the keeper is on, it is what keeps the distro alive, and PointyWSL is
+# off on purpose.
+$keeperOn = [bool]($keeperTask -and "$($keeperTask.State)" -ne "Disabled")
 $owner = $me
-if ($pointyTask) { $owner = "$($pointyTask.Principal.UserId)" }
+$ownerSource = "this collector's own account"
+if ($keeperOn) { $owner = "$($keeperTask.Principal.UserId)"; $ownerSource = "the $KeeperTaskName task" }
+elseif ($pointyTask) { $owner = "$($pointyTask.Principal.UserId)"; $ownerSource = "the $TaskName task" }
 $canGuest = Test-SameAccount $owner $me
 
 # 1. Before anything else: the state the collector FOUND. Everything after
@@ -763,6 +780,34 @@ if ($supervisor) {
     if ($supervisorAlive) { $aliveText = "alive" }
     $supervisorText = "PID $($supervisor.supervisor_pid) ($aliveText), heartbeat $(Format-Span $supervisorAge) ago, distro restarts $($supervisor.distro_restarts)"
 }
+# The keeper's heartbeat: it writes one every minute while it runs.
+$keeper = $null
+$keeperAge = $null
+$keeperAlive = $false
+try {
+    if (Test-Path $KeeperState) {
+        $keeper = Get-Content -Raw $KeeperState | ConvertFrom-Json
+        $keeperAge = (Get-Date) - [datetime]$keeper.heartbeat_at
+        if ($keeper.keeper_pid) {
+            $keeperAlive = [bool](Get-Process -Id ([int]$keeper.keeper_pid) -ErrorAction SilentlyContinue)
+        }
+    }
+} catch { $keeper = $null }
+$keeperText = "not installed (no $KeeperTaskName task)"
+if ($keeperTask) {
+    $keeperText = "task $($keeperTask.State), no heartbeat file ($KeeperState)"
+    if ($keeper) {
+        $aliveText = "gone"
+        if ($keeperAlive) { $aliveText = "alive" }
+        $keeperText = ("task $($keeperTask.State), PID $($keeper.keeper_pid) ($aliveText), heartbeat $(Format-Span $keeperAge) ago, " +
+                       "stack answering: $($keeper.healthy), distro restarts $($keeper.distro_restarts)")
+    }
+}
+# Whether Windows signs in by itself: the keeper runs only in a signed-in session.
+$winlogon = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" -ErrorAction SilentlyContinue
+$autoSignIn = [bool]($winlogon -and "$($winlogon.AutoAdminLogon)" -eq "1")
+$autoSignInUser = ""
+if ($autoSignIn) { $autoSignInUser = "$($winlogon.DefaultDomainName)\$($winlogon.DefaultUserName)" }
 $probes = [ordered]@{}
 foreach ($url in @("http://127.0.0.1:8000/healthz-edge", "http://127.0.0.1:8000/readyz/", "http://127.0.0.1:80/healthz-web")) {
     $probes[$url] = Get-HttpStatus $url
@@ -777,6 +822,7 @@ Save-Section "00-state-before.txt" {
     else { "WSL VM            : NOT running (no vmmem process)" }
     "wsl.exe clients   : $($clientsBefore.Count) (sessions: $((@($clientsBefore | ForEach-Object { $_.SessionId }) | Sort-Object -Unique) -join ', '))"
     "keep-alive client : $anchorText"
+    "keeper            : $keeperText"
     "supervisor        : $supervisorText"
     ""
     foreach ($url in $probes.Keys) { "{0,-44} -> {1}" -f $url, $probes[$url] }
@@ -801,7 +847,8 @@ Save-Section "windows\system.txt" {
     "Time zone       : $((Get-TimeZone).Id)"
     "Console user    : $($cs.UserName)"
     "Collector user  : $me (admin: $isAdmin)"
-    "Distro owner    : $owner (from the $TaskName task)"
+    "Distro owner    : $owner (from $ownerSource)"
+    "Auto sign-in    : $autoSignIn $autoSignInUser"
     ""
     "## logged-on sessions"
     (Invoke-Native "quser.exe").Output
@@ -873,6 +920,8 @@ Save-Section "windows\wsl.txt" {
             @{ n = "SizeGB"; e = { [math]::Round($_.Size / 1GB, 1) } } | Format-Table -AutoSize
 }
 Save-Section "windows\tasks.txt" {
+    Get-TaskReport $KeeperTaskName
+    ""
     Get-TaskReport $TaskName
     ""
     Get-TaskReport $ProbeTask
@@ -888,7 +937,7 @@ Save-Section "windows\tasks.txt" {
     "## Task Scheduler history log"
     (Invoke-Native "wevtutil.exe" @("gl", "Microsoft-Windows-TaskScheduler/Operational")).Output
 }
-foreach ($task in @($TaskName, $ProbeTask)) {
+foreach ($task in @($KeeperTaskName, $TaskName, $ProbeTask)) {
     try {
         $xml = Export-ScheduledTask -TaskName $task -ErrorAction Stop
         Write-TextFile -Path (Join-Path $Work "windows\task-$task.xml") -Text $xml
@@ -1006,13 +1055,13 @@ $hyperV = @($hyperV | Sort-Object TimeCreated)
 Write-TextFile -Path (Join-Path $Work "events\hyper-v.txt") -Text (($hyperV | ForEach-Object { Format-EventLine $_ "HyperV" }) -join "`n")
 foreach ($e in $hyperV) { Add-Timeline $e.TimeCreated (Format-EventLine $e "HyperV") }
 
-# PointyWSL's own history - only there if Task Scheduler history is on.
+# The Pointy tasks' own history - only there if Task Scheduler history is on.
 $taskEvents = @()
 $ms = [int64]$Days * 86400000
 try {
     $taskEvents = @(Get-WinEvent -LogName "Microsoft-Windows-TaskScheduler/Operational" -ErrorAction Stop -FilterXPath (
         "*[System[TimeCreated[timediff(@SystemTime) <= $ms]] and EventData[Data[@Name='TaskName']='\$TaskName' " +
-        "or Data[@Name='TaskName']='\$ProbeTask']]") | Sort-Object TimeCreated)
+        "or Data[@Name='TaskName']='\$KeeperTaskName' or Data[@Name='TaskName']='\$ProbeTask']]") | Sort-Object TimeCreated)
 } catch { }
 Write-TextFile -Path (Join-Path $Work "events\task-scheduler.txt") -Text (($taskEvents | ForEach-Object { Format-EventLine $_ "Task" }) -join "`n")
 foreach ($e in $taskEvents) { Add-Timeline $e.TimeCreated (Format-EventLine $e "Task") }
@@ -1023,8 +1072,23 @@ $pointyDir = Join-Path $Work "pointy"
 New-Item -ItemType Directory -Force -Path $pointyDir | Out-Null
 foreach ($file in @($BootLog, ($BootLog -replace '\.log$', '.1.log'), (Join-Path $InstallRoot "bridge-state.json"),
                     $SupervisorFile, $ProbeLog, ($ProbeLog -replace '\.csv$', '.1.csv'),
-                    (Join-Path $InstallRoot "bootstrap-wsl.ps1"))) {
+                    (Join-Path $InstallRoot "bootstrap-wsl.ps1"), $KeeperLog, ($KeeperLog -replace '\.log$', '.1.log'),
+                    $KeeperState, (Join-Path $InstallRoot "keep-pointy-running.ps1"))) {
     if (Test-Path $file) { Copy-Item -Force $file $pointyDir -ErrorAction SilentlyContinue }
+}
+
+# keepalive.log is the keeper's diary, in its own format ("yyyy-MM-dd
+# HH:mm:ss LEVEL message"). Each "WSL stopped the distro" is a restart it did.
+$keeperRestarts = 0
+if (Test-Path $KeeperLog) {
+    foreach ($line in [System.IO.File]::ReadAllLines($KeeperLog)) {
+        if ($line -notmatch '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (\w+) (.*)$') { continue }
+        $keeperLevel = $Matches[2]; $keeperMessage = $Matches[3]
+        $time = [datetime]::ParseExact($Matches[1], "yyyy-MM-dd HH:mm:ss", [Globalization.CultureInfo]::InvariantCulture)
+        if ($time -lt $Since) { continue }
+        if ($keeperMessage -like "WSL stopped the distro*") { $keeperRestarts++ }
+        Add-Timeline $time ("{0:yyyy-MM-dd HH:mm:ss}  {1,-5} [Keep] {2}" -f $time, $keeperLevel, $keeperMessage)
+    }
 }
 Save-Section "pointy\install-root.txt" {
     Get-ChildItem -Force -Recurse -Depth 1 $InstallRoot -ErrorAction SilentlyContinue |
@@ -1148,7 +1212,37 @@ if ($ownerWslConfig -and (Test-Path $ownerWslConfig)) { $wslConfigText = [System
 $instanceIdle = Get-WslConfigValue $wslConfigText "general" "instanceIdleTimeout"
 if ($null -eq $instanceIdle) { $instanceIdle = "not set" }
 
-if (-not $pointyTask) {
+if (Test-Path $MovedFile) {
+    Add-Finding "   This server was exported to Linux ($MovedFile): nothing here is meant to keep it running."
+} elseif ($keeperOn) {
+    # keep-pointy-running.ps1 keeps the distro alive from the signed-in
+    # session. PointyWSL is off on purpose, so none of its findings apply.
+    $keeperInfo = $keeperTask | Get-ScheduledTaskInfo
+    if ("$($keeperTask.State)" -ne "Running") {
+        Add-Finding ("!! The keeper is not running (the $KeeperTaskName task is $($keeperTask.State)), so nothing holds the " +
+                     "distro open. It runs only while $owner is signed in to Windows, and starts within a minute of that " +
+                     "sign-in. Its last run ($($keeperInfo.LastRunTime)) ended: $(Format-TaskResult $keeperInfo.LastTaskResult).")
+    } elseif (-not $keeper) {
+        Add-Finding "!  The keeper is running but has not written a heartbeat ($KeeperState) yet."
+    } elseif ($keeperAge.TotalMinutes -gt 5) {
+        Add-Finding ("!! The keeper is running but its heartbeat is $(Format-Span $keeperAge) old (last $($keeper.heartbeat_at)). " +
+                     "A keeper that stops cycling neither restarts the distro nor re-points the bridge. pointy\keepalive.log says where it stopped.")
+    }
+    if (-not $autoSignIn) {
+        Add-Finding ("!  Windows does not sign in by itself, so after a restart or a power cut the server stays down until " +
+                     "$owner signs in. Turn on automatic sign-in for $owner (Sysinternals Autologon).")
+    } elseif (-not (Test-SameAccount $autoSignInUser $owner)) {
+        Add-Finding ("!  Windows signs in by itself as $autoSignInUser, but the keeper runs for $owner. Unless those are one " +
+                     "account, the server stays down after a restart until $owner signs in.")
+    }
+    if ($keeperRestarts) {
+        Add-Finding ("!  The keeper found the distro stopped and started it again $keeperRestarts time(s) in the last $Days days " +
+                     "(a WSL update, 'wsl --shutdown', or a crash); the timeline has each.")
+    }
+    if ($pointyTask -and "$($pointyTask.State)" -ne "Disabled") {
+        Add-Finding "!  The $TaskName task is on beside the keeper. Its supervisor stands down while the keeper is installed."
+    }
+} elseif (-not $pointyTask) {
     Add-Finding "!! The $TaskName task does not exist, so nothing starts the distro after a restart. Re-running bootstrap-wsl.ps1 registers it."
 } else {
     if ("$($pointyTask.State)" -eq "Disabled") { Add-Finding "!! The $TaskName task is DISABLED." }
@@ -1197,10 +1291,14 @@ if ($anchorBefore.Count -eq 0) {
     # keep-alive client is what stands between the shop and that timer.
     $taskText = "not registered"
     if ($pointyTask) { $taskText = "$($pointyTask.State)" }
-    Add-Finding ("!! No keep-alive client is attached to the distro (no 'wsl.exe -d $Distro -u root --exec /bin/sleep infinity'). " +
+    $holder = "bootstrap-wsl.ps1 -Boot holds that client open; the $TaskName task is $taskText."
+    if ($keeperTask) {
+        $holder = ("keep-pointy-running.ps1 holds that client open while $owner is signed in; the $KeeperTaskName task " +
+                   "is $($keeperTask.State).")
+    }
+    Add-Finding ("!! No keep-alive client is attached to the distro (no 'wsl.exe -d $Distro -u root --exec /bin/sleep ...'). " +
                  "WSL powers a distro off ~15 s after its last Windows-side wsl.exe exits - systemd inside does not count - " +
-                 "so without one the stack is down unless a WSL window is open. bootstrap-wsl.ps1 -Boot holds that client " +
-                 "open; the $TaskName task is $taskText.")
+                 "so without one the stack is down unless a WSL window is open. " + $holder)
     if ($instanceIdle -ne "-1") {
         if ($canIdleOff) {
             Add-Finding ("!  As a fallback this WSL ($versionText) can also be told never to idle the distro off: add '[general]' " +
@@ -1212,12 +1310,19 @@ if ($anchorBefore.Count -eq 0) {
 } elseif ($instanceIdle -ne "-1" -and $canIdleOff) {
     Add-Finding "   [general] instanceIdleTimeout is not set in $where; not needed while the keep-alive client is attached (a newer bootstrap sets it)."
 }
-foreach ($key in @("sparseVhd", "autoMemoryReclaim")) {
-    if ($null -ne (Get-WslConfigValue $wslConfigText "wsl2" $key)) {
-        Add-Finding "   .wslconfig sets $key under [wsl2], where WSL ignores it with a warning (it is an [experimental] key)."
+# Neither belongs in a server's .wslconfig, in any section; keep-pointy-running.ps1
+# removes both when it starts, and a current bootstrap no longer writes them.
+$riskyKeys = @{ sparseVhd = "WSL 2.5.6+ refuses sparse disks over a data-corruption risk"
+                autoMemoryReclaim = "gradual reclaim breaks the Docker daemon running as a service" }
+foreach ($key in @($riskyKeys.Keys)) {
+    if ($null -ne (Get-WslConfigValue $wslConfigText "experimental" $key)) {
+        Add-Finding "!  .wslconfig sets $key under [experimental], where WSL applies it: $($riskyKeys[$key]). Remove it."
+    } elseif ($null -ne (Get-WslConfigValue $wslConfigText "wsl2" $key)) {
+        Add-Finding "   .wslconfig sets $key under [wsl2], where WSL ignores it with a warning. Remove it; do not move it to [experimental]."
     }
 }
-foreach ($line in @($bootErrors | Where-Object { $_ -match 'could not start distro' } | Select-Object -Last 1)) {
+# bootstrap.log records PointyWSL's runs; with the keeper on they are history.
+foreach ($line in @($bootErrors | Where-Object { -not $keeperOn -and $_ -match 'could not start distro' } | Select-Object -Last 1)) {
     Add-Finding "!! $TaskName could not start the distro. Its last attempt: $line"
 }
 if ($before.State -eq "stopped") {
@@ -1232,10 +1337,10 @@ if ($bridgeState -and $bridgeState.ftp_verified -eq $false) {
     Add-Finding ("!  The last bridge check found FTP camera uploads unreachable from the LAN (ports $($bridgeState.ftp_port) " +
                  "and $($bridgeState.ftp_passive_ports)); bootstrap.log names the broken hop.")
 }
-if ($gaps.Count) {
+if ($gaps.Count -and -not $keeperOn) {
     Add-Finding "!  bootstrap.log shows $($gaps.Count) stretch(es) of over 11 minutes with no $TaskName run (listed below)."
 }
-if ($bootNotAnswering) {
+if ($bootNotAnswering -and -not $keeperOn) {
     Add-Finding "!  $bootNotAnswering of $($bootRuns.Count) logged $TaskName runs found the stack not answering inside WSL."
 }
 if ($fastStartup -eq 1) {
@@ -1246,11 +1351,11 @@ if ("$sleepAc" -ne "" -and [int]$sleepAc -gt 0) {
 }
 if ($count["sleeps"]) { Add-Finding "!  Windows went to sleep $($count['sleeps']) time(s) in the last $Days days." }
 if ($count["unclean"]) { Add-Finding "!  Windows restarted without a clean shutdown $($count['unclean']) time(s) (power cut or crash)." }
-if (-not $historyOn) { Add-Finding "   Task Scheduler history is off, so $TaskName's past runs are not recorded. -Arm turns it on." }
+if (-not $historyOn) { Add-Finding "   Task Scheduler history is off, so the Pointy tasks' past runs are not recorded. -Arm turns it on." }
 if (@($processesBefore | Where-Object { $_.Name -like "*docker*" }).Count -or (Get-Service com.docker.service -ErrorAction SilentlyContinue)) {
     Add-Finding "!  Docker Desktop is on this PC. If it still starts an old Pointy stack, it competes for ports 8000 and 80."
 }
-$otherTasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like "Pointy*" -and $_.TaskName -notin @($TaskName, $ProbeTask) })
+$otherTasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like "Pointy*" -and $_.TaskName -notin @($TaskName, $KeeperTaskName, $ProbeTask) })
 if ($otherTasks.Count) {
     Add-Finding "!  Other Pointy tasks exist: $((@($otherTasks) | ForEach-Object { $_.TaskName }) -join ', ') (left over from the Docker Desktop install?)."
 }
@@ -1301,11 +1406,19 @@ Add-Line "  $wslVersion"
 Add-Line "  distro when collection started: $($before.State)   VM: $vmText"
 Add-Line "  wsl.exe clients attached: $($clientsBefore.Count)"
 Add-Line "  keep-alive client: $anchorText"
+Add-Line "  keeper: $keeperText"
 Add-Line "  supervisor: $supervisorText"
 Add-Line "  [general] instanceIdleTimeout: $instanceIdle   ($ownerWslConfig)"
+Add-Line "TASK $KeeperTaskName (keep-pointy-running.ps1)"
+if ($keeperTask) {
+    Add-Line "  state $($keeperTask.State) (Running while $owner is signed in is the design), runs as $($keeperTask.Principal.UserId) ($($keeperTask.Principal.LogonType))"
+    Add-Line "  Windows signs in by itself: $autoSignIn $autoSignInUser"
+} else { Add-Line "  NOT registered" }
 Add-Line "TASK $TaskName"
+$designText = "Running is the design: -Boot supervises from boot to shutdown"
+if ($keeperOn) { $designText = "Disabled is the design: the keeper replaces it" }
 if ($pointyTask) {
-    Add-Line "  state $($pointyTask.State) (Running is the design: -Boot supervises from boot to shutdown), runs as $($pointyTask.Principal.UserId) ($($pointyTask.Principal.LogonType))"
+    Add-Line "  state $($pointyTask.State) ($designText), runs as $($pointyTask.Principal.UserId) ($($pointyTask.Principal.LogonType))"
     if ($taskInfo) {
         Add-Line "  last run $($taskInfo.LastRunTime) -> $(Format-TaskResult $taskInfo.LastTaskResult)"
         Add-Line "  next run $($taskInfo.NextRunTime), missed runs $($taskInfo.NumberOfMissedRuns)"
@@ -1371,7 +1484,11 @@ if ($Arm) {
         if ($firstRow) {
             [void]$armLines.Add("PointyProbe first row: $firstRow")
             if ($firstRow -match ',not-visible') {
-                [void]$armLines.Add("!! Running as a task, WSL could not see the distro. That alone would stop PointyWSL from ever starting it.")
+                if ($keeperOn) {
+                    [void]$armLines.Add("   Running as a task, WSL could not see the distro: why PointyWSL is off. The keeper runs in the signed-in session instead.")
+                } else {
+                    [void]$armLines.Add("!! Running as a task, WSL could not see the distro. That alone would stop PointyWSL from ever starting it.")
+                }
             }
         } else {
             [void]$armLines.Add("PointyProbe: no row after 30s. Check the task in Task Scheduler (taskschd.msc).")

@@ -21,8 +21,13 @@
   It runs only while Windows is signed in to the account that owns the Pointy
   distro, so that account should sign in automatically after a restart.
 
-  Install, once, from an ELEVATED PowerShell, signed in as the Windows user
-  that installed Pointy:
+  bootstrap-wsl.ps1 installs it. Release updates reach it through the distro:
+  every 15 minutes it copies the Windows-side files a release put in
+  /opt/pointy out to %ProgramData%\Pointy, and hands over to a newer copy of
+  itself. The keep-alive client stays attached throughout.
+
+  Install by hand (a shop installed before the installer did it), once, from
+  an ELEVATED PowerShell, signed in as the Windows user that installed Pointy:
       powershell -ExecutionPolicy Bypass -File .\keep-pointy-running.ps1 -Install
 
   Undo (removes this task and turns the PointyWSL boot task back on):
@@ -57,7 +62,8 @@ $InstallRoot  = Join-Path $env:ProgramData "Pointy"
 $LogDir       = Join-Path $InstallRoot "logs"
 $LogFile      = Join-Path $LogDir "keepalive.log"
 $StateFile    = Join-Path $InstallRoot "keepalive-state.json"
-# Present while an export runs: WSL stays open, the stack is left alone.
+# Present while an export or an operator's maintenance runs: WSL stays open,
+# the stack is left alone.
 $HoldFile     = Join-Path $InstallRoot "keepalive.hold"
 # Present once the server has been exported for good: nothing to keep running.
 $MovedFile    = Join-Path $InstallRoot "MOVED-TO-LINUX.txt"
@@ -71,6 +77,19 @@ $GuestDir     = "/opt/pointy"
 $AnchorSleep  = "2147483647"
 $CheckEverySec = 60
 $script:WslExe = ""
+# Release updates land inside the distro (update-lib.sh adopts them into
+# $GuestDir). The keeper copies these out, this often: path under $GuestDir ->
+# file name under $InstallRoot.
+$PromoteEverySec = 900
+$PromotedFiles = [ordered]@{
+    "wsl/keep-pointy-running.ps1" = "keep-pointy-running.ps1"
+    "wsl/bootstrap-wsl.ps1"       = "bootstrap-wsl.ps1"
+    "wsl/collect-diagnostics.ps1" = "collect-diagnostics.ps1"
+    "wsl/timezone-map.txt"        = "timezone-map.txt"
+    "move-server.sh"              = "move-server.sh"
+}
+# Hashes of release copies already refused, so a bad one is logged once.
+$script:RefusedHashes = @{}
 
 # Arabic is spelled out as code points so this file stays plain ASCII, which
 # Windows PowerShell reads the same way whatever the PC's language.
@@ -501,13 +520,17 @@ function Disable-OldBootTask {
     try {
         $task = Get-ScheduledTask -TaskName $OldTaskName -ErrorAction SilentlyContinue
         if (-not $task) { return }
-        if ($StopRunning -and "$($task.State)" -eq "Running") {
-            Stop-ScheduledTask -TaskName $OldTaskName -ErrorAction Stop
-            Write-Log "stopped the running '${OldTaskName}' supervisor"
-        }
+        $wasRunning = ("$($task.State)" -eq "Running")
+        # Off first, so its 5-minute trigger cannot start it again in between.
         if ("$($task.State)" -ne "Disabled") {
             Disable-ScheduledTask -TaskName $OldTaskName -ErrorAction Stop | Out-Null
             Write-Log "turned off the '${OldTaskName}' boot task; this keeper replaces it"
+        }
+        # Stopped whatever its state read: an instance that started just before
+        # the task was turned off keeps running, and may read as Disabled.
+        if ($StopRunning) {
+            Stop-ScheduledTask -TaskName $OldTaskName -ErrorAction SilentlyContinue
+            if ($wasRunning) { Write-Log "stopped the running '${OldTaskName}' supervisor" }
         }
     } catch {
         Write-Log "could not turn off the '${OldTaskName}' task: $($_.Exception.Message)" "WARN"
@@ -548,6 +571,100 @@ function Write-KeeperState {
 
 
 # ---------------------------------------------------------------------------
+# Updates. A release update lands inside the distro: update-lib.sh adopts its
+# Windows-side files into $GuestDir. The PointyWSL supervisor that used to
+# copy them out is off, and nothing else on Windows runs, so the keeper does -
+# this file included - or a shop would keep the keeper it was installed with
+# forever.
+# ---------------------------------------------------------------------------
+
+function Get-FileSha256 {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return "" }
+    try { return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() } catch { return "" }
+}
+
+# A .ps1 that does not parse is never promoted, or handed over to: the keeper
+# runs whatever sits at its own path, and a broken one would leave nothing to
+# start WSL again after the next update or shutdown.
+function Test-ScriptParses {
+    param([string]$Path)
+    try {
+        $tokens = $null; $errors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$tokens, [ref]$errors) | Out-Null
+        return (@($errors).Count -eq 0)
+    } catch { return $false }
+}
+
+# sha256 of each promoted file inside the distro, keyed by its path under
+# $GuestDir; one wsl.exe call for all of them. A file the release does not
+# carry is simply absent.
+function Get-GuestFileHashes {
+    $paths = @($PromotedFiles.Keys | ForEach-Object { "'$_'" }) -join " "
+    $r = Invoke-Guest "cd '${GuestDir}' && sha256sum ${paths} 2>/dev/null" -TimeoutSec 60
+    $hashes = @{}
+    foreach ($line in ("$($r.Output)" -split "`r?`n")) {
+        if ($line -match '^([0-9a-f]{64})\s+\*?(\S+)\s*$') { $hashes[$Matches[2]] = $Matches[1] }
+    }
+    return $hashes
+}
+
+# The file's exact bytes, through wsl.exe's output as base64: no /mnt/c mount
+# involved, and nothing on the way can change an encoding or a line ending.
+function Save-GuestFile {
+    param([string]$GuestPath, [string]$Destination)
+    $r = Invoke-Guest "base64 -w0 '${GuestDir}/${GuestPath}'" -TimeoutSec 120
+    if ($r.ExitCode -ne 0 -or -not $r.Output) { return $false }
+    try {
+        [System.IO.File]::WriteAllBytes($Destination, [Convert]::FromBase64String(($r.Output -replace '\s', '')))
+        return $true
+    } catch { return $false }
+}
+
+# Copy out each promoted file whose copy in the distro differs from the one
+# here. A copy is written beside the target, checked, then moved over it, so
+# the target is never half-written.
+function Update-FromGuest {
+    $guest = Get-GuestFileHashes
+    foreach ($guestPath in @($PromotedFiles.Keys)) {
+        $want = $guest[$guestPath]
+        if (-not $want -or $script:RefusedHashes.ContainsKey($want)) { continue }
+        $name = $PromotedFiles[$guestPath]
+        $target = Join-Path $InstallRoot $name
+        if ((Get-FileSha256 $target) -eq $want) { continue }
+        $staged = "${target}.new"
+        try {
+            # Not being able to read it is WSL being busy; the next round retries.
+            if (-not (Save-GuestFile -GuestPath $guestPath -Destination $staged)) { continue }
+            $problem = ""
+            if ((Get-FileSha256 $staged) -ne $want) { $problem = "the copy does not match the distro's" }
+            elseif ($name -like "*.ps1" -and -not (Test-ScriptParses $staged)) { $problem = "it does not parse" }
+            if ($problem) {
+                $script:RefusedHashes[$want] = $true
+                Write-Log "kept the current ${name}: the release's copy was refused (${problem})" "WARN"
+                continue
+            }
+            Move-Item -Force -LiteralPath $staged -Destination $target
+            Write-Log "updated ${target} from the release in the distro"
+        } catch {
+            Write-Log "could not update ${name}: $($_.Exception.Message)" "WARN"
+        } finally {
+            Remove-Item -Force -LiteralPath $staged -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# Has another keeper been put where this one runs from since it started - by
+# Update-FromGuest, or by -Install? Only a copy that parses counts.
+function Test-KeeperReplaced {
+    param([string]$StartedHash)
+    if (-not $StartedHash) { return $false }
+    $now = Get-FileSha256 $StableScript
+    return [bool]($now -and $now -ne $StartedHash -and (Test-ScriptParses $StableScript))
+}
+
+
+# ---------------------------------------------------------------------------
 # The keeper. What the PointyKeepAlive task runs at sign-in.
 # ---------------------------------------------------------------------------
 function Invoke-KeepAlive {
@@ -570,6 +687,11 @@ function Invoke-KeepAlive {
     Protect-ConsoleWindow
     $script:WslExe = Get-WslExe
     Write-Log "keeper started (PID ${PID}) as ${env:USERDOMAIN}\${env:USERNAME}; wsl.exe: $($script:WslExe)"
+    # Only the installed copy updates the Windows-side files, and hands over
+    # when a newer keeper replaces it; a copy run from elsewhere does neither.
+    $startedHash = ""
+    if ($PSCommandPath -eq $StableScript) { $startedHash = Get-FileSha256 $StableScript }
+    $lastPromote = [datetime]::MinValue
     try {
         if (Update-WslConfig) {
             Write-Log ".wslconfig updated (localhostForwarding=false; removed autoMemoryReclaim/sparseVhd); WSL applies it at its next start"
@@ -630,8 +752,9 @@ function Invoke-KeepAlive {
             }
 
             if (Test-Path $HoldFile) {
-                # An export owns the stack: hold WSL open, touch nothing else.
-                Set-Title "MAINTENANCE (export running)"
+                # An export, or an operator, owns the stack: hold WSL open, touch
+                # nothing else.
+                Set-Title "MAINTENANCE (stack left alone)"
             } elseif (Test-ProcessAlive $anchor) {
                 # 3. The LAN forward follows the VM's address, which changes when the VM starts.
                 $ip = Get-WslIp
@@ -681,6 +804,13 @@ function Invoke-KeepAlive {
                     if ($sinceStart -lt 600 -and $failures -lt 5) { Set-Title "STARTING" } else { Set-Title "PROBLEM - see log" }
                 }
                 $lastHealthy = $healthy
+
+                # 5. A release update's Windows-side files, copied out while the
+                #    distro answers - it just did, $ip came from it.
+                if ($startedHash -and $ip -and ((Get-Date) - $lastPromote).TotalSeconds -ge $PromoteEverySec) {
+                    $lastPromote = Get-Date
+                    Update-FromGuest
+                }
             }
             Write-KeeperState -Anchor $anchor -WslIp $wslIp -Healthy $healthy -Restarts $restarts
         } catch {
@@ -688,7 +818,16 @@ function Invoke-KeepAlive {
             Write-Log "keeper cycle failed: $($_.Exception.Message)" "ERROR"
         }
 
-        # 5. Sleep until the next check, but wake the moment WSL stops the distro.
+        # 6. A newer keeper where this one runs from - promoted above, or copied
+        #    by -Install - takes over. The task starts it within a minute, and it
+        #    adopts the keep-alive client, which holds WSL up meanwhile.
+        if (Test-KeeperReplaced -StartedHash $startedHash) {
+            Write-Log "a newer keeper is installed at ${StableScript}; handing over to it (WSL stays up)"
+            Set-Title "UPDATING"
+            return
+        }
+
+        # 7. Sleep until the next check, but wake the moment WSL stops the distro.
         if (Test-ProcessAlive $anchor) {
             $exited = $false
             try { $exited = $anchor.WaitForExit($CheckEverySec * 1000) } catch { Start-Sleep -Seconds $CheckEverySec }
@@ -734,11 +873,13 @@ function Find-MoveScript {
     return $null
 }
 
-function Test-AutoSignIn {
+# The account Windows signs in to by itself, or "" when it does not.
+function Get-AutoSignInUser {
     try {
         $w = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" -ErrorAction Stop
-        return ("$($w.AutoAdminLogon)" -eq "1")
-    } catch { return $false }
+        if ("$($w.AutoAdminLogon)" -ne "1") { return "" }
+        return "$($w.DefaultUserName)"
+    } catch { return "" }
 }
 
 function Register-KeeperTask {
@@ -755,19 +896,23 @@ function Register-KeeperTask {
     } else {
         $action = New-ScheduledTaskAction -Execute $powershell -Argument $psArgs
     }
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
-    $trigger.Delay = "PT10S"
-    # Every minute after sign-in: if the window was closed or crashed, it is back
-    # within a minute. While it runs, IgnoreNew makes each repetition a no-op.
-    $trigger.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date).Date `
-        -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)).Repetition
+    $atLogOn = New-ScheduledTaskTrigger -AtLogOn -User $user
+    $atLogOn.Delay = "PT10S"
+    # And every minute on the clock: a window that was closed, crashed, or
+    # handed over to a newer keeper is back within a minute. Not a repetition
+    # of the sign-in trigger: that runs only from a sign-in, so re-registering
+    # the task mid-session (-Install again, a reinstall) would leave nothing to
+    # start the keeper again until the next one. It still runs only while this
+    # user is signed in, and IgnoreNew makes each tick a no-op while it runs.
+    $everyMinute = New-ScheduledTaskTrigger -Once -At (Get-Date).Date `
+        -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
         -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
     # Interactive: in the signed-in session, where wsl.exe has always worked.
     # Highest: netsh portproxy and the firewall need an administrator, and a task
     # gets that without a UAC prompt.
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal `
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($atLogOn, $everyMinute) -Principal $principal `
         -Settings $settings -Force -ErrorAction Stop | Out-Null
     Write-Log "registered the '${TaskName}' task for ${user}: at sign-in, re-checked every minute"
 }
@@ -800,10 +945,15 @@ function Invoke-Install {
 
     Start-ScheduledTask -TaskName $TaskName
     Write-Log "started the keeper: a minimised window titled 'Pointy server' now holds WSL open"
-    if (-not (Test-AutoSignIn)) {
+    $autoUser = Get-AutoSignInUser
+    if (-not $autoUser) {
         Write-Log ("Windows is not set to sign in by itself. Unless this account has no password, the server " +
                    "will stay down after a restart until someone signs in. Turn on automatic sign-in for " +
                    "${env:USERNAME} (Sysinternals Autologon, or netplwiz).") "WARN"
+    } elseif ($autoUser -ne $env:USERNAME) {
+        # The keeper runs only for this account, which owns the distro.
+        Write-Log ("Windows signs in by itself as ${autoUser}, but the keeper runs only for ${env:USERNAME}. Unless " +
+                   "those are one account, the server stays down after a restart until ${env:USERNAME} signs in.") "WARN"
     }
     Write-Log "log: ${LogFile}"
 }

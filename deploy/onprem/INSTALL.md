@@ -224,21 +224,17 @@ sudo bash register-autostart.sh
 
 The whole stack runs inside a WSL2 distro named `Pointy`. The Linux scripts
 above are the real ones; there is no parallel set of Windows scripts to keep in
-step. Only two jobs cannot be done from Linux, and both live in the single
-`wsl/bootstrap-wsl.ps1`:
+step. Only what cannot be done from Linux lives on the Windows side:
 
-- the **first install** (enable the Windows features, install WSL, import the
-  distro, register the boot task), and
-- the **supervisor** (`-Boot`), which starts the distro, holds it open,
-  re-points the LAN bridge at it, and keeps doing both until Windows shuts down.
+- `wsl/bootstrap-wsl.ps1`, the **first install**: enable the Windows features,
+  install WSL, import the distro, and set up the keeper;
+- `wsl/keep-pointy-running.ps1`, the **keeper**: it holds the distro open,
+  starts it again when WSL stops it, and re-points the LAN bridge at it.
 
-One Windows scheduled task, `PointyWSL`, runs the supervisor from startup to
-shutdown (its *Running* state in Task Scheduler is the design, not a hang) and
-re-launches it within 5 minutes should it ever exit. Everything else — the
-watchdog, the update agent, the discovery responder — is a systemd unit inside
-the distro.
+Everything else — the watchdog, the update agent, the discovery responder — is
+a systemd unit inside the distro.
 
-#### Windows: why the distro needs a supervisor
+#### Windows: why the distro needs a keeper
 
 WSL powers a distro off about 15 seconds after the last Windows-side client (a
 `wsl.exe`) exits, and **systemd inside does not count**. Microsoft's own
@@ -249,47 +245,60 @@ keeps the empty VM, not the distro; the `[general] instanceIdleTimeout`
 setting that does keep the distro exists only from WSL 2.5.4, newer than the
 WSL the bundle installs.
 
-So a boot task that starts the distro and returns has started it for 15
-seconds. That was the old design, and it is why shops found the server only
-stayed up while a PowerShell window with a WSL shell was open. Worse, on the
-bundled WSL that power-off is a hard stop of the VM: every 5-minute run of the
-old task booted the stack and then killed it, Postgres included, mid-write.
+So a task that starts the distro and returns has started it for 15 seconds.
+What shop staff found works, by hand, is a PowerShell window with `wsl`
+running in it, left open. The keeper is that window, automated. The installer
+registers a task, `PointyKeepAlive`, that opens it minimised, titled
+*Pointy server*, at every sign-in of the Windows user that installed Pointy,
+and brings it back within a minute should it ever close. The window:
 
-The supervisor holds one hidden keep-alive client open for as long as Windows
-runs — `wsl.exe -d Pointy -u root --exec /bin/sleep infinity`, visible in Task
-Manager as a `wsl.exe` process — and waits on it. The moment that client exits
-(`wsl --shutdown`, Windows Update servicing WSL, a logoff) it starts the
-distro again and re-points the bridge, within seconds. Every 5 minutes while
-quiet it re-proves the bridge and writes a heartbeat to
-`%ProgramData%\Pointy\supervisor-state.json`. A distro that stops answering
-three checks in a row is terminated and started fresh. On WSL 2.5.4+ the
-bootstrap also writes `[general] instanceIdleTimeout=-1`, as belt and braces.
+- holds one hidden keep-alive client open —
+  `wsl.exe -d Pointy -u root --exec /bin/sleep 2147483647`, a `wsl.exe` in
+  Task Manager — and waits on it. The moment it exits (`wsl --shutdown`,
+  Windows Update servicing WSL, a crash) it starts the distro again and asks
+  the watchdog to bring the stack up, within seconds;
+- re-points the LAN bridge whenever the VM's address changes, and checks the
+  path a till takes every minute;
+- writes a heartbeat to `%ProgramData%\Pointy\keepalive-state.json` and its
+  log to `logs\keepalive.log`;
+- keeps itself current: every 15 minutes it copies the Windows-side files a
+  release update put into `/opt/pointy` out to `%ProgramData%\Pointy`, and
+  hands over to a newer copy of itself. The keep-alive client stays attached
+  throughout.
 
-Two things follow:
+The window has no close button and ignores Ctrl+C. Ending it in Task Manager
+does not stop the server either: the client is a separate process, and the
+task opens the window again within a minute.
 
-- **Stopping or disabling the `PointyWSL` task stops the server.** Once its
-  keep-alive client is gone, WSL powers the distro off. To stop the stack on
-  purpose, pause the watchdog inside the distro (see *Doing maintenance*);
-  disable the task only if you want the server down until it is enabled again.
-- **The supervisor should be the first to start WSL after a boot.** The WSL
-  service ties a user's instances to whichever Windows session started them
-  first: started from the boot task (session 0, before anyone logs on) they
-  survive every logoff; started from a cashier's own `wsl` window first, they
-  die at that cashier's logoff — after which the supervisor starts them again,
-  from session 0, once. The task's 30-second startup delay is what wins that
-  race on a normal boot.
+**Windows must sign in by itself.** The keeper runs only while that user is
+signed in, so after a restart or a power cut the server is down until they
+sign in. Turn on automatic sign-in for that account with Sysinternals
+Autologon, which keeps the password encrypted as an LSA secret, not in clear
+text under `Winlogon`. The installer and the keeper warn when it is off. Lock
+the screen (Win+L) rather than signing out: signing out closes the window, and
+WSL stops the distro with it.
 
-**No automatic logon is needed.** This is the main operational gain over the old
-Docker Desktop install: Docker Desktop only ran inside a logged-in Windows
-session, which forced every shop to enable Windows auto-logon and store the POS
-user's password in clear text under `Winlogon`. The `PointyWSL` task runs
-without an interactive session, so a machine can reboot after a power cut,
-reach the logon screen with nobody there, and still bring the tills back.
+A shop installed before the installer set the keeper up gets it with one
+command, run once from an elevated PowerShell, signed in as the Windows user
+that installed Pointy, from a new bundle's `wsl` folder:
 
-> If the task fails to register with `LogonType=S4U`, the bootstrap prints the
-> exact task to create by hand in Task Scheduler: *Run whether user is logged
-> on or not* + *Run with highest privileges*, two triggers (at startup, and
-> every 5 minutes), no time limit, as the **same Windows user that ran the
+```powershell
+powershell -ExecutionPolicy Bypass -File .\keep-pointy-running.ps1 -Install
+```
+
+**The fallback, `PointyWSL`.** The installer also registers the session-0
+supervisor (`bootstrap-wsl.ps1 -Boot`), which holds the same client open
+from boot with nobody signed in. It has not been reliable on shop PCs, so it
+is registered **off**, and it stands down whenever the keeper is installed;
+two keepers would fight over one distro. `keep-pointy-running.ps1 -Uninstall`
+removes the keeper and turns `PointyWSL` back on, and the installer falls back
+to it by itself if the keeper cannot be set up.
+
+> If `PointyWSL` fails to register with `LogonType=S4U`, a keeper install
+> carries on without it; with no keeper, the bootstrap prints the exact task to
+> create by hand in Task Scheduler: *Run whether user is logged on or not* +
+> *Run with highest privileges*, two triggers (at startup, and every 5
+> minutes), no time limit, as the **same Windows user that ran the
 > bootstrap** — WSL distros are registered per user, and WSL refuses to run as
 > `SYSTEM` at all. The account needs the *Log on as a batch job* right, which
 > administrators have by default. Should `bootstrap.log` ever say the task
@@ -300,11 +309,11 @@ reach the logon screen with nobody there, and still bring the tills back.
 
 #### Windows: how the tills reach the stack
 
-A WSL2 VM sits behind a NAT with a **new IP every time it starts**. So
-`bootstrap-wsl.ps1 -Boot` forwards TCP 8000 and 80 from the host into the VM
-with `netsh interface portproxy`, and re-points them whenever the VM's IP
-changes. That is why the supervisor re-checks the bridge every 5 minutes, and
-immediately after every restart of the VM.
+A WSL2 VM sits behind a NAT with a **new IP every time it starts**. So the
+keeper forwards TCP 8000 and 80 from the host into the VM with `netsh
+interface portproxy`, and re-points them whenever the VM's IP changes: it
+reads the VM's address every minute, and right after every restart of the VM.
+The installer and `bootstrap-wsl.ps1 -Boot` do the same.
 
 That forward listens on `0.0.0.0`, so it also serves a till running on the
 server PC itself (`127.0.0.1`), and it must be the **only** thing holding those
@@ -312,11 +321,14 @@ ports on Windows. WSL's own `localhostForwarding` would bind `127.0.0.1` on the
 same ports, and whichever of the two gets there first can stop the other from
 binding at all. `netsh` still reports success, so the result looks healthy: the
 server's own till works and no other device can find the server. The bootstrap
-therefore writes `localhostForwarding=false` to `.wslconfig`. Shops installed
-before that change get the setting on their next `-Boot` run. It takes effect
-at the next Windows restart; re-running the installer applies it immediately.
+therefore writes `localhostForwarding=false` to `.wslconfig`, and the keeper
+sets it whenever it starts. It takes effect at the next Windows restart;
+re-running the installer applies it immediately.
 
-Every `-Boot` run then **proves** the path a till takes instead of trusting
+The keeper checks the path a till takes every minute, through the PC's own LAN
+address rather than `127.0.0.1`, and re-creates the forward when the stack
+answers inside the VM but not there. The installer, and a
+`bootstrap-wsl.ps1 -Boot -Once` pass, **prove** every hop instead of trusting
 `netsh`: the stack from inside the VM, Windows to the VM, then `127.0.0.1` and
 each of the PC's LAN addresses. A forward whose rule looks right but whose
 listener never bound is re-created. Whatever still fails is named in
@@ -340,12 +352,13 @@ Two consequences worth knowing:
 
 #### Windows: DVRs uploading over FTP
 
-FTP upload setups (`SURVEILLANCE_FTP_PLAN.md`) cross the same bridge. Every
-`-Boot` run reads `POINTY_FTP_PUBLIC_PORT` and `POINTY_FTP_PASSIVE_PORTS` from
-the stack's `.env` (21 and 30000-30019 by default), forwards the control port
-and **each passive port on its own** (a DVR is told to dial them one by one),
-and adds the firewall rules *Pointy FTP (TCP 21)* and *Pointy FTP data (TCP
-30000-30019)*, open to private addresses only. It then proves them: the `ftp`
+FTP upload setups (`SURVEILLANCE_FTP_PLAN.md`) cross the same bridge. The
+keeper, like the installer and every `-Boot` run, reads `POINTY_FTP_PUBLIC_PORT`
+and `POINTY_FTP_PASSIVE_PORTS` from the stack's `.env` (21 and 30000-30019 by
+default), forwards the control port and **each passive port on its own** (a
+DVR is told to dial them one by one), and adds the firewall rules *Pointy FTP
+(TCP 21)* and *Pointy FTP data (TCP 30000-30019)*, open to private addresses
+only. The installer and `-Boot` then prove them: the `ftp`
 service's own greeting from Windows to the VM and on each LAN address, and a
 listening forward for every passive port. Anything broken is named in
 `bootstrap.log`, and the result is kept in `bridge-state.json`
@@ -379,13 +392,19 @@ Besides WSL itself, the bootstrap makes the PC behave like a server:
 - **Fast Startup is turned off** (`HiberbootEnabled=0`). With it on, *Shut
   down* hibernates the kernel session instead of ending it: the next power-on
   is a resume, not a boot, so an *At startup* task trigger never fires and the
-  WSL VM, which no hibernation preserves, is simply gone. The task's second,
-  clock-based trigger covers a machine where Group Policy turns it back on.
+  WSL VM, which no hibernation preserves, is simply gone. The keeper starts
+  at sign-in, which a Fast Startup power-on still has; `PointyWSL`'s second,
+  clock-based trigger covers such a machine too.
 - **`.wslconfig`** in the installing user's profile: VM memory and CPU limits,
-  `localhostForwarding=false` (see above), `vmIdleTimeout=-1`, the sparse disk
-  and memory reclaim keys under `[experimental]`, and on WSL 2.5.4+
-  `[general] instanceIdleTimeout=-1`. It is converged at boot only if this
-  script wrote it; a hand-written one is never touched.
+  `localhostForwarding=false` (see above), `vmIdleTimeout=-1`, and on WSL
+  2.5.4+ `[general] instanceIdleTimeout=-1`. No `sparseVhd` and no
+  `autoMemoryReclaim`, in any section: WSL 2.5.6+ refuses sparse disks over a
+  data-corruption risk, and gradual reclaim breaks the Docker daemon running as
+  a service. The keeper removes both from a file an older bootstrap wrote, and
+  otherwise touches only `localhostForwarding`.
+- **Scheduled tasks:** `PointyKeepAlive`, the keeper (at sign-in and every
+  minute, as the installing user, with highest privileges, only while that user
+  is signed in), and `PointyWSL`, the fallback, registered off.
 - **IP Helper** is set to start automatically (it implements the port forward),
   and two inbound firewall rules are added for TCP 8000 and 80.
 
@@ -396,11 +415,12 @@ wsl -d Pointy -u root --cd /opt/pointy                       # shell into the se
 wsl -d Pointy -u root --cd /opt/pointy -- docker compose ps  # stack status
 wsl -d Pointy -u root -- journalctl -u pointy-watchdog -f    # watchdog log
 netsh interface portproxy show v4tov4                        # the LAN bridge
-Get-Content $env:ProgramData\Pointy\logs\bootstrap.log -Tail 50
-Get-ScheduledTask PointyWSL | Get-ScheduledTaskInfo          # the supervisor (State Running = good)
-Get-Content $env:ProgramData\Pointy\supervisor-state.json    # its heartbeat, keep-alive PID, restarts
+Get-Content $env:ProgramData\Pointy\logs\keepalive.log -Tail 50   # the keeper's log
+Get-ScheduledTask PointyKeepAlive | Get-ScheduledTaskInfo    # the keeper (State Running = good)
+Get-Content $env:ProgramData\Pointy\keepalive-state.json     # its heartbeat, keep-alive PID, restarts
+Get-Content $env:ProgramData\Pointy\logs\bootstrap.log -Tail 50   # the installer, and PointyWSL if it runs
 Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" | Select-Object ProcessId, SessionId, CommandLine
-# one reconcile pass right now (starts the distro and the supervisor task if they are down):
+# one reconcile pass right now (starts the distro, and the keeper if it is down):
 powershell -ExecutionPolicy Bypass -File $env:ProgramData\Pointy\bootstrap-wsl.ps1 -Boot -Once
 ```
 
@@ -415,9 +435,10 @@ powershell -ExecutionPolicy Bypass -File $env:ProgramData\Pointy\collect-diagnos
 ```
 
 It records the state it found (distro running or stopped, WSL VM up or not,
-keep-alive client attached or not, supervisor heartbeat, does the stack answer)
-*before* touching anything. Then it gathers `PointyWSL`'s settings and history,
-the Windows boot/shutdown/sleep/update events, systemd, Docker and the
+keep-alive client attached or not, the keeper's heartbeat, does the stack
+answer) *before* touching anything. Then it gathers the keeper's and
+`PointyWSL`'s settings and history, `keepalive.log`, whether Windows signs in
+by itself, the Windows boot/shutdown/sleep/update events, systemd, Docker and the
 container logs. The zip goes to the Desktop. Credentials are
 masked: `.env` values that look like one, URL passwords, and tokens in logs. A
 summary at the top names what already looks wrong.
@@ -425,7 +446,8 @@ summary at the top names what already looks wrong.
 `-Arm` also leaves a recorder for the *next* outage. It turns on Task
 Scheduler history and makes the distro's journal survive a restart. It also
 adds a `PointyProbe` task that appends one line a minute to
-`logs\probe.csv`: distro, VM, keep-alive client, stack, last `PointyWSL` run.
+`logs\probe.csv`: distro, VM, keep-alive client, stack, last run of the
+keep-alive task.
 After the next outage, run the command again without `-Arm` and send the new
 zip. Remove the
 probe with `-Disarm` once the cause is known.
@@ -454,9 +476,17 @@ sudo systemctl stop pointy-watchdog.timer
 
 Re-enable it with `systemctl start pointy-watchdog.timer` when you are done. On
 Windows run that inside the distro (`wsl -d Pointy -u root -- systemctl stop
-pointy-watchdog.timer`); do **not** stop the `PointyWSL` scheduled task for
-this. It never touches the containers, and it is what holds the distro open:
-without its keep-alive client WSL powers the distro off within 15 seconds.
+pointy-watchdog.timer`), and also put the keeper on hold, or it asks the
+watchdog to start a stack that has not answered for 3 minutes:
+
+```powershell
+New-Item $env:ProgramData\Pointy\keepalive.hold      # keeper: hold WSL open, leave the stack alone
+Remove-Item $env:ProgramData\Pointy\keepalive.hold   # when you are done
+```
+
+Do **not** sign out, or disable the `PointyKeepAlive` task, for this: the
+keeper is what holds the distro open, and without its keep-alive client WSL
+powers the distro off within 15 seconds.
 
 ## Updating to a newer bundle
 
