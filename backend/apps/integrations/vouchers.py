@@ -21,17 +21,17 @@ inline and leaves the rest one call away, and "not asked" is never "sold out".
 A provider nobody has been able to read for a while takes its whole shelf off
 the till: stock nobody knows is not stock to sell.
 
-**Cheap enough to run every few minutes.** One listing read (~40 KB), plus a
-handful of per-brand reads for whichever collapsed brands are stalest. And it
-writes only what changed: an unchanged shelf moves no catalog row, so it
+**Discovery is slow, on purpose.** A sweep every few hours reads the listing
+(~40 KB) and every collapsed brand once, so a new brand or denomination has a
+product to tap. It writes only what changed: an unchanged shelf moves no catalog row, so it
 bumps no catalog version and orphans no till's cached catalog. That is the
 difference from the lookups that made HD Box and LNET slow at the counter —
 the cashier's search, tap and picker never wait on the provider at all.
 
-**Fresh where it matters.** When a till opens a card's picker it asks for that
-one brand again (:func:`refresh_brand`), single-flighted and shared for under
-a minute, so a card that sold out since the last sweep disappears while the
-cashier is still choosing.
+**Stock is read when someone looks.** Nothing polls the provider for stock. When
+a till opens a card's picker it asks for that one brand (:func:`refresh_brand`),
+single-flighted and shared for under a minute, so a card that sold out since
+the last sweep disappears while the cashier is still choosing.
 
 Every card product is also filed under one category per provider, pinned to
 the till's quick-access strip when it is first made, so the whole shelf is one
@@ -66,11 +66,12 @@ logger = logging.getLogger(__name__)
 #: the shelf is re-read every sweep; what changes slowly is its price list.
 BRAND_ITEMS_MAX_AGE = timedelta(minutes=45)
 #: Past this without one good listing, the provider's stock is unknown and the
-#: shelf leaves the till until it answers again.
-LISTING_MAX_AGE = timedelta(minutes=30)
-#: Per-brand reads one sweep may spend. Stalest first, so a hundred brands are
-#: all refreshed inside the max age without any one sweep hammering the API.
-BRAND_REFRESHES_PER_SWEEP = 12
+#: shelf leaves the till until it answers again. Two six-hourly sweeps plus
+#: slack: one failed sweep must not empty the till.
+LISTING_MAX_AGE = timedelta(hours=13)
+#: Per-brand reads one sweep may spend. Stalest first. The sweep runs every few
+#: hours and is the only thing that finds new brands, so it covers the shelf.
+BRAND_REFRESHES_PER_SWEEP = 200
 #: How many of those run at once. The provider is one host and the sweep is
 #: not in a hurry; this only keeps a sweep from taking a minute.
 BRAND_REFRESH_CONCURRENCY = 4

@@ -663,13 +663,15 @@ CELERY_BEAT_SCHEDULE = {
         "task": "integrations.refresh_float_balances",
         "schedule": crontab(minute=50),
     },
-    # Every five minutes: re-read each voucher provider's shelf (Qareeb) so the
-    # cards on the till are the ones the provider actually has in stock. It
-    # writes only what changed, so an unchanged shelf costs one read and moves
-    # no catalog version — the tills' cached catalogs stay warm.
+    # Every six hours: discover each voucher provider's shelf (Qareeb) — new
+    # brands, retired brands, new denominations — so there is a product to tap.
+    # Stock is NOT kept fresh here: opening a card's picker re-reads that one
+    # brand live (``vouchers.refresh_brand``), which is the moment freshness
+    # matters. It writes only what changed, so an unchanged shelf moves no
+    # catalog version and the tills' cached catalogs stay warm.
     "integrations.sync-voucher-catalogs": {
         "task": "integrations.sync_voucher_catalogs",
-        "schedule": timedelta(minutes=5),
+        "schedule": crontab(minute=10, hour="*/6"),
     },
     # Half-hourly: mirror each provider's account-wide payments report (LNET).
     # It prints ten rows a page over the agency's whole life, so read live it

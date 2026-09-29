@@ -703,11 +703,12 @@ top-up button**. Each brand is a **system product** in the POS catalog and each
 denomination a variant: search "ليبيانا", tap it, pick the card. The shelf is
 built and kept by `apps/integrations/vouchers.py`:
 
-- **Served locally, refreshed in the background.** The till reads the catalog
+- **Served locally; discovered every 6 hours.** The till reads the catalog
   from Pointy's own database like any other product — no provider call on a tap.
-  Celery beat sweeps every 5 minutes (`integrations.sync-voucher-catalogs`),
-  writing only rows that changed, so an idle sweep never bumps the catalog
-  version or invalidates a till's cache.
+  Celery beat sweeps every 6 hours (`integrations.sync-voucher-catalogs`) to find
+  new and retired brands and denominations, writing only rows that changed, so an
+  idle sweep never bumps the catalog version or invalidates a till's cache.
+  Stock is not polled: it is read when a cashier opens a picker (below).
 - **Availability comes from Qareeb.** A brand Qareeb stops listing is taken off
   the shelf (`is_active=False`), and a sold-out card disappears. Opening a
   brand's picker also asks Qareeb for that brand's live stock in the background

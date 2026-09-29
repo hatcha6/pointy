@@ -48,9 +48,10 @@ _SWEEP_LOCK_SECONDS = 240
 
 @shared_task(bind=True, name="integrations.sync_voucher_catalogs")
 def sync_voucher_catalogs_task(self):
-    """Every few minutes: the cards on the till are the cards the provider has.
+    """Every few hours: find the provider's new and retired cards.
 
-    Not retried: the next sweep is minutes away and reads the same shelf.
+    Live stock is read when a cashier opens the picker, not here. Not retried:
+    the next sweep reads the same shelf.
     """
     from django.core.cache import cache
 

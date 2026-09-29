@@ -900,12 +900,24 @@ class VoucherShelfSyncTests(TestCase):
         sync(self.account, _StubDriver(_listing(), {"115": PSN}))
         self.account.refresh_from_db()
         config = dict(self.account.config)
-        config[vouchers.CONFIG_LISTED_AT] = (timezone.now() - timedelta(hours=2)).isoformat()
+        config[vouchers.CONFIG_LISTED_AT] = (timezone.now() - timedelta(hours=14)).isoformat()
         IntegrationAccount.objects.filter(pk=self.account.pk).update(config=config)
         self.account.refresh_from_db()
         failing = _StubDriver(VoucherCatalogResult(ok=False, error_code="unreachable"))
         sync(self.account, failing)
         self.assertFalse(
+            Product.objects.filter(system_kind=Product.SystemKind.VOUCHER, is_active=True).exists()
+        )
+
+    def test_one_missed_sweep_leaves_the_shelf_on_the_till(self):
+        sync(self.account, _StubDriver(_listing(), {"115": PSN}))
+        self.account.refresh_from_db()
+        config = dict(self.account.config)
+        config[vouchers.CONFIG_LISTED_AT] = (timezone.now() - timedelta(hours=7)).isoformat()
+        IntegrationAccount.objects.filter(pk=self.account.pk).update(config=config)
+        self.account.refresh_from_db()
+        sync(self.account, _StubDriver(VoucherCatalogResult(ok=False, error_code="unreachable")))
+        self.assertTrue(
             Product.objects.filter(system_kind=Product.SystemKind.VOUCHER, is_active=True).exists()
         )
 
