@@ -20,7 +20,7 @@ KEEP_TMP=1 bash deploy/onprem/tests/run-tests.sh   # keep each test's deploy dir
 
 No dependencies beyond bash and coreutils. Docker, curl, sleep and systemctl are
 replaced by recording stubs, so this runs anywhere — a laptop, CI, or a shop's
-own machine while debugging a failed update. 337 tests, roughly 30 seconds with
+own machine while debugging a failed update. About 380 tests, roughly 30 seconds with
 the suites running concurrently. Nearly all of that is process spawning: the
 tests drive the real scripts, and the real scripts shell out constantly.
 
@@ -45,7 +45,8 @@ mechanism. A bug here is a site visit.
 | `test_apply_live.sh` | the 0/1/2 return-code contract of the zero-downtime path, and the step ordering behind it |
 | `test_apply_bundle.sh` | strategy selection, backup-before-adopt, and that `VERSION.txt` and the image prune only move on success |
 | `test_rollback_backup_staging.sh` | rolling back after traffic moved, the pre-migration dump, turning a zip or directory into an applyable bundle |
-| `test_update_agent.sh` | the agent end to end with a stubbed relay: quiet no-ops, checksum enforcement, lock discipline, status reporting, self-update |
+| `test_update_agent.sh` | the agent end to end with a stubbed relay: quiet no-ops, checksum enforcement, lock discipline, status reporting, self-update, and a download that survives drops, stalls, reboots and runs (the fake relay honours `curl -C -` and can drop mid-stream) |
+| `test_update_bundle.sh` | `make-update-bundle.sh`: the fleet's update bundle leaves out exactly the install-only pieces, keeps the rest byte for byte, and is applied by the real updater |
 | `test_update_script.sh` | `update.sh` argument handling, `--force`, and leaving an operator's media alone |
 | `test_install_env.sh` | `install.sh --env-only`: every variable compose demands gets a real value, secrets never rotate, the app goes through the pooler |
 | `test_install_start.sh` | `install.sh` starting the stack on a fake clock: waiting out a backend compose gave up on while it migrated, publishing the client installers only once the stack is up, failing fast on a crash loop or a failure nothing is starting for |

@@ -10,8 +10,10 @@
 #   * a shop that is up to date, unreachable or still bootstrapping must be a
 #     quiet no-op, never a failed update;
 #   * nothing is applied until the bundle's sha256 matches;
-#   * the lock is taken before the download, so the watchdog stands down for the
-#     whole operation and two agents can never overlap;
+#   * a download survives any number of interruptions and runs, resuming where
+#     it stopped — a bundle over a Libyan shop line never arrives in one piece;
+#   * the update lock is held for the apply only, never the hours-long download,
+#     and two agents can never overlap;
 #   * every terminal state is reported back to the relay, because `fleet status`
 #     is what an operator batches on.
 . "$(dirname "$0")/harness.sh"
@@ -38,13 +40,25 @@ EOF
 
 # A relay: serves the manifest from a file the test writes, serves the bundle,
 # and records every status POST so the test can assert what the fleet was told.
+#
+# The bundle download behaves like the real endpoint on a bad line. It honours
+# `-C -` (resume from the size of the file already there, else start over), and
+# AGENT_DOWNLOAD_PLAN scripts each attempt in turn:
+#   ok        serve the rest of the file            (the default past the plan)
+#   drop:N    serve the next N bytes, then lose the connection (exit 18)
+#   fail:RC   fail with curl exit RC, no bytes
+#   http:C    answer HTTP C (curl -f exits 22)
+#   norange   answer 200 to a range request (curl exit 33)
+# Every attempt's starting offset is logged to download-offsets.log.
 _stub_curl_as_relay() {
   stub_script curl <<'EOF'
-_out=""; _url=""; _body=""; _prev=""
+_out=""; _url=""; _body=""; _prev=""; _resume=0; _code=0
 for _a in "$@"; do
   case "$_prev" in
     -o) _out="$_a" ;;
     -d) _body="$_a" ;;
+    -C) _resume=1 ;;
+    -w) _code=1 ;;
   esac
   case "$_a" in http*) _url="$_a" ;; esac
   _prev="$_a"
@@ -57,11 +71,28 @@ case "$_url" in
     [ "${AGENT_MANIFEST_RC:-0}" = 0 ] || exit "${AGENT_MANIFEST_RC}"
     cat "${PU_TEST_DIR}/manifest.json" >"$_out"
     exit 0 ;;
-  *)
-    [ "${AGENT_DOWNLOAD_RC:-0}" = 0 ] || exit "${AGENT_DOWNLOAD_RC}"
-    cat "${PU_TEST_DIR}/bundle.zip" >"$_out"
-    exit 0 ;;
 esac
+[ "${AGENT_DOWNLOAD_RC:-0}" = 0 ] || exit "${AGENT_DOWNLOAD_RC}"
+_n=$(( $(cat "${PU_TEST_DIR}/download-attempts" 2>/dev/null || echo 0) + 1 ))
+printf '%s' "$_n" >"${PU_TEST_DIR}/download-attempts"
+_step="$(printf '%s\n' ${AGENT_DOWNLOAD_PLAN:-} | sed -n "${_n}p")"
+_offset=0
+if [ "$_resume" = 1 ] && [ -f "$_out" ]; then _offset="$(wc -c <"$_out" | tr -d ' ')"; fi
+printf '%s\n' "$_offset" >>"${PU_TEST_DIR}/download-offsets.log"
+case "$_step" in
+  fail:*) exit "${_step#fail:}" ;;
+  http:*) [ "$_code" = 1 ] && printf '%s' "${_step#http:}"; exit 22 ;;
+  norange) exit 33 ;;
+esac
+[ "$_offset" = 0 ] && : >"$_out"
+case "$_step" in
+  drop:*)
+    tail -c +"$(( _offset + 1 ))" "${PU_TEST_DIR}/bundle.zip" | head -c "${_step#drop:}" >>"$_out"
+    exit 18 ;;
+esac
+tail -c +"$(( _offset + 1 ))" "${PU_TEST_DIR}/bundle.zip" >>"$_out"
+[ "$_code" = 1 ] && { [ "$_offset" = 0 ] && printf 200 || printf 206; }
+exit 0
 EOF
 }
 
@@ -92,10 +123,11 @@ _build_shared_bundle_zip 1.1.0
 _make_bundle_zip() { cp "${PU_AGENT_FIXTURES}/bundle-${1}.zip" "${PU_TEST_DIR}/bundle.zip"; }
 
 _manifest() { # _manifest <directive> <assigned-version> [sha-override]
-  local sha="${3:-}"
+  local sha="${3:-}" size
   [ -n "$sha" ] || sha="$(_sha256_of "${PU_TEST_DIR}/bundle.zip" 2>/dev/null || echo none)"
+  size="$(wc -c <"${PU_TEST_DIR}/bundle.zip" 2>/dev/null | tr -d ' ')"
   cat >"${PU_TEST_DIR}/manifest.json" <<JSON
-{"directive":"$1","assigned_version":"$2","bundle":{"path":"/v1/agent/artifacts/$2","sha256":"${sha}"}}
+{"directive":"$1","assigned_version":"$2","bundle":{"path":"/v1/agent/artifacts/$2","sha256":"${sha}","size":${size:-0}}}
 JSON
 }
 
@@ -110,6 +142,8 @@ _install_agent() {
 . "${PU_LIB}"
 pu_apply_bundle() {
   printf 'apply:%s->%s mode=%s dir=%s\n' "\$2" "\$3" "\${4:-auto}" "\$1" >>"\${PU_TEST_DIR}/order.log"
+  [ -f .update.lock ] && printf 'apply-locked\n' >>"\${PU_TEST_DIR}/order.log"
+  POINTY_APPLY_ERROR="\${APPLY_ERROR:-}"
   return "\${APPLY_RC:-0}"
 }
 EOF
@@ -119,6 +153,14 @@ EOF
 }
 
 _run_agent() { bash ./update-agent.sh "$@"; }
+# assert_order_in <text> <a> <b> — the first <a> comes before the first <b>.
+assert_order_in() {
+  local first second
+  first="$(printf '%s\n' "$1" | grep -n -F "$2" | head -1 | cut -d: -f1)"
+  second="$(printf '%s\n' "$1" | grep -n -F "$3" | head -1 | cut -d: -f1)"
+  [ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt "$second" ] && return 0
+  _fail "expected '$2' before '$3'" "$1"
+}
 _order()  { cat "${PU_TEST_DIR}/order.log" 2>/dev/null; }
 _status_posts() { cat "${PU_TEST_DIR}/status-posts.jsonl" 2>/dev/null; }
 
@@ -299,30 +341,6 @@ test_status_reports_carry_the_agent_version() {
   assert_contains "$(_status_posts)" '"agent_version":"pointy-update-agent/'
 }
 
-test_the_lock_is_taken_before_the_download_and_released_afterwards() {
-  # The download can take a long time on a shop's connection. Holding the lock
-  # across it is what stops the watchdog reconciling the stack halfway through.
-  _install_agent 1.0.0 1.1.0
-  _manifest apply 1.1.0
-  stub_script curl <<'EOF'
-_out=""; _url=""; _prev=""
-for _a in "$@"; do
-  case "$_prev" in -o) _out="$_a" ;; esac
-  case "$_a" in http*) _url="$_a" ;; esac
-  _prev="$_a"
-done
-case "$_url" in
-  */v1/agent/status) exit 0 ;;
-  */v1/agent/manifest) cat "${PU_TEST_DIR}/manifest.json" >"$_out"; exit 0 ;;
-  *) [ -f .update.lock ] && printf 'locked\n' >>"${PU_TEST_DIR}/order.log"
-     cat "${PU_TEST_DIR}/bundle.zip" >"$_out"; exit 0 ;;
-esac
-EOF
-  _run_agent >/dev/null 2>&1
-  assert_contains "$(_order)" 'locked'
-  assert_no_file .update.lock
-}
-
 test_a_second_agent_run_stands_down_while_the_first_holds_the_lock() {
   _install_agent 1.0.0 1.1.0
   _manifest apply 1.1.0
@@ -366,24 +384,291 @@ test_a_failed_checksum_still_reports_the_version_the_shop_is_running() {
   assert_contains "$(printf '%s\n' "$(_status_posts)" | tail -1)" '"current_version":"1.0.0"'
 }
 
-test_a_download_that_fails_is_reported_and_nothing_is_applied() {
+# ---------------------------------------------------------------------------
+# The download — built for a line that drops, a PC that sleeps, a distro that
+# restarts. Every one of these is a shop that would otherwise never update.
+# ---------------------------------------------------------------------------
+
+_bundle_bytes() { wc -c <"${PU_TEST_DIR}/bundle.zip" | tr -d ' '; }
+_offsets() { tr '\n' ' ' <"${PU_TEST_DIR}/download-offsets.log" 2>/dev/null | sed 's/ $//'; }
+_downloads() { ls downloads 2>/dev/null | grep -v '^\.' | tr '\n' ' ' | sed 's/ $//'; }
+
+test_a_dropped_connection_is_resumed_in_the_same_run() {
   _install_agent 1.0.0 1.1.0
   _manifest apply 1.1.0
-  export AGENT_DOWNLOAD_RC=18
+  export AGENT_DOWNLOAD_PLAN='drop:100 drop:50 ok'
   local out; out="$(_run_agent 2>&1)"; local rc=$?
-  assert_eq '1' "$rc"
-  assert_contains "$out" 'bundle download failed'
-  assert_contains "$(_status_posts)" '"update_error":"bundle download failed"'
+  assert_eq '0' "$rc"
+  assert_eq '0 100 150' "$(_offsets)" 'each retry must continue where the last one stopped'
+  assert_contains "$out" 'resuming the download at'
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0'
+}
+
+test_a_download_cut_short_by_the_end_of_a_run_resumes_on_the_next_run() {
+  # REGRESSION. The agent used to download into a fresh mktemp dir every run,
+  # so `curl -C -` never had anything to resume: a 1.1 GB bundle over a shop
+  # line had to arrive in one unbroken go, and on 2026-09-30 one shop sat on
+  # "applying" for six hours restarting from zero every attempt.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export POINTY_UPDATE_DOWNLOAD_ATTEMPTS=1 AGENT_DOWNLOAD_PLAN='drop:120'
+  local out; out="$(_run_agent 2>&1)"; local rc=$?
+  assert_eq '0' "$rc" 'an interrupted download is not a failed update'
+  assert_contains "$out" 'the next run resumes it'
+  assert_eq '' "$(_order)"
+  assert_contains "$(_status_posts | tail -1)" '"update_status":"downloading '
+  assert_contains "$(_status_posts | tail -1)" 'resuming next run'
+  assert_eq '120' "$(wc -c <downloads/bundle-*.part | tr -d ' ')"
+
+  # The next timer run: a new process, the same file.
+  unset AGENT_DOWNLOAD_PLAN
+  _run_agent >/dev/null 2>&1
+  assert_eq '0 120' "$(_offsets)"
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0'
+}
+
+test_a_run_that_keeps_failing_stops_at_its_attempt_budget() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export POINTY_UPDATE_DOWNLOAD_ATTEMPTS=3 AGENT_DOWNLOAD_PLAN='fail:7 fail:7 fail:7 fail:7'
+  local rc; _run_agent >/dev/null 2>&1; rc=$?
+  assert_eq '0' "$rc"
+  assert_eq '3' "$(cat "${PU_TEST_DIR}/download-attempts")"
+  assert_not_contains "$(_status_posts)" '"update_status":"failed"'
   assert_eq '' "$(_order)"
 }
 
-test_the_download_is_resumable() {
-  # Shops lose their connection mid-download routinely; without -C - every
-  # attempt would start from zero and a large bundle might never complete.
+test_a_run_stops_downloading_when_its_time_budget_is_spent() {
+  # So a paused or re-targeted rollout takes effect at the next run, rather
+  # than after a download that may take all day.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export POINTY_UPDATE_DOWNLOAD_BUDGET=0 AGENT_DOWNLOAD_PLAN='drop:10 ok'
+  _run_agent >/dev/null 2>&1
+  assert_eq '1' "$(cat "${PU_TEST_DIR}/download-attempts")"
+  assert_eq '' "$(_order)"
+}
+
+test_an_http_error_that_retrying_cannot_fix_fails_at_once() {
+  # A 404 (version withdrawn) or 401 (token revoked) is not a bad line.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export AGENT_DOWNLOAD_PLAN='http:404'
+  local out; out="$(_run_agent 2>&1)"; local rc=$?
+  assert_eq '1' "$rc"
+  assert_eq '1' "$(cat "${PU_TEST_DIR}/download-attempts")"
+  assert_contains "$(_status_posts)" '"update_error":"bundle download failed (HTTP 404)"'
+  assert_eq '' "$(_order)"
+}
+
+test_a_server_error_is_retried() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export AGENT_DOWNLOAD_PLAN='http:503 http:429 ok'
+  assert_status 0 _run_agent >/dev/null 2>&1
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0'
+}
+
+test_a_relay_that_will_not_resume_starts_the_download_over() {
+  # A proxy that strips Range makes curl -C - give up (exit 33). Appending a
+  # full response to a partial file would corrupt it, so start clean.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export AGENT_DOWNLOAD_PLAN='drop:40 norange ok'
+  assert_status 0 _run_agent >/dev/null 2>&1
+  assert_eq '0 40 0' "$(_offsets)"
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0'
+}
+
+test_a_partial_larger_than_the_bundle_is_discarded() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  mkdir -p downloads
+  local sha; sha="$(_sha256_of "${PU_TEST_DIR}/bundle.zip")"
+  head -c "$(( $(_bundle_bytes) + 10 ))" /dev/zero >"downloads/bundle-${sha}.zip.part"
+  assert_status 0 _run_agent >/dev/null 2>&1
+  assert_eq '0' "$(_offsets)"
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0'
+}
+
+test_a_complete_download_that_fails_its_checksum_is_thrown_away() {
+  # Kept, it would be "resumed" — i.e. declared complete — into the same wrong
+  # bytes on every run, and the shop could never update again.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+  _run_agent >/dev/null 2>&1
+  assert_eq '' "$(_downloads)"
+}
+
+test_progress_is_reported_while_downloading() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export AGENT_DOWNLOAD_PLAN='drop:100 ok'
+  _run_agent >/dev/null 2>&1
+  local posts; posts="$(_status_posts)"
+  assert_contains "$posts" '"update_status":"downloading 0%"'
+  assert_order_in "$posts" '"downloading 0%"' '"applying"'
+  assert_order_in "$posts" '"applying"' '"succeeded"'
+}
+
+test_a_stalled_connection_is_detected_and_the_speed_can_be_capped() {
+  # A dead TCP connection on a bad line can sit silent for hours; without a
+  # speed floor curl would wait on it forever.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  printf 'POINTY_UPDATE_RATE_LIMIT=200k\n' >>.env
+  _run_agent >/dev/null 2>&1
+  assert_called curl '*-C -*--speed-limit 1000 --speed-time 120*artifacts*'
+  assert_called curl '*--limit-rate 200k*artifacts*'
+}
+
+test_the_speed_is_not_capped_by_default() {
   _install_agent 1.0.0 1.1.0
   _manifest apply 1.1.0
   _run_agent >/dev/null 2>&1
-  assert_called curl '*-C -*artifacts*'
+  assert_not_called curl '*--limit-rate*'
+}
+
+test_the_update_lock_is_held_for_the_apply_but_not_the_download() {
+  # REGRESSION. The lock used to cover the download. It tells the watchdog to
+  # stand down, so a backend that crashed during a six-hour download stayed
+  # down for six hours — and after one hour the lock looked stale anyway.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  stub_script curl <<'EOF'
+_out=""; _url=""; _prev=""
+for _a in "$@"; do
+  case "$_prev" in -o) _out="$_a" ;; esac
+  case "$_a" in http*) _url="$_a" ;; esac
+  _prev="$_a"
+done
+case "$_url" in
+  */v1/agent/status) exit 0 ;;
+  */v1/agent/manifest) cat "${PU_TEST_DIR}/manifest.json" >"$_out"; exit 0 ;;
+  *) [ -f .update.lock ] && printf 'download-locked\n' >>"${PU_TEST_DIR}/order.log"
+     cat "${PU_TEST_DIR}/bundle.zip" >"$_out"; exit 0 ;;
+esac
+EOF
+  _run_agent >/dev/null 2>&1
+  assert_not_contains "$(_order)" 'download-locked'
+  assert_contains "$(_order)" 'apply-locked'
+  assert_no_file .update.lock
+}
+
+test_a_second_agent_stands_down_while_the_first_is_downloading() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  mkdir -p downloads
+  sleep_forever_pid=""
+  ( exec -a pu-fake-agent /bin/sleep 30 ) & sleep_forever_pid=$!
+  printf 'pid=%s started=now\n' "$sleep_forever_pid" >downloads/.lock
+  local out; out="$(_run_agent 2>&1)"; local rc=$?
+  kill "$sleep_forever_pid" 2>/dev/null
+  assert_eq '0' "$rc"
+  assert_contains "$out" 'already downloading'
+  assert_not_called curl '*artifacts*'
+  assert_file_contains downloads/.lock "pid=${sleep_forever_pid}"
+}
+
+test_a_download_lock_left_by_a_dead_run_is_taken_over() {
+  # A reboot mid-download leaves the lock behind; it must not block the shop.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  mkdir -p downloads
+  ( exit 0 ) & local dead=$!; wait "$dead"
+  printf 'pid=%s started=then\n' "$dead" >downloads/.lock
+  assert_status 0 _run_agent >/dev/null 2>&1
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0'
+  assert_no_file downloads/.lock
+}
+
+test_a_verified_download_survives_a_failed_apply_and_is_reused() {
+  # A failed apply is retried every run. Downloading the bundle again for each
+  # retry would bill the shop's line for our bug.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export APPLY_RC=1
+  _run_agent >/dev/null 2>&1
+  assert_contains "$(_downloads)" '.zip'
+  assert_not_contains "$(_downloads)" '.part'
+  unset APPLY_RC
+  local out; out="$(_run_agent 2>&1)"
+  assert_contains "$out" 'already downloaded'
+  assert_eq '1' "$(cat "${PU_TEST_DIR}/download-attempts")"
+  assert_eq '2' "$(grep -c '^apply:' "${PU_TEST_DIR}/order.log")"
+}
+
+test_a_kept_download_that_no_longer_verifies_is_downloaded_again() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  mkdir -p downloads
+  local sha; sha="$(_sha256_of "${PU_TEST_DIR}/bundle.zip")"
+  printf 'bit rot\n' >"downloads/bundle-${sha}.zip"
+  assert_status 0 _run_agent >/dev/null 2>&1
+  assert_eq '1' "$(cat "${PU_TEST_DIR}/download-attempts")"
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0'
+}
+
+test_a_successful_update_removes_the_download() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  _run_agent >/dev/null 2>&1
+  assert_eq '' "$(_downloads)"
+}
+
+test_a_new_assignment_discards_the_old_download() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  mkdir -p downloads
+  printf 'half of an older bundle\n' >downloads/bundle-0000.zip.part
+  printf 'an older bundle\n' >downloads/bundle-1111.zip
+  _run_agent >/dev/null 2>&1
+  assert_no_file downloads/bundle-0000.zip.part
+  assert_no_file downloads/bundle-1111.zip
+}
+
+test_a_paused_rollout_keeps_a_half_finished_download() {
+  # Pausing is the operator's kill switch; resuming must not cost the shop the
+  # hours it already spent.
+  _install_agent 1.0.0 1.1.0
+  mkdir -p downloads
+  printf 'half\n' >downloads/bundle-abc.zip.part
+  _manifest hold ''
+  _run_agent >/dev/null 2>&1
+  assert_file downloads/bundle-abc.zip.part
+}
+
+test_a_shop_running_the_assigned_version_clears_leftover_downloads() {
+  # E.g. an agent killed between a successful apply and its own cleanup.
+  _install_agent 1.1.0 1.1.0
+  mkdir -p downloads
+  printf 'leftover\n' >downloads/bundle-abc.zip
+  _manifest apply 1.1.0
+  _run_agent >/dev/null 2>&1
+  assert_no_file downloads/bundle-abc.zip
+}
+
+test_a_hostile_bundle_name_cannot_leave_the_downloads_directory() {
+  _install_agent 1.0.0 1.1.0
+  cat >"${PU_TEST_DIR}/manifest.json" <<'JSON'
+{"directive":"apply","assigned_version":"1.1.0","bundle":{"path":"/v1/agent/artifacts/1.1.0","sha256":"../../../etc/evil"}}
+JSON
+  _run_agent >/dev/null 2>&1
+  assert_no_file "${PU_TEST_DIR}/etc/evil.zip.part"
+  assert_no_file "${PU_TEST_DIR}/evil.zip.part"
+  assert_call_count curl '*-o downloads/bundle-./etc/evil.zip.part*' 0
+  assert_called curl '*-o downloads/bundle-.etcevil.zip.part*'
+}
+
+test_check_reports_how_much_is_already_downloaded() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  mkdir -p downloads
+  local sha; sha="$(_sha256_of "${PU_TEST_DIR}/bundle.zip")"
+  head -c 10 "${PU_TEST_DIR}/bundle.zip" >"downloads/bundle-${sha}.zip.part"
+  local out; out="$(_run_agent --check 2>&1)"
+  assert_contains "$out" 'already downloaded'
+  assert_file "downloads/bundle-${sha}.zip.part"
 }
 
 test_the_connector_token_authenticates_every_relay_call() {
@@ -432,6 +717,15 @@ test_a_failed_apply_is_reported_with_the_version_that_survived() {
   # pu_apply_bundle rolled back, so VERSION.txt still says 1.0.0 and that is
   # what the fleet must be told.
   assert_contains "$last" '"current_version":"1.0.0"'
+}
+
+test_a_failed_apply_reports_the_engines_reason_when_it_gives_one() {
+  # "needs the full bundle" is an operator action, not a mystery to diagnose.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  export APPLY_RC=1 APPLY_ERROR='needs the full bundle: missing pointy-edge:4'
+  _run_agent >/dev/null 2>&1
+  assert_contains "$(_status_posts | tail -1)" '"update_error":"needs the full bundle: missing pointy-edge:4"'
 }
 
 test_a_status_post_that_fails_does_not_fail_the_update() {

@@ -381,8 +381,9 @@ Customer backends learn about these cloud-side changes through their existing
 relay sync path. Remote access remains disabled/not subscribed by default until
 this relay-admin workflow changes it.
 
-Push on-prem backend updates to the fleet without visiting any shop. Upload a
-built bundle to the relay once, then set a target version per channel with a
+Push on-prem backend updates to the fleet without visiting any shop. Upload the
+release's update bundle (`pointy-update-<v>.zip` — about half the full
+`pointy-onprem-<v>.zip`, which is for new installs) to the relay once, then set a target version per channel with a
 staged rollout; each shop's on-prem update agent pulls the bundle from the relay,
 applies it, health-checks, and auto-rolls-back on failure (see
 `deploy/onprem/README.md`). The relay stores bundles under `/var/lib/pointy/artifacts`
@@ -390,9 +391,9 @@ automatically (no config needed); mount a persistent volume there so they surviv
 redeploy, or override with `--artifact-dir` / `POINTY_RELAY_ARTIFACT_DIR`.
 
 ```sh
-pointy-relay artifacts upload --version 1.4.0 --bundle pointy-onprem-1.4.0.zip
+pointy-relay artifacts upload --version 1.4.0 --bundle pointy-update-1.4.0.zip
 pointy-relay fleet set-version 1.4.0 --channel stable --rollout canary --canary inst_1,inst_2
-pointy-relay fleet status                # current → assigned version across the fleet
+pointy-relay fleet status                # current → assigned, "downloading 43%", DETAIL on failure
 pointy-relay fleet rollout 50%           # widen the rollout once canaries are healthy
 pointy-relay fleet rollout all
 pointy-relay fleet pause                 # kill switch: stop the rollout immediately
@@ -411,7 +412,7 @@ just run the command again.
 
 ```sh
 pointy-relay artifacts upload --version 1.4.0 \
-  --url https://files.example.com/pointy-onprem-1.4.0.zip --sha256 <hex>
+  --url https://files.example.com/pointy-update-1.4.0.zip --sha256 <hex>
 # private GitHub release: use the asset's API URL plus a token (sent only to
 # GitHub, never stored; dropped when GitHub redirects to its file CDN)
 pointy-relay artifacts upload --version 1.4.0 \

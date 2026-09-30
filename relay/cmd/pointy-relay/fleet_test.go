@@ -143,3 +143,25 @@ func TestRunFleetSetVersionRejectsBadRollout(t *testing.T) {
 		t.Fatal("expected an error for an invalid --rollout")
 	}
 }
+
+func TestRenderFleetStatusShowsDownloadProgressAndFailureDetail(t *testing.T) {
+	out, err := captureStdout(t, func() error {
+		return renderFleetStatus(fleetStatusResponse{Installations: []fleetInstallationRow{
+			{ID: "inst_1", ShopName: "A", Channel: "stable", CurrentVersion: "0.7.3",
+				AssignedVersion: "0.7.5", Directive: "apply",
+				UpdateStatus: "downloading 43%", UpdateError: "connection lost; resuming next run"},
+			{ID: "inst_2", ShopName: "B", Channel: "stable", CurrentVersion: "0.7.3",
+				AssignedVersion: "0.7.5", Directive: "apply",
+				UpdateStatus: "failed", UpdateError: "needs the full bundle: missing pointy-edge:2"},
+		}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"DETAIL", "downloading 43%", "connection lost; resuming next run",
+		"needs the full bundle: missing pointy-edge:2"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("fleet status missing %q:\n%s", want, out)
+		}
+	}
+}

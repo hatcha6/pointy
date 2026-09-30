@@ -861,6 +861,52 @@ jobs:
           ( cd dist && sha256sum "${BUNDLE}.zip" > SHA256SUMS-onprem.txt )
           ls -lh dist
 
+      # What the relay serves the FLEET. A running shop never uses the WSL
+      # installer/distro or the infrastructure images to update — about half
+      # the full bundle — and on a Libyan shop line every byte of an update is
+      # hours. Same directory, same scripts, same app images and clients, so
+      # every updater applies it unmodified. See make-update-bundle.sh.
+      #
+      # An infrastructure archive stays in when its image changed since the
+      # previous release, because running shops do not have the new one yet.
+      # If that release cannot be looked up, every one stays in: bigger, never
+      # broken. (A shop that skipped the release that bumped one is refused
+      # before anything changes and told to apply the full bundle.)
+      - name: Derive the fleet update bundle
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prev="$(gh release list --limit 50 --exclude-drafts --json tagName \
+                    --jq '[.[] | .tagName | select(endswith("-compat") | not)
+                           | select(. != env.TAG)] | first // empty' || true)"
+          prev_workflow=""
+          if [ -n "${prev}" ]; then
+            prev_workflow="$(gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/release.yml?ref=${prev}" \
+                               --jq .content 2>/dev/null | base64 -d 2>/dev/null || true)"
+          fi
+          echo "==> Infrastructure images against ${prev:-no previous release}:"
+          keep=()
+          for pair in POSTGRES_IMAGE:postgres.tar REDIS_IMAGE:redis.tar \
+                      PGBOUNCER_IMAGE:pgbouncer.tar EDGE_IMAGE:pointy-edge.tar; do
+            key="${pair%%:*}"; archive="${pair#*:}"; now="${!key}"
+            before="$(printf '%s\n' "${prev_workflow}" | grep -E "^  ${key}:" | head -1 \
+                        | cut -d: -f2- | tr -d ' "' || true)"
+            if [ -n "${before}" ] && [ "${before}" = "${now}" ]; then
+              echo "    ${now}: unchanged, left out"
+            else
+              echo "    ${now}: ${before:-unknown} before, kept"
+              keep+=(--keep "images/${archive}")
+            fi
+          done
+          bash deploy/onprem/make-update-bundle.sh "${keep[@]+"${keep[@]}"}" \
+            "dist/pointy-onprem-${VERSION}.zip" "dist/pointy-update-${VERSION}.zip"
+          ( cd dist && sha256sum "pointy-onprem-${VERSION}.zip" "pointy-update-${VERSION}.zip" > SHA256SUMS-onprem.txt )
+          cat dist/SHA256SUMS-onprem.txt
+
       # Authenticity, separate from integrity. The sha256 above proves the
       # download was not corrupted; it proves nothing about who produced it,
       # because the relay serves both the bundle and its hash. This signature is
@@ -872,9 +918,11 @@ jobs:
           SIGNING_KEY: ${{ secrets.POINTY_RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail
-          zip_path="$(ls dist/*-onprem-*.zip dist/*.zip 2>/dev/null | head -1)"
-          [ -n "$zip_path" ] || { echo "no bundle zip to sign" >&2; exit 1; }
-          digest="$(sha256sum "$zip_path" | awk '{print $1}')"
+          # Both zips: the full bundle installs, the update bundle is what the
+          # fleet applies, and the agent verifies whichever it is served.
+          shopt -s nullglob
+          zips=(dist/pointy-onprem-*.zip dist/pointy-update-*.zip)
+          [ ${#zips[@]} -gt 0 ] || { echo "no bundle zip to sign" >&2; exit 1; }
           if [ -z "${SIGNING_KEY:-}" ]; then
             echo "::warning title=Unsigned release::POINTY_RELEASE_SIGNING_KEY is not set — this bundle is UNSIGNED and shops with a release key configured will refuse it."
             exit 0
@@ -882,12 +930,15 @@ jobs:
           umask 077
           keyfile="$(mktemp)"; msg="$(mktemp)"; raw="$(mktemp)"
           printf '%s' "$SIGNING_KEY" > "$keyfile"
-          printf '%s' "$digest" > "$msg"
-          openssl pkeyutl -sign -inkey "$keyfile" -rawin -in "$msg" -out "$raw"
-          base64 -w0 < "$raw" > "${zip_path}.sig"
+          for zip_path in "${zips[@]}"; do
+            digest="$(sha256sum "$zip_path" | awk '{print $1}')"
+            printf '%s' "$digest" > "$msg"
+            openssl pkeyutl -sign -inkey "$keyfile" -rawin -in "$msg" -out "$raw"
+            base64 -w0 < "$raw" > "${zip_path}.sig"
+            echo "signed sha256=${digest}"
+            echo "  -> ${zip_path}.sig"
+          done
           rm -f "$keyfile" "$msg" "$raw"
-          echo "signed sha256=${digest}"
-          echo "  -> ${zip_path}.sig"
 
       # Test builds only. This is by far the largest artifact — it packs all
       # seven docker image tars — and at ~1 GB it was the biggest single draw on

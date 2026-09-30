@@ -38,6 +38,73 @@ _order() { cat "${PU_TEST_DIR}/order.log"; }
 _bundle() { mkdir -p "${PU_TEST_DIR}/b/images"; printf '%s' "${PU_TEST_DIR}/b"; }
 
 # ---------------------------------------------------------------------------
+# Update bundles: no infrastructure archives
+#
+# What the relay serves the fleet leaves out postgres/redis/pgbouncer/edge —
+# half the download, and a running shop already has them. The one case it
+# cannot serve is a shop missing one, and that must be refused before a single
+# thing changes, not discovered by compose halfway through a restart.
+# ---------------------------------------------------------------------------
+
+_infra_env() {
+  printf '%s\n' 'POINTY_POSTGRES_IMAGE=postgres:17-alpine' 'POINTY_REDIS_IMAGE=redis:7-alpine' \
+    'POINTY_PGBOUNCER_IMAGE=edoburu/pgbouncer:v1.23.1-p2' 'POINTY_EDGE_IMAGE=pointy-edge:3' >>.env
+}
+
+test_an_update_bundle_applies_when_docker_already_has_every_infra_image() {
+  installed_deploy 1.0.0; _infra_env; _mock_deps
+  assert_ok pu_apply_bundle "$(_bundle)" 1.0.0 1.1.0 auto >/dev/null 2>&1
+  assert_contains "$(_order)" 'apply-live'
+  assert_called docker 'image inspect postgres:17-alpine'
+  assert_called docker 'image inspect pointy-edge:3'
+}
+
+test_an_update_bundle_is_refused_before_anything_changes_when_an_infra_image_is_missing() {
+  installed_deploy 1.0.0; _infra_env; _mock_deps
+  stub_rule docker 'image inspect pointy-edge:4' 1
+  sed -i.bak 's|^POINTY_EDGE_IMAGE=.*|POINTY_EDGE_IMAGE=pointy-edge:4|' .env; rm -f .env.bak
+  cp .env "${PU_TEST_DIR}/env.before"
+  local out rc
+  pu_apply_bundle "$(_bundle)" 1.0.0 1.1.0 auto >"${PU_TEST_DIR}/out" 2>&1; rc=$?
+  out="$(cat "${PU_TEST_DIR}/out")"
+  assert_eq '1' "$rc"
+  assert_contains "$out" 'does not carry pointy-edge:4'
+  assert_contains "$out" 'pointy-onprem-1.1.0.zip'
+  assert_eq 'needs the full bundle: missing pointy-edge:4' "$POINTY_APPLY_ERROR"
+  assert_eq '' "$(_order)" 'no backup, no adoption, no apply'
+  assert_eq "$(cat "${PU_TEST_DIR}/env.before")" "$(cat .env)"
+}
+
+test_a_missing_infra_image_is_fine_when_the_bundle_carries_its_archive() {
+  # A full bundle, or an update bundle for a release that bumped that image.
+  installed_deploy 1.0.0; _infra_env; _mock_deps
+  stub_rule docker 'image inspect postgres:17-alpine' 1
+  local b; b="$(_bundle)"; printf 'archive\n' >"${b}/images/postgres.tar"
+  assert_ok pu_apply_bundle "$b" 1.0.0 1.1.0 auto >/dev/null 2>&1
+  assert_contains "$(_order)" 'apply-live'
+}
+
+test_an_infra_image_the_env_predates_is_taken_from_the_bundles_env_example() {
+  # A shop installed before pgbouncer existed has no key for it; the update's
+  # --env-only fill will add the bundle's value, so that is the image to check.
+  installed_deploy 1.0.0; _mock_deps
+  local b; b="$(_bundle)"
+  printf 'POINTY_PGBOUNCER_IMAGE="edoburu/pgbouncer:v9"\r\n' >"${b}/.env.example"
+  stub_rule docker 'image inspect edoburu/pgbouncer:v9' 1
+  local out; out="$(pu_apply_bundle "$b" 1.0.0 1.1.0 auto 2>&1)"
+  assert_contains "$out" 'does not carry edoburu/pgbouncer:v9'
+  assert_eq '' "$(_order)"
+}
+
+test_every_missing_infra_image_is_named_at_once() {
+  installed_deploy 1.0.0; _infra_env; _mock_deps
+  stub_rule docker 'image inspect postgres:*' 1
+  stub_rule docker 'image inspect redis:*' 1
+  pu_apply_bundle "$(_bundle)" 1.0.0 1.1.0 auto >/dev/null 2>&1
+  assert_eq 'needs the full bundle: missing postgres:17-alpine redis:7-alpine' "$POINTY_APPLY_ERROR"
+}
+
+# ---------------------------------------------------------------------------
 # Choosing a strategy
 # ---------------------------------------------------------------------------
 

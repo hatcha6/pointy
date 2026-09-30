@@ -68,12 +68,14 @@ relay (`pointy-relay fleet status`).
 Because updates no longer close the tills, a rollout does not have to be timed
 for after hours.
 
-Operators drive it entirely from the relay — no shop access needed:
+Operators drive it entirely from the relay — no shop access needed. Give the
+fleet the release's **update bundle**, `pointy-update-<v>.zip`, not the full
+`pointy-onprem-<v>.zip`:
 
 ```sh
-pointy-relay artifacts upload --version 1.4.0 --bundle pointy-onprem-1.4.0.zip
+pointy-relay artifacts upload --version 1.4.0 --bundle pointy-update-1.4.0.zip
 # or, on a slow line, have the relay download it itself:
-pointy-relay artifacts upload --version 1.4.0 --url https://…/pointy-onprem-1.4.0.zip
+pointy-relay artifacts upload --version 1.4.0 --url https://…/pointy-update-1.4.0.zip
 pointy-relay fleet set-version 1.4.0 --channel stable --rollout canary
 pointy-relay fleet rollout 50%        # widen once the canaries look healthy
 pointy-relay fleet rollout all
@@ -81,7 +83,37 @@ pointy-relay fleet pause              # kill switch: stop the rollout immediatel
 pointy-relay fleet pin <id> 1.3.0    # roll one shop back / hold it on a version
 ```
 
-Preview what a shop would do without applying: `bash update-agent.sh --check`.
+**What a shop downloads.** The update bundle is the full bundle minus what a
+running shop never uses to update: the WSL installer and distro, and the
+postgres / redis / pgbouncer / front-door images (the live updater never loads
+those). That is about half the full bundle. `make-update-bundle.sh` derives it in
+the release build. It keeps an infrastructure image after all when that release
+bumps it. A shop that still lacks one, because it skipped that release, is
+refused before anything changes (`fleet status` DETAIL: `needs the full bundle:
+missing …`). Upload the full bundle for that version and it goes through.
+
+**Slow and broken lines.** The download is built to finish across many attempts:
+
+- It is kept in `downloads/` under a name taken from its sha256. Every run continues
+  that file, whether the line dropped, the PC slept or WSL restarted the distro.
+- A dropped or stalled connection is retried in place. A run gives up after an
+  hour and exits cleanly, and the next timer run resumes.
+- `fleet status` shows `downloading 43%`.
+- The update lock (which makes the watchdog stand down) covers only the apply,
+  never the download.
+- A verified download is kept until the shop runs that version, so a failed apply
+  is retried without downloading again. A paused rollout keeps a half-finished
+  download.
+
+Optional `.env` knobs:
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `POINTY_UPDATE_RATE_LIMIT` | unlimited | cap the download speed (curl syntax, e.g. `200k`) so the tills keep the line |
+| `POINTY_UPDATE_DOWNLOAD_BUDGET` | `3600` | seconds one run spends downloading before handing over to the next |
+
+Preview what a shop would do without applying: `bash update-agent.sh --check`
+(it also says how much is already downloaded).
 The agent needs `jq` or `python3`, plus `unzip`, on the host. A failed forward DB
 migration is the one case auto-rollback can't fully heal — the agent takes a
 `pg_dump` first (under `backups/`); keep migrations backward-compatible across one

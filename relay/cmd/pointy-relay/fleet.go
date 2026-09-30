@@ -216,6 +216,7 @@ type fleetInstallationRow struct {
 	Directive       string  `json:"directive"`
 	PinnedVersion   string  `json:"pinned_version"`
 	UpdateStatus    string  `json:"update_status"`
+	UpdateError     string  `json:"update_error"`
 	AgentLastSeenAt *string `json:"agent_last_seen_at"`
 }
 
@@ -276,7 +277,10 @@ func renderFleetStatus(response fleetStatusResponse) error {
 		return nil
 	}
 	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(writer, "ID\tSHOP\tCH\tCURRENT\tASSIGNED\tDIR\tSTATUS\tAGENT SEEN")
+	// DETAIL is why a shop failed ("needs the full bundle: …") or why a download
+	// paused ("connection lost; resuming next run") — the part of the status an
+	// operator acts on, so it is not left to --json.
+	fmt.Fprintln(writer, "ID\tSHOP\tCH\tCURRENT\tASSIGNED\tDIR\tSTATUS\tAGENT SEEN\tDETAIL")
 	for _, installation := range response.Installations {
 		assigned := installation.AssignedVersion
 		if installation.PinnedVersion != "" {
@@ -284,7 +288,7 @@ func renderFleetStatus(response fleetStatusResponse) error {
 		}
 		fmt.Fprintf(
 			writer,
-			"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			installation.ID,
 			dashIfEmpty(installation.ShopName),
 			dashIfEmpty(installation.Channel),
@@ -293,6 +297,7 @@ func renderFleetStatus(response fleetStatusResponse) error {
 			dashIfEmpty(installation.Directive),
 			dashIfEmpty(installation.UpdateStatus),
 			formatTimeField(installation.AgentLastSeenAt),
+			installation.UpdateError,
 		)
 	}
 	if err := writer.Flush(); err != nil {

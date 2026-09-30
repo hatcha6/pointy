@@ -228,7 +228,7 @@ cmd_export() {
     total=$(( total + bytes ))
   done
   local deploy_bytes image_bytes=0
-  deploy_bytes="$(du -sb --exclude=images "$DEPLOY_DIR" 2>/dev/null | cut -f1)"; deploy_bytes="${deploy_bytes:-0}"
+  deploy_bytes="$(du -sb --exclude=images --exclude=downloads "$DEPLOY_DIR" 2>/dev/null | cut -f1)"; deploy_bytes="${deploy_bytes:-0}"
   for img in "${images[@]}"; do
     bytes="$(docker image inspect -f '{{.Size}}' "$img" 2>/dev/null || echo 0)"
     image_bytes=$(( image_bytes + bytes ))
@@ -272,6 +272,7 @@ cmd_export() {
   log "copying the deploy folder (.env and all)..."
   tar -C "$(dirname "$DEPLOY_DIR")" --numeric-owner -czpf - \
     --exclude="$(basename "$DEPLOY_DIR")/images" --exclude="$(basename "$DEPLOY_DIR")/.update.lock" \
+    --exclude="$(basename "$DEPLOY_DIR")/downloads" \
     "$(basename "$DEPLOY_DIR")" | write_pieces "${target}/pointy-deploy.tar.gz"
   for i in "${!keys[@]}"; do
     touch "$lock"

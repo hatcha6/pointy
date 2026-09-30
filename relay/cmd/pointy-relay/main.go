@@ -3650,8 +3650,8 @@ func printUsage() {
   pointy-relay sms <usage|log|config> [flags]
   pointy-relay wallet <list|show|topups|credit|debit|refund|confirm|config> [args]
   pointy-relay integrations <status|disable|enable> [provider] [flags]
-  pointy-relay artifacts upload --version X --bundle pointy-onprem-X.zip
-  pointy-relay artifacts upload --version X --url https://host/pointy-onprem-X.zip [--sha256 H]
+  pointy-relay artifacts upload --version X --bundle pointy-update-X.zip
+  pointy-relay artifacts upload --version X --url https://host/pointy-update-X.zip [--sha256 H]
   pointy-relay artifacts status --version X [--wait]
   pointy-relay provision [flags]
   pointy-relay migrate [flags]
@@ -3714,7 +3714,7 @@ Commands:
                    disable <provider> --reason "..."
                                              off in every shop (a cease-and-desist)
                    enable <provider> [--reason "..."]   back on in every shop
-  artifacts      upload --version X --bundle pointy-onprem-X.zip   serve a bundle
+  artifacts      upload --version X --bundle pointy-update-X.zip   serve a bundle
                    upload --version X --url URL   the relay downloads it itself (slow line)
                    status --version X [--wait]    progress of a --url download
   provision      Create an installation directly against the database (host-side).

@@ -552,9 +552,48 @@ pu_register_autostart() {
 #
 # mode: auto | live | restart. Prints what it did; returns 0 on success.
 # ---------------------------------------------------------------------------
+# Infrastructure images, and the archive a bundle carries each one in. An UPDATE
+# bundle (release.yml's pointy-update-<v>.zip, what the relay serves the fleet)
+# leaves these archives out: together with the WSL installer they are half of a
+# full bundle, they almost never change, and a shop that is already running has
+# every one of them in Docker. Almost: a release that bumps one, or adds a
+# service, needs an archive such a shop does not have.
+POINTY_INFRA_IMAGES="POINTY_POSTGRES_IMAGE:postgres.tar POINTY_REDIS_IMAGE:redis.tar
+POINTY_PGBOUNCER_IMAGE:pgbouncer.tar POINTY_EDGE_IMAGE:pointy-edge.tar"
+
+# pu_missing_infra_images <bundle-dir> — every infrastructure image the updated
+# deployment will run on that is neither in Docker nor in the bundle. The image
+# is .env's (never rewritten by an update), else the bundle's .env.example's
+# (which is where install.sh --env-only takes a key .env predates).
+pu_missing_infra_images() {
+  local dir="$1" pair key tar ref
+  for pair in $POINTY_INFRA_IMAGES; do
+    key="${pair%%:*}"; tar="${pair#*:}"
+    ref="$(pu_env_value "$key")"
+    if [ -z "$ref" ] && [ -f "${dir}/.env.example" ]; then
+      ref="$(grep -E "^${key}=" "${dir}/.env.example" | head -1 | cut -d= -f2- | tr -d "\"'\r")"
+    fi
+    [ -n "$ref" ] || continue
+    [ -f "${dir}/images/${tar}" ] && continue
+    docker image inspect "$ref" >/dev/null 2>&1 && continue
+    printf '%s\n' "$ref"
+  done
+}
+
 pu_apply_bundle() {
   local dir="$1" current="$2" assigned="$3" mode="${4:-auto}"
-  local strategy snapshot rc
+  local strategy snapshot rc missing
+  POINTY_APPLY_ERROR=""
+
+  # Refuse before anything is touched — no backup, no adopted file — so the
+  # shop is exactly as it was and the full bundle can be applied over it.
+  missing="$(pu_missing_infra_images "$dir" | tr '\n' ' ' | sed 's/ $//')"
+  if [ -n "$missing" ]; then
+    pu_warn "this bundle does not carry ${missing}, and Docker here does not have it;"
+    pu_warn "apply the full release bundle (pointy-onprem-${assigned}.zip) instead. Still on ${current}."
+    POINTY_APPLY_ERROR="needs the full bundle: missing ${missing}"
+    return 1
+  fi
 
   strategy="$mode"
   if [ "$mode" = auto ]; then
