@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"os/signal"
 	"sort"
@@ -65,19 +66,24 @@ type outcome struct {
 	// That window is also the window in which two app versions share one
 	// database, which is the whole reason migrations must be backward
 	// compatible; measuring it turns an assumption into a number.
-	FirstSeenMillis map[string]int64 `json:"first_seen_ms"`
-	LastSeenMillis  map[string]int64 `json:"last_seen_ms"`
-	FinalVersion    string           `json:"final_version"`
-	FinalUpstream   string           `json:"final_upstream"`
-	LongestFailureStreak int64   `json:"longest_failure_streak"`
-	MaxGapMillis         int64   `json:"max_gap_ms"`
-	DurationSeconds      float64 `json:"duration_seconds"`
-	FirstErrors          []string `json:"first_errors"`
+	FirstSeenMillis      map[string]int64 `json:"first_seen_ms"`
+	LastSeenMillis       map[string]int64 `json:"last_seen_ms"`
+	FinalVersion         string           `json:"final_version"`
+	FinalUpstream        string           `json:"final_upstream"`
+	LongestFailureStreak int64            `json:"longest_failure_streak"`
+	MaxGapMillis         int64            `json:"max_gap_ms"`
+	DurationSeconds      float64          `json:"duration_seconds"`
+	FirstErrors          []string         `json:"first_errors"`
 	// When each failure happened, in ms from the start. Without this a non-zero
 	// failure count is a mystery: 16 failures spread evenly across a run and 16
 	// clustered in one 200ms window are completely different problems, and only
 	// one of them is an outage.
 	FailureOffsets []int64 `json:"failure_offsets_ms"`
+}
+
+type connInfo struct {
+	reused bool
+	local  string
 }
 
 func runLoadGen(args []string) {
@@ -88,7 +94,35 @@ func runLoadGen(args []string) {
 	interval := flags.Duration("interval", 20*time.Millisecond, "pause between a worker's requests")
 	timeout := flags.Duration("timeout", 5*time.Second, "per-request timeout")
 	out := flags.String("out", "", "write the JSON summary here (default stdout)")
+	eventsPath := flags.String("events", "", "append one JSON line per failure and per upstream change (wall-clock ms, connection reuse)")
 	_ = flags.Parse(args)
+
+	// The summary says THAT requests failed and roughly when; lining a failure
+	// up against the engine's own log needs wall-clock time, and telling an old
+	// nginx worker's keep-alive connection from a fresh one needs to know
+	// whether the connection was reused.
+	var events *os.File
+	if *eventsPath != "" {
+		events, _ = os.OpenFile(*eventsPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if events != nil {
+			defer events.Close()
+		}
+	}
+	event := func(kind, status, version, upstream string, err error, conn connInfo) {
+		if events == nil {
+			return
+		}
+		line := map[string]any{
+			"t_ms": time.Now().UnixMilli(), "kind": kind, "status": status,
+			"version": version, "upstream": upstream,
+			"reused": conn.reused, "local": conn.local,
+		}
+		if err != nil {
+			line["error"] = err.Error()
+		}
+		blob, _ := json.Marshal(line)
+		_, _ = events.Write(append(blob, '\n'))
+	}
 
 	var mu sync.Mutex
 	result := outcome{
@@ -112,11 +146,12 @@ func runLoadGen(args []string) {
 	var lastSuccess time.Time
 	lastPair := ""
 
-	note := func(status string, version string, upstream string, err error) {
+	note := func(status string, version string, upstream string, err error, conn connInfo) {
 		mu.Lock()
 		defer mu.Unlock()
 		result.Total++
 		if err != nil || status == "" {
+			event("failure", status, version, upstream, err, conn)
 			result.Failed++
 			if len(result.FailureOffsets) < 200 {
 				result.FailureOffsets = append(result.FailureOffsets, time.Since(begun).Milliseconds())
@@ -157,6 +192,7 @@ func runLoadGen(args []string) {
 			lastSuccess = now
 			currentStreak = 0
 		} else {
+			event("failure", status, version, upstream, nil, conn)
 			result.Failed++
 			result.HTTPError++
 			if len(result.FailureOffsets) < 200 {
@@ -187,6 +223,7 @@ func runLoadGen(args []string) {
 			result.FinalUpstream = upstream
 		}
 		if pair := upstream + "/" + version; upstream != "" && pair != lastPair {
+			event("transition", status, version, upstream, nil, conn)
 			result.Transitions = append(result.Transitions, pair)
 			lastPair = pair
 		}
@@ -224,15 +261,25 @@ func runLoadGen(args []string) {
 					return
 				default:
 				}
-				resp, err := client.Get(*url)
+				var conn connInfo
+				req, _ := http.NewRequest(http.MethodGet, *url, nil)
+				req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+					GotConn: func(info httptrace.GotConnInfo) {
+						conn.reused = info.Reused
+						if info.Conn != nil {
+							conn.local = info.Conn.LocalAddr().String()
+						}
+					},
+				}))
+				resp, err := client.Do(req)
 				if err != nil {
-					note("", "", "", err)
+					note("", "", "", err, conn)
 				} else {
 					version := resp.Header.Get("X-Pointy-Stub-Version")
 					upstream := resp.Header.Get("X-Pointy-Upstream")
 					status := fmt.Sprintf("%d", resp.StatusCode)
 					resp.Body.Close()
-					note(status, version, upstream, nil)
+					note(status, version, upstream, nil, conn)
 				}
 				select {
 				case <-stop:

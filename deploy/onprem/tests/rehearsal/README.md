@@ -57,6 +57,7 @@ works and the one that does not.
 | `08-relay-driven-update` | The whole point: upload, target, pause, canary, apply, pin backwards, reject a corrupted bundle — with no one visiting the shop. |
 | `09-restart-slow-boot` | A restart update whose backend is still migrating when compose stops waiting for it. Does the update finish and publish the client installers, where it used to roll back? And does a release that cannot boot still fail fast? |
 | `10-update-bundle-over-a-bad-line` | The fleet's real update path on a Libyan line: the slim update bundle (no infrastructure images) applied live, a download stopped mid-way and resumed by the next run, `fleet status` showing the download, and a shop missing an infrastructure image refused before anything changes — then retried without a second download. |
+| `11-flip-soak` | One clean live update proves the flip *can* be clean, not that it always is. Flips one shop between two releases `SOAK_ROUNDS` times (default 12) under till traffic and demands zero failed requests across all of them. It is what caught nginx's old workers still routing to a container the engine had just killed. |
 
 ## Numbers this produces
 

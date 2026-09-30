@@ -490,6 +490,7 @@ rig_load_start() {
     -workers "${RIG_LOAD_WORKERS:-6}" \
     -interval "${RIG_LOAD_INTERVAL:-15ms}" \
     -timeout 5s \
+    -events "${RIG_LOAD_OUT%.json}.events.jsonl" \
     -out "$RIG_LOAD_OUT" &
   RIG_LOAD_PID=$!
   # Let it establish its keep-alive connections before anything moves, so the

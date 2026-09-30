@@ -170,11 +170,50 @@ pu_dump_logs() {
 # The flip
 # ---------------------------------------------------------------------------
 
+# The front door's nginx worker processes, as pids.
+pu_edge_worker_pids() {
+  pu_compose exec -T edge ps -o pid,args 2>/dev/null \
+    | awk '/nginx: worker process/ { print $1 }' | tr '\n' ' '
+}
+
+# pu_wait_edge_workers_retired <pids> — wait until none of <pids> is running.
+#
+# A reload is graceful: nginx starts new workers on the new config, and the old
+# ones carry on — still ACCEPTING new connections until the master has told them
+# to stop, then finishing what they accepted — all on the OLD upstream. So one
+# response from a new worker proves the flip began, not that it finished. The
+# engine used to take that as its cue to kill the container it had just moved
+# traffic off, and every request an old worker then sent there was a 502 at the
+# till: 14 in one live update in eight, in a 2026-09-30 soak (rehearsal
+# 11-flip-soak). Waiting out the old workers closes that window.
+#
+# Bounded, because an old worker also stays for a long-lived stream (an AI
+# reply streaming to a till) for as long as that stream lasts.
+pu_wait_edge_workers_retired() {
+  local old="$1" polls=$(( ${POINTY_EDGE_DRAIN_SECONDS:-15} * 5 )) now pid alive
+  [ -n "${old// /}" ] || return 0
+  while :; do
+    now=" $(pu_edge_worker_pids) "
+    alive=""
+    for pid in $old; do
+      case "$now" in *" ${pid} "*) alive="${alive} ${pid}" ;; esac
+    done
+    [ -n "$alive" ] || return 0
+    if [ "$polls" -le 0 ]; then
+      pu_warn "front-door workers from before the flip are still finishing requests (pid${alive}); carrying on"
+      return 0
+    fi
+    polls=$(( polls - 1 ))
+    sleep 0.2
+  done
+}
+
 # Point the LAN front door at a container and PROVE it took effect. nginx keeps
 # serving its previous config if a reload fails, so "the command returned 0" is
-# not evidence — the response header is.
+# not evidence — the response header is. Returns once the workers still on the
+# previous config are gone too, so the caller may then stop what they pointed at.
 pu_set_upstream() {
-  local target="$1" port backup=""
+  local target="$1" port backup="" old_workers
   port="$(pu_backend_port)"
 
   # Keep the previous pointer so a rejected config never survives on disk: the
@@ -204,11 +243,13 @@ EOF
     return 1
   fi
   rm -f "$backup" 2>/dev/null || true
+  old_workers="$(pu_edge_worker_pids)"
   pu_compose exec -T edge nginx -s reload >/dev/null 2>&1 || true
 
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     if curl -fsS -I "http://127.0.0.1:${port}/healthz-edge" 2>/dev/null \
         | tr -d '\r' | grep -qi "^X-Pointy-Upstream: ${target}$"; then
+      pu_wait_edge_workers_retired "$old_workers"
       pu_log "traffic now served by ${target}"
       return 0
     fi
@@ -434,6 +475,16 @@ pu_remove_standby() {
   docker rm -f "$POINTY_STANDBY_NAME" >/dev/null 2>&1 || true
 }
 
+# Take the standby out of service once traffic has moved off it: SIGTERM first,
+# so it finishes what it had already accepted (the backend drains on SIGTERM —
+# POINTY_ASGI_GRACEFUL_TIMEOUT), then remove it. pu_remove_standby is SIGKILL,
+# right for a standby that never served, wrong for one a till may still be
+# waiting on.
+pu_retire_standby() {
+  docker stop -t "${POINTY_STANDBY_STOP_SECONDS:-30}" "$POINTY_STANDBY_NAME" >/dev/null 2>&1 || true
+  pu_remove_standby
+}
+
 # Start the new backend beside the running one. `compose run` builds it from the
 # very same service definition (env, volumes, limits) but publishes no port and
 # carries the one-off label, so it cannot collide with the live container and
@@ -489,7 +540,7 @@ pu_apply_live() {
     return 2
   fi
   pu_set_upstream backend || return 2
-  pu_remove_standby
+  pu_retire_standby
 
   # Everything else can be replaced normally now: none of it holds the LAN port,
   # and the tills are already being served by the new backend.
@@ -723,7 +774,7 @@ pu_rollback_live() {
   if pu_recreate backend >/dev/null 2>&1 \
       && pu_wait_upstream backend "the restored backend" "${POINTY_RESTORE_READY_TRIES:-120}"; then
     pu_set_upstream backend || true
-    pu_remove_standby
+    pu_retire_standby
     pu_warn "rolled back to ${current}; the shop stayed open throughout"
     return 0
   fi

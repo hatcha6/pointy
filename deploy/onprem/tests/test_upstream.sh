@@ -14,6 +14,27 @@ _edge_reports() { stub_rule curl '-fsS -I *' 0 "$(curl_header_response "$1")"; }
 
 _use_private_tmp() { export TMPDIR="${PU_TEST_DIR}/tmp"; mkdir -p "$TMPDIR"; }
 
+# A front door whose `ps` answers from a script: one line of worker pids per
+# call, the last line repeating. The first call is the snapshot taken before
+# the reload.
+_edge_workers() {
+  printf '%s\n' "$@" >"${PU_TEST_DIR}/ps-script"
+  stub_script docker <<'EOF'
+case "$*" in
+  *"exec -T edge ps -o pid,args"*)
+    n=$(( $(cat "${PU_TEST_DIR}/ps-calls" 2>/dev/null || echo 0) + 1 ))
+    printf '%s' "$n" >"${PU_TEST_DIR}/ps-calls"
+    line="$(sed -n "${n}p" "${PU_TEST_DIR}/ps-script")"
+    [ -n "$line" ] || line="$(tail -1 "${PU_TEST_DIR}/ps-script")"
+    printf 'PID   COMMAND\n    1 nginx: master process nginx -g daemon off;\n'
+    for pid in $line; do printf '%5s nginx: worker process\n' "$pid"; done
+    exit 0 ;;
+esac
+exit 0
+EOF
+}
+_ps_calls() { cat "${PU_TEST_DIR}/ps-calls" 2>/dev/null || echo 0; }
+
 # ---------------------------------------------------------------------------
 # The happy path
 # ---------------------------------------------------------------------------
@@ -210,6 +231,65 @@ test_flip_fails_when_the_front_door_does_not_answer_at_all() {
 # ---------------------------------------------------------------------------
 # pu_write_default_upstream
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Old workers — the flip is not over until they are gone
+#
+# REGRESSION (2026-09-30, rehearsal 11-flip-soak). After a reload the old nginx
+# workers keep accepting connections for a moment, on the old upstream. The
+# flip returned on the first response from a NEW worker, the caller then killed
+# the old upstream, and the old workers' requests became 502s at the tills.
+# ---------------------------------------------------------------------------
+
+test_the_flip_waits_for_the_workers_from_before_the_reload_to_exit() {
+  default_env
+  _edge_reports backend
+  _edge_workers '10 11' '10 11 20 21' '11 20 21' '20 21'
+  local out; out="$(pu_set_upstream backend 2>&1)"; local rc=$?
+  assert_eq '0' "$rc"
+  assert_eq '4' "$(_ps_calls)" 'snapshot, then polled until 10 and 11 were both gone'
+  assert_not_contains "$out" 'still finishing'
+}
+
+test_the_old_worker_snapshot_is_taken_before_the_reload() {
+  default_env
+  _edge_reports backend
+  _edge_workers '10' '20'
+  pu_set_upstream backend >/dev/null 2>&1
+  local calls ps_line reload_line
+  calls="$(calls_of docker)"
+  ps_line="$(printf '%s\n' "$calls" | grep -n 'edge ps -o pid,args' | head -1 | cut -d: -f1)"
+  reload_line="$(printf '%s\n' "$calls" | grep -n 'nginx -s reload' | head -1 | cut -d: -f1)"
+  [ "$ps_line" -lt "$reload_line" ] || _fail 'the workers were listed after the reload, so new ones count as old'
+}
+
+test_the_flip_does_not_wait_when_the_old_workers_are_already_gone() {
+  default_env
+  _edge_reports backend
+  _edge_workers '10 11' '20 21'
+  assert_ok pu_set_upstream backend >/dev/null 2>&1
+  assert_eq '2' "$(_ps_calls)"
+}
+
+test_old_workers_held_open_by_a_long_stream_only_delay_the_flip_so_long() {
+  # An AI reply streaming to a till keeps its worker alive for as long as it
+  # streams. Waiting for it forever would hold the update lock forever.
+  default_env
+  _edge_reports backend
+  _edge_workers '10 11' '10 20 21'
+  export POINTY_EDGE_DRAIN_SECONDS=1
+  local out; out="$(pu_set_upstream backend 2>&1)"; local rc=$?
+  assert_eq '0' "$rc"
+  assert_contains "$out" 'still finishing requests (pid 10)'
+  assert_contains "$out" 'traffic now served by backend'
+}
+
+test_a_front_door_that_cannot_list_its_workers_does_not_block_the_flip() {
+  default_env
+  _edge_reports backend
+  stub_rule docker '*edge ps -o pid,args*' 1
+  assert_ok pu_set_upstream backend >/dev/null 2>&1
+}
 
 test_default_upstream_points_at_the_managed_backend() {
   pu_write_default_upstream

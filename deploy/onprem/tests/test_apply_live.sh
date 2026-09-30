@@ -21,6 +21,7 @@ _mock_deps() {
   pu_load_images()   { record "load:$1"; return 0; }
   pu_start_standby() { record 'start-standby'; return 0; }
   pu_remove_standby(){ record 'remove-standby'; return 0; }
+  pu_retire_standby(){ record 'retire-standby'; return 0; }
   pu_wait_upstream() { record "wait:$1"; return 0; }
   pu_set_upstream()  { record "flip:$1"; return 0; }
   pu_recreate()      { record "recreate:$*"; return 0; }
@@ -49,7 +50,17 @@ test_live_update_runs_its_steps_in_the_only_safe_order() {
   # The managed backend is only rebuilt while the standby is serving.
   assert_order 'flip:pointy-backend-standby' 'recreate:backend'
   # Traffic returns to the managed container before the standby is destroyed.
-  assert_order 'flip:backend' 'remove-standby'
+  assert_order 'flip:backend' 'retire-standby'
+}
+
+test_a_standby_that_served_traffic_is_retired_gracefully_not_killed() {
+  # REGRESSION. It was removed with `rm -f` — SIGKILL — the instant the flip
+  # back was confirmed, so a request an old nginx worker had just handed it was
+  # cut off mid-answer and the till got a 502.
+  _mock_deps
+  pu_apply_live 1.1.0 >/dev/null 2>&1
+  assert_contains "$(_order)" 'retire-standby'
+  assert_not_contains "$(_order)" 'remove-standby'
 }
 
 test_live_update_hands_traffic_back_to_the_managed_container() {
@@ -238,6 +249,24 @@ test_starting_a_standby_first_clears_any_leftover_one() {
   rm_line="$(printf '%s\n' "$calls" | grep -n 'rm -f pointy-backend-standby' | head -1 | cut -d: -f1)"
   run_line="$(printf '%s\n' "$calls" | grep -n 'run -d --no-deps' | head -1 | cut -d: -f1)"
   [ "$rm_line" -lt "$run_line" ] || _fail 'the leftover standby was not removed before starting a new one'
+}
+
+test_retiring_the_standby_lets_it_drain_before_removing_it() {
+  default_env
+  pu_retire_standby
+  assert_called docker 'stop -t 30 pointy-backend-standby'
+  local calls; calls="$(calls_of docker)"
+  local stop_line rm_line
+  stop_line="$(printf '%s\n' "$calls" | grep -n '^stop ' | head -1 | cut -d: -f1)"
+  rm_line="$(printf '%s\n' "$calls" | grep -n '^rm -f pointy-backend-standby' | head -1 | cut -d: -f1)"
+  [ -n "$stop_line" ] && [ -n "$rm_line" ] && [ "$stop_line" -lt "$rm_line" ] \
+    || _fail 'the standby was removed without being stopped first' "$calls"
+}
+
+test_retiring_a_standby_that_is_already_gone_is_harmless() {
+  stub_rule docker 'stop *' 1
+  stub_rule docker 'rm -f *' 1
+  assert_ok pu_retire_standby
 }
 
 test_removing_a_standby_that_is_not_there_is_harmless() {
