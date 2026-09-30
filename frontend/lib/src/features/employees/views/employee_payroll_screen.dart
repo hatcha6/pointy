@@ -322,6 +322,10 @@ class _MonthWorkflowCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = context.pointyColors;
     final run = viewModel.currentMonthRun;
+    final monthLabel = payrollMonthLabel(
+      context,
+      viewModel.currentMonthPeriod.start,
+    );
     final needsOnboarding =
         run == null &&
         viewModel.employees.isEmpty &&
@@ -345,9 +349,7 @@ class _MonthWorkflowCard extends StatelessWidget {
                 SizedBox(width: spacing.sm),
                 Expanded(
                   child: Text(
-                    l10n.payrollMonthCardTitle(
-                      payrollMonthLabel(context, DateTime.now()),
-                    ),
+                    l10n.payrollMonthCardTitle(monthLabel),
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -396,6 +398,13 @@ class _MonthWorkflowCard extends StatelessWidget {
               ),
             ),
             SizedBox(height: spacing.sm),
+            if (run == null && viewModel.monthDraftFoundNoPlans) ...[
+              PointyInlineMessage.warning(
+                key: const ValueKey('payroll_month_no_plans_message'),
+                message: l10n.payrollMonthNoPlansMessage(monthLabel),
+              ),
+              SizedBox(height: spacing.sm),
+            ],
             _buildAction(context, l10n, run, needsOnboarding),
           ],
         ),

@@ -12966,6 +12966,11 @@ class AppLocalizationsAr extends AppLocalizations {
       'لم يتم تجهيز مسير رواتب هذا الشهر بعد.';
 
   @override
+  String payrollMonthNoPlansMessage(String month) {
+    return 'لا يوجد موظف لديه خطة راتب سارية في $month، لذلك لم يُجهَّز مسير. أضف خطة راتب للموظف من تبويب الموظفين ثم أعد المحاولة.';
+  }
+
+  @override
   String get payrollMonthDraftMessage => 'المسير جاهز للمراجعة والاعتماد.';
 
   @override

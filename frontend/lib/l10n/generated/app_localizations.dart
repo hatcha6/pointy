@@ -22333,6 +22333,12 @@ abstract class AppLocalizations {
   /// **'لم يتم تجهيز مسير رواتب هذا الشهر بعد.'**
   String get payrollMonthNoRunMessage;
 
+  /// Shown on the monthly payroll card when preparing the month found no employee with a salary plan in effect for it.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد موظف لديه خطة راتب سارية في {month}، لذلك لم يُجهَّز مسير. أضف خطة راتب للموظف من تبويب الموظفين ثم أعد المحاولة.'**
+  String payrollMonthNoPlansMessage(String month);
+
   /// No description provided for @payrollMonthDraftMessage.
   ///
   /// In ar, this message translates to:

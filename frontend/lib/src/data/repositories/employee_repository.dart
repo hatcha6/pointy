@@ -66,8 +66,16 @@ class EmployeeRepository {
     );
   }
 
-  Future<Result<PayrollDraftResult>> draftMonthlyPayrollRun() {
-    return Result.guard(() => _service.draftMonthlyPayrollRun());
+  Future<Result<PayrollDraftResult>> draftMonthlyPayrollRun({
+    required DateTime periodStart,
+    required DateTime periodEnd,
+  }) {
+    return Result.guard(
+      () => _service.draftMonthlyPayrollRun(
+        periodStart: periodStart,
+        periodEnd: periodEnd,
+      ),
+    );
   }
 
   Future<Result<PayrollRun>> approvePayrollRun(int id) {

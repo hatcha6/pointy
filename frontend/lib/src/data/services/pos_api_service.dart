@@ -497,8 +497,14 @@ class PosApiService {
     return _employees.createPayrollBulkAdjustment(payrollRunId, draft);
   }
 
-  Future<PayrollDraftResult> draftMonthlyPayrollRun() {
-    return _employees.draftMonthlyPayrollRun();
+  Future<PayrollDraftResult> draftMonthlyPayrollRun({
+    required DateTime periodStart,
+    required DateTime periodEnd,
+  }) {
+    return _employees.draftMonthlyPayrollRun(
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+    );
   }
 
   Future<MigrationCatalog> fetchMigrationCatalog() {

@@ -7,8 +7,12 @@ import '../../../data/models/employee.dart';
 import '../../../data/repositories/employee_repository.dart';
 
 class EmployeePayrollViewModel extends ChangeNotifier {
-  EmployeePayrollViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
-    : _analyticsEngine = analyticsEngine {
+  EmployeePayrollViewModel(
+    this._repository, {
+    AnalyticsEngine? analyticsEngine,
+    DateTime Function()? clock,
+  }) : _analyticsEngine = analyticsEngine,
+       _clock = clock ?? DateTime.now {
     loadEmployees();
     loadPayrollRuns();
     loadLoans();
@@ -16,6 +20,7 @@ class EmployeePayrollViewModel extends ChangeNotifier {
 
   final EmployeeRepository _repository;
   final AnalyticsEngine? _analyticsEngine;
+  final DateTime Function() _clock;
 
   List<Employee> _employees = [];
   List<PayrollRun> _payrollRuns = [];
@@ -31,6 +36,7 @@ class EmployeePayrollViewModel extends ChangeNotifier {
   bool _hasPayrollError = false;
   bool _hasLoanError = false;
   bool _hasSaveError = false;
+  bool _monthDraftFoundNoPlans = false;
   bool _hasMoreEmployees = true;
   bool _hasMorePayrollRuns = true;
   bool _hasMoreLoans = true;
@@ -83,15 +89,29 @@ class EmployeePayrollViewModel extends ChangeNotifier {
   bool get hasPayrollError => _hasPayrollError;
   bool get hasLoanError => _hasLoanError;
   bool get hasSaveError => _hasSaveError;
+
+  /// The last "prepare this month" came back with nothing to draft: no
+  /// employee has a salary plan in effect for the month. Not a failure — the
+  /// server answered — so it is told apart from [hasSaveError].
+  bool get monthDraftFoundNoPlans => _monthDraftFoundNoPlans;
   bool get hasMoreEmployees => _hasMoreEmployees;
   bool get hasMorePayrollRuns => _hasMorePayrollRuns;
   bool get hasMoreLoans => _hasMoreLoans;
 
+  /// The month the payroll card is about: the calendar month the shop is in.
+  /// The card's title, [currentMonthRun] and [draftMonthlyPayrollRun] all read
+  /// it, so the month a manager is shown is the month that gets drafted.
+  ({DateTime start, DateTime end}) get currentMonthPeriod {
+    final now = _clock();
+    return (
+      start: DateTime(now.year, now.month),
+      end: DateTime(now.year, now.month + 1, 0),
+    );
+  }
+
   /// The latest non-void payroll run whose period overlaps the current month.
   PayrollRun? get currentMonthRun {
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month);
-    final monthEnd = DateTime(now.year, now.month + 1, 0);
+    final (start: monthStart, end: monthEnd) = currentMonthPeriod;
     for (final run in _payrollRuns) {
       if (run.status == PayrollStatus.voided) {
         continue;
@@ -306,13 +326,25 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     });
   }
 
+  /// Drafts the payroll run for [currentMonthPeriod] — the month on the card.
+  ///
+  /// It used to send no period, and the server then drafts the PREVIOUS month
+  /// (right for its own task on the 1st, wrong for a card titled with this
+  /// month). On 2026-09-30 a manager pressed it seven times: August had no
+  /// salary plans, so each press came back empty and was shown as a failed
+  /// save.
   Future<PayrollRun?> draftMonthlyPayrollRun() async {
     _isSaving = true;
     _hasSaveError = false;
+    _monthDraftFoundNoPlans = false;
     notifyListeners();
 
+    final (start: periodStart, end: periodEnd) = currentMonthPeriod;
     PayrollRun? run;
-    final result = await _repository.draftMonthlyPayrollRun();
+    final result = await _repository.draftMonthlyPayrollRun(
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+    );
     switch (result) {
       case Ok<PayrollDraftResult>(value: final draft):
         run = draft.payrollRun;
@@ -324,12 +356,13 @@ class EmployeePayrollViewModel extends ChangeNotifier {
             run.id,
             {'created': draft.created},
           );
+        } else {
+          _monthDraftFoundNoPlans = true;
         }
       case Error<PayrollDraftResult>():
-        run = null;
+        _hasSaveError = true;
     }
 
-    _hasSaveError = run == null;
     _isSaving = false;
     notifyListeners();
     return run;

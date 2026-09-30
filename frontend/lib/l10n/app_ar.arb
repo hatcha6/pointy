@@ -8315,6 +8315,15 @@
   "payrollMonthStepApprove": "اعتماد",
   "payrollMonthStepPay": "دفع",
   "payrollMonthNoRunMessage": "لم يتم تجهيز مسير رواتب هذا الشهر بعد.",
+  "payrollMonthNoPlansMessage": "لا يوجد موظف لديه خطة راتب سارية في {month}، لذلك لم يُجهَّز مسير. أضف خطة راتب للموظف من تبويب الموظفين ثم أعد المحاولة.",
+  "@payrollMonthNoPlansMessage": {
+    "description": "Shown on the monthly payroll card when preparing the month found no employee with a salary plan in effect for it.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
   "payrollMonthDraftMessage": "المسير جاهز للمراجعة والاعتماد.",
   "payrollMonthApprovedMessage": "المسير معتمد وبانتظار تسجيل الدفع.",
   "payrollMonthPaidMessage": "تم دفع رواتب هذا الشهر.",

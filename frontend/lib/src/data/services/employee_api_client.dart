@@ -125,8 +125,20 @@ class EmployeeApiClient {
     );
   }
 
-  Future<PayrollDraftResult> draftMonthlyPayrollRun() async {
-    final response = await _session.post('payroll-runs/draft-monthly/');
+  /// Drafts the payroll run for exactly [periodStart]–[periodEnd]. Without a
+  /// period the server drafts the PREVIOUS month (what its own 1st-of-the-month
+  /// task wants), which is never the month the payroll card shows.
+  Future<PayrollDraftResult> draftMonthlyPayrollRun({
+    required DateTime periodStart,
+    required DateTime periodEnd,
+  }) async {
+    final response = await _session.post(
+      'payroll-runs/draft-monthly/',
+      body: {
+        'period_start': periodStart.toIso8601String().split('T').first,
+        'period_end': periodEnd.toIso8601String().split('T').first,
+      },
+    );
     _session.ensureSuccess(
       response,
       'Monthly payroll draft failed with status',
