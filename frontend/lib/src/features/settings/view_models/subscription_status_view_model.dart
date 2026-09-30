@@ -4,15 +4,22 @@ import '../../../core/result.dart';
 import '../../../data/models/ai_chat.dart';
 import '../../../data/models/relay_installation_status.dart';
 import '../../../data/repositories/subscription_repository.dart';
+import 'wallet_view_model.dart';
 
 /// Drives the subscription status page: loads the relay installation snapshot
 /// (installation ID + remote-access/AI entitlements) and, when AI is entitled,
 /// the current usage windows. [sync] additionally refreshes the entitlement
 /// state from the relay control server.
+///
+/// The page also carries the Daftar wallet — the prepaid balance the
+/// company's services draw on — through [wallet], which has its own state.
 class SubscriptionStatusViewModel extends ChangeNotifier {
-  SubscriptionStatusViewModel(this._repository);
+  SubscriptionStatusViewModel(this._repository, {this.wallet});
 
   final SubscriptionRepository _repository;
+
+  /// Null where the page is shown without a wallet (older call sites, tests).
+  final WalletViewModel? wallet;
 
   RelayInstallationStatus? _status;
   AiUsage? _usage;

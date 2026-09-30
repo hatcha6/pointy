@@ -106,6 +106,7 @@ import 'features/settings/view_models/integrations_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
 import 'features/settings/view_models/exchange_rates_view_model.dart';
 import 'features/settings/view_models/subscription_status_view_model.dart';
+import 'features/settings/view_models/wallet_view_model.dart';
 import 'features/settings/views/exchange_rates_page.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/settings/views/warehouses_page.dart';
@@ -1145,6 +1146,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         migrationViewModel: dependencies.migrationViewModel,
         subscriptionViewModel: SubscriptionStatusViewModel(
           dependencies.subscriptionRepository,
+          wallet: WalletViewModel(dependencies.walletRepository),
         ),
         exchangeRatesViewModel: ExchangeRatesViewModel(
           dependencies.fxRepository,

@@ -258,6 +258,14 @@
       "port": 8080
     },
     {
+      "name": "wallet-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-wallet-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "login-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

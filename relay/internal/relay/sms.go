@@ -214,7 +214,7 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		writeSMSError(w, http.StatusServiceUnavailable, smsCodeUnconfigured, "relay SMS is not configured", nil)
 		return
 	}
-	installation, authOutcome, ok := s.authenticateSMS(w, r)
+	installation, authOutcome, ok := s.authenticateInstallation(w, r)
 	if !ok {
 		trace.outcome = authOutcome
 		return
@@ -552,7 +552,7 @@ func providerMessage(err error) string {
 // entitlement gate: an unentitled shop asks precisely so the app can say why
 // it cannot send.
 func (s HTTPServer) handleSMSUsageSelf(w http.ResponseWriter, r *http.Request) {
-	installation, _, ok := s.authenticateSMS(w, r)
+	installation, _, ok := s.authenticateInstallation(w, r)
 	if !ok {
 		return
 	}
@@ -586,7 +586,7 @@ func (s HTTPServer) handleSMSStatus(w http.ResponseWriter, r *http.Request) {
 		writeSMSError(w, http.StatusServiceUnavailable, smsCodeUnconfigured, "relay SMS ledger unavailable", nil)
 		return
 	}
-	installation, _, ok := s.authenticateSMS(w, r)
+	installation, _, ok := s.authenticateInstallation(w, r)
 	if !ok {
 		return
 	}
@@ -754,11 +754,11 @@ func (s HTTPServer) handleSMSAdminConfig(w http.ResponseWriter, _ *http.Request)
 	})
 }
 
-// authenticateSMS validates the installation's access token for identity only;
+// authenticateInstallation validates the installation's access token for identity only;
 // callers apply the entitlement they need. A store outage is reported as such
 // rather than as a rejected token, so a shop is never told its credentials are
 // wrong because the relay's database blinked.
-func (s HTTPServer) authenticateSMS(w http.ResponseWriter, r *http.Request) (control.Installation, string, bool) {
+func (s HTTPServer) authenticateInstallation(w http.ResponseWriter, r *http.Request) (control.Installation, string, bool) {
 	rawToken := strings.TrimSpace(r.Header.Get(AccessTokenHeader))
 	if rawToken == "" {
 		s.metrics().RecordCredentialRejected()
@@ -776,7 +776,7 @@ func (s HTTPServer) authenticateSMS(w http.ResponseWriter, r *http.Request) (con
 		writeSMSError(w, http.StatusUnauthorized, smsCodeUnauthorized, "relay token rejected", nil)
 		return control.Installation{}, smsCodeUnauthorized, false
 	}
-	s.logger().Error("sms token validation failed", "error", err)
+	s.logger().Error("installation token validation failed", "error", err)
 	writeSMSError(w, http.StatusInternalServerError, smsCodeInternalError, "relay store failed", nil)
 	return control.Installation{}, smsCodeInternalError, false
 }

@@ -149,6 +149,7 @@ import 'unit_of_measure_api_client.dart';
 import 'fx_api_client.dart';
 import 'sales_channel_api_client.dart';
 import 'server_state_api_client.dart';
+import 'wallet_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
 import 'consignment_api_client.dart';
@@ -213,6 +214,7 @@ class PosApiService {
     _companion = CompanionApiClient(_session);
     _surveillance = SurveillanceApiClient(_session);
     _serverState = ServerStateApiClient(_session);
+    _wallet = WalletApiClient(_session);
   }
 
   String get baseUrl => _session.baseUrl;
@@ -288,6 +290,7 @@ class PosApiService {
   late final ScaleBarcodeRuleApiClient _scaleBarcodeRules;
   late final ScalesApiClient _scales;
   late final SearchMissApiClient _searchMisses;
+  late final WalletApiClient _wallet;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
   late final MessagingApiClient _messaging;
@@ -2321,6 +2324,9 @@ class PosApiService {
 
   /// The catalogue's "searched but not found" worklist.
   SearchMissApiClient get searchMisses => _searchMisses;
+
+  /// The Daftar wallet: balance, top-ups through the payment gateway, history.
+  WalletApiClient get wallet => _wallet;
 
   Future<UnitOfMeasure> createUnitOfMeasure(UnitOfMeasureDraft draft) {
     return _unitsOfMeasure.createUnit(draft);

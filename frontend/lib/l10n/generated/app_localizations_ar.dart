@@ -16630,7 +16630,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionSectionTitle => 'الاشتراك والوصول عن بُعد';
 
   @override
-  String get subscriptionSectionSubtitle => 'معرّف التثبيت وحالة اشتراكاتك';
+  String get subscriptionSectionSubtitle =>
+      'معرّف التثبيت وحالة اشتراكاتك ومحفظتك';
 
   @override
   String get subscriptionStatusLoadError => 'تعذّر تحميل حالة الاشتراك.';
@@ -22935,4 +22936,325 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get ftpRetentionInvalid => 'اكتب عدداً من 1 إلى 3650.';
+
+  @override
+  String subscriptionWalletPill(String balance) {
+    return 'المحفظة · $balance';
+  }
+
+  @override
+  String get walletSectionTitle => 'المحفظة';
+
+  @override
+  String get walletBalanceLabel => 'الرصيد المتاح';
+
+  @override
+  String get walletExplainer =>
+      'رصيد مدفوع مسبقاً لدى دفتر تُدفع منه خدماتك، كالاشتراك والرسائل النصية.';
+
+  @override
+  String get walletTopUpButton => 'شحن المحفظة';
+
+  @override
+  String get walletTestModePill => 'وضع تجريبي';
+
+  @override
+  String get walletTestModeHint =>
+      'عمليات الشحن تجريبية الآن ولا تُحوَّل فيها أموال حقيقية.';
+
+  @override
+  String get walletRecordExpensesTitle => 'تسجيل الشحنات كمصروفات تلقائياً';
+
+  @override
+  String walletRecordExpensesSubtitle(String category) {
+    return 'كل شحن مدفوع يُسجَّل مصروفاً بالبطاقة ضمن «$category».';
+  }
+
+  @override
+  String get walletSettingsSaveFailed => 'تعذّر حفظ الإعداد. أعد المحاولة.';
+
+  @override
+  String get walletRecentTopUpsTitle => 'آخر عمليات الشحن';
+
+  @override
+  String get walletNoTopUps => 'لم تشحن المحفظة بعد.';
+
+  @override
+  String get walletViewHistory => 'السجل الكامل';
+
+  @override
+  String get walletLoadError => 'تعذّر تحميل المحفظة.';
+
+  @override
+  String get walletUnavailableTitle => 'المحفظة غير متاحة الآن';
+
+  @override
+  String get walletTopUpsUnavailable => 'شحن المحفظة غير متاح حالياً.';
+
+  @override
+  String get walletTopUpStatusPending => 'بانتظار الدفع';
+
+  @override
+  String get walletTopUpStatusPaid => 'تم الشحن';
+
+  @override
+  String get walletTopUpStatusCanceled => 'ملغاة';
+
+  @override
+  String get walletTopUpStatusFailed => 'لم تكتمل';
+
+  @override
+  String get walletTopUpStatusExpired => 'لم يُؤكَّد';
+
+  @override
+  String get walletTopUpStatusUnknown => 'غير معروفة';
+
+  @override
+  String get walletTopUpBookedAsExpense => 'مسجّل كمصروف';
+
+  @override
+  String get walletTopUpExpensePeriodLocked =>
+      'لم يُسجَّل كمصروف: الفترة مغلقة';
+
+  @override
+  String get walletTopUpExpensePending => 'لم يُسجَّل كمصروف بعد';
+
+  @override
+  String walletTopUpRowTitle(String amount) {
+    return 'شحن $amount';
+  }
+
+  @override
+  String walletTopUpRequestedBy(String name) {
+    return 'بواسطة $name';
+  }
+
+  @override
+  String walletTopUpInvoice(String invoice) {
+    return 'رقم العملية $invoice';
+  }
+
+  @override
+  String get walletMethodLocalBankCards => 'بطاقة مصرفية محلية';
+
+  @override
+  String get walletMethodLocalBankCardsHint =>
+      'ادفع بأي بطاقة مصرفية ليبية عبر بوابة الدفع الآمنة.';
+
+  @override
+  String get walletTopUpSheetTitle => 'شحن المحفظة';
+
+  @override
+  String get walletTopUpAmountLabel => 'المبلغ';
+
+  @override
+  String walletTopUpAmountHint(String min, String max) {
+    return 'من $min إلى $max';
+  }
+
+  @override
+  String get walletTopUpAmountRequired => 'أدخل مبلغ الشحن.';
+
+  @override
+  String walletTopUpAmountTooSmall(String min) {
+    return 'أقل مبلغ للشحن $min.';
+  }
+
+  @override
+  String walletTopUpAmountTooLarge(String max) {
+    return 'أكبر مبلغ للشحن $max.';
+  }
+
+  @override
+  String get walletTopUpMethodTitle => 'طريقة الدفع';
+
+  @override
+  String get walletTopUpRecordExpense => 'سجّل هذا الشحن كمصروف';
+
+  @override
+  String get walletTopUpBrowserNote =>
+      'ستُفتح صفحة الدفع الآمنة في المتصفح. أتمّ الدفع ثم عُد إلى دفتر، وسيظهر الرصيد تلقائياً.';
+
+  @override
+  String get walletTopUpContinue => 'متابعة إلى الدفع';
+
+  @override
+  String get walletTopUpCancel => 'إلغاء';
+
+  @override
+  String get walletTopUpStarting => 'نجهّز صفحة الدفع…';
+
+  @override
+  String get walletAwaitingTitle => 'بانتظار إتمام الدفع';
+
+  @override
+  String get walletAwaitingMessage =>
+      'أكمل الدفع في الصفحة التي فُتحت في المتصفح. نتابع العملية ونحدّث الرصيد فور وصول التأكيد.';
+
+  @override
+  String get walletAwaitingOpenAgain => 'فتح صفحة الدفع مجدداً';
+
+  @override
+  String get walletAwaitingCopyLink => 'نسخ رابط الدفع';
+
+  @override
+  String get walletAwaitingLinkCopied => 'تم نسخ رابط الدفع.';
+
+  @override
+  String get walletCheckoutOpenFailed =>
+      'تعذّر فتح المتصفح. انسخ رابط الدفع وافتحه في المتصفح.';
+
+  @override
+  String get walletAwaitingCloseHint =>
+      'يمكنك الإغلاق؛ إن أتممت الدفع فسيُضاف الرصيد تلقائياً.';
+
+  @override
+  String get walletClose => 'إغلاق';
+
+  @override
+  String get walletPaidTitle => 'تم شحن المحفظة';
+
+  @override
+  String walletPaidMessage(String amount) {
+    return 'أُضيف $amount إلى رصيدك.';
+  }
+
+  @override
+  String walletPaidBooked(String category) {
+    return 'سُجّل كمصروف بالبطاقة ضمن «$category».';
+  }
+
+  @override
+  String walletNewBalance(String amount) {
+    return 'الرصيد الآن $amount';
+  }
+
+  @override
+  String get walletCanceledTitle => 'أُلغيت عملية الدفع';
+
+  @override
+  String get walletCanceledMessage => 'لم يُخصم أي مبلغ.';
+
+  @override
+  String get walletFailedTitle => 'لم تكتمل عملية الدفع';
+
+  @override
+  String get walletFailedMessage =>
+      'لم تُقبل عملية الدفع ولم يُضف شيء إلى رصيدك.';
+
+  @override
+  String get walletReviewTitle => 'نراجع عملية الدفع';
+
+  @override
+  String get walletReviewMessage =>
+      'إن خُصم المبلغ من بطاقتك فسيُضاف إلى محفظتك بعد المراجعة.';
+
+  @override
+  String get walletUnconfirmedTitle => 'لم يصلنا تأكيد الدفع بعد';
+
+  @override
+  String get walletUnconfirmedMessage =>
+      'إن أتممت الدفع فسيظهر الرصيد تلقائياً خلال دقائق. إن خُصم المبلغ ولم يظهر، تواصل مع الدعم واذكر رقم العملية أدناه.';
+
+  @override
+  String get walletTryAgain => 'المحاولة مجدداً';
+
+  @override
+  String get walletDone => 'تم';
+
+  @override
+  String get walletErrorNotConfigured =>
+      'المحفظة غير متاحة: هذا المحل غير مربوط بخدمات دفتر بعد.';
+
+  @override
+  String get walletErrorRelayUnreachable =>
+      'تعذّر الوصول إلى خدمات دفتر. تحقق من اتصال الإنترنت ثم أعد المحاولة.';
+
+  @override
+  String get walletErrorRelayUnauthorized =>
+      'رفضت خدمات دفتر بيانات هذا المحل. تواصل مع الدعم.';
+
+  @override
+  String walletErrorAmountRange(String min, String max) {
+    return 'المبلغ غير مقبول. يُقبل من $min إلى $max.';
+  }
+
+  @override
+  String get walletErrorAmount => 'المبلغ غير مقبول.';
+
+  @override
+  String get walletErrorGatewayAmount =>
+      'بوابة الدفع لا تقبل هذا المبلغ. جرّب مبلغاً أقل.';
+
+  @override
+  String get walletErrorBusy =>
+      'بوابة الدفع مشغولة الآن. أعد المحاولة بعد قليل.';
+
+  @override
+  String get walletErrorGatewayAccount =>
+      'بوابة الدفع غير متاحة الآن. تواصل مع الدعم.';
+
+  @override
+  String get walletErrorGateway =>
+      'تعذّر بدء عملية الدفع. أعد المحاولة بعد قليل.';
+
+  @override
+  String get walletErrorNetwork =>
+      'تعذّر الاتصال. تحقق من الشبكة ثم أعد المحاولة.';
+
+  @override
+  String get walletErrorForbidden => 'ليست لديك صلاحية إدارة المحفظة.';
+
+  @override
+  String get walletErrorGeneric => 'تعذّر إتمام العملية. أعد المحاولة.';
+
+  @override
+  String get walletHistoryTitle => 'سجل المحفظة';
+
+  @override
+  String get walletHistoryTopUpsTab => 'عمليات الشحن';
+
+  @override
+  String get walletHistoryEntriesTab => 'حركات الرصيد';
+
+  @override
+  String get walletHistoryLoadMore => 'تحميل المزيد';
+
+  @override
+  String get walletHistoryLoadFailed => 'تعذّر تحميل السجل.';
+
+  @override
+  String get walletHistoryEmptyTopUps => 'لا توجد عمليات شحن بعد.';
+
+  @override
+  String get walletHistoryEmptyEntries => 'لا توجد حركات على الرصيد بعد.';
+
+  @override
+  String get walletEntryTopUp => 'شحن';
+
+  @override
+  String get walletEntryCharge => 'خصم';
+
+  @override
+  String get walletEntryRefund => 'استرداد';
+
+  @override
+  String get walletEntryAdjustment => 'تسوية';
+
+  @override
+  String walletEntryBalanceAfter(String amount) {
+    return 'الرصيد بعدها $amount';
+  }
+
+  @override
+  String get walletServiceSubscription => 'الاشتراك';
+
+  @override
+  String get walletServiceSms => 'الرسائل النصية';
+
+  @override
+  String get walletServiceAi => 'المساعد الذكي';
+
+  @override
+  String get walletServiceVouchers => 'الكروت';
 }

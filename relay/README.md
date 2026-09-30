@@ -982,6 +982,136 @@ pointy-relay sms config                                    # templates (MISSING 
   (`sms_deliveries_by_outcome`). Per-shop numbers live in the ledger
   (`pointy-relay sms usage`), not in metric labels.
 
+## Shop Wallets (Plutu top-ups)
+
+Every installation has a **wallet**: a prepaid balance with the company that
+the shop owner tops up from the app with a local bank card, and that the
+company's services draw on — the subscription, SMS, AI, vouchers. The payment
+gateway is **[Plutu](https://docs.plutu.ly)** on one company merchant account;
+the API key, access token and secret key live only in relay env.
+
+```text
+Pointy app: Settings -> الاشتراك -> المحفظة -> شحن المحفظة (amount)
+  -> on-prem Django: POST /api/wallet/topups/
+  -> Pointy Relay: POST /v1/wallet/topups   (X-Pointy-Relay-Token: ptr1...)
+       identity only -> amount rules -> burst limit -> idempotency (replay)
+       -> top-up row (pending, invoice DFW-XXXXXXXXXX)
+       -> Plutu POST /transaction/localbankcards/confirm -> checkout page
+  <- {top_up, checkout_url}
+Owner pays on Plutu's page -> browser redirected to
+  GET /v1/wallet/plutu/return?gateway&approved|canceled&invoice_no&amount&transaction_id&hashed
+       signature (HMAC-SHA256, secret key) -> invoice match -> amount match
+       -> paid + ONE ledger credit (keyed on the top-up) -> Arabic result page
+App polls GET /api/wallet/topups/<id>/ until paid; Django books the expense.
+```
+
+### Why verification works the way it does
+
+Plutu's local-card gateway has **no status API and no server-to-server
+callback**: the only proof of payment is the signed query string on the payer's
+redirect. So:
+
+- An unsigned, mis-signed or edited return changes **nothing** (`400` page).
+  The signature is Plutu's: upper-case hex HMAC-SHA256, keyed with the secret,
+  over the parameters PHP-`http_build_query`-encoded **in the order they
+  arrived** (the docs sign "everything but `hashed`", the SDK a fixed list —
+  both readings are accepted, and both need the secret). Tested against the
+  vector in Plutu's own SDK.
+- A valid return for an invoice the relay never issued changes nothing (`404`).
+- A valid approval for a **different amount** credits nothing: the top-up is
+  failed with `amount_mismatch` and logged at ERROR for the operator.
+- Replays (refresh, back button, a second tab) credit **once**: the ledger
+  credit's idempotency key is the top-up, under a row lock.
+- A **late approval wins**: a top-up written off as `expired`, or even marked
+  `canceled`, is still credited by a valid signed approval — the payer's money
+  has left their bank either way. A paid top-up can never be cancelled.
+- The checkout request is **never retried**: a retry would reuse the invoice
+  number, which Plutu refuses. A create replayed by idempotency key hands back
+  the same checkout page, or the same recorded failure.
+- A payer who paid but **never came back** (closed the tab, lost network, relay
+  down) leaves a top-up that expires after `POINTY_RELAY_WALLET_TOPUP_TTL`. The
+  operator reconciles it against Plutu's dashboard with
+  `pointy-relay wallet confirm` (below).
+
+### The ledger
+
+`relay_wallet_entries` holds one signed row per movement with the balance it
+left: `topup` (+, only from a paid top-up), `charge` (−, for a `service`),
+`refund` (+, gives a charge back) and `adjustment` (either sign, an operator's
+correction). `relay_wallets` keeps the running balance so a debit locks one row
+and checks it. A **charge can never overdraw** a wallet; an adjustment can,
+only with `allow_overdraft`. Rows are never edited or deleted, and nothing
+cascades from an installation (migration v15).
+
+**For services to come.** A service charges with `control.WalletStore.PostWalletEntry`
+(`kind=charge`, `service=subscription|sms|ai|vouchers|…`, a negative amount, an
+idempotency key per purchase). An insufficient balance comes back as
+`*control.WalletBalanceError` carrying the balance and the amount — that is the
+"top up to continue" answer. Until a service charges on its own, the operator
+charges by hand (`wallet debit --service`).
+
+### API
+
+Shop (installation access token, **identity only** — a lapsed shop can still see
+its balance and pay in, since paying in may be how it renews):
+
+| Route | Purpose |
+| --- | --- |
+| `GET /v1/wallet` | balance, top-up options (methods, min/max, quick amounts), the 10 latest top-ups and entries |
+| `GET /v1/wallet/entries?limit=&before=&kind=` | statement, newest first, cursor-paged |
+| `GET /v1/wallet/topups?limit=&before=&status=` | top-ups |
+| `POST /v1/wallet/topups` | `{amount, method, idempotency_key, requested_by}` → `201 {top_up, checkout_url}` |
+| `GET /v1/wallet/topups/{id}` | one top-up (what the app polls); another shop's is `404` |
+
+Public: `GET|POST /v1/wallet/plutu/return` (the signed return; HTML, `no-store`).
+
+Admin (bearer token): `GET /v1/wallet/admin/wallets`, `GET|POST /v1/wallet/admin/entries`,
+`GET /v1/wallet/admin/topups`, `POST /v1/wallet/admin/topups/{id}/confirm`,
+`GET /v1/wallet/admin/config`.
+
+Error `code`s: `topups_unconfigured` (503), `invalid_amount` (422, with
+`min_amount`/`max_amount`), `unsupported_method`, `rate_limited`, `in_flight`
+(409), `gateway_unauthorized` (the company's Plutu account is misconfigured —
+ERROR log), `amount_not_allowed`, `gateway_busy`, `gateway_error`,
+`outcome_unknown`, `insufficient_balance`.
+
+### Configuration
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `POINTY_RELAY_PLUTU_API_KEY` | empty | Plutu API key |
+| `POINTY_RELAY_PLUTU_ACCESS_TOKEN` | empty | Plutu access token (test or live) |
+| `POINTY_RELAY_PLUTU_SECRET_KEY` | empty | `sk_…`; verifies returns, never sent anywhere |
+| `POINTY_RELAY_PLUTU_MODE` | — | `test` or `live`, **required** with credentials; must match the token |
+| `POINTY_RELAY_PLUTU_BASE_URL` | `https://api.plutus.ly/api/v1` | |
+| `POINTY_RELAY_PUBLIC_URL` | derived per request | the relay's public origin the payer returns to — set it in production |
+| `POINTY_RELAY_WALLET_TOPUP_MIN` / `_MAX` | `10` / `5000` | bounds of one top-up (test mode also caps at Plutu's sandbox 500) |
+| `POINTY_RELAY_WALLET_QUICK_AMOUNTS` | `50,100,200,500` | one-tap amounts in the app |
+| `POINTY_RELAY_WALLET_TOPUP_TTL` | `30m` | pending → expired |
+| `POINTY_RELAY_WALLET_TOPUP_RATE_LIMIT` | `10/minute` | per shop |
+| `POINTY_RELAY_PLUTU_REQUEST_TIMEOUT` | `20s` | one Plutu call |
+
+All three credentials or none (none leaves top-ups off; the wallet still reads).
+An **incomplete** account also leaves top-ups off, with a startup warning naming
+the missing value — the relay keeps serving remote access, AI and SMS. A
+complete account without a stated mode (or a misspelt one), or bad bounds,
+**stop the relay at startup**: a wrong mode would credit test money as real. Test mode marks every top-up and its credit `test_mode`, and the
+return page says no real money moved. If Plutu's **IP whitelist** is enabled on
+the merchant account, add the relay's outbound IP there.
+
+### Operator CLI
+
+```sh
+pointy-relay wallet list                                   # balances, largest first, with the fleet total
+pointy-relay wallet show <installation-id>                 # statement
+pointy-relay wallet topups --status expired                # payers who never came back: check Plutu
+pointy-relay wallet confirm <top-up-id> --transaction-id 100900 --reason 'paid per Plutu dashboard'
+pointy-relay wallet credit <installation-id> --amount 50 --reason 'welcome credit'
+pointy-relay wallet debit <installation-id> --amount 150 --service subscription --reason 'October'
+pointy-relay wallet refund <installation-id> --amount 150 --service subscription --reference <entry-id> --reason '...'
+pointy-relay wallet config                                 # mode, bounds, return URL, which credentials are set
+```
+
 ## State
 
 The relay uses PostgreSQL for durable installation state. Run

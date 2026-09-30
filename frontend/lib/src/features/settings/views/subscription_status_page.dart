@@ -12,6 +12,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/subscription_status_view_model.dart';
+import 'wallet_presentation.dart';
+import 'wallet_section.dart';
 
 /// Shop Settings sub-page surfacing the relay installation ID (so owners can
 /// send it to support) alongside the remote-access, AI and SMS subscription
@@ -35,12 +37,21 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
         return;
       }
       unawaited(widget.viewModel.load());
+      unawaited(widget.viewModel.wallet?.load());
     });
+  }
+
+  Future<void> _reload() async {
+    await Future.wait([
+      widget.viewModel.load(),
+      if (widget.viewModel.wallet case final wallet?) wallet.load(),
+    ]);
   }
 
   Future<void> _sync() async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
+    unawaited(widget.viewModel.wallet?.load());
     final ok = await widget.viewModel.sync();
     if (!mounted) {
       return;
@@ -59,7 +70,11 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.viewModel,
+      // The hero shows the wallet balance, so the wallet redraws it too.
+      listenable: Listenable.merge([
+        widget.viewModel,
+        ?widget.viewModel.wallet,
+      ]),
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
@@ -108,9 +123,10 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
     }
 
     final spacing = AdaptiveSpacing.of(context);
+    final wallet = viewModel.wallet;
 
     return RefreshIndicator(
-      onRefresh: viewModel.load,
+      onRefresh: _reload,
       child: ListView(
         padding: spacing.pagePadding,
         physics: const AlwaysScrollableScrollPhysics(),
@@ -122,6 +138,10 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
               children: [
                 _buildHero(context, l10n, status),
                 SizedBox(height: spacing.md),
+                if (wallet != null) ...[
+                  WalletSection(viewModel: wallet),
+                  SizedBox(height: spacing.md),
+                ],
                 _InstallationIdSection(status: status),
                 SizedBox(height: spacing.md),
                 _RemoteAccessSection(status: status),
@@ -197,6 +217,11 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
                 : l10n.subscriptionStateOff,
           ),
         ),
+        if (widget.viewModel.wallet?.overview?.balance case final balance?)
+          PointyHeroPill(
+            icon: Icons.account_balance_wallet_outlined,
+            label: l10n.subscriptionWalletPill(formatWalletMoney(balance)),
+          ),
       ],
     );
   }

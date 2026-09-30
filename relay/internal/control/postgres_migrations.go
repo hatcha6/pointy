@@ -372,6 +372,87 @@ CREATE TABLE IF NOT EXISTS relay_integration_switches (
 );
 `,
 	},
+	{
+		version: 15,
+		name:    "shop wallets",
+		sql: `
+-- A shop's prepaid balance with the company, as a ledger (see control.Wallet).
+-- relay_wallets holds the running balance so a debit can lock ONE row and check
+-- it, instead of summing a history that grows with every SMS. No ON DELETE
+-- CASCADE anywhere: these are money records and must outlive an installation.
+CREATE TABLE IF NOT EXISTS relay_wallets (
+	installation_id text PRIMARY KEY REFERENCES relay_installations(id),
+	balance numeric(14, 3) NOT NULL DEFAULT 0,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS relay_wallet_entries (
+	id text PRIMARY KEY,
+	installation_id text NOT NULL REFERENCES relay_installations(id),
+	kind text NOT NULL,
+	service text NOT NULL DEFAULT '',
+	amount numeric(14, 3) NOT NULL,
+	balance_after numeric(14, 3) NOT NULL,
+	reference text NOT NULL DEFAULT '',
+	description text NOT NULL DEFAULT '',
+	idempotency_key text NOT NULL,
+	actor text NOT NULL DEFAULT '',
+	test_mode boolean NOT NULL DEFAULT false,
+	created_at timestamptz NOT NULL,
+	-- A retried posting finds its first attempt here instead of moving the
+	-- money twice; a paid top-up's credit is keyed on the top-up for the same
+	-- reason.
+	CONSTRAINT relay_wallet_entries_idempotency_key_key UNIQUE (installation_id, idempotency_key),
+	CONSTRAINT relay_wallet_entries_kind_valid
+		CHECK (kind IN ('topup', 'charge', 'refund', 'adjustment')),
+	CONSTRAINT relay_wallet_entries_sign_valid CHECK (
+		(kind IN ('topup', 'refund') AND amount > 0)
+		OR (kind = 'charge' AND amount < 0)
+		OR (kind = 'adjustment' AND amount <> 0)
+	)
+);
+
+-- One shop's statement, newest first (and its cursor).
+CREATE INDEX IF NOT EXISTS relay_wallet_entries_installation_created_idx
+	ON relay_wallet_entries (installation_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS relay_wallet_topups (
+	id text PRIMARY KEY,
+	installation_id text NOT NULL REFERENCES relay_installations(id),
+	method text NOT NULL,
+	amount numeric(14, 3) NOT NULL,
+	status text NOT NULL DEFAULT 'pending',
+	invoice_no text NOT NULL,
+	provider_transaction_id text NOT NULL DEFAULT '',
+	checkout_url text NOT NULL DEFAULT '',
+	idempotency_key text NOT NULL,
+	requested_by text NOT NULL DEFAULT '',
+	test_mode boolean NOT NULL DEFAULT false,
+	error_code text NOT NULL DEFAULT '',
+	error_detail text NOT NULL DEFAULT '',
+	entry_id text NOT NULL DEFAULT '',
+	confirmed_by text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	paid_at timestamptz,
+	-- The gateway refuses a reused invoice number across the whole merchant
+	-- account, and the signed return is matched back by it.
+	CONSTRAINT relay_wallet_topups_invoice_no_key UNIQUE (invoice_no),
+	CONSTRAINT relay_wallet_topups_idempotency_key_key UNIQUE (installation_id, idempotency_key),
+	CONSTRAINT relay_wallet_topups_amount_positive CHECK (amount > 0),
+	CONSTRAINT relay_wallet_topups_status_valid
+		CHECK (status IN ('pending', 'paid', 'canceled', 'failed', 'expired'))
+);
+
+CREATE INDEX IF NOT EXISTS relay_wallet_topups_installation_created_idx
+	ON relay_wallet_topups (installation_id, created_at DESC, id DESC);
+
+-- The expiry sweep (status = 'pending') and the operator's status filter.
+CREATE INDEX IF NOT EXISTS relay_wallet_topups_status_created_idx
+	ON relay_wallet_topups (status, created_at);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

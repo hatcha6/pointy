@@ -56,6 +56,7 @@ import 'features/inventory/view_models/consignment_view_model.dart';
 import 'features/inventory/view_models/tracked_stock_view_model.dart';
 import 'data/repositories/fx_repository.dart';
 import 'data/repositories/subscription_repository.dart';
+import 'data/repositories/wallet_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/backend_discovery_service.dart';
 import 'data/services/client_update_service.dart';
@@ -189,6 +190,7 @@ class PointyAppDependencies {
       printingRepository: printingRepository,
     );
     subscriptionRepository = SubscriptionRepository(service);
+    walletRepository = WalletRepository(service);
     fxRepository = FxRepository(service);
     dashboardFxViewModel = DashboardFxViewModel(fxRepository);
     messagingRepository = MessagingRepository(service);
@@ -447,6 +449,7 @@ class PointyAppDependencies {
   late final ConsignmentRepository consignmentRepository;
   late final ConsignmentViewModel consignmentViewModel;
   late final SubscriptionRepository subscriptionRepository;
+  late final WalletRepository walletRepository;
   late final FxRepository fxRepository;
   late final MessagingRepository messagingRepository;
   late final IntegrationsRepository integrationsRepository;

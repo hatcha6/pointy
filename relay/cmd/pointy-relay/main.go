@@ -89,6 +89,8 @@ func run(args []string) error {
 		return runFleet(args[1:])
 	case "sms":
 		return runSMS(args[1:])
+	case "wallet":
+		return runWallet(args[1:])
 	case "integrations":
 		return runIntegrations(args[1:])
 	case "artifacts":
@@ -405,6 +407,66 @@ func runServer(args []string) error {
 		envDuration("POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL", 5*time.Minute),
 		"how often to read Resala's delivery log back into the SMS ledger; 0 disables",
 	)
+	plutuAPIKey := flags.String(
+		"plutu-api-key",
+		envString("POINTY_RELAY_PLUTU_API_KEY", ""),
+		"Plutu (plutu.ly) API key for shop wallet top-ups; all three Plutu credentials or none",
+	)
+	plutuAccessToken := flags.String(
+		"plutu-access-token",
+		envString("POINTY_RELAY_PLUTU_ACCESS_TOKEN", ""),
+		"Plutu access token; it decides test or live mode, which --plutu-mode must match",
+	)
+	plutuSecretKey := flags.String(
+		"plutu-secret-key",
+		envString("POINTY_RELAY_PLUTU_SECRET_KEY", ""),
+		"Plutu secret key (sk_...) verifying the signed payment return; never sent anywhere",
+	)
+	plutuMode := flags.String(
+		"plutu-mode",
+		envString("POINTY_RELAY_PLUTU_MODE", ""),
+		"test or live — required with Plutu credentials; test marks every top-up as test money",
+	)
+	plutuBaseURL := flags.String(
+		"plutu-base-url",
+		envString("POINTY_RELAY_PLUTU_BASE_URL", "https://api.plutus.ly/api/v1"),
+		"Plutu API base URL",
+	)
+	plutuRequestTimeout := flags.Duration(
+		"plutu-request-timeout",
+		envDuration("POINTY_RELAY_PLUTU_REQUEST_TIMEOUT", 20*time.Second),
+		"timeout for one Plutu call",
+	)
+	publicURL := flags.String(
+		"public-url",
+		envString("POINTY_RELAY_PUBLIC_URL", ""),
+		"the relay's public origin (https://...), where a payer's browser returns from the gateway; empty derives it per request",
+	)
+	walletTopUpMin := flags.String(
+		"wallet-topup-min",
+		envString("POINTY_RELAY_WALLET_TOPUP_MIN", "10"),
+		"smallest wallet top-up in dinars",
+	)
+	walletTopUpMax := flags.String(
+		"wallet-topup-max",
+		envString("POINTY_RELAY_WALLET_TOPUP_MAX", "5000"),
+		"largest wallet top-up in dinars (test mode also caps at Plutu's sandbox 500)",
+	)
+	walletQuickAmounts := flags.String(
+		"wallet-quick-amounts",
+		envString("POINTY_RELAY_WALLET_QUICK_AMOUNTS", "50,100,200,500"),
+		"comma-separated amounts the app offers as one-tap top-ups",
+	)
+	walletTopUpTTL := flags.Duration(
+		"wallet-topup-ttl",
+		envDuration("POINTY_RELAY_WALLET_TOPUP_TTL", 30*time.Minute),
+		"how long a checkout stays pending before it is written off as expired (a late signed approval still credits it)",
+	)
+	walletTopUpRateLimit := flags.String(
+		"wallet-topup-rate-limit",
+		envString("POINTY_RELAY_WALLET_TOPUP_RATE_LIMIT", "10/minute"),
+		"per-installation limit on starting top-ups, e.g. 10/minute; 0 disables",
+	)
 	openRouterAPIKey := flags.String(
 		"openrouter-api-key",
 		envString("POINTY_RELAY_OPENROUTER_API_KEY", ""),
@@ -549,6 +611,23 @@ func runServer(args []string) error {
 	if err != nil {
 		return err
 	}
+	walletConfig, walletWarnings, err := buildWalletConfig(walletSettings{
+		PlutuBaseURL:     *plutuBaseURL,
+		PlutuAPIKey:      *plutuAPIKey,
+		PlutuAccessToken: *plutuAccessToken,
+		PlutuSecretKey:   *plutuSecretKey,
+		PlutuMode:        *plutuMode,
+		PublicURL:        *publicURL,
+		MinTopUp:         *walletTopUpMin,
+		MaxTopUp:         *walletTopUpMax,
+		QuickAmounts:     *walletQuickAmounts,
+		TopUpTTL:         *walletTopUpTTL,
+		TopUpRateLimit:   *walletTopUpRateLimit,
+		RequestTimeout:   *plutuRequestTimeout,
+	})
+	if err != nil {
+		return err
+	}
 	profile := strings.ToLower(strings.TrimSpace(*platform))
 	if profile == "paas" {
 		// A PaaS host (e.g. JPaaS) sits behind the platform load balancer,
@@ -631,6 +710,9 @@ func runServer(args []string) error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	for _, warning := range smsWarnings {
 		logger.Warn("relay sms templates: " + warning)
+	}
+	for _, warning := range walletWarnings {
+		logger.Warn("relay wallet: " + warning)
 	}
 	if profile == "paas" {
 		logger.Info(
@@ -881,6 +963,12 @@ func runServer(args []string) error {
 	// Resala shares the tuned transport; the per-call timeout is also applied
 	// by the client itself, so this one is only a backstop.
 	smsConfig.HTTPClient = &http.Client{Timeout: smsConfig.RequestTimeout + 5*time.Second, Transport: outboundTransport}
+	// Plutu likewise; the client applies its own per-call timeout too.
+	walletRequestTimeout := walletConfig.RequestTimeout
+	if walletRequestTimeout <= 0 {
+		walletRequestTimeout = 20 * time.Second
+	}
+	walletConfig.HTTPClient = &http.Client{Timeout: walletRequestTimeout + 5*time.Second, Transport: outboundTransport}
 
 	baseHTTPHandler := relayserver.HTTPServer{
 		Store:                         store,
@@ -916,6 +1004,7 @@ func runServer(args []string) error {
 			WebhookSecret: strings.TrimSpace(*fulusWebhookSecret),
 		},
 		SMS:               smsConfig,
+		Wallet:            walletConfig,
 		OpenRouterAPIKey:  strings.TrimSpace(*openRouterAPIKey),
 		OpenRouterBaseURL: strings.TrimSpace(*openRouterBaseURL),
 		AIModelTiers: map[string]string{
@@ -1040,6 +1129,28 @@ func runServer(args []string) error {
 	// store supports audited subscription writes.
 	if sweeper, ok := store.(control.AdminSubscriptionStore); ok && *subscriptionSweepInterval > 0 {
 		go runSubscriptionExpirySweep(ctx, sweeper, logger, *subscriptionSweepInterval)
+	}
+
+	// Checkouts nobody came back from stop reading as "pending" once their
+	// window has passed. It moves no money; a late signed approval still pays.
+	if walletStore, ok := store.(control.WalletStore); ok {
+		expirer := &relayserver.WalletTopUpExpirer{
+			Store:    walletStore,
+			TTL:      walletConfig.TopUpTTL,
+			Interval: time.Minute,
+			Logger:   logger,
+		}
+		go expirer.Run(ctx)
+	}
+	if walletConfig.TopUpsConfigured() {
+		logger.Info(
+			"relay wallet top-ups configured",
+			"gateway", "plutu",
+			"test_mode", walletConfig.TestMode,
+			"public_url", walletConfig.PublicURL,
+			"min", walletConfig.MinTopUp,
+			"max", walletConfig.MaxTopUp,
+		)
 	}
 
 	select {
@@ -3537,8 +3648,11 @@ func printUsage() {
   pointy-relay enrollment mint [--count N] [--relay] [--ai] [--subscription DUR]
   pointy-relay fleet <status|set-version|rollout|pause|pin|unpin|channel> [args]
   pointy-relay sms <usage|log|config> [flags]
+  pointy-relay wallet <list|show|topups|credit|debit|refund|confirm|config> [args]
   pointy-relay integrations <status|disable|enable> [provider] [flags]
   pointy-relay artifacts upload --version X --bundle pointy-onprem-X.zip
+  pointy-relay artifacts upload --version X --url https://host/pointy-onprem-X.zip [--sha256 H]
+  pointy-relay artifacts status --version X [--wait]
   pointy-relay provision [flags]
   pointy-relay migrate [flags]
   pointy-relay gen-token [flags]
@@ -3583,12 +3697,26 @@ Commands:
                    log [--installation ID] [--status S] [--limit N] [--json]
                                              recent sends, newest first
                    config [--json]           templates, test mode, limits (no token)
+  wallet         Shop wallets (prepaid balance, Plutu top-ups) over the admin API:
+                   list [--limit N] [--json] balances, largest first, with the total
+                   show <id> [--limit N]     one shop's statement, newest first
+                   topups [--installation ID] [--status S] [--limit N] [--json]
+                                             top-ups; expired = payer never came back
+                   credit <id> --amount N --reason "..."        hand-made credit
+                   debit <id> --amount N --reason "..." [--service S]
+                                             a charge (with --service) or adjustment
+                   refund <id> --amount N --service S --reason "..." [--reference E]
+                   confirm <top-up id> --transaction-id T --reason "..."
+                                             credit a payment the gateway shows as paid
+                   config                    gateway, mode, limits (no credentials)
   integrations   Fleet-wide switch per provider integration (hdbox, lnet, qareeb):
                    status [--json]           which are off, since when, by whom, why
                    disable <provider> --reason "..."
                                              off in every shop (a cease-and-desist)
                    enable <provider> [--reason "..."]   back on in every shop
   artifacts      upload --version X --bundle pointy-onprem-X.zip   serve a bundle
+                   upload --version X --url URL   the relay downloads it itself (slow line)
+                   status --version X [--wait]    progress of a --url download
   provision      Create an installation directly against the database (host-side).
   migrate        Apply relay PostgreSQL migrations.
   gen-token      Print a strong random admin token for POINTY_RELAY_ADMIN_TOKEN.
@@ -3604,7 +3732,3 @@ Deployment profiles (server --platform / POINTY_RELAY_PLATFORM):
   (empty)       Self-hosted private-network deployment (set --production to
                 enforce split admin listener + mTLS).`)
 }
-  pointy-relay artifacts upload --version X --url https://host/pointy-onprem-X.zip [--sha256 H]
-  pointy-relay artifacts status --version X [--wait]
-                   upload --version X --url URL   the relay downloads it itself (slow line)
-                   status --version X [--wait]    progress of a --url download

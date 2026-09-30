@@ -307,6 +307,9 @@ type HTTPServer struct {
 	// approved template ids live only here, and every shop's messages go out
 	// through it, gated by the sms_enabled entitlement and a monthly cap.
 	SMS SMSConfig
+	// Wallet (Plutu). The company's payment gateway account that shops top up
+	// their prepaid balance through; the credentials live only here.
+	Wallet WalletConfig
 	// Relay-hosted AI (OpenRouter). The key and tier->model catalog live only
 	// here so AI billing and model routing stay company-controlled.
 	OpenRouterAPIKey  string
@@ -687,6 +690,10 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleSMSAdminConfig)
+	case r.URL.Path == "/v1/wallet" || strings.HasPrefix(r.URL.Path, "/v1/wallet/"):
+		// A shop's prepaid balance: its own reads and top-ups (installation
+		// token), the gateway's return (signed), the operator's views (admin).
+		s.handleWalletRoutes(w, r)
 	default:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)

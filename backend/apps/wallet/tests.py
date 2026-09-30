@@ -1,0 +1,427 @@
+"""The Daftar wallet's shop side: the relay proxy, top-ups, and the books."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone as dt_timezone
+from decimal import Decimal
+from unittest import mock
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.cache import cache
+from django.test import TestCase, override_settings
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from apps.core.models import RelayInstallation, ShopSettings
+from apps.core.relay import RelayControlError
+from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.expenses.models import Expense, ExpenseCategory
+
+from .models import WalletSettings, WalletTopUp
+from .services import WALLET_EXPENSE_CATEGORY_NAME, book_topup_expense, sync_topups
+
+_LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+_CLIENT = "apps.wallet.services.scoped_relay_client"
+
+
+def link_relay():
+    return RelayInstallation.objects.create(
+        installation_id="inst-1",
+        relay_public_api_url="https://relay.example",
+        connector_token="c",
+        access_token="access-token",
+    )
+
+
+def remote_topup(**overrides):
+    topup = {
+        "id": "topup-1",
+        "invoice_no": "DFW-ABCDEFGH23",
+        "method": "plutu_localbankcards",
+        "amount": "100.000",
+        "status": "pending",
+        "test_mode": False,
+        "requested_by": "owner",
+        "provider_transaction_id": "",
+        "error_code": "",
+        "confirmed_by": "",
+        "created_at": "2026-09-30T08:00:00Z",
+        "paid_at": None,
+        "checkout_url": "https://checkout.plutus.test/pay/abc",
+    }
+    topup.update(overrides)
+    return topup
+
+
+def paid(**overrides):
+    values = {
+        "status": "paid",
+        "provider_transaction_id": "100900",
+        "confirmed_by": "plutu",
+        "paid_at": "2026-09-30T08:03:00Z",
+    }
+    values.update(overrides)
+    topup = remote_topup(**values)
+    topup.pop("checkout_url", None)
+    return topup
+
+
+def relay_refusal(status, code="", **extra):
+    body = json.dumps({"error": code or "refused", "code": code, **extra}) if code else "<html>"
+    return RelayControlError(f"relay {status}", status_code=status, body=body)
+
+
+def wallet_payload(**overrides):
+    payload = {
+        "balance": "100.000",
+        "currency": "LYD",
+        "updated_at": "2026-09-30T08:03:00Z",
+        "test_mode": False,
+        "topups": {
+            "available": True,
+            "methods": [{"key": "plutu_localbankcards", "gateway": "plutu", "kind": "hosted_checkout"}],
+            "min_amount": "10.00",
+            "max_amount": "5000.00",
+            "max_decimals": 2,
+            "quick_amounts": ["50", "100", "200", "500"],
+            "pending_ttl": 1800,
+        },
+        "recent_topups": [paid()],
+        "recent_entries": [
+            {"id": "e1", "kind": "topup", "amount": "100.000", "balance_after": "100.000",
+             "created_at": "2026-09-30T08:03:00Z"},
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
+@override_settings(CACHES=_LOCMEM)
+class WalletApiTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="owner", password="x")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="csh", password="x")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.api = APIClient()
+        self.api.force_authenticate(self.manager)
+        self.relay = mock.Mock()
+        patcher = mock.patch(_CLIENT, return_value=self.relay)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        link_relay()
+
+    def start(self, **overrides):
+        """Start a top-up the way the app does, so the shop knows it is its own."""
+        self.relay.create_wallet_topup.return_value = {
+            "top_up": remote_topup(**overrides),
+            "checkout_url": "https://checkout.plutus.test/pay/abc",
+        }
+        resp = self.api.post("/api/wallet/topups/", {"amount": "100"}, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        return resp
+
+    # --- reading ---------------------------------------------------------------
+
+    def test_overview_books_a_paid_topup_once(self):
+        self.start()
+        self.relay.get_wallet.return_value = wallet_payload()
+        for _ in range(3):
+            resp = self.api.get("/api/wallet/")
+            self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertTrue(resp.data["available"])
+        self.assertEqual(resp.data["balance"], "100.000")
+        self.assertEqual(resp.data["topups"]["min_amount"], "10.00")
+        topup = resp.data["recent_topups"][0]
+        self.assertEqual(Expense.objects.count(), 1, "three reads, one expense")
+        expense = Expense.objects.get()
+        self.assertEqual(topup["expense_id"], expense.pk)
+        self.assertEqual(expense.amount, Decimal("100.00"))
+        self.assertEqual(expense.payment_method, Expense.PaymentMethod.CARD)
+        self.assertEqual(expense.category.name, WALLET_EXPENSE_CATEGORY_NAME)
+        self.assertEqual(expense.reference, "DFW-ABCDEFGH23")
+        self.assertEqual(
+            expense.spent_at,
+            timezone.localdate(datetime(2026, 9, 30, 8, 3, tzinfo=dt_timezone.utc)),
+        )
+        self.assertIn("100900", expense.notes)
+        self.assertNotIn("تجريبي", expense.description)
+        self.assertEqual(WalletSettings.load().expense_category, expense.category)
+
+    def test_a_topup_first_seen_already_paid_is_not_back_dated_into_the_books(self):
+        # After a factory reset (or an old backup restored) the shop's copy is
+        # gone while the relay still lists the payments made before it. They
+        # were paid before these books existed; booking them now would put old
+        # expenses into books the owner just emptied.
+        self.relay.get_wallet.return_value = wallet_payload()
+        resp = self.api.get("/api/wallet/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        topup = resp.data["recent_topups"][0]
+        self.assertEqual(topup["status"], "paid")
+        self.assertIsNone(topup["expense_id"])
+        self.assertFalse(topup["record_as_expense"])
+        self.assertFalse(Expense.objects.exists())
+
+    def test_a_topup_first_seen_while_open_follows_the_setting(self):
+        # Pending when first seen: the payment, if it comes, is new money
+        # leaving the shop, so the books follow the switch.
+        self.relay.get_wallet.return_value = wallet_payload(recent_topups=[remote_topup()])
+        self.api.get("/api/wallet/")
+        self.assertTrue(WalletTopUp.objects.get(relay_id="topup-1").record_as_expense)
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        resp = self.api.get("/api/wallet/topups/topup-1/")
+        self.assertIsNotNone(resp.data["top_up"]["expense_id"])
+
+    def test_an_unreachable_relay_still_shows_the_shops_own_history(self):
+        WalletTopUp.objects.create(
+            relay_id="topup-9",
+            invoice_no="DFW-LOCALCOPY9",
+            method="plutu_localbankcards",
+            amount=Decimal("50"),
+            status="paid",
+            relay_created_at=timezone.now(),
+        )
+        self.relay.get_wallet.side_effect = RelayControlError("down")
+        resp = self.api.get("/api/wallet/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["available"])
+        self.assertEqual(resp.data["error"]["code"], "relay_unreachable")
+        self.assertIsNone(resp.data["balance"])
+        self.assertEqual(resp.data["recent_topups"][0]["invoice_no"], "DFW-LOCALCOPY9")
+
+    def test_a_shop_not_linked_to_the_relay_is_told_so(self):
+        RelayInstallation.objects.all().delete()
+        cache.clear()
+        resp = self.api.get("/api/wallet/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["available"])
+        self.assertEqual(resp.data["error"]["code"], "not_configured")
+        self.relay.get_wallet.assert_not_called()
+
+    def test_cashiers_cannot_see_or_spend_the_wallet(self):
+        self.api.force_authenticate(self.cashier)
+        self.assertEqual(self.api.get("/api/wallet/").status_code, 403)
+        self.assertEqual(self.api.post("/api/wallet/topups/", {"amount": "50"}, format="json").status_code, 403)
+        self.relay.create_wallet_topup.assert_not_called()
+
+    def test_statement_pages_come_from_the_relay(self):
+        self.relay.list_wallet_entries.return_value = {"entries": [{"id": "e2"}], "has_more": True}
+        resp = self.api.get("/api/wallet/entries/?limit=1&before=e1&kind=charge")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["has_more"])
+        self.relay.list_wallet_entries.assert_called_once_with(
+            access_token="access-token", limit=1, before="e1", kind="charge"
+        )
+
+    # --- starting a top-up ------------------------------------------------------
+
+    def test_starting_a_topup_returns_the_checkout_and_remembers_who(self):
+        self.relay.create_wallet_topup.return_value = {
+            "top_up": remote_topup(),
+            "checkout_url": "https://checkout.plutus.test/pay/abc",
+            "replayed": False,
+        }
+        resp = self.api.post(
+            "/api/wallet/topups/",
+            {"amount": "100.00", "idempotency_key": "app-key-1"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["checkout_url"], "https://checkout.plutus.test/pay/abc")
+        self.assertEqual(resp.data["top_up"]["status"], "pending")
+        self.assertTrue(resp.data["top_up"]["record_as_expense"])
+        call = self.relay.create_wallet_topup.call_args.kwargs
+        self.assertEqual(call["amount"], Decimal("100.00"))
+        self.assertEqual(call["idempotency_key"], "app-key-1")
+        self.assertEqual(call["method"], "plutu_localbankcards")
+        self.assertEqual(call["requested_by"], "owner")
+        mirrored = WalletTopUp.objects.get(relay_id="topup-1")
+        self.assertEqual(mirrored.requested_by, self.manager)
+        self.assertEqual(mirrored.status, "pending")
+        self.assertFalse(Expense.objects.exists(), "nothing is booked before it is paid")
+
+    def test_the_sheet_switch_decides_this_topup_and_becomes_the_default(self):
+        self.relay.create_wallet_topup.return_value = {"top_up": remote_topup(), "checkout_url": "x"}
+        resp = self.api.post(
+            "/api/wallet/topups/",
+            {"amount": "100", "record_as_expense": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertFalse(WalletSettings.load().record_topups_as_expenses)
+        topup = WalletTopUp.objects.get(relay_id="topup-1")
+        self.assertFalse(topup.record_as_expense)
+        # Paid later: the owner said no, so no expense.
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        resp = self.api.get("/api/wallet/topups/topup-1/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["top_up"]["expense_id"])
+        self.assertFalse(Expense.objects.exists())
+
+    def test_flipping_the_setting_later_does_not_change_a_topup_under_way(self):
+        self.relay.create_wallet_topup.return_value = {"top_up": remote_topup(), "checkout_url": "x"}
+        self.api.post("/api/wallet/topups/", {"amount": "100"}, format="json")
+        self.api.patch("/api/wallet/settings/", {"record_topups_as_expenses": False}, format="json")
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        resp = self.api.get("/api/wallet/topups/topup-1/")
+        self.assertIsNotNone(resp.data["top_up"]["expense_id"])
+        self.assertEqual(Expense.objects.count(), 1)
+
+    def test_relay_refusals_reach_the_app_as_codes(self):
+        self.relay.create_wallet_topup.side_effect = relay_refusal(
+            422, "invalid_amount", min_amount="10.00", max_amount="5000.00"
+        )
+        resp = self.api.post("/api/wallet/topups/", {"amount": "5"}, format="json")
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.data["code"], "invalid_amount")
+        self.assertEqual(resp.data["min_amount"], "10.00")
+        self.assertTrue(resp.data["detail"])
+
+        failed = remote_topup(status="failed", error_code="gateway_unauthorized")
+        failed.pop("checkout_url")
+        self.relay.create_wallet_topup.side_effect = relay_refusal(
+            502, "gateway_unauthorized", top_up=failed
+        )
+        resp = self.api.post("/api/wallet/topups/", {"amount": "50"}, format="json")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.data["code"], "gateway_unauthorized")
+        self.assertEqual(resp.data["top_up"]["status"], "failed")
+        self.assertEqual(WalletTopUp.objects.get(relay_id="topup-1").status, "failed")
+
+        self.relay.create_wallet_topup.side_effect = RelayControlError("unreachable")
+        resp = self.api.post("/api/wallet/topups/", {"amount": "50"}, format="json")
+        self.assertEqual(resp.status_code, 503)
+        self.assertEqual(resp.data["code"], "relay_unreachable")
+
+    def test_amounts_the_gateway_cannot_take_are_refused_before_the_relay(self):
+        for amount in ("0", "-5", "12.345", "abc"):
+            resp = self.api.post("/api/wallet/topups/", {"amount": amount}, format="json")
+            self.assertEqual(resp.status_code, 400, amount)
+        self.relay.create_wallet_topup.assert_not_called()
+
+    # --- the books ----------------------------------------------------------------
+
+    def test_polling_books_the_payment_once(self):
+        self.start()
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        first = self.api.get("/api/wallet/topups/topup-1/")
+        second = self.api.get("/api/wallet/topups/topup-1/")
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(first.data["top_up"]["expense_id"], second.data["top_up"]["expense_id"])
+        self.assertEqual(Expense.objects.count(), 1)
+
+    def test_a_cancelled_expense_is_not_booked_again(self):
+        self.start()
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        self.api.get("/api/wallet/topups/topup-1/")
+        Expense.objects.all().delete()
+        self.api.get("/api/wallet/topups/topup-1/")
+        self.assertFalse(Expense.objects.exists())
+
+    def test_a_test_payment_says_so_in_the_books(self):
+        self.start(test_mode=True)
+        self.relay.get_wallet_topup.return_value = {"top_up": paid(test_mode=True)}
+        self.api.get("/api/wallet/topups/topup-1/")
+        self.assertIn("تجريبي", Expense.objects.get().description)
+
+    def test_the_owners_category_is_used_when_chosen(self):
+        category = ExpenseCategory.objects.create(name="اشتراكات")
+        resp = self.api.patch("/api/wallet/settings/", {"expense_category": category.pk}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["expense_category"]["name"], "اشتراكات")
+        self.start()
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        self.api.get("/api/wallet/topups/topup-1/")
+        self.assertEqual(Expense.objects.get().category, category)
+        self.assertFalse(ExpenseCategory.objects.filter(name=WALLET_EXPENSE_CATEGORY_NAME).exists())
+
+    def test_a_payment_dated_in_a_closed_period_is_booked_today(self):
+        paid_at = timezone.now() - timedelta(days=40)
+        settings = ShopSettings.load()
+        settings.books_locked_through = timezone.localdate(paid_at)
+        settings.save()
+        cache.clear()
+        self.start()
+        self.relay.get_wallet_topup.return_value = {"top_up": paid(paid_at=paid_at.isoformat())}
+        self.api.get("/api/wallet/topups/topup-1/")
+        expense = Expense.objects.get()
+        self.assertEqual(expense.spent_at, timezone.localdate())
+        self.assertIn("فترة مغلقة", expense.notes)
+
+    def test_when_today_is_closed_too_nothing_is_booked_and_the_reason_is_kept(self):
+        settings = ShopSettings.load()
+        settings.books_locked_through = timezone.localdate() + timedelta(days=1)
+        settings.save()
+        cache.clear()
+        self.start()
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        resp = self.api.get("/api/wallet/topups/topup-1/")
+        self.assertEqual(resp.data["top_up"]["expense_error"], "period_locked")
+        self.assertFalse(Expense.objects.exists())
+
+
+@override_settings(CACHES=_LOCMEM)
+class WalletSyncTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        link_relay()
+        self.relay = mock.Mock()
+        patcher = mock.patch(_CLIENT, return_value=self.relay)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _mirror(self, **overrides):
+        values = dict(
+            relay_id="topup-1",
+            invoice_no="DFW-ABCDEFGH23",
+            method="plutu_localbankcards",
+            amount=Decimal("100"),
+            status="pending",
+            relay_created_at=timezone.now() - timedelta(minutes=5),
+        )
+        values.update(overrides)
+        return WalletTopUp.objects.create(**values)
+
+    def test_nothing_open_means_no_relay_call(self):
+        self._mirror(status="canceled")
+        result = sync_topups()
+        self.assertFalse(result["asked_relay"])
+        self.relay.list_wallet_topups.assert_not_called()
+
+    def test_a_payment_nobody_was_watching_reaches_the_books(self):
+        self._mirror(status="expired")
+        self.relay.list_wallet_topups.return_value = {"topups": [paid()], "has_more": False}
+        result = sync_topups()
+        self.assertTrue(result["asked_relay"])
+        topup = WalletTopUp.objects.get(relay_id="topup-1")
+        self.assertEqual(topup.status, "paid")
+        self.assertIsNotNone(topup.expense)
+        # The next sweep finds nothing open and asks nothing.
+        self.relay.list_wallet_topups.reset_mock()
+        self.assertFalse(sync_topups()["asked_relay"])
+
+    def test_an_owed_expense_is_retried_without_the_relay(self):
+        topup = self._mirror(
+            status="paid", paid_at=timezone.now(), expense_error="booking_failed"
+        )
+        sync_topups()
+        topup.refresh_from_db()
+        self.assertIsNotNone(topup.expense)
+        self.assertEqual(topup.expense_error, "")
+
+    def test_a_relay_outage_is_not_an_error(self):
+        self._mirror()
+        self.relay.list_wallet_topups.side_effect = RelayControlError("down")
+        result = sync_topups()
+        self.assertEqual(result["error"], "relay_unreachable")
+
+    def test_booking_is_idempotent_even_when_called_directly(self):
+        topup = self._mirror(status="paid", paid_at=timezone.now())
+        book_topup_expense(topup.pk)
+        book_topup_expense(topup.pk)
+        self.assertEqual(Expense.objects.count(), 1)

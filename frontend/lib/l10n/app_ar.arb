@@ -10677,7 +10677,7 @@
   "@subscriptionSectionTitle": {
     "description": "Title for the subscription/relay status section and its page."
   },
-  "subscriptionSectionSubtitle": "معرّف التثبيت وحالة اشتراكاتك",
+  "subscriptionSectionSubtitle": "معرّف التثبيت وحالة اشتراكاتك ومحفظتك",
   "@subscriptionSectionSubtitle": {
     "description": "Subtitle shown on the subscription tile in the settings hub."
   },
@@ -17665,5 +17665,444 @@
   "ftpRetentionInvalid": "اكتب عدداً من 1 إلى 3650.",
   "@ftpRetentionInvalid": {
     "description": "Validation message for the retention days."
+  },
+  "subscriptionWalletPill": "المحفظة · {balance}",
+  "@subscriptionWalletPill": {
+    "description": "Hero pill on the subscription page showing the Daftar wallet balance.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSectionTitle": "المحفظة",
+  "@walletSectionTitle": {
+    "description": "Title of the Daftar wallet section on the subscription page."
+  },
+  "walletBalanceLabel": "الرصيد المتاح",
+  "@walletBalanceLabel": {
+    "description": "Label above the wallet balance."
+  },
+  "walletExplainer": "رصيد مدفوع مسبقاً لدى دفتر تُدفع منه خدماتك، كالاشتراك والرسائل النصية.",
+  "@walletExplainer": {
+    "description": "One line explaining what the Daftar wallet is for."
+  },
+  "walletTopUpButton": "شحن المحفظة",
+  "@walletTopUpButton": {
+    "description": "Button that starts a wallet top-up."
+  },
+  "walletTestModePill": "وضع تجريبي",
+  "@walletTestModePill": {
+    "description": "Pill shown when wallet top-ups run on the payment gateway's test mode."
+  },
+  "walletTestModeHint": "عمليات الشحن تجريبية الآن ولا تُحوَّل فيها أموال حقيقية.",
+  "@walletTestModeHint": {
+    "description": "Warning that top-ups are test payments."
+  },
+  "walletRecordExpensesTitle": "تسجيل الشحنات كمصروفات تلقائياً",
+  "@walletRecordExpensesTitle": {
+    "description": "Switch that books every paid wallet top-up as a shop expense."
+  },
+  "walletRecordExpensesSubtitle": "كل شحن مدفوع يُسجَّل مصروفاً بالبطاقة ضمن «{category}».",
+  "@walletRecordExpensesSubtitle": {
+    "description": "Explains where auto-booked top-up expenses go.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSettingsSaveFailed": "تعذّر حفظ الإعداد. أعد المحاولة.",
+  "@walletSettingsSaveFailed": {
+    "description": "Snackbar when the auto-expense switch could not be saved."
+  },
+  "walletRecentTopUpsTitle": "آخر عمليات الشحن",
+  "@walletRecentTopUpsTitle": {
+    "description": "Heading over the latest top-ups on the wallet section."
+  },
+  "walletNoTopUps": "لم تشحن المحفظة بعد.",
+  "@walletNoTopUps": {
+    "description": "Empty state when the wallet has never been topped up."
+  },
+  "walletViewHistory": "السجل الكامل",
+  "@walletViewHistory": {
+    "description": "Button opening the full wallet history."
+  },
+  "walletLoadError": "تعذّر تحميل المحفظة.",
+  "@walletLoadError": {
+    "description": "Error when the wallet could not be loaded at all."
+  },
+  "walletUnavailableTitle": "المحفظة غير متاحة الآن",
+  "@walletUnavailableTitle": {
+    "description": "Callout title when the wallet cannot be read from the relay."
+  },
+  "walletTopUpsUnavailable": "شحن المحفظة غير متاح حالياً.",
+  "@walletTopUpsUnavailable": {
+    "description": "Shown when top-ups are switched off on the company's side."
+  },
+  "walletTopUpStatusPending": "بانتظار الدفع",
+  "@walletTopUpStatusPending": {
+    "description": "Top-up status: the checkout is open."
+  },
+  "walletTopUpStatusPaid": "تم الشحن",
+  "@walletTopUpStatusPaid": {
+    "description": "Top-up status: paid and credited."
+  },
+  "walletTopUpStatusCanceled": "ملغاة",
+  "@walletTopUpStatusCanceled": {
+    "description": "Top-up status: the payer cancelled."
+  },
+  "walletTopUpStatusFailed": "لم تكتمل",
+  "@walletTopUpStatusFailed": {
+    "description": "Top-up status: the payment failed."
+  },
+  "walletTopUpStatusExpired": "لم يُؤكَّد",
+  "@walletTopUpStatusExpired": {
+    "description": "Top-up status: no confirmation came back in time."
+  },
+  "walletTopUpStatusUnknown": "غير معروفة",
+  "@walletTopUpStatusUnknown": {
+    "description": "Top-up status the app does not recognise."
+  },
+  "walletTopUpBookedAsExpense": "مسجّل كمصروف",
+  "@walletTopUpBookedAsExpense": {
+    "description": "Chip on a top-up that was booked as a shop expense."
+  },
+  "walletTopUpExpensePeriodLocked": "لم يُسجَّل كمصروف: الفترة مغلقة",
+  "@walletTopUpExpensePeriodLocked": {
+    "description": "Chip when a paid top-up could not be booked because the books are closed."
+  },
+  "walletTopUpExpensePending": "لم يُسجَّل كمصروف بعد",
+  "@walletTopUpExpensePending": {
+    "description": "Chip when booking the expense failed and will be retried."
+  },
+  "walletTopUpRowTitle": "شحن {amount}",
+  "@walletTopUpRowTitle": {
+    "description": "Title of one top-up row.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTopUpRequestedBy": "بواسطة {name}",
+  "@walletTopUpRequestedBy": {
+    "description": "Who started a top-up.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTopUpInvoice": "رقم العملية {invoice}",
+  "@walletTopUpInvoice": {
+    "description": "The top-up's gateway reference, e.g. DFW-7K3M9Q2X4P.",
+    "placeholders": {
+      "invoice": {
+        "type": "String"
+      }
+    }
+  },
+  "walletMethodLocalBankCards": "بطاقة مصرفية محلية",
+  "@walletMethodLocalBankCards": {
+    "description": "Payment method: Libyan bank card through the gateway."
+  },
+  "walletMethodLocalBankCardsHint": "ادفع بأي بطاقة مصرفية ليبية عبر بوابة الدفع الآمنة.",
+  "@walletMethodLocalBankCardsHint": {
+    "description": "Explains the local bank card method."
+  },
+  "walletTopUpSheetTitle": "شحن المحفظة",
+  "@walletTopUpSheetTitle": {
+    "description": "Title of the top-up sheet."
+  },
+  "walletTopUpAmountLabel": "المبلغ",
+  "@walletTopUpAmountLabel": {
+    "description": "Top-up amount field label."
+  },
+  "walletTopUpAmountHint": "من {min} إلى {max}",
+  "@walletTopUpAmountHint": {
+    "description": "Allowed top-up range under the amount field.",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTopUpAmountRequired": "أدخل مبلغ الشحن.",
+  "@walletTopUpAmountRequired": {
+    "description": "Validation: no amount entered."
+  },
+  "walletTopUpAmountTooSmall": "أقل مبلغ للشحن {min}.",
+  "@walletTopUpAmountTooSmall": {
+    "description": "Validation: amount below the minimum.",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTopUpAmountTooLarge": "أكبر مبلغ للشحن {max}.",
+  "@walletTopUpAmountTooLarge": {
+    "description": "Validation: amount above the maximum.",
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTopUpMethodTitle": "طريقة الدفع",
+  "@walletTopUpMethodTitle": {
+    "description": "Heading over the payment method."
+  },
+  "walletTopUpRecordExpense": "سجّل هذا الشحن كمصروف",
+  "@walletTopUpRecordExpense": {
+    "description": "Switch in the top-up sheet; also saved as the default."
+  },
+  "walletTopUpBrowserNote": "ستُفتح صفحة الدفع الآمنة في المتصفح. أتمّ الدفع ثم عُد إلى دفتر، وسيظهر الرصيد تلقائياً.",
+  "@walletTopUpBrowserNote": {
+    "description": "Explains that the card is entered on the gateway's page in the browser."
+  },
+  "walletTopUpContinue": "متابعة إلى الدفع",
+  "@walletTopUpContinue": {
+    "description": "Primary button: create the checkout and open it."
+  },
+  "walletTopUpCancel": "إلغاء",
+  "@walletTopUpCancel": {
+    "description": "Closes the top-up sheet."
+  },
+  "walletTopUpStarting": "نجهّز صفحة الدفع…",
+  "@walletTopUpStarting": {
+    "description": "While the checkout is being created."
+  },
+  "walletAwaitingTitle": "بانتظار إتمام الدفع",
+  "@walletAwaitingTitle": {
+    "description": "Title while the payer is on the checkout page."
+  },
+  "walletAwaitingMessage": "أكمل الدفع في الصفحة التي فُتحت في المتصفح. نتابع العملية ونحدّث الرصيد فور وصول التأكيد.",
+  "@walletAwaitingMessage": {
+    "description": "Explains that the app follows the payment by itself."
+  },
+  "walletAwaitingOpenAgain": "فتح صفحة الدفع مجدداً",
+  "@walletAwaitingOpenAgain": {
+    "description": "Reopens the checkout page."
+  },
+  "walletAwaitingCopyLink": "نسخ رابط الدفع",
+  "@walletAwaitingCopyLink": {
+    "description": "Copies the checkout link."
+  },
+  "walletAwaitingLinkCopied": "تم نسخ رابط الدفع.",
+  "@walletAwaitingLinkCopied": {
+    "description": "Snackbar after copying the checkout link."
+  },
+  "walletCheckoutOpenFailed": "تعذّر فتح المتصفح. انسخ رابط الدفع وافتحه في المتصفح.",
+  "@walletCheckoutOpenFailed": {
+    "description": "The browser did not open the checkout."
+  },
+  "walletAwaitingCloseHint": "يمكنك الإغلاق؛ إن أتممت الدفع فسيُضاف الرصيد تلقائياً.",
+  "@walletAwaitingCloseHint": {
+    "description": "Reassures that closing the sheet does not lose a payment."
+  },
+  "walletClose": "إغلاق",
+  "@walletClose": {
+    "description": "Closes the top-up sheet."
+  },
+  "walletPaidTitle": "تم شحن المحفظة",
+  "@walletPaidTitle": {
+    "description": "Top-up succeeded."
+  },
+  "walletPaidMessage": "أُضيف {amount} إلى رصيدك.",
+  "@walletPaidMessage": {
+    "description": "How much was credited.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPaidBooked": "سُجّل كمصروف بالبطاقة ضمن «{category}».",
+  "@walletPaidBooked": {
+    "description": "The paid top-up was booked as an expense.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "walletNewBalance": "الرصيد الآن {amount}",
+  "@walletNewBalance": {
+    "description": "The balance after the top-up.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletCanceledTitle": "أُلغيت عملية الدفع",
+  "@walletCanceledTitle": {
+    "description": "The payer cancelled on the checkout."
+  },
+  "walletCanceledMessage": "لم يُخصم أي مبلغ.",
+  "@walletCanceledMessage": {
+    "description": "Nothing was charged."
+  },
+  "walletFailedTitle": "لم تكتمل عملية الدفع",
+  "@walletFailedTitle": {
+    "description": "The payment failed."
+  },
+  "walletFailedMessage": "لم تُقبل عملية الدفع ولم يُضف شيء إلى رصيدك.",
+  "@walletFailedMessage": {
+    "description": "Explains a failed payment."
+  },
+  "walletReviewTitle": "نراجع عملية الدفع",
+  "@walletReviewTitle": {
+    "description": "The gateway approved a different amount; held for review."
+  },
+  "walletReviewMessage": "إن خُصم المبلغ من بطاقتك فسيُضاف إلى محفظتك بعد المراجعة.",
+  "@walletReviewMessage": {
+    "description": "Explains a payment held for review."
+  },
+  "walletUnconfirmedTitle": "لم يصلنا تأكيد الدفع بعد",
+  "@walletUnconfirmedTitle": {
+    "description": "No verdict came back in time."
+  },
+  "walletUnconfirmedMessage": "إن أتممت الدفع فسيظهر الرصيد تلقائياً خلال دقائق. إن خُصم المبلغ ولم يظهر، تواصل مع الدعم واذكر رقم العملية أدناه.",
+  "@walletUnconfirmedMessage": {
+    "description": "Guidance when a payment was not confirmed in time."
+  },
+  "walletTryAgain": "المحاولة مجدداً",
+  "@walletTryAgain": {
+    "description": "Back to the amount form after a cancelled or failed top-up."
+  },
+  "walletDone": "تم",
+  "@walletDone": {
+    "description": "Closes the sheet after a successful top-up."
+  },
+  "walletErrorNotConfigured": "المحفظة غير متاحة: هذا المحل غير مربوط بخدمات دفتر بعد.",
+  "@walletErrorNotConfigured": {
+    "description": "The shop is not linked to the relay."
+  },
+  "walletErrorRelayUnreachable": "تعذّر الوصول إلى خدمات دفتر. تحقق من اتصال الإنترنت ثم أعد المحاولة.",
+  "@walletErrorRelayUnreachable": {
+    "description": "The relay could not be reached."
+  },
+  "walletErrorRelayUnauthorized": "رفضت خدمات دفتر بيانات هذا المحل. تواصل مع الدعم.",
+  "@walletErrorRelayUnauthorized": {
+    "description": "The relay rejected the shop's credentials."
+  },
+  "walletErrorAmountRange": "المبلغ غير مقبول. يُقبل من {min} إلى {max}.",
+  "@walletErrorAmountRange": {
+    "description": "The amount is outside the allowed range.",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "walletErrorAmount": "المبلغ غير مقبول.",
+  "@walletErrorAmount": {
+    "description": "The amount was refused."
+  },
+  "walletErrorGatewayAmount": "بوابة الدفع لا تقبل هذا المبلغ. جرّب مبلغاً أقل.",
+  "@walletErrorGatewayAmount": {
+    "description": "The gateway refused the amount."
+  },
+  "walletErrorBusy": "بوابة الدفع مشغولة الآن. أعد المحاولة بعد قليل.",
+  "@walletErrorBusy": {
+    "description": "The gateway or relay asked to retry later."
+  },
+  "walletErrorGatewayAccount": "بوابة الدفع غير متاحة الآن. تواصل مع الدعم.",
+  "@walletErrorGatewayAccount": {
+    "description": "The company's gateway account is misconfigured."
+  },
+  "walletErrorGateway": "تعذّر بدء عملية الدفع. أعد المحاولة بعد قليل.",
+  "@walletErrorGateway": {
+    "description": "The checkout could not be created."
+  },
+  "walletErrorNetwork": "تعذّر الاتصال. تحقق من الشبكة ثم أعد المحاولة.",
+  "@walletErrorNetwork": {
+    "description": "The request never got an answer."
+  },
+  "walletErrorForbidden": "ليست لديك صلاحية إدارة المحفظة.",
+  "@walletErrorForbidden": {
+    "description": "The user may not manage the wallet."
+  },
+  "walletErrorGeneric": "تعذّر إتمام العملية. أعد المحاولة.",
+  "@walletErrorGeneric": {
+    "description": "Fallback wallet error."
+  },
+  "walletHistoryTitle": "سجل المحفظة",
+  "@walletHistoryTitle": {
+    "description": "Title of the wallet history page."
+  },
+  "walletHistoryTopUpsTab": "عمليات الشحن",
+  "@walletHistoryTopUpsTab": {
+    "description": "Tab listing top-ups."
+  },
+  "walletHistoryEntriesTab": "حركات الرصيد",
+  "@walletHistoryEntriesTab": {
+    "description": "Tab listing every balance movement."
+  },
+  "walletHistoryLoadMore": "تحميل المزيد",
+  "@walletHistoryLoadMore": {
+    "description": "Loads the next page of history."
+  },
+  "walletHistoryLoadFailed": "تعذّر تحميل السجل.",
+  "@walletHistoryLoadFailed": {
+    "description": "A history page failed to load."
+  },
+  "walletHistoryEmptyTopUps": "لا توجد عمليات شحن بعد.",
+  "@walletHistoryEmptyTopUps": {
+    "description": "Empty top-ups tab."
+  },
+  "walletHistoryEmptyEntries": "لا توجد حركات على الرصيد بعد.",
+  "@walletHistoryEmptyEntries": {
+    "description": "Empty movements tab."
+  },
+  "walletEntryTopUp": "شحن",
+  "@walletEntryTopUp": {
+    "description": "Ledger entry kind: money in through the gateway."
+  },
+  "walletEntryCharge": "خصم",
+  "@walletEntryCharge": {
+    "description": "Ledger entry kind: a service charge."
+  },
+  "walletEntryRefund": "استرداد",
+  "@walletEntryRefund": {
+    "description": "Ledger entry kind: a charge given back."
+  },
+  "walletEntryAdjustment": "تسوية",
+  "@walletEntryAdjustment": {
+    "description": "Ledger entry kind: a correction by the company."
+  },
+  "walletEntryBalanceAfter": "الرصيد بعدها {amount}",
+  "@walletEntryBalanceAfter": {
+    "description": "The balance a movement left.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletServiceSubscription": "الاشتراك",
+  "@walletServiceSubscription": {
+    "description": "Service a charge was for: the subscription."
+  },
+  "walletServiceSms": "الرسائل النصية",
+  "@walletServiceSms": {
+    "description": "Service a charge was for: SMS."
+  },
+  "walletServiceAi": "المساعد الذكي",
+  "@walletServiceAi": {
+    "description": "Service a charge was for: the AI assistant."
+  },
+  "walletServiceVouchers": "الكروت",
+  "@walletServiceVouchers": {
+    "description": "Service a charge was for: prepaid vouchers."
   }
 }

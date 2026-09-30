@@ -157,6 +157,13 @@ from apps.messaging.views import (
     MessagingStatusView,
 )
 from apps.notifications.views import BusinessNotificationViewSet
+from apps.wallet.views import (
+    WalletEntriesView,
+    WalletSettingsView,
+    WalletTopUpDetailView,
+    WalletTopUpListView,
+    WalletView,
+)
 from apps.payments.views import CardTerminalViewSet, PaymentViewSet
 from apps.printing.views import (
     PrepStationViewSet,
@@ -526,6 +533,17 @@ urlpatterns = [
         MessagingStatusView.as_view(),
         name="messaging-status",
     ),
+    # The Daftar wallet: the shop's prepaid balance with the company, held on
+    # the relay and topped up through the payment gateway.
+    path("api/wallet/", WalletView.as_view(), name="wallet"),
+    path("api/wallet/settings/", WalletSettingsView.as_view(), name="wallet-settings"),
+    path("api/wallet/topups/", WalletTopUpListView.as_view(), name="wallet-topups"),
+    path(
+        "api/wallet/topups/<str:relay_id>/",
+        WalletTopUpDetailView.as_view(),
+        name="wallet-topup-detail",
+    ),
+    path("api/wallet/entries/", WalletEntriesView.as_view(), name="wallet-entries"),
     path(
         "api/messaging/inbound/<int:gateway_id>/",
         InboundWebhookView.as_view(),

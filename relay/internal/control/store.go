@@ -666,6 +666,8 @@ type fileStoreData struct {
 	EnrollmentTokens                 map[string]EnrollmentTokenRecord          `json:"enrollment_tokens,omitempty"`
 	SMSMessages                      map[string]SMSMessage                     `json:"sms_messages,omitempty"`
 	IntegrationSwitches              map[string]IntegrationSwitch              `json:"integration_switches,omitempty"`
+	WalletEntries                    map[string]WalletEntry                    `json:"wallet_entries,omitempty"`
+	WalletTopUps                     map[string]WalletTopUp                    `json:"wallet_topups,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {

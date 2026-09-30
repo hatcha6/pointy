@@ -147,6 +147,9 @@ INSTALLED_APPS = [
     "apps.employees",
     "apps.attendance",
     "apps.expenses",
+    # The Daftar wallet's shop side: books paid top-ups as expenses, so it
+    # sits after expenses.
+    "apps.wallet",
     "apps.treasury",
     "apps.price_checker",
     "apps.ai",
@@ -781,6 +784,13 @@ CELERY_BEAT_SCHEDULE = {
     "messaging.sync-delivery-status": {
         "task": "messaging.sync_delivery_status",
         "schedule": timedelta(minutes=10),
+    },
+    # Wallet top-ups paid while nobody had the app open (the owner closed it,
+    # the company confirmed a payment by hand) reach the shop's books here. It
+    # asks the relay only while a top-up could still change.
+    "wallet.sync-topups": {
+        "task": "wallet.sync_topups",
+        "schedule": timedelta(minutes=5),
     },
     # Daily debt reminders for open-credit (آجل) invoices — opt-in via
     # POINTY_SMS_DEBT_REMINDERS_ENABLED; the task no-ops when disabled.

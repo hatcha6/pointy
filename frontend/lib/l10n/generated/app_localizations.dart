@@ -28551,7 +28551,7 @@ abstract class AppLocalizations {
   /// Subtitle shown on the subscription tile in the settings hub.
   ///
   /// In ar, this message translates to:
-  /// **'معرّف التثبيت وحالة اشتراكاتك'**
+  /// **'معرّف التثبيت وحالة اشتراكاتك ومحفظتك'**
   String get subscriptionSectionSubtitle;
 
   /// Error state shown when the relay installation status fails to load.
@@ -39059,6 +39059,558 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اكتب عدداً من 1 إلى 3650.'**
   String get ftpRetentionInvalid;
+
+  /// Hero pill on the subscription page showing the Daftar wallet balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحفظة · {balance}'**
+  String subscriptionWalletPill(String balance);
+
+  /// Title of the Daftar wallet section on the subscription page.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحفظة'**
+  String get walletSectionTitle;
+
+  /// Label above the wallet balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد المتاح'**
+  String get walletBalanceLabel;
+
+  /// One line explaining what the Daftar wallet is for.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد مدفوع مسبقاً لدى دفتر تُدفع منه خدماتك، كالاشتراك والرسائل النصية.'**
+  String get walletExplainer;
+
+  /// Button that starts a wallet top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن المحفظة'**
+  String get walletTopUpButton;
+
+  /// Pill shown when wallet top-ups run on the payment gateway's test mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع تجريبي'**
+  String get walletTestModePill;
+
+  /// Warning that top-ups are test payments.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الشحن تجريبية الآن ولا تُحوَّل فيها أموال حقيقية.'**
+  String get walletTestModeHint;
+
+  /// Switch that books every paid wallet top-up as a shop expense.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الشحنات كمصروفات تلقائياً'**
+  String get walletRecordExpensesTitle;
+
+  /// Explains where auto-booked top-up expenses go.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل شحن مدفوع يُسجَّل مصروفاً بالبطاقة ضمن «{category}».'**
+  String walletRecordExpensesSubtitle(String category);
+
+  /// Snackbar when the auto-expense switch could not be saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الإعداد. أعد المحاولة.'**
+  String get walletSettingsSaveFailed;
+
+  /// Heading over the latest top-ups on the wallet section.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر عمليات الشحن'**
+  String get walletRecentTopUpsTitle;
+
+  /// Empty state when the wallet has never been topped up.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تشحن المحفظة بعد.'**
+  String get walletNoTopUps;
+
+  /// Button opening the full wallet history.
+  ///
+  /// In ar, this message translates to:
+  /// **'السجل الكامل'**
+  String get walletViewHistory;
+
+  /// Error when the wallet could not be loaded at all.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل المحفظة.'**
+  String get walletLoadError;
+
+  /// Callout title when the wallet cannot be read from the relay.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحفظة غير متاحة الآن'**
+  String get walletUnavailableTitle;
+
+  /// Shown when top-ups are switched off on the company's side.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن المحفظة غير متاح حالياً.'**
+  String get walletTopUpsUnavailable;
+
+  /// Top-up status: the checkout is open.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الدفع'**
+  String get walletTopUpStatusPending;
+
+  /// Top-up status: paid and credited.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الشحن'**
+  String get walletTopUpStatusPaid;
+
+  /// Top-up status: the payer cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get walletTopUpStatusCanceled;
+
+  /// Top-up status: the payment failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تكتمل'**
+  String get walletTopUpStatusFailed;
+
+  /// Top-up status: no confirmation came back in time.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُؤكَّد'**
+  String get walletTopUpStatusExpired;
+
+  /// Top-up status the app does not recognise.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معروفة'**
+  String get walletTopUpStatusUnknown;
+
+  /// Chip on a top-up that was booked as a shop expense.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسجّل كمصروف'**
+  String get walletTopUpBookedAsExpense;
+
+  /// Chip when a paid top-up could not be booked because the books are closed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل كمصروف: الفترة مغلقة'**
+  String get walletTopUpExpensePeriodLocked;
+
+  /// Chip when booking the expense failed and will be retried.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل كمصروف بعد'**
+  String get walletTopUpExpensePending;
+
+  /// Title of one top-up row.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن {amount}'**
+  String walletTopUpRowTitle(String amount);
+
+  /// Who started a top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name}'**
+  String walletTopUpRequestedBy(String name);
+
+  /// The top-up's gateway reference, e.g. DFW-7K3M9Q2X4P.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم العملية {invoice}'**
+  String walletTopUpInvoice(String invoice);
+
+  /// Payment method: Libyan bank card through the gateway.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة مصرفية محلية'**
+  String get walletMethodLocalBankCards;
+
+  /// Explains the local bank card method.
+  ///
+  /// In ar, this message translates to:
+  /// **'ادفع بأي بطاقة مصرفية ليبية عبر بوابة الدفع الآمنة.'**
+  String get walletMethodLocalBankCardsHint;
+
+  /// Title of the top-up sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن المحفظة'**
+  String get walletTopUpSheetTitle;
+
+  /// Top-up amount field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get walletTopUpAmountLabel;
+
+  /// Allowed top-up range under the amount field.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {min} إلى {max}'**
+  String walletTopUpAmountHint(String min, String max);
+
+  /// Validation: no amount entered.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغ الشحن.'**
+  String get walletTopUpAmountRequired;
+
+  /// Validation: amount below the minimum.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل مبلغ للشحن {min}.'**
+  String walletTopUpAmountTooSmall(String min);
+
+  /// Validation: amount above the maximum.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكبر مبلغ للشحن {max}.'**
+  String walletTopUpAmountTooLarge(String max);
+
+  /// Heading over the payment method.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الدفع'**
+  String get walletTopUpMethodTitle;
+
+  /// Switch in the top-up sheet; also saved as the default.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل هذا الشحن كمصروف'**
+  String get walletTopUpRecordExpense;
+
+  /// Explains that the card is entered on the gateway's page in the browser.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُفتح صفحة الدفع الآمنة في المتصفح. أتمّ الدفع ثم عُد إلى دفتر، وسيظهر الرصيد تلقائياً.'**
+  String get walletTopUpBrowserNote;
+
+  /// Primary button: create the checkout and open it.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة إلى الدفع'**
+  String get walletTopUpContinue;
+
+  /// Closes the top-up sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get walletTopUpCancel;
+
+  /// While the checkout is being created.
+  ///
+  /// In ar, this message translates to:
+  /// **'نجهّز صفحة الدفع…'**
+  String get walletTopUpStarting;
+
+  /// Title while the payer is on the checkout page.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار إتمام الدفع'**
+  String get walletAwaitingTitle;
+
+  /// Explains that the app follows the payment by itself.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل الدفع في الصفحة التي فُتحت في المتصفح. نتابع العملية ونحدّث الرصيد فور وصول التأكيد.'**
+  String get walletAwaitingMessage;
+
+  /// Reopens the checkout page.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح صفحة الدفع مجدداً'**
+  String get walletAwaitingOpenAgain;
+
+  /// Copies the checkout link.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ رابط الدفع'**
+  String get walletAwaitingCopyLink;
+
+  /// Snackbar after copying the checkout link.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ رابط الدفع.'**
+  String get walletAwaitingLinkCopied;
+
+  /// The browser did not open the checkout.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح المتصفح. انسخ رابط الدفع وافتحه في المتصفح.'**
+  String get walletCheckoutOpenFailed;
+
+  /// Reassures that closing the sheet does not lose a payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك الإغلاق؛ إن أتممت الدفع فسيُضاف الرصيد تلقائياً.'**
+  String get walletAwaitingCloseHint;
+
+  /// Closes the top-up sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق'**
+  String get walletClose;
+
+  /// Top-up succeeded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم شحن المحفظة'**
+  String get walletPaidTitle;
+
+  /// How much was credited.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيف {amount} إلى رصيدك.'**
+  String walletPaidMessage(String amount);
+
+  /// The paid top-up was booked as an expense.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّل كمصروف بالبطاقة ضمن «{category}».'**
+  String walletPaidBooked(String category);
+
+  /// The balance after the top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد الآن {amount}'**
+  String walletNewBalance(String amount);
+
+  /// The payer cancelled on the checkout.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغيت عملية الدفع'**
+  String get walletCanceledTitle;
+
+  /// Nothing was charged.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُخصم أي مبلغ.'**
+  String get walletCanceledMessage;
+
+  /// The payment failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تكتمل عملية الدفع'**
+  String get walletFailedTitle;
+
+  /// Explains a failed payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُقبل عملية الدفع ولم يُضف شيء إلى رصيدك.'**
+  String get walletFailedMessage;
+
+  /// The gateway approved a different amount; held for review.
+  ///
+  /// In ar, this message translates to:
+  /// **'نراجع عملية الدفع'**
+  String get walletReviewTitle;
+
+  /// Explains a payment held for review.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن خُصم المبلغ من بطاقتك فسيُضاف إلى محفظتك بعد المراجعة.'**
+  String get walletReviewMessage;
+
+  /// No verdict came back in time.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصلنا تأكيد الدفع بعد'**
+  String get walletUnconfirmedTitle;
+
+  /// Guidance when a payment was not confirmed in time.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن أتممت الدفع فسيظهر الرصيد تلقائياً خلال دقائق. إن خُصم المبلغ ولم يظهر، تواصل مع الدعم واذكر رقم العملية أدناه.'**
+  String get walletUnconfirmedMessage;
+
+  /// Back to the amount form after a cancelled or failed top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحاولة مجدداً'**
+  String get walletTryAgain;
+
+  /// Closes the sheet after a successful top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم'**
+  String get walletDone;
+
+  /// The shop is not linked to the relay.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحفظة غير متاحة: هذا المحل غير مربوط بخدمات دفتر بعد.'**
+  String get walletErrorNotConfigured;
+
+  /// The relay could not be reached.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى خدمات دفتر. تحقق من اتصال الإنترنت ثم أعد المحاولة.'**
+  String get walletErrorRelayUnreachable;
+
+  /// The relay rejected the shop's credentials.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفضت خدمات دفتر بيانات هذا المحل. تواصل مع الدعم.'**
+  String get walletErrorRelayUnauthorized;
+
+  /// The amount is outside the allowed range.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ غير مقبول. يُقبل من {min} إلى {max}.'**
+  String walletErrorAmountRange(String min, String max);
+
+  /// The amount was refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ غير مقبول.'**
+  String get walletErrorAmount;
+
+  /// The gateway refused the amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'بوابة الدفع لا تقبل هذا المبلغ. جرّب مبلغاً أقل.'**
+  String get walletErrorGatewayAmount;
+
+  /// The gateway or relay asked to retry later.
+  ///
+  /// In ar, this message translates to:
+  /// **'بوابة الدفع مشغولة الآن. أعد المحاولة بعد قليل.'**
+  String get walletErrorBusy;
+
+  /// The company's gateway account is misconfigured.
+  ///
+  /// In ar, this message translates to:
+  /// **'بوابة الدفع غير متاحة الآن. تواصل مع الدعم.'**
+  String get walletErrorGatewayAccount;
+
+  /// The checkout could not be created.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر بدء عملية الدفع. أعد المحاولة بعد قليل.'**
+  String get walletErrorGateway;
+
+  /// The request never got an answer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال. تحقق من الشبكة ثم أعد المحاولة.'**
+  String get walletErrorNetwork;
+
+  /// The user may not manage the wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليست لديك صلاحية إدارة المحفظة.'**
+  String get walletErrorForbidden;
+
+  /// Fallback wallet error.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إتمام العملية. أعد المحاولة.'**
+  String get walletErrorGeneric;
+
+  /// Title of the wallet history page.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المحفظة'**
+  String get walletHistoryTitle;
+
+  /// Tab listing top-ups.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الشحن'**
+  String get walletHistoryTopUpsTab;
+
+  /// Tab listing every balance movement.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات الرصيد'**
+  String get walletHistoryEntriesTab;
+
+  /// Loads the next page of history.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحميل المزيد'**
+  String get walletHistoryLoadMore;
+
+  /// A history page failed to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل السجل.'**
+  String get walletHistoryLoadFailed;
+
+  /// Empty top-ups tab.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات شحن بعد.'**
+  String get walletHistoryEmptyTopUps;
+
+  /// Empty movements tab.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حركات على الرصيد بعد.'**
+  String get walletHistoryEmptyEntries;
+
+  /// Ledger entry kind: money in through the gateway.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن'**
+  String get walletEntryTopUp;
+
+  /// Ledger entry kind: a service charge.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم'**
+  String get walletEntryCharge;
+
+  /// Ledger entry kind: a charge given back.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد'**
+  String get walletEntryRefund;
+
+  /// Ledger entry kind: a correction by the company.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوية'**
+  String get walletEntryAdjustment;
+
+  /// The balance a movement left.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد بعدها {amount}'**
+  String walletEntryBalanceAfter(String amount);
+
+  /// Service a charge was for: the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاشتراك'**
+  String get walletServiceSubscription;
+
+  /// Service a charge was for: SMS.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل النصية'**
+  String get walletServiceSms;
+
+  /// Service a charge was for: the AI assistant.
+  ///
+  /// In ar, this message translates to:
+  /// **'المساعد الذكي'**
+  String get walletServiceAi;
+
+  /// Service a charge was for: prepaid vouchers.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكروت'**
+  String get walletServiceVouchers;
 }
 
 class _AppLocalizationsDelegate

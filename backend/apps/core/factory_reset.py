@@ -277,6 +277,11 @@ WIPED_MODELS = (
     # treasury — counts and transfers. The money accounts are the seeded chart.
     "treasury.moneycount",
     "treasury.moneytransfer",
+    # wallet — the shop's copy of its wallet top-ups and the expenses they
+    # became. The wallet itself (balance, ledger) lives on the relay and a shop
+    # reset never touches it; a top-up first seen again after the reset is
+    # already paid and is not booked into the fresh books a second time.
+    "wallet.wallettopup",
 )
 
 #: Never touched. The reason is part of the entry: a model is only allowed to
@@ -331,6 +336,8 @@ KEPT_MODELS = {
     "price_checker.pricecheckerdevice": "A configured kiosk.",
     "payments.cardterminal": "A configured card terminal.",
     "messaging.messaginggateway": "The shop's SMS switch, pace and quiet hours.",
+    "wallet.walletsettings": "Whether wallet top-ups go into the books, and "
+    "under which category.",
     "attendance.biotimeconnection": "Attendance device credentials.",
     "integrations.integrationaccount": "Provider credentials and float.",
     "integrations.integrationoptionprice": "The provider's price list.",

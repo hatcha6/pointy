@@ -362,6 +362,61 @@ class RelayControlClient:
             timeout=timeout,
         )
 
+    def get_wallet(self, *, access_token, timeout=None):
+        """This installation's wallet: balance, top-up options, latest movements.
+
+        The wallet lives on the relay — it is the shop's prepaid balance with the
+        company — and answers on the installation's identity alone, so a shop
+        whose subscription lapsed can still see it and pay in.
+        """
+        return self._request("GET", "/v1/wallet", relay_token=access_token, timeout=timeout)
+
+    def list_wallet_entries(self, *, access_token, limit=50, before="", kind="", timeout=None):
+        """The wallet statement, newest first; ``before`` is the last entry id seen."""
+        return self._request(
+            "GET",
+            _wallet_path("/v1/wallet/entries", limit=limit, before=before, kind=kind),
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def list_wallet_topups(self, *, access_token, limit=50, before="", status="", timeout=None):
+        """This installation's top-ups, newest first."""
+        return self._request(
+            "GET",
+            _wallet_path("/v1/wallet/topups", limit=limit, before=before, status=status),
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def create_wallet_topup(
+        self, *, access_token, amount, method, idempotency_key, requested_by="", timeout=None
+    ):
+        """Start a top-up: the relay records it and returns the gateway's checkout
+        page. The idempotency key makes a retry return the SAME checkout instead
+        of a second one. Nothing is credited until the payer comes back paid."""
+        return self._request(
+            "POST",
+            "/v1/wallet/topups",
+            body={
+                "amount": str(amount),
+                "method": method,
+                "idempotency_key": idempotency_key,
+                "requested_by": requested_by,
+            },
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def get_wallet_topup(self, *, access_token, topup_id, timeout=None):
+        """One top-up — what the app polls while the payer is on the checkout."""
+        return self._request(
+            "GET",
+            f"/v1/wallet/topups/{quote(str(topup_id), safe='')}",
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
     def open_ai_stream(
         self,
         *,
@@ -524,6 +579,16 @@ class RelayControlClient:
                 self.config.client_key_file,
             )
         return context
+
+
+def _wallet_path(path, **params):
+    """``path`` with the non-empty ``params`` as its query string."""
+    query = "&".join(
+        f"{key}={quote(str(value), safe='')}"
+        for key, value in params.items()
+        if value not in (None, "")
+    )
+    return f"{path}?{query}" if query else path
 
 
 def relay_status_payload(installation):
