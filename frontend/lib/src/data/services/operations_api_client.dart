@@ -38,7 +38,7 @@ class OperationsApiClient {
         'page': '$page',
       },
     );
-    _session.ensureSuccess(response, 'Job list request failed with status');
+    _session.throwApiException(response, 'Job list request failed with status');
     return OperationsJobPage.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -46,7 +46,10 @@ class OperationsApiClient {
 
   Future<OperationsJob> fetchJob(int jobId) async {
     final response = await _session.get('jobs/$jobId/');
-    _session.ensureSuccess(response, 'Job detail request failed with status');
+    _session.throwApiException(
+      response,
+      'Job detail request failed with status',
+    );
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -61,7 +64,7 @@ class OperationsApiClient {
       body: draft.toJson(),
       idempotencyKey: idempotencyKey,
     );
-    _session.ensureSuccess(response, 'Job create failed with status');
+    _session.throwApiException(response, 'Job create failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -72,7 +75,7 @@ class OperationsApiClient {
     Map<String, Object?> changes,
   ) async {
     final response = await _session.patch('jobs/$jobId/', body: changes);
-    _session.ensureSuccess(response, 'Job update failed with status');
+    _session.throwApiException(response, 'Job update failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -99,7 +102,7 @@ class OperationsApiClient {
       },
       idempotencyKey: idempotencyKey,
     );
-    _session.ensureSuccess(response, 'Job transition failed with status');
+    _session.throwApiException(response, 'Job transition failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -111,7 +114,7 @@ class OperationsApiClient {
   /// and needs a permission the counter that assigns work does not hold.
   Future<List<Employee>> fetchJobAssignees() async {
     final response = await _session.get('jobs/assignees/');
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Job assignees request failed with status',
     );
@@ -129,7 +132,7 @@ class OperationsApiClient {
       'jobs/$jobId/assign/',
       body: {'employee_id': employeeId},
     );
-    _session.ensureSuccess(response, 'Job assign failed with status');
+    _session.throwApiException(response, 'Job assign failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -151,7 +154,7 @@ class OperationsApiClient {
       },
       idempotencyKey: idempotencyKey,
     );
-    _session.ensureSuccess(response, 'Job material add failed with status');
+    _session.throwApiException(response, 'Job material add failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -167,7 +170,7 @@ class OperationsApiClient {
       body: draft.toJson(),
       idempotencyKey: idempotencyKey,
     );
-    _session.ensureSuccess(response, 'Job service add failed with status');
+    _session.throwApiException(response, 'Job service add failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -175,7 +178,10 @@ class OperationsApiClient {
 
   Future<OperationsJob> removeJobService(int jobId, int serviceId) async {
     final response = await _session.delete('jobs/$jobId/services/$serviceId/');
-    _session.ensureSuccess(response, 'Job service remove failed with status');
+    _session.throwApiException(
+      response,
+      'Job service remove failed with status',
+    );
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -186,7 +192,7 @@ class OperationsApiClient {
       'jobs/$jobId/hold/',
       body: {'reason': reason.trim()},
     );
-    _session.ensureSuccess(response, 'Job hold failed with status');
+    _session.throwApiException(response, 'Job hold failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -194,7 +200,7 @@ class OperationsApiClient {
 
   Future<OperationsJob> resumeJob(int jobId) async {
     final response = await _session.post('jobs/$jobId/resume/', body: const {});
-    _session.ensureSuccess(response, 'Job resume failed with status');
+    _session.throwApiException(response, 'Job resume failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -204,7 +210,10 @@ class OperationsApiClient {
     final response = await _session.post(
       'jobs/$jobId/materials/$materialId/reverse/',
     );
-    _session.ensureSuccess(response, 'Job material reverse failed with status');
+    _session.throwApiException(
+      response,
+      'Job material reverse failed with status',
+    );
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -216,7 +225,7 @@ class OperationsApiClient {
       'jobs/$jobId/cancel/',
       body: {if (normalizedReason.isNotEmpty) 'reason': normalizedReason},
     );
-    _session.ensureSuccess(response, 'Job cancel failed with status');
+    _session.throwApiException(response, 'Job cancel failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -232,7 +241,7 @@ class OperationsApiClient {
       body: draft.toJson(),
       idempotencyKey: idempotencyKey,
     );
-    _session.ensureSuccess(response, 'Job decline failed with status');
+    _session.throwApiException(response, 'Job decline failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -257,7 +266,7 @@ class OperationsApiClient {
       },
       idempotencyKey: idempotencyKey,
     );
-    _session.ensureSuccess(response, 'Job hand-back failed with status');
+    _session.throwApiException(response, 'Job hand-back failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -269,7 +278,7 @@ class OperationsApiClient {
       'jobs/$jobId/reopen/',
       body: {if (normalizedNote.isNotEmpty) 'note': normalizedNote},
     );
-    _session.ensureSuccess(response, 'Job reopen failed with status');
+    _session.throwApiException(response, 'Job reopen failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -285,7 +294,7 @@ class OperationsApiClient {
       body: draft.toJson(),
       idempotencyKey: idempotencyKey,
     );
-    _session.ensureSuccess(response, 'Job invoice failed with status');
+    _session.throwApiException(response, 'Job invoice failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -312,7 +321,7 @@ class OperationsApiClient {
         'page': '$page',
       },
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Customer asset list request failed with status',
     );
@@ -332,7 +341,7 @@ class OperationsApiClient {
         'page': '$page',
       },
     );
-    _session.ensureSuccess(response, 'Asset type list failed with status');
+    _session.throwApiException(response, 'Asset type list failed with status');
     return CustomerAssetTypePage.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -342,7 +351,7 @@ class OperationsApiClient {
     final response = type.id > 0
         ? await _session.patch('asset-types/${type.id}/', body: type.toJson())
         : await _session.post('asset-types/', body: type.toJson());
-    _session.ensureSuccess(response, 'Asset type save failed with status');
+    _session.throwApiException(response, 'Asset type save failed with status');
     return CustomerAssetType.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -350,12 +359,15 @@ class OperationsApiClient {
 
   Future<void> deleteAssetType(int typeId) async {
     final response = await _session.delete('asset-types/$typeId/');
-    _session.ensureSuccess(response, 'Asset type delete failed with status');
+    _session.throwApiException(
+      response,
+      'Asset type delete failed with status',
+    );
   }
 
   Future<CustomerAssetDetail> fetchCustomerAsset(int assetId) async {
     final response = await _session.get('assets/$assetId/');
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Customer asset request failed with status',
     );
@@ -377,7 +389,7 @@ class OperationsApiClient {
         if (normalizedNote.isNotEmpty) 'note': normalizedNote,
       },
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Customer asset transfer failed with status',
     );
@@ -388,7 +400,7 @@ class OperationsApiClient {
 
   Future<CustomerAsset> createCustomerAsset(CustomerAssetDraft draft) async {
     final response = await _session.post('assets/', body: draft.toJson());
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Customer asset create failed with status',
     );
@@ -405,7 +417,7 @@ class OperationsApiClient {
       'assets/$assetId/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Customer asset update failed with status',
     );
@@ -427,7 +439,7 @@ class OperationsApiClient {
         'page': '$page',
       },
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Workflow template list request failed with status',
     );
@@ -446,7 +458,7 @@ class OperationsApiClient {
             'workflow-templates/$templateId/',
             body: draft.toJson(),
           );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Workflow template save failed with status',
     );
@@ -457,7 +469,7 @@ class OperationsApiClient {
 
   Future<void> deleteWorkflowTemplate(int templateId) async {
     final response = await _session.delete('workflow-templates/$templateId/');
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Workflow template delete failed with status',
     );
@@ -468,7 +480,7 @@ class OperationsApiClient {
       'boms/',
       query: {if (isActive != null) 'is_active': '$isActive', 'page': '$page'},
     );
-    _session.ensureSuccess(response, 'BOM list request failed with status');
+    _session.throwApiException(response, 'BOM list request failed with status');
     return BillOfMaterialsPage.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -479,7 +491,7 @@ class OperationsApiClient {
     final response = bomId == null
         ? await _session.post('boms/', body: draft.toJson())
         : await _session.put('boms/$bomId/', body: draft.toJson());
-    _session.ensureSuccess(response, 'BOM save failed with status');
+    _session.throwApiException(response, 'BOM save failed with status');
     return BillOfMaterials.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -487,6 +499,6 @@ class OperationsApiClient {
 
   Future<void> deleteBom(int bomId) async {
     final response = await _session.delete('boms/$bomId/');
-    _session.ensureSuccess(response, 'BOM delete failed with status');
+    _session.throwApiException(response, 'BOM delete failed with status');
   }
 }
