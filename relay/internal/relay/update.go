@@ -334,6 +334,10 @@ func (s HTTPServer) handleAdminArtifact(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	version := strings.TrimPrefix(r.URL.Path, "/v1/artifacts/")
+	if fetchVersion, isFetch := strings.CutSuffix(version, "/fetch"); isFetch {
+		s.handleAdminArtifactFetch(w, r, store, fetchVersion)
+		return
+	}
 	if version == "" || strings.Contains(version, "/") {
 		writeNotFound(w)
 		return
@@ -357,6 +361,61 @@ func (s HTTPServer) handleAdminArtifact(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		writeJSON(w, http.StatusOK, meta)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+type artifactFetchRequest struct {
+	URL     string            `json:"url"`
+	SHA256  string            `json:"sha256,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// handleAdminArtifactFetch starts (POST) or reports (GET) a relay-side download
+// of a bundle from a URL — the alternative to uploading it over a slow line.
+// The bundle is published only once the download completes and verifies.
+func (s HTTPServer) handleAdminArtifactFetch(
+	w http.ResponseWriter,
+	r *http.Request,
+	store *artifacts.Store,
+	version string,
+) {
+	if version == "" || strings.Contains(version, "/") {
+		writeNotFound(w)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		var req artifactFetchRequest
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		status, err := store.Fetch(version, artifacts.FetchRequest{
+			URL: req.URL, SHA256: req.SHA256, Headers: req.Headers,
+		})
+		if errors.Is(err, artifacts.ErrFetchInProgress) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		s.logger().Info("artifact fetch started", "version", status.Version, "url", status.URL)
+		writeJSON(w, http.StatusAccepted, status)
+	case http.MethodGet:
+		status, err := store.FetchStatus(version)
+		if errors.Is(err, artifacts.ErrNoFetch) {
+			writeNotFound(w)
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}

@@ -11,45 +11,168 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 )
 
 // runArtifacts manages the on-prem update bundles the relay serves to the fleet.
 func runArtifacts(args []string) error {
 	if len(args) == 0 {
-		return usageError("missing artifacts command (upload)")
+		return usageError("missing artifacts command (upload, status)")
 	}
 	switch args[0] {
 	case "upload":
 		return runArtifactsUpload(args[1:])
+	case "status":
+		return runArtifactsStatus(args[1:])
 	default:
 		return usageError("unknown artifacts command %q", args[0])
 	}
 }
+
+// artifactFetchPollInterval paces progress polls while the relay downloads.
+var artifactFetchPollInterval = 3 * time.Second
 
 func runArtifactsUpload(args []string) error {
 	flags := flag.NewFlagSet("artifacts upload", flag.ExitOnError)
 	admin := registerAdminControlFlags(flags)
 	version := flags.String("version", "", "version this bundle is for, e.g. 1.4.0")
 	bundle := flags.String("bundle", "", "path to the on-prem bundle zip to upload")
+	sourceURL := flags.String("url", "", "instead of --bundle: a URL the relay downloads the bundle zip from itself")
+	sha := flags.String("sha256", "", "with --url: expected sha256 of the zip (hex or sha256:<hex>); a mismatch is discarded")
+	var headers headerFlags
+	flags.Var(&headers, "header", "with --url: extra download header \"Name: value\" (repeatable), e.g. Authorization for a private asset")
+	noWait := flags.Bool("no-wait", false, "with --url: start the download and return; check it with artifacts status")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if strings.TrimSpace(*version) == "" {
+	ver := strings.TrimSpace(*version)
+	if ver == "" {
 		return usageError("--version is required")
 	}
-	if strings.TrimSpace(*bundle) == "" {
-		return usageError("--bundle is required")
+	bundlePath, source := strings.TrimSpace(*bundle), strings.TrimSpace(*sourceURL)
+	if (bundlePath == "") == (source == "") {
+		return usageError("pass exactly one of --bundle or --url")
+	}
+	if bundlePath == "" {
+		return runArtifactsFetch(admin, ver, source, *sha, headers, !*noWait)
 	}
 	raw, err := admin.uploadFile(
 		http.MethodPost,
-		"/v1/artifacts/"+url.PathEscape(strings.TrimSpace(*version)),
-		strings.TrimSpace(*bundle),
+		"/v1/artifacts/"+url.PathEscape(ver),
+		bundlePath,
 	)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Uploaded bundle for %s.\n\n", strings.TrimSpace(*version))
+	fmt.Printf("Uploaded bundle for %s.\n\n", ver)
 	return printRawJSON(raw)
+}
+
+type artifactFetchStatus struct {
+	URL           string          `json:"url"`
+	State         string          `json:"state"`
+	BytesReceived int64           `json:"bytes_received"`
+	BytesTotal    int64           `json:"bytes_total"`
+	Error         string          `json:"error"`
+	Artifact      json.RawMessage `json:"artifact"`
+}
+
+// runArtifactsFetch has the relay download the bundle on its own connection, so
+// the operator's line only carries the URL.
+func runArtifactsFetch(admin *adminControlFlags, version, source, sha string, headers headerFlags, wait bool) error {
+	body := map[string]any{"url": source}
+	if strings.TrimSpace(sha) != "" {
+		body["sha256"] = strings.TrimSpace(sha)
+	}
+	if len(headers) > 0 {
+		body["headers"] = map[string]string(headers)
+	}
+	raw, err := admin.requestJSON(http.MethodPost, artifactFetchPath(version), nil, body)
+	if err != nil {
+		return err
+	}
+	if !wait {
+		fmt.Printf("Relay is downloading the bundle for %s. Check with: pointy-relay artifacts status --version %s\n\n", version, version)
+		return printRawJSON(raw)
+	}
+	return waitForArtifactFetch(admin, version)
+}
+
+func runArtifactsStatus(args []string) error {
+	flags := flag.NewFlagSet("artifacts status", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	version := flags.String("version", "", "version whose relay-side download to show")
+	wait := flags.Bool("wait", false, "keep polling until the download finishes")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	ver := strings.TrimSpace(*version)
+	if ver == "" {
+		return usageError("--version is required")
+	}
+	if *wait {
+		return waitForArtifactFetch(admin, ver)
+	}
+	raw, err := admin.requestJSON(http.MethodGet, artifactFetchPath(ver), nil, nil)
+	if err != nil {
+		return err
+	}
+	return printRawJSON(raw)
+}
+
+func waitForArtifactFetch(admin *adminControlFlags, version string) error {
+	for {
+		raw, err := admin.requestJSON(http.MethodGet, artifactFetchPath(version), nil, nil)
+		if err != nil {
+			return err
+		}
+		var status artifactFetchStatus
+		if err := json.Unmarshal(raw, &status); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "\r%s: %s", version, formatFetchProgress(status))
+		switch status.State {
+		case "done":
+			fmt.Fprintf(os.Stderr, "\nRelay downloaded the bundle for %s from %s.\n\n", version, status.URL)
+			return printRawJSON(status.Artifact)
+		case "failed":
+			fmt.Fprintln(os.Stderr)
+			return fmt.Errorf("relay could not fetch the bundle for %s: %s", version, status.Error)
+		}
+		time.Sleep(artifactFetchPollInterval)
+	}
+}
+
+func formatFetchProgress(status artifactFetchStatus) string {
+	const mb = 1 << 20
+	if status.BytesTotal > 0 {
+		return fmt.Sprintf("%s %.0f/%.0f MB (%d%%)   ", status.State,
+			float64(status.BytesReceived)/mb, float64(status.BytesTotal)/mb,
+			status.BytesReceived*100/status.BytesTotal)
+	}
+	return fmt.Sprintf("%s %.0f MB   ", status.State, float64(status.BytesReceived)/mb)
+}
+
+func artifactFetchPath(version string) string {
+	return "/v1/artifacts/" + url.PathEscape(version) + "/fetch"
+}
+
+// headerFlags collects repeatable --header "Name: value" flags.
+type headerFlags map[string]string
+
+func (h headerFlags) String() string { return "" }
+
+func (h *headerFlags) Set(value string) error {
+	name, val, ok := strings.Cut(value, ":")
+	name, val = strings.TrimSpace(name), strings.TrimSpace(val)
+	if !ok || name == "" {
+		return fmt.Errorf("header %q must look like \"Name: value\"", value)
+	}
+	if *h == nil {
+		*h = headerFlags{}
+	}
+	(*h)[name] = val
+	return nil
 }
 
 // runFleet drives the remote-update control plane.

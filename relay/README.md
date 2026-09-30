@@ -400,6 +400,26 @@ pointy-relay fleet pin <id> 1.3.0        # pin/roll back one shop; unpin with fl
 pointy-relay fleet channel <id> beta     # move a shop to another channel
 ```
 
+On a slow line, don't push the bundle through it: give the relay a URL and it
+downloads the zip on its own connection, then publishes it exactly as an upload
+would (`fleet set-version` accepts it the moment it lands). The command waits and
+shows progress; Ctrl-C only stops the waiting, and `artifacts status --version X
+--wait` picks it back up. A download that fails, is not a zip (a share page
+instead of the file), or fails the `--sha256` check publishes nothing. Download
+progress lives in the relay's memory, so a relay restart mid-download drops it —
+just run the command again.
+
+```sh
+pointy-relay artifacts upload --version 1.4.0 \
+  --url https://files.example.com/pointy-onprem-1.4.0.zip --sha256 <hex>
+# private GitHub release: use the asset's API URL plus a token (sent only to
+# GitHub, never stored; dropped when GitHub redirects to its file CDN)
+pointy-relay artifacts upload --version 1.4.0 \
+  --url https://api.github.com/repos/<owner>/<repo>/releases/assets/<asset-id> \
+  --header "Authorization: Bearer $GITHUB_TOKEN"
+pointy-relay artifacts status --version 1.4.0   # progress / result of the download
+```
+
 Route a remote request with a short-lived relay ticket:
 
 ```sh

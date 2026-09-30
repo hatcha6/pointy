@@ -72,6 +72,8 @@ Operators drive it entirely from the relay — no shop access needed:
 
 ```sh
 pointy-relay artifacts upload --version 1.4.0 --bundle pointy-onprem-1.4.0.zip
+# or, on a slow line, have the relay download it itself:
+pointy-relay artifacts upload --version 1.4.0 --url https://…/pointy-onprem-1.4.0.zip
 pointy-relay fleet set-version 1.4.0 --channel stable --rollout canary
 pointy-relay fleet rollout 50%        # widen once the canaries look healthy
 pointy-relay fleet rollout all

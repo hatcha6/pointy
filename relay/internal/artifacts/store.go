@@ -1,6 +1,7 @@
 // Package artifacts is the relay's disk-backed store for on-prem update bundles.
 // The relay is the sole source of update bits for the fleet (shops never need a
-// registry or GitHub): an operator uploads a built bundle once, the relay keeps
+// registry or GitHub): an operator uploads a built bundle once (or points the
+// relay at a URL to download it from, see Fetch), the relay keeps
 // it on a persistent volume keyed by version, and the on-prem update agent pulls
 // it back over an authenticated, range-resumable HTTPS endpoint.
 package artifacts
@@ -12,10 +13,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +36,13 @@ type Meta struct {
 // Store keeps one bundle per version under <dir>/<version>/{bundle.zip,meta.json}.
 type Store struct {
 	dir string
+
+	// FetchClient downloads bundles for Fetch; nil uses a client with sane
+	// connect/header timeouts and no overall deadline (bundles are large).
+	FetchClient *http.Client
+
+	mu      sync.Mutex
+	fetches map[string]*fetchJob
 }
 
 // New opens (creating if needed) an artifact store rooted at dir.
@@ -50,6 +60,12 @@ func New(dir string) (*Store, error) {
 // Put streams content into the store under version, computing its sha256 and size,
 // then atomically publishes it. An existing version is overwritten.
 func (s *Store) Put(version string, content io.Reader) (Meta, error) {
+	return s.put(version, content, "")
+}
+
+// put is Put with an optional expected sha256: on a mismatch nothing is
+// published, so a corrupt download never replaces a good bundle.
+func (s *Store) put(version string, content io.Reader, expectedSHA256 string) (_ Meta, err error) {
 	clean, err := safeVersion(version)
 	if err != nil {
 		return Meta{}, err
@@ -58,6 +74,11 @@ func (s *Store) Put(version string, content io.Reader) (Meta, error) {
 	if err := os.MkdirAll(versionDir, 0o755); err != nil {
 		return Meta{}, err
 	}
+	defer func() {
+		if err != nil {
+			os.Remove(versionDir) // only succeeds when empty: never drops a good bundle
+		}
+	}()
 
 	tmp, err := os.CreateTemp(versionDir, ".bundle-*.tmp")
 	if err != nil {
@@ -81,6 +102,9 @@ func (s *Store) Put(version string, content io.Reader) (Meta, error) {
 		SHA256:    hex.EncodeToString(hasher.Sum(nil)),
 		Size:      size,
 		CreatedAt: time.Now().UTC(),
+	}
+	if expectedSHA256 != "" && meta.SHA256 != expectedSHA256 {
+		return Meta{}, fmt.Errorf("%w: got %s, want %s", ErrChecksumMismatch, meta.SHA256, expectedSHA256)
 	}
 	if err := os.Rename(tmpName, s.bundlePath(clean)); err != nil {
 		return Meta{}, err

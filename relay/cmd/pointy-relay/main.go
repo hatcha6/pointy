@@ -3604,3 +3604,7 @@ Deployment profiles (server --platform / POINTY_RELAY_PLATFORM):
   (empty)       Self-hosted private-network deployment (set --production to
                 enforce split admin listener + mTLS).`)
 }
+  pointy-relay artifacts upload --version X --url https://host/pointy-onprem-X.zip [--sha256 H]
+  pointy-relay artifacts status --version X [--wait]
+                   upload --version X --url URL   the relay downloads it itself (slow line)
+                   status --version X [--wait]    progress of a --url download
