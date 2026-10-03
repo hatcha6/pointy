@@ -1185,7 +1185,9 @@ def _rollup(queryset, keys, *, quantity_expr, revenue_expr, profit_expr, extra=N
     return {tuple(row[key] for key in keys): row for row in rows}
 
 
-def net_line_rollups(orders, adjustments, *keys, labels=(), extra=None):
+def net_line_rollups(
+    orders, adjustments, *keys, labels=(), extra=None, include_unsold_returns=False
+):
     """Units, revenue and profit per ``keys``, net of everything handed back.
 
     ``keys`` are field paths that must resolve on **both** ``OrderLine`` and
@@ -1204,6 +1206,13 @@ def net_line_rollups(orders, adjustments, *keys, labels=(), extra=None):
 
     Sums are raw and unrounded — the caller rounds once, so a fully returned
     line contributes exactly nothing rather than a rounding residue.
+
+    ``include_unsold_returns`` keeps what came back of a key that sold nothing
+    in the period — last month's sale returned this month — as a negative row.
+    A ranking can leave it out (the dashboard does: it is nobody's best
+    seller), but a schedule that has to add up to the period's net sales
+    cannot: dropping it is how the margin report came to state more profit
+    than the sales summary for the same month.
     """
     keys = tuple(keys)
     sold = _rollup(
@@ -1216,11 +1225,14 @@ def net_line_rollups(orders, adjustments, *keys, labels=(), extra=None):
     )
     returned = _rollup(
         OrderAdjustmentLine.objects.filter(adjustment__in=adjustments),
-        keys,
+        keys + (tuple(labels) if include_unsold_returns else ()),
         quantity_expr=models.F("quantity"),
         revenue_expr=RETURNED_REVENUE_EXPRESSION,
         profit_expr=RETURNED_PROFIT_EXPRESSION,
     )
+    # The returned side is merged on ``keys`` alone; labels only ride along
+    # (one product has one name), so drop them from the merge key.
+    returned = {key[: len(keys)]: row for key, row in returned.items()}
     rows = []
     for sold_key, row in sold.items():
         back = returned.get(sold_key[: len(keys)])
@@ -1242,10 +1254,24 @@ def net_line_rollups(orders, adjustments, *keys, labels=(), extra=None):
                 "profit": profit,
             }
         )
+    if include_unsold_returns:
+        sold_keys = {sold_key[: len(keys)] for sold_key in sold}
+        for returned_key, back in returned.items():
+            if returned_key in sold_keys:
+                continue
+            rows.append(
+                {
+                    **{key: back[key] for key in keys + tuple(labels)},
+                    **{name: 0 for name in (extra or ())},
+                    "quantity": -(back["rollup_quantity"] or Decimal("0")),
+                    "revenue": -(back["rollup_revenue"] or Decimal("0")),
+                    "profit": -(back["rollup_profit"] or Decimal("0")),
+                }
+            )
     return rows
 
 
-def net_product_rollups(orders, adjustments):
+def net_product_rollups(orders, adjustments, *, include_unsold_returns=False):
     """One netted row per product sold in the period, ready to rank.
 
     The dashboard and the reports layer both rank products by revenue and both
@@ -1268,6 +1294,7 @@ def net_product_rollups(orders, adjustments):
             "variant__product_id",
             labels=("variant__product__name",),
             extra={"variant_count": models.Count("variant_id", distinct=True)},
+            include_unsold_returns=include_unsold_returns,
         )
     ]
 

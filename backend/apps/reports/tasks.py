@@ -67,6 +67,9 @@ def snapshot_month_end(*, today=None, force=False):
                 "start_date": period_start.isoformat(),
                 "end_date": period_end.isoformat(),
                 "comparison": "previous_period",
+                # The copy that goes in the file: every schedule behind the
+                # month's figures, not the summary an owner reads on screen.
+                "granularity": "detailed",
             },
             output_format=ReportRun.OutputFormat.JSON,
         )

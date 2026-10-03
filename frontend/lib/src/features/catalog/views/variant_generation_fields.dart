@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/catalog_identity_conflict.dart';
 import '../../../data/models/variant_option.dart';
+import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
@@ -574,19 +575,22 @@ class _GeneratedVariantTile extends StatelessWidget {
               validator: (_) => skuError,
             ),
             const SizedBox(height: 8),
-            TextFormField(
-              controller: barcodeController,
-              decoration: InputDecoration(
-                labelText: l10n.barcodeLabel,
-                hintText: l10n.barcodeHint,
-                prefixIcon: const Icon(Icons.document_scanner_outlined),
-                suffixIcon: UseSkuAsBarcodeButton(
-                  sku: skuController,
-                  barcode: barcodeController,
+            // Each row's own code, scanned straight into it.
+            ScanWedgeTarget(
+              child: TextFormField(
+                controller: barcodeController,
+                decoration: InputDecoration(
+                  labelText: l10n.barcodeLabel,
+                  hintText: l10n.barcodeHint,
+                  prefixIcon: const Icon(Icons.document_scanner_outlined),
+                  suffixIcon: UseSkuAsBarcodeButton(
+                    sku: skuController,
+                    barcode: barcodeController,
+                  ),
+                  errorText: barcodeError,
                 ),
-                errorText: barcodeError,
+                validator: (_) => barcodeError,
               ),
-              validator: (_) => barcodeError,
             ),
             const SizedBox(height: 8),
             TextFormField(

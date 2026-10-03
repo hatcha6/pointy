@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from .automation import auto_message_states, automatic_kinds
 from .models import MessagingGateway, OutboundMessage
 
 
@@ -23,6 +24,7 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
             "quiet_hours_start",
             "quiet_hours_end",
             "send_timeout_seconds",
+            "auto_messages",
             "last_seen_at",
             "last_error",
             "last_error_at",
@@ -51,6 +53,26 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
                 {"quiet_hours_end": "حدّد بداية ونهاية أوقات الهدوء معًا، أو اتركهما فارغين."}
             )
         return attrs
+
+    def validate_auto_messages(self, value):
+        """Switches for automatic texts, by kind. A partial update keeps the
+        switches it does not name."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("أرسل الرسائل التلقائية كقائمة تشغيل لكل نوع.")
+        known = set(automatic_kinds())
+        unknown = sorted(str(kind) for kind in value if kind not in known)
+        if unknown:
+            raise serializers.ValidationError(f"أنواع رسائل لا تُرسل تلقائيًا: {', '.join(unknown)}")
+        if any(not isinstance(enabled, bool) for enabled in value.values()):
+            raise serializers.ValidationError("كل مفتاح تشغيل إما true أو false.")
+        current = getattr(self.instance, "auto_messages", None) or {}
+        return {**current, **value}
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Every automatic kind, on or off — not only the ones the shop touched.
+        data["auto_messages"] = auto_message_states(instance)
+        return data
 
 
 class OutboundMessageSerializer(serializers.ModelSerializer):

@@ -44,28 +44,6 @@ func sentOutcome(at time.Time, cost string) SMSOutcome {
 	}
 }
 
-func TestInstallationSMSActiveIsItsOwnEntitlement(t *testing.T) {
-	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
-	past := now.Add(-time.Hour)
-	future := now.Add(time.Hour)
-	cases := []struct {
-		name         string
-		installation Installation
-		want         bool
-	}{
-		{"flag and subscription, no remote access", Installation{SMSEnabled: true, SubscriptionActive: true}, true},
-		{"flag without subscription", Installation{SMSEnabled: true}, false},
-		{"subscription without flag", Installation{SubscriptionActive: true, RelayEnabled: true, AIEnabled: true}, false},
-		{"expired subscription", Installation{SMSEnabled: true, SubscriptionActive: true, SubscriptionEndsAt: &past}, false},
-		{"subscription running", Installation{SMSEnabled: true, SubscriptionActive: true, SubscriptionEndsAt: &future}, true},
-	}
-	for _, tc := range cases {
-		if got := tc.installation.SMSActive(now); got != tc.want {
-			t.Errorf("%s: SMSActive = %v, want %v", tc.name, got, tc.want)
-		}
-	}
-}
-
 func TestSMSMonthlyPeriodIsTheLibyanCalendarMonth(t *testing.T) {
 	// 22:30 UTC on the 30th is already 00:30 on the 1st in Libya.
 	start, resets := SMSMonthlyPeriod(time.Date(2026, 9, 30, 22, 30, 0, 0, time.UTC))
@@ -106,18 +84,18 @@ func TestFileStoreSMSClaimIsIdempotentPerInstallation(t *testing.T) {
 	store, _ := newSMSFileStore(t, now)
 	ctx := context.Background()
 
-	first, created, err := store.BeginSMS(ctx, smsClaim("shop-a", "key-1", now), SMSClaimLimit{})
+	first, created, err := store.BeginSMS(ctx, smsClaim("shop-a", "key-1", now), SMSClaimTerms{})
 	if err != nil || !created {
 		t.Fatalf("first claim: created=%v err=%v", created, err)
 	}
 	if first.Status != SMSStatusPending || first.ID == "" || first.Cost != "0.00" {
 		t.Fatalf("unexpected claim %+v", first)
 	}
-	again, created, err := store.BeginSMS(ctx, smsClaim("shop-a", "key-1", now), SMSClaimLimit{})
+	again, created, err := store.BeginSMS(ctx, smsClaim("shop-a", "key-1", now), SMSClaimTerms{})
 	if err != nil || created || again.ID != first.ID {
 		t.Fatalf("a repeated key must return the first claim: created=%v id=%s err=%v", created, again.ID, err)
 	}
-	other, created, err := store.BeginSMS(ctx, smsClaim("shop-b", "key-1", now), SMSClaimLimit{})
+	other, created, err := store.BeginSMS(ctx, smsClaim("shop-b", "key-1", now), SMSClaimTerms{})
 	if err != nil || !created || other.ID == first.ID {
 		t.Fatalf("keys are per installation: created=%v err=%v", created, err)
 	}
@@ -135,10 +113,10 @@ func TestFileStoreSMSClaimEnforcesTheMonthlyLimit(t *testing.T) {
 	store, _ := newSMSFileStore(t, now)
 	ctx := context.Background()
 	periodStart, _ := SMSMonthlyPeriod(now)
-	limit := SMSClaimLimit{Limit: 2, Since: periodStart}
+	limit := SMSClaimTerms{Limit: 2, Since: periodStart}
 
 	// Last month's messages are a different allowance.
-	if _, _, err := store.BeginSMS(ctx, smsClaim("shop", "old", periodStart.Add(-time.Hour)), SMSClaimLimit{}); err != nil {
+	if _, _, err := store.BeginSMS(ctx, smsClaim("shop", "old", periodStart.Add(-time.Hour)), SMSClaimTerms{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range []string{"a", "b"} {
@@ -175,7 +153,7 @@ func TestFileStoreFinishSMSKeepsTheFirstOutcome(t *testing.T) {
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	store, _ := newSMSFileStore(t, now)
 	ctx := context.Background()
-	claim, _, _ := store.BeginSMS(ctx, smsClaim("shop", "k", now), SMSClaimLimit{})
+	claim, _, _ := store.BeginSMS(ctx, smsClaim("shop", "k", now), SMSClaimTerms{})
 
 	sent, applied, err := store.FinishSMS(ctx, claim.ID, sentOutcome(now, "0.1"))
 	if err != nil || !applied {
@@ -200,8 +178,8 @@ func TestFileStoreSMSLookupsAreScopedToTheInstallation(t *testing.T) {
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	store, _ := newSMSFileStore(t, now)
 	ctx := context.Background()
-	mine, _, _ := store.BeginSMS(ctx, smsClaim("shop-a", "k", now), SMSClaimLimit{})
-	theirs, _, _ := store.BeginSMS(ctx, smsClaim("shop-b", "k", now), SMSClaimLimit{})
+	mine, _, _ := store.BeginSMS(ctx, smsClaim("shop-a", "k", now), SMSClaimTerms{})
+	theirs, _, _ := store.BeginSMS(ctx, smsClaim("shop-b", "k", now), SMSClaimTerms{})
 
 	rows, err := store.GetSMSByIDs(ctx, "shop-a", []string{mine.ID, theirs.ID, "unknown", mine.ID})
 	if err != nil {
@@ -224,7 +202,7 @@ func TestFileStoreSMSUsageAggregatesPerShop(t *testing.T) {
 		claim := smsClaim(installationID, key, now)
 		claim.Kind = kind
 		claim.TestMode = test
-		row, _, err := store.BeginSMS(ctx, claim, SMSClaimLimit{})
+		row, _, err := store.BeginSMS(ctx, claim, SMSClaimTerms{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -288,17 +266,17 @@ func TestFileStoreSMSDeliveryTrackingAndPersistence(t *testing.T) {
 	store, path := newSMSFileStore(t, now)
 	ctx := context.Background()
 
-	recent, _, _ := store.BeginSMS(ctx, smsClaim("shop", "recent", now.Add(-time.Hour)), SMSClaimLimit{})
+	recent, _, _ := store.BeginSMS(ctx, smsClaim("shop", "recent", now.Add(-time.Hour)), SMSClaimTerms{})
 	store.FinishSMS(ctx, recent.ID, sentOutcome(now, "0.1"))
-	old, _, _ := store.BeginSMS(ctx, smsClaim("shop", "old", now.Add(-72*time.Hour)), SMSClaimLimit{})
+	old, _, _ := store.BeginSMS(ctx, smsClaim("shop", "old", now.Add(-72*time.Hour)), SMSClaimTerms{})
 	store.FinishSMS(ctx, old.ID, sentOutcome(now, "0.1"))
 	test := smsClaim("shop", "test", now)
 	test.TestMode = true
-	testRow, _, _ := store.BeginSMS(ctx, test, SMSClaimLimit{})
+	testRow, _, _ := store.BeginSMS(ctx, test, SMSClaimTerms{})
 	outcome := sentOutcome(now, "0")
 	outcome.TestMode = true
 	store.FinishSMS(ctx, testRow.ID, outcome)
-	pending, _, _ := store.BeginSMS(ctx, smsClaim("shop", "pending", now), SMSClaimLimit{})
+	pending, _, _ := store.BeginSMS(ctx, smsClaim("shop", "pending", now), SMSClaimTerms{})
 
 	awaiting, err := store.ListSMSAwaitingDelivery(ctx, now.Add(-48*time.Hour), 0)
 	if err != nil {
@@ -405,7 +383,7 @@ func TestCachedInstallationStoreKeepsTheSMSCapability(t *testing.T) {
 	if !ok {
 		t.Fatal("cached store must expose the SMS ledger")
 	}
-	claim, created, err := ledger.BeginSMS(ctx, smsClaim("shop", "k", now), SMSClaimLimit{})
+	claim, created, err := ledger.BeginSMS(ctx, smsClaim("shop", "k", now), SMSClaimTerms{})
 	if err != nil || !created {
 		t.Fatalf("claim through the wrapper: %v", err)
 	}
@@ -418,7 +396,7 @@ func TestCachedInstallationStoreKeepsTheSMSCapability(t *testing.T) {
 	}
 }
 
-func TestCachedInstallationStoreServesTheNewSMSEntitlement(t *testing.T) {
+func TestCachedInstallationStoreServesTheNewSMSBrake(t *testing.T) {
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	inner, _ := newSMSFileStore(t, now)
 	active := true
@@ -431,20 +409,18 @@ func TestCachedInstallationStoreServesTheNewSMSEntitlement(t *testing.T) {
 	cached := NewCachedInstallationStore(inner, newMemoryInstallationCache(), fixedClock{now: now}, time.Minute)
 	ctx := context.Background()
 	before, err := cached.ValidateAccessTokenIdentity(ctx, provisioned.AccessToken)
-	if err != nil || before.SMSActive(now) {
-		t.Fatalf("expected an unentitled, cached installation: %+v %v", before, err)
+	if err != nil || before.SMSMonthlyLimit != 0 {
+		t.Fatalf("expected a cached installation without a brake: %+v %v", before, err)
 	}
-	enabled := true
 	limit := 42
 	if _, _, err := cached.UpdateSubscriptionWithAudit(ctx, provisioned.Installation.ID, SubscriptionUpdate{
-		SMSEnabled:      &enabled,
 		SMSMonthlyLimit: &limit,
-	}, AdminAuditMetadata{Actor: "ops", Reason: "sms add-on"}); err != nil {
+	}, AdminAuditMetadata{Actor: "ops", Reason: "sms brake"}); err != nil {
 		t.Fatal(err)
 	}
 	after, err := cached.ValidateAccessTokenIdentity(ctx, provisioned.AccessToken)
-	if err != nil || !after.SMSActive(now) || after.SMSMonthlyLimit != 42 {
-		t.Fatalf("the cache must serve the new entitlement at once: %+v %v", after, err)
+	if err != nil || after.SMSMonthlyLimit != 42 {
+		t.Fatalf("the cache must serve the new brake at once: %+v %v", after, err)
 	}
 
 	// The Redis cache stores installations as JSON: the SMS fields must
@@ -457,7 +433,7 @@ func TestCachedInstallationStoreServesTheNewSMSEntitlement(t *testing.T) {
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if !decoded.SMSEnabled || decoded.SMSMonthlyLimit != 42 {
+	if decoded.SMSMonthlyLimit != 42 {
 		t.Fatalf("SMS fields lost in JSON: %s", encoded)
 	}
 }
@@ -503,7 +479,7 @@ func TestPostgresSMSLedger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !loaded.SMSEnabled || loaded.SMSMonthlyLimit != 3 || !loaded.FXEnabled || !loaded.SMSActive(now) {
+	if !loaded.SMSEnabled || loaded.SMSMonthlyLimit != 3 || !loaded.FXEnabled {
 		t.Fatalf("provisioned SMS/FX fields did not round-trip: %+v", loaded)
 	}
 	raised := 5
@@ -521,7 +497,7 @@ func TestPostgresSMSLedger(t *testing.T) {
 	}
 
 	periodStart, periodEnd := SMSMonthlyPeriod(now)
-	limit := SMSClaimLimit{Limit: 3, Since: periodStart}
+	limit := SMSClaimTerms{Limit: 3, Since: periodStart}
 	first, created, err := store.BeginSMS(ctx, smsClaim(id, "k-1", now), limit)
 	if err != nil || !created || first.Status != SMSStatusPending || first.Cost != "0.00" {
 		t.Fatalf("first claim: %+v created=%v err=%v", first, created, err)

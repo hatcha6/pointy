@@ -427,6 +427,7 @@ class _EditableStage {
     this.releasesCustody = false,
     this.consumesMaterials = false,
     this.producesOutput = false,
+    this.readyForPickup = false,
   });
 
   final int? id;
@@ -439,6 +440,7 @@ class _EditableStage {
   bool releasesCustody;
   bool consumesMaterials;
   bool producesOutput;
+  bool readyForPickup;
 }
 
 class _WorkflowStageEditorPage extends StatefulWidget {
@@ -475,6 +477,7 @@ class _WorkflowStageEditorPageState extends State<_WorkflowStageEditorPage> {
           releasesCustody: stage.releasesCustody,
           consumesMaterials: stage.consumesMaterials,
           producesOutput: stage.producesOutput,
+          readyForPickup: stage.readyForPickup,
         ),
     ];
   }
@@ -598,6 +601,7 @@ class _WorkflowStageEditorPageState extends State<_WorkflowStageEditorPage> {
               releasesCustody: _stages[index].releasesCustody,
               consumesMaterials: _stages[index].consumesMaterials,
               producesOutput: _stages[index].producesOutput,
+              readyForPickup: _stages[index].readyForPickup,
             ),
         ],
       ),
@@ -748,6 +752,12 @@ class _StageEditorCardState extends State<_StageEditorCard> {
                   widget.stage.requiresSettlement,
                   (value) => widget.stage.requiresSettlement = value,
                   helpText: l10n.workflowStageSettlementHelp,
+                ),
+                _flagSwitch(
+                  l10n.workflowStageReadyLabel,
+                  widget.stage.readyForPickup,
+                  (value) => widget.stage.readyForPickup = value,
+                  helpText: l10n.workflowStageReadyHelp,
                 ),
                 _flagSwitch(
                   l10n.workflowStageCustodyLabel,

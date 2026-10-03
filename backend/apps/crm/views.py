@@ -23,7 +23,7 @@ from .campaigns import (
 )
 from .consent import apply_consent, consent_state
 from .models import Campaign, ConsentEvent, Conversation
-from .transactional import NoRecipientPhone, send_invoice_sms
+from .transactional import NoRecipientPhone, NothingOwed, send_account_balance_sms, send_invoice_sms
 from .serializers import (
     CampaignDetailSerializer,
     CampaignSerializer,
@@ -182,6 +182,27 @@ class SendInvoiceSmsView(APIView):
             message = send_invoice_sms(order, actor=request.user)
         except NoRecipientPhone:
             return Response({"detail": "لا يوجد رقم هاتف للعميل."}, status=400)
+        except NoGatewayConfigured as exc:
+            return Response(
+                {"detail": unavailable_message(exc), "code": exc.code}, status=400
+            )
+        return Response(OutboundMessageSerializer(message).data, status=201)
+
+
+class SendAccountBalanceSmsView(APIView):
+    """Text a customer what their account owes today (transactional)."""
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"POST": ("customers.view_customer",)}
+
+    def post(self, request, customer_id):
+        customer = get_object_or_404(Customer, pk=customer_id)
+        try:
+            message = send_account_balance_sms(customer)
+        except NoRecipientPhone:
+            return Response({"detail": "لا يوجد رقم هاتف للعميل.", "code": "no_phone"}, status=400)
+        except NothingOwed:
+            return Response({"detail": "لا يوجد مبلغ مستحق على العميل.", "code": "nothing_owed"}, status=400)
         except NoGatewayConfigured as exc:
             return Response(
                 {"detail": unavailable_message(exc), "code": exc.code}, status=400

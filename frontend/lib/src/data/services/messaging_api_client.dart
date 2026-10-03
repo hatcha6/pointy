@@ -39,6 +39,25 @@ class MessagingApiClient {
     );
   }
 
+  /// Turns one automatic text on or off. The server keeps every other switch
+  /// as it was.
+  Future<MessagingGateway> setAutoMessage(
+    int id, {
+    required String kind,
+    required bool enabled,
+  }) async {
+    final response = await _session.patch(
+      'messaging/gateways/$id/',
+      body: {
+        'auto_messages': {kind: enabled},
+      },
+    );
+    _session.throwApiException(response, 'Gateway update failed with status');
+    return MessagingGateway.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   /// Sends the approved test template to [to]. There is no free-text body any
   /// more: every SMS is a template the provider has approved.
   Future<MessagingSendResult> testSend({

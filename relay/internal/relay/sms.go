@@ -8,12 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/big"
+	"net"
 	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"pointy/relay/internal/control"
@@ -22,10 +25,14 @@ import (
 )
 
 // Relay-hosted SMS. A shop's backend asks the relay to send one templated
-// message; the relay checks the entitlement and the shop's allowance, records
-// the attempt in its ledger, and sends through the company's Resala account.
-// The ledger is what tells the company which shop sends the most, what it
-// costs, what fails and what arrives.
+// message; the relay charges the message to the shop's SMS balance (money the
+// shop moved there from its wallet), records the attempt in its ledger, and
+// sends through the company's Resala account. A message is paid per SMS part,
+// exactly as Resala bills the company: one part up to 70 Arabic letters, 67
+// per part beyond. It is held for the parts the relay counts before sending
+// and settled to the parts it really went out as; a message that does not go
+// out is refunded. The ledger is what tells the company which shop sends the
+// most, what it costs, what fails and what arrives.
 
 const (
 	defaultSMSRequestTimeout   = 20 * time.Second
@@ -39,6 +46,19 @@ const (
 	// declares its outcome unknown. Comfortably longer than a send can take,
 	// so a send that is merely slow is never judged while still in flight.
 	smsMinimumStaleAfter = 2 * time.Minute
+	// defaultSMSPrice is what one SMS part costs the shop: Resala charges the
+	// company 0.100 a part, and the difference is the company's margin.
+	defaultSMSPrice = "0.150"
+	// smsUnknownTemplateUnits is how long a template that was never sent is
+	// assumed to be, in UTF-16 units, when a message from it is held: longer
+	// than any approved text (the longest is about 110 letters), so the hold
+	// covers the real message and what it held beyond comes back at once.
+	smsUnknownTemplateUnits = 160
+	// smsMaxPartsAboveCount caps how far Resala's own part count may go above
+	// the relay's count of the text it sent. A small gap is a different way of
+	// counting and is billed as Resala bills it; a large one is a provider
+	// glitch and is not passed on to the shop.
+	smsMaxPartsAboveCount = 2
 )
 
 // Error codes of the SMS API. Django maps each to its own Arabic message and
@@ -46,19 +66,21 @@ const (
 const (
 	smsCodeUnconfigured          = "sms_unconfigured"
 	smsCodeUnauthorized          = "unauthorized"
-	smsCodeNotEntitled           = "not_entitled"
 	smsCodeInvalidRequest        = "invalid_request"
 	smsCodeInvalidPhone          = "invalid_phone"
 	smsCodeUnknownKind           = "unknown_kind"
 	smsCodeTemplateNotConfigured = "template_not_configured"
 	smsCodeRateLimited           = "rate_limited"
 	smsCodeMonthlyLimit          = "monthly_limit"
-	smsCodeInFlight              = "in_flight"
-	smsCodeProviderCredit        = "provider_credit"
-	smsCodeProviderUnauthorized  = "provider_unauthorized"
-	smsCodeProviderRejected      = "provider_rejected"
-	smsCodeProviderError         = "provider_error"
-	smsCodeOutcomeUnknown        = "outcome_unknown"
+	// smsCodeInsufficientBalance is an SMS balance that cannot pay for this
+	// message's parts; the shop moves money into it from its wallet.
+	smsCodeInsufficientBalance  = "insufficient_balance"
+	smsCodeInFlight             = "in_flight"
+	smsCodeProviderCredit       = "provider_credit"
+	smsCodeProviderUnauthorized = "provider_unauthorized"
+	smsCodeProviderRejected     = "provider_rejected"
+	smsCodeProviderError        = "provider_error"
+	smsCodeOutcomeUnknown       = "outcome_unknown"
 	// smsCodeInternalError is the relay's own storage failing. Nothing was
 	// sent, so it is safe to retry.
 	smsCodeInternalError = "internal_error"
@@ -75,8 +97,13 @@ type SMSConfig struct {
 	// TestMode forces Resala's test flag on every send: nothing reaches a phone
 	// and nothing is charged.
 	TestMode bool
-	// MonthlyLimit is the per-shop cap for shops whose own sms_monthly_limit is
-	// 0. Zero here means unlimited.
+	// Price is what one SMS part costs the shop, taken from its SMS balance; a
+	// message pays it once per part it goes out as. Empty or invalid means
+	// defaultSMSPrice.
+	Price string
+	// MonthlyLimit is the operator's brake for shops whose own
+	// sms_monthly_limit is 0. Zero here means none: the SMS balance is what
+	// limits sending.
 	MonthlyLimit int
 	// RateLimit is the per-shop burst guard, separate from the monthly cap.
 	RateLimit        ratelimit.Policy
@@ -90,6 +117,15 @@ type SMSConfig struct {
 
 func (c SMSConfig) configured() bool {
 	return strings.TrimSpace(c.Token) != ""
+}
+
+// price is what one SMS part costs the shop.
+func (c SMSConfig) price() *big.Rat {
+	if price, err := control.ParseWalletAmount(c.Price); err == nil && price.Sign() > 0 {
+		return price
+	}
+	price, _ := control.ParseWalletAmount(defaultSMSPrice)
+	return price
 }
 
 func (c SMSConfig) baseURL() string {
@@ -188,6 +224,8 @@ type smsSendTrace struct {
 	kind           string
 	ledgerID       string
 	testMode       bool
+	parts          int
+	charged        string
 	cost           string
 	detail         string
 	// providerRequestID is Resala's id for a failed call — what their support
@@ -196,10 +234,11 @@ type smsSendTrace struct {
 }
 
 // handleSMSSend serves POST /v1/sms/send. The checks run in the contract's
-// order — configured, identity, entitlement, body, burst limit, idempotency,
-// monthly cap, template — and only then is a ledger row claimed and Resala
-// called. A retry of a key that was already claimed never reaches Resala
-// again: it replays what the ledger recorded.
+// order — configured, identity, body, burst limit, idempotency, monthly brake,
+// template — and only then is a ledger row claimed, the price of its parts
+// taken from the shop's SMS balance in the same step, and Resala called. The
+// answer settles the parts. A retry of a key that was already claimed never
+// reaches Resala again, nor pays again: it replays what the ledger recorded.
 func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
 	trace := &smsSendTrace{outcome: "unknown"}
@@ -221,12 +260,6 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 	}
 	trace.installationID = installation.ID
 	now := s.clock().Now()
-	if !installation.SMSActive(now) {
-		trace.outcome = smsCodeNotEntitled
-		s.metrics().RecordSubscriptionRejected()
-		writeSMSError(w, http.StatusPaymentRequired, smsCodeNotEntitled, "relay SMS is not entitled for this installation", nil)
-		return
-	}
 	request, rejection := s.decodeSMSSendRequest(w, r)
 	trace.kind = truncateRunes(request.Kind, 64)
 	if rejection != nil {
@@ -276,9 +309,13 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claimLimit := control.SMSClaimLimit{Since: periodStart}
+	plan := s.planSMS(ctx, store, templateID, request.Variables)
+	held := plan.Parts
+	terms := control.SMSClaimTerms{Since: periodStart, Parts: held}
 	if !testMode {
-		claimLimit.Limit = limit
+		terms.Limit = limit
+		terms.Price = control.FormatWalletAmount(s.SMS.price())
+		terms.ChargeDescription = smsChargeDescription(request.Kind, held)
 	}
 	claim, created, err := store.BeginSMS(ctx, control.SMSMessage{
 		InstallationID: installation.ID,
@@ -287,16 +324,23 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		ConsentClass:   request.ConsentClass,
 		Recipient:      request.recipient,
 		TemplateID:     templateID,
+		TemplateBody:   plan.TemplateBody,
+		ContentSHA256:  plan.ContentSHA256,
 		TestMode:       testMode,
 		CreatedAt:      now,
-	}, claimLimit)
+	}, terms)
 	var limitErr *control.SMSLimitError
+	var balanceErr *control.WalletBalanceError
 	switch {
 	case errors.As(err, &limitErr):
 		// Another send took the last message of the month between the count
 		// above and this claim.
 		trace.outcome = smsCodeMonthlyLimit
 		writeSMSMonthlyLimit(w, limitErr.Limit, limitErr.Used, resetsAt)
+		return
+	case errors.As(err, &balanceErr):
+		trace.outcome = smsCodeInsufficientBalance
+		s.writeSMSInsufficientBalance(w, balanceErr, held)
 		return
 	case err != nil:
 		s.writeSMSInternalError(w, trace, "sms ledger claim failed", err)
@@ -320,7 +364,13 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		testMode,
 	)
 	cancel()
-	outcome, content := s.smsOutcomeFromSend(result, sendErr, testMode, request.Variables)
+	outcome, content := s.smsOutcomeFromSend(result, sendErr, testMode, request.Variables, claim)
+	if outcome.Parts > 0 {
+		outcome.SettleDescription = smsChargeDescription(request.Kind, outcome.Parts)
+	}
+	// Without the sent-log sync nothing would ever settle a hold, so a
+	// failure is refunded at once, as it always was.
+	outcome.Uncertain = outcome.Uncertain && s.smsChecksSentLog()
 	trace.detail = outcome.ErrorDetail
 	trace.providerRequestID = resalaRequestID(sendErr)
 
@@ -346,6 +396,11 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 	}
 	trace.testMode = finished.TestMode
 	trace.cost = finished.Cost
+	trace.parts = finished.Parts
+	trace.charged = finished.Price
+	if applied {
+		s.checkSMSMargin(finished)
+	}
 
 	if finished.Status == control.SMSStatusFailed {
 		trace.outcome = finished.ErrorCode
@@ -361,7 +416,216 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		trace.outcome = "replayed"
 		status = http.StatusOK
 	}
-	writeJSON(w, status, smsSuccessBody(finished, content, smsUsageBlock(used, limit, periodStart, resetsAt), !applied))
+	body := smsSuccessBody(finished, content, smsUsageBlock(used, limit, periodStart, resetsAt), !applied)
+	s.addSMSBalance(detached, body, installation.ID)
+	writeJSON(w, status, body)
+}
+
+// smsChargeDescription is the line a message's charge prints on the shop's
+// SMS statement: what kind of message it paid for and how many SMS it went
+// out as, e.g. "تذكير بدين (رسالتان)".
+func smsChargeDescription(kind string, parts int) string {
+	title := "رسالة نصية"
+	if known, ok := lookupSMSKind(kind); ok && known.Title != "" {
+		title = known.Title
+	}
+	return title + " (" + smsPartsPhrase(parts) + ")"
+}
+
+// smsPartsPhrase counts SMS the way Arabic does: one, two, 3–10 take the
+// plural, 11 and up the singular again.
+func smsPartsPhrase(parts int) string {
+	switch {
+	case parts <= 1:
+		return "رسالة واحدة"
+	case parts == 2:
+		return "رسالتان"
+	case parts <= 10:
+		return fmt.Sprintf("%d رسائل", parts)
+	default:
+		return fmt.Sprintf("%d رسالة", parts)
+	}
+}
+
+// smsPlan is what the relay knows about a message before it is sent.
+type smsPlan struct {
+	// Parts is how many SMS parts the message is held for.
+	Parts int
+	// TemplateBody and ContentSHA256 are the approved text and the hash of
+	// the message rendered from it — "" when the template has never been
+	// sent. The hash is what recognises the message in Resala's sent log if
+	// the send's own answer is lost.
+	TemplateBody  string
+	ContentSHA256 string
+}
+
+// planSMS counts a message's parts before it is sent. Resala hands back the
+// approved text on every send, so once a template has gone out the relay
+// renders the new message exactly as Resala will and counts it. A template
+// never sent before is held as if its text were longer than any approved one;
+// the answer gives back whatever that held beyond the real message.
+func (s HTTPServer) planSMS(
+	ctx context.Context,
+	store control.SMSStore,
+	templateID string,
+	variables []string,
+) smsPlan {
+	body, err := store.SMSTemplateBody(ctx, templateID)
+	if err != nil {
+		s.logger().Warn("reading a template's approved text failed; holding the longest message",
+			"template_id", templateID, "error", err)
+		body = ""
+	}
+	if body != "" {
+		content := resala.RenderBody(body, variables)
+		return smsPlan{
+			Parts:         resala.CountParts(content),
+			TemplateBody:  body,
+			ContentSHA256: smsContentSHA256(content),
+		}
+	}
+	units := smsUnknownTemplateUnits
+	for _, value := range variables {
+		units += len(utf16.Encode([]rune(value)))
+	}
+	return smsPlan{Parts: resala.UCS2Parts(units)}
+}
+
+// smsChecksSentLog reports whether the sent-log sync runs, so a failure that
+// may still have gone out can wait for it instead of being refunded blind.
+// The server starts the sync under the same conditions.
+func (s HTTPServer) smsChecksSentLog() bool {
+	return s.SMS.configured() && s.SMS.DeliverySyncInterval > 0
+}
+
+// smsSendMayHaveGoneOut reports whether a failed Resala call may still have
+// sent the SMS: Resala erred (5xx), the connection broke after the request
+// left, or Resala's answer could not be read. A refusal Resala stated (4xx)
+// did not, nor did a call that never reached Resala (no connection was made)
+// or failed before it was made.
+func smsSendMayHaveGoneOut(err error) bool {
+	var provider *resala.ProviderError
+	if errors.As(err, &provider) {
+		return provider.Status >= 500
+	}
+	var transport *resala.TransportError
+	if !errors.As(err, &transport) {
+		return false
+	}
+	var opErr *net.OpError
+	if errors.As(transport.Err, &opErr) && opErr.Op == "dial" {
+		return false
+	}
+	var dnsErr *net.DNSError
+	return !errors.As(transport.Err, &dnsErr)
+}
+
+// smsBilledParts is how many SMS parts a message went out as: what Resala
+// bills the company for it, and so what the shop pays. It is the relay's own
+// count of the text Resala sent, or Resala's count when that is higher — by a
+// little: far above the text's own count is a provider glitch, not a longer
+// message. Without the text the hold stands, unless Resala counted more.
+func (s HTTPServer) smsBilledParts(content string, reported int, claim control.SMSMessage) int {
+	counted := max(claim.Parts, 1)
+	if content != "" {
+		counted = resala.CountParts(content)
+	}
+	if reported <= counted {
+		return counted
+	}
+	billed := min(reported, counted+smsMaxPartsAboveCount)
+	s.logger().Warn(
+		"resala counted more sms parts than the text it sent; the shop pays what resala bills",
+		"installation_id", claim.InstallationID,
+		"ledger_id", claim.ID,
+		"counted_parts", counted,
+		"resala_parts", reported,
+		"billed_parts", billed,
+	)
+	return billed
+}
+
+// checkSMSMargin raises the alarm when a message cost the company more than
+// the shop paid for it — the price per part no longer covers what Resala
+// charges. Every message is still charged per part; this is for the operator
+// to raise POINTY_RELAY_SMS_PRICE before it costs more.
+func (s HTTPServer) checkSMSMargin(message control.SMSMessage) {
+	if message.TestMode || message.Status != control.SMSStatusSent {
+		return
+	}
+	cost, okCost := new(big.Rat).SetString(strings.TrimSpace(message.Cost))
+	charged, okCharged := new(big.Rat).SetString(strings.TrimSpace(message.Price))
+	if !okCost || !okCharged || cost.Cmp(charged) <= 0 {
+		return
+	}
+	s.logger().Error(
+		"an sms cost the company more than the shop paid for it; raise POINTY_RELAY_SMS_PRICE",
+		"installation_id", message.InstallationID,
+		"ledger_id", message.ID,
+		"kind", message.Kind,
+		"parts", message.Parts,
+		"cost", message.Cost,
+		"charged", message.Price,
+	)
+}
+
+// smsBalance reads the shop's SMS balance, or "" when the relay keeps no
+// wallets or cannot read them right now.
+func (s HTTPServer) smsBalance(ctx context.Context, installationID string) string {
+	store, ok := s.walletStore()
+	if !ok {
+		return ""
+	}
+	wallet, err := store.GetWalletAccount(ctx, installationID, control.WalletAccountSMS)
+	if err != nil {
+		s.logger().Warn("reading an sms balance failed", "installation_id", installationID, "error", err)
+		return ""
+	}
+	return wallet.Balance
+}
+
+// addSMSBalance tells the shop what its SMS balance is after a send, so its
+// backend can stop offering SMS the moment the money runs out.
+func (s HTTPServer) addSMSBalance(ctx context.Context, body map[string]any, installationID string) {
+	if balance := s.smsBalance(ctx, installationID); balance != "" {
+		body["balance"] = balance
+	}
+}
+
+// smsWalletPayload is the SMS balance as the shop sees it: what is in it, what
+// a message costs, and how many messages that pays for.
+func (s HTTPServer) smsWalletPayload(balance string) map[string]any {
+	price := s.SMS.price()
+	value, ok := new(big.Rat).SetString(balance)
+	if !ok {
+		value = new(big.Rat)
+	}
+	messagesLeft := int64(0)
+	if value.Sign() > 0 {
+		messagesLeft = new(big.Int).Quo(
+			new(big.Int).Mul(value.Num(), price.Denom()),
+			new(big.Int).Mul(value.Denom(), price.Num()),
+		).Int64()
+	}
+	return map[string]any{
+		"balance":       control.FormatWalletAmount(value),
+		"price":         control.FormatWalletAmount(price),
+		"messages_left": messagesLeft,
+		"configured":    s.SMS.configured(),
+		"available":     s.SMS.configured() && messagesLeft > 0,
+	}
+}
+
+// writeSMSInsufficientBalance refuses a message the SMS balance cannot pay
+// for, saying what it would have cost: parts SMS at price each.
+func (s HTTPServer) writeSMSInsufficientBalance(w http.ResponseWriter, refusal *control.WalletBalanceError, parts int) {
+	writeSMSError(w, http.StatusPaymentRequired, smsCodeInsufficientBalance,
+		"the SMS balance cannot pay for this message; move money into it from the wallet", map[string]any{
+			"balance": control.NormalizeWalletAmount(refusal.Balance),
+			"amount":  control.NormalizeWalletAmount(refusal.Amount),
+			"parts":   max(parts, 1),
+			"price":   control.FormatWalletAmount(s.SMS.price()),
+		})
 }
 
 // replaySMS answers a request whose idempotency key already has a ledger row.
@@ -405,6 +669,7 @@ func (s HTTPServer) replaySMS(
 			ErrorDetail: "the earlier send with this idempotency key never finished; it may or may not have been delivered",
 			Cost:        message.Cost,
 			TestMode:    message.TestMode,
+			Uncertain:   s.smsChecksSentLog(),
 		})
 		if err != nil {
 			s.writeSMSInternalError(w, trace, "recording an unknown sms outcome failed", err)
@@ -432,21 +697,25 @@ func (s HTTPServer) replaySMS(
 		s.writeSMSInternalError(w, trace, "sms usage count failed", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, smsSuccessBody(
+	body := smsSuccessBody(
 		message,
 		smsReplayContent(message, request.Variables),
 		smsUsageBlock(used, limit, periodStart, resetsAt),
 		true,
-	))
+	)
+	s.addSMSBalance(r.Context(), body, installation.ID)
+	writeJSON(w, http.StatusOK, body)
 }
 
-// smsOutcomeFromSend turns Resala's answer into the ledger's outcome and the
-// rendered content returned to the shop.
+// smsOutcomeFromSend turns Resala's answer into the ledger's outcome — with
+// the parts the message went out as — and the rendered content returned to
+// the shop.
 func (s HTTPServer) smsOutcomeFromSend(
 	result resala.SendResult,
 	sendErr error,
 	testMode bool,
 	variables []string,
+	claim control.SMSMessage,
 ) (control.SMSOutcome, string) {
 	if sendErr != nil {
 		code, detail := s.classifyResalaError(sendErr)
@@ -455,6 +724,7 @@ func (s HTTPServer) smsOutcomeFromSend(
 			ErrorCode:   code,
 			ErrorDetail: truncateRunes(detail, maxSMSErrorDetailRunes),
 			TestMode:    testMode,
+			Uncertain:   smsSendMayHaveGoneOut(sendErr),
 		}, ""
 	}
 	// Resala has the last word on whether a phone was reached: a send it
@@ -492,6 +762,7 @@ func (s HTTPServer) smsOutcomeFromSend(
 		TemplateBody:  result.Template.Body,
 		TestMode:      effectiveTest,
 		SentAt:        &sentAt,
+		Parts:         s.smsBilledParts(content, result.TotalMessages, claim),
 	}, content
 }
 
@@ -548,9 +819,9 @@ func providerMessage(err error) string {
 	return err.Error()
 }
 
-// handleSMSUsageSelf serves GET /v1/sms/usage/self. Identity only, no
-// entitlement gate: an unentitled shop asks precisely so the app can say why
-// it cannot send.
+// handleSMSUsageSelf serves GET /v1/sms/usage/self: the SMS balance, what a
+// message costs, and this month's sends. Identity only: a shop with an empty
+// balance asks precisely so the app can say why it cannot send.
 func (s HTTPServer) handleSMSUsageSelf(w http.ResponseWriter, r *http.Request) {
 	installation, _, ok := s.authenticateInstallation(w, r)
 	if !ok {
@@ -570,10 +841,14 @@ func (s HTTPServer) handleSMSUsageSelf(w http.ResponseWriter, r *http.Request) {
 		used = count
 	}
 	body := smsUsageBlock(used, limit, periodStart, resetsAt)
-	body["entitled"] = installation.SMSActive(now)
+	wallet := s.smsWalletPayload(s.smsBalance(r.Context(), installation.ID))
+	for key, value := range wallet {
+		body[key] = value
+	}
+	// "entitled" is what a backend from before the SMS balance reads.
+	body["entitled"] = wallet["available"]
 	body["sms_enabled"] = installation.SMSEnabled
 	body["test_mode"] = s.SMS.TestMode
-	body["configured"] = s.SMS.configured()
 	body["kinds"] = s.smsConfiguredKinds()
 	writeJSON(w, http.StatusOK, body)
 }
@@ -655,8 +930,9 @@ func (s HTTPServer) handleSMSAdminUsage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	totals := map[string]any{"installations": len(usage)}
-	var messages, sent, failed, delivered, undelivered, test int
+	var messages, sent, failed, delivered, undelivered, test, parts int
 	costs := make([]string, 0, len(usage))
+	charges := make([]string, 0, len(usage))
 	for _, row := range usage {
 		messages += row.Messages
 		sent += row.Sent
@@ -664,7 +940,9 @@ func (s HTTPServer) handleSMSAdminUsage(w http.ResponseWriter, r *http.Request) 
 		delivered += row.Delivered
 		undelivered += row.Undelivered
 		test += row.Test
+		parts += row.Parts
 		costs = append(costs, row.Cost)
+		charges = append(charges, row.Charged)
 	}
 	totals["messages"] = messages
 	totals["sent"] = sent
@@ -672,7 +950,9 @@ func (s HTTPServer) handleSMSAdminUsage(w http.ResponseWriter, r *http.Request) 
 	totals["delivered"] = delivered
 	totals["undelivered"] = undelivered
 	totals["test"] = test
+	totals["parts"] = parts
 	totals["cost"] = control.SumSMSCosts(costs)
+	totals["charged"] = control.SumWalletAmounts(charges)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"from":          from,
 		"to":            to,
@@ -723,21 +1003,32 @@ func (s HTTPServer) handleSMSAdminMessages(w http.ResponseWriter, r *http.Reques
 
 // handleSMSAdminConfig serves GET /v1/sms/config (admin): what the relay is
 // configured to do, for the operator. It never includes the token.
-func (s HTTPServer) handleSMSAdminConfig(w http.ResponseWriter, _ *http.Request) {
+//
+// text_known says whether the relay has seen a kind's approved text come back
+// from Resala: until it has, a message of that kind is held as if it were as
+// long as any template, and the answer gives the difference back.
+func (s HTTPServer) handleSMSAdminConfig(w http.ResponseWriter, r *http.Request) {
 	templates := map[string]string{}
 	for kind, templateID := range s.SMS.Templates {
 		if templateID = strings.TrimSpace(templateID); templateID != "" {
 			templates[kind] = templateID
 		}
 	}
+	store, hasStore := s.smsStore()
 	catalog := make([]map[string]any, 0, len(smsKindCatalog))
 	for _, kind := range smsKindCatalog {
-		_, configured := templates[kind.Kind]
+		templateID, configured := templates[kind.Kind]
+		textKnown := false
+		if configured && hasStore {
+			body, err := store.SMSTemplateBody(r.Context(), templateID)
+			textKnown = err == nil && body != ""
+		}
 		catalog = append(catalog, map[string]any{
 			"kind":          kind.Kind,
 			"consent_class": kind.ConsentClass,
 			"variables":     kind.Variables,
 			"configured":    configured,
+			"text_known":    textKnown,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -745,6 +1036,7 @@ func (s HTTPServer) handleSMSAdminConfig(w http.ResponseWriter, _ *http.Request)
 		"test_mode":              s.SMS.TestMode,
 		"base_url":               s.SMS.baseURL(),
 		"templates":              templates,
+		"price":                  control.FormatWalletAmount(s.SMS.price()),
 		"monthly_limit_default":  max(s.SMS.MonthlyLimit, 0),
 		"rate_limit":             s.SMS.RateLimit.String(),
 		"request_timeout":        s.smsRequestTimeout().String(),
@@ -912,8 +1204,14 @@ func (s HTTPServer) logSMSSend(trace *smsSendTrace, elapsed time.Duration) {
 		"test_mode", trace.testMode,
 		"duration_ms", elapsed.Milliseconds(),
 	}
+	if trace.parts > 0 {
+		attrs = append(attrs, "parts", trace.parts)
+	}
 	if trace.cost != "" {
 		attrs = append(attrs, "cost", trace.cost)
+	}
+	if trace.charged != "" {
+		attrs = append(attrs, "charged", trace.charged)
 	}
 	if trace.detail != "" {
 		attrs = append(attrs, "detail", scrubPhoneNumbers(trace.detail))
@@ -962,15 +1260,24 @@ func writeSMSMonthlyLimit(w http.ResponseWriter, limit, used int, resetsAt time.
 
 // writeSMSStoredFailure answers with a failure the ledger recorded. A replay
 // gets exactly the response the first attempt got.
+// writeSMSStoredFailure answers a send that failed. held says its price is
+// kept while Resala's sent log is checked: the shop's backend keeps the id and
+// asks for the message's status, which turns to sent if it went out after all.
 func writeSMSStoredFailure(w http.ResponseWriter, message control.SMSMessage, replayed bool) {
 	code := message.ErrorCode
 	if code == "" {
 		code = smsCodeProviderError
 	}
-	writeSMSError(w, http.StatusBadGateway, code, smsFailureMessage(code), map[string]any{
+	held := message.HeldSince != nil
+	text := smsFailureMessage(code)
+	if held {
+		text += "; its price is held until the SMS provider's sent log shows whether it went out"
+	}
+	writeSMSError(w, http.StatusBadGateway, code, text, map[string]any{
 		"detail":   message.ErrorDetail,
 		"id":       message.ID,
 		"replayed": replayed,
+		"held":     held,
 	})
 }
 
@@ -989,13 +1296,21 @@ func smsFailureMessage(code string) string {
 	}
 }
 
+// smsSuccessBody is a sent message as the shop's backend records it: parts is
+// how many SMS it went out as and charged what the shop paid for them.
 func smsSuccessBody(message control.SMSMessage, content string, usage map[string]any, replayed bool) map[string]any {
+	charged := message.Price
+	if message.TestMode {
+		charged = control.FormatWalletAmount(nil)
+	}
 	return map[string]any{
 		"id":        message.ID,
 		"status":    message.Status,
 		"test_mode": message.TestMode,
 		"content":   content,
 		"cost":      message.Cost,
+		"parts":     max(message.Parts, 1),
+		"charged":   control.NormalizeWalletAmount(charged),
 		"replayed":  replayed,
 		"usage":     usage,
 	}

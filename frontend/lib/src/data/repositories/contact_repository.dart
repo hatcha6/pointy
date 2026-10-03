@@ -2,6 +2,7 @@ import '../../core/result.dart';
 import '../models/balance_entry.dart';
 import '../models/contact.dart';
 import '../models/customer_activity.dart';
+import '../models/messaging_gateway.dart';
 import '../models/payment_card.dart';
 import '../models/sale_order_page.dart';
 import '../services/balance_api_client.dart';
@@ -67,6 +68,10 @@ class ContactRepository {
   /// Records a cash/transfer payment against the customer's account; the
   /// backend allocates it oldest-first across open debt invoices and returns
   /// the refreshed sales-summary.
+  Future<Result<MessagingSendResult>> sendCustomerBalanceSms(int customerId) {
+    return Result.guard(() => _service.sendCustomerBalanceSms(customerId));
+  }
+
   Future<Result<CustomerSalesSummary>> recordCustomerAccountPayment(
     int customerId, {
     required String method,

@@ -22,6 +22,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../register_sessions/views/sale_order_details_sheet.dart';
 import '../view_models/customer_details_view_model.dart';
 import 'balance_entries_section.dart';
+import '../../settings/views/messaging_presentation.dart';
 
 class CustomerDetailsScreen extends StatefulWidget {
   const CustomerDetailsScreen({
@@ -136,7 +137,14 @@ class CustomerDetailsView extends StatelessWidget {
               _CustomerHero(customer: customer),
               SizedBox(height: spacing.md),
               if (viewModel.outstandingBalance > 0.005) ...[
-                _OutstandingBalanceCallout(viewModel: viewModel),
+                _OutstandingBalanceCallout(
+                  viewModel: viewModel,
+                  // A colleague's debt comes off payroll: no text for it.
+                  canTextBalance:
+                      (capabilities?.canSendSms ?? false) &&
+                      !customer.isStaffAccount &&
+                      customer.phone.trim().isNotEmpty,
+                ),
                 SizedBox(height: spacing.md),
               ],
               if (viewModel.creditBalance > 0.005 ||
@@ -786,9 +794,15 @@ class _UnclaimedCardCallout extends StatelessWidget {
 /// Prominent "you owe X" callout + a primary [recordPayment] action, shown only
 /// while the customer carries an outstanding balance on their account.
 class _OutstandingBalanceCallout extends StatelessWidget {
-  const _OutstandingBalanceCallout({required this.viewModel});
+  const _OutstandingBalanceCallout({
+    required this.viewModel,
+    this.canTextBalance = false,
+  });
 
   final CustomerDetailsViewModel viewModel;
+
+  /// Offer to text the customer what they owe (SMS on, a phone to text).
+  final bool canTextBalance;
 
   @override
   Widget build(BuildContext context) {
@@ -827,7 +841,39 @@ class _OutstandingBalanceCallout extends StatelessWidget {
               : const Icon(Icons.add_card_outlined),
           label: Text(l10n.recordCustomerPaymentButton),
         ),
+        if (canTextBalance) ...[
+          SizedBox(height: spacing.xs),
+          OutlinedButton.icon(
+            key: const ValueKey('send_customer_balance_sms_button'),
+            onPressed: busy ? null : () => _sendBalanceSms(context),
+            icon: const Icon(Icons.sms_outlined),
+            label: Text(l10n.customerSendBalanceSmsButton),
+          ),
+        ],
       ],
+    );
+  }
+
+  Future<void> _sendBalanceSms(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final failure = await viewModel.sendBalanceSms();
+    if (!context.mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          failure == null
+              ? l10n.customerSendBalanceSmsSent
+              : messagingFailureMessage(
+                  l10n,
+                  code: failure.code,
+                  detail: failure.detail,
+                  fallback: l10n.customerSendBalanceSmsError,
+                ),
+        ),
+      ),
     );
   }
 

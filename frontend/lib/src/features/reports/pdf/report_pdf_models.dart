@@ -51,10 +51,15 @@ class ReportPdfSection {
     this.paragraphs = const [],
     this.fields = const [],
     this.tables = const [],
+    this.compact = false,
   });
 
   final String heading;
   final List<String> paragraphs;
+
+  /// Set paragraphs tighter and smaller — the definitions under a summary,
+  /// which should not outweigh the figures they qualify.
+  final bool compact;
   final List<ReportPdfField> fields;
   final List<ReportPdfTable> tables;
 }
@@ -99,6 +104,7 @@ class BusinessReportPdfDocument {
     this.generatedBy,
     this.reference,
     this.period,
+    this.detailLevel,
     this.shopSettingFields = const [],
     this.metrics = const [],
     this.summaryFields = const [],
@@ -117,6 +123,10 @@ class BusinessReportPdfDocument {
   final String? generatedBy;
   final String? reference;
   final ReportPdfPeriod? period;
+
+  /// Which level of detail the document was built at — a summary must never
+  /// pass for a report that left rows out, nor the reverse.
+  final ReportPdfField? detailLevel;
   final List<ReportPdfField> shopSettingFields;
   final List<ReportPdfMetric> metrics;
   final List<ReportPdfField> summaryFields;

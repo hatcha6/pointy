@@ -9,14 +9,20 @@ import '../view_models/wallet_view_model.dart';
 import 'wallet_history_page.dart';
 import 'wallet_presentation.dart';
 import 'wallet_rows.dart';
+import 'wallet_spend_rows.dart';
 import 'wallet_top_up_sheet.dart';
 
 /// The Daftar wallet on the subscription page: the balance, the top-up button,
-/// the switch that puts top-ups in the shop's books, and the latest top-ups.
+/// the SMS balance it fills, the switch that puts top-ups in the shop's books,
+/// and the latest top-ups.
 class WalletSection extends StatelessWidget {
-  const WalletSection({super.key, required this.viewModel});
+  const WalletSection({super.key, required this.viewModel, this.onSpent});
 
   final WalletViewModel viewModel;
+
+  /// Told when money moved into the SMS balance, for the page to re-read
+  /// what SMS can do now.
+  final VoidCallback? onSpent;
 
   static const _recentShown = 3;
 
@@ -173,6 +179,10 @@ class WalletSection extends StatelessWidget {
             ),
           ],
         ),
+        if (overview.sms case final sms?) ...[
+          SizedBox(height: spacing.sm),
+          WalletSmsBalanceCard(wallet: viewModel, sms: sms, onMoved: onSpent),
+        ],
         SizedBox(height: spacing.sm),
         const Divider(height: 1),
         SwitchListTile.adaptive(

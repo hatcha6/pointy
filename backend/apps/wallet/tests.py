@@ -39,27 +39,41 @@ def remote_topup(**overrides):
     topup = {
         "id": "topup-1",
         "invoice_no": "DFW-ABCDEFGH23",
-        "method": "plutu_localbankcards",
+        "method": "dafa_moamalat",
+        "kind": "hosted_page",
+        "payer_hint": "",
         "amount": "100.000",
         "status": "pending",
         "test_mode": False,
         "requested_by": "owner",
-        "provider_transaction_id": "",
+        "provider_transaction_id": "pay-1",
         "error_code": "",
         "confirmed_by": "",
         "created_at": "2026-09-30T08:00:00Z",
         "paid_at": None,
-        "checkout_url": "https://checkout.plutus.test/pay/abc",
+        "checkout_url": "https://pay.dafa.test/pay-1",
     }
     topup.update(overrides)
+    return topup
+
+
+def sadad_topup(**overrides):
+    values = {
+        "method": "dafa_sadad",
+        "kind": "otp",
+        "payer_hint": "091•••678",
+        "otp_attempts_left": 5,
+    }
+    values.update(overrides)
+    topup = remote_topup(**values)
+    topup.pop("checkout_url", None)
     return topup
 
 
 def paid(**overrides):
     values = {
         "status": "paid",
-        "provider_transaction_id": "100900",
-        "confirmed_by": "plutu",
+        "confirmed_by": "dafa",
         "paid_at": "2026-09-30T08:03:00Z",
     }
     values.update(overrides)
@@ -81,12 +95,18 @@ def wallet_payload(**overrides):
         "test_mode": False,
         "topups": {
             "available": True,
-            "methods": [{"key": "plutu_localbankcards", "gateway": "plutu", "kind": "hosted_checkout"}],
+            "methods": [
+                {"key": "dafa_moamalat", "gateway": "dafa", "provider": "moamalat", "kind": "hosted_page",
+                 "payer": "", "birth_year": False},
+                {"key": "dafa_sadad", "gateway": "dafa", "provider": "sadad", "kind": "otp",
+                 "payer": "phone", "birth_year": True},
+            ],
             "min_amount": "10.00",
             "max_amount": "5000.00",
             "max_decimals": 2,
             "quick_amounts": ["50", "100", "200", "500"],
             "pending_ttl": 1800,
+            "max_otp_attempts": 5,
         },
         "recent_topups": [paid()],
         "recent_entries": [
@@ -120,9 +140,24 @@ class WalletApiTests(TestCase):
         """Start a top-up the way the app does, so the shop knows it is its own."""
         self.relay.create_wallet_topup.return_value = {
             "top_up": remote_topup(**overrides),
-            "checkout_url": "https://checkout.plutus.test/pay/abc",
+            "next_action": "hosted_page",
+            "checkout_url": "https://pay.dafa.test/pay-1",
         }
         resp = self.api.post("/api/wallet/topups/", {"amount": "100"}, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        return resp
+
+    def start_sadad(self):
+        self.relay.create_wallet_topup.return_value = {
+            "top_up": sadad_topup(),
+            "next_action": "otp",
+            "replayed": False,
+        }
+        resp = self.api.post(
+            "/api/wallet/topups/",
+            {"amount": "100", "method": "dafa_sadad", "user_identifier": "0912345678", "birth_year": "1995"},
+            format="json",
+        )
         self.assertEqual(resp.status_code, 201, resp.content)
         return resp
 
@@ -143,13 +178,14 @@ class WalletApiTests(TestCase):
         self.assertEqual(topup["expense_id"], expense.pk)
         self.assertEqual(expense.amount, Decimal("100.00"))
         self.assertEqual(expense.payment_method, Expense.PaymentMethod.CARD)
+        self.assertEqual(expense.description, "شحن محفظة دفتر — بطاقة مصرفية محلية")
         self.assertEqual(expense.category.name, WALLET_EXPENSE_CATEGORY_NAME)
         self.assertEqual(expense.reference, "DFW-ABCDEFGH23")
         self.assertEqual(
             expense.spent_at,
             timezone.localdate(datetime(2026, 9, 30, 8, 3, tzinfo=dt_timezone.utc)),
         )
-        self.assertIn("100900", expense.notes)
+        self.assertIn("pay-1", expense.notes)
         self.assertNotIn("تجريبي", expense.description)
         self.assertEqual(WalletSettings.load().expense_category, expense.category)
 
@@ -181,7 +217,7 @@ class WalletApiTests(TestCase):
         WalletTopUp.objects.create(
             relay_id="topup-9",
             invoice_no="DFW-LOCALCOPY9",
-            method="plutu_localbankcards",
+            method="dafa_moamalat",
             amount=Decimal("50"),
             status="paid",
             relay_created_at=timezone.now(),
@@ -215,7 +251,7 @@ class WalletApiTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data["has_more"])
         self.relay.list_wallet_entries.assert_called_once_with(
-            access_token="access-token", limit=1, before="e1", kind="charge"
+            access_token="access-token", limit=1, before="e1", kind="charge", account=""
         )
 
     # --- starting a top-up ------------------------------------------------------
@@ -223,7 +259,8 @@ class WalletApiTests(TestCase):
     def test_starting_a_topup_returns_the_checkout_and_remembers_who(self):
         self.relay.create_wallet_topup.return_value = {
             "top_up": remote_topup(),
-            "checkout_url": "https://checkout.plutus.test/pay/abc",
+            "next_action": "hosted_page",
+            "checkout_url": "https://pay.dafa.test/pay-1",
             "replayed": False,
         }
         resp = self.api.post(
@@ -232,18 +269,135 @@ class WalletApiTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 201, resp.content)
-        self.assertEqual(resp.data["checkout_url"], "https://checkout.plutus.test/pay/abc")
+        self.assertEqual(resp.data["checkout_url"], "https://pay.dafa.test/pay-1")
+        self.assertEqual(resp.data["next_action"], "hosted_page")
         self.assertEqual(resp.data["top_up"]["status"], "pending")
         self.assertTrue(resp.data["top_up"]["record_as_expense"])
         call = self.relay.create_wallet_topup.call_args.kwargs
         self.assertEqual(call["amount"], Decimal("100.00"))
         self.assertEqual(call["idempotency_key"], "app-key-1")
-        self.assertEqual(call["method"], "plutu_localbankcards")
+        self.assertEqual(call["method"], "dafa_moamalat", "no method means bank cards")
         self.assertEqual(call["requested_by"], "owner")
+        self.assertGreater(call["timeout"], 20, "starting a payment outlasts the relay's gateway call")
         mirrored = WalletTopUp.objects.get(relay_id="topup-1")
         self.assertEqual(mirrored.requested_by, self.manager)
         self.assertEqual(mirrored.status, "pending")
         self.assertFalse(Expense.objects.exists(), "nothing is booked before it is paid")
+
+    def test_an_app_from_before_dafa_still_tops_up_with_a_card(self):
+        # It sends Plutu's method name; the relay serves it as Dafa's bank cards.
+        self.relay.create_wallet_topup.return_value = {
+            "top_up": remote_topup(),
+            "next_action": "hosted_page",
+            "checkout_url": "https://pay.dafa.test/pay-1",
+        }
+        resp = self.api.post(
+            "/api/wallet/topups/",
+            {"amount": "100.00", "method": "plutu_localbankcards", "idempotency_key": "old-app"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["checkout_url"], "https://pay.dafa.test/pay-1")
+        self.assertEqual(self.relay.create_wallet_topup.call_args.kwargs["method"], "plutu_localbankcards")
+
+    # --- a code-confirmed method --------------------------------------------------
+
+    def test_an_otp_topup_passes_the_payer_on_and_keeps_only_the_hint(self):
+        resp = self.start_sadad()
+        self.assertEqual(resp.data["next_action"], "otp")
+        self.assertNotIn("checkout_url", resp.data["top_up"])
+        self.assertEqual(resp.data["top_up"]["payer_hint"], "091•••678")
+        self.assertEqual(resp.data["top_up"]["otp_attempts_left"], 5)
+        call = self.relay.create_wallet_topup.call_args.kwargs
+        self.assertEqual(call["method"], "dafa_sadad")
+        self.assertEqual(call["user_identifier"], "0912345678")
+        self.assertEqual(call["birth_year"], "1995")
+        mirrored = WalletTopUp.objects.get(relay_id="topup-1")
+        self.assertEqual(mirrored.payer_hint, "091•••678")
+        stored = " ".join(str(value) for value in WalletTopUp.objects.values().get().values())
+        self.assertNotIn("0912345678", stored, "the full number is never stored here")
+        self.assertNotIn("1995", stored)
+
+    def test_the_right_code_pays_and_books_a_transfer_at_once(self):
+        self.start_sadad()
+        self.relay.confirm_wallet_topup.return_value = {"top_up": paid(**sadad_topup())}
+        self.relay.confirm_wallet_topup.return_value["top_up"].update(status="paid", confirmed_by="dafa")
+        resp = self.api.post("/api/wallet/topups/topup-1/confirm/", {"otp": "111111"}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["top_up"]["status"], "paid")
+        call = self.relay.confirm_wallet_topup.call_args.kwargs
+        self.assertEqual((call["topup_id"], call["otp"]), ("topup-1", "111111"))
+        self.assertGreater(call["timeout"], 40, "a confirm may be followed by reading the payment back")
+        expense = Expense.objects.get()
+        self.assertEqual(resp.data["top_up"]["expense_id"], expense.pk)
+        self.assertEqual(expense.payment_method, Expense.PaymentMethod.TRANSFER)
+        self.assertEqual(expense.description, "شحن محفظة دفتر — سداد")
+        self.assertIn("091•••678", expense.notes)
+
+    def test_a_wrong_code_reaches_the_app_with_what_is_left(self):
+        self.start_sadad()
+        self.relay.confirm_wallet_topup.side_effect = relay_refusal(
+            422,
+            "otp_rejected",
+            attempts_left=4,
+            gateway_code="PAYER_OTP_WRONG",
+            gateway_message="رمز التحقق غير صحيح، يرجى إعادة إدخاله.",
+            detail="400 PAYER_OTP_WRONG simulated: wrong otp",
+            top_up=sadad_topup(otp_attempts_left=4),
+        )
+        resp = self.api.post("/api/wallet/topups/topup-1/confirm/", {"otp": "123456"}, format="json")
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.data["code"], "otp_rejected")
+        self.assertEqual(resp.data["attempts_left"], 4)
+        self.assertEqual(resp.data["gateway_message"], "رمز التحقق غير صحيح، يرجى إعادة إدخاله.")
+        self.assertEqual(resp.data["detail"], "رمز التحقق غير صحيح. أعد إدخاله.", "the relay's English detail stays out")
+        self.assertEqual(resp.data["top_up"]["status"], "pending")
+        self.assertFalse(Expense.objects.exists())
+
+    def test_a_declined_payment_is_mirrored_as_failed(self):
+        self.start_sadad()
+        self.relay.confirm_wallet_topup.side_effect = relay_refusal(
+            422,
+            "declined",
+            gateway_code="PAYER_INSUFFICIENT_FUNDS",
+            gateway_message="تعذّر إتمام العملية، يرجى مراجعة المصرف.",
+            top_up=sadad_topup(status="failed", error_code="declined"),
+        )
+        resp = self.api.post("/api/wallet/topups/topup-1/confirm/", {"otp": "222222"}, format="json")
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.data["code"], "declined")
+        self.assertEqual(resp.data["gateway_code"], "PAYER_INSUFFICIENT_FUNDS")
+        topup = WalletTopUp.objects.get(relay_id="topup-1")
+        self.assertEqual((topup.status, topup.error_code), ("failed", "declined"))
+
+    def test_a_code_taken_without_a_verdict_is_accepted_and_polled(self):
+        self.start_sadad()
+        self.relay.confirm_wallet_topup.return_value = {"top_up": sadad_topup(), "code": "awaiting_gateway"}
+        resp = self.api.post("/api/wallet/topups/topup-1/confirm/", {"otp": "111111"}, format="json")
+        self.assertEqual(resp.status_code, 202, resp.content)
+        self.assertEqual(resp.data["code"], "awaiting_gateway")
+
+    def test_a_confirm_needs_a_code_and_the_owners_permission(self):
+        self.start_sadad()
+        self.assertEqual(self.api.post("/api/wallet/topups/topup-1/confirm/", {}, format="json").status_code, 400)
+        self.api.force_authenticate(self.cashier)
+        resp = self.api.post("/api/wallet/topups/topup-1/confirm/", {"otp": "111111"}, format="json")
+        self.assertEqual(resp.status_code, 403)
+        self.relay.confirm_wallet_topup.assert_not_called()
+
+    def test_backing_out_before_the_code_cancels_it(self):
+        self.start_sadad()
+        self.relay.cancel_wallet_topup.return_value = {
+            "top_up": sadad_topup(status="canceled", error_code="canceled"),
+            "applied": True,
+        }
+        resp = self.api.post("/api/wallet/topups/topup-1/cancel/", format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["top_up"]["status"], "canceled")
+        self.assertEqual(WalletTopUp.objects.get(relay_id="topup-1").status, "canceled")
+        self.relay.cancel_wallet_topup.side_effect = relay_refusal(409, "not_otp_method")
+        resp = self.api.post("/api/wallet/topups/topup-1/cancel/", format="json")
+        self.assertEqual((resp.status_code, resp.data["code"]), (409, "not_otp_method"))
 
     def test_the_sheet_switch_decides_this_topup_and_becomes_the_default(self):
         self.relay.create_wallet_topup.return_value = {"top_up": remote_topup(), "checkout_url": "x"}
@@ -299,6 +453,7 @@ class WalletApiTests(TestCase):
         self.assertEqual(resp.data["code"], "relay_unreachable")
 
     def test_amounts_the_gateway_cannot_take_are_refused_before_the_relay(self):
+        # Two places, not the dirham's three: the expense keeps two.
         for amount in ("0", "-5", "12.345", "abc"):
             resp = self.api.post("/api/wallet/topups/", {"amount": amount}, format="json")
             self.assertEqual(resp.status_code, 400, amount)
@@ -379,7 +534,7 @@ class WalletSyncTests(TestCase):
         values = dict(
             relay_id="topup-1",
             invoice_no="DFW-ABCDEFGH23",
-            method="plutu_localbankcards",
+            method="dafa_moamalat",
             amount=Decimal("100"),
             status="pending",
             relay_created_at=timezone.now() - timedelta(minutes=5),
@@ -419,6 +574,13 @@ class WalletSyncTests(TestCase):
         self.relay.list_wallet_topups.side_effect = RelayControlError("down")
         result = sync_topups()
         self.assertEqual(result["error"], "relay_unreachable")
+
+    def test_a_paid_plutu_topup_from_before_dafa_is_still_booked_as_a_card(self):
+        topup = self._mirror(method="plutu_localbankcards", status="paid", paid_at=timezone.now())
+        book_topup_expense(topup.pk)
+        expense = Expense.objects.get()
+        self.assertEqual(expense.payment_method, Expense.PaymentMethod.CARD)
+        self.assertEqual(expense.description, "شحن محفظة دفتر — بطاقة مصرفية محلية")
 
     def test_booking_is_idempotent_even_when_called_directly(self):
         topup = self._mirror(status="paid", paid_at=timezone.now())

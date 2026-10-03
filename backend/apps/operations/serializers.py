@@ -251,6 +251,7 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
             "releases_custody",
             "consumes_materials",
             "produces_output",
+            "ready_for_pickup",
         ]
 
 

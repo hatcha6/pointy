@@ -13,6 +13,16 @@ class RelayInstallationStatusSerializer(serializers.Serializer):
     ai_enabled = serializers.BooleanField()
     sms_enabled = serializers.BooleanField()
     subscription_ends_at = serializers.DateTimeField(allow_null=True)
+    # The plans paid from the Daftar wallet, and when each plan stops whoever
+    # pays for it (null: not running, or included with no end).
+    remote_access_paid_until = serializers.DateTimeField(allow_null=True)
+    ai_paid_until = serializers.DateTimeField(allow_null=True)
+    remote_access_until = serializers.DateTimeField(allow_null=True)
+    ai_available = serializers.BooleanField()
+    ai_until = serializers.DateTimeField(allow_null=True)
+    sms_available = serializers.BooleanField()
+    sms_balance = serializers.CharField()
+    sms_price = serializers.CharField()
     last_synced_at = serializers.DateTimeField(allow_null=True)
     connector_last_seen_at = serializers.DateTimeField(allow_null=True)
     connector_version = serializers.CharField(allow_blank=True)

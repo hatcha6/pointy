@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/unit_of_measure.dart';
+import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/barcode/camera_text_barcode_scanner_sheet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
@@ -598,16 +599,21 @@ class _UnitBarcodesField extends StatelessWidget {
             Expanded(
               child: TutorTarget(
                 anchor: TutorAnchor.productUnitBarcodeField,
-                child: TextField(
-                  controller: row.barcodeInputController,
-                  focusNode: row.barcodeInputFocusNode,
-                  enabled: enabled,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: enabled ? _submit : null,
-                  decoration: InputDecoration(
-                    labelText: l10n.productUnitBarcodeAddHint,
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.qr_code_2),
+                // Scanned into on purpose: a carton's code belongs here, not
+                // in the product's own barcode where the new-product form
+                // sends a scan typed anywhere else.
+                child: ScanWedgeTarget(
+                  child: TextField(
+                    controller: row.barcodeInputController,
+                    focusNode: row.barcodeInputFocusNode,
+                    enabled: enabled,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: enabled ? _submit : null,
+                    decoration: InputDecoration(
+                      labelText: l10n.productUnitBarcodeAddHint,
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.qr_code_2),
+                    ),
                   ),
                 ),
               ),

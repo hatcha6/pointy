@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 
 import '../models/camera.dart';
 import 'api_session.dart';
@@ -450,11 +450,23 @@ class SurveillanceApiClient {
     return controller.stream;
   }
 
+  /// [_pollFrames] for tests: only the browser build polls, and `kIsWeb` is a
+  /// compile-time constant, so a VM test cannot reach it through [liveFrames].
+  @visibleForTesting
+  Stream<CameraFrame> pollFrames(String path, Duration interval) =>
+      _pollFrames(path, interval);
+
   Stream<CameraFrame> _pollFrames(String path, Duration interval) async* {
     while (true) {
       final started = DateTime.now();
       final response = await _session.get(path);
-      _session.ensureSuccess(response, 'Snapshot request failed with status');
+      // The status has to survive, as on the streaming path: the camera view
+      // honours a 503's retry_after and stops retrying a 401 or 501 — a
+      // recorder that will never answer must not be asked twice a second.
+      _session.throwApiException(
+        response,
+        'Snapshot request failed with status',
+      );
       yield CameraFrame(bytes: response.bodyBytes, capturedAt: DateTime.now());
       final elapsed = DateTime.now().difference(started);
       if (elapsed < interval) {

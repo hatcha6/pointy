@@ -2786,6 +2786,12 @@ abstract class AppLocalizations {
   /// **'تغيّرت {count} من الأرقام منذ إصدار التقرير.'**
   String reportVerifyChangedMessage(String count);
 
+  /// No description provided for @reportVerifyDetailChangedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرقام الرئيسية لم تتغير، لكن تفاصيل الجداول اختلفت عمّا صدر.'**
+  String get reportVerifyDetailChangedMessage;
+
   /// No description provided for @reportTruncatedNotice.
   ///
   /// In ar, this message translates to:
@@ -7559,6 +7565,54 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'دخول هذه المرحلة يعني أن الزبون استلم جهازه.'**
   String get workflowStageCustodyHelp;
+
+  /// Customer page: text the customer what their account owes today.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الرصيد برسالة'**
+  String get customerSendBalanceSmsButton;
+
+  /// Snack bar after the balance text was queued.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل للعميل رصيد حسابه برسالة.'**
+  String get customerSendBalanceSmsSent;
+
+  /// Fallback when the balance text could not be sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الرسالة. أعد المحاولة.'**
+  String get customerSendBalanceSmsError;
+
+  /// Job menu action: text the customer that the job is ready for pickup.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال رسالة «جاهز للاستلام»'**
+  String get jobTextReadyAction;
+
+  /// Snack bar after the ready text was queued.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسلت للزبون رسالة بأن طلبه جاهز.'**
+  String get jobTextReadySent;
+
+  /// Fallback when the ready text could not be sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الرسالة. أعد المحاولة.'**
+  String get jobTextReadyError;
+
+  /// Stage flag: the job waits here for the customer to collect it.
+  ///
+  /// In ar, this message translates to:
+  /// **'جاهز للاستلام'**
+  String get workflowStageReadyLabel;
+
+  /// Explains the ready-for-pickup flag: the customer is texted, and reminded if they do not come.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند الوصول إلى هذه المرحلة تُرسل للزبون رسالة بأن طلبه جاهز، ويُذكَّر إن لم يستلمه.'**
+  String get workflowStageReadyHelp;
 
   /// No description provided for @shopTypeCarWorkshop.
   ///
@@ -13254,6 +13308,198 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.'**
   String get productCreateError;
+
+  /// No description provided for @createAndAddAnotherButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء وإضافة آخر'**
+  String get createAndAddAnotherButton;
+
+  /// No description provided for @productMoreDetailsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل إضافية'**
+  String get productMoreDetailsTitle;
+
+  /// No description provided for @productMoreDetailsSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصف، الصورة، الإضافات، ونوع المنتج'**
+  String get productMoreDetailsSummary;
+
+  /// No description provided for @productFieldPinTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تثبيت القيمة للمنتج التالي'**
+  String get productFieldPinTooltip;
+
+  /// No description provided for @productFieldUnpinTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء التثبيت — لن تُنسخ للمنتج التالي'**
+  String get productFieldUnpinTooltip;
+
+  /// No description provided for @productFieldKeptLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'من المنتج السابق'**
+  String get productFieldKeptLabel;
+
+  /// No description provided for @productEntryPinsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحقول المثبّتة تبقى كما هي للمنتج التالي. اضغط الدبوس بجانب أي حقل لتثبيته أو إلغائه.'**
+  String get productEntryPinsHint;
+
+  /// How many products were created in a row without closing the new-product panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{أضفت منتجًا واحدًا} =2{أضفت منتجين} few{أضفت {count} منتجات} many{أضفت {count} منتجًا} other{أضفت {count} منتج}}'**
+  String productEntryCreatedCount(int count);
+
+  /// Inline status in the new-product panel naming the product just created by «create and add another».
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إنشاء «{name}»'**
+  String productEntryLastCreated(String name);
+
+  /// No description provided for @productEntryEditLastButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get productEntryEditLastButton;
+
+  /// No description provided for @productNameUnchangedWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم مطابق للمنتج السابق. عدّل الجزء المختلف.'**
+  String get productNameUnchangedWarning;
+
+  /// No description provided for @productNameUnchangedConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم ما زال مطابقًا للمنتج السابق. اضغط الحفظ مرة أخرى للمتابعة على أي حال.'**
+  String get productNameUnchangedConfirm;
+
+  /// Product details: starts an unsaved new-product form prefilled from this product.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج مشابه'**
+  String get similarProductAction;
+
+  /// No description provided for @similarProductTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج جديد يبدأ ببيانات هذا المنتج، دون الباركود ورمز المنتج'**
+  String get similarProductTooltip;
+
+  /// Top of the new-product form opened by «منتج مشابه»: what it copies from, and what it never copies.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخة من «{name}». الباركود ورمز المنتج والصورة والكمية لا تُنسخ، ولا يُحفظ شيء حتى تضغط الإنشاء.'**
+  String similarProductNotice(String name);
+
+  /// No description provided for @productFieldCopiedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'من المنتج الأصلي'**
+  String get productFieldCopiedLabel;
+
+  /// No description provided for @similarProductNameUnchangedWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم مطابق للمنتج الأصلي. عدّل الجزء المختلف.'**
+  String get similarProductNameUnchangedWarning;
+
+  /// No description provided for @similarProductNameUnchangedConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم ما زال مطابقًا للمنتج الأصلي. اضغط الحفظ مرة أخرى للمتابعة على أي حال.'**
+  String get similarProductNameUnchangedConfirm;
+
+  /// No description provided for @productBarcodeScanAnywhereHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح من أي حقل ويصل الرمز إلى هنا'**
+  String get productBarcodeScanAnywhereHelper;
+
+  /// No description provided for @productFormShortcutsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختصارات لوحة المفاتيح'**
+  String get productFormShortcutsTooltip;
+
+  /// No description provided for @productFormShortcutsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختصارات إضافة المنتجات'**
+  String get productFormShortcutsTitle;
+
+  /// No description provided for @productFormShortcutsSectionSave.
+  ///
+  /// In ar, this message translates to:
+  /// **'التنقل والحفظ'**
+  String get productFormShortcutsSectionSave;
+
+  /// No description provided for @productFormShortcutsSectionRun.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتجات متتالية'**
+  String get productFormShortcutsSectionRun;
+
+  /// No description provided for @productFormShortcutNextField.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحقل التالي، ثم زر الحفظ'**
+  String get productFormShortcutNextField;
+
+  /// No description provided for @productFormShortcutCreate.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء المنتج وإغلاق النافذة'**
+  String get productFormShortcutCreate;
+
+  /// No description provided for @productFormShortcutCreateAnother.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء المنتج والبدء بالتالي'**
+  String get productFormShortcutCreateAnother;
+
+  /// No description provided for @productFormShortcutClose.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق النافذة'**
+  String get productFormShortcutClose;
+
+  /// No description provided for @productFormShortcutPinField.
+  ///
+  /// In ar, this message translates to:
+  /// **'تثبيت الحقل الحالي للمنتج التالي، أو إلغاء تثبيته'**
+  String get productFormShortcutPinField;
+
+  /// No description provided for @productFormShortcutNewProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج جديد من شاشة الأصناف'**
+  String get productFormShortcutNewProduct;
+
+  /// No description provided for @productFormShortcutsScanNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسح بالقارئ يعمل وأنت في أي حقل: يذهب الرمز إلى خانة الباركود ويبقى المؤشر حيث هو.'**
+  String get productFormShortcutsScanNote;
+
+  /// No description provided for @barcodeScanNotFoundCreateAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء منتج'**
+  String get barcodeScanNotFoundCreateAction;
+
+  /// Tooltip on the catalog's add-product button naming its keyboard shortcut.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة منتج ({shortcut})'**
+  String addProductShortcutTooltip(String shortcut);
 
   /// No description provided for @productUpdateError.
   ///
@@ -29352,6 +29598,54 @@ abstract class AppLocalizations {
   /// **'ترويجية'**
   String get messagingTemplateMarketingBadge;
 
+  /// Badge on a text that goes out by itself when its event happens, switched on.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُرسل تلقائيًا'**
+  String get messagingTemplateAutoOn;
+
+  /// Badge on an automatic text whose switch is off: it goes out only from a button, if at all.
+  ///
+  /// In ar, this message translates to:
+  /// **'التلقائي موقوف'**
+  String get messagingTemplateAutoOff;
+
+  /// How many SMS a text goes out as (one SMS holds 70 Arabic letters).
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{رسالة واحدة} =2{رسالتان} few{{count} رسائل} many{{count} رسالة} other{{count} رسالة}}'**
+  String messagingTemplateParts(int count);
+
+  /// Under a template's example: how many SMS it takes and what that costs from the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المثال: {parts} بـ {price}'**
+  String messagingTemplateExampleCost(String parts, String price);
+
+  /// Under a template's example when SMS is not sold from a balance: how many SMS it takes.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المثال: {parts}'**
+  String messagingTemplateExampleParts(String parts);
+
+  /// Section of switches for the texts that go out by themselves.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل التلقائية'**
+  String get messagingAutoTitle;
+
+  /// Explains the automatic texts and that each is paid from the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُرسل هذه الرسائل وحدها حين يحدث ما تخصّه، ويُدفع ثمن كل واحدة من رصيد الرسائل. أوقف ما لا تريد إرساله.'**
+  String get messagingAutoIntro;
+
+  /// Snack bar when turning an automatic text on or off failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ إعداد الرسالة التلقائية. أعد المحاولة.'**
+  String get messagingAutoSaveFailed;
+
   /// SMS error code not_entitled.
   ///
   /// In ar, this message translates to:
@@ -29415,7 +29709,7 @@ abstract class AppLocalizations {
   /// SMS error codes provider_error / outcome_unknown.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.'**
+  /// **'تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. إن لم تكن أُرسلت يعود ثمنها إلى رصيد الرسائل تلقائياً بعد التحقق. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.'**
   String get messagingErrorOutcomeUnknown;
 
   /// SMS error code sms_unconfigured.
@@ -39117,7 +39411,7 @@ abstract class AppLocalizations {
   /// Explains where auto-booked top-up expenses go.
   ///
   /// In ar, this message translates to:
-  /// **'كل شحن مدفوع يُسجَّل مصروفاً بالبطاقة ضمن «{category}».'**
+  /// **'كل شحن مدفوع يُسجَّل مصروفاً ضمن «{category}».'**
   String walletRecordExpensesSubtitle(String category);
 
   /// Snackbar when the auto-expense switch could not be saved.
@@ -39381,7 +39675,7 @@ abstract class AppLocalizations {
   /// The paid top-up was booked as an expense.
   ///
   /// In ar, this message translates to:
-  /// **'سُجّل كمصروف بالبطاقة ضمن «{category}».'**
+  /// **'سُجّل كمصروف ضمن «{category}».'**
   String walletPaidBooked(String category);
 
   /// The balance after the top-up.
@@ -39423,7 +39717,7 @@ abstract class AppLocalizations {
   /// Explains a payment held for review.
   ///
   /// In ar, this message translates to:
-  /// **'إن خُصم المبلغ من بطاقتك فسيُضاف إلى محفظتك بعد المراجعة.'**
+  /// **'إن خُصم المبلغ من حسابك فسيُضاف إلى محفظتك بعد المراجعة.'**
   String get walletReviewMessage;
 
   /// No verdict came back in time.
@@ -39617,6 +39911,654 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الكروت'**
   String get walletServiceVouchers;
+
+  /// Wallet top-up method: Sadad (Libyana's mobile wallet). Brand name.
+  ///
+  /// In ar, this message translates to:
+  /// **'سداد'**
+  String get walletMethodSadad;
+
+  /// Wallet top-up method: Edfali mobile wallet. Brand name.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدفعلي'**
+  String get walletMethodEdfali;
+
+  /// Wallet top-up method: MobiCash. Brand name.
+  ///
+  /// In ar, this message translates to:
+  /// **'موبي كاش'**
+  String get walletMethodMobiCash;
+
+  /// Wallet top-up method: Yussor Pay. Brand name.
+  ///
+  /// In ar, this message translates to:
+  /// **'يسر باي'**
+  String get walletMethodYussorPay;
+
+  /// Wallet top-up method: Masrafi Pay. Brand name.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصرفي باي'**
+  String get walletMethodMasrafiPay;
+
+  /// Wallet top-up method: Sahara Pay. Brand name.
+  ///
+  /// In ar, this message translates to:
+  /// **'صحارى باي'**
+  String get walletMethodSaharaPay;
+
+  /// Under a method tile: the payer pays on the gateway's secure page.
+  ///
+  /// In ar, this message translates to:
+  /// **'صفحة دفع آمنة'**
+  String get walletMethodHintHostedPage;
+
+  /// Under a method tile: the payer pays with their phone number and a texted code.
+  ///
+  /// In ar, this message translates to:
+  /// **'برقم الهاتف'**
+  String get walletMethodHintPhone;
+
+  /// Under a method tile: the payer pays with their wallet card number and a texted code.
+  ///
+  /// In ar, this message translates to:
+  /// **'برقم البطاقة'**
+  String get walletMethodHintCard;
+
+  /// Title of the dialog asking for the payer's details, with the method's name.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع عبر {method}'**
+  String walletPayerDialogTitle(String method);
+
+  /// Message of the payer dialog: method name and the amount to pay.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل بيانات حسابك في {method}، وسيصلك رمز تحقق برسالة نصية لتأكيد دفع {amount}.'**
+  String walletPayerDialogMessage(String method, String amount);
+
+  /// Label of the payer's phone field.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف المسجّل في {method}'**
+  String walletPayerPhoneLabel(String method);
+
+  /// Placeholder showing the Libyan mobile number format.
+  ///
+  /// In ar, this message translates to:
+  /// **'09XXXXXXXX'**
+  String get walletPayerPhoneHint;
+
+  /// Validation: the phone is not a Libyan mobile number.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم هاتف ليبياً صحيحاً، مثل 0912345678.'**
+  String get walletPayerPhoneInvalid;
+
+  /// Label of the payer's wallet card number field.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم بطاقة {method}'**
+  String walletPayerCardLabel(String method);
+
+  /// Validation: the card number is not 6-19 digits.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم البطاقة كاملاً، من 6 إلى 19 رقماً.'**
+  String get walletPayerCardInvalid;
+
+  /// Label of Sadad's birth year field.
+  ///
+  /// In ar, this message translates to:
+  /// **'سنة الميلاد'**
+  String get walletPayerBirthYearLabel;
+
+  /// Validation: the birth year is not a four-digit year.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل سنة الميلاد بأربعة أرقام.'**
+  String get walletPayerBirthYearInvalid;
+
+  /// Note under the form for methods confirmed with a texted code.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيصلك رمز تحقق برسالة نصية لتأكيد الدفع، ولا يُخصم شيء قبل إدخاله.'**
+  String get walletTopUpCodeNote;
+
+  /// Button that starts a code-confirmed payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال رمز التحقق'**
+  String get walletTopUpSendCode;
+
+  /// Button label while the code-confirmed payment starts.
+  ///
+  /// In ar, this message translates to:
+  /// **'نرسل رمز التحقق…'**
+  String get walletTopUpSendingCode;
+
+  /// Title of the code step.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رمز التحقق'**
+  String get walletCodeTitle;
+
+  /// Where the payer's code went: method name and masked phone or card.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل رمز التحقق عبر {method} إلى {payer}.'**
+  String walletCodeSentTo(String method, String payer);
+
+  /// Where the payer's code went, when no masked payer is known.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل رمز التحقق عبر {method}.'**
+  String walletCodeSent(String method);
+
+  /// Label of the code field.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز التحقق'**
+  String get walletCodeLabel;
+
+  /// Validation: the code is missing or not 4-8 digits.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رمز التحقق كما وصلك.'**
+  String get walletCodeRequired;
+
+  /// Button that sends the code.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الدفع'**
+  String get walletCodeConfirm;
+
+  /// Button label while the code is sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'نؤكد الدفع…'**
+  String get walletCodeConfirming;
+
+  /// Button going back from the code to the form (another number or method).
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير البيانات'**
+  String get walletCodeChangeDetails;
+
+  /// Shown on the code step in test mode only: the gateway's test codes.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع تجريبي: الرمز 111111 يُكمل الدفع، و222222 يرفضه.'**
+  String get walletCodeTestHint;
+
+  /// The code the payer typed was wrong.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز التحقق غير صحيح.'**
+  String get walletCodeWrong;
+
+  /// How many codes the payer may still try.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لم تبقَ محاولات.} =1{بقيت محاولة واحدة.} =2{بقيت محاولتان.} few{بقيت {count} محاولات.} other{بقيت {count} محاولة.}}'**
+  String walletCodeAttemptsLeft(int count);
+
+  /// The answer to the code was lost; sending it again is safe.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصلنا رد بوابة الدفع. أعد إرسال الرمز نفسه، ولن يُخصم المبلغ مرتين.'**
+  String get walletCodeUnknown;
+
+  /// Title while the gateway took the code but has not said paid yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتحقق من الدفع'**
+  String get walletAwaitingGatewayTitle;
+
+  /// Message while the gateway took the code but has not said paid yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل الرمز إلى بوابة الدفع، ونتحقق من نتيجة العملية. سيظهر الرصيد فور التأكيد.'**
+  String get walletAwaitingGatewayMessage;
+
+  /// Verdict title: the payer's bank or wallet declined.
+  ///
+  /// In ar, this message translates to:
+  /// **'رُفضت عملية الدفع'**
+  String get walletDeclinedTitle;
+
+  /// Verdict message after a decline.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُضف شيء إلى رصيدك. يمكنك المحاولة مجدداً أو بطريقة دفع أخرى.'**
+  String get walletDeclinedMessage;
+
+  /// Verdict message after too many wrong codes.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُدخل رمز خاطئ مرات كثيرة فأُلغيت العملية. ابدأ عملية شحن جديدة.'**
+  String get walletAttemptsExceededMessage;
+
+  /// The gateway refused the payer's phone number.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تقبل بوابة الدفع رقم الهاتف. تحقق منه وأعد المحاولة.'**
+  String get walletErrorInvalidPhone;
+
+  /// The gateway refused the payer's card number.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تقبل بوابة الدفع رقم البطاقة. تحقق منه وأعد المحاولة.'**
+  String get walletErrorInvalidCard;
+
+  /// The gateway refused Sadad's birth year.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تقبل بوابة الدفع سنة الميلاد. تحقق منها وأعد المحاولة.'**
+  String get walletErrorInvalidBirthYear;
+
+  /// The chosen method is switched off at the gateway.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الدفع هذه غير متاحة الآن. اختر طريقة أخرى.'**
+  String get walletErrorMethodUnavailable;
+
+  /// The payer's provider refused to start the payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض مزوّد الخدمة عملية الدفع. تحقق من البيانات وأعد المحاولة.'**
+  String get walletErrorPayerRejected;
+
+  /// The top-up is closed; start another.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت عملية الشحن هذه. ابدأ عملية جديدة.'**
+  String get walletErrorTopUpClosed;
+
+  /// Title of the SMS balance: the sub-wallet each text message is paid from.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الرسائل'**
+  String get walletSmsBalanceTitle;
+
+  /// How many text messages an SMS balance (or an amount moved into it) pays for.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا يكفي لأي رسالة} =1{يكفي لرسالة واحدة} =2{يكفي لرسالتين} few{يكفي لـ {count} رسائل} many{يكفي لـ {count} رسالة} other{يكفي لـ {count} رسالة}}'**
+  String walletSmsMessagesLeft(int count);
+
+  /// What one text message (one SMS, up to 70 Arabic letters) costs, under the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'{price} للرسالة'**
+  String walletSmsPricePerMessage(String price);
+
+  /// Button that opens the sheet moving money from the main wallet into the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل من المحفظة'**
+  String get walletSmsAllocateButton;
+
+  /// Under the SMS balance when the company's SMS provider is not set up yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة الرسائل غير جاهزة بعد لدى دفتر.'**
+  String get walletSmsNotReady;
+
+  /// Title of the sheet moving money from the main wallet into the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل إلى رصيد الرسائل'**
+  String get walletSmsAllocateTitle;
+
+  /// Explains the transfer at the top of the sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم المبلغ من المحفظة ويُضاف إلى رصيد الرسائل، وتُدفع منه كل رسالة بـ {price}. الرسالة حتى 70 حرفاً، والنص الأطول يُحسب رسالتين أو أكثر.'**
+  String walletSmsAllocateIntro(String price);
+
+  /// Label of the amount field in the SMS transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get walletSmsAllocateAmountLabel;
+
+  /// How much the main wallet holds, in the SMS transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المحفظة: {balance}'**
+  String walletSmsAllocateAvailable(String balance);
+
+  /// Confirm button of the SMS transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل {amount}'**
+  String walletSmsAllocateConfirm(String amount);
+
+  /// Snack bar after money was moved into the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُوِّل {amount} إلى رصيد الرسائل.'**
+  String walletSmsAllocateDone(String amount);
+
+  /// The typed amount is more than the main wallet holds.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ أكبر من رصيد المحفظة.'**
+  String get walletSmsAllocateTooMuch;
+
+  /// The typed amount does not pay for one message.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل مبلغ هو ثمن رسالة واحدة ({price}).'**
+  String walletSmsAllocateTooLittle(String price);
+
+  /// Callout when the main wallet cannot pay for a transfer or a plan.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المحفظة لا يكفي'**
+  String get walletSpendTopUpFirstTitle;
+
+  /// Callout message: top up the wallet, then come back.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشحن المحفظة أولاً ثم أكمل من هنا.'**
+  String get walletSpendTopUpFirstMessage;
+
+  /// A transfer or plan the main wallet could not cover.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المحفظة لا يكفي ({balance}). اشحن المحفظة ثم أعد المحاولة.'**
+  String walletErrorInsufficientBalance(String balance);
+
+  /// A transfer or plan the main wallet could not cover, when the balance is unknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المحفظة لا يكفي. اشحن المحفظة ثم أعد المحاولة.'**
+  String get walletErrorInsufficientBalanceShort;
+
+  /// The plan is not sold through the wallet right now.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الاشتراك غير متاح للدفع من المحفظة الآن.'**
+  String get walletErrorPlanUnavailable;
+
+  /// The subscription already includes the plan with no end date.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الخدمة مشمولة في اشتراكك دون تاريخ انتهاء، فلا حاجة للدفع.'**
+  String get walletErrorPlanIncluded;
+
+  /// The number of periods was refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة الاشتراك غير مقبولة.'**
+  String get walletErrorInvalidPeriods;
+
+  /// Name of the remote-access plan paid from the wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول عن بُعد'**
+  String get walletPlanRemoteAccessTitle;
+
+  /// Name of the AI assistant plan paid from the wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'المساعد الذكي'**
+  String get walletPlanAiTitle;
+
+  /// A plan's length in months.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{شهر} =2{شهرين} few{{count} أشهر} many{{count} شهراً} other{{count} شهر}}'**
+  String walletPlanMonths(int count);
+
+  /// A plan's length in days, when it is not whole months.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{يوم واحد} =2{يومين} few{{count} أيام} many{{count} يوماً} other{{count} يوم}}'**
+  String walletPlanDays(int count);
+
+  /// One period's price, e.g. 50.00 د.ل لكل شهر.
+  ///
+  /// In ar, this message translates to:
+  /// **'{price} لكل {period}'**
+  String walletPlanPricePer(String price, String period);
+
+  /// Button paying for a plan that is not running, from the wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترك من المحفظة'**
+  String get walletPlanBuyButton;
+
+  /// Button paying for more of a plan that is running, from the wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'جدّد من المحفظة'**
+  String get walletPlanRenewButton;
+
+  /// Row label: the plan is paid from the wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُدفع من المحفظة'**
+  String get walletPlanPaidFromWallet;
+
+  /// Title of the sheet paying for a plan.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتراك {plan}'**
+  String walletPlanSheetTitle(String plan);
+
+  /// Label above the plan length choices.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدة'**
+  String get walletPlanPeriodLabel;
+
+  /// Summary row: what the purchase costs.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get walletPlanTotalLabel;
+
+  /// Summary row: what the main wallet holds now.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المحفظة'**
+  String get walletPlanWalletLabel;
+
+  /// Summary row: what the main wallet holds after paying.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد بعد الدفع'**
+  String get walletPlanBalanceAfterLabel;
+
+  /// Summary row: when the plan ends after this purchase.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي في'**
+  String get walletPlanEndsLabel;
+
+  /// Note when renewing a plan that is still running.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُضاف المدة بعد نهاية اشتراكك الحالي، فلا يضيع شيء من أيامه.'**
+  String get walletPlanRenewNote;
+
+  /// Confirm button of the plan sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'ادفع {amount}'**
+  String walletPlanPayButton(String amount);
+
+  /// Snack bar after a plan was paid for.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الدفع — {plan} مُفعّل حتى {date}.'**
+  String walletPlanPaidMessage(String plan, String date);
+
+  /// Under a plan the subscription includes for good.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشمول في اشتراكك دون تاريخ انتهاء.'**
+  String get walletPlanIncludedMessage;
+
+  /// Under a plan the wallet does not sell, while it is not running.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متاح للدفع من المحفظة حالياً. تواصل مع الدعم لتفعيله.'**
+  String get walletPlanNotSold;
+
+  /// Statement line: the shop moving its own money between the wallet and the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل'**
+  String get walletEntryTransfer;
+
+  /// The remote-access service a charge was for.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول عن بُعد'**
+  String get walletServiceRemoteAccess;
+
+  /// History tab listing the SMS balance's movements.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الرسائل'**
+  String get walletHistorySmsTab;
+
+  /// Empty SMS balance history.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حركات على رصيد الرسائل بعد.'**
+  String get walletHistoryEmptySms;
+
+  /// Remote access is off and the wallet sells it.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترك من المحفظة لاستخدام التطبيق خارج المتجر عبر خادم دفتر.'**
+  String get subscriptionRemoteAccessWalletMessage;
+
+  /// The assistant is off and the wallet sells it.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترك من المحفظة لتستفيد من المساعد الذكي في تحليل مبيعاتك ومخزونك.'**
+  String get subscriptionAiWalletMessage;
+
+  /// SMS works: the SMS balance pays for messages.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسائل النصية تعمل'**
+  String get subscriptionSmsPrepaidActiveTitle;
+
+  /// SMS works, paid per SMS (70 Arabic letters each) from the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُدفع الرسائل من رصيد الرسائل: {price} للرسالة حتى 70 حرفاً، والنص الأطول يُحسب رسالتين أو أكثر. الإعدادات ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.'**
+  String subscriptionSmsPrepaidActiveMessage(String price);
+
+  /// SMS cannot be sent: the SMS balance is empty.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الرسائل فارغ'**
+  String get subscriptionSmsPrepaidEmptyTitle;
+
+  /// How to start sending SMS.
+  ///
+  /// In ar, this message translates to:
+  /// **'حوّل مبلغاً من المحفظة إلى رصيد الرسائل لإرسال الفواتير والتذكيرات والعروض إلى عملائك.'**
+  String get subscriptionSmsPrepaidEmptyMessage;
+
+  /// SMS page status when the SMS balance cannot pay for a message.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد فارغ'**
+  String get messagingStatusNoBalance;
+
+  /// Title of the SMS balance section on the SMS settings page.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الرسائل'**
+  String get messagingBalanceTitle;
+
+  /// How many messages went out this month.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لم تُرسل رسائل هذا الشهر} =1{أُرسلت رسالة واحدة هذا الشهر} =2{أُرسلت رسالتان هذا الشهر} few{أُرسلت {count} رسائل هذا الشهر} many{أُرسلت {count} رسالة هذا الشهر} other{أُرسلت {count} رسالة هذا الشهر}}'**
+  String messagingBalanceSentThisMonth(int count);
+
+  /// Callout when the SMS balance cannot pay for a message.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الرسائل فارغ'**
+  String get messagingBalanceEmptyTitle;
+
+  /// Callout message for an empty SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تُرسل الرسائل حتى تحوّل مبلغاً من المحفظة إلى رصيد الرسائل. تُدفع كل رسالة بـ {price}.'**
+  String messagingBalanceEmptyMessage(String price);
+
+  /// A message refused because the SMS balance could not pay for it (a long message costs several SMS).
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الرسائل لا يكفي لهذه الرسالة. حوّل مبلغاً من المحفظة إلى رصيد الرسائل ثم أعد الإرسال.'**
+  String get messagingErrorInsufficientBalance;
+
+  /// Explains that SMS are paid by length: one SMS holds 70 Arabic letters, a longer text goes out (and is paid) as several.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسالة حتى 70 حرفاً، والنص الأطول يُرسل ويُحسب رسالتين أو أكثر.'**
+  String get walletSmsLengthNote;
+
+  /// Under an SMS balance that went below zero: messages sent longer than they were held for; the next transfer pays it.
+  ///
+  /// In ar, this message translates to:
+  /// **'عليه {amount} عن رسائل خرجت أطول من المتوقع، تُخصم من التحويل القادم.'**
+  String walletSmsOwed(String amount);
+
+  /// Campaign preview row: what the campaign will cost from the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة التقديرية'**
+  String get campaignPreviewCostLabel;
+
+  /// Approximate campaign cost: every recipient's message, per SMS.
+  ///
+  /// In ar, this message translates to:
+  /// **'≈ {amount}'**
+  String campaignPreviewCost(String amount);
+
+  /// Warning in the campaign preview: the SMS balance pays for only part of the campaign.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الرسائل لا يكفي للحملة كاملة'**
+  String get campaignPreviewBalanceShortTitle;
+
+  /// Explains the shortfall and how to cover it before sending.
+  ///
+  /// In ar, this message translates to:
+  /// **'في رصيد الرسائل {balance} والحملة تحتاج نحو {cost}. تتوقف الرسائل حين ينفد الرصيد، فحوّل مبلغاً إليه من المحفظة قبل الإرسال.'**
+  String campaignPreviewBalanceShortMessage(String balance, String cost);
+
+  /// Quick amount moving the whole main wallet into the SMS balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'كامل الرصيد'**
+  String get walletSmsAllocateAll;
+
+  /// Cancel button of the wallet spending sheets.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get walletSpendCancel;
+
+  /// A plan that runs, and the day it stops.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُفعّل حتى {date}'**
+  String walletPlanActiveUntil(String date);
 }
 
 class _AppLocalizationsDelegate

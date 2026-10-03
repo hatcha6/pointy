@@ -23,7 +23,7 @@ about, so this module makes four things explicit that used to be guessed:
 """
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 MONEY_PLACES = Decimal("0.01")
 QUANTITY_PLACES = Decimal("0.001")
@@ -155,7 +155,16 @@ def money(value):
 
 
 def quantity(value):
-    return str(decimal_from(value).quantize(QUANTITY_PLACES).normalize())
+    """A quantity as plain digits, trailing zeros dropped: ``2.5``, ``40``.
+
+    Always fixed-point. ``normalize()`` alone turns a whole number of tens into
+    an exponent — ``str(Decimal(40).normalize())`` is ``"4E+1"`` — and every
+    reader prints the string it is given, so forty on the shelf printed as
+    4E+1 on the stock report.
+    """
+    number = decimal_from(value).quantize(QUANTITY_PLACES).normalize()
+    # A sum that rounds to nothing from below is nothing, not "-0".
+    return format(number if number else Decimal("0"), "f")
 
 
 def decimal_from(value):
@@ -183,14 +192,31 @@ def percent_change(current, previous):
     Returning ``None`` rather than 0 or 100 matters: "up from nothing" is not a
     percentage, and printing one invites a reader to compare two figures that
     are not comparable.
+
+    So is a figure that is not a number at all — the customer a statement is
+    about, the busiest hour, the largest category. It is compared by printing
+    the earlier one beside it, never by dividing; dividing it was a crash, and
+    with a comparison selected by default it took every customer statement
+    with it.
     """
     if previous is None:
         return None
-    previous_value = decimal_from(previous)
-    if previous_value == 0:
+    previous_value = _number_or_none(previous)
+    current_value = _number_or_none(current)
+    if previous_value is None or current_value is None or previous_value == 0:
         return None
-    change = (decimal_from(current) - previous_value) / abs(previous_value)
+    change = (current_value - previous_value) / abs(previous_value)
     return str((change * Decimal("100")).quantize(MONEY_PLACES))
+
+
+def _number_or_none(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        number = decimal_from(value)
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return number if number.is_finite() else None
 
 
 def bounded_queryset(queryset, *, limit):

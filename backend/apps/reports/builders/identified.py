@@ -66,8 +66,14 @@ def unit_aging(context):
     Counts what is physically here — consigned articles included, because they
     take up the same space and go just as stale — while the capital column is
     blind to them, because none of it is the shop's money.
+
+    Always today's shelf, aged to today. It used to age today's shelf to the
+    end of whatever period was picked: an article bought after that date
+    counted as 0 days old, and one that was 200 days old then but has since
+    sold was missing altogether. A past shelf is not something this report can
+    rebuild, so a past date gets today's answer and a note saying so.
     """
-    today = context.period.end_date
+    today = timezone.localdate()
     units = list(
         StockUnit.objects.filter(status__in=StockUnit.ON_HAND_STATUSES)
         .select_related("variant", "variant__product")
@@ -136,21 +142,22 @@ def unit_aging(context):
         "stale_capital": money(stale_capital),
         "oldest_days": oldest,
     }
-    bounded = bounded_rows(rows, limit=context.row_limit("aging_units"))
-    return {
-        "summary": figures,
-        "sections": [
-            context.metrics(figures),
-            report_section(
-                "aging_buckets",
-                [
-                    Column("bucket", ColumnType.LABEL),
-                    Column("unit_count", ColumnType.COUNT, total=True),
-                    Column("capital", ColumnType.MONEY, total=True),
-                    Column("consigned_count", ColumnType.COUNT, total=True),
-                ],
-                bucket_rows,
-            ),
+    sections = [
+        context.metrics(figures),
+        report_section(
+            "aging_buckets",
+            [
+                Column("bucket", ColumnType.LABEL),
+                Column("unit_count", ColumnType.COUNT, total=True),
+                Column("capital", ColumnType.MONEY, total=True),
+                Column("consigned_count", ColumnType.COUNT, total=True),
+            ],
+            bucket_rows,
+        ),
+    ]
+    if context.wants_detail():
+        bounded = bounded_rows(rows, limit=context.row_limit("aging_units"))
+        sections.append(
             report_section(
                 "aging_units",
                 [
@@ -164,11 +171,20 @@ def unit_aging(context):
                 bounded.rows,
                 total_count=bounded.total_count,
                 limit=bounded.limit,
-            ),
-        ],
+                totals={"capital": money(total_capital)},
+            )
+        )
+    return {
+        "summary": figures,
+        "sections": sections,
         "notes": [
             note("aging_counts_consignment"),
             note("aging_capital_excludes_consignment"),
+            (
+                note("aging_is_today", date=today)
+                if context.period.end_date < today
+                else None
+            ),
         ],
     }
 
@@ -224,11 +240,10 @@ def unit_margin(context):
         "gross_profit": money(revenue - cost),
         "loss_making_units": loss_makers,
     }
-    bounded = bounded_rows(rows, limit=context.row_limit("unit_margin"))
-    return {
-        "summary": figures,
-        "sections": [
-            context.metrics(figures),
+    sections = [context.metrics(figures)]
+    if context.wants_detail():
+        bounded = bounded_rows(rows, limit=context.row_limit("unit_margin"))
+        sections.append(
             report_section(
                 "unit_margin",
                 [
@@ -244,8 +259,19 @@ def unit_margin(context):
                 bounded.rows,
                 total_count=bounded.total_count,
                 limit=bounded.limit,
-            ),
-        ],
+                totals={
+                    "sold_price": money(revenue),
+                    "unit_cost": money(cost),
+                    "refurb_cost": money(
+                        sum((Decimal(unit.refurb_cost or 0) for unit in units), ZERO)
+                    ),
+                    "profit": money(revenue - cost),
+                },
+            )
+        )
+    return {
+        "summary": figures,
+        "sections": sections,
         "notes": [note("unit_margin_cost_includes_refurb")],
     }
 
@@ -264,6 +290,12 @@ def unit_ledger(context):
     from apps.inventory.identity import normalize_identifier
 
     normalized = normalize_identifier(code)
+    if not normalized:
+        # A code made only of separators ("-", "/") normalises to nothing, and
+        # nothing matches every article without a second code.
+        from ..registry import ReportValidationError
+
+        raise ReportValidationError("code")
     units = list(
         StockUnit.objects.filter(
             Q(code_normalized=normalized) | Q(secondary_code_normalized=normalized)
@@ -293,10 +325,9 @@ def unit_ledger(context):
         "status": current.status if current is not None else "",
         "cost": money(current.stock_value) if current is not None else money(ZERO),
     }
-    return {
-        "summary": figures,
-        "sections": [
-            context.metrics(figures),
+    sections = [context.metrics(figures)]
+    if context.wants_detail():
+        sections.append(
             report_section(
                 "unit_ledger",
                 [
@@ -308,8 +339,11 @@ def unit_ledger(context):
                     Column("rate", ColumnType.MONEY),
                 ],
                 rows,
-            ),
-        ],
+            )
+        )
+    return {
+        "summary": figures,
+        "sections": sections,
         "notes": [note("unit_ledger_is_one_article")],
     }
 
@@ -324,6 +358,35 @@ def consignment_ledger(context):
     position = consignment_figures.consignment_position(
         start=start, end=end, as_of=end
     )
+    figures = {
+        # ≡ 0 by construction, and printed anyway: a consignment page that did
+        # not say "the goods are worth nothing to this shop" would be read as
+        # having forgotten to.
+        "consignment_stock_value": money(position["stock_value"]),
+        "consignor_payable": money(position["consignor_payable"]),
+        # The debt that runs the other way, on the page beside the one that runs
+        # this way. Never netted into it: a shop that owes one consignor 10,000
+        # and is owed 3,000 by another owes 10,000.
+        "consignor_receivable": money(position["consignor_receivable"]),
+        "shop_commission": money(position["shop_commission"]),
+        "custody_unit_count": position["custody"]["unit_count"],
+        "custody_declared_value": money(position["custody"]["declared_value"]),
+    }
+    sections = [context.metrics(figures)]
+    if context.wants_detail():
+        sections.extend(_consignment_detail_sections(start, end, period.end_date))
+    return {
+        "summary": figures,
+        "sections": sections,
+        "notes": [
+            note("consignment_stock_value_is_zero"),
+            note("consignment_payable_counts_credit_sales"),
+        ],
+    }
+
+
+def _consignment_detail_sections(start, end, today):
+    """What is owed article by article, and every consignment sold."""
     payables = list(
         consignment_figures.payable_units(as_of=end)
         .select_related("variant", "consignor", "sold_order_line__order")
@@ -339,7 +402,6 @@ def consignment_ledger(context):
         .select_related("variant", "consignor")
         .order_by("-sold_at", "-id")
     )
-    today = period.end_date
     payable_rows = [
         {
             "consignor": unit.consignor.full_name if unit.consignor_id else "",
@@ -371,56 +433,34 @@ def consignment_ledger(context):
         }
         for unit in sold
     ]
-    figures = {
-        # ≡ 0 by construction, and printed anyway: a consignment page that did
-        # not say "the goods are worth nothing to this shop" would be read as
-        # having forgotten to.
-        "consignment_stock_value": money(position["stock_value"]),
-        "consignor_payable": money(position["consignor_payable"]),
-        # The debt that runs the other way, on the page beside the one that runs
-        # this way. Never netted into it: a shop that owes one consignor 10,000
-        # and is owed 3,000 by another owes 10,000.
-        "consignor_receivable": money(position["consignor_receivable"]),
-        "shop_commission": money(position["shop_commission"]),
-        "custody_unit_count": position["custody"]["unit_count"],
-        "custody_declared_value": money(position["custody"]["declared_value"]),
-    }
-    return {
-        "summary": figures,
-        "sections": [
-            context.metrics(figures),
-            report_section(
-                "consignment_payables",
-                [
-                    Column("consignor"),
-                    Column("code"),
-                    Column("product_name"),
-                    Column("sold_at", ColumnType.DATETIME),
-                    Column("payout_due", ColumnType.MONEY, total=True),
-                    Column("days_waiting", ColumnType.COUNT),
-                ],
-                payable_rows,
-            ),
-            report_section(
-                "consignment_sales",
-                [
-                    Column("consignor"),
-                    Column("code"),
-                    Column("product_name"),
-                    Column("sold_at", ColumnType.DATETIME),
-                    Column("sold_price", ColumnType.MONEY, total=True),
-                    Column("payout", ColumnType.MONEY, total=True),
-                    Column("commission", ColumnType.MONEY, total=True),
-                    Column("paid", ColumnType.CHOICE),
-                ],
-                sold_rows,
-            ),
-        ],
-        "notes": [
-            note("consignment_stock_value_is_zero"),
-            note("consignment_payable_counts_credit_sales"),
-        ],
-    }
+    return [
+        report_section(
+            "consignment_payables",
+            [
+                Column("consignor"),
+                Column("code"),
+                Column("product_name"),
+                Column("sold_at", ColumnType.DATETIME),
+                Column("payout_due", ColumnType.MONEY, total=True),
+                Column("days_waiting", ColumnType.COUNT),
+            ],
+            payable_rows,
+        ),
+        report_section(
+            "consignment_sales",
+            [
+                Column("consignor"),
+                Column("code"),
+                Column("product_name"),
+                Column("sold_at", ColumnType.DATETIME),
+                Column("sold_price", ColumnType.MONEY, total=True),
+                Column("payout", ColumnType.MONEY, total=True),
+                Column("commission", ColumnType.MONEY, total=True),
+                Column("paid", ColumnType.CHOICE),
+            ],
+            sold_rows,
+        ),
+    ]
 
 
 __all__ = ["consignment_ledger", "unit_aging", "unit_ledger", "unit_margin"]

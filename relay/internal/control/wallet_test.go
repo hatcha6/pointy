@@ -39,22 +39,27 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 	// Top-up: born pending with a readable invoice number, idempotent by key.
 	topUp, created, err := store.BeginWalletTopUp(ctx, WalletTopUp{
 		InstallationID: installationID,
-		Method:         WalletTopUpMethodPlutuLocalBankCards,
+		Method:         WalletTopUpMethodDafaSadad,
 		Amount:         "100",
 		IdempotencyKey: "topup-key-1",
 		RequestedBy:    "owner",
+		PayerHint:      "091•••678",
 		TestMode:       true,
 	})
 	if err != nil || !created {
 		t.Fatalf("begin top-up: %+v created=%v err=%v", topUp, created, err)
 	}
 	if topUp.Status != WalletTopUpPending || topUp.Amount != "100.000" || !strings.HasPrefix(topUp.InvoiceNo, "DFW-") ||
-		len(topUp.InvoiceNo) != 14 || !topUp.TestMode || topUp.RequestedBy != "owner" {
+		len(topUp.InvoiceNo) != 14 || !topUp.TestMode || topUp.RequestedBy != "owner" || topUp.PayerHint != "091•••678" ||
+		topUp.OTPAttempts != 0 || topUp.ProviderTransactionID != "" {
 		t.Fatalf("unexpected top-up %+v", topUp)
+	}
+	if open, err := store.ListOpenWalletTopUps(ctx, topUp.CreatedAt.Add(-time.Hour), 50); err != nil || len(open) != 0 {
+		t.Fatalf("a top-up without a payment has nothing to check: %+v %v", open, err)
 	}
 	again, created, err := store.BeginWalletTopUp(ctx, WalletTopUp{
 		InstallationID: installationID,
-		Method:         WalletTopUpMethodPlutuLocalBankCards,
+		Method:         WalletTopUpMethodDafaSadad,
 		Amount:         "999",
 		IdempotencyKey: "topup-key-1",
 	})
@@ -62,32 +67,58 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 		t.Fatalf("a repeated key must return the first top-up: %+v created=%v err=%v", again, created, err)
 	}
 
-	attached, err := store.AttachWalletTopUpCheckout(ctx, topUp.ID, "https://checkout.example/p/1")
-	if err != nil || attached.CheckoutURL != "https://checkout.example/p/1" {
-		t.Fatalf("attach checkout: %+v %v", attached, err)
+	attached, err := store.AttachWalletTopUpPayment(ctx, topUp.ID, "pay-1", "https://pay.example/p/1")
+	if err != nil || attached.ProviderTransactionID != "pay-1" || attached.CheckoutURL != "https://pay.example/p/1" {
+		t.Fatalf("attach payment: %+v %v", attached, err)
 	}
-	// A second attach never replaces the page the payer may already be on.
-	if second, err := store.AttachWalletTopUpCheckout(ctx, topUp.ID, "https://checkout.example/p/2"); err != nil ||
-		second.CheckoutURL != "https://checkout.example/p/1" {
-		t.Fatalf("second attach must keep the first page: %+v %v", second, err)
+	// A second attach never replaces the payment the payer may already be on.
+	if second, err := store.AttachWalletTopUpPayment(ctx, topUp.ID, "pay-2", "https://pay.example/p/2"); err != nil ||
+		second.ProviderTransactionID != "pay-1" || second.CheckoutURL != "https://pay.example/p/1" {
+		t.Fatalf("second attach must keep the first payment: %+v %v", second, err)
 	}
 	byInvoice, err := store.FindWalletTopUpByInvoice(ctx, topUp.InvoiceNo)
 	if err != nil || byInvoice.ID != topUp.ID {
 		t.Fatalf("find by invoice: %+v %v", byInvoice, err)
 	}
+	open, err := store.ListOpenWalletTopUps(ctx, topUp.CreatedAt, 50)
+	if err != nil || len(open) != 1 || open[0].ID != topUp.ID || open[0].ShopName == "" {
+		t.Fatalf("a pending top-up with a payment is open: %+v %v", open, err)
+	}
+	if open, err := store.ListOpenWalletTopUps(ctx, topUp.CreatedAt.Add(time.Second), 50); err != nil || len(open) != 0 {
+		t.Fatalf("the horizon must leave out older top-ups: %+v %v", open, err)
+	}
 
-	// Paid exactly once, however many times the payment is proved.
-	paid, applied, err := store.SettleWalletTopUp(ctx, topUp.ID, WalletTopUpSettlement{
-		ProviderTransactionID: "100900",
-		ConfirmedBy:           "plutu",
-	})
+	// Codes are counted up to the cap and no further.
+	for want := 1; want <= 2; want++ {
+		counted, recorded, err := store.RecordWalletTopUpOTPAttempt(ctx, topUp.ID, 2)
+		if err != nil || !recorded || counted.OTPAttempts != want {
+			t.Fatalf("attempt %d: %+v recorded=%v err=%v", want, counted, recorded, err)
+		}
+	}
+	if counted, recorded, err := store.RecordWalletTopUpOTPAttempt(ctx, topUp.ID, 2); err != nil || recorded || counted.OTPAttempts != 2 {
+		t.Fatalf("the cap must hold: %+v recorded=%v err=%v", counted, recorded, err)
+	}
+
+	// Paid exactly once, however many times the payment is proved. A proof
+	// without its own id keeps the payment id the top-up already has.
+	paid, applied, err := store.SettleWalletTopUp(ctx, topUp.ID, WalletTopUpSettlement{ConfirmedBy: "dafa"})
 	if err != nil || !applied || paid.Status != WalletTopUpPaid || paid.EntryID == "" || paid.PaidAt == nil ||
-		paid.ProviderTransactionID != "100900" || paid.ConfirmedBy != "plutu" {
+		paid.ProviderTransactionID != "pay-1" || paid.ConfirmedBy != "dafa" {
 		t.Fatalf("settle: %+v applied=%v err=%v", paid, applied, err)
 	}
-	replayed, applied, err := store.SettleWalletTopUp(ctx, topUp.ID, WalletTopUpSettlement{ConfirmedBy: "ops"})
-	if err != nil || applied || replayed.EntryID != paid.EntryID || replayed.ConfirmedBy != "plutu" {
+	replayed, applied, err := store.SettleWalletTopUp(ctx, topUp.ID, WalletTopUpSettlement{ConfirmedBy: "ops", ProviderTransactionID: "x"})
+	if err != nil || applied || replayed.EntryID != paid.EntryID || replayed.ConfirmedBy != "dafa" || replayed.ProviderTransactionID != "pay-1" {
 		t.Fatalf("a second settlement must change nothing: %+v applied=%v err=%v", replayed, applied, err)
+	}
+	if counted, recorded, err := store.RecordWalletTopUpOTPAttempt(ctx, topUp.ID, 10); err != nil || recorded || counted.Status != WalletTopUpPaid {
+		t.Fatalf("a paid top-up takes no more codes: %+v recorded=%v err=%v", counted, recorded, err)
+	}
+	if open, err := store.ListOpenWalletTopUps(ctx, topUp.CreatedAt, 50); err != nil || len(open) != 0 {
+		t.Fatalf("a paid top-up is no longer open: %+v %v", open, err)
+	}
+	entries, err := store.ListWalletEntries(ctx, WalletEntryFilter{InstallationID: installationID})
+	if err != nil || len(entries) != 1 || entries[0].Description != "شحن المحفظة "+topUp.InvoiceNo {
+		t.Fatalf("an undescribed credit is named in Arabic for the statement: %+v %v", entries, err)
 	}
 	if closed, applied, err := store.CloseWalletTopUp(ctx, topUp.ID, WalletTopUpCanceled, "canceled", ""); err != nil ||
 		applied || closed.Status != WalletTopUpPaid {
@@ -184,7 +215,7 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 		t.Fatalf("an unknown installation must be ErrNotFound, got %v", err)
 	}
 
-	entries, err := store.ListWalletEntries(ctx, WalletEntryFilter{InstallationID: installationID})
+	entries, err = store.ListWalletEntries(ctx, WalletEntryFilter{InstallationID: installationID})
 	if err != nil || len(entries) != 4 {
 		t.Fatalf("four entries expected: %d %v", len(entries), err)
 	}
@@ -202,7 +233,7 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 
 	// Cancel, fail and expire only ever touch undecided top-ups, and a signed
 	// approval still wins over an expiry.
-	canceled, _, _ := store.BeginWalletTopUp(ctx, WalletTopUp{InstallationID: installationID, Method: WalletTopUpMethodPlutuLocalBankCards, Amount: "5", IdempotencyKey: "k-cancel"})
+	canceled, _, _ := store.BeginWalletTopUp(ctx, WalletTopUp{InstallationID: installationID, Method: WalletTopUpMethodDafaSadad, Amount: "5", IdempotencyKey: "k-cancel"})
 	if closed, applied, err := store.CloseWalletTopUp(ctx, canceled.ID, WalletTopUpCanceled, "canceled", "payer cancelled"); err != nil ||
 		!applied || closed.Status != WalletTopUpCanceled || closed.ErrorDetail != "payer cancelled" {
 		t.Fatalf("cancel: %+v applied=%v err=%v", closed, applied, err)
@@ -210,7 +241,7 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 	if _, _, err := store.CloseWalletTopUp(ctx, canceled.ID, WalletTopUpPaid, "", ""); err == nil {
 		t.Fatal("close must refuse to set paid")
 	}
-	stale, _, _ := store.BeginWalletTopUp(ctx, WalletTopUp{InstallationID: installationID, Method: WalletTopUpMethodPlutuLocalBankCards, Amount: "7.5", IdempotencyKey: "k-stale"})
+	stale, _, _ := store.BeginWalletTopUp(ctx, WalletTopUp{InstallationID: installationID, Method: WalletTopUpMethodDafaSadad, Amount: "7.5", IdempotencyKey: "k-stale"})
 	moved, err := store.ExpireWalletTopUps(ctx, stale.CreatedAt.Add(time.Second))
 	if err != nil || moved != 1 {
 		t.Fatalf("exactly the pending top-up expires: %d %v", moved, err)
@@ -219,7 +250,7 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 	if err != nil || expired.Status != WalletTopUpExpired {
 		t.Fatalf("expired: %+v %v", expired, err)
 	}
-	late, applied, err := store.SettleWalletTopUp(ctx, stale.ID, WalletTopUpSettlement{ProviderTransactionID: "late", ConfirmedBy: "plutu"})
+	late, applied, err := store.SettleWalletTopUp(ctx, stale.ID, WalletTopUpSettlement{ProviderTransactionID: "late", ConfirmedBy: "dafa"})
 	if err != nil || !applied || late.Status != WalletTopUpPaid {
 		t.Fatalf("a late signed approval must still credit: %+v applied=%v err=%v", late, applied, err)
 	}
@@ -239,7 +270,7 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 	if _, err := store.GetWalletTopUp(ctx, "nope"); !errors.Is(err, ErrWalletTopUpNotFound) {
 		t.Fatalf("unknown top-up: %v", err)
 	}
-	wallets, err := store.ListWallets(ctx, 200)
+	wallets, err := store.ListWallets(ctx, WalletAccountMain, 200)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,12 +333,12 @@ func TestFileStoreWalletSurvivesAReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	topUp, _, err := store.BeginWalletTopUp(context.Background(), WalletTopUp{
-		InstallationID: provisioned.Installation.ID, Method: WalletTopUpMethodPlutuLocalBankCards, Amount: "25", IdempotencyKey: "k",
+		InstallationID: provisioned.Installation.ID, Method: WalletTopUpMethodDafaSadad, Amount: "25", IdempotencyKey: "k",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.SettleWalletTopUp(context.Background(), topUp.ID, WalletTopUpSettlement{ConfirmedBy: "plutu"}); err != nil {
+	if _, _, err := store.SettleWalletTopUp(context.Background(), topUp.ID, WalletTopUpSettlement{ConfirmedBy: "dafa"}); err != nil {
 		t.Fatal(err)
 	}
 	reloaded, err := NewFileStore(path, fixedClock{now: now})
@@ -376,7 +407,7 @@ func TestNewWalletInvoiceNoIsReadableAndGatewaySafe(t *testing.T) {
 	}
 }
 
-// TestPostgresWalletLedger exercises migration 15 and the Postgres wallet. It
+// TestPostgresWalletLedger exercises migrations 15 and 16 and the Postgres wallet. It
 // is gated on a reachable database like the SMS ledger test; point
 // POINTY_RELAY_E2E_DATABASE_URL at a DEDICATED database, never a dev one.
 func TestPostgresWalletLedger(t *testing.T) {
@@ -401,7 +432,7 @@ func TestPostgresWalletLedger(t *testing.T) {
 	id := provisioned.Installation.ID
 	defer func() {
 		cleanup := context.Background()
-		for _, table := range []string{"relay_wallet_topups", "relay_wallet_entries", "relay_wallets", "relay_admin_audit_events"} {
+		for _, table := range []string{"relay_wallet_topups", "relay_wallet_entries", "relay_wallets", "relay_wallet_accounts", "relay_admin_audit_events"} {
 			_, _ = store.pool.Exec(cleanup, `DELETE FROM `+table+` WHERE installation_id = $1`, id)
 		}
 		_, _ = store.pool.Exec(cleanup, `DELETE FROM relay_installations WHERE id = $1`, id)
@@ -454,7 +485,7 @@ func TestPostgresWalletLedger(t *testing.T) {
 	}
 
 	// Two proofs of the same payment racing: one credit.
-	topUp, _, err := store.BeginWalletTopUp(ctx, WalletTopUp{InstallationID: id, Method: WalletTopUpMethodPlutuLocalBankCards, Amount: "20", IdempotencyKey: "settle-race"})
+	topUp, _, err := store.BeginWalletTopUp(ctx, WalletTopUp{InstallationID: id, Method: WalletTopUpMethodDafaSadad, Amount: "20", IdempotencyKey: "settle-race"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,7 +495,7 @@ func TestPostgresWalletLedger(t *testing.T) {
 		settleWG.Add(1)
 		go func() {
 			defer settleWG.Done()
-			_, applied, err := store.SettleWalletTopUp(ctx, topUp.ID, WalletTopUpSettlement{ConfirmedBy: "plutu"})
+			_, applied, err := store.SettleWalletTopUp(ctx, topUp.ID, WalletTopUpSettlement{ConfirmedBy: "dafa"})
 			if err != nil {
 				t.Errorf("settle race: %v", err)
 			}
@@ -485,6 +516,39 @@ func TestPostgresWalletLedger(t *testing.T) {
 	wallet, _ = store.GetWallet(ctx, id)
 	if wallet.Balance != "25.000" {
 		t.Fatalf("balance after the settle race: %s", wallet.Balance)
+	}
+
+	// Codes sent in parallel cannot slip past the cap: twenty race for five.
+	guessed, _, err := store.BeginWalletTopUp(ctx, WalletTopUp{InstallationID: id, Method: WalletTopUpMethodDafaSadad, Amount: "10", IdempotencyKey: "otp-race"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AttachWalletTopUpPayment(ctx, guessed.ID, "pay-race", ""); err != nil {
+		t.Fatal(err)
+	}
+	var otpWG sync.WaitGroup
+	recordedCount := make(chan bool, 20)
+	for i := 0; i < 20; i++ {
+		otpWG.Add(1)
+		go func() {
+			defer otpWG.Done()
+			_, recorded, err := store.RecordWalletTopUpOTPAttempt(ctx, guessed.ID, 5)
+			if err != nil {
+				t.Errorf("otp race: %v", err)
+			}
+			recordedCount <- recorded
+		}()
+	}
+	otpWG.Wait()
+	close(recordedCount)
+	recorded := 0
+	for ok := range recordedCount {
+		if ok {
+			recorded++
+		}
+	}
+	if counted, _ := store.GetWalletTopUp(ctx, guessed.ID); recorded != 5 || counted.OTPAttempts != 5 {
+		t.Fatalf("exactly five codes may be counted, got %d (stored %d)", recorded, counted.OTPAttempts)
 	}
 
 	// The database itself refuses what the ledger's rules refuse.

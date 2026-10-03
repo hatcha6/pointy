@@ -14,6 +14,7 @@ from apps.messaging.transports import fake
 from .campaigns import (
     approve_and_send,
     expand_campaign_recipients,
+    preview_campaign,
     pump_campaign,
     resolve_audience,
 )
@@ -49,6 +50,44 @@ class TemplatingTests(TestCase):
         )
         self.assertIn("علي", out)
         self.assertIn("{{unknown}}", out)
+
+
+class PreviewCostTests(TestCase):
+    """A campaign's cost is every recipient's message at the price of each
+    SMS part it goes out as — a long promotion is several SMS apiece."""
+
+    def setUp(self):
+        fake.reset()
+        make_gateway()
+
+    def test_no_cost_without_an_sms_balance(self):
+        champion("علي", "+218912345670")
+        preview = preview_campaign(make_campaign(rfm_segments=["champion"]))
+        self.assertEqual(preview["estimated_cost"], "")
+        self.assertEqual(preview["sms_balance"], "")
+
+    def test_cost_counts_every_part_of_every_message(self):
+        from decimal import Decimal
+
+        from apps.core.models import RelayInstallation
+
+        RelayInstallation.objects.create(
+            installation_id="inst-1",
+            relay_public_api_url="https://relay.example",
+            connector_token="c",
+            access_token="a",
+            sms_balance=Decimal("1.000"),
+            sms_price=Decimal("0.150"),
+        )
+        for index in range(3):
+            champion(f"عميل {index}", f"+21891234567{index}")
+        long_text = "عرض خاص هذا الأسبوع على كل المنظفات والمواد الغذائية في المحل، خصم يصل إلى عشرين بالمئة"
+        preview = preview_campaign(make_campaign(rfm_segments=["champion"], body_template=long_text))
+        self.assertEqual(preview["segments"], 2)
+        self.assertEqual(preview["sendable_estimate"], 3)
+        self.assertEqual(preview["estimated_cost"], "0.900")
+        self.assertEqual(preview["sms_balance"], "1.000")
+        self.assertEqual(preview["sms_price"], "0.150")
 
 
 class AudienceTests(TestCase):

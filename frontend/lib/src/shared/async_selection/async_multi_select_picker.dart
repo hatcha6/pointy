@@ -382,6 +382,7 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
     required this.onPick,
     required this.onClear,
     required this.validator,
+    this.fillColor,
   });
 
   final Key fieldKey;
@@ -391,6 +392,10 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
   final VoidCallback? onClear;
   final String? Function(List<AsyncSelectionOption<T>> selected) validator;
 
+  /// Overrides the field's background — the product form tints a selection
+  /// carried over from the previous product.
+  final Color? fillColor;
+
   @override
   Widget build(BuildContext context) {
     return FormField<List<AsyncSelectionOption<T>>>(
@@ -398,7 +403,7 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
       validator: (_) => validator(selected),
       builder: (field) {
         return Material(
-          color: context.pointyColors.surface,
+          color: fillColor ?? context.pointyColors.surface,
           borderRadius: BorderRadius.circular(8),
           child: InkWell(
             key: fieldKey,
@@ -409,6 +414,7 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
                 helperText: strings.helperText,
                 errorText: field.errorText,
                 isDense: true,
+                fillColor: fillColor,
               ),
               child: Row(
                 children: [

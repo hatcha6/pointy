@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_units_editor.dart';
+import 'package:pointy_frontend/src/shared/barcode/barcode_scan_listener.dart';
 
 void main() {
   const box = UnitOfMeasure(id: 1, code: 'box', name: 'صندوق');
@@ -122,5 +123,24 @@ void main() {
     // Conflict is surfaced and the carton never gains the duplicate code.
     expect(find.text(l10n.productUnitBarcodeConflict('صندوق')), findsOneWidget);
     expect(latest()[1].barcodes, isEmpty);
+  });
+
+  testWidgets('a carton code is scanned into its own field', (tester) async {
+    // Inside the new-product form a scan typed anywhere else lands in the
+    // product's own barcode. This field opts out, so a carton's code stays on
+    // the carton.
+    await pumpEditor(
+      tester,
+      units: const [ProductUnit(unit: box, factorToBase: 6)],
+    );
+
+    final field = find.widgetWithText(
+      TextField,
+      l10n.productUnitBarcodeAddHint,
+    );
+    expect(
+      find.ancestor(of: field, matching: find.byType(ScanWedgeTarget)),
+      findsOneWidget,
+    );
   });
 }

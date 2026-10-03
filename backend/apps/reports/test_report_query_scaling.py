@@ -122,42 +122,66 @@ class ReportSectionQueryScalingTests(TestCase):
             )
         self.seeded += count
 
-    def _payload(self, report_type):
+    def _payload(self, report_type, granularity="detailed"):
+        # Detailed by default: the per-row reads under test live in the
+        # schedules a summary leaves out.
         today = timezone.localdate()
         return generate_report_payload(
             report_type=report_type,
             params={
                 "start_date": (today - timezone.timedelta(days=7)).isoformat(),
                 "end_date": today.isoformat(),
+                "granularity": granularity,
             },
             user=self.manager,
         )
 
-    def _query_count(self, report_type):
+    def _query_count(self, report_type, granularity):
         with CaptureQueriesContext(connection) as captured:
-            self._payload(report_type)
+            self._payload(report_type, granularity)
         return len(captured)
 
     def test_detail_sections_do_not_scale_with_row_count(self):
         self._seed(BASE_ROWS)
+        levels = ("summary", "detailed")
         # One discarded pass first. The very first report of a test run pays
         # for singletons that are created on demand (the shop settings row) and
         # for caches that live on the user object (its group membership) — a
         # cost paid once, not per row, and measuring it as the baseline makes
         # every later flat report look like an improvement.
         for report in SCALING_REPORTS:
-            self._query_count(report)
+            self._query_count(report, "detailed")
         baseline = {
-            report: self._query_count(report) for report in SCALING_REPORTS
+            (report, level): self._query_count(report, level)
+            for report in SCALING_REPORTS
+            for level in levels
         }
         self._seed(BASE_ROWS)
         for report in SCALING_REPORTS:
+            for level in levels:
+                with self.subTest(report=report, level=level):
+                    self.assertEqual(
+                        self._query_count(report, level),
+                        baseline[report, level],
+                        f"{report} ({level}) costs a query per row: "
+                        f"{baseline[report, level]} at {BASE_ROWS} rows, more "
+                        f"at {BASE_ROWS * 2}.",
+                    )
+
+    def test_a_summary_costs_fewer_queries_than_the_detail(self):
+        """A summary skips its detail schedules altogether — it does not build
+        them and throw them away."""
+        self._seed(BASE_ROWS)
+        for report in (
+            ReportRun.ReportType.INVENTORY_STATUS,
+            ReportRun.ReportType.PURCHASING_SUMMARY,
+            ReportRun.ReportType.EXPENSE_BREAKDOWN,
+        ):
+            self._query_count(report, "detailed")
             with self.subTest(report=report):
-                self.assertEqual(
-                    self._query_count(report),
-                    baseline[report],
-                    f"{report} costs a query per row: {baseline[report]} at "
-                    f"{BASE_ROWS} rows, more at {BASE_ROWS * 2}.",
+                self.assertLess(
+                    self._query_count(report, "summary"),
+                    self._query_count(report, "detailed"),
                 )
 
     def test_primed_rows_still_carry_the_values_they_report(self):

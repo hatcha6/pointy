@@ -21,6 +21,7 @@ column of headline figures and nothing else.
 import hashlib
 import json
 import time as monotonic_time
+from dataclasses import replace
 
 from django.utils import timezone
 
@@ -31,7 +32,7 @@ from apps.core import period_lock
 from . import registry
 from .definitions import REPORT_DEFINITIONS, report_catalog_for_user
 from .models import ReportRun
-from .periods import PeriodValidationError, resolve_period
+from .periods import Comparison, PeriodValidationError, resolve_period
 from .registry import ReportContext, ReportValidationError
 from .sections import note
 
@@ -115,7 +116,16 @@ def create_report_run(*, user, report_type, params, output_format):
     return run
 
 
-def generate_report_payload(*, report_type, params, user, row_scale=None):
+def generate_report_payload(
+    *, report_type, params, user, row_scale=None, period_today=None
+):
+    """Build a report's payload.
+
+    ``period_today`` is the day a preset is resolved against — today unless
+    the caller is rebuilding an earlier run, which must cover the days that
+    run covered: "last month" asked for in October is September, whenever it
+    is verified.
+    """
     definition = REPORT_DEFINITIONS.get(report_type)
     if definition is None:
         raise ReportValidationError("Unknown report type.")
@@ -129,7 +139,10 @@ def generate_report_payload(*, report_type, params, user, row_scale=None):
             f"This report needs: {', '.join(sorted(missing))}."
         )
 
-    period = resolve_period(params)
+    period = resolve_period(params, today=period_today)
+    if definition.states_today and period.compared_to is not None:
+        # Today against today is not a comparison.
+        period = replace(period, comparison=Comparison.NONE, compared_to=None)
     context = ReportContext(
         user=user,
         period=period,
@@ -189,6 +202,35 @@ def _period_notes(period):
             )
         )
     return notes
+
+
+#: The notes that say whether the books were open or closed when the report was
+#: built. They are about the period, not its figures.
+PERIOD_STATE_NOTES = ("period_open", "period_closed")
+
+
+def with_period_state_of(payload, stored_payload):
+    """``payload`` carrying the period-lock note ``stored_payload`` was built
+    with, for comparing their figures.
+
+    The ordinary close is: run September, then lock September. Rebuilt after
+    the lock, the report says "closed" where the stored run said "open" — and
+    that one sentence changed the figures checksum, so every report verified
+    after the books were closed read as changed with no figure different.
+    """
+    stored = [
+        entry
+        for entry in stored_payload.get("notes", [])
+        if entry.get("code") in PERIOD_STATE_NOTES
+    ]
+    notes = []
+    for entry in payload.get("notes", []):
+        if entry.get("code") in PERIOD_STATE_NOTES:
+            notes.extend(stored)
+            stored = []
+        else:
+            notes.append(entry)
+    return {**payload, "notes": notes}
 
 
 def report_checksum(payload):
@@ -251,4 +293,5 @@ __all__ = [
     "report_catalog_for_user",
     "report_checksum",
     "report_figures_checksum",
+    "with_period_state_of",
 ]

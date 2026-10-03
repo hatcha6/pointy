@@ -12,6 +12,17 @@ import '../../../shared/tutor/tutor_target.dart';
 import 'variant_identity_watcher.dart';
 import '../../../shared/components/pointy_progress.dart';
 
+/// The base units a product can be counted in, for a unit dropdown.
+List<DropdownMenuItem<String>> baseUnitDropdownItems(AppLocalizations l10n) {
+  return [
+    DropdownMenuItem(value: 'piece', child: Text(l10n.unitPiece)),
+    DropdownMenuItem(value: 'kg', child: Text(l10n.unitKilogram)),
+    DropdownMenuItem(value: 'g', child: Text(l10n.unitGram)),
+    DropdownMenuItem(value: 'l', child: Text(l10n.unitLiter)),
+    DropdownMenuItem(value: 'ml', child: Text(l10n.unitMilliliter)),
+  ];
+}
+
 class ProductParentFormFields extends StatelessWidget {
   const ProductParentFormFields({
     super.key,
@@ -113,13 +124,7 @@ class ProductParentFormFields extends StatelessWidget {
               labelText: l10n.productUnitLabel,
               prefixIcon: const Icon(Icons.straighten_outlined),
             ),
-            items: [
-              DropdownMenuItem(value: 'piece', child: Text(l10n.unitPiece)),
-              DropdownMenuItem(value: 'kg', child: Text(l10n.unitKilogram)),
-              DropdownMenuItem(value: 'g', child: Text(l10n.unitGram)),
-              DropdownMenuItem(value: 'l', child: Text(l10n.unitLiter)),
-              DropdownMenuItem(value: 'ml', child: Text(l10n.unitMilliliter)),
-            ],
+            items: baseUnitDropdownItems(l10n),
             onChanged: (value) {
               if (value != null) {
                 onUnitChanged!(value);
@@ -204,7 +209,6 @@ class ProductVariantFormFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final skuError = identityErrorText(l10n, skuState);
     final barcodeError = identityErrorText(l10n, barcodeState);
 
     final fields = [
@@ -219,29 +223,11 @@ class ProductVariantFormFields extends StatelessWidget {
       ),
       TutorTarget(
         anchor: TutorAnchor.productSkuField,
-        child: TextFormField(
-          key: skuFieldKey,
+        child: VariantSkuField(
+          fieldKey: skuFieldKey,
           controller: skuController,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            labelText: l10n.skuLabel,
-            hintText: l10n.skuHint,
-            prefixIcon: const Icon(Icons.qr_code_2),
-            suffixIcon: IdentityStatusIcon(state: skuState, isBarcode: false),
-            // Optional, like the barcode beside it: a shop that keeps no SKUs
-            // should not have to invent one, and the server codes a blank row
-            // itself. Says so while there is no live status to report.
-            helperText: skuIsAutomatic
-                ? l10n.skuAutomaticHelper
-                : identityHelperText(l10n, skuState, isBarcode: false) ??
-                      l10n.skuOptionalHelper,
-            // The server error stays visible until the value changes.
-            errorText: skuError,
-          ),
-          // Only a clash can fail a SKU now — surfaced through the validator so
-          // Form.validate() blocks the save, exactly as the barcode does.
-          validator: (_) => skuError,
+          state: skuState,
+          isAutomatic: skuIsAutomatic,
         ),
       ),
       TutorTarget(
@@ -306,6 +292,57 @@ class ProductVariantFormFields extends StatelessWidget {
   }
 }
 
+/// A variant's SKU, with its live "is this code taken?" status.
+///
+/// Optional, like the barcode beside it: a shop that keeps no SKUs should not
+/// have to invent one, and the server codes a blank row itself.
+class VariantSkuField extends StatelessWidget {
+  const VariantSkuField({
+    super.key,
+    required this.controller,
+    required this.state,
+    this.fieldKey,
+    this.isAutomatic = false,
+  });
+
+  final TextEditingController controller;
+  final IdentityFieldState state;
+  final Key? fieldKey;
+
+  /// The field still holds the number the form filled in — said under the
+  /// field, so the owner knows the code is the shop's next one and theirs to
+  /// change.
+  final bool isAutomatic;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final error = identityErrorText(l10n, state);
+    return TextFormField(
+      key: fieldKey,
+      controller: controller,
+      textInputAction: TextInputAction.next,
+      textCapitalization: TextCapitalization.characters,
+      decoration: InputDecoration(
+        labelText: l10n.skuLabel,
+        hintText: l10n.skuHint,
+        prefixIcon: const Icon(Icons.qr_code_2),
+        suffixIcon: IdentityStatusIcon(state: state, isBarcode: false),
+        // Says it is optional while there is no live status to report.
+        helperText: isAutomatic
+            ? l10n.skuAutomaticHelper
+            : identityHelperText(l10n, state, isBarcode: false) ??
+                  l10n.skuOptionalHelper,
+        // The server error stays visible until the value changes.
+        errorText: error,
+      ),
+      // Only a clash can fail a SKU — surfaced through the validator so
+      // Form.validate() blocks the save, exactly as the barcode does.
+      validator: (_) => error,
+    );
+  }
+}
+
 class BarcodeInputRow extends StatelessWidget {
   const BarcodeInputRow({
     super.key,
@@ -316,6 +353,9 @@ class BarcodeInputRow extends StatelessWidget {
     this.state = const IdentityFieldState(),
     this.errorText,
     this.skuController,
+    this.focusNode,
+    this.onEditingComplete,
+    this.idleHelperText,
   });
 
   final TextEditingController controller;
@@ -324,6 +364,14 @@ class BarcodeInputRow extends StatelessWidget {
   final Key? fieldKey;
   final IdentityFieldState state;
   final String? errorText;
+  final FocusNode? focusNode;
+
+  /// Replaces the default "move to the next field" on Enter — the product
+  /// form walks a fixed path of essential fields instead.
+  final VoidCallback? onEditingComplete;
+
+  /// Shown under the field while there is no availability status to report.
+  final String? idleHelperText;
 
   /// The SKU beside this barcode. When given, the field offers a one-click
   /// "barcode = SKU" — see [UseSkuAsBarcodeButton].
@@ -337,7 +385,9 @@ class BarcodeInputRow extends StatelessWidget {
     return TextFormField(
       key: fieldKey,
       controller: controller,
+      focusNode: focusNode,
       textInputAction: TextInputAction.next,
+      onEditingComplete: onEditingComplete,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -351,7 +401,8 @@ class BarcodeInputRow extends StatelessWidget {
                   UseSkuAsBarcodeButton(sku: sku, barcode: controller),
                 ],
               ),
-        helperText: identityHelperText(l10n, state, isBarcode: true),
+        helperText:
+            identityHelperText(l10n, state, isBarcode: true) ?? idleHelperText,
         errorText: errorText,
       ),
       // A barcode is optional, so the only thing that can fail it is a clash —

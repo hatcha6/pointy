@@ -11,7 +11,8 @@ import '../view_models/wallet_view_model.dart';
 import 'wallet_rows.dart';
 
 /// Everything the wallet has done: its top-ups (with whether each went into
-/// the books) and every movement of the balance, newest first, paged.
+/// the books), every movement of the main balance, and — where SMS is paid
+/// from it — every movement of the SMS balance, newest first, paged.
 class WalletHistoryPage extends StatefulWidget {
   const WalletHistoryPage({super.key, required this.viewModel});
 
@@ -31,14 +32,20 @@ class _WalletHistoryPageState extends State<WalletHistoryPage> {
       }
       unawaited(widget.viewModel.loadHistoryTopUps(reset: true));
       unawaited(widget.viewModel.loadHistoryEntries(reset: true));
+      if (_showsSms) {
+        unawaited(widget.viewModel.spending.loadSmsEntries(reset: true));
+      }
     });
   }
+
+  bool get _showsSms => widget.viewModel.overview?.sms != null;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final showsSms = _showsSms;
     return DefaultTabController(
-      length: 2,
+      length: showsSms ? 3 : 2,
       child: PointyScaffold(
         appBar: PointyAppBar(
           title: Text(l10n.walletHistoryTitle),
@@ -46,13 +53,18 @@ class _WalletHistoryPageState extends State<WalletHistoryPage> {
             tabs: [
               Tab(text: l10n.walletHistoryTopUpsTab),
               Tab(text: l10n.walletHistoryEntriesTab),
+              if (showsSms) Tab(text: l10n.walletHistorySmsTab),
             ],
           ),
         ),
         body: ListenableBuilder(
-          listenable: widget.viewModel,
+          listenable: Listenable.merge([
+            widget.viewModel,
+            widget.viewModel.spending,
+          ]),
           builder: (context, _) {
             final viewModel = widget.viewModel;
+            final spending = viewModel.spending;
             return TabBarView(
               children: [
                 _HistoryList(
@@ -79,6 +91,19 @@ class _WalletHistoryPageState extends State<WalletHistoryPage> {
                   onLoadMore: viewModel.loadHistoryEntries,
                   onRefresh: () => viewModel.loadHistoryEntries(reset: true),
                 ),
+                if (showsSms)
+                  _HistoryList(
+                    itemCount: spending.smsEntries.length,
+                    itemBuilder: (index) =>
+                        WalletEntryTile(entry: spending.smsEntries[index]),
+                    isLoading: spending.isLoadingSmsEntries,
+                    hasMore: spending.smsEntriesHasMore,
+                    failed: spending.smsEntriesFailed,
+                    emptyIcon: Icons.sms_outlined,
+                    emptyTitle: l10n.walletHistoryEmptySms,
+                    onLoadMore: spending.loadSmsEntries,
+                    onRefresh: () => spending.loadSmsEntries(reset: true),
+                  ),
               ],
             );
           },

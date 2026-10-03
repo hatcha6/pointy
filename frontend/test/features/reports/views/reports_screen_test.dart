@@ -198,6 +198,59 @@ void main() {
     expect(repository.lastDraft?.params['code'], '351234567890116');
   });
 
+  testWidgets('offers only the levels and comparison a report has', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1366, 1400)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final repository = FakeReportRepository(
+      extraReports: const [
+        {
+          'key': 'balance_sheet',
+          'category': 'close',
+          'granularities': ['summary', 'detailed'],
+        },
+        {
+          'key': 'reorder_items',
+          'category': 'inventory',
+          'point_in_time': true,
+          'granularities': ['summary', 'detailed'],
+          'states_today': true,
+        },
+      ],
+    );
+    await tester.pumpWidget(_ReportsTestApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    Future<void> open(String title) async {
+      final tile = find.text(title, skipOffstage: false).first;
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+    }
+
+    // The sales summary has a day-by-day table, so it offers one.
+    expect(find.text('يومي', skipOffstage: false), findsOneWidget);
+    expect(find.text('المقارنة', skipOffstage: false), findsOneWidget);
+
+    // The balance sheet has none: summary or detailed only.
+    await open('الميزانية العمومية');
+    expect(find.text('يومي', skipOffstage: false), findsNothing);
+    expect(find.text('تفصيلي', skipOffstage: false), findsOneWidget);
+    expect(find.text('المقارنة', skipOffstage: false), findsOneWidget);
+
+    // The reorder list can only state today: there is nothing to compare.
+    await open('أصناف تحتاج إعادة طلب');
+    expect(find.text('المقارنة', skipOffstage: false), findsNothing);
+  });
+
   testWidgets('offers the periods a close is built on', (tester) async {
     tester.view
       ..physicalSize = const Size(1366, 900)

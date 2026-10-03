@@ -5,6 +5,7 @@ import 'package:pointy_frontend/src/data/models/shop_settings.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/features/reports/pdf/report_document_builder.dart';
 import 'package:pointy_frontend/src/features/reports/pdf/report_pdf.dart';
+import 'package:pointy_frontend/src/features/reports/report_labels.dart';
 
 import '../balance_sheet_payload.dart';
 import '../identified_payloads.dart';
@@ -107,6 +108,59 @@ void main() {
       document.shopSettingFields.map((field) => field.label),
       contains('طريقة تقييم المخزون'),
     );
+  });
+
+  test('a summary prints its figures once and leaves the working out', () {
+    // The metric grid already states every headline figure; printed again as
+    // a table, it made the summary the longer document. And the balance
+    // sheet's summary is its statement — the bridge and the zakat working
+    // are the detail.
+    final document = buildBusinessReportPdfDocument(
+      run: _reportRun(
+        ReportRunType.balanceSheet,
+        payload: balanceSheetPayload(granularity: 'summary'),
+      ),
+      l10n: l10n,
+      currentUser: _manager,
+      includeAuditTrail: true,
+      includePreparedBy: false,
+      shopSettings: _settings,
+    );
+
+    final headings = [for (final section in document.sections) section.heading];
+    expect(headings, isNot(contains(reportLabel('summary'))));
+    expect(headings, contains('لنا — الأصول'));
+    expect(headings, contains(reportLabel('balance_liabilities')));
+    expect(headings, isNot(contains(reportLabel('zakat'))));
+    expect(document.metrics.first.label, 'الصافي');
+    expect(document.detailLevel?.label, l10n.reportGranularityTitle);
+    expect(document.detailLevel?.value, l10n.reportGranularitySummary);
+    // Who built it and when is in the panel at the top; the audit block that
+    // restated it was a page of its own for one line.
+    expect(document.auditTrail, isEmpty);
+    expect(document.sections.last.heading, l10n.reportNotesTitle);
+    expect(document.sections.last.compact, isTrue);
+  });
+
+  test('the detailed copy keeps the figures table and the working', () {
+    final document = buildBusinessReportPdfDocument(
+      run: _reportRun(
+        ReportRunType.balanceSheet,
+        payload: balanceSheetPayload(granularity: 'detailed'),
+      ),
+      l10n: l10n,
+      currentUser: _manager,
+      includeAuditTrail: true,
+      includePreparedBy: false,
+      shopSettings: _settings,
+    );
+
+    final headings = [for (final section in document.sections) section.heading];
+    expect(headings, contains(reportLabel('summary')));
+    expect(headings, contains(reportLabel('zakat')));
+    expect(document.detailLevel?.value, l10n.reportGranularityDetailed);
+    expect(document.auditTrail, isNotEmpty);
+    expect(document.sections.last.compact, isFalse);
   });
 
   test('prints each identified-stock report under a document type', () {

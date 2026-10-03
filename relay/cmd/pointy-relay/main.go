@@ -382,10 +382,15 @@ func runServer(args []string) error {
 		envBool("POINTY_RELAY_SMS_TEST_MODE", false),
 		"send every SMS in Resala test mode (no message delivered, nothing charged)",
 	)
+	smsPrice := flags.String(
+		"sms-price",
+		envString("POINTY_RELAY_SMS_PRICE", "0.150"),
+		"what one SMS part costs a shop, in dinars (up to three decimals), paid from its SMS balance; a message longer than one SMS (70 Arabic letters, 67 per part beyond) pays once per part, as Resala bills",
+	)
 	smsMonthlyLimit := flags.Int(
 		"sms-monthly-limit",
-		envInt("POINTY_RELAY_SMS_MONTHLY_LIMIT", 500),
-		"default per-installation SMS cap per calendar month (UTC+2) when the installation sets none; 0 = unlimited",
+		envInt("POINTY_RELAY_SMS_MONTHLY_LIMIT", 0),
+		"operator's brake: per-installation SMS cap per calendar month (UTC+2) when the installation sets none; 0 = none (the SMS balance limits sending)",
 	)
 	smsRateLimit := flags.String(
 		"sms-rate-limit",
@@ -407,40 +412,30 @@ func runServer(args []string) error {
 		envDuration("POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL", 5*time.Minute),
 		"how often to read Resala's delivery log back into the SMS ledger; 0 disables",
 	)
-	plutuAPIKey := flags.String(
-		"plutu-api-key",
-		envString("POINTY_RELAY_PLUTU_API_KEY", ""),
-		"Plutu (plutu.ly) API key for shop wallet top-ups; all three Plutu credentials or none",
+	dafaAPIKey := flags.String(
+		"dafa-api-key",
+		envString("POINTY_RELAY_DAFA_API_KEY", ""),
+		"Dafa (dafa.ly) API key for shop wallet top-ups; a dafa_test_ key makes only simulated payments, dafa_live_ real ones",
 	)
-	plutuAccessToken := flags.String(
-		"plutu-access-token",
-		envString("POINTY_RELAY_PLUTU_ACCESS_TOKEN", ""),
-		"Plutu access token; it decides test or live mode, which --plutu-mode must match",
+	dafaBaseURL := flags.String(
+		"dafa-base-url",
+		envString("POINTY_RELAY_DAFA_BASE_URL", "https://dev.dafa.ly/api/v1"),
+		"Dafa API base URL, as the project's Integration page shows it",
 	)
-	plutuSecretKey := flags.String(
-		"plutu-secret-key",
-		envString("POINTY_RELAY_PLUTU_SECRET_KEY", ""),
-		"Plutu secret key (sk_...) verifying the signed payment return; never sent anywhere",
+	dafaRequestTimeout := flags.Duration(
+		"dafa-request-timeout",
+		envDuration("POINTY_RELAY_DAFA_REQUEST_TIMEOUT", 20*time.Second),
+		"timeout for one Dafa call",
 	)
-	plutuMode := flags.String(
-		"plutu-mode",
-		envString("POINTY_RELAY_PLUTU_MODE", ""),
-		"test or live — required with Plutu credentials; test marks every top-up as test money",
-	)
-	plutuBaseURL := flags.String(
-		"plutu-base-url",
-		envString("POINTY_RELAY_PLUTU_BASE_URL", "https://api.plutus.ly/api/v1"),
-		"Plutu API base URL",
-	)
-	plutuRequestTimeout := flags.Duration(
-		"plutu-request-timeout",
-		envDuration("POINTY_RELAY_PLUTU_REQUEST_TIMEOUT", 20*time.Second),
-		"timeout for one Plutu call",
+	walletMethods := flags.String(
+		"wallet-methods",
+		envString("POINTY_RELAY_WALLET_METHODS", ""),
+		"comma-separated top-up methods to offer, in order (e.g. moamalat,sadad,edfali); empty offers all seven",
 	)
 	publicURL := flags.String(
 		"public-url",
 		envString("POINTY_RELAY_PUBLIC_URL", ""),
-		"the relay's public origin (https://...), where a payer's browser returns from the gateway; empty derives it per request",
+		"the relay's public origin (https://...), where Dafa's payment webhook reaches it; empty derives it per request",
 	)
 	walletTopUpMin := flags.String(
 		"wallet-topup-min",
@@ -450,7 +445,7 @@ func runServer(args []string) error {
 	walletTopUpMax := flags.String(
 		"wallet-topup-max",
 		envString("POINTY_RELAY_WALLET_TOPUP_MAX", "5000"),
-		"largest wallet top-up in dinars (test mode also caps at Plutu's sandbox 500)",
+		"largest wallet top-up in dinars",
 	)
 	walletQuickAmounts := flags.String(
 		"wallet-quick-amounts",
@@ -460,12 +455,27 @@ func runServer(args []string) error {
 	walletTopUpTTL := flags.Duration(
 		"wallet-topup-ttl",
 		envDuration("POINTY_RELAY_WALLET_TOPUP_TTL", 30*time.Minute),
-		"how long a checkout stays pending before it is written off as expired (a late signed approval still credits it)",
+		"how long a top-up stays pending before it is written off as expired (a payment Dafa proves later still credits it)",
 	)
 	walletTopUpRateLimit := flags.String(
 		"wallet-topup-rate-limit",
 		envString("POINTY_RELAY_WALLET_TOPUP_RATE_LIMIT", "10/minute"),
 		"per-installation limit on starting top-ups, e.g. 10/minute; 0 disables",
+	)
+	remoteAccessPrice := flags.String(
+		"remote-access-price",
+		envString("POINTY_RELAY_REMOTE_ACCESS_PRICE", ""),
+		"what one period of remote access costs a shop, in dinars, paid from its wallet; empty: not sold through the wallet",
+	)
+	aiPrice := flags.String(
+		"ai-price",
+		envString("POINTY_RELAY_AI_PRICE", ""),
+		"what one period of the AI assistant costs a shop, in dinars, paid from its wallet; empty: not sold through the wallet",
+	)
+	planDays := flags.Int(
+		"plan-days",
+		envInt("POINTY_RELAY_PLAN_DAYS", 30),
+		"how many days one period of a wallet-paid plan lasts",
 	)
 	openRouterAPIKey := flags.String(
 		"openrouter-api-key",
@@ -602,6 +612,7 @@ func runServer(args []string) error {
 		BaseURL:              *resalaBaseURL,
 		Templates:            *smsTemplates,
 		TestMode:             *smsTestMode,
+		Price:                *smsPrice,
 		MonthlyLimit:         *smsMonthlyLimit,
 		RateLimit:            *smsRateLimit,
 		RequestTimeout:       *smsRequestTimeout,
@@ -612,18 +623,22 @@ func runServer(args []string) error {
 		return err
 	}
 	walletConfig, walletWarnings, err := buildWalletConfig(walletSettings{
-		PlutuBaseURL:     *plutuBaseURL,
-		PlutuAPIKey:      *plutuAPIKey,
-		PlutuAccessToken: *plutuAccessToken,
-		PlutuSecretKey:   *plutuSecretKey,
-		PlutuMode:        *plutuMode,
-		PublicURL:        *publicURL,
-		MinTopUp:         *walletTopUpMin,
-		MaxTopUp:         *walletTopUpMax,
-		QuickAmounts:     *walletQuickAmounts,
-		TopUpTTL:         *walletTopUpTTL,
-		TopUpRateLimit:   *walletTopUpRateLimit,
-		RequestTimeout:   *plutuRequestTimeout,
+		DafaBaseURL:       *dafaBaseURL,
+		DafaAPIKey:        *dafaAPIKey,
+		Methods:           *walletMethods,
+		PublicURL:         *publicURL,
+		MinTopUp:          *walletTopUpMin,
+		MaxTopUp:          *walletTopUpMax,
+		QuickAmounts:      *walletQuickAmounts,
+		TopUpTTL:          *walletTopUpTTL,
+		TopUpRateLimit:    *walletTopUpRateLimit,
+		RequestTimeout:    *dafaRequestTimeout,
+		RemoteAccessPrice: *remoteAccessPrice,
+		AIPrice:           *aiPrice,
+		PlanDays:          *planDays,
+		LegacyPlutu: os.Getenv("POINTY_RELAY_PLUTU_API_KEY") != "" ||
+			os.Getenv("POINTY_RELAY_PLUTU_ACCESS_TOKEN") != "" ||
+			os.Getenv("POINTY_RELAY_PLUTU_SECRET_KEY") != "",
 	})
 	if err != nil {
 		return err
@@ -963,7 +978,7 @@ func runServer(args []string) error {
 	// Resala shares the tuned transport; the per-call timeout is also applied
 	// by the client itself, so this one is only a backstop.
 	smsConfig.HTTPClient = &http.Client{Timeout: smsConfig.RequestTimeout + 5*time.Second, Transport: outboundTransport}
-	// Plutu likewise; the client applies its own per-call timeout too.
+	// Dafa likewise; the client applies its own per-call timeout too.
 	walletRequestTimeout := walletConfig.RequestTimeout
 	if walletRequestTimeout <= 0 {
 		walletRequestTimeout = 20 * time.Second
@@ -1131,8 +1146,10 @@ func runServer(args []string) error {
 		go runSubscriptionExpirySweep(ctx, sweeper, logger, *subscriptionSweepInterval)
 	}
 
-	// Checkouts nobody came back from stop reading as "pending" once their
-	// window has passed. It moves no money; a late signed approval still pays.
+	// Top-ups nobody finished stop reading as "pending" once their window has
+	// passed; that moves no money. The sweep reads back from Dafa the payments
+	// that can complete without the relay hearing of it (a bank card paid
+	// after the owner closed the app) and credits the ones that went through.
 	if walletStore, ok := store.(control.WalletStore); ok {
 		expirer := &relayserver.WalletTopUpExpirer{
 			Store:    walletStore,
@@ -1141,16 +1158,32 @@ func runServer(args []string) error {
 			Logger:   logger,
 		}
 		go expirer.Run(ctx)
+		if walletConfig.TopUpsConfigured() {
+			reconciler := &relayserver.WalletTopUpReconciler{
+				Store:    walletStore,
+				Config:   walletConfig,
+				Interval: time.Minute,
+				Logger:   logger,
+			}
+			go reconciler.Run(ctx)
+		}
 	}
 	if walletConfig.TopUpsConfigured() {
 		logger.Info(
 			"relay wallet top-ups configured",
-			"gateway", "plutu",
+			"gateway", "dafa",
+			"base_url", walletConfig.DafaBaseURL,
 			"test_mode", walletConfig.TestMode,
+			"methods", strings.Join(walletConfig.Methods, ","),
 			"public_url", walletConfig.PublicURL,
 			"min", walletConfig.MinTopUp,
 			"max", walletConfig.MaxTopUp,
 		)
+	}
+	for _, plan := range []string{control.WalletPlanRemoteAccess, control.WalletPlanAI} {
+		if sold, ok := walletConfig.Plans[plan]; ok {
+			logger.Info("relay wallet sells a plan", "plan", plan, "price", sold.Price, "days", sold.Days)
+		}
 	}
 
 	select {
@@ -1725,8 +1758,8 @@ func runProvision(args []string) error {
 	relayEnabled := flags.Bool("relay-enabled", false, "enable remote relay access")
 	subscriptionActive := flags.Bool("subscription-active", false, "mark the relay subscription active")
 	aiEnabled := flags.Bool("ai-enabled", false, "enable AI entitlement for this installation")
-	smsEnabled := flags.Bool("sms-enabled", false, "enable the relay-hosted SMS entitlement for this installation")
-	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "SMS cap per calendar month; 0 uses the relay default")
+	smsEnabled := flags.Bool("sms-enabled", false, "legacy: no longer gates SMS, which is paid per message from the shop's SMS balance")
+	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "operator's brake: SMS cap per calendar month; 0 uses the relay default")
 	subscriptionEndsAt := flags.String(
 		"subscription-ends-at",
 		"",
@@ -1803,8 +1836,8 @@ func runSubscriptionUpdate(args []string) error {
 	relayEnabled := flags.String("relay-enabled", "", "optional true/false relay entitlement")
 	subscriptionActive := flags.String("subscription-active", "", "optional true/false subscription state")
 	aiEnabled := flags.String("ai-enabled", "", "optional true/false AI entitlement")
-	smsEnabled := flags.String("sms-enabled", "", "optional true/false relay-hosted SMS entitlement")
-	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "optional SMS cap per calendar month; 0 = relay default")
+	smsEnabled := flags.String("sms-enabled", "", "legacy true/false: no longer gates SMS, which is paid per message from the shop's SMS balance")
+	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "optional operator's brake: SMS cap per calendar month; 0 = relay default")
 	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
 	clearEnd := flags.Bool("clear-subscription-end", false, "clear subscription end time")
 	asJSON := flags.Bool("json", false, "print the raw JSON response")
@@ -1877,9 +1910,9 @@ func runSubscriptionSet(args []string) error {
 	until := flags.String("until", "", "explicit RFC3339 subscription end (alternative to --months/--days)")
 	aiOn := flags.Bool("ai", false, "enable the AI add-on")
 	aiOff := flags.Bool("no-ai", false, "disable the AI add-on")
-	smsOn := flags.Bool("sms", false, "enable the relay-hosted SMS add-on")
+	smsOn := flags.Bool("sms", false, "legacy: no longer gates SMS, which is paid per message from the shop's SMS balance")
 	smsOff := flags.Bool("no-sms", false, "disable the relay-hosted SMS add-on")
-	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "SMS cap per calendar month; 0 = relay default")
+	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "operator's brake: SMS cap per calendar month; 0 = relay default")
 	remoteOn := flags.Bool("remote", false, "enable remote access (implied when a length is set)")
 	remoteOff := flags.Bool("no-remote", false, "disable remote access")
 	asJSON := flags.Bool("json", false, "print the raw JSON response")
@@ -2205,8 +2238,8 @@ func runInstallationsProvision(args []string) error {
 	relayEnabled := flags.Bool("relay-enabled", false, "enable remote relay access immediately")
 	subscriptionActive := flags.Bool("subscription-active", false, "mark the relay subscription active immediately")
 	aiEnabled := flags.Bool("ai-enabled", false, "enable the AI entitlement immediately")
-	smsEnabled := flags.Bool("sms-enabled", false, "enable the relay-hosted SMS entitlement immediately")
-	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "SMS cap per calendar month; 0 uses the relay default")
+	smsEnabled := flags.Bool("sms-enabled", false, "legacy: no longer gates SMS, which is paid per message from the shop's SMS balance")
+	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "operator's brake: SMS cap per calendar month; 0 uses the relay default")
 	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -3648,7 +3681,7 @@ func printUsage() {
   pointy-relay enrollment mint [--count N] [--relay] [--ai] [--subscription DUR]
   pointy-relay fleet <status|set-version|rollout|pause|pin|unpin|channel> [args]
   pointy-relay sms <usage|log|config> [flags]
-  pointy-relay wallet <list|show|topups|credit|debit|refund|confirm|config> [args]
+  pointy-relay wallet <list|show|topups|check|credit|debit|refund|confirm|config> [args]
   pointy-relay integrations <status|disable|enable> [provider] [flags]
   pointy-relay artifacts upload --version X --bundle pointy-update-X.zip
   pointy-relay artifacts upload --version X --url https://host/pointy-update-X.zip [--sha256 H]
@@ -3697,18 +3730,20 @@ Commands:
                    log [--installation ID] [--status S] [--limit N] [--json]
                                              recent sends, newest first
                    config [--json]           templates, test mode, limits (no token)
-  wallet         Shop wallets (prepaid balance, Plutu top-ups) over the admin API:
+  wallet         Shop wallets (prepaid balance, Dafa top-ups) over the admin API:
                    list [--limit N] [--json] balances, largest first, with the total
                    show <id> [--limit N]     one shop's statement, newest first
                    topups [--installation ID] [--status S] [--limit N] [--json]
-                                             top-ups; expired = payer never came back
+                                             top-ups; expired = nobody finished paying
+                   check <top-up id | DFW-reference>
+                                             ask Dafa now; credits it if it is paid
                    credit <id> --amount N --reason "..."        hand-made credit
                    debit <id> --amount N --reason "..." [--service S]
                                              a charge (with --service) or adjustment
                    refund <id> --amount N --service S --reason "..." [--reference E]
                    confirm <top-up id> --transaction-id T --reason "..."
-                                             credit a payment the gateway shows as paid
-                   config                    gateway, mode, limits (no credentials)
+                                             credit by hand what Dafa will not show paid
+                   config                    gateway, mode, methods, limits (no key)
   integrations   Fleet-wide switch per provider integration (hdbox, lnet, qareeb):
                    status [--json]           which are off, since when, by whom, why
                    disable <provider> --reason "..."

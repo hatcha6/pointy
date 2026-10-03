@@ -15,7 +15,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
-from django.db.models.functions import Coalesce, TruncDate
+from django.db.models.functions import Coalesce, Greatest, TruncDate
 
 from apps.balances.common import statement_kind
 from apps.core.money_dates import day_range_end
@@ -45,54 +45,46 @@ ZERO = Decimal("0.00")
 
 BUCKETS = ("d0_30", "d31_60", "d61_90", "d90_plus")
 BUCKET_DAYS = {"d0_30": 30, "d31_60": 60, "d61_90": 90}
+#: What an order bills: what was ordered, less what a receipt cancelled as
+#: never arriving — the figure the statement and the aging owe on.
+BILLABLE = F("total") - F("cancelled_total")
+#: Payments that put no money anywhere: credit the supplier already owed the
+#: shop, spent; and goods sent back against an order. The treasury leaves the
+#: same two out of the cash that left (``treasury.position``).
+NON_CASH_METHODS = (
+    SupplierPayment.Method.SUPPLIER_CREDIT,
+    SupplierPayment.Method.REFUND,
+)
+
+
+def placed_orders():
+    """Purchase orders the shop actually placed: not a draft — a proposal, the
+    AI intake's first reading of an invoice — and not cancelled."""
+    return PurchaseOrder.objects.exclude(
+        status__in=(PurchaseOrder.Status.DRAFT, PurchaseOrder.Status.CANCELLED)
+    )
+
+
+def placed_purchase_total(period):
+    """What the shop bought in ``period``: the billable value of the orders it
+    placed. Shared by the purchasing summary and the profit report's
+    memorandum line, so the two state one figure."""
+    return in_period(placed_orders(), period).aggregate(
+        total=Coalesce(Sum(BILLABLE), Value(ZERO), output_field=MONEY)
+    )["total"]
 
 
 def purchasing_summary(context):
-    orders = PurchaseOrder.objects.select_related("supplier").exclude(
-        status=PurchaseOrder.Status.CANCELLED,
-    )
+    orders = placed_orders().select_related("supplier")
     period_orders = in_period(orders, context.period)
-    purchase_total = period_orders.aggregate(total=money_sum("total"))["total"]
+    purchase_total = placed_purchase_total(context.period)
 
-    limit = context.row_limit("purchase_orders")
-    purchase_rows = bounded_queryset(
-        # Each row reads ``balance_due``, which sums ``supplier_payments`` twice
-        # (paid + credit-applied) in Python — 2 queries per order unless the
-        # payments ride along. Same reason the supplier rows below are primed.
-        period_orders.order_by("-created_at").prefetch_related("supplier_payments"),
-        limit=limit,
-    )
-    rows = [
-        {
-            "order_number": order.order_number,
-            "supplier_name": order.supplier.name,
-            "status": order.status,
-            "total": money(order.total),
-            "balance_due": money(order.balance_due),
-            "created_at": order.created_at.isoformat(),
-            "due_date": order.due_date.isoformat() if order.due_date else "",
-        }
-        for order in purchase_rows.rows
-    ]
-
-    supplier_rows_values = bounded_queryset(
-        Supplier.objects.filter(is_active=True).order_by("name"),
-        limit=context.row_limit("supplier_balances"),
-    )
-    # Each row reads payable/credit/net — 6 queries per supplier unless primed.
-    prime_supplier_balances(supplier_rows_values.rows)
-    supplier_rows = [
-        {
-            "supplier_name": supplier.name,
-            "payable_balance": money(supplier.payable_balance),
-            "credit_balance": money(supplier.credit_balance),
-            "net_balance": money(supplier.net_balance),
-        }
-        for supplier in supplier_rows_values.rows
-    ]
-
+    # Money that left for suppliers: spending a supplier's own credit, or
+    # sending goods back against an order, moved none — and counting the
+    # credit a supplier's cash refund consumed made a refund *raise* this.
     paid_in_period = in_period(
-        SupplierPayment.objects.live(), context.period
+        SupplierPayment.objects.live().exclude(method__in=NON_CASH_METHODS),
+        context.period,
     ).aggregate(total=money_sum("amount"))["total"]
     figures = {
         "purchase_total": money(purchase_total),
@@ -103,41 +95,115 @@ def purchasing_summary(context):
         ).count(),
         "supplier_count": Supplier.objects.filter(is_active=True).count(),
     }
+    sections = [context.metrics(figures), _supplier_balances_section(context)]
+    if context.wants_detail():
+        sections.append(_purchase_orders_section(period_orders, purchase_total, context))
     return {
         "summary": figures,
-        "sections": [
-            context.metrics(figures),
-            report_section(
-                "purchase_orders",
-                [
-                    Column("order_number"),
-                    Column("supplier_name"),
-                    Column("status", ColumnType.CHOICE),
-                    Column("total", ColumnType.MONEY, total=True),
-                    Column("balance_due", ColumnType.MONEY, total=True),
-                    Column("created_at", ColumnType.DATETIME),
-                    Column("due_date", ColumnType.DATE),
-                ],
-                rows,
-                total_count=purchase_rows.total_count,
-                limit=purchase_rows.limit,
-                totals={"total": money(purchase_total)},
-            ),
-            report_section(
-                "supplier_balances",
-                [
-                    Column("supplier_name"),
-                    Column("payable_balance", ColumnType.MONEY, total=True),
-                    Column("credit_balance", ColumnType.MONEY, total=True),
-                    Column("net_balance", ColumnType.MONEY, total=True),
-                ],
-                supplier_rows,
-                total_count=supplier_rows_values.total_count,
-                limit=supplier_rows_values.limit,
-            ),
-        ],
+        "sections": sections,
         "notes": [note("purchase_is_stock_not_expense"), note("balance_nets_credit")],
     }
+
+
+def _supplier_balances_section(context):
+    """What the shop owes each supplier now, the largest first.
+
+    Every active supplier is primed — 4 queries whatever their number — so the
+    table can lead with the largest debts rather than with whichever names
+    come first in the alphabet, and its totals are every supplier's. A supplier
+    the shop neither owes nor holds credit with has no line: a balances table
+    of zeros is not a summary of anything.
+    """
+    # Each supplier reads payable/credit/net — 6 queries apiece unless primed.
+    suppliers = prime_supplier_balances(
+        Supplier.objects.filter(is_active=True).order_by("name")
+    )
+    rows = sorted(
+        (
+            {
+                "supplier_name": supplier.name,
+                "payable_balance": money(supplier.payable_balance),
+                "credit_balance": money(supplier.credit_balance),
+                "net_balance": money(supplier.net_balance),
+            }
+            for supplier in suppliers
+            if supplier.payable_balance or supplier.credit_balance
+        ),
+        key=lambda row: -decimal_from(row["net_balance"]),
+    )
+    bounded = bounded_rows(rows, limit=context.row_limit("supplier_balances"))
+    return report_section(
+        "supplier_balances",
+        [
+            Column("supplier_name"),
+            Column("payable_balance", ColumnType.MONEY, total=True),
+            Column("credit_balance", ColumnType.MONEY, total=True),
+            Column("net_balance", ColumnType.MONEY, total=True),
+        ],
+        bounded.rows,
+        total_count=bounded.total_count,
+        limit=bounded.limit,
+        totals={
+            column: money(sum((decimal_from(row[column]) for row in rows), ZERO))
+            for column in ("payable_balance", "credit_balance", "net_balance")
+        },
+    )
+
+
+def _purchase_orders_section(period_orders, purchase_total, context):
+    """Every purchase order raised in the period, newest first."""
+    purchase_rows = bounded_queryset(
+        # Each row reads ``balance_due``, which sums ``supplier_payments`` twice
+        # (paid + credit-applied) in Python — 2 queries per order unless the
+        # payments ride along. Same reason the supplier rows are primed.
+        period_orders.order_by("-created_at").prefetch_related("supplier_payments"),
+        limit=context.row_limit("purchase_orders"),
+    )
+    rows = [
+        {
+            "order_number": order.order_number,
+            "supplier_name": order.supplier.name,
+            "status": order.status,
+            "total": money(order.total - order.cancelled_total),
+            "balance_due": money(order.balance_due),
+            "created_at": order.created_at.isoformat(),
+            "due_date": order.due_date.isoformat() if order.due_date else "",
+        }
+        for order in purchase_rows.rows
+    ]
+    # What every order in the period still owes, for the totals line under a
+    # cut table: the same per-order arithmetic ``balance_due`` uses, summed.
+    paid = (
+        SupplierPayment.objects.live()
+        .filter(purchase_order=OuterRef("pk"))
+        .order_by()
+        .values("purchase_order")
+        .annotate(total=Sum("amount"))
+        .values("total")[:1]
+    )
+    still_owed = (
+        period_orders.annotate(
+            _paid=Coalesce(Subquery(paid, output_field=MONEY), Value(ZERO), output_field=MONEY)
+        )
+        .annotate(_due=Greatest(BILLABLE - F("_paid"), Value(ZERO), output_field=MONEY))
+        .aggregate(total=Coalesce(Sum("_due"), Value(ZERO), output_field=MONEY))
+    )["total"]
+    return report_section(
+        "purchase_orders",
+        [
+            Column("order_number"),
+            Column("supplier_name"),
+            Column("status", ColumnType.CHOICE),
+            Column("total", ColumnType.MONEY, total=True),
+            Column("balance_due", ColumnType.MONEY, total=True),
+            Column("created_at", ColumnType.DATETIME),
+            Column("due_date", ColumnType.DATE),
+        ],
+        rows,
+        total_count=purchase_rows.total_count,
+        limit=purchase_rows.limit,
+        totals={"total": money(purchase_total), "balance_due": money(still_owed)},
+    )
 
 
 # --------------------------------------------------------------------------
@@ -429,15 +495,43 @@ def supplier_statement(context):
             }
         )
 
-    invoiced = sum((entry["credit"] for entry in entries), ZERO)
-    paid = sum((entry["debit"] for entry in entries), ZERO)
-    bounded = bounded_rows(rows, limit=context.row_limit("statement_entries"))
+    # Each figure is one kind of line, as on the customer's statement, never a
+    # whole column: summed whole, «إجمالي الفواتير» took in opening balances
+    # and money the supplier refunded, and the paid figure took in goods sent
+    # back. So opening + account entries + purchases − returns − paid =
+    # closing, and every term says what it is.
+    by_kind = {}
+    for entry in entries:
+        kind = by_kind.setdefault(entry["kind"], {"credit": ZERO, "debit": ZERO})
+        kind["credit"] += entry["credit"]
+        kind["debit"] += entry["debit"]
+
+    def kind_total(kinds, side):
+        return sum((by_kind.get(kind, {}).get(side, ZERO) for kind in kinds), ZERO)
+
+    account_entries = kind_total(_ACCOUNT_ENTRY_KINDS, "credit") - kind_total(
+        _ACCOUNT_ENTRY_KINDS, "debit"
+    )
+    invoiced = kind_total(("purchase",), "credit")
+    returned = kind_total(("supplier_credit", SupplierPayment.Method.REFUND), "debit")
+    paid = sum(
+        (
+            totals["debit"]
+            for kind, totals in by_kind.items()
+            if kind in _CASH_PAYMENT_KINDS
+        ),
+        ZERO,
+    )
+    column_credit = sum((entry["credit"] for entry in entries), ZERO)
+    column_debit = sum((entry["debit"] for entry in entries), ZERO)
 
     figures = {
         "supplier_name": supplier.name,
         "opening_balance": money(opening),
+        "account_entries_total": money(account_entries),
         "invoiced_total": money(invoiced),
-        "paid_total": money(paid),
+        "returned_total": money(returned),
+        "paid_to_supplier_total": money(paid),
         "closing_balance": money(balance),
         "entry_count": len(entries),
     }
@@ -450,24 +544,49 @@ def supplier_statement(context):
         },
         "sections": [
             context.metrics(figures),
-            report_section(
-                "statement_entries",
+            *(
                 [
-                    Column("date", ColumnType.DATE),
-                    Column("document"),
-                    Column("kind", ColumnType.CHOICE),
-                    Column("credit", ColumnType.MONEY, total=True),
-                    Column("debit", ColumnType.MONEY, total=True),
-                    Column("balance", ColumnType.MONEY),
-                ],
-                bounded.rows,
-                total_count=bounded.total_count,
-                limit=bounded.limit,
-                totals={"credit": money(invoiced), "debit": money(paid)},
+                    _statement_entries_section(
+                        rows,
+                        context,
+                        columns=[
+                            Column("date", ColumnType.DATE),
+                            Column("document"),
+                            Column("kind", ColumnType.CHOICE),
+                            Column("credit", ColumnType.MONEY, total=True),
+                            Column("debit", ColumnType.MONEY, total=True),
+                            Column("balance", ColumnType.MONEY),
+                        ],
+                        totals={
+                            "credit": money(column_credit),
+                            "debit": money(column_debit),
+                        },
+                    )
+                ]
+                if context.wants_detail()
+                else []
             ),
         ],
-        "notes": [note("statement_running_balance"), note("supplier_credit_is_owed")],
+        "notes": [
+            # The running balance is a column of the entries, so the sentence
+            # about it goes where they go.
+            note("statement_running_balance") if context.wants_detail() else None,
+            note("supplier_credit_is_owed"),
+        ],
     }
+
+
+def _statement_entries_section(rows, context, *, columns, totals):
+    """The statement's lines, oldest first, each with the balance after it."""
+    bounded = bounded_rows(rows, limit=context.row_limit("statement_entries"))
+    return report_section(
+        "statement_entries",
+        columns,
+        bounded.rows,
+        total_count=bounded.total_count,
+        limit=bounded.limit,
+        totals=totals,
+    )
 
 
 def _statement_payments(supplier):
@@ -609,10 +728,37 @@ def _supplier_entries(supplier, period):
     return entries
 
 
+# The lines written straight onto the supplier's account rather than bought or
+# paid (``apps.balances.common.statement_kind``).
+_ACCOUNT_ENTRY_KINDS = ("opening_balance", "balance_adjustment", "balance_refund")
+#: Payment lines that are money leaving for the supplier.
+_CASH_PAYMENT_KINDS = tuple(
+    method
+    for method in SupplierPayment.Method.values
+    if method not in NON_CASH_METHODS
+)
+#: Same-day order: the opening balance and the other entries written onto the
+#: account first, then the purchase, then what was sent back against it, then
+#: the money that paid it. Alphabetical, "cash" paid an order before it was
+#: bought and the running balance dipped below zero in the middle of the day.
+_SAME_DAY_ORDER = {
+    "opening_balance": 0,
+    "balance_adjustment": 1,
+    "balance_refund": 2,
+    "purchase": 3,
+    "supplier_credit": 4,
+    SupplierPayment.Method.REFUND: 5,
+}
+
+
 def _statement_order(entry):
-    """Date order, with an opening balance first on its day."""
-    first = 0 if entry["kind"] == "opening_balance" else 1
-    return (entry["date"], first, entry["kind"], entry["document"])
+    """Date order, and on one day the order the lines were written in."""
+    return (
+        entry["date"],
+        _SAME_DAY_ORDER.get(entry["kind"], 6),
+        entry["kind"],
+        entry["document"],
+    )
 
 
 __all__ = [

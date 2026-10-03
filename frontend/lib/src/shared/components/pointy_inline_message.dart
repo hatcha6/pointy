@@ -12,6 +12,7 @@ class PointyInlineMessage extends StatelessWidget {
     this.icon = Icons.info_outline,
     this.tone = PointyInlineMessageTone.neutral,
     this.compact = false,
+    this.trailing,
   });
 
   const PointyInlineMessage.error({
@@ -19,6 +20,7 @@ class PointyInlineMessage extends StatelessWidget {
     required this.message,
     this.icon = Icons.error_outline,
     this.compact = false,
+    this.trailing,
   }) : tone = PointyInlineMessageTone.error;
 
   const PointyInlineMessage.warning({
@@ -26,6 +28,7 @@ class PointyInlineMessage extends StatelessWidget {
     required this.message,
     this.icon = Icons.warning_amber_outlined,
     this.compact = false,
+    this.trailing,
   }) : tone = PointyInlineMessageTone.warning;
 
   const PointyInlineMessage.success({
@@ -33,12 +36,17 @@ class PointyInlineMessage extends StatelessWidget {
     required this.message,
     this.icon = Icons.check_circle_outline,
     this.compact = false,
+    this.trailing,
   }) : tone = PointyInlineMessageTone.success;
 
   final String message;
   final IconData icon;
   final PointyInlineMessageTone tone;
   final bool compact;
+
+  /// An action at the end of the line — a dismiss button, or a link to what
+  /// the message is about.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +81,10 @@ class PointyInlineMessage extends StatelessWidget {
                 ),
               ),
             ),
+            if (trailing case final trailing?) ...[
+              SizedBox(width: spacing.xs),
+              trailing,
+            ],
           ],
         ),
       ),

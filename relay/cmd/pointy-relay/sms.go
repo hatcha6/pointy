@@ -24,6 +24,7 @@ type smsSettings struct {
 	BaseURL              string
 	Templates            string
 	TestMode             bool
+	Price                string
 	MonthlyLimit         int
 	RateLimit            string
 	RequestTimeout       time.Duration
@@ -44,7 +45,16 @@ func buildSMSConfig(settings smsSettings) (relayserver.SMSConfig, []string, erro
 		return relayserver.SMSConfig{}, nil, fmt.Errorf("POINTY_RELAY_SMS_RATE_LIMIT: %w", err)
 	}
 	if settings.MonthlyLimit < 0 {
-		return relayserver.SMSConfig{}, nil, fmt.Errorf("POINTY_RELAY_SMS_MONTHLY_LIMIT must be 0 (unlimited) or positive")
+		return relayserver.SMSConfig{}, nil, fmt.Errorf("POINTY_RELAY_SMS_MONTHLY_LIMIT must be 0 (no brake) or positive")
+	}
+	price := strings.TrimSpace(settings.Price)
+	if price != "" {
+		value, err := control.ParseWalletAmount(price)
+		if err != nil || value.Sign() <= 0 {
+			return relayserver.SMSConfig{}, nil, fmt.Errorf(
+				"POINTY_RELAY_SMS_PRICE must be a positive amount of dinars with at most three decimals, got %q", settings.Price)
+		}
+		price = control.FormatWalletAmount(value)
 	}
 	if settings.MaxVariableRunes < 0 {
 		return relayserver.SMSConfig{}, nil, fmt.Errorf("POINTY_RELAY_SMS_MAX_VARIABLE_RUNES must be positive")
@@ -65,6 +75,7 @@ func buildSMSConfig(settings smsSettings) (relayserver.SMSConfig, []string, erro
 		Token:                token,
 		Templates:            templates,
 		TestMode:             settings.TestMode,
+		Price:                price,
 		MonthlyLimit:         settings.MonthlyLimit,
 		RateLimit:            rate,
 		RequestTimeout:       timeout,
@@ -99,7 +110,9 @@ type smsUsageRow struct {
 	Delivered      int            `json:"delivered"`
 	Undelivered    int            `json:"undelivered"`
 	Test           int            `json:"test"`
+	Parts          int            `json:"parts"`
 	Cost           string         `json:"cost"`
+	Charged        string         `json:"charged"`
 	LastSentAt     *string        `json:"last_sent_at"`
 	Kinds          map[string]int `json:"kinds"`
 }
@@ -115,11 +128,15 @@ type smsUsageResponse struct {
 		Failed        int    `json:"failed"`
 		Delivered     int    `json:"delivered"`
 		Test          int    `json:"test"`
+		Parts         int    `json:"parts"`
 		Cost          string `json:"cost"`
+		Charged       string `json:"charged"`
 	} `json:"totals"`
 }
 
-// runSMSUsage answers "which shop sends the most, and what does it cost?".
+// runSMSUsage answers "which shop sends the most, and what does it cost?" —
+// and whether the price per part still covers what Resala charges: MARGIN is
+// what the shops paid less what Resala charged the company.
 func runSMSUsage(args []string) error {
 	flags := flag.NewFlagSet("sms usage", flag.ExitOnError)
 	admin := registerAdminControlFlags(flags)
@@ -196,18 +213,21 @@ func renderSMSUsage(response smsUsageResponse) error {
 	rows := append([]smsUsageRow(nil), response.Installations...)
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Messages > rows[j].Messages })
 	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(writer, "SHOP\tINSTALLATION\tMESSAGES\tSENT\tFAILED\tDELIVERED\tCOST\tLAST SENT")
+	fmt.Fprintln(writer, "SHOP\tINSTALLATION\tMESSAGES\tSMS PARTS\tSENT\tFAILED\tDELIVERED\tCOST\tCHARGED\tMARGIN\tLAST SENT")
 	for _, row := range rows {
 		fmt.Fprintf(
 			writer,
-			"%s\t%s\t%d\t%d\t%d\t%d\t%s\t%s\n",
+			"%s\t%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\n",
 			dashIfEmpty(row.ShopName),
 			row.InstallationID,
 			row.Messages,
+			row.Parts,
 			row.Sent,
 			row.Failed,
 			row.Delivered,
 			dashIfEmpty(row.Cost),
+			dashIfEmpty(row.Charged),
+			smsMargin(row.Charged, row.Cost),
 			formatTimeField(row.LastSentAt),
 		)
 	}
@@ -215,12 +235,25 @@ func renderSMSUsage(response smsUsageResponse) error {
 		return err
 	}
 	totals := response.Totals
+	margin := smsMargin(totals.Charged, totals.Cost)
 	fmt.Printf(
-		"\n%d shop(s): %d message(s), %d sent, %d failed, %d delivered, %d test; cost %s LYD.\n",
-		totals.Installations, totals.Messages, totals.Sent, totals.Failed, totals.Delivered, totals.Test,
-		dashIfEmpty(totals.Cost),
+		"\n%d shop(s): %d message(s) in %d SMS part(s), %d sent, %d failed, %d delivered, %d test; "+
+			"cost %s LYD, charged %s LYD, margin %s LYD.\n",
+		totals.Installations, totals.Messages, totals.Parts, totals.Sent, totals.Failed, totals.Delivered, totals.Test,
+		dashIfEmpty(totals.Cost), dashIfEmpty(totals.Charged), margin,
 	)
+	if strings.HasPrefix(margin, "-") {
+		fmt.Println("The shops paid less than Resala charged: raise POINTY_RELAY_SMS_PRICE.")
+	}
 	return nil
+}
+
+// smsMargin is what the shops paid less what Resala charged, exactly.
+func smsMargin(charged, cost string) string {
+	if strings.TrimSpace(charged) == "" || strings.TrimSpace(cost) == "" {
+		return "-"
+	}
+	return control.SumSMSCosts([]string{charged, "-" + strings.TrimSpace(cost)})
 }
 
 type smsLogRow struct {
@@ -231,9 +264,12 @@ type smsLogRow struct {
 	Recipient      string  `json:"recipient"`
 	Status         string  `json:"status"`
 	TestMode       bool    `json:"test_mode"`
+	Parts          int     `json:"parts"`
 	Cost           string  `json:"cost"`
+	Price          string  `json:"price"`
 	ErrorCode      string  `json:"error_code"`
 	CreatedAt      *string `json:"created_at"`
+	HeldSince      *string `json:"held_since"`
 }
 
 type smsLogResponse struct {
@@ -286,7 +322,7 @@ func renderSMSLog(response smsLogResponse) error {
 		return nil
 	}
 	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(writer, "TIME\tSHOP\tKIND\tTO\tSTATUS\tTEST\tCOST\tERROR")
+	fmt.Fprintln(writer, "TIME\tSHOP\tKIND\tTO\tSTATUS\tTEST\tPARTS\tCOST\tCHARGED\tERROR")
 	for _, message := range response.Messages {
 		shop := message.ShopName
 		if strings.TrimSpace(shop) == "" {
@@ -296,16 +332,28 @@ func renderSMSLog(response smsLogResponse) error {
 		if message.TestMode {
 			test = "test"
 		}
+		// A message that never went out was given its price back — unless it
+		// may still have gone out, and its price waits on the sent-log check.
+		status, charged := message.Status, message.Price
+		switch {
+		case message.HeldSince != nil:
+			status = "checking"
+			charged += " held"
+		case message.TestMode || message.Status == control.SMSStatusFailed:
+			charged = ""
+		}
 		fmt.Fprintf(
 			writer,
-			"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
 			formatTimeField(message.CreatedAt),
 			dashIfEmpty(shop),
 			dashIfEmpty(message.Kind),
 			maskPhone(message.Recipient),
-			dashIfEmpty(message.Status),
+			dashIfEmpty(status),
 			dashIfEmpty(test),
+			max(message.Parts, 1),
 			dashIfEmpty(message.Cost),
+			dashIfEmpty(charged),
 			dashIfEmpty(message.ErrorCode),
 		)
 	}
@@ -313,6 +361,12 @@ func renderSMSLog(response smsLogResponse) error {
 		return err
 	}
 	fmt.Printf("\n%d message(s).\n", response.Count)
+	for _, message := range response.Messages {
+		if message.HeldSince != nil {
+			fmt.Println("\"checking\": the send failed but may have gone out; its price is held until Resala's sent log settles it.")
+			break
+		}
+	}
 	return nil
 }
 
@@ -331,6 +385,7 @@ type smsConfigResponse struct {
 	TestMode             bool              `json:"test_mode"`
 	BaseURL              string            `json:"base_url"`
 	Templates            map[string]string `json:"templates"`
+	Price                string            `json:"price"`
 	MonthlyLimitDefault  int               `json:"monthly_limit_default"`
 	RateLimit            string            `json:"rate_limit"`
 	RequestTimeout       string            `json:"request_timeout"`
@@ -341,6 +396,7 @@ type smsConfigResponse struct {
 		ConsentClass string `json:"consent_class"`
 		Variables    int    `json:"variables"`
 		Configured   bool   `json:"configured"`
+		TextKnown    bool   `json:"text_known"`
 	} `json:"catalog"`
 }
 
@@ -377,6 +433,7 @@ func renderSMSConfig(response smsConfigResponse) error {
 		{"configured", onOff(response.Configured)},
 		{"test mode", onOff(response.TestMode)},
 		{"base url", dashIfEmpty(response.BaseURL)},
+		{"price per SMS part", dashIfEmpty(response.Price)},
 		{"monthly limit (default)", monthly},
 		{"rate limit", dashIfEmpty(response.RateLimit)},
 		{"request timeout", dashIfEmpty(response.RequestTimeout)},
@@ -391,17 +448,24 @@ func renderSMSConfig(response smsConfigResponse) error {
 
 	fmt.Println()
 	writer = tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(writer, "KIND\tCONSENT\tVARS\tTEMPLATE")
+	fmt.Fprintln(writer, "KIND\tCONSENT\tVARS\tTEMPLATE\tTEXT")
 	listed := map[string]bool{}
-	missing := 0
+	missing, unseen := 0, 0
 	for _, kind := range response.Catalog {
 		listed[kind.Kind] = true
 		templateID := response.Templates[kind.Kind]
-		if templateID == "" {
+		text := "—"
+		switch {
+		case templateID == "":
 			templateID = "MISSING"
 			missing++
+		case kind.TextKnown:
+			text = "known"
+		default:
+			text = "not sent yet"
+			unseen++
 		}
-		fmt.Fprintf(writer, "%s\t%s\t%d\t%s\n", kind.Kind, kind.ConsentClass, kind.Variables, templateID)
+		fmt.Fprintf(writer, "%s\t%s\t%d\t%s\t%s\n", kind.Kind, kind.ConsentClass, kind.Variables, templateID, text)
 	}
 	var extra []string
 	for kind := range response.Templates {
@@ -411,7 +475,7 @@ func renderSMSConfig(response smsConfigResponse) error {
 	}
 	sort.Strings(extra)
 	for _, kind := range extra {
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\n", kind, "—", "—", response.Templates[kind])
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\n", kind, "—", "—", response.Templates[kind], "—")
 	}
 	if err := writer.Flush(); err != nil {
 		return err
@@ -421,6 +485,13 @@ func renderSMSConfig(response smsConfigResponse) error {
 			"\n%d kind(s) have no template id: their sends fail with template_not_configured.\n"+
 				"Register the text in the Resala dashboard and add its id to POINTY_RELAY_SMS_TEMPLATES.\n",
 			missing,
+		)
+	}
+	if unseen > 0 {
+		fmt.Printf(
+			"\n%d template(s) have not been sent yet, so the relay cannot count their parts: the first\n"+
+				"message of each is held as if 160 letters long, and Resala's answer gives the rest back.\n",
+			unseen,
 		)
 	}
 	return nil

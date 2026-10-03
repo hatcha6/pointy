@@ -79,30 +79,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> goToVariantStep(
-    WidgetTester tester,
-    AppLocalizations l10n,
-  ) async {
-    await tester.enterText(find.byType(TextFormField).first, 'زيت زيتون');
-    await tester.tap(find.text(l10n.nextButton));
-    await tester.pumpAndSettle();
-  }
+  Finder field(String label) => find.widgetWithText(TextFormField, label);
 
-  /// Step two, in order: variant name, SKU, barcode, price, then — when it is
-  /// offered — the opening quantity and cost.
-  Future<void> fillVariant(
-    WidgetTester tester, {
+  /// One page: name, SKU and price, then — when it is offered — the opening
+  /// quantity and cost under them.
+  Future<void> fillProduct(
+    WidgetTester tester,
+    AppLocalizations l10n, {
     required String price,
     String? openingQuantity,
     String? openingCost,
   }) async {
-    await tester.enterText(find.byType(TextFormField).at(1), 'OIL-1');
-    await tester.enterText(find.byType(TextFormField).at(3), price);
+    await tester.enterText(field(l10n.productNameLabel), 'زيت زيتون');
+    await tester.enterText(field(l10n.skuLabel), 'OIL-1');
+    await tester.enterText(field(l10n.unitPriceLabel), price);
     if (openingQuantity != null) {
-      await tester.enterText(find.byType(TextFormField).at(4), openingQuantity);
+      await tester.enterText(
+        field(l10n.openingStockQuantityLabel),
+        openingQuantity,
+      );
     }
     if (openingCost != null) {
-      await tester.enterText(find.byType(TextFormField).at(5), openingCost);
+      await tester.enterText(
+        field(l10n.openingStockUnitCostLabel),
+        openingCost,
+      );
     }
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
@@ -113,9 +114,9 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await openForm(tester, showOpeningStock: true);
-    await goToVariantStep(tester, l10n);
-    await fillVariant(
+    await fillProduct(
       tester,
+      l10n,
       price: '12',
       openingQuantity: '40',
       openingCost: '7.5',
@@ -134,8 +135,7 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await openForm(tester, showOpeningStock: true);
-    await goToVariantStep(tester, l10n);
-    await fillVariant(tester, price: '12');
+    await fillProduct(tester, l10n, price: '12');
 
     await tester.tap(find.text(l10n.createProductButton));
     await tester.pumpAndSettle();
@@ -150,7 +150,6 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await openForm(tester, showOpeningStock: false);
-    await goToVariantStep(tester, l10n);
 
     expect(find.text(l10n.openingStockSectionTitle), findsNothing);
     expect(find.text(l10n.openingStockQuantityLabel), findsNothing);
@@ -161,8 +160,7 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await openForm(tester, showOpeningStock: true);
-    await goToVariantStep(tester, l10n);
-    await fillVariant(tester, price: '12', openingCost: '7.5');
+    await fillProduct(tester, l10n, price: '12', openingCost: '7.5');
 
     await tester.tap(find.text(l10n.createProductButton));
     await tester.pumpAndSettle();
@@ -176,9 +174,9 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await openForm(tester, showOpeningStock: true);
-    await goToVariantStep(tester, l10n);
-    await fillVariant(
+    await fillProduct(
       tester,
+      l10n,
       price: '12',
       openingQuantity: '40',
       openingCost: '7.5',
@@ -196,8 +194,17 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await openForm(tester, showOpeningStock: true);
+    expect(find.text(l10n.openingStockSectionTitle), findsOneWidget);
 
-    await tester.enterText(find.byType(TextFormField).first, 'صيانة');
+    await tester.enterText(field(l10n.productNameLabel), 'صيانة');
+    // The service switch is folded under «تفاصيل إضافية».
+    final moreDetails = find.byKey(
+      const ValueKey('product_form_more_details_toggle'),
+    );
+    await tester.ensureVisible(moreDetails);
+    await tester.pumpAndSettle();
+    await tester.tap(moreDetails);
+    await tester.pumpAndSettle();
     final serviceToggle = find.ancestor(
       of: find.text(l10n.productIsServiceTitle),
       matching: find.byType(SwitchListTile),
@@ -205,8 +212,6 @@ void main() {
     await tester.ensureVisible(serviceToggle);
     await tester.pumpAndSettle();
     await tester.tap(serviceToggle);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(l10n.nextButton));
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.openingStockSectionTitle), findsNothing);

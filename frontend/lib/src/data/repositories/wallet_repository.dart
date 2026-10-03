@@ -15,25 +15,63 @@ class WalletRepository {
   Future<Result<WalletPage<WalletTopUp>>> loadTopUps({String? before}) =>
       Result.guard(() => _service.wallet.fetchTopUps(before: before));
 
-  Future<Result<WalletPage<WalletEntry>>> loadEntries({String? before}) =>
-      Result.guard(() => _service.wallet.fetchEntries(before: before));
+  Future<Result<WalletPage<WalletEntry>>> loadEntries({
+    String? before,
+    WalletAccount account = WalletAccount.main,
+  }) => Result.guard(
+    () => _service.wallet.fetchEntries(before: before, account: account),
+  );
+
+  Future<Result<WalletSmsAllocation>> allocateToSms({
+    required String amount,
+    required String idempotencyKey,
+  }) => Result.guard(
+    () => _service.wallet.allocateToSms(
+      amount: amount,
+      idempotencyKey: idempotencyKey,
+    ),
+  );
+
+  Future<Result<WalletPlanPurchase>> purchasePlan({
+    required String plan,
+    required int periods,
+    required String idempotencyKey,
+  }) => Result.guard(
+    () => _service.wallet.purchasePlan(
+      plan: plan,
+      periods: periods,
+      idempotencyKey: idempotencyKey,
+    ),
+  );
 
   Future<Result<WalletTopUpStart>> startTopUp({
     required String amount,
     required String method,
     required String idempotencyKey,
     bool? recordAsExpense,
+    String userIdentifier = '',
+    String birthYear = '',
   }) => Result.guard(
     () => _service.wallet.startTopUp(
       amount: amount,
       method: method,
       idempotencyKey: idempotencyKey,
       recordAsExpense: recordAsExpense,
+      userIdentifier: userIdentifier,
+      birthYear: birthYear,
     ),
   );
 
   Future<Result<WalletTopUp>> loadTopUp(String id) =>
       Result.guard(() => _service.wallet.fetchTopUp(id));
+
+  Future<Result<WalletTopUpConfirmation>> confirmTopUp({
+    required String id,
+    required String otp,
+  }) => Result.guard(() => _service.wallet.confirmTopUp(id: id, otp: otp));
+
+  Future<Result<WalletTopUp>> cancelTopUp(String id) =>
+      Result.guard(() => _service.wallet.cancelTopUp(id));
 
   Future<Result<WalletSettings>> updateSettings({
     required bool recordTopUpsAsExpenses,

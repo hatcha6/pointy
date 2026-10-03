@@ -42,15 +42,18 @@ class WalletApiClient {
     );
   }
 
+  /// One account's statement: the main wallet, or the SMS balance.
   Future<WalletPage<WalletEntry>> fetchEntries({
     String? before,
     int limit = 30,
+    WalletAccount account = WalletAccount.main,
   }) async {
     final response = await _session.get(
       'wallet/entries/',
       query: {
         'limit': '$limit',
         if (before != null && before.isNotEmpty) 'before': before,
+        if (account != WalletAccount.main) 'account': account.key,
       },
     );
     _ensure(response);
@@ -68,12 +71,16 @@ class WalletApiClient {
   }
 
   /// Starts a top-up. [idempotencyKey] belongs to this attempt: sending it
-  /// again returns the same checkout instead of opening a second one.
+  /// again returns the same payment instead of starting a second one.
+  /// [userIdentifier] is the payer's phone or wallet card number and
+  /// [birthYear] Sadad's second factor; a bank card takes neither.
   Future<WalletTopUpStart> startTopUp({
     required String amount,
     required String method,
     required String idempotencyKey,
     bool? recordAsExpense,
+    String userIdentifier = '',
+    String birthYear = '',
   }) async {
     final response = await _session.post(
       'wallet/topups/',
@@ -82,10 +89,38 @@ class WalletApiClient {
         'method': method,
         'idempotency_key': idempotencyKey,
         'record_as_expense': ?recordAsExpense,
+        if (userIdentifier.isNotEmpty) 'user_identifier': userIdentifier,
+        if (birthYear.isNotEmpty) 'birth_year': birthYear,
       },
     );
     _ensure(response);
     return WalletTopUpStart.fromJson(_map(response));
+  }
+
+  /// Sends the code the payer's provider texted them.
+  Future<WalletTopUpConfirmation> confirmTopUp({
+    required String id,
+    required String otp,
+  }) async {
+    final response = await _session.post(
+      'wallet/topups/${Uri.encodeComponent(id)}/confirm/',
+      body: {'otp': otp},
+    );
+    _ensure(response);
+    return WalletTopUpConfirmation.fromJson(_map(response));
+  }
+
+  /// Calls off a top-up still waiting for its code.
+  Future<WalletTopUp> cancelTopUp(String id) async {
+    final response = await _session.post(
+      'wallet/topups/${Uri.encodeComponent(id)}/cancel/',
+      body: const {},
+    );
+    _ensure(response);
+    final topUp = _map(response)['top_up'];
+    return WalletTopUp.fromJson(
+      topUp is Map<String, Object?> ? topUp : const {},
+    );
   }
 
   Future<WalletTopUp> fetchTopUp(String id) async {
@@ -97,6 +132,38 @@ class WalletApiClient {
     return WalletTopUp.fromJson(
       topUp is Map<String, Object?> ? topUp : const {},
     );
+  }
+
+  /// Moves [amount] dinars from the main wallet into the SMS balance. The
+  /// same [idempotencyKey] sent again returns the first transfer.
+  Future<WalletSmsAllocation> allocateToSms({
+    required String amount,
+    required String idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'wallet/sms/allocations/',
+      body: {'amount': amount, 'idempotency_key': idempotencyKey},
+    );
+    _ensure(response);
+    return WalletSmsAllocation.fromJson(_map(response));
+  }
+
+  /// Pays for [periods] periods of [plan] from the main wallet.
+  Future<WalletPlanPurchase> purchasePlan({
+    required String plan,
+    required int periods,
+    required String idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'wallet/subscriptions/',
+      body: {
+        'plan': plan,
+        'periods': periods,
+        'idempotency_key': idempotencyKey,
+      },
+    );
+    _ensure(response);
+    return WalletPlanPurchase.fromJson(_map(response));
   }
 
   Future<WalletSettings> updateSettings({

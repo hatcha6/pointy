@@ -41,13 +41,6 @@ const catalogCreateProductLesson = TutorLesson(
       hint: 'الاسم هو ما يبحث به الكاشير، فاكتبه كما ينطقه.',
     ),
     TutorStep(
-      say: 'اضغط «التالي» للانتقال إلى بيانات البيع.',
-      anchor: TutorAnchor.productFormPrimaryButton,
-      act: TutorAct.tap(),
-      expect: TutorExpect.visible(TutorAnchor.productSkuField),
-      hint: 'الصفحة الأولى للمنتج، والثانية للخيار الذي يُباع.',
-    ),
-    TutorStep(
       say: 'اكتب رمز الصنف (SKU): TEA1.',
       anchor: TutorAnchor.productSkuField,
       act: TutorAct.type('TEA1'),
@@ -125,7 +118,7 @@ const catalogCartonBarcodeLesson = TutorLesson(
       anchor: TutorAnchor.productAddUnitButton,
       act: TutorAct.tap(),
       expect: TutorExpect.visible(TutorAnchor.productUnitBarcodeField),
-      hint: 'قسم «وحدات القياس» أسفل الصفحة الأولى.',
+      hint: 'قسم «وحدات القياس» في أسفل النموذج.',
     ),
     TutorStep(
       say: 'اكتب باركود الكرتونة: 6001000000981.',
@@ -147,18 +140,11 @@ const catalogCartonBarcodeLesson = TutorLesson(
       hint: 'يمكن إضافة أكثر من باركود للوحدة الواحدة.',
     ),
     TutorStep(
-      say: 'اضغط «التالي».',
-      anchor: TutorAnchor.productFormPrimaryButton,
-      act: TutorAct.tap(),
-      expect: TutorExpect.visible(TutorAnchor.productSkuField),
-      hint: 'بقي أن نعطي الحبة رمزها وسعرها.',
-    ),
-    TutorStep(
-      say: 'اكتب رمز الحبة: PASTA1.',
+      say: 'بقي أن نعطي الحبة رمزها وسعرها. اكتب رمز الحبة: PASTA1.',
       anchor: TutorAnchor.productSkuField,
       act: TutorAct.type('PASTA1'),
       expect: TutorExpect.fieldEquals(TutorAnchor.productSkuField, 'PASTA1'),
-      hint: 'رمز داخلي قصير.',
+      hint: 'رمز داخلي قصير، في أعلى النموذج بجانب الباركود.',
     ),
     TutorStep(
       say: 'اكتب باركود الحبة: 6001000000974.',

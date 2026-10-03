@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/analytics_audit.dart';
@@ -387,10 +389,16 @@ class CatalogViewModel extends ChangeNotifier {
     }
   }
 
+  /// Creates the product, then reloads the list so it appears there.
+  ///
+  /// [waitForListRefresh] false returns as soon as the product exists and lets
+  /// the list catch up behind it — for a form that goes straight on to the
+  /// next product and has nothing to show from the list.
   Future<ProductCreateResult> createProduct(
     ProductDraft draft, {
     ProductImageUpload? imageUpload,
     String? imageImportToken,
+    bool waitForListRefresh = true,
   }) async {
     _isSaving = true;
     _errorMessage = null;
@@ -411,7 +419,12 @@ class CatalogViewModel extends ChangeNotifier {
           imageRequested: imageUpload != null || imageImportToken != null,
           imageAttached: imageAttached,
         );
-        await loadProducts();
+        final refresh = loadProducts();
+        if (waitForListRefresh) {
+          await refresh;
+        } else {
+          unawaited(refresh);
+        }
         _isSaving = false;
         if (!imageAttached) {
           _errorMessage = 'catalog_image_attach_error';

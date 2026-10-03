@@ -792,11 +792,18 @@ CELERY_BEAT_SCHEDULE = {
         "task": "wallet.sync_topups",
         "schedule": timedelta(minutes=5),
     },
-    # Daily debt reminders for open-credit (آجل) invoices — opt-in via
-    # POINTY_SMS_DEBT_REMINDERS_ENABLED; the task no-ops when disabled.
+    # Daily debt reminders for open-credit (آجل) invoices — switched on from the
+    # SMS settings page (POINTY_SMS_DEBT_REMINDERS_ENABLED is only its default);
+    # the task no-ops when off.
     "crm.debt-reminder-sweep": {
         "task": "crm.debt_reminder_sweep",
         "schedule": crontab(minute=0, hour=10),
+    },
+    # Repairs left ready and uncollected: their customers are reminded on the
+    # 3rd, 10th and 30th day, when the shop has the pickup reminder on.
+    "operations.job-pickup-reminders": {
+        "task": "operations.job_pickup_reminders",
+        "schedule": crontab(minute=30, hour=10),
     },
     # Drain sending campaigns into the outbound queue (the gateway limiter paces
     # the actual sends).

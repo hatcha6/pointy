@@ -16,7 +16,7 @@ from apps.purchasing.models import PurchaseOrder, Supplier
 from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
 
 from .models import ReportRun
-from .services import DEFAULT_DETAIL_ROW_LIMIT
+from .periods import SUMMARY_ROW_LIMIT
 
 
 class ReportRunApiTests(TestCase):
@@ -183,7 +183,7 @@ class ReportRunApiTests(TestCase):
             {
                 "report_type": ReportRun.ReportType.PAYROLL_SUMMARY,
                 "output_format": ReportRun.OutputFormat.PDF,
-                "params": {},
+                "params": {"granularity": "detailed"},
             },
             format="json",
         )
@@ -309,7 +309,7 @@ class ReportRunApiTests(TestCase):
             {
                 "report_type": ReportRun.ReportType.REGISTER_CLOSURE,
                 "output_format": ReportRun.OutputFormat.PDF,
-                "params": {},
+                "params": {"granularity": "detailed"},
             },
             format="json",
         )
@@ -329,99 +329,85 @@ class ReportRunApiTests(TestCase):
         self.assertEqual(register_row["pay_in_total"], "5.00")
         self.assertEqual(register_row["pay_out_total"], "2.00")
 
-    def test_inventory_report_bounds_long_detail_rows_with_audit_metadata(self):
-        created_count = DEFAULT_DETAIL_ROW_LIMIT + 7
-        for index in range(created_count):
+    def _seed_reorder_lines(self, count, prefix):
+        """``count`` stock lines below their reorder level — rows of the
+        reorder list, which a summary cuts to its largest ten."""
+        for index in range(count):
             product = create_product_with_default_variant(
-                sku=f"BOUND-{index:03d}",
-                name=f"منتج أرشفة {index:03d}",
+                sku=f"{prefix}-{index:03d}",
+                name=f"منتج {prefix} {index:03d}",
                 unit_price=Decimal("2.00"),
             )
             StockItem.objects.create(
                 variant=product.default_variant,
-                quantity_on_hand=index + 1,
+                quantity_on_hand=index % 3,
+                reorder_level=5,
             )
 
+    def _post(self, report_type, params=None):
         client = APIClient()
         client.force_authenticate(user=self.manager)
-
         response = client.post(
             reverse("report-list"),
             {
-                "report_type": ReportRun.ReportType.INVENTORY_STATUS,
+                "report_type": report_type,
                 "output_format": ReportRun.OutputFormat.PDF,
-                "params": {},
+                "params": params or {},
             },
             format="json",
         )
-
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        payload = response.data["payload"]
-        inventory_section = self._section(payload, "inventory_items")
-        self.assertEqual(len(inventory_section["rows"]), DEFAULT_DETAIL_ROW_LIMIT)
+        return response
+
+    def test_a_summary_bounds_its_tables_with_audit_metadata(self):
+        created_count = SUMMARY_ROW_LIMIT + 7
+        self._seed_reorder_lines(created_count, "BOUND")
+
+        payload = self._post(ReportRun.ReportType.REORDER_ITEMS).data["payload"]
+        reorder_section = self._section(payload, "reorder_items")
+        self.assertEqual(len(reorder_section["rows"]), SUMMARY_ROW_LIMIT)
         self.assertEqual(
-            inventory_section["metadata"],
+            reorder_section["metadata"],
             {
-                "returned_count": DEFAULT_DETAIL_ROW_LIMIT,
+                "returned_count": SUMMARY_ROW_LIMIT,
                 "total_count": created_count,
                 "omitted_count": 7,
                 "truncated": True,
-                "limit": DEFAULT_DETAIL_ROW_LIMIT,
+                "limit": SUMMARY_ROW_LIMIT,
             },
         )
 
-        inventory_audit = next(
+        reorder_audit = next(
             section
             for section in payload["audit"]["sections"]
-            if section["key"] == "inventory_items"
+            if section["key"] == "reorder_items"
         )
         self.assertEqual(
-            inventory_audit,
-            inventory_section["metadata"] | {"key": "inventory_items"},
+            reorder_audit,
+            reorder_section["metadata"] | {"key": "reorder_items"},
         )
         self.assertTrue(payload["audit"]["truncated"])
+        # The headline is every line's, not the ten printed.
+        self.assertEqual(payload["summary"]["reorder_item_count"], created_count)
 
     def test_report_run_row_count_tracks_returned_payload_rows(self):
-        created_count = DEFAULT_DETAIL_ROW_LIMIT + 3
-        for index in range(created_count):
-            product = create_product_with_default_variant(
-                sku=f"COUNT-{index:03d}",
-                name=f"منتج عد {index:03d}",
-                unit_price=Decimal("3.00"),
-            )
-            StockItem.objects.create(
-                variant=product.default_variant,
-                quantity_on_hand=index + 1,
-            )
+        self._seed_reorder_lines(SUMMARY_ROW_LIMIT + 3, "COUNT")
 
-        client = APIClient()
-        client.force_authenticate(user=self.manager)
-
-        response = client.post(
-            reverse("report-list"),
-            {
-                "report_type": ReportRun.ReportType.INVENTORY_STATUS,
-                "output_format": ReportRun.OutputFormat.PDF,
-                "params": {},
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response = self._post(ReportRun.ReportType.REORDER_ITEMS)
         payload = response.data["payload"]
         returned_row_count = sum(
             len(section["rows"]) for section in payload["sections"]
         )
         run = ReportRun.objects.get(pk=response.data["id"])
 
-        inventory_section = self._section(payload, "inventory_items")
+        reorder_section = self._section(payload, "reorder_items")
 
         self.assertEqual(response.data["row_count"], returned_row_count)
         self.assertEqual(payload["audit"]["row_count"], returned_row_count)
         self.assertEqual(run.row_count, returned_row_count)
         self.assertGreater(
-            inventory_section["metadata"]["total_count"],
-            inventory_section["metadata"]["returned_count"],
+            reorder_section["metadata"]["total_count"],
+            reorder_section["metadata"]["returned_count"],
         )
 
 

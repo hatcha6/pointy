@@ -53,14 +53,21 @@ type Installation struct {
 	// the relay holds one fulus.ly subscription for the whole fleet and serves
 	// the published rates, so this is what a shop is actually buying.
 	FXEnabled bool `json:"fx_enabled"`
-	// SMSEnabled gates relay-hosted SMS (Resala). Its own entitlement like AI
-	// and FX: the company owns the provider account and pays per message, so
-	// sending is something a shop buys, not a setting it flips.
+	// SMSEnabled was SMS as part of the subscription. SMS is now prepaid: each
+	// message is paid from the shop's SMS balance, so this flag no longer
+	// decides anything and is kept only because old rows and tools carry it.
 	SMSEnabled bool `json:"sms_enabled"`
-	// SMSMonthlyLimit caps the shop's billable messages per calendar month
-	// (UTC+2). 0 means "the relay default" (POINTY_RELAY_SMS_MONTHLY_LIMIT),
-	// so a plan that needs more is raised per shop without a redeploy.
+	// SMSMonthlyLimit is the operator's brake on one shop's billable messages
+	// per calendar month (UTC+2). 0 means "the relay default"
+	// (POINTY_RELAY_SMS_MONTHLY_LIMIT, itself 0 = no brake): the SMS balance is
+	// what normally limits sending.
 	SMSMonthlyLimit int `json:"sms_monthly_limit"`
+	// RemoteAccessPaidUntil and AIPaidUntil are how far the shop has paid for
+	// each plan from its wallet. They stand beside the operator's subscription
+	// (the feature flag plus SubscriptionActive/SubscriptionEndsAt): a plan
+	// runs while either covers it.
+	RemoteAccessPaidUntil *time.Time `json:"remote_access_paid_until,omitempty"`
+	AIPaidUntil           *time.Time `json:"ai_paid_until,omitempty"`
 	// LastFXFetchAt stamps the goodwill allowance (see FXAccessAt). Written
 	// only for a shop WITHOUT the entitlement, so an entitled shop's fetches
 	// never cost a write.
@@ -85,34 +92,19 @@ type Installation struct {
 	AgentLastSeenAt *time.Time `json:"agent_last_seen_at,omitempty"`
 }
 
+// RelayActive reports whether the installation may use remote access right
+// now: the operator's subscription includes it (relay flag, active, unexpired)
+// or the shop has paid for it from its wallet.
 func (i Installation) RelayActive(now time.Time) bool {
-	if !i.RelayEnabled {
-		return false
-	}
-	if !i.SubscriptionActive {
-		return false
-	}
-	if i.SubscriptionEndsAt == nil {
-		return true
-	}
-	return now.Before(*i.SubscriptionEndsAt)
+	return i.PlanCoverage(WalletPlanRemoteAccess, now).Active
 }
 
 // AIActive reports whether the installation may use relay-hosted AI right now.
-// AI is its own entitlement: it requires an active, unexpired subscription and
-// the AI feature flag, but deliberately does NOT require RelayEnabled (remote
-// access). A shop can subscribe to AI without buying remote relay access.
+// AI is its own entitlement: the operator's subscription with the AI flag, or
+// the period the shop paid for from its wallet. It deliberately does NOT
+// require remote access: a shop can have the assistant without the relay.
 func (i Installation) AIActive(now time.Time) bool {
-	if !i.AIEnabled {
-		return false
-	}
-	if !i.SubscriptionActive {
-		return false
-	}
-	if i.SubscriptionEndsAt == nil {
-		return true
-	}
-	return now.Before(*i.SubscriptionEndsAt)
+	return i.PlanCoverage(WalletPlanAI, now).Active
 }
 
 // FXActive reports whether the installation may pull exchange rates right now.
@@ -122,23 +114,6 @@ func (i Installation) AIActive(now time.Time) bool {
 // exactly the one thing it wants.
 func (i Installation) FXActive(now time.Time) bool {
 	if !i.FXEnabled {
-		return false
-	}
-	if !i.SubscriptionActive {
-		return false
-	}
-	if i.SubscriptionEndsAt == nil {
-		return true
-	}
-	return now.Before(*i.SubscriptionEndsAt)
-}
-
-// SMSActive reports whether the installation may send SMS through the relay
-// right now. Same rule as AIActive: an active, unexpired subscription plus the
-// SMS flag, deliberately NOT requiring RelayEnabled — invoice texts and debt
-// reminders are useful to a shop that never buys remote access.
-func (i Installation) SMSActive(now time.Time) bool {
-	if !i.SMSEnabled {
 		return false
 	}
 	if !i.SubscriptionActive {
@@ -262,9 +237,13 @@ const (
 	AuditActionSubscriptionUpdated            = "subscription.updated"
 	AuditActionSubscriptionActivatedByLicense = "subscription.activated_by_license"
 	AuditActionSubscriptionExpired            = "subscription.expired"
+	// AuditActionSubscriptionPurchased is a plan the shop paid for from its
+	// wallet; the actor is "wallet:<who paid>".
+	AuditActionSubscriptionPurchased = "subscription.purchased"
 
 	AuditActorLicense = "license"
 	AuditActorSystem  = "system"
+	AuditActorWallet  = "wallet"
 )
 
 type AdminAuditMetadata struct {
@@ -1675,14 +1654,17 @@ func InstallationSubscriptionAuditState(
 	now time.Time,
 ) map[string]any {
 	return map[string]any{
-		"relay_enabled":        installation.RelayEnabled,
-		"subscription_active":  installation.SubscriptionActive,
-		"subscription_ends_at": installation.SubscriptionEndsAt,
-		"ai_enabled":           installation.AIEnabled,
-		"fx_enabled":           installation.FXEnabled,
-		"sms_enabled":          installation.SMSEnabled,
-		"sms_monthly_limit":    installation.SMSMonthlyLimit,
-		"relay_active":         installation.RelayActive(now),
+		"relay_enabled":            installation.RelayEnabled,
+		"subscription_active":      installation.SubscriptionActive,
+		"subscription_ends_at":     installation.SubscriptionEndsAt,
+		"ai_enabled":               installation.AIEnabled,
+		"fx_enabled":               installation.FXEnabled,
+		"sms_enabled":              installation.SMSEnabled,
+		"sms_monthly_limit":        installation.SMSMonthlyLimit,
+		"remote_access_paid_until": installation.RemoteAccessPaidUntil,
+		"ai_paid_until":            installation.AIPaidUntil,
+		"relay_active":             installation.RelayActive(now),
+		"ai_active":                installation.AIActive(now),
 	}
 }
 

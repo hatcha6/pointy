@@ -6,9 +6,11 @@ import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/employee.dart';
 import '../../../data/models/job_refusal.dart';
+import '../../../data/models/messaging_gateway.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/models/workflow.dart';
 import '../../../data/repositories/operations_repository.dart';
+import '../../../data/services/api_error_detail.dart';
 import 'job_print_actions.dart';
 
 class JobDetailsViewModel extends ChangeNotifier {
@@ -299,6 +301,23 @@ class JobDetailsViewModel extends ChangeNotifier {
       eventName: 'operations.job.reopened',
     );
     return updated != null;
+  }
+
+  /// Texts the customer that the job is ready. Null once it is on its way;
+  /// otherwise why not — the refusal's code and the server's words.
+  Future<({String code, String detail})?> sendReadySms() async {
+    final result = await _repository.notifyJobReady(jobId);
+    switch (result) {
+      case Ok<MessagingSendResult>(value: final sent):
+        return sent.isFailure
+            ? (code: sent.errorCode, detail: sent.errorDetail)
+            : null;
+      case Error<MessagingSendResult>(exception: final exception):
+        return (
+          code: apiErrorCode(exception) ?? '',
+          detail: apiErrorDetail(exception),
+        );
+    }
   }
 
   Future<OperationsJob?> _mutate(

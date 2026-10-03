@@ -14,8 +14,13 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.search_filters import FOLDING_FILTER_BACKENDS
 from apps.customers.models import Asset, AssetOwnership, AssetType
 from apps.employees.models import Employee
+from apps.messaging.serializers import OutboundMessageSerializer
+from apps.messaging.services import NoGatewayConfigured, unavailable_message
 from apps.sales.models import RegisterSession
 from apps.sales.views import register_session_owner_key
+from .customer_sms import JobNotReady as JobNotReadyForPickup
+from .customer_sms import NoRecipientPhone as NoJobRecipientPhone
+from .customer_sms import notify_job_received, send_job_ready_sms
 from .models import Job, JobAsset, WorkflowTemplate
 from .serializers import (
     AssetDetailSerializer,
@@ -93,6 +98,7 @@ class JobViewSet(
         "cancel": ("operations.change_job",),
         "decline": ("operations.change_job",),
         "hand_back": ("operations.change_job",),
+        "notify_ready": ("operations.change_job",),
         "reopen": ("operations.reopen_job",),
         "invoice": (
             "operations.change_job",
@@ -244,6 +250,8 @@ class JobViewSet(
             JobAsset.objects.create(job=job, asset=asset)
         if bom is not None:
             explode_bom_into_job(job=job, bom=bom, batches=batches)
+        # Here, not in create_job: the text names the job's item, linked above.
+        notify_job_received(job)
 
         job = self.get_queryset().get(pk=job.pk)
         return Response(
@@ -412,6 +420,30 @@ class JobViewSet(
             request=request,
         )
         return self._refreshed(request, job.pk)
+
+    @action(detail=True, methods=["post"], url_path="notify-ready")
+    def notify_ready(self, request, pk=None):
+        """Text the customer that the job is ready, by hand: again after the
+        automatic text, or at all when the shop keeps that switched off."""
+        job = self.get_object()
+        try:
+            message = send_job_ready_sms(job)
+        except JobNotReadyForPickup:
+            return Response(
+                {"detail": "الطلب ليس في مرحلة جاهز للاستلام.", "code": "not_ready"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except NoJobRecipientPhone:
+            return Response(
+                {"detail": "لا يوجد رقم هاتف للزبون.", "code": "no_phone"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except NoGatewayConfigured as exc:
+            return Response(
+                {"detail": unavailable_message(exc), "code": exc.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(OutboundMessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def reopen(self, request, pk=None):

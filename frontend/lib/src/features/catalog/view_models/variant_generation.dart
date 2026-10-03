@@ -8,10 +8,7 @@ class VariantCombination {
 
   List<int> get valueIds => [for (final value in values) value.id];
 
-  String get signature {
-    final ids = [...valueIds]..sort();
-    return ids.join('|');
-  }
+  String get signature => variantSignature(valueIds);
 
   String get autoName => values
       .map((value) => value.name.trim())
@@ -32,6 +29,13 @@ class VariantCombination {
         .join('-');
     return suffix.isEmpty ? base : '$base-$suffix';
   }
+}
+
+/// The key a combination of option values goes by, whatever order the values
+/// come in — so an existing variant can be matched to a generated row.
+String variantSignature(Iterable<int> valueIds) {
+  final ids = [...valueIds]..sort();
+  return ids.join('|');
 }
 
 List<VariantCombination> generateVariantCombinations({

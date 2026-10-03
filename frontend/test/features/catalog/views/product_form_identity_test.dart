@@ -102,13 +102,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Fills the first step and moves to the default-variant step.
-  Future<void> goToVariantStep(
-    WidgetTester tester,
-    AppLocalizations l10n,
-  ) async {
-    await tester.enterText(find.byType(TextFormField).first, 'منتج جديد');
-    await tester.tap(find.text(l10n.nextButton));
+  Finder field(String label) => find.widgetWithText(TextFormField, label);
+
+  Future<void> enterName(WidgetTester tester, AppLocalizations l10n) async {
+    await tester.enterText(field(l10n.productNameLabel), 'منتج جديد');
     await tester.pumpAndSettle();
   }
 
@@ -117,10 +114,9 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await pumpForm(tester, identityResponse: takenIdentity);
-    await goToVariantStep(tester, l10n);
+    await enterName(tester, l10n);
 
-    // Step two: variant name, SKU, barcode, price.
-    await tester.enterText(find.byType(TextFormField).at(2), '999');
+    await tester.enterText(field(l10n.barcodeLabel), '999');
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 
@@ -165,7 +161,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await goToVariantStep(tester, l10n);
+      await enterName(tester, l10n);
       await tester.pumpAndSettle();
 
       expect(
@@ -185,11 +181,11 @@ void main() {
       createStatus: 400,
       createBody: conflictBody,
     );
-    await goToVariantStep(tester, l10n);
+    await enterName(tester, l10n);
 
-    await tester.enterText(find.byType(TextFormField).at(1), 'NEW-1');
-    await tester.enterText(find.byType(TextFormField).at(2), '999');
-    await tester.enterText(find.byType(TextFormField).at(3), '5');
+    await tester.enterText(field(l10n.skuLabel), 'NEW-1');
+    await tester.enterText(field(l10n.barcodeLabel), '999');
+    await tester.enterText(field(l10n.unitPriceLabel), '5');
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 

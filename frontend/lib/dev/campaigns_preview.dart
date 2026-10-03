@@ -1,7 +1,8 @@
 // Dev-only preview harness for the campaign editor / approval screen (CRM).
 //
 // Run with: make frontend-campaigns-preview
-// Scenarios: new | draft | sent
+// Scenarios: new | draft | sent | cost (preview loaded, the SMS balance covers
+// it) | short (preview loaded, the balance runs out first)
 //
 // The list screen needs the nav shell, so this previews the editor (self-
 // contained). Not part of the shipping app.
@@ -25,6 +26,13 @@ class _PreviewApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scenario = _screen();
+    final viewModel = CampaignEditorViewModel(
+      _FakeCrmRepository(scenario),
+      _campaign(scenario),
+    );
+    if (scenario == 'cost' || scenario == 'short') {
+      viewModel.loadPreview();
+    }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
@@ -41,13 +49,7 @@ class _PreviewApp extends StatelessWidget {
         controller: PointyNavigationRailController(),
         child: child ?? const SizedBox.shrink(),
       ),
-      home: CampaignEditorScreen(
-        viewModel: CampaignEditorViewModel(
-          _FakeCrmRepository(),
-          _campaign(scenario),
-        ),
-        canSend: true,
-      ),
+      home: CampaignEditorScreen(viewModel: viewModel, canSend: true),
     );
   }
 }
@@ -86,7 +88,9 @@ Campaign? _campaign(String scenario) {
 }
 
 class _FakeCrmRepository extends CrmRepository {
-  _FakeCrmRepository() : super(PosApiService());
+  _FakeCrmRepository(this.scenario) : super(PosApiService());
+
+  final String scenario;
 
   @override
   Future<Result<Campaign>> createCampaign(CampaignDraft draft) async {
@@ -109,14 +113,19 @@ class _FakeCrmRepository extends CrmRepository {
   @override
   Future<Result<CampaignPreview>> previewCampaign(int id) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    return const Ok(
+    // 130 recipients x 2 SMS x 0.150.
+    return Ok(
       CampaignPreview(
         audienceTotal: 142,
         sendableEstimate: 130,
         skippedEstimate: 12,
         segments: 2,
         estimatedMinutes: 22,
-        sampleMessage: 'مرحبا علي، عرض خاص من متجري 🎉',
+        sampleMessage:
+            'عرض من متجري: مرحبا علي، خصم عشرين بالمئة على كل المنظفات والمواد '
+            'الغذائية حتى نهاية الأسبوع 🎉 (لإيقاف العروض أبلغ المحل)',
+        estimatedCost: 39,
+        smsBalance: scenario == 'short' ? 12.5 : 60,
       ),
     );
   }

@@ -77,6 +77,12 @@ class WorkflowStage(TimeStampedModel):
     consumes_materials = models.BooleanField(default=False)
     # Entering this stage receives the job's output into stock (production).
     produces_output = models.BooleanField(default=False)
+    # The job is ready for the customer to collect while it sits here: entering
+    # it texts the customer (the ``job_ready`` SMS, when the shop has it on),
+    # and a job left here is reminded about. Seeded on each repair and work
+    # order workflow's "ready" stage; a shop's own workflow sets it where it
+    # means it.
+    ready_for_pickup = models.BooleanField(default=False, db_default=False)
 
     class Meta:
         ordering = ["display_order", "id"]

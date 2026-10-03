@@ -56,11 +56,14 @@ class _ReportCase(TestCase):
         return timezone.make_aware(datetime.combine(day, time(12)))
 
     def _report(self, report_type, *, start, end=None, **params):
+        # Detailed: these tests read the schedules behind the figures — the
+        # statement's lines, the bridges — which a summary leaves out.
         return generate_report_payload(
             report_type=report_type,
             params={
                 "start_date": start.isoformat(),
                 "end_date": (end or self.today).isoformat(),
+                "granularity": "detailed",
                 **params,
             },
             user=self.manager,

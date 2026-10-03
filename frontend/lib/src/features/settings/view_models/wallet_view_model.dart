@@ -7,14 +7,16 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/result.dart';
 import '../../../data/models/wallet.dart';
 import '../../../data/repositories/wallet_repository.dart';
+import 'wallet_spending_view_model.dart';
 
-/// Opens the gateway's checkout page. Injected so tests and the preview never
+/// Opens the gateway's payment page. Injected so tests and the preview never
 /// leave the app.
 typedef WalletCheckoutLauncher = Future<bool> Function(Uri uri);
 
-/// The payer pays on the gateway's own page, in the system browser: card
-/// details never pass through Pointy, and it works on every platform the till
-/// runs on. The app follows the payment by polling, so nothing is typed back.
+/// A bank-card payer pays on the gateway's own page, in the system browser:
+/// card details never pass through Pointy, and it works on every platform the
+/// till runs on. The app follows the payment by polling, so nothing is typed
+/// back.
 Future<bool> openWalletCheckoutInBrowser(Uri uri) async {
   try {
     return await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -25,26 +27,34 @@ Future<bool> openWalletCheckoutInBrowser(Uri uri) async {
 
 /// Where the top-up sheet is.
 enum WalletTopUpStage {
-  /// Choosing the amount.
+  /// Choosing the amount, the method and the payer.
   form,
 
-  /// Asking the gateway for a checkout.
+  /// Asking the gateway to start the payment.
   starting,
 
-  /// The checkout is open; waiting for the payer to come back paid.
+  /// The provider texted the payer a code; waiting for them to type it.
+  awaitingCode,
+
+  /// Sending the code.
+  confirmingCode,
+
+  /// The payer is paying on the gateway's page — or the gateway took the code
+  /// without a verdict yet — and the app is waiting for the outcome.
   awaitingPayment,
   paid,
   canceled,
   failed,
 
   /// No verdict came back in time. The payment may still land: the relay
-  /// credits a late approval, and the backend's sync books it.
+  /// credits a late one, and the backend's sync books it.
   unconfirmed,
 }
 
 /// Drives the wallet on the subscription page: the balance, the top-up flow
-/// (start, open the checkout, follow it to a verdict), the auto-expense
-/// switch, and the paged history.
+/// (pick a method, start, confirm with the texted code or pay on the gateway's
+/// page, follow it to a verdict), the auto-expense switch, and the paged
+/// history. Spending it — the SMS balance, the plans — is [spending].
 class WalletViewModel extends ChangeNotifier {
   WalletViewModel(
     this._repository, {
@@ -63,8 +73,14 @@ class WalletViewModel extends ChangeNotifier {
   final DateTime Function() _clock;
   final String Function() _newAttemptKey;
 
-  /// While the payer is most likely on the checkout, ask often; after that,
-  /// ask less — a card payment that has not landed in minutes is rare.
+  /// Moving money into the SMS balance and paying for plans.
+  late final WalletSpendingViewModel spending = WalletSpendingViewModel(
+    _repository,
+    wallet: this,
+  );
+
+  /// While the payer is most likely on the payment page, ask often; after
+  /// that, ask less — a card payment that has not landed in minutes is rare.
   final Duration fastPollInterval;
   final Duration slowPollInterval;
   final Duration fastPollFor;
@@ -96,6 +112,16 @@ class WalletViewModel extends ChangeNotifier {
         _hasLoadError = true;
     }
     _isLoading = false;
+    _notify();
+  }
+
+  /// Shows what a spend left at once, before the reload that follows it.
+  void applySpending({double? balance, SmsWallet? sms, WalletPlan? plan}) {
+    final overview = _overview;
+    if (overview == null) {
+      return;
+    }
+    _overview = overview.copyWith(balance: balance, sms: sms, plan: plan);
     _notify();
   }
 
@@ -147,13 +173,16 @@ class WalletViewModel extends ChangeNotifier {
   // --- a top-up -----------------------------------------------------------
 
   WalletTopUpStage _stage = WalletTopUpStage.form;
+  String? _methodKey;
   WalletTopUp? _activeTopUp;
   String? _checkoutUrl;
   WalletException? _topUpError;
+  WalletException? _codeError;
+  WalletException? _verdictError;
   bool _checkoutOpenFailed = false;
   bool _recordAsExpense = true;
   String? _attemptKey;
-  String? _attemptAmount;
+  String? _attemptSignature;
   DateTime? _awaitingSince;
   Timer? _pollTimer;
   bool _isChecking = false;
@@ -161,7 +190,15 @@ class WalletViewModel extends ChangeNotifier {
   WalletTopUpStage get topUpStage => _stage;
   WalletTopUp? get activeTopUp => _activeTopUp;
   String? get checkoutUrl => _checkoutUrl;
+
+  /// Why the payment could not start (shown on the form).
   WalletException? get topUpError => _topUpError;
+
+  /// Why the last code was not taken, while another may be sent.
+  WalletException? get codeError => _codeError;
+
+  /// The refusal that ended the top-up, with the gateway's own sentence.
+  WalletException? get verdictError => _verdictError;
 
   /// The browser did not open; the sheet offers the link instead.
   bool get checkoutOpenFailed => _checkoutOpenFailed;
@@ -172,15 +209,46 @@ class WalletViewModel extends ChangeNotifier {
 
   bool get isPolling => _pollTimer != null;
 
-  /// Opens the sheet on a clean form.
+  /// The ways to pay the company offers right now, in its order.
+  List<WalletTopUpMethod> get methods =>
+      _overview?.topUpOptions?.methods ?? const [];
+
+  /// The method the form is set to: the owner's pick while it is still
+  /// offered, else the first one offered.
+  WalletTopUpMethod? get selectedMethod {
+    final offered = methods;
+    for (final method in offered) {
+      if (method.key == _methodKey) {
+        return method;
+      }
+    }
+    return offered.isEmpty ? null : offered.first;
+  }
+
+  /// Whether the payment in hand is waiting on the gateway's page (true) or
+  /// on the gateway's verdict about a code (false).
+  bool get awaitingHostedPage => (_checkoutUrl ?? '').isNotEmpty;
+
+  /// Opens the sheet on a clean form, on the method picked last time.
   void beginTopUp() {
     _stopPolling();
     _stage = WalletTopUpStage.form;
     _activeTopUp = null;
     _checkoutUrl = null;
     _topUpError = null;
+    _codeError = null;
+    _verdictError = null;
     _checkoutOpenFailed = false;
     _recordAsExpense = recordTopUpsAsExpenses;
+    _notify();
+  }
+
+  void selectMethod(String key) {
+    if (_stage != WalletTopUpStage.form || key == selectedMethod?.key) {
+      return;
+    }
+    _methodKey = key;
+    _topUpError = null;
     _notify();
   }
 
@@ -189,42 +257,77 @@ class WalletViewModel extends ChangeNotifier {
     _notify();
   }
 
-  /// Asks the gateway for a checkout for [amount] dinars and opens it.
-  Future<void> startTopUp(double amount) async {
-    if (_stage == WalletTopUpStage.starting) {
+  /// Drops the reason the payment could not start, once something closer to
+  /// the cause shows it — the payer dialog, beside the number it refused.
+  void dismissTopUpError() {
+    if (_topUpError == null) {
       return;
     }
-    final amountText = amount.toStringAsFixed(2);
+    _topUpError = null;
+    _notify();
+  }
+
+  /// Asks the gateway to start a payment of [amount] dinars by the selected
+  /// method: a code goes to the payer's phone, or the payment page opens.
+  Future<void> startTopUp(
+    double amount, {
+    String userIdentifier = '',
+    String birthYear = '',
+  }) async {
+    final method = selectedMethod;
+    if (_stage == WalletTopUpStage.starting || method == null) {
+      return;
+    }
+    final amountText = walletAmountText(
+      amount,
+      _overview?.topUpOptions?.maxDecimals ?? 2,
+    );
+    final payer = userIdentifier.trim();
+    final year = birthYear.trim();
     // One attempt, one key: a retry after a dropped response returns the same
-    // checkout instead of a second one. A different amount is a new attempt.
-    if (_attemptKey == null || _attemptAmount != amountText) {
+    // payment instead of a second one. Anything changed is a new attempt.
+    final signature = [amountText, method.key, payer, year].join('|');
+    if (_attemptKey == null || _attemptSignature != signature) {
       _attemptKey = _newAttemptKey();
-      _attemptAmount = amountText;
+      _attemptSignature = signature;
     }
     _stage = WalletTopUpStage.starting;
     _topUpError = null;
+    _codeError = null;
+    _verdictError = null;
     _checkoutOpenFailed = false;
     _notify();
 
     final result = await _repository.startTopUp(
       amount: amountText,
-      method: WalletTopUpMethod.localBankCards,
+      method: method.key,
       idempotencyKey: _attemptKey!,
       recordAsExpense: _recordAsExpense,
+      userIdentifier: payer,
+      birthYear: year,
     );
+    if (_disposed) {
+      return;
+    }
     switch (result) {
       case Ok<WalletTopUpStart>(value: final start):
         _attemptKey = null;
         _activeTopUp = start.topUp;
-        _checkoutUrl = start.checkoutUrl.isEmpty
-            ? start.topUp.checkoutUrl
-            : start.checkoutUrl;
         _rememberSettingChoice();
         if (_settleFrom(start.topUp)) {
           // A replayed key whose top-up already has a verdict.
           _notify();
           return;
         }
+        if (start.needsCode) {
+          _checkoutUrl = null;
+          _stage = WalletTopUpStage.awaitingCode;
+          _notify();
+          return;
+        }
+        _checkoutUrl = start.checkoutUrl.isEmpty
+            ? start.topUp.checkoutUrl
+            : start.checkoutUrl;
         _stage = WalletTopUpStage.awaitingPayment;
         _awaitingSince = _clock();
         _notify();
@@ -244,7 +347,77 @@ class WalletViewModel extends ChangeNotifier {
     }
   }
 
-  /// Opens (or reopens) the checkout page in the browser.
+  /// Sends the code the payer's provider texted them.
+  Future<void> confirmCode(String otp) async {
+    final topUp = _activeTopUp;
+    if (topUp == null || _stage != WalletTopUpStage.awaitingCode) {
+      return;
+    }
+    _stage = WalletTopUpStage.confirmingCode;
+    _codeError = null;
+    _notify();
+    final result = await _repository.confirmTopUp(id: topUp.id, otp: otp);
+    if (_disposed || _stage != WalletTopUpStage.confirmingCode) {
+      return;
+    }
+    switch (result) {
+      case Ok<WalletTopUpConfirmation>(value: final confirmation):
+        _activeTopUp = confirmation.topUp;
+        if (_settleFrom(confirmation.topUp)) {
+          if (confirmation.topUp.status == WalletTopUpStatus.paid) {
+            // The balance moved; the expense (if any) is already booked.
+            unawaited(load());
+          }
+        } else if (confirmation.awaitingGateway) {
+          _stage = WalletTopUpStage.awaitingPayment;
+          _awaitingSince = _clock();
+          _startPolling();
+        } else {
+          _stage = WalletTopUpStage.awaitingCode;
+        }
+      case Error<WalletTopUpConfirmation>(exception: final exception):
+        final error = exception is WalletException
+            ? exception
+            : const WalletException(code: 'network', message: '');
+        final latest = error.topUp;
+        if (latest != null) {
+          _activeTopUp = latest;
+        }
+        final stillOpen =
+            latest == null || latest.status == WalletTopUpStatus.pending;
+        if (error.leavesCodeOpen && stillOpen) {
+          _codeError = error;
+          _stage = WalletTopUpStage.awaitingCode;
+          if (error.code != 'otp_rejected' && error.code != 'invalid_otp') {
+            // The answer was lost or the gateway was busy: the code may have
+            // gone through all the same. Ask before the owner sends it again.
+            unawaited(_recheckCodeTopUp());
+          }
+        } else {
+          _verdictError = error;
+          if (latest == null || !_settleFrom(latest)) {
+            _stage = WalletTopUpStage.failed;
+          }
+        }
+    }
+    _notify();
+  }
+
+  /// Back from the code to the form — a wrong number, another method. The
+  /// payment waiting for that code is called off, so it cannot linger.
+  void changeDetails() {
+    if (_stage != WalletTopUpStage.awaitingCode) {
+      return;
+    }
+    _cancelWaitingCode();
+    _stage = WalletTopUpStage.form;
+    _activeTopUp = null;
+    _codeError = null;
+    _topUpError = null;
+    _notify();
+  }
+
+  /// Opens (or reopens) the payment page in the browser.
   Future<bool> openCheckout() async {
     final url = _checkoutUrl;
     final uri = url == null ? null : Uri.tryParse(url);
@@ -295,18 +468,53 @@ class WalletViewModel extends ChangeNotifier {
   }
 
   /// Leaves the flow: stops asking. A payment still under way is not lost —
-  /// the backend's sync books it, and the wallet shows it on the next load.
+  /// the backend's sync books it, and the wallet shows it on the next load. A
+  /// payment still waiting for its code is called off.
   void endTopUp() {
     // Past the form, a top-up exists: reload so the wallet shows where it
     // stands (paid, or still waiting on the gateway).
     final topUpStarted =
         _stage != WalletTopUpStage.form && _stage != WalletTopUpStage.starting;
+    if (_stage == WalletTopUpStage.awaitingCode) {
+      _cancelWaitingCode();
+    }
     _stopPolling();
     _stage = WalletTopUpStage.form;
     if (topUpStarted) {
       unawaited(load());
     }
     _notify();
+  }
+
+  void _cancelWaitingCode() {
+    final topUp = _activeTopUp;
+    if (topUp != null) {
+      // Best effort: if it fails, the relay's expiry writes the top-up off.
+      unawaited(_repository.cancelTopUp(topUp.id));
+    }
+  }
+
+  /// After a code whose answer was lost: if the payment went through, say so
+  /// instead of asking for the code again.
+  Future<void> _recheckCodeTopUp() async {
+    final topUp = _activeTopUp;
+    if (topUp == null) {
+      return;
+    }
+    final result = await _repository.loadTopUp(topUp.id);
+    if (_disposed || _stage != WalletTopUpStage.awaitingCode) {
+      return;
+    }
+    if (result case Ok<WalletTopUp>(value: final latest)) {
+      if (latest.status != WalletTopUpStatus.pending && _settleFrom(latest)) {
+        _activeTopUp = latest;
+        _codeError = null;
+        if (latest.status == WalletTopUpStatus.paid) {
+          unawaited(load());
+        }
+        _notify();
+      }
+    }
   }
 
   /// Moves the stage to the verdict [topUp] carries. False while undecided.
@@ -482,8 +690,19 @@ class WalletViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _stopPolling();
+    spending.dispose();
     super.dispose();
   }
+}
+
+/// An amount as the gateway takes it: at most [decimals] places, without the
+/// trailing zeros ("100", "10.5", "10.125").
+String walletAmountText(double amount, int decimals) {
+  final fixed = amount.toStringAsFixed(decimals.clamp(0, 3));
+  if (!fixed.contains('.')) {
+    return fixed;
+  }
+  return fixed.replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
 String _randomAttemptKey() {

@@ -5,6 +5,7 @@ from decimal import Decimal
 from apps.balances.employees import balances_as_of_by_employee
 from apps.employees.models import Employee, PayrollLine
 from apps.employees.reporting import (
+    RECOGNISED_STATUSES,
     payroll_cost,
     payroll_paid,
     payroll_pending,
@@ -28,25 +29,16 @@ def payroll_summary(context):
     start, end = context.period.start_date, context.period.end_date
     runs = payroll_runs_for_period(start, end)
 
-    limit = context.row_limit("payroll_runs")
-    bounded_runs = bounded_queryset(runs.order_by("-period_end", "-id"), limit=limit)
-    run_rows = [
-        {
-            "run_number": run.run_number,
-            "status": run.status,
-            "period_start": run.period_start.isoformat(),
-            "period_end": run.period_end.isoformat(),
-            "payment_date": run.payment_date.isoformat() if run.payment_date else "",
-            "gross_total": money(run.gross_total),
-            "deductions_total": money(run.deductions_total),
-            "net_total": money(run.net_total),
-        }
-        for run in bounded_runs.rows
-    ]
-
+    # The runs the cost figures count: approved or paid. A draft is still a
+    # proposal — in this table it put wages nobody had agreed under the
+    # employee's name.
+    counted_lines = PayrollLine.objects.filter(
+        payroll_run__in=runs.filter(status__in=RECOGNISED_STATUSES)
+    )
     employee_values = (
-        PayrollLine.objects.filter(payroll_run__in=runs)
-        .values("employee__full_name")
+        # By employee, not by name: two staff called the same thing are two
+        # rows, not one with both their wages.
+        counted_lines.values("employee_id", "employee__full_name")
         .annotate(
             gross_total=money_sum("gross_amount"),
             additions_total=money_sum("additions_amount"),
@@ -68,6 +60,14 @@ def payroll_summary(context):
         }
         for row in bounded_employees.rows
     ]
+    # What every employee's column adds up to, so a table cut to the largest
+    # ten still foots to the whole payroll under it.
+    employee_totals = counted_lines.aggregate(
+        gross_total=money_sum("gross_amount"),
+        additions_total=money_sum("additions_amount"),
+        deductions_total=money_sum("deductions_amount"),
+        net_total=money_sum("net_amount"),
+    )
 
     # ``salary_expense`` is the period's labour cost and ``paid_total`` is the
     # cash that left inside it. They are different questions, they used to be
@@ -91,6 +91,85 @@ def payroll_summary(context):
         "staff_owe_total": money(owed_by_staff),
         "owed_to_staff_total": money(owed_to_staff),
     }
+    sections = [
+        context.metrics(figures),
+        report_section(
+            "employee_totals",
+            [
+                Column("employee_name"),
+                Column("gross_total", ColumnType.MONEY, total=True),
+                Column("additions_total", ColumnType.MONEY, total=True),
+                Column("deductions_total", ColumnType.MONEY, total=True),
+                Column("net_total", ColumnType.MONEY, total=True),
+            ],
+            employee_rows,
+            total_count=bounded_employees.total_count,
+            limit=bounded_employees.limit,
+            totals={name: money(value) for name, value in employee_totals.items()},
+        ),
+    ]
+    if context.wants_detail():
+        sections.extend(
+            [
+                _payroll_runs_section(runs, context),
+                _account_balances_section(
+                    balances, owed_by_staff, owed_to_staff, context
+                ),
+            ]
+        )
+    return {
+        "summary": figures,
+        "sections": sections,
+        "notes": [
+            note("payroll_cost_vs_paid"),
+            note("payroll_period_overlap"),
+            *([note("payroll_account_balances")] if balances else []),
+        ],
+    }
+
+
+def _payroll_runs_section(runs, context):
+    """Every payroll run the period touches, newest first."""
+    bounded_runs = bounded_queryset(
+        runs.order_by("-period_end", "-id"), limit=context.row_limit("payroll_runs")
+    )
+    run_rows = [
+        {
+            "run_number": run.run_number,
+            "status": run.status,
+            "period_start": run.period_start.isoformat(),
+            "period_end": run.period_end.isoformat(),
+            "payment_date": run.payment_date.isoformat() if run.payment_date else "",
+            "gross_total": money(run.gross_total),
+            "additions_total": money(run.additions_total),
+            "deductions_total": money(run.deductions_total),
+            "net_total": money(run.net_total),
+        }
+        for run in bounded_runs.rows
+    ]
+    return report_section(
+        "payroll_runs",
+        [
+            Column("run_number"),
+            Column("status", ColumnType.CHOICE),
+            Column("period_start", ColumnType.DATE),
+            Column("period_end", ColumnType.DATE),
+            Column("payment_date", ColumnType.DATE),
+            Column("gross_total", ColumnType.MONEY, total=True),
+            # Without it the row did not add up: gross less deductions is not
+            # the net when a run paid anything on top.
+            Column("additions_total", ColumnType.MONEY, total=True),
+            Column("deductions_total", ColumnType.MONEY, total=True),
+            Column("net_total", ColumnType.MONEY, total=True),
+        ],
+        run_rows,
+        total_count=bounded_runs.total_count,
+        limit=bounded_runs.limit,
+    )
+
+
+def _account_balances_section(balances, owed_by_staff, owed_to_staff, context):
+    """Each employee's account at the period's close, both ways."""
     names = dict(
         Employee.objects.filter(pk__in=balances.keys()).values_list(
             "pk", "full_name"
@@ -108,57 +187,21 @@ def payroll_summary(context):
         key=lambda row: row["employee_name"],
     )
     balance_limit = context.row_limit("employee_account_balances")
-    return {
-        "summary": figures,
-        "sections": [
-            context.metrics(figures),
-            report_section(
-                "payroll_runs",
-                [
-                    Column("run_number"),
-                    Column("status", ColumnType.CHOICE),
-                    Column("period_start", ColumnType.DATE),
-                    Column("period_end", ColumnType.DATE),
-                    Column("payment_date", ColumnType.DATE),
-                    Column("gross_total", ColumnType.MONEY, total=True),
-                    Column("deductions_total", ColumnType.MONEY, total=True),
-                    Column("net_total", ColumnType.MONEY, total=True),
-                ],
-                run_rows,
-                total_count=bounded_runs.total_count,
-                limit=bounded_runs.limit,
-            ),
-            report_section(
-                "employee_totals",
-                [
-                    Column("employee_name"),
-                    Column("gross_total", ColumnType.MONEY, total=True),
-                    Column("additions_total", ColumnType.MONEY, total=True),
-                    Column("deductions_total", ColumnType.MONEY, total=True),
-                    Column("net_total", ColumnType.MONEY, total=True),
-                ],
-                employee_rows,
-                total_count=bounded_employees.total_count,
-                limit=bounded_employees.limit,
-            ),
-            report_section(
-                "employee_account_balances",
-                [
-                    Column("employee_name"),
-                    Column("owed_by_employee", ColumnType.MONEY, total=True),
-                    Column("owed_to_employee", ColumnType.MONEY, total=True),
-                ],
-                balance_rows[:balance_limit],
-                total_count=len(balance_rows),
-                limit=balance_limit,
-            ),
+    return report_section(
+        "employee_account_balances",
+        [
+            Column("employee_name"),
+            Column("owed_by_employee", ColumnType.MONEY, total=True),
+            Column("owed_to_employee", ColumnType.MONEY, total=True),
         ],
-        "notes": [
-            note("payroll_cost_vs_paid"),
-            note("payroll_period_overlap"),
-            *([note("payroll_account_balances")] if balances else []),
-        ],
-    }
+        balance_rows[:balance_limit],
+        total_count=len(balance_rows),
+        limit=balance_limit,
+        totals={
+            "owed_by_employee": money(owed_by_staff),
+            "owed_to_employee": money(owed_to_staff),
+        },
+    )
 
 
 __all__ = ["payroll_summary"]

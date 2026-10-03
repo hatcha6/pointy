@@ -21,7 +21,7 @@ from apps.payments.models import Payment
 from apps.sales.models import Order, OrderLine, RegisterSession
 
 from .models import ReportRun
-from .registry import SECTION_ROW_LIMITS
+from .periods import SUMMARY_ROW_LIMIT
 from .sections import decimal_from
 from .services import generate_report_payload
 
@@ -31,7 +31,8 @@ class TruncationTests(TestCase):
 
     The row caps were always computed and the metadata always emitted; the
     reader was never told. A month of stock movements printed 120 lines out of
-    thousands under a header badged "archive" and a checksum.
+    thousands under a header badged "archive" and a checksum. A summary cuts
+    its tables to the largest ten, so the rule matters on every summary now.
     """
 
     def setUp(self):
@@ -44,25 +45,39 @@ class TruncationTests(TestCase):
             owner_key=f"user:{self.manager.pk}",
             opening_cash=Decimal("0.00"),
         )
-        self.limit = SECTION_ROW_LIMITS["recent_orders"]
-        for _ in range(self.limit + 3):
-            Order.objects.create(
-                register_session=self.session,
-                status=Order.Status.PAID,
-                subtotal=Decimal("1.00"),
-                total=Decimal("1.00"),
+        self.limit = SUMMARY_ROW_LIMIT
+        # One product per line, each selling for a different amount, so the
+        # top-products table has more rows than a summary keeps.
+        prices = [Decimal(index + 1) for index in range(self.limit + 3)]
+        self.period_total = sum(prices, Decimal("0.00"))
+        order = Order.objects.create(
+            register_session=self.session,
+            status=Order.Status.PAID,
+            subtotal=self.period_total,
+            total=self.period_total,
+        )
+        for index, price in enumerate(prices):
+            product = create_product_with_default_variant(
+                sku=f"TRUNC-{index}", name=f"صنف {index:02d}", unit_price=price
+            )
+            OrderLine.objects.create(
+                order=order,
+                variant=product.default_variant,
+                quantity=1,
+                unit_price=price,
+                unit_cost=Decimal("0.50"),
             )
 
     def _section(self, key, **params):
         payload = generate_report_payload(
             report_type=ReportRun.ReportType.SALES_SUMMARY,
-            params=params or {"preset": "month"},
+            params={"preset": "month", **params},
             user=self.manager,
         )
         return payload, next(s for s in payload["sections"] if s["key"] == key)
 
     def test_a_truncated_section_reports_what_it_omitted(self):
-        _payload, section = self._section("recent_orders")
+        _payload, section = self._section("top_products")
         metadata = section["metadata"]
         self.assertTrue(metadata["truncated"])
         self.assertEqual(metadata["returned_count"], self.limit)
@@ -70,14 +85,12 @@ class TruncationTests(TestCase):
         self.assertEqual(metadata["omitted_count"], 3)
 
     def test_the_report_level_audit_says_the_document_is_incomplete(self):
-        payload, _section = self._section("recent_orders")
+        payload, _section = self._section("top_products")
         self.assertTrue(payload["audit"]["truncated"])
         self.assertEqual(payload["audit"]["omitted_count"], 3)
 
     def test_asking_for_detail_raises_the_cap(self):
-        _payload, section = self._section(
-            "recent_orders", preset="month", granularity="detailed"
-        )
+        _payload, section = self._section("top_products", granularity="detailed")
         self.assertFalse(section["metadata"]["truncated"])
         self.assertEqual(section["metadata"]["returned_count"], self.limit + 3)
 
@@ -86,10 +99,21 @@ class TruncationTests(TestCase):
 
         "The rows you can see add up to this; all the rows add up to that."
         """
-        _payload, section = self._section("recent_orders")
+        _payload, section = self._section("top_products")
         totals = section["totals"]
-        self.assertEqual(decimal_from(totals["shown"]["total"]), Decimal(self.limit))
-        self.assertNotEqual(totals["shown"]["total"], totals["full"]["total"])
+        self.assertEqual(
+            decimal_from(totals["full"]["revenue"]), self.period_total
+        )
+        self.assertNotEqual(totals["shown"]["revenue"], totals["full"]["revenue"])
+
+    def test_the_documents_behind_the_totals_are_detail(self):
+        """A summary is the same page for a busy month as for a quiet one: the
+        list of orders appears only when the detail is asked for."""
+        summary, _section = self._section("top_products")
+        detailed, orders = self._section("recent_orders", granularity="detailed")
+        self.assertNotIn("recent_orders", [s["key"] for s in summary["sections"]])
+        self.assertEqual(orders["metadata"]["total_count"], 1)
+        self.assertEqual(summary["summary"], detailed["summary"])
 
 
 class ProfitStatementTests(TestCase):
@@ -125,10 +149,10 @@ class ProfitStatementTests(TestCase):
             order=order, method=Payment.Method.CASH, amount=Decimal("20.00")
         )
 
-    def _payload(self):
+    def _payload(self, granularity="summary"):
         return generate_report_payload(
             report_type=ReportRun.ReportType.PROFIT_COSTS,
-            params={"preset": "month"},
+            params={"preset": "month", "granularity": granularity},
             user=self.manager,
         )
 
@@ -177,7 +201,7 @@ class ProfitStatementTests(TestCase):
     def test_the_cash_bridge_reconciles_revenue_to_money_received(self):
         """Revenue recognised, less the movement in what customers owe, is the
         cash the shop should have taken. A cash sale leaves no residual."""
-        payload = self._payload()
+        payload = self._payload(granularity="detailed")
         rows = {
             row["line"]: decimal_from(row["amount"])
             for row in next(

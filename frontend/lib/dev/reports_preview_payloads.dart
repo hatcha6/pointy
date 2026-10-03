@@ -6,13 +6,42 @@ import 'package:pointy_frontend/src/data/models/report_run.dart';
 
 /// What the preview's fake server answers for a report. Anything without a
 /// sample of its own gets the balance sheet.
-Map<String, Object?> previewPayload(ReportRunType type) {
+///
+/// [granularity] trims the balance sheet the way the server does: a summary
+/// is the statement — لنا and علينا — under its headline, and the bridge and
+/// the zakat working are the detail.
+Map<String, Object?> previewPayload(
+  ReportRunType type, {
+  String granularity = 'detailed',
+}) {
   return switch (type) {
     ReportRunType.unitAging => _identified('unit_aging'),
     ReportRunType.unitMargin => _identified('unit_margin'),
     ReportRunType.unitLedger => _identified('unit_ledger'),
     ReportRunType.consignmentLedger => _identified('consignment_ledger'),
-    _ => _balanceSheet(),
+    _ => _atLevel(_balanceSheet(), granularity),
+  };
+}
+
+const _balanceSheetDetail = {'balance_net', 'net_position_movement', 'zakat'};
+
+Map<String, Object?> _atLevel(
+  Map<String, Object?> payload,
+  String granularity,
+) {
+  final sections = (payload['sections'] as List).cast<Map<String, Object?>>();
+  return {
+    ...payload,
+    'period': {
+      ...(payload['period'] as Map).cast<String, Object?>(),
+      'granularity': granularity,
+    },
+    'sections': [
+      for (final section in sections)
+        if (granularity == 'detailed' ||
+            !_balanceSheetDetail.contains(section['key']))
+          section,
+    ],
   };
 }
 

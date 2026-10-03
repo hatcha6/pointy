@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -13,109 +11,167 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"pointy/relay/internal/control"
-	"pointy/relay/internal/plutu"
+	"pointy/relay/internal/dafa"
 	"pointy/relay/internal/ratelimit"
 )
 
-// The shop wallet over HTTP. A shop's backend reads its balance and history
-// and starts top-ups with its installation token. The payer's browser comes
-// back from Plutu to a public page, which verifies the signed outcome and
-// credits the wallet. The operator reads every wallet and corrects one by
-// hand, under their own name.
+// The shop wallet over HTTP. A shop's backend reads its balance and history,
+// starts top-ups and sends the payer's code with its installation token. Dafa
+// posts a webhook when a payment completes. The operator reads every wallet
+// and corrects one by hand, under their own name.
 //
-// Payment verification is the whole difficulty. Plutu's local-card gateway
-// has no status API and no server-to-server callback: the only proof of a
-// payment is the signed query string on the payer's redirect. So the relay
-// never believes an unsigned or unmatched return, credits a matching one
-// exactly once however often it is replayed, lets a late approval win over a
-// checkout it had written off as expired, and leaves a return it cannot prove
-// untouched for the operator rather than guessing either way.
+// Payment verification is the whole difficulty, and it has two shapes:
+//   - OTP methods (Sadad, Edfali, MobiCash, Yussor/Masrafi/Sahara Pay): only
+//     the relay can confirm, with the code the payer was texted, so Dafa's
+//     answer to that confirm is the proof.
+//   - Bank cards: the payer pays on Dafa's page and nothing comes back through
+//     the relay. The relay reads the payment back from Dafa — when the app
+//     polls, when Dafa's webhook nudges it, and on a background sweep for the
+//     payer who closed everything — and only that read is believed. The
+//     webhook itself carries no signature.
+//
+// Either way a proven payment credits the wallet exactly once, a late one
+// still credits a top-up the relay had written off, and a payment that does
+// not match what was asked for (another amount, the other environment) is
+// held for the operator rather than guessed at.
 
 const (
-	walletReturnPath = "/v1/wallet/plutu/return"
-	walletCurrency   = "LYD"
-	// walletConfirmedByGateway marks a top-up the gateway's signed return
-	// proved; an operator's reconciliation is "operator:<name>".
-	walletConfirmedByGateway = "plutu"
-	// plutuSandboxMaximum is Plutu's per-transaction ceiling in test mode.
-	plutuSandboxMaximum = "500"
-	// plutuAmountDecimals is the gateway's own rule: dinars with at most two
-	// places, although the dinar has three.
-	plutuAmountDecimals = 2
+	walletWebhookPrefix = "/v1/wallet/dafa/webhook/"
+	walletCurrency      = "LYD"
+	// walletConfirmedByGateway marks a top-up Dafa itself proved; an
+	// operator's reconciliation is "operator:<name>".
+	walletConfirmedByGateway = "dafa"
+	// walletTopUpDecimals is two places, although Dafa (and the dinar) take
+	// three: the shop's books keep two, and a top-up its expense could not
+	// record exactly would leave them a dirham off what left the account.
+	walletTopUpDecimals = 2
+	// maxWalletOTPAttempts caps the codes tried on one top-up. A wrong code
+	// can be typed again; guessing someone else's cannot be ground out.
+	maxWalletOTPAttempts = 5
 
-	defaultWalletTopUpTTL        = 30 * time.Minute
-	defaultWalletRequestTimeout  = 20 * time.Second
-	defaultWalletMinTopUp        = "10"
-	defaultWalletMaxTopUp        = "5000"
-	maxWalletRequestBytes        = 16 << 10
-	maxWalletRequestedByRunes    = 128
-	walletRecentTopUps           = 10
-	walletRecentEntries          = 10
-	walletMinimumStaleAfter      = time.Minute
-	walletCheckoutLanguageArabic = "ar"
+	defaultWalletTopUpTTL       = 30 * time.Minute
+	defaultWalletRequestTimeout = 20 * time.Second
+	defaultWalletMinTopUp       = "10"
+	defaultWalletMaxTopUp       = "5000"
+	maxWalletRequestBytes       = 16 << 10
+	maxWalletWebhookBytes       = 64 << 10
+	maxWalletRequestedByRunes   = 128
+	walletRecentTopUps          = 10
+	walletRecentEntries         = 10
+	walletMinimumStaleAfter     = time.Minute
+	// walletVerifyEvery spaces the relay's reads of one payment when the
+	// app polls it, so several screens watching one top-up cost one call.
+	walletVerifyEvery = 3 * time.Second
 )
 
 var defaultWalletQuickAmounts = []string{"50", "100", "200", "500"}
 
 // Error codes of the wallet API. Django maps each to its own Arabic message.
 const (
-	walletCodeUnavailable         = "wallet_unavailable"
-	walletCodeTopUpsUnconfigured  = "topups_unconfigured"
-	walletCodeInvalidRequest      = "invalid_request"
-	walletCodeInvalidAmount       = "invalid_amount"
-	walletCodeUnsupportedMethod   = "unsupported_method"
-	walletCodeRateLimited         = "rate_limited"
-	walletCodeInFlight            = "in_flight"
-	walletCodeNotFound            = "not_found"
-	walletCodeInsufficientBalance = "insufficient_balance"
-	walletCodeGatewayUnauthorized = "gateway_unauthorized"
-	walletCodeGatewayRejected     = "gateway_rejected"
-	walletCodeAmountNotAllowed    = "amount_not_allowed"
-	walletCodeGatewayBusy         = "gateway_busy"
-	walletCodeGatewayError        = "gateway_error"
-	walletCodeOutcomeUnknown      = "outcome_unknown"
-	walletCodeAmountMismatch      = "amount_mismatch"
-	walletCodeCanceled            = "canceled"
-	walletCodeDeclined            = "declined"
-	walletCodeInternalError       = "internal_error"
+	walletCodeUnavailable          = "wallet_unavailable"
+	walletCodeTopUpsUnconfigured   = "topups_unconfigured"
+	walletCodeInvalidRequest       = "invalid_request"
+	walletCodeInvalidAmount        = "invalid_amount"
+	walletCodeUnsupportedMethod    = "unsupported_method"
+	walletCodeMethodUnavailable    = "method_unavailable"
+	walletCodeInvalidPhone         = "invalid_phone"
+	walletCodeInvalidCardNumber    = "invalid_card_number"
+	walletCodeInvalidBirthYear     = "invalid_birth_year"
+	walletCodePayerRejected        = "payer_rejected"
+	walletCodeRateLimited          = "rate_limited"
+	walletCodeInFlight             = "in_flight"
+	walletCodeNotFound             = "not_found"
+	walletCodeInsufficientBalance  = "insufficient_balance"
+	walletCodeGatewayUnauthorized  = "gateway_unauthorized"
+	walletCodeGatewayRejected      = "gateway_rejected"
+	walletCodeAmountNotAllowed     = "amount_not_allowed"
+	walletCodeGatewayBusy          = "gateway_busy"
+	walletCodeGatewayError         = "gateway_error"
+	walletCodeOutcomeUnknown       = "outcome_unknown"
+	walletCodeAmountMismatch       = "amount_mismatch"
+	walletCodeEnvironmentMismatch  = "environment_mismatch"
+	walletCodeCanceled             = "canceled"
+	walletCodeDeclined             = "declined"
+	walletCodeInvalidOTP           = "invalid_otp"
+	walletCodeOTPRejected          = "otp_rejected"
+	walletCodeOTPAttemptsExceeded  = "otp_attempts_exceeded"
+	walletCodeNotOTPMethod         = "not_otp_method"
+	walletCodeTopUpClosed          = "topup_closed"
+	walletCodeConfirmUnknown       = "confirm_unknown"
+	walletCodeAwaitingGateway      = "awaiting_gateway"
+	walletCodeInternalError        = "internal_error"
+	walletCodePaymentNotStartedYet = "payment_not_started"
 )
 
 // WalletConfig is the company's payment gateway account and the top-up rules.
-// The Plutu credentials live only here, like the Resala token.
+// The Dafa key lives only here, like the Resala token.
 type WalletConfig struct {
-	PlutuBaseURL     string
-	PlutuAPIKey      string
-	PlutuAccessToken string
-	// PlutuSecretKey verifies the signed return; it is never sent anywhere.
-	PlutuSecretKey string
-	// TestMode says the access token is Plutu's test token. It marks every
-	// top-up and its credit as test money and holds amounts to the sandbox
-	// ceiling. The relay cannot tell the tokens apart, so it is stated.
+	DafaBaseURL string
+	DafaAPIKey  string
+	// TestMode is the key's environment: a dafa_test_ key only ever makes
+	// simulated payments, so every top-up and its credit is marked test money.
 	TestMode bool
-	// PublicURL is the relay's public origin, where the payer's browser comes
-	// back to. Empty derives it from the request that starts the top-up.
+	// Methods are the method keys offered, in order; empty offers them all.
+	Methods []string
+	// PublicURL is the relay's public origin, where Dafa's webhook is sent.
+	// Empty derives it from the request that starts the top-up.
 	PublicURL string
 	// MinTopUp and MaxTopUp bound one top-up, in dinars.
 	MinTopUp     string
 	MaxTopUp     string
 	QuickAmounts []string
-	// TopUpTTL is how long a checkout stays pending before the expiry sweep
-	// writes it off (a later signed approval still credits it).
+	// TopUpTTL is how long a top-up stays pending before the expiry sweep
+	// writes it off (a payment proven later still credits it).
 	TopUpTTL time.Duration
-	// TopUpRateLimit is the per-shop guard on starting checkouts.
+	// TopUpRateLimit is the per-shop guard on starting top-ups.
 	TopUpRateLimit ratelimit.Policy
 	RequestTimeout time.Duration
 	HTTPClient     *http.Client
+	// Plans are what the shop pays for from its main wallet, by plan key
+	// (control.WalletPlanRemoteAccess, control.WalletPlanAI). A plan missing
+	// here, or without a price, is not sold through the wallet.
+	Plans map[string]WalletPlan
 }
 
-// TopUpsConfigured reports whether top-ups can run: all three Plutu values.
+// TopUpsConfigured reports whether top-ups can run: a Dafa key whose
+// environment the relay can read.
 func (c WalletConfig) TopUpsConfigured() bool {
-	return strings.TrimSpace(c.PlutuAPIKey) != "" &&
-		strings.TrimSpace(c.PlutuAccessToken) != "" &&
-		strings.TrimSpace(c.PlutuSecretKey) != ""
+	_, known := dafa.KeyEnvironment(c.DafaAPIKey)
+	return known
+}
+
+// enabledMethods is what the shop is offered, in order.
+func (c WalletConfig) enabledMethods() []walletMethod {
+	if !c.TopUpsConfigured() {
+		return nil
+	}
+	if len(c.Methods) == 0 {
+		return append([]walletMethod(nil), walletMethods...)
+	}
+	methods := make([]walletMethod, 0, len(c.Methods))
+	for _, key := range c.Methods {
+		if method, ok := lookupWalletMethod(key); ok {
+			methods = append(methods, method)
+		}
+	}
+	return methods
+}
+
+// enabledMethod finds a method the shop may use right now. The retired Plutu
+// key — what an app from before Dafa still sends — is served as Dafa's bank
+// cards: the same hosted page and the same polling, through another gateway.
+func (c WalletConfig) enabledMethod(key string) (walletMethod, bool) {
+	if key == "" || key == control.WalletTopUpMethodPlutuLocalBankCards {
+		key = control.WalletTopUpMethodDafaMoamalat
+	}
+	for _, method := range c.enabledMethods() {
+		if method.Key == key {
+			return method, true
+		}
+	}
+	return walletMethod{}, false
 }
 
 func (c WalletConfig) topUpTTL() time.Duration {
@@ -149,13 +205,16 @@ func (c WalletConfig) topUpBounds() (*big.Rat, *big.Rat) {
 	if err != nil || maximum.Sign() <= 0 {
 		maximum, _ = control.ParseWalletAmount(defaultWalletMaxTopUp)
 	}
-	if c.TestMode {
-		sandbox, _ := control.ParseWalletAmount(plutuSandboxMaximum)
-		if maximum.Cmp(sandbox) > 0 {
-			maximum = sandbox
-		}
-	}
 	return minimum, maximum
+}
+
+func (c WalletConfig) dafaClient() *dafa.Client {
+	return dafa.New(dafa.Config{
+		BaseURL:    c.DafaBaseURL,
+		APIKey:     c.DafaAPIKey,
+		HTTPClient: c.HTTPClient,
+		Timeout:    c.requestTimeout(),
+	})
 }
 
 func (s HTTPServer) walletStore() (control.WalletStore, bool) {
@@ -163,29 +222,18 @@ func (s HTTPServer) walletStore() (control.WalletStore, bool) {
 	return store, ok
 }
 
-func (s HTTPServer) plutuClient() *plutu.Client {
-	return plutu.New(plutu.Config{
-		BaseURL:     s.Wallet.PlutuBaseURL,
-		APIKey:      s.Wallet.PlutuAPIKey,
-		AccessToken: s.Wallet.PlutuAccessToken,
-		SecretKey:   s.Wallet.PlutuSecretKey,
-		HTTPClient:  s.Wallet.HTTPClient,
-		Timeout:     s.Wallet.requestTimeout(),
-	})
-}
-
 // handleWalletRoutes serves everything under /v1/wallet.
 func (s HTTPServer) handleWalletRoutes(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	switch {
-	case path == walletReturnPath && (r.Method == http.MethodGet || r.Method == http.MethodPost):
-		// The payer's browser, back from the gateway. No token: the signature
-		// is the credential.
+	case strings.HasPrefix(path, walletWebhookPrefix) && r.Method == http.MethodPost:
+		// Dafa's server, about a payment. No token: the webhook URL carries a
+		// per-top-up token, and the relay believes only what it reads back.
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
 			return
 		}
-		s.handlePlutuReturn(w, r)
+		s.handleDafaWebhook(w, r, strings.TrimPrefix(path, walletWebhookPrefix))
 	case strings.HasPrefix(path, "/v1/wallet/admin/"):
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -206,6 +254,7 @@ func (s HTTPServer) handleWalletRoutes(w http.ResponseWriter, r *http.Request) {
 // still see its balance and pay in — paying in may be how it renews.
 func (s HTTPServer) handleWalletShopRoutes(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	topUpID, action := walletTopUpSubpath(path, "/v1/wallet/topups/")
 	switch {
 	case path == "/v1/wallet" && r.Method == http.MethodGet:
 		s.handleWalletSelf(w, r)
@@ -215,15 +264,37 @@ func (s HTTPServer) handleWalletShopRoutes(w http.ResponseWriter, r *http.Reques
 		s.handleWalletTopUpsSelf(w, r)
 	case path == "/v1/wallet/topups" && r.Method == http.MethodPost:
 		s.handleWalletTopUpCreate(w, r)
-	case strings.HasPrefix(path, "/v1/wallet/topups/") && r.Method == http.MethodGet:
-		s.handleWalletTopUpSelf(w, r, strings.TrimPrefix(path, "/v1/wallet/topups/"))
+	case path == "/v1/wallet/sms/allocations" && r.Method == http.MethodPost:
+		s.handleWalletSMSAllocate(w, r)
+	case path == "/v1/wallet/subscriptions" && r.Method == http.MethodPost:
+		s.handleWalletPlanPurchase(w, r)
+	case topUpID != "" && action == "" && r.Method == http.MethodGet:
+		s.handleWalletTopUpSelf(w, r, topUpID)
+	case topUpID != "" && action == "confirm" && r.Method == http.MethodPost:
+		s.handleWalletTopUpConfirm(w, r, topUpID)
+	case topUpID != "" && action == "cancel" && r.Method == http.MethodPost:
+		s.handleWalletTopUpCancel(w, r, topUpID)
 	default:
 		writeNotFound(w)
 	}
 }
 
+// walletTopUpSubpath splits "<prefix><id>[/<action>]".
+func walletTopUpSubpath(path, prefix string) (string, string) {
+	if !strings.HasPrefix(path, prefix) {
+		return "", ""
+	}
+	rest := strings.Trim(strings.TrimPrefix(path, prefix), "/")
+	id, action, _ := strings.Cut(rest, "/")
+	if strings.Contains(action, "/") {
+		return "", ""
+	}
+	return id, action
+}
+
 func (s HTTPServer) handleWalletAdminRoutes(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	topUpID, action := walletTopUpSubpath(path, "/v1/wallet/admin/topups/")
 	switch {
 	case path == "/v1/wallet/admin/wallets" && r.Method == http.MethodGet:
 		s.handleWalletAdminWallets(w, r)
@@ -233,10 +304,10 @@ func (s HTTPServer) handleWalletAdminRoutes(w http.ResponseWriter, r *http.Reque
 		s.handleWalletAdminPostEntry(w, r)
 	case path == "/v1/wallet/admin/topups" && r.Method == http.MethodGet:
 		s.handleWalletAdminTopUps(w, r)
-	case strings.HasPrefix(path, "/v1/wallet/admin/topups/") && strings.HasSuffix(path, "/confirm") &&
-		r.Method == http.MethodPost:
-		id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/wallet/admin/topups/"), "/confirm")
-		s.handleWalletAdminConfirmTopUp(w, r, id)
+	case topUpID != "" && action == "confirm" && r.Method == http.MethodPost:
+		s.handleWalletAdminConfirmTopUp(w, r, topUpID)
+	case topUpID != "" && action == "check" && r.Method == http.MethodPost:
+		s.handleWalletAdminCheckTopUp(w, r, topUpID)
 	case path == "/v1/wallet/admin/config" && r.Method == http.MethodGet:
 		s.handleWalletAdminConfig(w, r)
 	default:
@@ -246,9 +317,9 @@ func (s HTTPServer) handleWalletAdminRoutes(w http.ResponseWriter, r *http.Reque
 
 // --- a shop's own wallet ---
 
-// handleWalletSelf serves GET /v1/wallet: the balance, what a top-up may be,
-// and the latest movements, in one call so the app's wallet card needs no
-// second round trip.
+// handleWalletSelf serves GET /v1/wallet: the balance, the SMS balance, the
+// plans the wallet pays for, what a top-up may be, and the main wallet's latest
+// movements, in one call so the app's wallet card needs no second round trip.
 func (s HTTPServer) handleWalletSelf(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.requireWalletStore(w)
 	if !ok {
@@ -264,12 +335,21 @@ func (s HTTPServer) handleWalletSelf(w http.ResponseWriter, r *http.Request) {
 		s.writeWalletInternalError(w, "wallet read failed", installation.ID, err)
 		return
 	}
+	sms, err := store.GetWalletAccount(ctx, installation.ID, control.WalletAccountSMS)
+	if err != nil {
+		s.writeWalletInternalError(w, "sms balance read failed", installation.ID, err)
+		return
+	}
 	topUps, err := store.ListWalletTopUps(ctx, control.WalletTopUpFilter{InstallationID: installation.ID, Limit: walletRecentTopUps})
 	if err != nil {
 		s.writeWalletInternalError(w, "wallet top-up listing failed", installation.ID, err)
 		return
 	}
-	entries, err := store.ListWalletEntries(ctx, control.WalletEntryFilter{InstallationID: installation.ID, Limit: walletRecentEntries})
+	entries, err := store.ListWalletEntries(ctx, control.WalletEntryFilter{
+		InstallationID: installation.ID,
+		Account:        control.WalletAccountMain,
+		Limit:          walletRecentEntries,
+	})
 	if err != nil {
 		s.writeWalletInternalError(w, "wallet ledger listing failed", installation.ID, err)
 		return
@@ -280,35 +360,44 @@ func (s HTTPServer) handleWalletSelf(w http.ResponseWriter, r *http.Request) {
 		"updated_at":     wallet.UpdatedAt,
 		"test_mode":      s.Wallet.TestMode,
 		"topups":         s.walletTopUpOptions(),
+		"sms":            s.smsWalletPayload(sms.Balance),
+		"plans":          s.walletPlansPayload(installation, s.clock().Now()),
 		"recent_topups":  walletTopUpPayloads(topUps),
 		"recent_entries": walletEntryPayloads(entries),
 	})
 }
 
-// walletTopUpOptions is what the app needs to draw its top-up sheet.
+// walletTopUpOptions is what the app needs to draw its top-up sheet: each
+// method with what it asks of the payer, and the amount rules.
 func (s HTTPServer) walletTopUpOptions() map[string]any {
 	minimum, maximum := s.Wallet.topUpBounds()
 	methods := []map[string]any{}
-	if s.Wallet.TopUpsConfigured() {
+	for _, method := range s.Wallet.enabledMethods() {
 		methods = append(methods, map[string]any{
-			"key":     control.WalletTopUpMethodPlutuLocalBankCards,
-			"gateway": "plutu",
-			"kind":    "hosted_checkout",
+			"key":        method.Key,
+			"gateway":    "dafa",
+			"provider":   method.Provider.ID,
+			"kind":       method.kind(),
+			"payer":      string(method.Provider.Payer),
+			"birth_year": method.Provider.BirthYear,
 		})
 	}
 	return map[string]any{
-		"available":     s.Wallet.TopUpsConfigured(),
-		"methods":       methods,
-		"min_amount":    minimum.FloatString(plutuAmountDecimals),
-		"max_amount":    maximum.FloatString(plutuAmountDecimals),
-		"max_decimals":  plutuAmountDecimals,
-		"quick_amounts": s.Wallet.quickAmounts(),
-		"pending_ttl":   int(s.Wallet.topUpTTL().Seconds()),
+		"available":        len(methods) > 0,
+		"methods":          methods,
+		"min_amount":       minimum.FloatString(walletTopUpDecimals),
+		"max_amount":       maximum.FloatString(walletTopUpDecimals),
+		"max_decimals":     walletTopUpDecimals,
+		"quick_amounts":    s.Wallet.quickAmounts(),
+		"pending_ttl":      int(s.Wallet.topUpTTL().Seconds()),
+		"max_otp_attempts": maxWalletOTPAttempts,
+		"test_mode":        s.Wallet.TestMode && len(methods) > 0,
 	}
 }
 
-// handleWalletEntriesSelf serves GET /v1/wallet/entries: the shop's statement,
-// newest first, paged by ?before=<entry id>.
+// handleWalletEntriesSelf serves GET /v1/wallet/entries: one account's
+// statement (?account=main, the default, or sms), newest first, paged by
+// ?before=<entry id>.
 func (s HTTPServer) handleWalletEntriesSelf(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.requireWalletStore(w)
 	if !ok {
@@ -325,11 +414,20 @@ func (s HTTPServer) handleWalletEntriesSelf(w http.ResponseWriter, r *http.Reque
 	}
 	kind := strings.ToLower(strings.TrimSpace(query.Get("kind")))
 	if kind != "" && !control.ValidWalletEntryKind(kind) {
-		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest, "kind must be topup, charge, refund or adjustment", nil)
+		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest,
+			"kind must be topup, charge, refund, adjustment or transfer", nil)
 		return
+	}
+	account, ok := walletAccountParam(w, query)
+	if !ok {
+		return
+	}
+	if account == "" {
+		account = control.WalletAccountMain
 	}
 	entries, err := store.ListWalletEntries(r.Context(), control.WalletEntryFilter{
 		InstallationID: installation.ID,
+		Account:        account,
 		Kind:           kind,
 		Limit:          limit,
 		BeforeID:       strings.TrimSpace(query.Get("before")),
@@ -390,8 +488,9 @@ func (s HTTPServer) handleWalletTopUpsSelf(w http.ResponseWriter, r *http.Reques
 }
 
 // handleWalletTopUpSelf serves GET /v1/wallet/topups/{id} — what the app polls
-// while the payer is on the checkout page. Another shop's top-up is simply not
-// found.
+// while the payer is paying. For a payment that can complete without the
+// relay (a bank card on Dafa's page) the poll is also the moment to read it
+// back from Dafa. Another shop's top-up is simply not found.
 func (s HTTPServer) handleWalletTopUpSelf(w http.ResponseWriter, r *http.Request, id string) {
 	store, ok := s.requireWalletStore(w)
 	if !ok {
@@ -401,436 +500,52 @@ func (s HTTPServer) handleWalletTopUpSelf(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	topUp, err := store.GetWalletTopUp(r.Context(), strings.Trim(id, "/"))
-	if errors.Is(err, control.ErrWalletTopUpNotFound) || (err == nil && topUp.InstallationID != installation.ID) {
-		writeWalletError(w, http.StatusNotFound, walletCodeNotFound, "top-up not found", nil)
+	topUp, ok := s.ownWalletTopUp(w, r, store, installation.ID, id)
+	if !ok {
 		return
 	}
-	if err != nil {
-		s.writeWalletInternalError(w, "wallet top-up read failed", installation.ID, err)
-		return
+	if s.Wallet.TopUpsConfigured() && walletTopUpWorthChecking(topUp) && s.allowWalletVerify(r.Context(), topUp.ID) {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), s.Wallet.requestTimeout())
+		verified, _, err := s.walletGateway(store).verify(ctx, topUp, "poll")
+		cancel()
+		if err != nil {
+			// A blip at Dafa is not a verdict: show what the relay knows.
+			s.logger().Warn("reading a wallet payment back failed", "installation_id", installation.ID,
+				"top_up_id", topUp.ID, "error", err)
+		} else {
+			topUp = verified
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"top_up": walletTopUpPayload(topUp)})
 }
 
-type walletTopUpRequest struct {
-	Amount         json.RawMessage `json:"amount"`
-	Method         string          `json:"method"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	RequestedBy    string          `json:"requested_by"`
-}
-
-// handleWalletTopUpCreate serves POST /v1/wallet/topups. The top-up is stored
-// pending BEFORE the gateway is asked for a checkout, so a relay that dies in
-// between leaves a row that says so. The response carries the checkout page;
-// the wallet is credited only when the payer's browser brings back a signed
-// approval (handlePlutuReturn).
-func (s HTTPServer) handleWalletTopUpCreate(w http.ResponseWriter, r *http.Request) {
-	store, ok := s.requireWalletStore(w)
-	if !ok {
-		return
-	}
-	if !s.Wallet.TopUpsConfigured() {
-		writeWalletError(w, http.StatusServiceUnavailable, walletCodeTopUpsUnconfigured,
-			"wallet top-ups are not configured on this relay", nil)
-		return
-	}
-	installation, _, ok := s.authenticateInstallation(w, r)
-	if !ok {
-		return
-	}
-	var request walletTopUpRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxWalletRequestBytes)).Decode(&request); err != nil {
-		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest, "invalid request body", nil)
-		return
-	}
-	request.Method = strings.ToLower(strings.TrimSpace(request.Method))
-	request.IdempotencyKey = strings.TrimSpace(request.IdempotencyKey)
-	request.RequestedBy = strings.TrimSpace(request.RequestedBy)
-	if request.Method == "" {
-		request.Method = control.WalletTopUpMethodPlutuLocalBankCards
-	}
-	if request.Method != control.WalletTopUpMethodPlutuLocalBankCards {
-		writeWalletError(w, http.StatusUnprocessableEntity, walletCodeUnsupportedMethod,
-			fmt.Sprintf("unsupported top-up method %q", request.Method), nil)
-		return
-	}
-	if request.IdempotencyKey == "" || utf8.RuneCountInString(request.IdempotencyKey) > 128 {
-		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest,
-			"idempotency_key is required (at most 128 characters)", nil)
-		return
-	}
-	if utf8.RuneCountInString(request.RequestedBy) > maxWalletRequestedByRunes {
-		request.RequestedBy = string([]rune(request.RequestedBy)[:maxWalletRequestedByRunes])
-	}
-	amount, rejection := s.validateTopUpAmount(request.Amount)
-	if rejection != "" {
-		minimum, maximum := s.Wallet.topUpBounds()
-		writeWalletError(w, http.StatusUnprocessableEntity, walletCodeInvalidAmount, rejection, map[string]any{
-			"min_amount":   minimum.FloatString(plutuAmountDecimals),
-			"max_amount":   maximum.FloatString(plutuAmountDecimals),
-			"max_decimals": plutuAmountDecimals,
-		})
-		return
-	}
-	if s.enforceWalletTopUpRateLimit(w, r, installation.ID) {
-		return
-	}
-
-	ctx := r.Context()
-	topUp, created, err := store.BeginWalletTopUp(ctx, control.WalletTopUp{
-		InstallationID: installation.ID,
-		Method:         request.Method,
-		Amount:         control.FormatWalletAmount(amount),
-		IdempotencyKey: request.IdempotencyKey,
-		RequestedBy:    request.RequestedBy,
-		TestMode:       s.Wallet.TestMode,
-	})
-	if err != nil {
-		s.writeWalletInternalError(w, "wallet top-up claim failed", installation.ID, err)
-		return
-	}
-	if !created {
-		s.replayWalletTopUp(w, r, store, topUp)
-		return
-	}
-
-	// Detached from the caller: if the shop's backend hangs up mid-call, the
-	// gateway's answer is still recorded, so the retry replays the truth.
-	detached := context.WithoutCancel(ctx)
-	callCtx, cancel := context.WithTimeout(detached, s.Wallet.requestTimeout())
-	returnURL := s.walletReturnURL(r)
-	checkout, err := s.plutuClient().ConfirmLocalBankCards(callCtx, plutu.CheckoutRequest{
-		Amount:    amount.FloatString(plutuAmountDecimals),
-		InvoiceNo: topUp.InvoiceNo,
-		ReturnURL: returnURL,
-		Lang:      walletCheckoutLanguageArabic,
-	})
-	cancel()
-	if err != nil {
-		code, status, detail := s.classifyPlutuError(err)
-		closed, _, closeErr := store.CloseWalletTopUp(detached, topUp.ID, control.WalletTopUpFailed, code, detail)
-		if closeErr != nil {
-			s.logger().Error("recording a failed top-up failed", "installation_id", installation.ID,
-				"top_up_id", topUp.ID, "error", closeErr)
-			closed = topUp
-			closed.Status = control.WalletTopUpFailed
-			closed.ErrorCode = code
-			closed.ErrorDetail = detail
-		}
-		s.logWalletTopUp(installation.ID, closed, "checkout_failed", detail)
-		writeWalletError(w, status, code, walletFailureMessage(code), map[string]any{
-			"detail": detail,
-			"top_up": walletTopUpPayload(closed),
-		})
-		return
-	}
-	attached, err := store.AttachWalletTopUpCheckout(detached, topUp.ID, checkout.RedirectURL)
-	if err != nil {
-		// The checkout exists and the payer can still use it: the signed return
-		// finds the top-up by invoice number, not by this URL. So hand it out.
-		s.logger().Error("recording a top-up checkout failed", "installation_id", installation.ID,
-			"top_up_id", topUp.ID, "error", err)
-		attached = topUp
-		attached.CheckoutURL = checkout.RedirectURL
-	}
-	s.logWalletTopUp(installation.ID, attached, "checkout_created", "")
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"top_up":       walletTopUpPayload(attached),
-		"checkout_url": checkout.RedirectURL,
-		"replayed":     false,
-	})
-}
-
-// replayWalletTopUp answers a create whose idempotency key already has a
-// top-up: the same checkout page, or the same failure.
-func (s HTTPServer) replayWalletTopUp(
+// ownWalletTopUp loads a top-up the installation owns, or answers 404.
+func (s HTTPServer) ownWalletTopUp(
 	w http.ResponseWriter,
 	r *http.Request,
 	store control.WalletStore,
-	topUp control.WalletTopUp,
-) {
-	now := s.clock().Now()
-	switch {
-	case topUp.Status == control.WalletTopUpPending && topUp.CheckoutURL == "":
-		staleAfter := max(walletMinimumStaleAfter, s.Wallet.requestTimeout()+30*time.Second)
-		if now.Sub(topUp.CreatedAt) < staleAfter {
-			w.Header().Set("Retry-After", retryAfterSeconds(topUp.CreatedAt.Add(s.Wallet.requestTimeout()), now))
-			writeWalletError(w, http.StatusConflict, walletCodeInFlight,
-				"this top-up is being set up right now; retry shortly", map[string]any{"top_up": walletTopUpPayload(topUp)})
-			return
-		}
-		// The request that claimed this key never finished. Nobody was given a
-		// checkout page, so nobody can have paid: the safe verdict is failed.
-		closed, _, err := store.CloseWalletTopUp(context.WithoutCancel(r.Context()), topUp.ID, control.WalletTopUpFailed,
-			walletCodeOutcomeUnknown, "the checkout request never finished; start a new top-up")
-		if err != nil {
-			s.writeWalletInternalError(w, "recording an unfinished top-up failed", topUp.InstallationID, err)
-			return
-		}
-		topUp = closed
-	case topUp.Status == control.WalletTopUpPending:
-		writeJSON(w, http.StatusOK, map[string]any{
-			"top_up":       walletTopUpPayload(topUp),
-			"checkout_url": topUp.CheckoutURL,
-			"replayed":     true,
-		})
-		return
-	}
-	if topUp.Status == control.WalletTopUpFailed {
-		code := topUp.ErrorCode
-		if code == "" {
-			code = walletCodeGatewayError
-		}
-		writeWalletError(w, http.StatusBadGateway, code, walletFailureMessage(code), map[string]any{
-			"detail":   topUp.ErrorDetail,
-			"top_up":   walletTopUpPayload(topUp),
-			"replayed": true,
-		})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"top_up": walletTopUpPayload(topUp), "replayed": true})
-}
-
-// validateTopUpAmount accepts a JSON string or number of dinars with at most
-// the gateway's two places, inside the configured bounds. It returns the
-// reason for a refusal, or "".
-func (s HTTPServer) validateTopUpAmount(raw json.RawMessage) (*big.Rat, string) {
-	text := strings.TrimSpace(string(raw))
-	if unquoted, err := strconv.Unquote(text); err == nil {
-		text = strings.TrimSpace(unquoted)
-	}
-	amount, err := control.ParseWalletAmount(text)
-	if err != nil || amount.Sign() <= 0 {
-		return nil, "amount must be a positive number of dinars"
-	}
-	if control.WalletAmountDecimals(text) > plutuAmountDecimals {
-		return nil, fmt.Sprintf("amount may have at most %d decimal places", plutuAmountDecimals)
-	}
-	minimum, maximum := s.Wallet.topUpBounds()
-	if amount.Cmp(minimum) < 0 {
-		return nil, "amount is below the smallest top-up"
-	}
-	if amount.Cmp(maximum) > 0 {
-		return nil, "amount is above the largest top-up"
-	}
-	return amount, ""
-}
-
-// classifyPlutuError maps a failed checkout request to the wallet's code, the
-// status the shop gets and the detail it is shown.
-func (s HTTPServer) classifyPlutuError(err error) (string, int, string) {
-	var apiErr *plutu.APIError
-	var transport *plutu.TransportError
-	switch {
-	case errors.As(err, &apiErr):
-		detail := strings.TrimSpace(apiErr.Code + " " + apiErr.Message)
-		// The live API is not consistent about case: its docs list
-		// "UNAUTHORIZED", the sandbox answers "Unauthorized".
-		switch strings.ToUpper(apiErr.Code) {
-		case "UNAUTHORIZED", "DENIED_ACCESS_GATEWAY", "FORBIDDEN_IP_ADDRESS", "MISSING_PARAMETER", "TEST_MODE_NOT_SUPPORTED":
-			return walletCodeGatewayUnauthorized, http.StatusBadGateway, detail
-		case "AMOUNT_EXCEEDED_MAXIMUM", "AMOUNT_NOT_ALLOWED", "INVALID_AMOUNT_FORMAT",
-			"SANDBOX_TRANSACTION_LIMIT_EXCEEDED", "CURRENCY_NOT_SUPPORTED":
-			return walletCodeAmountNotAllowed, http.StatusUnprocessableEntity, detail
-		case "TOO_MAY_REQUESTS", "TOO_MANY_REQUESTS", "MAINTENANCE_MODE":
-			return walletCodeGatewayBusy, http.StatusServiceUnavailable, detail
-		}
-		if apiErr.Status == http.StatusTooManyRequests {
-			return walletCodeGatewayBusy, http.StatusServiceUnavailable, detail
-		}
-		if apiErr.Status == http.StatusUnauthorized || apiErr.Status == http.StatusForbidden {
-			return walletCodeGatewayUnauthorized, http.StatusBadGateway, detail
-		}
-		if apiErr.Status >= 500 || apiErr.Code == "BACKEND_ERROR" {
-			return walletCodeGatewayError, http.StatusBadGateway, detail
-		}
-		return walletCodeGatewayRejected, http.StatusBadGateway, detail
-	case errors.As(err, &transport):
-		if transport.Timeout() {
-			return walletCodeGatewayError, http.StatusBadGateway,
-				fmt.Sprintf("plutu did not answer within %s", s.Wallet.requestTimeout())
-		}
-		return walletCodeGatewayError, http.StatusBadGateway, "plutu could not be reached"
-	default:
-		return walletCodeGatewayError, http.StatusBadGateway, "the checkout request failed"
-	}
-}
-
-// walletReturnURL is where the gateway sends the payer back to. The operator's
-// PublicURL wins; without one it is derived from the request that started the
-// top-up, which already came to the relay's public address.
-func (s HTTPServer) walletReturnURL(r *http.Request) string {
-	base := strings.TrimRight(strings.TrimSpace(s.Wallet.PublicURL), "/")
-	if base == "" {
-		scheme := "http"
-		if r.TLS != nil || strings.EqualFold(firstForwardedValue(r.Header.Get("X-Forwarded-Proto")), "https") {
-			scheme = "https"
-		}
-		host := firstForwardedValue(r.Header.Get("X-Forwarded-Host"))
-		if host == "" {
-			host = r.Host
-		}
-		base = scheme + "://" + host
-	}
-	return base + walletReturnPath
-}
-
-func firstForwardedValue(value string) string {
-	first, _, _ := strings.Cut(value, ",")
-	return strings.TrimSpace(first)
-}
-
-// enforceWalletTopUpRateLimit fails OPEN like the SMS burst guard: a limiter
-// outage must not stop a shop paying in.
-func (s HTTPServer) enforceWalletTopUpRateLimit(w http.ResponseWriter, r *http.Request, installationID string) bool {
-	policy := s.Wallet.TopUpRateLimit
-	if !policy.Enabled() || s.RateLimiter == nil {
-		return false
-	}
-	decision, err := s.RateLimiter.Allow(r.Context(), "wallet-topup:"+installationID, policy)
-	if err != nil {
-		s.logger().Error("wallet rate limiter failed; allowing the top-up", "installation_id", installationID, "error", err)
-		return false
-	}
-	if decision.Allowed {
-		return false
-	}
-	w.Header().Set("Retry-After", retryAfterSeconds(decision.ResetAt, s.clock().Now()))
-	writeWalletError(w, http.StatusTooManyRequests, walletCodeRateLimited, "too many top-ups started; retry shortly", nil)
-	return true
-}
-
-// --- the payer's return from the gateway ---
-
-// handlePlutuReturn serves the page Plutu sends the payer's browser back to.
-// It acts only on a return whose signature verifies against the secret AND
-// whose invoice matches a top-up the relay created, and then only in the
-// direction the signed fields say. Whatever it decides, it draws the page from
-// the stored top-up, so a refreshed or replayed return shows the same truth
-// and moves no money twice.
-func (s HTTPServer) handlePlutuReturn(w http.ResponseWriter, r *http.Request) {
-	store, hasStore := s.walletStore()
-	if !hasStore || strings.TrimSpace(s.Wallet.PlutuSecretKey) == "" {
-		writeWalletReturnPage(w, http.StatusNotFound, walletReturnUnavailable())
-		return
-	}
-	params, err := plutuReturnParams(r)
-	if err != nil || len(params) == 0 {
-		writeWalletReturnPage(w, http.StatusBadRequest, walletReturnUnverified(""))
-		return
-	}
-	callback := plutu.ReadCallback(params)
-	if !plutu.VerifyCallback(s.Wallet.PlutuSecretKey, params, plutu.LocalBankCardsSignedFields) {
-		// Never acted on. If it was a real payment whose signature we cannot
-		// check, the operator reconciles it from the gateway's dashboard; the
-		// top-up stays as it was so a genuine return can still settle it.
-		s.metrics().RecordCredentialRejected()
-		s.logger().Warn("plutu return signature rejected",
-			"invoice_no", truncateRunes(callback.InvoiceNo, 64),
-			"approved", callback.Approved,
-			"canceled", callback.Canceled)
-		writeWalletReturnPage(w, http.StatusBadRequest, walletReturnUnverified(callback.InvoiceNo))
-		return
-	}
-	ctx := context.WithoutCancel(r.Context())
-	topUp, err := store.FindWalletTopUpByInvoice(ctx, callback.InvoiceNo)
-	if errors.Is(err, control.ErrWalletTopUpNotFound) {
-		s.logger().Warn("plutu return for an unknown invoice", "invoice_no", truncateRunes(callback.InvoiceNo, 64),
-			"transaction_id", truncateRunes(callback.TransactionID, 64))
-		writeWalletReturnPage(w, http.StatusNotFound, walletReturnUnverified(callback.InvoiceNo))
-		return
+	installationID, id string,
+) (control.WalletTopUp, bool) {
+	topUp, err := store.GetWalletTopUp(r.Context(), strings.Trim(id, "/"))
+	if errors.Is(err, control.ErrWalletTopUpNotFound) || (err == nil && topUp.InstallationID != installationID) {
+		writeWalletError(w, http.StatusNotFound, walletCodeNotFound, "top-up not found", nil)
+		return control.WalletTopUp{}, false
 	}
 	if err != nil {
-		s.logger().Error("plutu return lookup failed", "invoice_no", callback.InvoiceNo, "error", err)
-		writeWalletReturnPage(w, http.StatusInternalServerError, walletReturnRetry(callback.InvoiceNo))
-		return
+		s.writeWalletInternalError(w, "wallet top-up read failed", installationID, err)
+		return control.WalletTopUp{}, false
 	}
-	if callback.Gateway != "" && callback.Gateway != plutu.GatewayLocalBankCards {
-		s.logger().Warn("plutu return names another gateway", "invoice_no", topUp.InvoiceNo, "gateway", callback.Gateway)
-	}
-
-	switch {
-	case topUp.Status == control.WalletTopUpPaid:
-		// A refresh, a back button, a replay: already credited.
-	case callback.Approved:
-		topUp, err = s.settleApprovedReturn(ctx, store, topUp, callback)
-	case callback.Canceled:
-		topUp, _, err = store.CloseWalletTopUp(ctx, topUp.ID, control.WalletTopUpCanceled, walletCodeCanceled,
-			"the payer cancelled on the checkout page")
-	default:
-		topUp, _, err = store.CloseWalletTopUp(ctx, topUp.ID, control.WalletTopUpFailed, walletCodeDeclined,
-			"the gateway returned without an approval")
-	}
-	if err != nil {
-		// Nothing was decided; the payer reloading this page retries it.
-		s.logger().Error("recording a plutu return failed", "invoice_no", callback.InvoiceNo, "error", err)
-		writeWalletReturnPage(w, http.StatusInternalServerError, walletReturnRetry(callback.InvoiceNo))
-		return
-	}
-	s.logWalletTopUp(topUp.InstallationID, topUp, "return_"+topUp.Status, callback.TransactionID)
-	writeWalletReturnPage(w, http.StatusOK, walletReturnFor(topUp))
+	return topUp, true
 }
 
-// settleApprovedReturn credits a signed approval, unless the gateway approved
-// a different amount than the top-up asked for — then nothing is credited and
-// the operator reconciles by hand. A mismatch should be impossible, and
-// silently crediting either figure would be wrong one way or the other.
-func (s HTTPServer) settleApprovedReturn(
-	ctx context.Context,
-	store control.WalletStore,
-	topUp control.WalletTopUp,
-	callback plutu.Callback,
-) (control.WalletTopUp, error) {
-	if !walletAmountsEqual(callback.Amount, topUp.Amount) {
-		s.logger().Error("plutu approved a different amount than the top-up; not credited",
-			"installation_id", topUp.InstallationID,
-			"invoice_no", topUp.InvoiceNo,
-			"top_up_amount", topUp.Amount,
-			"approved_amount", truncateRunes(callback.Amount, 32),
-			"transaction_id", truncateRunes(callback.TransactionID, 64))
-		closed, _, err := store.CloseWalletTopUp(ctx, topUp.ID, control.WalletTopUpFailed, walletCodeAmountMismatch,
-			fmt.Sprintf("plutu approved %s for a %s top-up (transaction %s); reconcile by hand",
-				truncateRunes(callback.Amount, 32), topUp.Amount, truncateRunes(callback.TransactionID, 64)))
-		return closed, err
+// allowWalletVerify spaces the relay's reads of one payment. It fails open:
+// a limiter outage must not stop a payment being noticed.
+func (s HTTPServer) allowWalletVerify(ctx context.Context, topUpID string) bool {
+	if s.RateLimiter == nil {
+		return true
 	}
-	settled, _, err := store.SettleWalletTopUp(ctx, topUp.ID, control.WalletTopUpSettlement{
-		ProviderTransactionID: truncateRunes(callback.TransactionID, 128),
-		ConfirmedBy:           walletConfirmedByGateway,
-		Description:           "Plutu local bank card " + topUp.InvoiceNo,
-	})
-	return settled, err
-}
-
-// plutuReturnParams reads the return's parameters in the order they arrived:
-// the query string, plus a form body if the gateway ever posts one.
-func plutuReturnParams(r *http.Request) ([]plutu.Param, error) {
-	params, err := plutu.ParseQuery(r.URL.RawQuery)
-	if err != nil {
-		return nil, err
-	}
-	if r.Method == http.MethodPost &&
-		strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxWalletRequestBytes))
-		if err != nil {
-			return nil, err
-		}
-		formParams, err := plutu.ParseQuery(string(body))
-		if err != nil {
-			return nil, err
-		}
-		params = append(params, formParams...)
-	}
-	return params, nil
-}
-
-func walletAmountsEqual(raw, stored string) bool {
-	left, ok := new(big.Rat).SetString(strings.TrimSpace(raw))
-	if !ok || strings.TrimSpace(raw) == "" {
-		return false
-	}
-	right, ok := new(big.Rat).SetString(strings.TrimSpace(stored))
-	return ok && left.Cmp(right) == 0
+	decision, err := s.RateLimiter.Allow(ctx, "wallet-verify:"+topUpID, ratelimit.Policy{Limit: 1, Window: walletVerifyEvery})
+	return err != nil || decision.Allowed
 }
 
 // --- operator ---
@@ -845,7 +560,11 @@ func (s HTTPServer) handleWalletAdminWallets(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	wallets, err := store.ListWallets(r.Context(), limit)
+	account, ok := walletAccountParam(w, r.URL.Query())
+	if !ok {
+		return
+	}
+	wallets, err := store.ListWallets(r.Context(), account, limit)
 	if err != nil {
 		s.writeWalletInternalError(w, "wallet listing failed", "", err)
 		return
@@ -857,7 +576,7 @@ func (s HTTPServer) handleWalletAdminWallets(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{
 		"wallets": wallets,
 		"count":   len(wallets),
-		"total":   sumWalletAmounts(balances),
+		"total":   control.SumWalletAmounts(balances),
 	})
 }
 
@@ -872,8 +591,13 @@ func (s HTTPServer) handleWalletAdminEntries(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
+	account, ok := walletAccountParam(w, query)
+	if !ok {
+		return
+	}
 	entries, err := store.ListWalletEntries(r.Context(), control.WalletEntryFilter{
 		InstallationID: strings.TrimSpace(query.Get("installation_id")),
+		Account:        account,
 		Kind:           strings.ToLower(strings.TrimSpace(query.Get("kind"))),
 		Limit:          limit,
 		BeforeID:       strings.TrimSpace(query.Get("before")),
@@ -891,6 +615,7 @@ func (s HTTPServer) handleWalletAdminEntries(w http.ResponseWriter, r *http.Requ
 
 type walletAdminEntryRequest struct {
 	InstallationID string `json:"installation_id"`
+	Account        string `json:"account"`
 	Kind           string `json:"kind"`
 	Service        string `json:"service"`
 	Amount         string `json:"amount"`
@@ -926,6 +651,11 @@ func (s HTTPServer) handleWalletAdminPostEntry(w http.ResponseWriter, r *http.Re
 			"a top-up credit comes only from a paid top-up; use confirm, or an adjustment", nil)
 		return
 	}
+	if kind == control.WalletEntryTransfer {
+		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest,
+			"a transfer has two sides and comes only from the shop moving its money; use an adjustment", nil)
+		return
+	}
 	key := strings.TrimSpace(request.IdempotencyKey)
 	if key == "" {
 		id, err := control.NewInstallationID()
@@ -937,6 +667,7 @@ func (s HTTPServer) handleWalletAdminPostEntry(w http.ResponseWriter, r *http.Re
 	}
 	entry, created, err := store.PostWalletEntry(r.Context(), control.WalletPosting{
 		InstallationID: request.InstallationID,
+		Account:        request.Account,
 		Kind:           kind,
 		Service:        request.Service,
 		Amount:         request.Amount,
@@ -968,6 +699,7 @@ func (s HTTPServer) handleWalletAdminPostEntry(w http.ResponseWriter, r *http.Re
 	}
 	s.logger().Info("wallet entry posted by the operator",
 		"installation_id", entry.InstallationID,
+		"account", entry.Account,
 		"kind", entry.Kind,
 		"service", entry.Service,
 		"amount", entry.Amount,
@@ -1017,10 +749,9 @@ type walletAdminConfirmRequest struct {
 }
 
 // handleWalletAdminConfirmTopUp serves POST /v1/wallet/admin/topups/{id}/confirm:
-// the operator's answer to a payer who paid but never made it back to the
-// return page (closed the tab, lost the network, the relay was down). The
-// operator checks the gateway's dashboard first; this credits the top-up the
-// same way a signed return would, once.
+// the operator crediting by hand a payment Dafa will not report as paid — the
+// payer's bank statement shows it, say. The operator checks Dafa's dashboard
+// first (wallet check reads it for them); this credits the top-up once.
 func (s HTTPServer) handleWalletAdminConfirmTopUp(w http.ResponseWriter, r *http.Request, id string) {
 	store, ok := s.requireWalletStore(w)
 	if !ok {
@@ -1039,7 +770,7 @@ func (s HTTPServer) handleWalletAdminConfirmTopUp(w http.ResponseWriter, r *http
 			"provider_transaction_id, actor and reason are required: check the gateway's dashboard first", nil)
 		return
 	}
-	topUp, applied, err := store.SettleWalletTopUp(r.Context(), strings.Trim(id, "/"), control.WalletTopUpSettlement{
+	topUp, applied, err := store.SettleWalletTopUp(r.Context(), id, control.WalletTopUpSettlement{
 		ProviderTransactionID: transactionID,
 		ConfirmedBy:           "operator:" + actor,
 		Description:           reason,
@@ -1060,25 +791,34 @@ func (s HTTPServer) handleWalletAdminConfirmTopUp(w http.ResponseWriter, r *http
 // is set up to do. It never includes a credential.
 func (s HTTPServer) handleWalletAdminConfig(w http.ResponseWriter, r *http.Request) {
 	options := s.walletTopUpOptions()
+	keyTest, keyKnown := dafa.KeyEnvironment(s.Wallet.DafaAPIKey)
+	environment := ""
+	if keyKnown {
+		environment = "live"
+		if keyTest {
+			environment = "test"
+		}
+	}
 	options["test_mode"] = s.Wallet.TestMode
+	options["dafa_base_url"] = dafaBaseURL(s.Wallet.DafaBaseURL)
+	options["api_key_set"] = strings.TrimSpace(s.Wallet.DafaAPIKey) != ""
+	options["key_environment"] = environment
 	options["public_url"] = strings.TrimSpace(s.Wallet.PublicURL)
-	options["return_url"] = s.walletReturnURL(r)
-	options["plutu_base_url"] = plutuBaseURL(s.Wallet.PlutuBaseURL)
-	options["api_key_set"] = strings.TrimSpace(s.Wallet.PlutuAPIKey) != ""
-	options["access_token_set"] = strings.TrimSpace(s.Wallet.PlutuAccessToken) != ""
-	options["secret_key_set"] = strings.TrimSpace(s.Wallet.PlutuSecretKey) != ""
+	options["webhook_base"] = s.walletWebhookBase(r)
 	options["request_timeout"] = s.Wallet.requestTimeout().String()
 	options["rate_limit"] = s.Wallet.TopUpRateLimit.String()
 	_, hasStore := s.walletStore()
 	options["store_supports_wallets"] = hasStore
+	options["sms_price"] = control.FormatWalletAmount(s.SMS.price())
+	options["plans"] = s.walletPlansConfig()
 	writeJSON(w, http.StatusOK, options)
 }
 
-func plutuBaseURL(configured string) string {
+func dafaBaseURL(configured string) string {
 	if trimmed := strings.TrimRight(strings.TrimSpace(configured), "/"); trimmed != "" {
 		return trimmed
 	}
-	return plutu.DefaultBaseURL
+	return dafa.DefaultBaseURL
 }
 
 // --- shared ---
@@ -1090,6 +830,20 @@ func (s HTTPServer) requireWalletStore(w http.ResponseWriter) (control.WalletSto
 		return nil, false
 	}
 	return store, true
+}
+
+// walletAccountParam reads ?account=; empty is left for the caller to read.
+func walletAccountParam(w http.ResponseWriter, query url.Values) (string, bool) {
+	raw := strings.TrimSpace(query.Get("account"))
+	if raw == "" {
+		return "", true
+	}
+	account := control.NormalizeWalletAccount(raw)
+	if !control.ValidWalletAccount(account) {
+		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest, "account must be main or sms", nil)
+		return "", false
+	}
+	return account, true
 }
 
 func walletListLimit(w http.ResponseWriter, query url.Values) (int, bool) {
@@ -1105,18 +859,9 @@ func walletListLimit(w http.ResponseWriter, query url.Values) (int, bool) {
 	return limit, true
 }
 
-func sumWalletAmounts(amounts []string) string {
-	total := new(big.Rat)
-	for _, amount := range amounts {
-		if value, ok := new(big.Rat).SetString(amount); ok {
-			total.Add(total, value)
-		}
-	}
-	return control.FormatWalletAmount(total)
-}
-
-// walletTopUpPayload is a top-up as the shop sees it. The checkout page is
-// only handed out while it can still be paid.
+// walletTopUpPayload is a top-up as the shop sees it. The payment page is
+// only handed out while it can still be paid, and the code count only while a
+// code can still be sent.
 func walletTopUpPayload(topUp control.WalletTopUp) map[string]any {
 	payload := map[string]any{
 		"id":                      topUp.ID,
@@ -1126,6 +871,7 @@ func walletTopUpPayload(topUp control.WalletTopUp) map[string]any {
 		"invoice_no":              topUp.InvoiceNo,
 		"provider_transaction_id": topUp.ProviderTransactionID,
 		"requested_by":            topUp.RequestedBy,
+		"payer_hint":              topUp.PayerHint,
 		"test_mode":               topUp.TestMode,
 		"error_code":              topUp.ErrorCode,
 		"error_detail":            topUp.ErrorDetail,
@@ -1135,8 +881,19 @@ func walletTopUpPayload(topUp control.WalletTopUp) map[string]any {
 		"updated_at":              topUp.UpdatedAt,
 		"paid_at":                 topUp.PaidAt,
 	}
+	method, known := lookupWalletMethod(topUp.Method)
+	if known {
+		payload["kind"] = method.kind()
+	} else if topUp.Method == control.WalletTopUpMethodPlutuLocalBankCards {
+		payload["kind"] = walletKindHostedPage
+	}
 	if topUp.Status == control.WalletTopUpPending {
-		payload["checkout_url"] = topUp.CheckoutURL
+		if topUp.CheckoutURL != "" {
+			payload["checkout_url"] = topUp.CheckoutURL
+		}
+		if known && method.kind() == walletKindOTP {
+			payload["otp_attempts_left"] = max(0, maxWalletOTPAttempts-topUp.OTPAttempts)
+		}
 	}
 	return payload
 }
@@ -1152,6 +909,7 @@ func walletTopUpPayloads(topUps []control.WalletTopUp) []map[string]any {
 func walletEntryPayload(entry control.WalletEntry) map[string]any {
 	return map[string]any{
 		"id":            entry.ID,
+		"account":       control.NormalizeWalletAccount(entry.Account),
 		"kind":          entry.Kind,
 		"service":       entry.Service,
 		"amount":        entry.Amount,
@@ -1171,23 +929,6 @@ func walletEntryPayloads(entries []control.WalletEntry) []map[string]any {
 	return payloads
 }
 
-func walletFailureMessage(code string) string {
-	switch code {
-	case walletCodeGatewayUnauthorized:
-		return "the payment gateway refused the company's credentials; the company must fix its account"
-	case walletCodeAmountNotAllowed:
-		return "the payment gateway does not accept this amount"
-	case walletCodeGatewayBusy:
-		return "the payment gateway is busy; retry in a few minutes"
-	case walletCodeOutcomeUnknown:
-		return "an earlier attempt with this key never finished; start a new top-up"
-	case walletCodeGatewayRejected:
-		return "the payment gateway rejected the top-up"
-	default:
-		return "the payment gateway could not start the top-up"
-	}
-}
-
 func writeWalletError(w http.ResponseWriter, status int, code, message string, extra map[string]any) {
 	body := map[string]any{"error": message, "code": code}
 	for key, value := range extra {
@@ -1201,23 +942,29 @@ func (s HTTPServer) writeWalletInternalError(w http.ResponseWriter, message, ins
 	writeWalletError(w, http.StatusInternalServerError, walletCodeInternalError, "relay store failed", nil)
 }
 
-// logWalletTopUp writes one line per top-up event. It never logs the
-// checkout URL or the signature.
+// logWalletTopUp writes one line per top-up event. It never logs the payment
+// page, the payer's number, a code or a webhook token.
 func (s HTTPServer) logWalletTopUp(installationID string, topUp control.WalletTopUp, event, detail string) {
+	logWalletTopUpEvent(s.logger(), installationID, topUp, event, detail)
+}
+
+func logWalletTopUpEvent(logger *slog.Logger, installationID string, topUp control.WalletTopUp, event, detail string) {
 	level := slog.LevelInfo
-	switch {
-	case topUp.ErrorCode == walletCodeGatewayUnauthorized:
+	switch topUp.ErrorCode {
+	case walletCodeGatewayUnauthorized, walletCodeAmountMismatch, walletCodeEnvironmentMismatch:
 		level = slog.LevelError
-	case topUp.ErrorCode == walletCodeAmountMismatch:
-		level = slog.LevelError
-	case topUp.Status == control.WalletTopUpFailed:
-		level = slog.LevelWarn
+	default:
+		if topUp.Status == control.WalletTopUpFailed {
+			level = slog.LevelWarn
+		}
 	}
 	attrs := []any{
 		"event", event,
 		"installation_id", installationID,
 		"top_up_id", topUp.ID,
 		"invoice_no", topUp.InvoiceNo,
+		"method", topUp.Method,
+		"payment_id", topUp.ProviderTransactionID,
 		"amount", topUp.Amount,
 		"status", topUp.Status,
 		"test_mode", topUp.TestMode,
@@ -1228,15 +975,14 @@ func (s HTTPServer) logWalletTopUp(installationID string, topUp control.WalletTo
 	if detail != "" {
 		attrs = append(attrs, "detail", truncateRunes(detail, 200))
 	}
-	s.logger().Log(context.Background(), level, "relay wallet top-up", attrs...)
+	logger.Log(context.Background(), level, "relay wallet top-up", attrs...)
 }
 
 // --- expiry ---
 
-// WalletTopUpExpirer writes off checkouts nobody came back from, so a shop's
-// history stops saying "pending" about a payment that is not happening. It
-// moves money nowhere: a signed approval arriving after the write-off still
-// credits the top-up.
+// WalletTopUpExpirer writes off top-ups nobody finished, so a shop's history
+// stops saying "pending" about a payment that is not happening. It moves
+// money nowhere: a payment Dafa proves after the write-off still credits it.
 type WalletTopUpExpirer struct {
 	Store    control.WalletStore
 	TTL      time.Duration

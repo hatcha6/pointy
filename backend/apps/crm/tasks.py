@@ -72,11 +72,14 @@ def debt_reminder_sweep_task():
     """Queue a debt reminder for every open-credit order that is *due* and has a
     reachable customer. "Due" means the invoice's due date has arrived or passed,
     or it carries no due date at all (an open tab is due now); a future due date
-    holds the reminder until that day. Off by default (opt-in via
-    ``POINTY_SMS_DEBT_REMINDERS_ENABLED``) so a shop never sends surprise SMS.
+    holds the reminder until that day. Off by default — the owner switches it
+    on from the SMS settings page (``POINTY_SMS_DEBT_REMINDERS_ENABLED`` only
+    sets where that switch starts) — so a shop never sends surprise SMS.
     Honors do-not-contact and is idempotent per shop-local day.
     """
-    if not getattr(django_settings, "POINTY_SMS_DEBT_REMINDERS_ENABLED", False):
+    from apps.messaging.automation import auto_sms_enabled
+
+    if not auto_sms_enabled("debt_reminder"):
         return {"skipped": "disabled"}
 
     from apps.core.timeutils import business_local_date
@@ -150,10 +153,9 @@ def generate_ai_suggestions_task():
     if not getattr(django_settings, "POINTY_SMS_AI_SUGGESTIONS_ENABLED", False):
         return {"skipped": "disabled"}
 
-    from apps.core.models import RelayInstallation
+    from apps.core.relay import relay_ai_available
 
-    installation = RelayInstallation.load()
-    if installation is None or not installation.ai_enabled:
+    if not relay_ai_available():
         return {"skipped": "no_ai"}
 
     from apps.customers.models import Customer

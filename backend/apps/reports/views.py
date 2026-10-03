@@ -1,5 +1,6 @@
 from django.core.handlers.asgi import ASGIRequest
 from django.http import StreamingHttpResponse
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets, views
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -35,6 +36,7 @@ from .services import (
     generate_report_payload,
     report_catalog_for_user,
     report_figures_checksum,
+    with_period_state_of,
 )
 
 
@@ -128,13 +130,20 @@ class ReportRunViewSet(
                 report_type=run.report_type,
                 params=run.params or {},
                 user=request.user,
+                # The days the run covered. A run asked for "last month" in
+                # October is September; resolved against today, verifying it
+                # in November compared it with October and reported every
+                # figure as changed.
+                period_today=timezone.localdate(run.created_at),
             )
         except ReportAccessDenied as exc:
             raise PermissionDenied(str(exc)) from exc
         except (ReportValidationError, PeriodValidationError) as exc:
             raise ValidationError({"detail": str(exc)}) from exc
 
-        current = report_figures_checksum(payload)
+        current = report_figures_checksum(
+            with_period_state_of(payload, run.payload)
+        )
         matches = bool(run.figures_checksum) and current == run.figures_checksum
         changed = _changed_figures(run.payload.get("summary", {}), payload.get("summary", {}))
 

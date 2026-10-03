@@ -107,7 +107,9 @@ def balance_sheet(context):
     # was already in, brought onto the books — not something it earned. Left
     # in, the day a shop types its paper ledger in would read as the year's
     # profit.
-    openings = opening_balances_recorded(start=period.start_date, end=period.end_date)
+    openings = opening_balances_recorded(
+        start=period.start_date, end=period.end_date
+    ) + opening_stock_recorded(start=period.start_date, end=period.end_date)
     period_result = (
         closing_net
         - opening_net
@@ -127,39 +129,48 @@ def balance_sheet(context):
         "period_result": money(period_result),
         "zakat_base": money(zakat["base"]),
     }
+    # The summary is the statement itself — لنا and علينا at both dates, each
+    # footed — under the headline that already states the net position, its
+    # change, the period's result and the zakat. What explains those figures
+    # line by line (the net position at both dates again, the bridge from one
+    # to the other, the zakat working) is the detail.
+    sections = [
+        context.metrics(figures),
+        _statement_section("balance_assets", ASSET_LINES, opening, closing),
+        _statement_section("balance_liabilities", LIABILITY_LINES, opening, closing),
+    ]
+    if context.wants_detail():
+        sections.extend(
+            [
+                _comparison_section(
+                    "balance_net",
+                    [
+                        ("total_assets", opening_assets, closing_assets),
+                        ("total_liabilities", opening_liabilities, closing_liabilities),
+                        ("net_position", opening_net, closing_net),
+                    ],
+                ),
+                _amount_section(
+                    "net_position_movement",
+                    [
+                        ("opening_net_position", opening_net),
+                        ("outside_money_added", outside["added"]),
+                        ("outside_money_withdrawn", -outside["withdrawn"]),
+                        *(
+                            [("opening_balances_recorded", openings)]
+                            if openings
+                            else []
+                        ),
+                        ("period_result", period_result),
+                        ("closing_net_position", closing_net),
+                    ],
+                ),
+                _amount_section("zakat", zakat["rows"]),
+            ]
+        )
     return {
         "summary": figures,
-        "sections": [
-            context.metrics(figures),
-            _statement_section("balance_assets", ASSET_LINES, opening, closing),
-            _statement_section(
-                "balance_liabilities", LIABILITY_LINES, opening, closing
-            ),
-            _comparison_section(
-                "balance_net",
-                [
-                    ("total_assets", opening_assets, closing_assets),
-                    ("total_liabilities", opening_liabilities, closing_liabilities),
-                    ("net_position", opening_net, closing_net),
-                ],
-            ),
-            _amount_section(
-                "net_position_movement",
-                [
-                    ("opening_net_position", opening_net),
-                    ("outside_money_added", outside["added"]),
-                    ("outside_money_withdrawn", -outside["withdrawn"]),
-                    *(
-                        [("opening_balances_recorded", openings)]
-                        if openings
-                        else []
-                    ),
-                    ("period_result", period_result),
-                    ("closing_net_position", closing_net),
-                ],
-            ),
-            _amount_section("zakat", zakat["rows"]),
-        ],
+        "sections": sections,
         "notes": [
             note("balance_positions", opening=opening_date, closing=closing_date),
             note("balance_stock_at_cost"),
@@ -239,6 +250,30 @@ def opening_balances_recorded(*, start, end):
             else:
                 total -= amount
     return total
+
+
+def opening_stock_recorded(*, start, end):
+    """What the opening stock entered inside ``start``..``end`` added to the
+    shop's net position — the goods it already had, brought onto the books.
+
+    Stock enters the ledger as an ``OPENING`` voucher when a shop migrates from
+    its old system or gives a new product the quantity it already holds. It
+    raises the stock line like a purchase would, but nothing was bought: left
+    in the result, a shop that typed in 150,000 of stock on its first day read
+    that as the year's profit, while its party balances, entered the same
+    day, were already set aside.
+    """
+    from django.db.models import Sum
+
+    from apps.core.money_dates import day_range_end, day_range_start
+    from apps.inventory.models import StockLedgerEntry
+
+    total = StockLedgerEntry.objects.filter(
+        voucher_type=StockLedgerEntry.VoucherType.OPENING,
+        posting_at__gte=day_range_start(start),
+        posting_at__lt=day_range_end(end),
+    ).aggregate(total=Sum("value_change"))["total"]
+    return decimal_from(total).quantize(Decimal("0.01"))
 
 
 def _totals(position):

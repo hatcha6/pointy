@@ -1,3 +1,4 @@
+export 'pointy_brand_mark.dart';
 export 'pointy_card_grid.dart';
 export 'pointy_confirmation_dialog.dart';
 export 'pointy_unsaved_changes_guard.dart';
@@ -28,6 +29,7 @@ export 'pointy_searchable_picker.dart';
 export 'pointy_section_header.dart';
 export 'pointy_skeleton.dart';
 export 'pointy_settings_section.dart';
+export 'pointy_shortcuts_sheet.dart';
 export 'pointy_status_pill.dart';
 export 'pointy_sticky_action_footer.dart';
 export 'pointy_summary_list.dart';

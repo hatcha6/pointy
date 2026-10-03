@@ -1,8 +1,9 @@
 /// Snapshot of the shop's relay installation as reported by
 /// `GET /api/relay/installation/` — the installation ID the owner sends to
-/// support plus the entitlement flags (remote access, AI, SMS) and the shared
-/// subscription expiry. Read-only: the relay control server owns this state and
-/// the backend mirrors it.
+/// support plus where each service stands: remote access and the assistant
+/// (granted by the company's subscription or paid from the Daftar wallet) and
+/// SMS (paid per message from the SMS balance). Read-only: the relay control
+/// server owns this state and the backend mirrors it.
 class RelayInstallationStatus {
   const RelayInstallationStatus({
     required this.configured,
@@ -16,16 +17,22 @@ class RelayInstallationStatus {
     required this.aiEnabled,
     this.smsEnabled = false,
     this.subscriptionEndsAt,
+    this.remoteAccessUntil,
+    this.aiUntil,
+    bool? aiAvailable,
+    bool? smsAvailable,
     this.lastSyncedAt,
     this.connectorLastSeenAt,
     this.connectorVersion = '',
-  });
+  }) : _aiAvailable = aiAvailable,
+       _smsAvailable = smsAvailable;
 
   /// Whether a relay installation has been provisioned at all. When false the
   /// shop has never been linked to the relay and there is no installation ID.
   final bool configured;
 
-  /// Backend-computed: relay enabled + active, unexpired subscription.
+  /// Backend-computed: the subscription includes remote access, or the shop
+  /// paid for it from the wallet.
   final bool remoteAccessSupported;
 
   /// The stable identifier the owner sends to support to activate or renew.
@@ -50,6 +57,16 @@ class RelayInstallationStatus {
   /// When the shared subscription lapses. Null means no expiry (perpetual).
   final DateTime? subscriptionEndsAt;
 
+  /// When remote access stops, whoever pays for it — null while it is not
+  /// running, or when it runs with no end.
+  final DateTime? remoteAccessUntil;
+
+  /// The same for the assistant.
+  final DateTime? aiUntil;
+
+  final bool? _aiAvailable;
+  final bool? _smsAvailable;
+
   /// When the backend last refreshed this snapshot from the relay.
   final DateTime? lastSyncedAt;
 
@@ -64,15 +81,22 @@ class RelayInstallationStatus {
       subscriptionEndsAt != null &&
       !subscriptionEndsAt!.isAfter(DateTime.now());
 
-  /// Mirrors the backend's `relay_ai_available`: AI flag + active, unexpired
-  /// subscription. The 5h/weekly usage call is only meaningful when this holds.
+  /// The backend's `relay_ai_available`: the subscription includes the
+  /// assistant or the shop paid for it from the wallet. A backend from before
+  /// the wallet sends nothing, and the old rule is read off the flags. The
+  /// 5h/weekly usage call is only meaningful when this holds.
   bool get aiAvailable =>
-      aiEnabled && subscriptionActive && !subscriptionExpired;
+      _aiAvailable ?? (aiEnabled && subscriptionActive && !subscriptionExpired);
 
-  /// The same rule for SMS: flag + active, unexpired subscription. Says what
-  /// the subscription includes; the shop can still have switched SMS off.
+  /// Whether SMS can be sent: the SMS balance pays for a message (or, from a
+  /// backend before the SMS balance, the subscription includes SMS). The shop
+  /// can still have switched SMS off.
   bool get smsAvailable =>
-      smsEnabled && subscriptionActive && !subscriptionExpired;
+      _smsAvailable ??
+      (smsEnabled && subscriptionActive && !subscriptionExpired);
+
+  /// Remote access or the assistant runs right now, whoever pays for it.
+  bool get anyPlanActive => remoteAccessSupported || aiAvailable;
 
   /// Whole days until the subscription lapses (negative once expired). Null when
   /// there is no end date.
@@ -98,6 +122,14 @@ class RelayInstallationStatus {
       aiEnabled: _bool(json['ai_enabled']),
       smsEnabled: _bool(json['sms_enabled']),
       subscriptionEndsAt: _dateTime(json['subscription_ends_at']),
+      remoteAccessUntil: _dateTime(json['remote_access_until']),
+      aiUntil: _dateTime(json['ai_until']),
+      aiAvailable: json.containsKey('ai_available')
+          ? _bool(json['ai_available'])
+          : null,
+      smsAvailable: json.containsKey('sms_available')
+          ? _bool(json['sms_available'])
+          : null,
       lastSyncedAt: _dateTime(json['last_synced_at']),
       connectorLastSeenAt: _dateTime(json['connector_last_seen_at']),
       connectorVersion: json['connector_version']?.toString() ?? '',

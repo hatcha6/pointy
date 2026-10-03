@@ -148,6 +148,7 @@ from apps.crm.views import (
     CampaignViewSet,
     ConversationViewSet,
     CustomerConsentView,
+    SendAccountBalanceSmsView,
     SendInvoiceSmsView,
 )
 from apps.messaging.views import (
@@ -159,7 +160,11 @@ from apps.messaging.views import (
 from apps.notifications.views import BusinessNotificationViewSet
 from apps.wallet.views import (
     WalletEntriesView,
+    WalletPlanPurchaseView,
     WalletSettingsView,
+    WalletSmsAllocationView,
+    WalletTopUpCancelView,
+    WalletTopUpConfirmView,
     WalletTopUpDetailView,
     WalletTopUpListView,
     WalletView,
@@ -534,7 +539,7 @@ urlpatterns = [
         name="messaging-status",
     ),
     # The Daftar wallet: the shop's prepaid balance with the company, held on
-    # the relay and topped up through the payment gateway.
+    # the relay and topped up through the payment gateway (Dafa).
     path("api/wallet/", WalletView.as_view(), name="wallet"),
     path("api/wallet/settings/", WalletSettingsView.as_view(), name="wallet-settings"),
     path("api/wallet/topups/", WalletTopUpListView.as_view(), name="wallet-topups"),
@@ -543,7 +548,29 @@ urlpatterns = [
         WalletTopUpDetailView.as_view(),
         name="wallet-topup-detail",
     ),
+    path(
+        "api/wallet/topups/<str:relay_id>/confirm/",
+        WalletTopUpConfirmView.as_view(),
+        name="wallet-topup-confirm",
+    ),
+    path(
+        "api/wallet/topups/<str:relay_id>/cancel/",
+        WalletTopUpCancelView.as_view(),
+        name="wallet-topup-cancel",
+    ),
     path("api/wallet/entries/", WalletEntriesView.as_view(), name="wallet-entries"),
+    # Spending it: money into the SMS balance each message is paid from, and
+    # the plans (remote access, the assistant) paid a period at a time.
+    path(
+        "api/wallet/sms/allocations/",
+        WalletSmsAllocationView.as_view(),
+        name="wallet-sms-allocations",
+    ),
+    path(
+        "api/wallet/subscriptions/",
+        WalletPlanPurchaseView.as_view(),
+        name="wallet-subscriptions",
+    ),
     path(
         "api/messaging/inbound/<int:gateway_id>/",
         InboundWebhookView.as_view(),
@@ -563,6 +590,11 @@ urlpatterns = [
         "api/crm/orders/<int:order_id>/send-invoice-sms/",
         SendInvoiceSmsView.as_view(),
         name="crm-send-invoice-sms",
+    ),
+    path(
+        "api/crm/customers/<int:customer_id>/send-balance-sms/",
+        SendAccountBalanceSmsView.as_view(),
+        name="crm-send-balance-sms",
     ),
     # Its own router (see apps.invoice_intake.urls) — mounted at
     # api/invoice-intakes/ alongside the project router below.

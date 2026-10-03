@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -22,6 +23,12 @@ import (
 // content hash. The poller does that on an interval for the last 48 hours of
 // real sends still at "sent", so the ledger can say "delivered" or
 // "undelivered" instead of only "handed to the provider".
+//
+// The same read settles held messages: sends that failed in a way that leaves
+// it unknown whether the SMS went out, whose price is kept until the log is
+// checked. One found in the log — same number, same text, within minutes —
+// went out after all and stays paid for; one the log does not show once it has
+// had time to, in a read that reached back past it, is refunded.
 type SMSDeliveryPoller struct {
 	Client   SMSSentLister
 	Store    control.SMSStore
@@ -51,6 +58,20 @@ const (
 	// A log row and a ledger row are the same message only if Resala stamped
 	// it within this long of our send.
 	smsDeliveryMatchWindow = 10 * time.Minute
+
+	// A held message is its log row only with the same text, stamped within
+	// this long of the send — longer than for a delivery report, because a
+	// Resala that timed out may have finished the send late.
+	smsSentLogCheckWindow = 15 * time.Minute
+	// A held message the log does not show is refunded once it has been held
+	// this long, and only after a read that reached back past it.
+	smsSentLogCheckGrace = 15 * time.Minute
+	// A hold the log could not settle in this long — Resala's log unreadable
+	// all that time — is refunded unchecked rather than kept forever.
+	smsSentLogCheckDeadline = 48 * time.Hour
+	smsSentLogCheckLimit    = 200
+	// Paging may go this deep to reach back past the oldest held message.
+	smsSentLogCheckMaxPages = 50
 )
 
 // SMSDeliverySyncResult is what one sync did.
@@ -63,6 +84,29 @@ type SMSDeliverySyncResult struct {
 	// Tagged counts rows still at "sent" whose provider id was recorded, which
 	// pins their match for every later sync.
 	Tagged int
+	// Held is how many held messages were checked: Kept went out after all,
+	// Refunded never did, Expired were refunded unchecked past the deadline.
+	Held     int
+	Kept     int
+	Refunded int
+	Expired  int
+}
+
+// smsSentLogRead is how far back one sync read the log.
+type smsSentLogRead struct {
+	// Oldest is the earliest stamp among the rows read.
+	Oldest time.Time
+	// Complete means the log had nothing older: every row was read.
+	Complete bool
+}
+
+// covers reports whether the read reached back past a message's window, so a
+// message it did not find is not in the log.
+func (r smsSentLogRead) covers(message control.SMSMessage) bool {
+	if r.Complete {
+		return true
+	}
+	return !r.Oldest.IsZero() && r.Oldest.Before(smsCandidateTime(message).Add(-smsSentLogCheckWindow))
 }
 
 func (p *SMSDeliveryPoller) interval() time.Duration {
@@ -126,51 +170,38 @@ func (p *SMSDeliveryPoller) SyncOnce(ctx context.Context) (SMSDeliverySyncResult
 	if err != nil {
 		return result, err
 	}
+	held, err := p.Store.ListSMSAwaitingCheck(ctx, smsSentLogCheckLimit)
+	if err != nil {
+		return result, err
+	}
 	result.Candidates = len(candidates)
-	if len(candidates) == 0 {
+	result.Held = len(held)
+	if len(candidates) == 0 && len(held) == 0 {
 		// Nothing awaits a report, so the provider is not asked at all.
 		return result, nil
 	}
-	oldest := smsCandidateTime(candidates[0])
-	for _, candidate := range candidates[1:] {
-		if at := smsCandidateTime(candidate); at.Before(oldest) {
-			oldest = at
-		}
-	}
-	floor := oldest.Add(-smsDeliveryPageSlack)
 
-	var rows []resala.SentMessage
-	for page := 1; page <= smsDeliveryMaxPages; page++ {
-		sent, err := p.Client.ListSent(ctx, resala.SentQuery{
-			Source:  "message",
-			Page:    page,
-			PerPage: smsDeliveryPageSize,
-		})
-		if err != nil {
-			if page == 1 {
-				return result, err
-			}
-			// Match what was read; the next sync reads the rest.
-			p.logger().Warn("sms delivery log page failed", "page", page, "error", err)
-			break
-		}
-		rows = append(rows, sent.Messages...)
-		if len(sent.Messages) == 0 {
-			break
-		}
-		if last := sent.Messages[len(sent.Messages)-1]; !last.CreatedAt.IsZero() && last.CreatedAt.Before(floor) {
-			break
-		}
-		if sent.LastPage > 0 && page >= sent.LastPage {
-			break
-		}
-		if sent.LastPage == 0 && len(sent.Messages) < smsDeliveryPageSize {
-			break
-		}
+	rows, read, err := p.readSentLog(ctx, candidates, held)
+	if err != nil {
+		// Unreadable: holds past the deadline are refunded unchecked rather
+		// than kept forever; the rest wait for the next sync.
+		p.expireHolds(ctx, held, now, &result)
+		return result, err
 	}
 	result.LogRows = len(rows)
+	claimed, checkHeld := p.claimedLogRows(ctx, held, rows)
 
-	for _, match := range matchSMSDeliveries(candidates, rows) {
+	pool := candidates
+	if checkHeld {
+		pool = append(append([]control.SMSMessage(nil), candidates...), held...)
+	}
+	found := map[string]bool{}
+	for _, match := range matchSMSDeliveries(pool, rows, claimed) {
+		if match.Message.HeldSince != nil {
+			found[match.Message.ID] = true
+			p.keepHeld(ctx, match, &result)
+			continue
+		}
 		status, known := smsDeliveryStatus(match.Row.Status)
 		if !known {
 			// Accepted but not reported yet; nothing to record.
@@ -201,7 +232,16 @@ func (p *SMSDeliveryPoller) SyncOnce(ctx context.Context) (SMSDeliverySyncResult
 		}
 		p.Metrics.RecordSMSDelivery(status)
 	}
-	if result.Matched > 0 {
+	if checkHeld {
+		for _, message := range held {
+			if !found[message.ID] {
+				p.settleUnseen(ctx, message, read, now, &result)
+			}
+		}
+	} else {
+		p.expireHolds(ctx, held, now, &result)
+	}
+	if result.Matched > 0 || result.Kept > 0 || result.Refunded > 0 || result.Expired > 0 {
 		p.logger().Info(
 			"sms delivery sync",
 			"candidates", result.Candidates,
@@ -209,9 +249,242 @@ func (p *SMSDeliveryPoller) SyncOnce(ctx context.Context) (SMSDeliverySyncResult
 			"delivered", result.Delivered,
 			"undelivered", result.Undelivered,
 			"tagged", result.Tagged,
+			"held", result.Held,
+			"kept", result.Kept,
+			"refunded", result.Refunded,
+			"expired", result.Expired,
 		)
 	}
 	return result, nil
+}
+
+// readSentLog reads the log newest first: back past the oldest delivery
+// candidate within the usual page budget, and further — within a larger one —
+// when a held message needs it, so a busy log does not leave a hold unsettled.
+func (p *SMSDeliveryPoller) readSentLog(
+	ctx context.Context,
+	candidates, held []control.SMSMessage,
+) ([]resala.SentMessage, smsSentLogRead, error) {
+	deliveryFloor := smsOldestCandidate(candidates).Add(-smsDeliveryPageSlack)
+	checkFloor := smsOldestCandidate(held).Add(-smsSentLogCheckWindow - smsDeliveryPageSlack)
+	var rows []resala.SentMessage
+	var read smsSentLogRead
+	var last time.Time
+	reached := func(floor time.Time) bool { return !last.IsZero() && last.Before(floor) }
+	for page := 1; ; page++ {
+		needDelivery := len(candidates) > 0 && page <= smsDeliveryMaxPages && !reached(deliveryFloor)
+		needCheck := len(held) > 0 && page <= smsSentLogCheckMaxPages && !reached(checkFloor)
+		if !needDelivery && !needCheck {
+			break
+		}
+		sent, err := p.Client.ListSent(ctx, resala.SentQuery{
+			Source:  "message",
+			Page:    page,
+			PerPage: smsDeliveryPageSize,
+		})
+		if err != nil {
+			if page == 1 {
+				return nil, read, err
+			}
+			// Match what was read; the next sync reads the rest.
+			p.logger().Warn("sms delivery log page failed", "page", page, "error", err)
+			break
+		}
+		rows = append(rows, sent.Messages...)
+		for _, row := range sent.Messages {
+			if !row.CreatedAt.IsZero() && (read.Oldest.IsZero() || row.CreatedAt.Before(read.Oldest)) {
+				read.Oldest = row.CreatedAt
+			}
+		}
+		if len(sent.Messages) == 0 ||
+			(sent.LastPage > 0 && page >= sent.LastPage) ||
+			(sent.LastPage == 0 && len(sent.Messages) < smsDeliveryPageSize) {
+			read.Complete = true
+			break
+		}
+		last = sent.Messages[len(sent.Messages)-1].CreatedAt
+	}
+	return rows, read, nil
+}
+
+// claimedLogRows is the set of log rows another message already owns, among
+// those a held message could match. checkHeld is false when that cannot be
+// known right now, and the holds then wait for the next sync.
+func (p *SMSDeliveryPoller) claimedLogRows(
+	ctx context.Context,
+	held []control.SMSMessage,
+	rows []resala.SentMessage,
+) (map[string]bool, bool) {
+	if len(held) == 0 {
+		return nil, false
+	}
+	recipients := map[string]bool{}
+	for _, message := range held {
+		recipients[message.Recipient] = true
+	}
+	var ids []string
+	for _, row := range rows {
+		if row.ID != "" && recipients[smsLogRecipient(row)] {
+			ids = append(ids, row.ID)
+		}
+	}
+	claimed, err := p.Store.SMSClaimedProviderIDs(ctx, ids)
+	if err != nil {
+		p.logger().Warn("reading which sms log rows are matched failed; held messages wait", "error", err)
+		return nil, false
+	}
+	return claimed, true
+}
+
+// keepHeld records that a held message went out after all: it stays paid
+// for, settled to the parts its log text took, and joins delivery tracking.
+func (p *SMSDeliveryPoller) keepHeld(ctx context.Context, match smsDeliveryMatch, result *SMSDeliverySyncResult) {
+	message, row := match.Message, match.Row
+	status, known := smsDeliveryStatus(row.Status)
+	if !known {
+		// Accepted and on its way: it went out, the carrier has not said more.
+		status = control.SMSStatusSent
+	}
+	resolution := control.SMSCheckResolution{
+		WentOut:           true,
+		Status:            status,
+		ProviderMessageID: row.ID,
+		SentAt:            row.CreatedAt,
+		Detail: fmt.Sprintf(
+			"resala's sent log shows the message went out after the send failed (%s); it stays paid for",
+			message.ErrorCode,
+		),
+	}
+	if row.Content != "" {
+		resolution.Parts = resala.CountParts(row.Content)
+		resolution.SettleDescription = smsChargeDescription(message.Kind, resolution.Parts)
+	}
+	// The answer that carries the cost was lost: price the parts at what
+	// Resala charged per part on the latest send, so the usage report's cost
+	// and margin stay true.
+	if perPart, err := p.Store.SMSPartCost(ctx); err != nil {
+		p.logger().Warn("reading resala's latest per-part cost failed", "error", err)
+	} else if perPart != "" {
+		parts := resolution.Parts
+		if parts == 0 {
+			parts = message.Parts
+		}
+		resolution.Cost = control.SMSCostOfParts(perPart, parts)
+		resolution.Detail += "; its cost is estimated at resala's latest per-part rate"
+	}
+	if status == control.SMSStatusDelivered && !row.UpdatedAt.IsZero() {
+		at := row.UpdatedAt
+		resolution.DeliveredAt = &at
+	}
+	resolved, applied, err := p.Store.ResolveSMSCheck(ctx, message.ID, resolution)
+	if err != nil {
+		p.logger().Error("keeping a held sms failed", "ledger_id", message.ID, "error", err)
+		return
+	}
+	if !applied {
+		return
+	}
+	result.Kept++
+	p.Metrics.RecordSMSCheck("kept")
+	p.logger().Info(
+		"a held sms went out after all; it stays paid for",
+		"installation_id", resolved.InstallationID,
+		"ledger_id", resolved.ID,
+		"failed_with", message.ErrorCode,
+		"status", resolved.Status,
+		"parts", resolved.Parts,
+		"charged", resolved.Price,
+	)
+}
+
+// settleUnseen decides a held message the log did not show: refunded once it
+// has been held long enough and the read reached back past it, refunded
+// unchecked past the deadline, otherwise left for the next sync.
+func (p *SMSDeliveryPoller) settleUnseen(
+	ctx context.Context,
+	message control.SMSMessage,
+	read smsSentLogRead,
+	now time.Time,
+	result *SMSDeliverySyncResult,
+) {
+	heldFor := now.Sub(*message.HeldSince)
+	switch {
+	case heldFor >= smsSentLogCheckDeadline:
+		p.expireHold(ctx, message, result)
+	case heldFor >= smsSentLogCheckGrace && read.covers(message):
+		resolved, applied, err := p.Store.ResolveSMSCheck(ctx, message.ID, control.SMSCheckResolution{
+			Detail: fmt.Sprintf(
+				"resala's sent log does not show the message after the send failed (%s); refunded",
+				message.ErrorCode,
+			),
+		})
+		if err != nil {
+			p.logger().Error("refunding a held sms failed", "ledger_id", message.ID, "error", err)
+			return
+		}
+		if !applied {
+			return
+		}
+		result.Refunded++
+		p.Metrics.RecordSMSCheck("refunded")
+		p.logger().Info(
+			"a held sms never went out; refunded",
+			"installation_id", resolved.InstallationID,
+			"ledger_id", resolved.ID,
+			"failed_with", message.ErrorCode,
+			"refunded", resolved.Price,
+		)
+	}
+}
+
+// expireHolds refunds, unchecked, every hold past the deadline.
+func (p *SMSDeliveryPoller) expireHolds(
+	ctx context.Context,
+	held []control.SMSMessage,
+	now time.Time,
+	result *SMSDeliverySyncResult,
+) {
+	for _, message := range held {
+		if now.Sub(*message.HeldSince) >= smsSentLogCheckDeadline {
+			p.expireHold(ctx, message, result)
+		}
+	}
+}
+
+func (p *SMSDeliveryPoller) expireHold(ctx context.Context, message control.SMSMessage, result *SMSDeliverySyncResult) {
+	resolved, applied, err := p.Store.ResolveSMSCheck(ctx, message.ID, control.SMSCheckResolution{
+		Detail: fmt.Sprintf(
+			"resala's sent log could not be checked for %s after the send failed (%s); refunded unchecked",
+			smsSentLogCheckDeadline, message.ErrorCode,
+		),
+	})
+	if err != nil {
+		p.logger().Error("refunding an expired sms hold failed", "ledger_id", message.ID, "error", err)
+		return
+	}
+	if !applied {
+		return
+	}
+	result.Expired++
+	p.Metrics.RecordSMSCheck("expired")
+	p.logger().Error(
+		"a held sms was refunded without the sent-log check: resala's log could not be read in time",
+		"installation_id", resolved.InstallationID,
+		"ledger_id", resolved.ID,
+		"failed_with", message.ErrorCode,
+		"refunded", resolved.Price,
+	)
+}
+
+// smsOldestCandidate is the earliest send among messages; zero for none.
+func smsOldestCandidate(messages []control.SMSMessage) time.Time {
+	var oldest time.Time
+	for _, message := range messages {
+		if at := smsCandidateTime(message); oldest.IsZero() || at.Before(oldest) {
+			oldest = at
+		}
+	}
+	return oldest
 }
 
 // smsDeliveryMatch pairs one ledger row with the delivery-log row it became.
@@ -229,7 +502,15 @@ type smsDeliveryMatch struct {
 // then an identical content hash, then the nearest in time — and are taken
 // greedily across ALL candidates, so one message cannot take a row that is a
 // better (content-identical) match for another message to the same phone.
-func matchSMSDeliveries(candidates []control.SMSMessage, rows []resala.SentMessage) []smsDeliveryMatch {
+//
+// A held message decides money, so it is held to more: the identical text,
+// within fifteen minutes, and never a row in claimed (one some other message
+// already owns).
+func matchSMSDeliveries(
+	candidates []control.SMSMessage,
+	rows []resala.SentMessage,
+	claimed map[string]bool,
+) []smsDeliveryMatch {
 	type pairing struct {
 		candidate   int
 		row         int
@@ -248,6 +529,11 @@ func matchSMSDeliveries(candidates []control.SMSMessage, rows []resala.SentMessa
 	var pairings []pairing
 	for ci, candidate := range candidates {
 		sentAt := smsCandidateTime(candidate)
+		held := candidate.HeldSince != nil
+		window := smsDeliveryMatchWindow
+		if held {
+			window = smsSentLogCheckWindow
+		}
 		for ri, row := range rows {
 			if recipients[ri] == "" || recipients[ri] != candidate.Recipient || !smsLogRowIsReal(row) {
 				continue
@@ -261,11 +547,14 @@ func matchSMSDeliveries(candidates []control.SMSMessage, rows []resala.SentMessa
 			if row.CreatedAt.IsZero() {
 				continue
 			}
+			if held && (candidate.ContentSHA256 == "" || candidate.ContentSHA256 != hashes[ri] || claimed[row.ID]) {
+				continue
+			}
 			distance := row.CreatedAt.Sub(sentAt)
 			if distance < 0 {
 				distance = -distance
 			}
-			if distance > smsDeliveryMatchWindow {
+			if distance > window {
 				continue
 			}
 			pairings = append(pairings, pairing{

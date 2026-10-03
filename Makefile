@@ -473,7 +473,7 @@ frontend-learning-preview: frontend-install ## Run the learning (in-app guides) 
 frontend-subscription-preview: frontend-install ## Run the subscription / relay status settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/subscription_preview.dart
 
-frontend-wallet-preview: frontend-install ## Run the Daftar wallet (balance, Plutu top-up sheet, history) UI preview harness as a local web server.
+frontend-wallet-preview: frontend-install ## Run the Daftar wallet (balance, Dafa top-up sheet with every method, history) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/wallet_preview.dart
 
 frontend-messaging-preview: frontend-install ## Run the SMS (relay/Resala) settings UI preview harness as a local web server.

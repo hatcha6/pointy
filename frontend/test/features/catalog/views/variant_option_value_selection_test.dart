@@ -88,7 +88,10 @@ void main() {
   ) async {
     // enterText round-trips through the platform text input, so the form has
     // to settle before the next tap lands on the layout it produced.
-    await tester.enterText(find.byType(TextFormField).first, 'قميص');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, l10n.productNameLabel),
+      'قميص',
+    );
     await tester.pumpAndSettle();
     await tapVisible(
       tester,

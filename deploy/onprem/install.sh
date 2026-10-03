@@ -309,12 +309,60 @@ case "${1:-}" in
   --env-only) echo "==> --env-only: stopping before Docker."; exit 0 ;;
 esac
 
-# Install Docker Engine + the Compose plugin (Linux, via Docker's official
-# convenience script) or Docker Desktop (macOS, via Homebrew) when it is missing,
-# so onboarding a fresh shop is just running this one script.
+# Install Docker Engine + the Compose plugin (Linux, from Docker's apt repository
+# or its convenience script) or Docker Desktop (macOS, via Homebrew) when it is
+# missing, so onboarding a fresh shop is just running this one script.
+
+# Docker's apt repository picked from /etc/os-release, prints "<repo> <codename>"
+# or nothing. get.docker.com cannot be trusted with an Ubuntu derivative: it asks
+# `lsb_release -u` for the upstream release, Linux Mint 22.3 dropped that flag,
+# and the script then reads /etc/debian_version ("trixie/sid") and adds Docker's
+# DEBIAN trixie repo to an Ubuntu noble system — apt fails with "held broken
+# packages" (containerd.io needs a newer libseccomp2). UBUNTU_CODENAME is the
+# reliable answer. move-server.sh has the same logic, standalone on purpose.
+docker_apt_repo() {
+  [ -r /etc/os-release ] && command -v apt-get >/dev/null 2>&1 || return 0
+  (
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    if [ -n "${UBUNTU_CODENAME:-}" ]; then echo "ubuntu $UBUNTU_CODENAME"       # Ubuntu, Linux Mint
+    elif [ -n "${DEBIAN_CODENAME:-}" ]; then echo "debian $DEBIAN_CODENAME"     # LMDE
+    elif [ "${ID:-}" = debian ] && [ -n "${VERSION_CODENAME:-}" ]; then echo "debian $VERSION_CODENAME"
+    elif [ "${ID:-}" = ubuntu ] && [ -n "${VERSION_CODENAME:-}" ]; then echo "ubuntu $VERSION_CODENAME"
+    fi
+  )
+}
+
+install_docker_from_apt_repo() {
+  repo="$1"; codename="$2"
+  echo "    Installing Docker from Docker's apt repository (${repo} ${codename})…"
+  apt-get update || err "apt-get update failed (no internet?)."
+  apt-get install -y ca-certificates curl || err "Could not install curl (no internet?)."
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL "https://download.docker.com/linux/${repo}/gpg" -o /etc/apt/keyrings/docker.asc \
+    || err "Could not download Docker's signing key (no internet?)."
+  chmod a+r /etc/apt/keyrings/docker.asc
+  # Overwrites a docker.list a failed get.docker.com run left pointing at the
+  # wrong distro, which is what un-sticks a machine that already hit that.
+  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/%s %s stable\n' \
+    "$(dpkg --print-architecture)" "$repo" "$codename" >/etc/apt/sources.list.d/docker.list
+  apt-get update || err "apt-get update failed after adding Docker's repository."
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
+    || err "Docker installation failed. Run 'sudo apt-get update && sudo apt-get full-upgrade' and re-run."
+}
+
 install_docker_linux() {
   if [ "$(id -u)" -ne 0 ]; then
     err "Docker isn't installed. Re-run as root so it can be installed automatically:  sudo bash install.sh"
+  fi
+  apt_repo="$(docker_apt_repo)"
+  if [ -n "$apt_repo" ]; then
+    # shellcheck disable=SC2086 # two words on purpose: repo and codename
+    install_docker_from_apt_repo $apt_repo
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl enable --now docker || true
+    fi
+    return 0
   fi
   command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 \
     || err "Need curl or wget to download Docker. Install one and re-run."

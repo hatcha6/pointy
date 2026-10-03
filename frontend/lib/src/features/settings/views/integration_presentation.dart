@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/integration_provider.dart';
-import '../../../shared/design/design.dart';
+import '../../../shared/components/components.dart';
 
 /// Arabic wording and iconography for the resale providers.
 ///
@@ -283,59 +283,22 @@ class IntegrationProviderLogo extends StatelessWidget {
   final double size;
 
   /// Square in a list, so a column of providers lines up whatever shape each
-  /// mark is. Wider inline, where a landscape mark squeezed into a square
-  /// loses a third of its height to letterboxing and stops being readable.
+  /// mark is. Wider inline (see [PointyBrandMark.aspectRatio]).
   final double aspectRatio;
 
-  /// Light enough for black artwork in either theme, warm enough not to read
-  /// as a hole punched in the surface.
-  static const Color _chip = Color(0xFFFFFFFF);
-
   /// Marks that are a whole app tile already — Qareeb's is its orange app
-  /// icon. Those fill the box: a white chip around a tile reads as a frame
-  /// around a picture of a frame.
+  /// icon. Those fill the box.
   static bool _isTile(IntegrationProviderKey key) =>
       key == IntegrationProviderKey.qareeb;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.pointyColors;
-    final radius = BorderRadius.circular(size <= 28 ? 6 : PointyRadii.card);
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: SizedBox(
-        height: size,
-        width: size * aspectRatio,
-        child: Image.asset(
-          integrationProviderLogoAsset(providerKey),
-          fit: BoxFit.contain,
-          // A provider with no artwork yet is the normal case, not a bug.
-          errorBuilder: (context, error, stackTrace) => DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.primaryStrong.withValues(alpha: 0.10),
-            ),
-            child: Icon(
-              integrationProviderIcon(providerKey),
-              color: colors.primaryStrong,
-            ),
-          ),
-          frameBuilder: (context, child, frame, wasSynchronous) {
-            if (_isTile(providerKey)) {
-              return child;
-            }
-            // Only artwork gets the chip. Wrapping the fallback too would put
-            // a white square behind a themed icon.
-            return DecoratedBox(
-              decoration: const BoxDecoration(color: _chip),
-              child: Padding(
-                padding: EdgeInsets.all(size * 0.12),
-                child: child,
-              ),
-            );
-          },
-        ),
-      ),
+    return PointyBrandMark(
+      asset: integrationProviderLogoAsset(providerKey),
+      fallbackIcon: integrationProviderIcon(providerKey),
+      size: size,
+      aspectRatio: aspectRatio,
+      fillsBox: _isTile(providerKey),
     );
   }
 }

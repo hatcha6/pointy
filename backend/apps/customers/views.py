@@ -292,6 +292,16 @@ class CustomerViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         allocations = serializer.save()
+        if allocations:
+            # One receipt for the whole collection, however many invoices it
+            # settled, keyed on its first payment so a retry never re-sends.
+            from apps.crm.transactional import notify_payment_received
+
+            notify_payment_received(
+                customer,
+                serializer.validated_data["amount"],
+                reference=f"payment-{allocations[0]['payment'].pk}",
+            )
         # Return the refreshed summary so the caller sees the new balance, plus a
         # representative payment so the client can print a proof-of-payment slip
         # (the collection splits across invoices; the proof is for the whole

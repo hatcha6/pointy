@@ -43,12 +43,14 @@ class ProductDetailsScreen extends StatelessWidget {
     required this.capabilities,
     this.analyticsEngine,
     this.onChanged,
+    this.onCreateSimilar,
   });
 
   final ProductDetailsViewModel viewModel;
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+
   /// Optional: without it the stock panel simply shows the total and no
   /// per-place breakdown, which is the right answer for a shop with one
   /// place anyway.
@@ -57,6 +59,9 @@ class ProductDetailsScreen extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
   final VoidCallback? onChanged;
+
+  /// See [ProductDetailsView.onCreateSimilar].
+  final ValueChanged<Product>? onCreateSimilar;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +100,7 @@ class ProductDetailsScreen extends StatelessWidget {
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,
           onChanged: onChanged,
+          onCreateSimilar: onCreateSimilar,
         ),
       ),
     );
@@ -115,12 +121,14 @@ class ProductDetailsView extends StatelessWidget {
     required this.capabilities,
     this.analyticsEngine,
     this.onChanged,
+    this.onCreateSimilar,
   });
 
   final ProductDetailsViewModel viewModel;
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+
   /// Optional: without it the stock panel simply shows the total and no
   /// per-place breakdown, which is the right answer for a shop with one
   /// place anyway.
@@ -130,6 +138,11 @@ class ProductDetailsView extends StatelessWidget {
   final AnalyticsEngine? analyticsEngine;
   final VoidCallback? onChanged;
 
+  /// Starts a new product from this one — «منتج مشابه». Given by the catalog,
+  /// which owns the new-product form; where nobody gives it, the action is not
+  /// offered.
+  final ValueChanged<Product>? onCreateSimilar;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -138,6 +151,7 @@ class ProductDetailsView extends StatelessWidget {
       listenable: viewModel,
       builder: (context, _) {
         final product = viewModel.product;
+        final createSimilar = onCreateSimilar;
         // A system product is written by the feature that owns it and by
         // nobody else: every change affordance below disappears for it.
         final capabilities = this.capabilities.forProduct(
@@ -176,6 +190,15 @@ class ProductDetailsView extends StatelessWidget {
                   showProductParentEditor(context, viewModel, onChanged),
               onArchive: () => _confirmArchive(context, l10n),
               onRestore: () => _restore(context, l10n),
+              // A system product belongs to the feature that made it: a copy
+              // would be an ordinary product passing for, say, a provider's
+              // card, without the provider behind it.
+              onCreateSimilar: createSimilar == null || product.isSystem
+                  ? null
+                  : () => createSimilar(viewModel.product),
+              // Not from the list row it opened on: that can leave out units,
+              // modifiers and options, and the copy would quietly lack them.
+              canCreateSimilar: viewModel.hasLoadedProduct,
             ),
             if (capabilities.canAccessPurchasing) ...[
               const SizedBox(height: 12),
@@ -391,6 +414,7 @@ class ProductDetailsView extends StatelessWidget {
           shopSettingsRepository: shopSettingsRepository,
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,
+          onCreateSimilar: onCreateSimilar,
         ),
       ),
     );
@@ -465,6 +489,8 @@ class _ParentSummaryCard extends StatelessWidget {
     required this.onEdit,
     required this.onArchive,
     required this.onRestore,
+    this.onCreateSimilar,
+    this.canCreateSimilar = false,
   });
 
   final Product product;
@@ -475,6 +501,10 @@ class _ParentSummaryCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onArchive;
   final VoidCallback onRestore;
+
+  /// «منتج مشابه». Null hides it; [canCreateSimilar] false shows it waiting.
+  final VoidCallback? onCreateSimilar;
+  final bool canCreateSimilar;
 
   @override
   Widget build(BuildContext context) {
@@ -609,6 +639,27 @@ class _ParentSummaryCard extends StatelessWidget {
                         Chip(label: Text(option.displayLabel)),
                     ],
                   ),
+            // Below the card rather than beside the name, where a fourth
+            // button would leave a phone too little room to read the name.
+            if (onCreateSimilar case final onCreateSimilar?)
+              ProductCreateGuard(
+                capabilities: capabilities,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Tooltip(
+                      message: l10n.similarProductTooltip,
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('product_details_similar_button'),
+                        onPressed: canCreateSimilar ? onCreateSimilar : null,
+                        icon: const Icon(Icons.copy_all_outlined),
+                        label: Text(l10n.similarProductAction),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

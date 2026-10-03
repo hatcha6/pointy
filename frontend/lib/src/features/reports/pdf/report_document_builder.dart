@@ -27,6 +27,7 @@ import 'dart:typed_data';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/pos_user.dart';
+import '../../../data/models/report_catalog.dart';
 import '../../../data/models/report_run.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../shared/formatters.dart';
@@ -51,10 +52,15 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
   final period = _periodFromPayload(payload);
   final summary = _mapFromPayload(payload['summary']);
   final headline = _stringList(payload['headline']);
+  final granularity = _mapFromPayload(payload['period'])['granularity'];
+  final detailed = granularity == ReportGranularityOption.detailed;
 
   final sections = <ReportPdfSection>[
-    ..._sectionsFromPayload(payload),
-    ...?_notesSection(payload, l10n),
+    // The headline figures already lead the page as the metric grid. A summary
+    // does not print them a second time as a table; the detailed copy keeps
+    // the table, which carries every figure and the movement column.
+    ..._sectionsFromPayload(payload, includeFigures: detailed),
+    ...?_notesSection(payload, l10n, compact: !detailed),
   ];
 
   return BusinessReportPdfDocument(
@@ -70,13 +76,22 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
     generatedBy: includePreparedBy ? currentUser.label : null,
     reference: _referenceFor(run),
     period: period,
+    detailLevel: granularity is String
+        ? ReportPdfField(
+            label: l10n.reportGranularityTitle,
+            value: reportGranularityLabel(l10n, granularity),
+          )
+        : null,
     shopSettingFields: _shopSettingFieldsForReport(
       run.reportType,
       shopSettings,
     ),
     metrics: _metricsFromSummary(summary, headline, payload),
     sections: sections,
-    auditTrail: includeAuditTrail
+    // The audit block restates who built the report and when — the panel at
+    // the top of the page already says both, with the reference. The detailed
+    // copy keeps it; on a summary it was a page of its own for one line.
+    auditTrail: includeAuditTrail && detailed
         ? [
             ReportPdfAuditEntry(
               occurredAt: run.createdAt,
@@ -172,14 +187,18 @@ String? _comparisonNote(String key, Object? previousValue) {
   return 'السابق: ${reportValue(key, previousValue)}';
 }
 
-List<ReportPdfSection> _sectionsFromPayload(Map<String, Object?> payload) {
+List<ReportPdfSection> _sectionsFromPayload(
+  Map<String, Object?> payload, {
+  required bool includeFigures,
+}) {
   final sections = payload['sections'];
   if (sections is! List) {
     return const [];
   }
   return [
     for (final section in sections)
-      if (section is Map) _sectionFrom(section.cast<String, Object?>()),
+      if (section is Map && (includeFigures || section['key'] != 'summary'))
+        _sectionFrom(section.cast<String, Object?>()),
   ];
 }
 
@@ -278,8 +297,9 @@ bool _sameTotals(Map<String, Object?> shown, Map<String, Object?> full) {
 /// The closing block: what each figure includes, which basis, which date rule.
 List<ReportPdfSection>? _notesSection(
   Map<String, Object?> payload,
-  AppLocalizations l10n,
-) {
+  AppLocalizations l10n, {
+  required bool compact,
+}) {
   final notes = payload['notes'];
   if (notes is! List || notes.isEmpty) {
     return null;
@@ -296,7 +316,11 @@ List<ReportPdfSection>? _notesSection(
     return null;
   }
   return [
-    ReportPdfSection(heading: l10n.reportNotesTitle, paragraphs: sentences),
+    ReportPdfSection(
+      heading: l10n.reportNotesTitle,
+      paragraphs: sentences,
+      compact: compact,
+    ),
   ];
 }
 

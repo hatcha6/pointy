@@ -47,6 +47,7 @@ class ProductList extends StatelessWidget {
     required this.onOpenCameraScanner,
     required this.onCreateProduct,
     this.onOpenProduct,
+    this.onCreateSimilar,
   });
 
   final CatalogViewModel viewModel;
@@ -73,6 +74,10 @@ class ProductList extends StatelessWidget {
   /// Overrides the default push navigation when a product row is opened.
   /// The catalog master-detail pane uses this to select inline.
   final ValueChanged<Product>? onOpenProduct;
+
+  /// «منتج مشابه» on the details a row opens — see
+  /// [ProductDetailsView.onCreateSimilar].
+  final ValueChanged<Product>? onCreateSimilar;
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +311,7 @@ class ProductList extends StatelessWidget {
       analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,
       pricingOptions: viewModel.pricingOptions,
+      onCreateSimilar: onCreateSimilar,
     );
   }
 }
@@ -574,10 +580,15 @@ class _CatalogActionBar extends StatelessWidget {
             if (canCreateProduct)
               TutorTarget(
                 anchor: TutorAnchor.catalogAddProductButton,
-                child: FilledButton.icon(
-                  onPressed: onCreateProduct,
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.addProductButton),
+                child: Tooltip(
+                  message: l10n.addProductShortcutTooltip(
+                    '${pointyCommandKeyLabel(context)}+N',
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: onCreateProduct,
+                    icon: const Icon(Icons.add),
+                    label: Text(l10n.addProductButton),
+                  ),
                 ),
               ),
           ],
@@ -604,6 +615,9 @@ Future<void> openProductDetails(
   /// screen's edit sheet simply shows no pricing-currency picker.
   PricingCurrencyOptions? pricingOptions,
   WarehouseRepository? warehouseRepository,
+
+  /// «منتج مشابه». Omitted, the details screen does not offer it.
+  ValueChanged<Product>? onCreateSimilar,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -626,6 +640,7 @@ Future<void> openProductDetails(
         capabilities: capabilities,
         analyticsEngine: analyticsEngine,
         onChanged: onChanged,
+        onCreateSimilar: onCreateSimilar,
       ),
     ),
   );

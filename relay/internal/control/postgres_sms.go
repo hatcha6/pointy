@@ -28,11 +28,14 @@ const smsMessageColumns = `m.id,
 	m.error_code,
 	m.error_detail,
 	m.cost::text,
+	m.price::text,
+	m.parts,
 	m.provider_message_id,
 	m.created_at,
 	m.updated_at,
 	m.sent_at,
-	m.delivered_at`
+	m.delivered_at,
+	m.held_since`
 
 const selectSMSSQL = `SELECT ` + smsMessageColumns + ` FROM relay_sms_messages m`
 
@@ -57,7 +60,7 @@ func smsClaimLockKey(installationID string) int64 {
 func (s *PostgresStore) BeginSMS(
 	ctx context.Context,
 	message SMSMessage,
-	limit SMSClaimLimit,
+	terms SMSClaimTerms,
 ) (SMSMessage, bool, error) {
 	claim, err := prepareSMSClaim(message, s.clock.Now())
 	if err != nil {
@@ -70,8 +73,10 @@ func (s *PostgresStore) BeginSMS(
 	defer tx.Rollback(ctx)
 
 	// One shop's claims go through one at a time, so the key check, the cap
-	// count and the insert are a single step: neither a same-key race nor two
-	// sends racing for the month's last message can slip between them.
+	// count, the charge and the insert are a single step: neither a same-key
+	// race nor two sends racing for the month's last message can slip between
+	// them. The charge also locks the SMS balance row, which is what a transfer
+	// into it waits on.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, smsClaimLockKey(claim.InstallationID)); err != nil {
 		return SMSMessage{}, false, err
 	}
@@ -90,13 +95,22 @@ func (s *PostgresStore) BeginSMS(
 	if !errors.Is(err, ErrSMSNotFound) {
 		return SMSMessage{}, false, err
 	}
-	if limit.Limit > 0 && !claim.TestMode {
+	if terms.Limit > 0 && !claim.TestMode {
 		var used int
-		if err := tx.QueryRow(ctx, countBillableSMSSQL, claim.InstallationID, limit.Since).Scan(&used); err != nil {
+		if err := tx.QueryRow(ctx, countBillableSMSSQL, claim.InstallationID, terms.Since).Scan(&used); err != nil {
 			return SMSMessage{}, false, err
 		}
-		if used >= limit.Limit {
-			return SMSMessage{}, false, &SMSLimitError{Limit: limit.Limit, Used: used}
+		if used >= terms.Limit {
+			return SMSMessage{}, false, &SMSLimitError{Limit: terms.Limit, Used: used}
+		}
+	}
+	if price := smsClaimCharge(&claim, terms); price != nil {
+		posting, err := prepareWalletPosting(smsChargePosting(claim, price, terms.ChargeDescription))
+		if err != nil {
+			return SMSMessage{}, false, err
+		}
+		if _, _, err := s.postWalletEntryTx(ctx, tx, posting); err != nil {
+			return SMSMessage{}, false, err
 		}
 	}
 	inserted, err := scanSMSMessage(tx.QueryRow(
@@ -105,12 +119,12 @@ func (s *PostgresStore) BeginSMS(
 			id, installation_id, idempotency_key, kind, consent_class, recipient,
 			content_sha256, template_id, template_body, test_mode, status,
 			error_code, error_detail, cost, provider_message_id,
-			created_at, updated_at, sent_at, delivered_at
+			created_at, updated_at, sent_at, delivered_at, price, parts
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11,
 			'', '', $12::text::numeric, $13,
-			$14::timestamptz, $15::timestamptz, NULL, NULL
+			$14::timestamptz, $15::timestamptz, NULL, NULL, $16::text::numeric, $17
 		) RETURNING `+smsMessageColumns,
 		claim.ID,
 		claim.InstallationID,
@@ -127,6 +141,8 @@ func (s *PostgresStore) BeginSMS(
 		claim.ProviderMessageID,
 		claim.CreatedAt,
 		claim.UpdatedAt,
+		claim.Price,
+		claim.Parts,
 	), false)
 	if err != nil {
 		return SMSMessage{}, false, err
@@ -168,7 +184,13 @@ func (s *PostgresStore) FinishSMS(
 	if outcome.SentAt != nil {
 		sentAt = outcome.SentAt.UTC()
 	}
-	finished, err := scanSMSMessage(s.pool.QueryRow(
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	finished, err := scanSMSMessage(tx.QueryRow(
 		ctx,
 		`UPDATE relay_sms_messages AS m
 		SET
@@ -194,18 +216,206 @@ func (s *PostgresStore) FinishSMS(
 		sentAt,
 		s.clock.Now().UTC(),
 	), false)
-	if err == nil {
-		return finished, true, nil
+	if errors.Is(err, ErrSMSNotFound) {
+		// Not pending any more (or not there at all): the first outcome stands.
+		existing, err := scanSMSMessage(tx.QueryRow(ctx, selectSMSSQL+` WHERE m.id = $1`, id), false)
+		if err != nil {
+			return SMSMessage{}, false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return SMSMessage{}, false, err
+		}
+		return existing, false, nil
 	}
-	if !errors.Is(err, ErrSMSNotFound) {
-		return SMSMessage{}, false, err
-	}
-	// Not pending any more (or not there at all): the first outcome stands.
-	existing, err := scanSMSMessage(s.pool.QueryRow(ctx, selectSMSSQL+` WHERE m.id = $1`, id), false)
 	if err != nil {
 		return SMSMessage{}, false, err
 	}
-	return existing, false, nil
+	// The update left parts and price alone: the row is still what was held.
+	held := finished
+	posting, err := smsFinishPosting(held, &finished, outcome, s.clock.Now())
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	if posting != nil {
+		if _, _, err := s.postWalletEntryTx(ctx, tx, *posting); err != nil {
+			return SMSMessage{}, false, err
+		}
+	}
+	if finished.Parts != held.Parts || finished.Price != held.Price || finished.HeldSince != nil {
+		var heldSince any
+		if finished.HeldSince != nil {
+			heldSince = finished.HeldSince.UTC()
+		}
+		if _, err := tx.Exec(
+			ctx,
+			`UPDATE relay_sms_messages
+			SET parts = $2, price = $3::text::numeric, held_since = $4::timestamptz
+			WHERE id = $1`,
+			id,
+			finished.Parts,
+			finished.Price,
+			heldSince,
+		); err != nil {
+			return SMSMessage{}, false, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return SMSMessage{}, false, err
+	}
+	return finished, true, nil
+}
+
+func (s *PostgresStore) ListSMSAwaitingCheck(ctx context.Context, limit int) ([]SMSMessage, error) {
+	return s.querySMS(
+		ctx,
+		false,
+		selectSMSSQL+` WHERE m.held_since IS NOT NULL ORDER BY m.held_since, m.id LIMIT $1`,
+		normalizedSMSAwaitingLimit(limit),
+	)
+}
+
+func (s *PostgresStore) ResolveSMSCheck(
+	ctx context.Context,
+	id string,
+	resolution SMSCheckResolution,
+) (SMSMessage, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	held, err := scanSMSMessage(tx.QueryRow(
+		ctx,
+		selectSMSSQL+` WHERE m.id = $1 FOR UPDATE`,
+		id,
+	), false)
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	if held.HeldSince == nil {
+		// Settled already, by this check or another relay node's.
+		if err := tx.Commit(ctx); err != nil {
+			return SMSMessage{}, false, err
+		}
+		return held, false, nil
+	}
+	resolved, posting, err := resolveSMSCheck(held, resolution, s.clock.Now())
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	if posting != nil {
+		if _, _, err := s.postWalletEntryTx(ctx, tx, *posting); err != nil {
+			return SMSMessage{}, false, err
+		}
+	}
+	var sentAt, deliveredAt any
+	if resolved.SentAt != nil {
+		sentAt = resolved.SentAt.UTC()
+	}
+	if resolved.DeliveredAt != nil {
+		deliveredAt = resolved.DeliveredAt.UTC()
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`UPDATE relay_sms_messages
+		SET
+			status = $2,
+			error_code = $3,
+			error_detail = $4,
+			provider_message_id = $5,
+			sent_at = $6::timestamptz,
+			delivered_at = $7::timestamptz,
+			parts = $8,
+			price = $9::text::numeric,
+			cost = $11::text::numeric,
+			held_since = NULL,
+			updated_at = $10::timestamptz
+		WHERE id = $1`,
+		id,
+		resolved.Status,
+		resolved.ErrorCode,
+		resolved.ErrorDetail,
+		resolved.ProviderMessageID,
+		sentAt,
+		deliveredAt,
+		resolved.Parts,
+		resolved.Price,
+		resolved.UpdatedAt,
+		resolved.Cost,
+	); err != nil {
+		return SMSMessage{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return SMSMessage{}, false, err
+	}
+	return resolved, true, nil
+}
+
+func (s *PostgresStore) SMSPartCost(ctx context.Context) (string, error) {
+	var cost string
+	var parts int
+	err := s.pool.QueryRow(
+		ctx,
+		`SELECT cost::text, parts FROM relay_sms_messages
+		WHERE NOT test_mode AND cost > 0 AND status IN ('sent', 'delivered', 'undelivered')
+		ORDER BY created_at DESC, id DESC
+		LIMIT 1`,
+	).Scan(&cost, &parts)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return smsPerPart(cost, parts), nil
+}
+
+func (s *PostgresStore) SMSClaimedProviderIDs(ctx context.Context, ids []string) (map[string]bool, error) {
+	wanted := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" {
+			wanted = append(wanted, id)
+		}
+	}
+	claimed := map[string]bool{}
+	if len(wanted) == 0 {
+		return claimed, nil
+	}
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT DISTINCT provider_message_id FROM relay_sms_messages
+		WHERE provider_message_id = ANY($1::text[])`,
+		wanted,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		claimed[id] = true
+	}
+	return claimed, rows.Err()
+}
+
+func (s *PostgresStore) SMSTemplateBody(ctx context.Context, templateID string) (string, error) {
+	var body string
+	err := s.pool.QueryRow(
+		ctx,
+		`SELECT template_body FROM relay_sms_messages
+		WHERE template_id = $1 AND template_body <> ''
+		ORDER BY created_at DESC, id DESC
+		LIMIT 1`,
+		strings.TrimSpace(templateID),
+	).Scan(&body)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return body, err
 }
 
 func (s *PostgresStore) CountBillableSMSSince(
@@ -272,7 +482,13 @@ func (s *PostgresStore) SMSUsage(ctx context.Context, from, to time.Time) ([]SMS
 			count(*) FILTER (WHERE NOT m.test_mode AND m.status = 'delivered'),
 			count(*) FILTER (WHERE NOT m.test_mode AND m.status = 'undelivered'),
 			count(*) FILTER (WHERE m.test_mode),
+			COALESCE(sum(m.parts) FILTER (
+				WHERE NOT m.test_mode AND m.status IN ('pending', 'sent', 'delivered', 'undelivered')
+			), 0),
 			COALESCE(sum(m.cost) FILTER (WHERE NOT m.test_mode), 0)::text,
+			COALESCE(sum(m.price) FILTER (
+				WHERE NOT m.test_mode AND m.status IN ('pending', 'sent', 'delivered', 'undelivered')
+			), 0)::text,
 			max(m.sent_at) FILTER (WHERE NOT m.test_mode)
 		FROM relay_sms_messages m
 		LEFT JOIN relay_installations i ON i.id = m.installation_id
@@ -298,13 +514,16 @@ func (s *PostgresStore) SMSUsage(ctx context.Context, from, to time.Time) ([]SMS
 			&row.Delivered,
 			&row.Undelivered,
 			&row.Test,
+			&row.Parts,
 			&row.Cost,
+			&row.Charged,
 			&lastSentAt,
 		); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		row.Cost = NormalizeSMSCost(row.Cost)
+		row.Charged = NormalizeWalletAmount(row.Charged)
 		if lastSentAt.Valid {
 			value := lastSentAt.Time.UTC()
 			row.LastSentAt = &value
@@ -422,7 +641,7 @@ func (s *PostgresStore) querySMS(ctx context.Context, withShop bool, sql string,
 
 func scanSMSMessage(row pgx.Row, withShop bool) (SMSMessage, error) {
 	var message SMSMessage
-	var sentAt, deliveredAt pgtype.Timestamptz
+	var sentAt, deliveredAt, heldSince pgtype.Timestamptz
 	dest := []any{
 		&message.ID,
 		&message.InstallationID,
@@ -438,11 +657,14 @@ func scanSMSMessage(row pgx.Row, withShop bool) (SMSMessage, error) {
 		&message.ErrorCode,
 		&message.ErrorDetail,
 		&message.Cost,
+		&message.Price,
+		&message.Parts,
 		&message.ProviderMessageID,
 		&message.CreatedAt,
 		&message.UpdatedAt,
 		&sentAt,
 		&deliveredAt,
+		&heldSince,
 	}
 	if withShop {
 		dest = append(dest, &message.ShopName)
@@ -454,6 +676,7 @@ func scanSMSMessage(row pgx.Row, withShop bool) (SMSMessage, error) {
 		return SMSMessage{}, err
 	}
 	message.Cost = NormalizeSMSCost(message.Cost)
+	message.Price = NormalizeWalletAmount(message.Price)
 	message.CreatedAt = message.CreatedAt.UTC()
 	message.UpdatedAt = message.UpdatedAt.UTC()
 	if sentAt.Valid {
@@ -463,6 +686,10 @@ func scanSMSMessage(row pgx.Row, withShop bool) (SMSMessage, error) {
 	if deliveredAt.Valid {
 		value := deliveredAt.Time.UTC()
 		message.DeliveredAt = &value
+	}
+	if heldSince.Valid {
+		value := heldSince.Time.UTC()
+		message.HeldSince = &value
 	}
 	return message, nil
 }

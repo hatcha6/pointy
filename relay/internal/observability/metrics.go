@@ -39,6 +39,7 @@ type Metrics struct {
 	// with the fleet and duplicate it.
 	smsSendsByOutcome      map[string]uint64
 	smsDeliveriesByOutcome map[string]uint64
+	smsChecksByOutcome     map[string]uint64
 }
 
 type Snapshot struct {
@@ -73,6 +74,10 @@ type Snapshot struct {
 	// SMSDeliveriesByOutcome counts delivery reports the sent-log sync applied
 	// ("delivered", "undelivered", "sent").
 	SMSDeliveriesByOutcome map[string]uint64 `json:"sms_deliveries_by_outcome"`
+	// SMSChecksByOutcome counts held messages the sent-log check settled:
+	// "kept" (it went out after all), "refunded" (it never did) and "expired"
+	// (refunded unchecked after the log could not be read for too long).
+	SMSChecksByOutcome map[string]uint64 `json:"sms_checks_by_outcome"`
 }
 
 type RelayRequestObservation struct {
@@ -285,6 +290,21 @@ func (m *Metrics) RecordSMSDelivery(outcome string) {
 	m.mu.Unlock()
 }
 
+func (m *Metrics) RecordSMSCheck(outcome string) {
+	if m == nil {
+		return
+	}
+	if outcome == "" {
+		outcome = "unknown"
+	}
+	m.mu.Lock()
+	if m.smsChecksByOutcome == nil {
+		m.smsChecksByOutcome = make(map[string]uint64)
+	}
+	m.smsChecksByOutcome[outcome]++
+	m.mu.Unlock()
+}
+
 func (m *Metrics) Snapshot() Snapshot {
 	if m == nil {
 		return NewMetrics().Snapshot()
@@ -321,6 +341,7 @@ func (m *Metrics) Snapshot() Snapshot {
 		ConnectorHandshakeRejections: copyStringMap(m.connectorHandshakeRejections),
 		SMSSendsByOutcome:            copyStringMap(m.smsSendsByOutcome),
 		SMSDeliveriesByOutcome:       copyStringMap(m.smsDeliveriesByOutcome),
+		SMSChecksByOutcome:           copyStringMap(m.smsChecksByOutcome),
 	}
 }
 

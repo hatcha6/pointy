@@ -208,12 +208,15 @@ class BalanceSheetTests(TestCase):
 
     # -- helpers -----------------------------------------------------------
 
-    def _report(self, *, end=None, user=None):
+    def _report(self, *, end=None, user=None, granularity="detailed"):
+        # Detailed by default: most of these tests read the bridge and the
+        # zakat working, which a summary leaves out.
         return generate_report_payload(
             report_type=Type.BALANCE_SHEET,
             params={
                 "start_date": self.start.isoformat(),
                 "end_date": (end or self.today).isoformat(),
+                "granularity": granularity,
             },
             user=user or self.manager,
         )
@@ -289,7 +292,11 @@ class BalanceSheetTests(TestCase):
         yesterday = self.today - timedelta(days=1)
         payload = generate_report_payload(
             report_type=Type.BALANCE_SHEET,
-            params={"start_date": yesterday.isoformat(), "end_date": yesterday.isoformat()},
+            params={
+                "start_date": yesterday.isoformat(),
+                "end_date": yesterday.isoformat(),
+                "granularity": "detailed",
+            },
             user=self.manager,
         )
         movement = self._lines(payload, "net_position_movement")

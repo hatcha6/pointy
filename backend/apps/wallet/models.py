@@ -58,6 +58,11 @@ class WalletTopUp(TimeStampedModel):
     relay_id = models.CharField(max_length=64, unique=True)
     invoice_no = models.CharField(max_length=32, db_index=True)
     method = models.CharField(max_length=40)
+    # The payer's phone or wallet card, masked by the relay ("091•••678"). The
+    # full number went to the gateway and is kept nowhere. ``db_default`` as
+    # well: the previous release, still serving for the minute a live update
+    # overlaps, mirrors top-ups with an INSERT that names no such column.
+    payer_hint = models.CharField(max_length=32, blank=True, default="", db_default="")
     amount = models.DecimalField(max_digits=12, decimal_places=3)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     provider_transaction_id = models.CharField(max_length=128, blank=True)

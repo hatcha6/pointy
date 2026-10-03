@@ -10,6 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Failure codes meaning the provider may have sent the message anyway: it erred
+# or went silent after taking it. The relay keeps such a send's price while it
+# checks Resala's sent log, so the message keeps the provider's id and its
+# status is asked for again — it may yet turn out to have been sent.
+UNCERTAIN_FAILURE_CODES = frozenset({"provider_error", "outcome_unknown"})
+
 
 @dataclass(frozen=True)
 class SendResult:
@@ -25,6 +31,9 @@ class SendResult:
     # provider approved with different wording than ours would otherwise leave
     # the log showing a message nobody received.
     sent_body: str = ""
+    # How many SMS parts the provider sent — and billed — the message as, when
+    # it says; 0 leaves the count to us.
+    segments: int = 0
     # Not the message's fault — the provider is out of reach or asked us to slow
     # down. The message waits and tries again without spending an attempt, so an
     # afternoon without internet does not fail every invoice SMS of the day.
@@ -52,6 +61,14 @@ class MessagingTransport:
 
         Checked before a message is queued, so a shop whose plan has no SMS gets
         a clear answer at the button instead of a queue of doomed messages.
+        """
+        return ""
+
+    def unaffordable_reason(self, segments: int) -> str:
+        """Why a message of ``segments`` SMS parts cannot be paid for, or ``""``.
+
+        Checked when a message is queued, after ``unavailable_reason``: a
+        provider paid per part may afford a short message and not a long one.
         """
         return ""
 

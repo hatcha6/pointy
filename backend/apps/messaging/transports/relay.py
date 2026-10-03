@@ -3,8 +3,9 @@
 The shop holds no SMS credentials at all. The relay owns the Resala account and
 the approved template ids; this driver hands it a template kind, the values for
 its slots and the installation's own access token, and the relay decides —
-subscription, monthly allowance, template, number — before anything is sent.
-That single chokepoint is also where the company sees which shop sends what.
+the shop's SMS balance (each message is paid from it, per SMS part it goes out
+as), template, number — before anything is sent. That single chokepoint is also where the company sees
+which shop sends what.
 
 Resala only delivers approved templates, so a message without a template kind is
 refused here rather than sent as free text.
@@ -21,12 +22,15 @@ from django.core.exceptions import ImproperlyConfigured
 from apps.core.models import RelayInstallation
 from apps.core.relay import (
     RelayControlError,
+    mirror_sms_wallet,
     relay_sms_available,
     relay_transport_cooldown_active,
     scoped_relay_client,
+    sms_affordable,
+    sms_prepaid,
 )
 
-from .base import MessagingTransport, SendResult, register
+from .base import UNCERTAIN_FAILURE_CODES, MessagingTransport, SendResult, register
 
 logger = logging.getLogger(__name__)
 
@@ -66,13 +70,16 @@ def _error_payload(exc: RelayControlError) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-def _failure(code: str, detail: str, *, retryable: bool = False) -> SendResult:
+def _failure(
+    code: str, detail: str, *, retryable: bool = False, provider_message_id: str = ""
+) -> SendResult:
     return SendResult(
         ok=False,
         status="failed",
         error_code=code,
         error_detail=(detail or code)[:500],
         retryable=retryable,
+        provider_message_id=provider_message_id,
     )
 
 
@@ -112,7 +119,33 @@ def result_for_relay_error(exc: RelayControlError) -> SendResult:
     # spent, a template the company never registered, a number Resala cannot
     # reach, a provider failure whose outcome is unknown. Retrying any of them
     # either fails again or risks texting the customer twice.
-    return _failure(_CODE_ALIASES.get(code, code), detail)
+    code = _CODE_ALIASES.get(code, code)
+    relay_id = str(payload.get("id") or "") if code in UNCERTAIN_FAILURE_CODES else ""
+    return _failure(code, detail, provider_message_id=relay_id)
+
+
+def _reported_parts(payload: dict) -> int:
+    """The SMS parts the relay charged the message for; 0 when an older relay
+    does not say, which leaves the count to ``count_segments``."""
+    try:
+        parts = int(payload.get("parts") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return parts if 0 < parts < 1000 else 0
+
+
+def _note_sms_balance(payload: dict, installation) -> None:
+    """Mirror the SMS balance a relay answer reported. Best-effort: the send's
+    own outcome is what matters here, and the periodic sync catches up."""
+    if not isinstance(payload, dict) or payload.get("balance") in (None, ""):
+        return
+    sms = {"balance": payload.get("balance")}
+    if payload.get("price") not in (None, ""):
+        sms["price"] = payload.get("price")
+    try:
+        mirror_sms_wallet(sms, installation=installation)
+    except Exception:  # noqa: BLE001 - see the docstring
+        logger.exception("mirroring the SMS balance after a send failed")
 
 
 @register("relay")
@@ -120,9 +153,17 @@ class RelaySmsDriver(MessagingTransport):
     requires_template = True
 
     def unavailable_reason(self) -> str:
-        if not relay_sms_available():
-            return "not_entitled"
-        return ""
+        installation = RelayInstallation.load()
+        if relay_sms_available(installation):
+            return ""
+        # SMS is prepaid by the message: an empty SMS balance is something the
+        # owner fixes from the wallet, not a plan to ask support for.
+        return "insufficient_balance" if sms_prepaid(installation) else "not_entitled"
+
+    def unaffordable_reason(self, segments: int) -> str:
+        if sms_affordable(RelayInstallation.load(), segments):
+            return ""
+        return "insufficient_balance"
 
     def _timeout(self) -> int:
         return self.gateway.send_timeout_seconds or 20
@@ -160,8 +201,14 @@ class RelaySmsDriver(MessagingTransport):
             logger.warning("relay SMS is not configured on this backend: %s", exc)
             return _failure("relay_unconfigured", str(exc))
         except RelayControlError as exc:
-            return result_for_relay_error(exc)
+            result = result_for_relay_error(exc)
+            if result.error_code == "insufficient_balance":
+                # The money ran out: say so to every device now, not at the
+                # next sync, so nobody queues more messages that cannot go.
+                _note_sms_balance(_error_payload(exc), installation)
+            return result
 
+        _note_sms_balance(payload, installation)
         status = str(payload.get("status") or "sent")
         if status == "failed":
             return _failure(
@@ -173,6 +220,7 @@ class RelaySmsDriver(MessagingTransport):
             status="sent",
             provider_message_id=str(payload.get("id") or ""),
             sent_body=str(payload.get("content") or ""),
+            segments=_reported_parts(payload),
         )
 
     def delivery_statuses(self, messages) -> dict:
@@ -206,6 +254,8 @@ class RelaySmsDriver(MessagingTransport):
                     continue
                 pk = by_relay_id.get(str(row.get("id") or ""))
                 status = str(row.get("status") or "").strip().lower()
-                if pk is not None and status in {"delivered", "undelivered", "failed"}:
+                # "sent" matters for a send that failed in doubt: the relay
+                # found it in Resala's sent log after all.
+                if pk is not None and status in {"sent", "delivered", "undelivered", "failed"}:
                     statuses[pk] = status
         return statuses

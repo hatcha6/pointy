@@ -31,6 +31,8 @@ class ReportGranularityOption {
   static const summary = 'summary';
   static const daily = 'daily';
   static const detailed = 'detailed';
+
+  static const all = [summary, daily, detailed];
 }
 
 class ReportComparisonOption {
@@ -47,6 +49,8 @@ class ReportCatalogEntry {
     this.headline = const [],
     this.requiredParams = const [],
     this.pointInTime = false,
+    this.granularities = ReportGranularityOption.all,
+    this.statesToday = false,
   });
 
   final String key;
@@ -63,6 +67,15 @@ class ReportCatalogEntry {
   /// over a window, so the period picker means "as at" rather than "between".
   final bool pointInTime;
 
+  /// The levels of detail this report can be built at. "Daily" is offered
+  /// only by a report that has a day-by-day table: a choice that changes
+  /// nothing is not one to offer.
+  final List<String> granularities;
+
+  /// True when the report can only state the shop as it is today, whatever
+  /// period is picked — so it has no comparison column to ask for.
+  final bool statesToday;
+
   bool get needsCustomer => requiredParams.contains('customer_id');
   bool get needsSupplier => requiredParams.contains('supplier_id');
 
@@ -77,6 +90,11 @@ class ReportCatalogEntry {
       headline: _stringList(json['headline']),
       requiredParams: _stringList(json['required_params']),
       pointInTime: json['point_in_time'] as bool? ?? false,
+      // A server that predates the per-report list offers every level.
+      granularities: json['granularities'] is List
+          ? _stringList(json['granularities'])
+          : ReportGranularityOption.all,
+      statesToday: json['states_today'] as bool? ?? false,
     );
   }
 }

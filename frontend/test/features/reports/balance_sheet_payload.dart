@@ -1,7 +1,13 @@
 /// A balance sheet exactly as `apps/reports/builders/balance_sheet.py` builds
 /// it, for the shop in the backend's `test_balance_sheet.py`: the same figures,
 /// so the two halves of the feature are tested against one story.
-Map<String, Object?> balanceSheetPayload() {
+///
+/// [granularity] is the level it was built at. A summary carries the statement
+/// alone — لنا and علينا — and leaves the bridge and the zakat working to the
+/// detailed copy; without a level it is a payload stored before there were
+/// levels, which carried everything.
+Map<String, Object?> balanceSheetPayload({String? granularity}) {
+  final detailed = granularity != 'summary';
   const pairColumns = ['line', 'opening_balance', 'closing_balance', 'change'];
   const pairTypes = {
     'line': 'label',
@@ -63,7 +69,11 @@ Map<String, Object?> balanceSheetPayload() {
       'period_result': '-8.00',
       'zakat_base': '170.00',
     },
-    'period': {'start_date': '2026-09-16', 'end_date': '2026-09-23'},
+    'period': {
+      'start_date': '2026-09-16',
+      'end_date': '2026-09-23',
+      'granularity': ?granularity,
+    },
     'sections': [
       section(
         'summary',
@@ -96,28 +106,30 @@ Map<String, Object?> balanceSheetPayload() {
         ],
         totals: {'opening_balance': '115.00', 'closing_balance': '50.00', 'change': '-65.00'},
       ),
-      section('balance_net', pairColumns, pairTypes, [
-        pair('total_assets', '220.00', '172.00'),
-        pair('total_liabilities', '115.00', '50.00'),
-        pair('net_position', '105.00', '122.00'),
-      ]),
-      section('net_position_movement', amountColumns, amountTypes, [
-        {'line': 'opening_net_position', 'amount': '105.00'},
-        {'line': 'outside_money_added', 'amount': '40.00'},
-        {'line': 'outside_money_withdrawn', 'amount': '-15.00'},
-        {'line': 'period_result', 'amount': '-8.00'},
-        {'line': 'closing_net_position', 'amount': '122.00'},
-      ]),
-      section('zakat', amountColumns, amountTypes, [
-        {'line': 'stock_at_selling_price', 'amount': '60.00'},
-        {'line': 'cash_and_bank', 'amount': '90.00'},
-        {'line': 'customer_receivables', 'amount': '50.00'},
-        {'line': 'employee_loans', 'amount': '20.00'},
-        {'line': 'zakat_assets_total', 'amount': '220.00'},
-        {'line': 'zakat_liabilities', 'amount': '-50.00'},
-        {'line': 'zakat_base', 'amount': '170.00'},
-        {'line': 'zakat_due', 'amount': '4.25'},
-      ]),
+      if (detailed) ...[
+        section('balance_net', pairColumns, pairTypes, [
+          pair('total_assets', '220.00', '172.00'),
+          pair('total_liabilities', '115.00', '50.00'),
+          pair('net_position', '105.00', '122.00'),
+        ]),
+        section('net_position_movement', amountColumns, amountTypes, [
+          {'line': 'opening_net_position', 'amount': '105.00'},
+          {'line': 'outside_money_added', 'amount': '40.00'},
+          {'line': 'outside_money_withdrawn', 'amount': '-15.00'},
+          {'line': 'period_result', 'amount': '-8.00'},
+          {'line': 'closing_net_position', 'amount': '122.00'},
+        ]),
+        section('zakat', amountColumns, amountTypes, [
+          {'line': 'stock_at_selling_price', 'amount': '60.00'},
+          {'line': 'cash_and_bank', 'amount': '90.00'},
+          {'line': 'customer_receivables', 'amount': '50.00'},
+          {'line': 'employee_loans', 'amount': '20.00'},
+          {'line': 'zakat_assets_total', 'amount': '220.00'},
+          {'line': 'zakat_liabilities', 'amount': '-50.00'},
+          {'line': 'zakat_base', 'amount': '170.00'},
+          {'line': 'zakat_due', 'amount': '4.25'},
+        ]),
+      ],
     ],
     'notes': [
       {

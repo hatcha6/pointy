@@ -105,6 +105,8 @@ class CampaignPreview {
     required this.segments,
     required this.estimatedMinutes,
     required this.sampleMessage,
+    this.estimatedCost,
+    this.smsBalance,
   });
 
   final int audienceTotal;
@@ -114,6 +116,21 @@ class CampaignPreview {
   final int estimatedMinutes;
   final String sampleMessage;
 
+  /// What the campaign takes from the SMS balance: every recipient's message
+  /// at the price of each SMS it goes out as. Null when SMS is not paid from
+  /// a balance.
+  final double? estimatedCost;
+
+  /// What the SMS balance holds now, beside [estimatedCost].
+  final double? smsBalance;
+
+  /// The SMS balance runs out before the campaign does.
+  bool get balanceFallsShort {
+    final cost = estimatedCost;
+    final balance = smsBalance;
+    return cost != null && balance != null && cost > balance;
+  }
+
   factory CampaignPreview.fromJson(Map<String, Object?> json) {
     return CampaignPreview(
       audienceTotal: _int(json['audience_total']),
@@ -122,8 +139,15 @@ class CampaignPreview {
       segments: _int(json['segments'], fallback: 1),
       estimatedMinutes: _int(json['estimated_minutes']),
       sampleMessage: json['sample_message']?.toString() ?? '',
+      estimatedCost: _doubleOrNull(json['estimated_cost']),
+      smsBalance: _doubleOrNull(json['sms_balance']),
     );
   }
+}
+
+double? _doubleOrNull(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '');
 }
 
 int _int(Object? value, {int fallback = 0}) {

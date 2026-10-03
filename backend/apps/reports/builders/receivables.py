@@ -346,7 +346,6 @@ def customer_statement(context):
         (by_kind[kind]["debit"] - by_kind[kind]["credit"] for kind in _ACCOUNT_ENTRY_KINDS),
         ZERO,
     )
-    bounded = bounded_rows(rows, limit=context.row_limit("statement_entries"))
 
     figures = {
         "customer_name": customer.full_name,
@@ -369,31 +368,39 @@ def customer_statement(context):
         },
         "sections": [
             context.metrics(figures),
-            report_section(
-                "statement_entries",
-                [
-                    Column("date", ColumnType.DATE),
-                    Column("document"),
-                    Column("kind", ColumnType.CHOICE),
-                    Column("due_date", ColumnType.DATE),
-                    Column("debit", ColumnType.MONEY, total=True),
-                    Column("credit", ColumnType.MONEY, total=True),
-                    Column("balance", ColumnType.MONEY),
-                ],
-                bounded.rows,
-                total_count=bounded.total_count,
-                limit=bounded.limit,
-                totals={
-                    "debit": money(sum((entry["debit"] for entry in entries), ZERO)),
-                    "credit": money(sum((entry["credit"] for entry in entries), ZERO)),
-                },
-            ),
+            *([_statement_entries_section(rows, entries, context)] if context.wants_detail() else []),
         ],
         "notes": [
-            note("statement_running_balance"),
+            # The running balance is a column of the entries, so the sentence
+            # about it goes where they go.
+            note("statement_running_balance") if context.wants_detail() else None,
             note("statement_credit_and_account_entries"),
         ],
     }
+
+
+def _statement_entries_section(rows, entries, context):
+    """The statement's lines, oldest first, each with the balance after it."""
+    bounded = bounded_rows(rows, limit=context.row_limit("statement_entries"))
+    return report_section(
+        "statement_entries",
+        [
+            Column("date", ColumnType.DATE),
+            Column("document"),
+            Column("kind", ColumnType.CHOICE),
+            Column("due_date", ColumnType.DATE),
+            Column("debit", ColumnType.MONEY, total=True),
+            Column("credit", ColumnType.MONEY, total=True),
+            Column("balance", ColumnType.MONEY),
+        ],
+        bounded.rows,
+        total_count=bounded.total_count,
+        limit=bounded.limit,
+        totals={
+            "debit": money(sum((entry["debit"] for entry in entries), ZERO)),
+            "credit": money(sum((entry["credit"] for entry in entries), ZERO)),
+        },
+    )
 
 
 def _statement_payments(customer):

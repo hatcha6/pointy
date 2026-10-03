@@ -73,7 +73,7 @@ String reportValue(String key, Object? value, {String? columnType}) {
       return _percent(value);
     case ReportColumnType.count:
     case ReportColumnType.quantity:
-      return _plain(value);
+      return _plain(_fixedPoint(value));
     case ReportColumnType.choice:
       return _choice(value) ?? _plain(value);
     case ReportColumnType.date:
@@ -206,6 +206,27 @@ String _plain(Object? value) {
 
 String _two(int value) => value.toString().padLeft(2, '0');
 
+/// A quantity written in exponent form, as plain digits. The server used to
+/// send forty as `4E+1`; runs stored then still do, and reopening one should
+/// not print it. Only for columns declared numeric — a SKU like `2E10` is text.
+Object _fixedPoint(Object value) {
+  final text = value.toString();
+  if (!text.contains(RegExp('[eE]'))) {
+    return value;
+  }
+  final number = num.tryParse(text);
+  if (number == null || !number.isFinite) {
+    return value;
+  }
+  if (number == number.roundToDouble()) {
+    return number.toInt().toString();
+  }
+  return number
+      .toStringAsFixed(3)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
 String _compact(String value) {
   const maxCellCharacters = 140;
   final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -252,6 +273,9 @@ const _moneyKeys = {
   'unit_cost',
   'purchase_total',
   'supplier_paid_total',
+  'paid_to_supplier_total',
+  'provider_float',
+  'sales_after_discount',
   'balance_due',
   'payable_balance',
   'credit_balance',
@@ -493,6 +517,10 @@ const _labels = {
   'gross_sales': 'إجمالي المبيعات',
   'discount_total': 'الخصومات',
   'refund_total': 'المرتجعات',
+  // The invoices' value after their discounts — the first column of the
+  // day-by-day and per-staff tables, distinct from «إجمالي المبيعات», which
+  // is before them.
+  'sales_after_discount': 'المبيعات بعد الخصم',
   'net_sales': 'صافي المبيعات',
   'gross_profit': 'الربح الإجمالي',
   'cost_of_sales': 'تكلفة المبيعات',
@@ -648,6 +676,10 @@ const _labels = {
   'owed_by_employee': 'على الموظف',
   'owed_to_employee': 'مستحق للموظف',
   'paid_total': 'الرواتب المصروفة',
+  // The supplier statement's own figure: money paid to the supplier. It used
+  // to borrow ``paid_total``, and so printed «الرواتب المصروفة» on a supplier's
+  // account.
+  'paid_to_supplier_total': 'المدفوع للمورد',
   'pending_total': 'رواتب معتمدة غير مصروفة',
   'payroll_run_count': 'عدد المسيرات',
   'active_employee_count': 'موظفون نشطون',
@@ -897,6 +929,7 @@ const _notes = {
   'staff_is_register_owner':
       'يُنسب البيع إلى صاحب جلسة الدرج التي حُرِّر عليها.',
   'hours_on_report_clock': 'الساعات بتوقيت التقارير المعتمد في النظام.',
+  'hours_in_shop_time': 'الساعات بالتوقيت المحلي للمحل.',
 
   // -- stock ---------------------------------------------------------------
   'stock_as_of': 'قيمة المخزون بتاريخ {date}.',
@@ -979,6 +1012,9 @@ const _notes = {
   'aging_counts_consignment':
       'يشمل العدد الأمانات الموجودة على الرف، لأنها تشغل المكان نفسه وتتقادم '
       'مثل غيرها.',
+  'aging_is_today':
+      'يعرض التقرير ما على الرف اليوم وأعماره حتى {date}، أيًّا كانت الفترة '
+      'المختارة.',
   'aging_capital_excludes_consignment':
       'رأس المال لا يشمل الأمانات، فهي ليست من مال المحل.',
   'unit_margin_cost_includes_refurb':

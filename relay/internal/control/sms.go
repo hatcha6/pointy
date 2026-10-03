@@ -53,32 +53,280 @@ type SMSMessage struct {
 	ID             string `json:"id"`
 	InstallationID string `json:"installation_id"`
 	// ShopName is filled by listings for the operator; it is not stored.
-	ShopName          string     `json:"shop_name,omitempty"`
-	IdempotencyKey    string     `json:"idempotency_key"`
-	Kind              string     `json:"kind"`
-	ConsentClass      string     `json:"consent_class"`
-	Recipient         string     `json:"recipient"`
-	ContentSHA256     string     `json:"content_sha256,omitempty"`
-	TemplateID        string     `json:"template_id"`
-	TemplateBody      string     `json:"template_body,omitempty"`
-	TestMode          bool       `json:"test_mode"`
-	Status            string     `json:"status"`
-	ErrorCode         string     `json:"error_code,omitempty"`
-	ErrorDetail       string     `json:"error_detail,omitempty"`
-	Cost              string     `json:"cost"`
+	ShopName       string `json:"shop_name,omitempty"`
+	IdempotencyKey string `json:"idempotency_key"`
+	Kind           string `json:"kind"`
+	ConsentClass   string `json:"consent_class"`
+	Recipient      string `json:"recipient"`
+	ContentSHA256  string `json:"content_sha256,omitempty"`
+	TemplateID     string `json:"template_id"`
+	TemplateBody   string `json:"template_body,omitempty"`
+	TestMode       bool   `json:"test_mode"`
+	Status         string `json:"status"`
+	ErrorCode      string `json:"error_code,omitempty"`
+	ErrorDetail    string `json:"error_detail,omitempty"`
+	// Cost is what the provider says the send cost the company.
+	Cost string `json:"cost"`
+	// Parts is how many SMS the message goes out as. A text longer than one
+	// SMS (70 Arabic letters) is sent, and billed by the provider, as several;
+	// the claim holds the count the relay expects and the provider's answer
+	// settles it.
+	Parts int `json:"parts"`
+	// Price is what the shop pays for it from its SMS balance: Parts times the
+	// price of one part. It is taken when the message is claimed and settled
+	// to the parts it really went out as; a message that never went out —
+	// failed, or a test after all — is refunded, so only billable rows keep
+	// what they cost the shop.
+	Price             string     `json:"price"`
 	ProviderMessageID string     `json:"provider_message_id,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 	SentAt            *time.Time `json:"sent_at,omitempty"`
 	DeliveredAt       *time.Time `json:"delivered_at,omitempty"`
+	// HeldSince is set while a failed message's refund waits on Resala's sent
+	// log. The send failed in a way that leaves it unknown whether the SMS
+	// went out — Resala timed out or erred after taking the request, or the
+	// relay died mid-call — so its price is kept until the log shows it (it
+	// stays paid for) or shows it never went out (it is refunded).
+	HeldSince *time.Time `json:"held_since,omitempty"`
 }
 
-// SMSClaimLimit is the monthly allowance a new claim is checked against. The
-// check runs under the same lock as the insert, so two sends racing for a
-// shop's last message cannot both get it. Limit 0 means no cap.
-type SMSClaimLimit struct {
+// SMSClaimTerms is what a new claim is checked and charged against. Both run
+// under the same lock as the insert, so two sends racing for a shop's last
+// message — or its last 0.150 — cannot both get it.
+type SMSClaimTerms struct {
+	// Limit is the operator's monthly brake; 0 means none.
 	Limit int
 	Since time.Time
+	// Price is what one SMS part costs the shop, and Parts how many parts the
+	// message is held for (at least one). Their product is taken from the
+	// shop's SMS balance for a real (non-test) message; a price of "" or zero
+	// charges nothing. A balance that cannot cover it refuses the claim with
+	// *WalletBalanceError.
+	Price string
+	Parts int
+	// ChargeDescription is the line the charge prints on the shop's statement.
+	ChargeDescription string
+}
+
+// smsChargeKey, smsSettleKey and smsRefundKey tie a message's charge, its
+// settlement and its refund to the ledger row, so none can ever be posted
+// twice.
+func smsChargeKey(messageID string) string { return "sms:" + messageID }
+func smsSettleKey(messageID string) string { return "sms-settle:" + messageID }
+func smsRefundKey(messageID string) string { return "sms-refund:" + messageID }
+
+// smsClaimCharge records on the claim the parts it is held for and, for a
+// real message, their price, and returns the amount to take from the SMS
+// balance: nil for a test, or when there is no price. A malformed price
+// charges nothing rather than guessing.
+func smsClaimCharge(claim *SMSMessage, terms SMSClaimTerms) *big.Rat {
+	claim.Parts = max(terms.Parts, 1)
+	if claim.TestMode {
+		return nil
+	}
+	price, err := ParseWalletAmount(terms.Price)
+	if err != nil || price.Sign() <= 0 {
+		return nil
+	}
+	charge := new(big.Rat).Mul(price, big.NewRat(int64(claim.Parts), 1))
+	claim.Price = FormatWalletAmount(charge)
+	return charge
+}
+
+func smsChargePosting(claim SMSMessage, price *big.Rat, description string) WalletPosting {
+	return WalletPosting{
+		InstallationID: claim.InstallationID,
+		Account:        WalletAccountSMS,
+		Kind:           WalletEntryCharge,
+		Service:        WalletServiceSMS,
+		Amount:         "-" + FormatWalletAmount(price),
+		Reference:      claim.ID,
+		Description:    smsDescription(description),
+		IdempotencyKey: smsChargeKey(claim.ID),
+	}
+}
+
+func smsDescription(description string) string {
+	if description = strings.TrimSpace(description); description != "" {
+		return description
+	}
+	return "رسالة نصية"
+}
+
+// smsRefundDue reports whether finishing a message this way gives its price
+// back: it was charged, and it never reached a phone — it failed, or the
+// provider ran it as a test.
+func smsRefundDue(message SMSMessage) bool {
+	price, ok := new(big.Rat).SetString(strings.TrimSpace(message.Price))
+	if !ok || price.Sign() <= 0 {
+		return false
+	}
+	return message.Status == SMSStatusFailed || message.TestMode
+}
+
+func smsRefundPosting(message SMSMessage) WalletPosting {
+	return WalletPosting{
+		InstallationID: message.InstallationID,
+		Account:        WalletAccountSMS,
+		Kind:           WalletEntryRefund,
+		Service:        WalletServiceSMS,
+		Amount:         NormalizeWalletAmount(message.Price),
+		Reference:      message.ID,
+		Description:    "استرداد رسالة لم تُرسل",
+		IdempotencyKey: smsRefundKey(message.ID),
+	}
+}
+
+// smsFinishPosting decides what finishing a message moves on the SMS balance,
+// and records on finished the parts and the price it settles at. held is the
+// row as it was claimed.
+//
+//   - It never reached a phone (failed, or a test after all): all of it comes
+//     back.
+//   - It went out as a different number of parts than it was held for: the
+//     difference is charged or given back at the price per part it was held
+//     at. A message that turned out longer is charged even past an empty
+//     balance — it has gone out, and the provider bills the company for every
+//     part — so the balance goes below zero and the next transfer into it
+//     settles the debt. Holding the right count up front is what keeps that
+//     rare.
+//
+// A failure that may still have gone out (outcome.Uncertain) is not refunded
+// yet when the relay can recognise the message in Resala's sent log: its price
+// is held (HeldSince = now) until the log has been checked.
+//
+// It returns nil when nothing moves.
+func smsFinishPosting(
+	held SMSMessage,
+	finished *SMSMessage,
+	outcome SMSOutcome,
+	now time.Time,
+) (*preparedWalletPosting, error) {
+	if outcome.Parts > 0 {
+		finished.Parts = outcome.Parts
+	}
+	if smsRefundDue(*finished) {
+		if outcome.Uncertain && smsCheckable(*finished) {
+			heldSince := now.UTC()
+			finished.HeldSince = &heldSince
+			return nil, nil
+		}
+		posting, err := prepareWalletPosting(smsRefundPosting(*finished))
+		if err != nil {
+			return nil, err
+		}
+		return &posting, nil
+	}
+	charged, ok := new(big.Rat).SetString(strings.TrimSpace(held.Price))
+	if finished.Parts == held.Parts || !ok || charged.Sign() <= 0 || !smsWentOut(finished.Status) {
+		return nil, nil
+	}
+	perPart := new(big.Rat).Quo(charged, big.NewRat(int64(max(held.Parts, 1)), 1))
+	settled := new(big.Rat).Mul(perPart, big.NewRat(int64(finished.Parts), 1))
+	finished.Price = FormatWalletAmount(settled)
+	owed := new(big.Rat).Sub(settled, charged)
+	posting, err := prepareWalletPosting(smsSettlePosting(*finished, owed, outcome.SettleDescription))
+	if err != nil {
+		return nil, err
+	}
+	posting.AllowOverdraft = owed.Sign() > 0
+	return &posting, nil
+}
+
+// smsCheckable reports whether a failed message can wait for the sent-log
+// check: it was charged for real, and the relay knows what it said, so its row
+// in the log can be told apart from any other message to the same phone.
+func smsCheckable(message SMSMessage) bool {
+	price, ok := new(big.Rat).SetString(strings.TrimSpace(message.Price))
+	return ok && price.Sign() > 0 && !message.TestMode && message.Status == SMSStatusFailed &&
+		message.ContentSHA256 != ""
+}
+
+// smsWentOut reports whether a status means the message left Resala.
+func smsWentOut(status string) bool {
+	switch status {
+	case SMSStatusSent, SMSStatusDelivered, SMSStatusUndelivered:
+		return true
+	}
+	return false
+}
+
+// resolveSMSCheck applies what the sent log said to a held message: the row
+// it becomes and what moves on the SMS balance (nil when nothing does).
+func resolveSMSCheck(
+	held SMSMessage,
+	resolution SMSCheckResolution,
+	now time.Time,
+) (SMSMessage, *preparedWalletPosting, error) {
+	resolved := held
+	resolved.HeldSince = nil
+	resolved.UpdatedAt = now.UTC()
+	if detail := strings.TrimSpace(resolution.Detail); detail != "" {
+		resolved.ErrorDetail = detail
+	}
+	if !resolution.WentOut {
+		posting, err := prepareWalletPosting(smsRefundPosting(held))
+		if err != nil {
+			return SMSMessage{}, nil, err
+		}
+		return resolved, &posting, nil
+	}
+	status := resolution.Status
+	if !smsWentOut(status) {
+		status = SMSStatusSent
+	}
+	resolved.Status = status
+	resolved.ErrorCode = ""
+	if cost := strings.TrimSpace(resolution.Cost); cost != "" {
+		resolved.Cost = NormalizeSMSCost(cost)
+	}
+	if id := strings.TrimSpace(resolution.ProviderMessageID); id != "" {
+		resolved.ProviderMessageID = id
+	}
+	sentAt := resolution.SentAt
+	if sentAt.IsZero() {
+		sentAt = now
+	}
+	sentAt = sentAt.UTC()
+	resolved.SentAt = &sentAt
+	if status == SMSStatusDelivered {
+		deliveredAt := now.UTC()
+		if resolution.DeliveredAt != nil {
+			deliveredAt = resolution.DeliveredAt.UTC()
+		}
+		resolved.DeliveredAt = &deliveredAt
+	}
+	posting, err := smsFinishPosting(held, &resolved, SMSOutcome{
+		Parts:             resolution.Parts,
+		SettleDescription: resolution.SettleDescription,
+	}, now)
+	if err != nil {
+		return SMSMessage{}, nil, err
+	}
+	return resolved, posting, nil
+}
+
+// smsSettlePosting charges what a longer message still owes, or gives back
+// what a shorter one was held for beyond its parts.
+func smsSettlePosting(message SMSMessage, owed *big.Rat, description string) WalletPosting {
+	posting := WalletPosting{
+		InstallationID: message.InstallationID,
+		Account:        WalletAccountSMS,
+		Service:        WalletServiceSMS,
+		Reference:      message.ID,
+		IdempotencyKey: smsSettleKey(message.ID),
+	}
+	if owed.Sign() > 0 {
+		posting.Kind = WalletEntryCharge
+		posting.Amount = "-" + FormatWalletAmount(owed)
+		posting.Description = "فرق عدد الرسائل: " + smsDescription(description)
+		return posting
+	}
+	posting.Kind = WalletEntryRefund
+	posting.Amount = FormatWalletAmount(new(big.Rat).Neg(owed))
+	posting.Description = "استرداد فرق عدد الرسائل: " + smsDescription(description)
+	return posting
 }
 
 // SMSOutcome is what a finished send records on its pending row.
@@ -93,6 +341,36 @@ type SMSOutcome struct {
 	// reports as not production reached no phone and must not be billed.
 	TestMode bool
 	SentAt   *time.Time
+	// Parts is how many SMS the message went out as; 0 keeps what it was held
+	// for. SettleDescription is the statement line of the difference, when
+	// there is one to charge or give back.
+	Parts             int
+	SettleDescription string
+	// Uncertain marks a failure that may still have gone out. A charged
+	// message whose text the relay knows (ContentSHA256) is then held for the
+	// sent-log check instead of refunded; one it could not recognise in the
+	// log is refunded at once, as before.
+	Uncertain bool
+}
+
+// SMSCheckResolution is what Resala's sent log said about a held message.
+type SMSCheckResolution struct {
+	// WentOut: the log shows the message, so it stays paid for — settled to
+	// Parts when that is known — and takes Status (sent, delivered or
+	// undelivered) and the log's id and times. Otherwise its price comes back.
+	WentOut           bool
+	Status            string
+	ProviderMessageID string
+	SentAt            time.Time
+	DeliveredAt       *time.Time
+	Parts             int
+	SettleDescription string
+	// Cost is what the message cost the company, when it went out. Resala's
+	// answer — which carries the cost — was lost, so the check estimates it
+	// from what Resala charged per part on the latest send (SMSPartCost).
+	Cost string
+	// Detail replaces the row's error detail: how the hold ended.
+	Detail string
 }
 
 // SMSMessageFilter narrows the operator's ledger listing.
@@ -105,17 +383,22 @@ type SMSMessageFilter struct {
 // SMSInstallationUsage is one shop's line in the fleet usage report. Counts
 // other than Test cover real (non-test) messages only.
 type SMSInstallationUsage struct {
-	InstallationID string         `json:"installation_id"`
-	ShopName       string         `json:"shop_name"`
-	Messages       int            `json:"messages"`
-	Sent           int            `json:"sent"`
-	Failed         int            `json:"failed"`
-	Delivered      int            `json:"delivered"`
-	Undelivered    int            `json:"undelivered"`
-	Test           int            `json:"test"`
-	Cost           string         `json:"cost"`
-	LastSentAt     *time.Time     `json:"last_sent_at"`
-	Kinds          map[string]int `json:"kinds"`
+	InstallationID string `json:"installation_id"`
+	ShopName       string `json:"shop_name"`
+	Messages       int    `json:"messages"`
+	Sent           int    `json:"sent"`
+	Failed         int    `json:"failed"`
+	Delivered      int    `json:"delivered"`
+	Undelivered    int    `json:"undelivered"`
+	Test           int    `json:"test"`
+	// Parts is how many SMS the billable messages went out as. Cost is what
+	// the provider charged the company; Charged is what the shop paid for the
+	// same messages from its SMS balance.
+	Parts      int            `json:"parts"`
+	Cost       string         `json:"cost"`
+	Charged    string         `json:"charged"`
+	LastSentAt *time.Time     `json:"last_sent_at"`
+	Kinds      map[string]int `json:"kinds"`
 }
 
 // SMSStore is the optional ledger capability, type-asserted by the HTTP layer
@@ -125,14 +408,37 @@ type SMSStore interface {
 	// as a pending row and returned with created=true; a key that was already
 	// claimed returns the stored row with created=false, so two racing requests
 	// for the same message can never both reach the provider. A new, non-test
-	// claim is refused with *SMSLimitError once the limit is used up.
-	BeginSMS(ctx context.Context, message SMSMessage, limit SMSClaimLimit) (SMSMessage, bool, error)
+	// claim is refused with *SMSLimitError once the limit is used up, and with
+	// *WalletBalanceError when the SMS balance cannot cover its price, which
+	// is otherwise charged in the same step.
+	BeginSMS(ctx context.Context, message SMSMessage, terms SMSClaimTerms) (SMSMessage, bool, error)
 	// FindSMSByKey returns the row an idempotency key already claimed.
 	FindSMSByKey(ctx context.Context, installationID, idempotencyKey string) (SMSMessage, bool, error)
+	// SMSTemplateBody is the approved text a template was last sent with, ""
+	// when it never was. It is what lets a new message's parts be counted
+	// before it is sent.
+	SMSTemplateBody(ctx context.Context, templateID string) (string, error)
 	// FinishSMS moves a pending row to its outcome. A row that already left
 	// pending is returned untouched with applied=false: the first recorded
-	// outcome wins, so a late finisher cannot overwrite a replay's verdict.
+	// outcome wins, so a late finisher cannot overwrite a replay's verdict. In
+	// the same step a charged message that did not go out is refunded, and one
+	// that went out as more or fewer parts than it was held for is settled.
 	FinishSMS(ctx context.Context, id string, outcome SMSOutcome) (SMSMessage, bool, error)
+	// ListSMSAwaitingCheck returns failed messages whose refund is held for
+	// the sent-log check (HeldSince set), oldest hold first.
+	ListSMSAwaitingCheck(ctx context.Context, limit int) ([]SMSMessage, error)
+	// ResolveSMSCheck ends a hold with what the sent log said, moving the money
+	// in the same step. A message no longer held is returned untouched with
+	// applied=false, so a hold is settled exactly once.
+	ResolveSMSCheck(ctx context.Context, id string, resolution SMSCheckResolution) (SMSMessage, bool, error)
+	// SMSClaimedProviderIDs reports which of these delivery-log ids are already
+	// recorded on a ledger row: a log row another message owns is never
+	// mistaken for a held one.
+	SMSClaimedProviderIDs(ctx context.Context, ids []string) (map[string]bool, error)
+	// SMSPartCost is what Resala charged per SMS part on the latest real send
+	// that reported a cost, "" when none has. It prices a message whose own
+	// answer was lost.
+	SMSPartCost(ctx context.Context) (string, error)
 	// CountBillableSMSSince counts real messages that were, or may have been,
 	// sent: pending, sent, delivered and undelivered. Test sends and failures
 	// are free.
@@ -259,9 +565,12 @@ func prepareSMSClaim(message SMSMessage, now time.Time) (SMSMessage, error) {
 	message.ErrorCode = ""
 	message.ErrorDetail = ""
 	message.Cost = NormalizeSMSCost(message.Cost)
+	message.Parts = 1
+	message.Price = FormatWalletAmount(nil)
 	message.ShopName = ""
 	message.SentAt = nil
 	message.DeliveredAt = nil
+	message.HeldSince = nil
 	return message, nil
 }
 
@@ -365,7 +674,7 @@ func (s *FileStore) countBillableSMSLocked(installationID string, since time.Tim
 func (s *FileStore) BeginSMS(
 	_ context.Context,
 	message SMSMessage,
-	limit SMSClaimLimit,
+	terms SMSClaimTerms,
 ) (SMSMessage, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -377,9 +686,19 @@ func (s *FileStore) BeginSMS(
 	if existing, ok := s.findSMSByKeyLocked(claim.InstallationID, claim.IdempotencyKey); ok {
 		return existing, false, nil
 	}
-	if limit.Limit > 0 && !claim.TestMode {
-		if used := s.countBillableSMSLocked(claim.InstallationID, limit.Since); used >= limit.Limit {
-			return SMSMessage{}, false, &SMSLimitError{Limit: limit.Limit, Used: used}
+	if terms.Limit > 0 && !claim.TestMode {
+		if used := s.countBillableSMSLocked(claim.InstallationID, terms.Since); used >= terms.Limit {
+			return SMSMessage{}, false, &SMSLimitError{Limit: terms.Limit, Used: used}
+		}
+	}
+	var charge WalletEntry
+	if price := smsClaimCharge(&claim, terms); price != nil {
+		posting, err := prepareWalletPosting(smsChargePosting(claim, price, terms.ChargeDescription))
+		if err != nil {
+			return SMSMessage{}, false, err
+		}
+		if charge, _, err = s.postWalletEntryLocked(posting); err != nil {
+			return SMSMessage{}, false, err
 		}
 	}
 	if s.data.SMSMessages == nil {
@@ -388,6 +707,9 @@ func (s *FileStore) BeginSMS(
 	s.data.SMSMessages[claim.ID] = claim
 	if err := s.saveLocked(); err != nil {
 		delete(s.data.SMSMessages, claim.ID)
+		if charge.ID != "" {
+			delete(s.data.WalletEntries, charge.ID)
+		}
 		return SMSMessage{}, false, err
 	}
 	return claim, true, nil
@@ -422,13 +744,162 @@ func (s *FileStore) FinishSMS(
 	if existing.Status != SMSStatusPending {
 		return existing, false, nil
 	}
-	finished := applySMSOutcome(existing, outcome, s.clock.Now())
+	now := s.clock.Now()
+	finished := applySMSOutcome(existing, outcome, now)
+	posting, err := smsFinishPosting(existing, &finished, outcome, now)
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	var moved WalletEntry
+	if posting != nil {
+		if moved, _, err = s.postWalletEntryLocked(*posting); err != nil {
+			return SMSMessage{}, false, err
+		}
+	}
 	s.data.SMSMessages[id] = finished
 	if err := s.saveLocked(); err != nil {
 		s.data.SMSMessages[id] = existing
+		if moved.ID != "" {
+			delete(s.data.WalletEntries, moved.ID)
+		}
 		return SMSMessage{}, false, err
 	}
 	return finished, true, nil
+}
+
+func (s *FileStore) SMSTemplateBody(_ context.Context, templateID string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	templateID = strings.TrimSpace(templateID)
+	var latest SMSMessage
+	for _, message := range s.data.SMSMessages {
+		if message.TemplateID != templateID || message.TemplateBody == "" {
+			continue
+		}
+		if latest.ID == "" || message.CreatedAt.After(latest.CreatedAt) ||
+			(message.CreatedAt.Equal(latest.CreatedAt) && message.ID > latest.ID) {
+			latest = message
+		}
+	}
+	return latest.TemplateBody, nil
+}
+
+func (s *FileStore) ListSMSAwaitingCheck(_ context.Context, limit int) ([]SMSMessage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	held := make([]SMSMessage, 0)
+	for _, message := range s.data.SMSMessages {
+		if message.HeldSince != nil {
+			held = append(held, message)
+		}
+	}
+	sort.Slice(held, func(i, j int) bool {
+		if !held[i].HeldSince.Equal(*held[j].HeldSince) {
+			return held[i].HeldSince.Before(*held[j].HeldSince)
+		}
+		return held[i].ID < held[j].ID
+	})
+	if limit = normalizedSMSAwaitingLimit(limit); len(held) > limit {
+		held = held[:limit]
+	}
+	return held, nil
+}
+
+func (s *FileStore) ResolveSMSCheck(
+	_ context.Context,
+	id string,
+	resolution SMSCheckResolution,
+) (SMSMessage, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.data.SMSMessages[id]
+	if !ok {
+		return SMSMessage{}, false, ErrSMSNotFound
+	}
+	if existing.HeldSince == nil {
+		return existing, false, nil
+	}
+	resolved, posting, err := resolveSMSCheck(existing, resolution, s.clock.Now())
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	var moved WalletEntry
+	if posting != nil {
+		if moved, _, err = s.postWalletEntryLocked(*posting); err != nil {
+			return SMSMessage{}, false, err
+		}
+	}
+	s.data.SMSMessages[id] = resolved
+	if err := s.saveLocked(); err != nil {
+		s.data.SMSMessages[id] = existing
+		if moved.ID != "" {
+			delete(s.data.WalletEntries, moved.ID)
+		}
+		return SMSMessage{}, false, err
+	}
+	return resolved, true, nil
+}
+
+func (s *FileStore) SMSPartCost(_ context.Context) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var latest SMSMessage
+	for _, message := range s.data.SMSMessages {
+		cost, ok := new(big.Rat).SetString(strings.TrimSpace(message.Cost))
+		if message.TestMode || !smsWentOut(message.Status) || !ok || cost.Sign() <= 0 {
+			continue
+		}
+		if latest.ID == "" || message.CreatedAt.After(latest.CreatedAt) ||
+			(message.CreatedAt.Equal(latest.CreatedAt) && message.ID > latest.ID) {
+			latest = message
+		}
+	}
+	if latest.ID == "" {
+		return "", nil
+	}
+	return smsPerPart(latest.Cost, latest.Parts), nil
+}
+
+// SMSCostOfParts prices parts at a per-part cost, exactly; "" for a cost
+// that is not a number.
+func SMSCostOfParts(perPart string, parts int) string {
+	value, ok := new(big.Rat).SetString(strings.TrimSpace(perPart))
+	if !ok {
+		return ""
+	}
+	return formatSMSCost(value.Mul(value, big.NewRat(int64(max(parts, 1)), 1)))
+}
+
+// smsPerPart divides a message's cost by its parts, exactly.
+func smsPerPart(cost string, parts int) string {
+	value, ok := new(big.Rat).SetString(strings.TrimSpace(cost))
+	if !ok {
+		return ""
+	}
+	return formatSMSCost(value.Quo(value, big.NewRat(int64(max(parts, 1)), 1)))
+}
+
+func (s *FileStore) SMSClaimedProviderIDs(_ context.Context, ids []string) (map[string]bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	wanted := map[string]bool{}
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" {
+			wanted[id] = true
+		}
+	}
+	claimed := map[string]bool{}
+	for _, message := range s.data.SMSMessages {
+		if wanted[message.ProviderMessageID] {
+			claimed[message.ProviderMessageID] = true
+		}
+	}
+	return claimed, nil
 }
 
 func (s *FileStore) CountBillableSMSSince(
@@ -499,6 +970,7 @@ func (s *FileStore) SMSUsage(_ context.Context, from, to time.Time) ([]SMSInstal
 
 	byInstallation := map[string]*SMSInstallationUsage{}
 	costs := map[string][]string{}
+	charges := map[string][]string{}
 	for _, message := range s.data.SMSMessages {
 		if message.CreatedAt.Before(from) || !message.CreatedAt.Before(to) {
 			continue
@@ -519,6 +991,10 @@ func (s *FileStore) SMSUsage(_ context.Context, from, to time.Time) ([]SMSInstal
 		usage.Messages++
 		usage.Kinds[message.Kind]++
 		costs[message.InstallationID] = append(costs[message.InstallationID], message.Cost)
+		if smsBillable(message.Status) {
+			usage.Parts += max(message.Parts, 1)
+			charges[message.InstallationID] = append(charges[message.InstallationID], message.Price)
+		}
 		switch message.Status {
 		case SMSStatusFailed:
 			usage.Failed++
@@ -539,6 +1015,7 @@ func (s *FileStore) SMSUsage(_ context.Context, from, to time.Time) ([]SMSInstal
 	rows := make([]SMSInstallationUsage, 0, len(byInstallation))
 	for id, usage := range byInstallation {
 		usage.Cost = SumSMSCosts(costs[id])
+		usage.Charged = SumWalletAmounts(charges[id])
 		rows = append(rows, *usage)
 	}
 	sortSMSUsage(rows)
@@ -619,13 +1096,13 @@ func (s *CachedInstallationStore) smsStore() (SMSStore, error) {
 func (s *CachedInstallationStore) BeginSMS(
 	ctx context.Context,
 	message SMSMessage,
-	limit SMSClaimLimit,
+	terms SMSClaimTerms,
 ) (SMSMessage, bool, error) {
 	store, err := s.smsStore()
 	if err != nil {
 		return SMSMessage{}, false, err
 	}
-	return store.BeginSMS(ctx, message, limit)
+	return store.BeginSMS(ctx, message, terms)
 }
 
 func (s *CachedInstallationStore) FindSMSByKey(
@@ -639,6 +1116,14 @@ func (s *CachedInstallationStore) FindSMSByKey(
 	return store.FindSMSByKey(ctx, installationID, idempotencyKey)
 }
 
+func (s *CachedInstallationStore) SMSTemplateBody(ctx context.Context, templateID string) (string, error) {
+	store, err := s.smsStore()
+	if err != nil {
+		return "", err
+	}
+	return store.SMSTemplateBody(ctx, templateID)
+}
+
 func (s *CachedInstallationStore) FinishSMS(
 	ctx context.Context,
 	id string,
@@ -649,6 +1134,42 @@ func (s *CachedInstallationStore) FinishSMS(
 		return SMSMessage{}, false, err
 	}
 	return store.FinishSMS(ctx, id, outcome)
+}
+
+func (s *CachedInstallationStore) ListSMSAwaitingCheck(ctx context.Context, limit int) ([]SMSMessage, error) {
+	store, err := s.smsStore()
+	if err != nil {
+		return nil, err
+	}
+	return store.ListSMSAwaitingCheck(ctx, limit)
+}
+
+func (s *CachedInstallationStore) ResolveSMSCheck(
+	ctx context.Context,
+	id string,
+	resolution SMSCheckResolution,
+) (SMSMessage, bool, error) {
+	store, err := s.smsStore()
+	if err != nil {
+		return SMSMessage{}, false, err
+	}
+	return store.ResolveSMSCheck(ctx, id, resolution)
+}
+
+func (s *CachedInstallationStore) SMSPartCost(ctx context.Context) (string, error) {
+	store, err := s.smsStore()
+	if err != nil {
+		return "", err
+	}
+	return store.SMSPartCost(ctx)
+}
+
+func (s *CachedInstallationStore) SMSClaimedProviderIDs(ctx context.Context, ids []string) (map[string]bool, error) {
+	store, err := s.smsStore()
+	if err != nil {
+		return nil, err
+	}
+	return store.SMSClaimedProviderIDs(ctx, ids)
 }
 
 func (s *CachedInstallationStore) CountBillableSMSSince(

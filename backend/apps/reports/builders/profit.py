@@ -31,7 +31,6 @@ from apps.employees.reporting import payroll_cost
 from apps.expenses.models import Expense
 from apps.inventory.reporting import shrinkage_value
 from apps.payments.models import Payment
-from apps.purchasing.models import PurchaseOrder
 
 from ..sections import (
     Column,
@@ -43,6 +42,7 @@ from ..sections import (
     percent,
     report_section,
 )
+from .purchasing import placed_purchase_total
 from .receivables import receivables_total
 from .sales import sales_summary_figures
 from .scope import in_period, money_sum, payments
@@ -81,9 +81,10 @@ def profit_costs(context):
     # Stated, but never added into the expense total: buying stock converts
     # money into goods, it does not consume it. It appears because an owner
     # comparing profit to their bank balance needs to see where the cash went.
-    purchase_spend = in_period(
-        PurchaseOrder.objects.exclude(status=PurchaseOrder.Status.CANCELLED), period
-    ).aggregate(total=money_sum("total"))["total"]
+    # The same purchases the purchasing summary states: orders actually placed
+    # (a draft is a proposal), at what they bill once undelivered lines are
+    # cancelled.
+    purchase_spend = placed_purchase_total(period)
 
     figures = {
         "net_sales": money(revenue),
@@ -103,17 +104,23 @@ def profit_costs(context):
         "purchase_spend_total": money(purchase_spend),
     }
 
+    sections = [
+        context.metrics(figures),
+        _profit_statement_section(figures, purchase_spend),
+        _expense_category_section(context),
+    ]
+    if context.wants_detail():
+        sections.append(_cash_bridge_section(context, revenue))
     return {
         "summary": figures,
-        "sections": [
-            context.metrics(figures),
-            _profit_statement_section(figures, purchase_spend),
-            _expense_category_section(context),
-            _cash_bridge_section(context, revenue),
-        ],
+        "sections": sections,
         "notes": [
             note("basis_accrual"),
             note("payroll_is_period_cost"),
+            # Which runs that labour cost is made of, said here as the payroll
+            # report says it: a run is counted whole in every period it
+            # overlaps.
+            note("payroll_period_overlap"),
             note("purchases_are_not_expense"),
             note("shrinkage_is_non_cash_stock_loss"),
         ],
@@ -131,15 +138,18 @@ def _profit_statement_section(figures, purchase_spend):
     """
     rows = [
         _line("net_sales", figures["net_sales"]),
-        _line("cost_of_sales", "-" + figures["cost_of_sales"]),
+        _line("cost_of_sales", _negated(figures["cost_of_sales"])),
         _line("gross_profit", figures["gross_profit"], is_total=True),
-        _line("payroll_cost_total", "-" + figures["payroll_cost_total"]),
-        _line("payment_commission_total", "-" + figures["payment_commission_total"]),
-        _line("ad_hoc_expense_total", "-" + figures["ad_hoc_expense_total"]),
-        _line("shrinkage_total", "-" + figures["shrinkage_total"]),
+        _line("payroll_cost_total", _negated(figures["payroll_cost_total"])),
+        _line(
+            "payment_commission_total",
+            _negated(figures["payment_commission_total"]),
+        ),
+        _line("ad_hoc_expense_total", _negated(figures["ad_hoc_expense_total"])),
+        _line("shrinkage_total", _negated(figures["shrinkage_total"])),
         _line(
             "operating_expense_total",
-            "-" + figures["operating_expense_total"],
+            _negated(figures["operating_expense_total"]),
             is_total=True,
         ),
         _line("net_operating_profit", figures["net_operating_profit"], is_total=True),
@@ -157,6 +167,14 @@ def _profit_statement_section(figures, purchase_spend):
     )
 
 
+def _negated(amount):
+    """A deduction as the statement prints it. Negated as a number: prefixed
+    as text, a negative deduction — stock a count found, debts customers paid
+    down — printed ``--2000.00``, which no reader or spreadsheet can parse."""
+    # Subtracted rather than negated: ``-Decimal("0.00")`` is ``-0.00``.
+    return money(ZERO - decimal_from(amount))
+
+
 def _line(name, amount, *, is_total=False, below_total=False):
     return {
         "line": name,
@@ -167,7 +185,8 @@ def _line(name, amount, *, is_total=False, below_total=False):
 
 
 def _expense_category_section(context):
-    rows, _total = _expenses_by_category(context)
+    rows, total = _expenses_by_category(context)
+    limit = context.row_limit("expense_categories")
     return report_section(
         "expense_categories",
         [
@@ -175,10 +194,20 @@ def _expense_category_section(context):
             Column("expense_count", ColumnType.COUNT, total=True),
             Column("amount", ColumnType.MONEY, total=True),
         ],
-        rows[: context.row_limit("expense_categories")],
+        rows[:limit],
         total_count=len(rows),
-        limit=context.row_limit("expense_categories"),
+        limit=limit,
+        totals=_category_totals(rows, total),
     )
+
+
+def _category_totals(rows, total):
+    """What every category adds up to — the totals a table cut to its largest
+    rows still has to foot to."""
+    return {
+        "expense_count": sum(row["expense_count"] for row in rows),
+        "amount": money(total),
+    }
 
 
 def _cash_bridge_section(context, revenue):
@@ -227,7 +256,7 @@ def _cash_bridge_section(context, revenue):
         _line("revenue_recognised", money(revenue)),
         _line("opening_receivables", money(opening)),
         _line("closing_receivables", money(closing)),
-        _line("movement_in_receivables", "-" + money(movement)),
+        _line("movement_in_receivables", _negated(movement)),
         _line("cash_received_from_customers", money(received), is_total=True),
     ]
     if settled_from_wages:
@@ -284,12 +313,45 @@ def expense_breakdown(context):
     category_rows, total = _expenses_by_category(context)
     period_expenses = in_period(Expense.objects.live(), context.period)
 
-    limit = context.row_limit("expenses")
+    figures = {
+        "expense_total": money(total),
+        "category_count": len(category_rows),
+        "expense_count": period_expenses.count(),
+        "largest_category": category_rows[0]["category_name"] if category_rows else "",
+    }
+    category_limit = context.row_limit("expense_categories")
+    sections = [
+        context.metrics(figures),
+        report_section(
+            "expense_categories",
+            [
+                Column("category_name"),
+                Column("expense_count", ColumnType.COUNT, total=True),
+                Column("amount", ColumnType.MONEY, total=True),
+                Column("share_percent", ColumnType.PERCENT),
+            ],
+            category_rows[:category_limit],
+            total_count=len(category_rows),
+            limit=category_limit,
+            totals=_category_totals(category_rows, total),
+        ),
+    ]
+    if context.wants_detail():
+        sections.append(_expense_list_section(period_expenses, total, context))
+    return {
+        "summary": figures,
+        "sections": sections,
+        "notes": [note("expense_dated_when_spent"), note("expense_excludes_stock")],
+    }
+
+
+def _expense_list_section(period_expenses, total, context):
+    """Every expense in the period, newest first."""
     detail = bounded_queryset(
         period_expenses.select_related("category", "created_by").order_by(
             "-spent_at", "-id"
         ),
-        limit=limit,
+        limit=context.row_limit("expenses"),
     )
     detail_rows = [
         {
@@ -304,49 +366,21 @@ def expense_breakdown(context):
         }
         for expense in detail.rows
     ]
-
-    figures = {
-        "expense_total": money(total),
-        "category_count": len(category_rows),
-        "expense_count": period_expenses.count(),
-        "largest_category": category_rows[0]["category_name"] if category_rows else "",
-    }
-    sections = [
-        context.metrics(figures),
-        report_section(
-            "expense_categories",
-            [
-                Column("category_name"),
-                Column("expense_count", ColumnType.COUNT, total=True),
-                Column("amount", ColumnType.MONEY, total=True),
-                Column("share_percent", ColumnType.PERCENT),
-            ],
-            category_rows[: context.row_limit("expense_categories")],
-            total_count=len(category_rows),
-            limit=context.row_limit("expense_categories"),
-            totals={"amount": money(total)},
-        ),
-        report_section(
-            "expenses",
-            [
-                Column("spent_at", ColumnType.DATE),
-                Column("category_name"),
-                Column("description"),
-                Column("payment_method", ColumnType.CHOICE),
-                Column("recorded_by"),
-                Column("amount", ColumnType.MONEY, total=True),
-            ],
-            detail_rows,
-            total_count=detail.total_count,
-            limit=detail.limit,
-            totals={"amount": money(total)},
-        ),
-    ]
-    return {
-        "summary": figures,
-        "sections": sections,
-        "notes": [note("expense_dated_when_spent"), note("expense_excludes_stock")],
-    }
+    return report_section(
+        "expenses",
+        [
+            Column("spent_at", ColumnType.DATE),
+            Column("category_name"),
+            Column("description"),
+            Column("payment_method", ColumnType.CHOICE),
+            Column("recorded_by"),
+            Column("amount", ColumnType.MONEY, total=True),
+        ],
+        detail_rows,
+        total_count=detail.total_count,
+        limit=detail.limit,
+        totals={"amount": money(total)},
+    )
 
 
 def _expenses_by_category(context):
@@ -389,6 +423,7 @@ def month_end_pack(context):
     omitted = []
     sections = []
     figures = {}
+    notes = []
 
     for key in context.definition.composed_of:
         part = registry.definition(key)
@@ -414,11 +449,19 @@ def month_end_pack(context):
                 ],
             )
         )
+        # Two parts can carry the same table — the profit statement and the
+        # expense breakdown both list the expense categories — and the pack
+        # prints each once, from the first part that has it.
+        printed = {section["key"] for section in sections}
         sections.extend(
             section
             for section in payload["sections"]
-            if section["key"] != "summary"
+            if section["key"] != "summary" and section["key"] not in printed
         )
+        # What qualifies a part's figures — stock live or as at the close,
+        # the accrual basis, the receivables' date — qualifies them in the
+        # pack too. Each sentence once, however many parts say it.
+        notes.extend(entry for entry in payload["notes"] if entry not in notes)
 
     headline = {
         "sections_included": len(included),
@@ -433,6 +476,7 @@ def month_end_pack(context):
         "notes": [
             note("pack_is_assembled"),
             note("pack_omitted", reports=", ".join(omitted)) if omitted else None,
+            *notes,
         ],
     }
 

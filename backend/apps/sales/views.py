@@ -446,7 +446,10 @@ class OrderViewSet(
             },
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        payment = serializer.save()
+        from apps.crm.transactional import notify_payment_received
+
+        notify_payment_received(order.customer, payment.amount, reference=f"payment-{payment.pk}")
         return self._adjusted_order_response(
             order.pk,
             status_code=status.HTTP_201_CREATED,
@@ -468,7 +471,11 @@ class OrderViewSet(
             context={"order": order, "request": request},
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        assigned = serializer.save()
+        # The debt has a named customer now: they hear what they owe.
+        from apps.crm.transactional import notify_credit_invoice
+
+        notify_credit_invoice(assigned)
         return self._adjusted_order_response(
             order.pk,
             status_code=status.HTTP_200_OK,
@@ -490,7 +497,10 @@ class OrderViewSet(
             context={"order": order, "request": request},
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        rescheduled = serializer.save()
+        from apps.crm.transactional import notify_due_date_changed
+
+        notify_due_date_changed(rescheduled)
         return self._adjusted_order_response(
             order.pk,
             status_code=status.HTTP_200_OK,
@@ -521,6 +531,10 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         new_order = serializer.save()
+        if new_order.sale_type == Order.SaleType.CREDIT:
+            from apps.crm.transactional import notify_credit_invoice
+
+            notify_credit_invoice(new_order)
         return self._adjusted_order_response(
             new_order.pk,
             status_code=status.HTTP_201_CREATED,
@@ -565,7 +579,10 @@ class OrderViewSet(
             },
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        adjustment = serializer.save()
+        from apps.crm.transactional import notify_refund_issued
+
+        notify_refund_issued(order, adjustment.amount, reference=f"adjustment-{adjustment.pk}")
         schedule_targeted_sweep()
         return self._adjusted_order_response(
             order.pk,

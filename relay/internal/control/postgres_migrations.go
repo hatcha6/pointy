@@ -453,6 +453,108 @@ CREATE INDEX IF NOT EXISTS relay_wallet_topups_status_created_idx
 	ON relay_wallet_topups (status, created_at);
 `,
 	},
+	{
+		version: 16,
+		name:    "wallet top-ups through dafa",
+		sql: `
+-- Dafa replaced Plutu as the wallet's gateway. Its payment id lives in
+-- provider_transaction_id from the moment a payment starts; these add what an
+-- OTP payment needs. Columns only, with defaults, so a relay still running the
+-- previous release keeps working while the fleet rolls over.
+--
+-- payer_hint: the payer's phone or card, masked ("091•••678"). The full number
+-- goes to the gateway and is never stored.
+ALTER TABLE relay_wallet_topups ADD COLUMN IF NOT EXISTS payer_hint text NOT NULL DEFAULT '';
+-- otp_attempts: codes sent to confirm the payment, capped against guessing.
+ALTER TABLE relay_wallet_topups ADD COLUMN IF NOT EXISTS otp_attempts integer NOT NULL DEFAULT 0;
+`,
+	},
+	{
+		version: 17,
+		name:    "sms balance and paid plans",
+		sql: `
+-- The shop's money now sits in accounts: the main wallet (relay_wallets, as
+-- before) and the SMS balance each message is paid from. Additive only, with
+-- defaults, so a relay still on the previous release keeps working while the
+-- fleet rolls over: it writes main-wallet entries as it always did, and those
+-- land in 'main'.
+ALTER TABLE relay_wallet_entries ADD COLUMN IF NOT EXISTS account text NOT NULL DEFAULT 'main';
+
+-- Every account but the main wallet keeps its running balance here, so a
+-- message can lock ONE row and check it. relay_wallets stays the main
+-- wallet's: re-keying it would break the previous release mid-rollover.
+CREATE TABLE IF NOT EXISTS relay_wallet_accounts (
+	installation_id text NOT NULL REFERENCES relay_installations(id),
+	account text NOT NULL,
+	balance numeric(14, 3) NOT NULL DEFAULT 0,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	PRIMARY KEY (installation_id, account),
+	CONSTRAINT relay_wallet_accounts_not_main CHECK (account <> 'main')
+);
+
+-- A transfer moves the shop's own money between its accounts: one entry out
+-- (negative), one in (positive).
+ALTER TABLE relay_wallet_entries DROP CONSTRAINT IF EXISTS relay_wallet_entries_kind_valid;
+ALTER TABLE relay_wallet_entries ADD CONSTRAINT relay_wallet_entries_kind_valid
+	CHECK (kind IN ('topup', 'charge', 'refund', 'adjustment', 'transfer'));
+ALTER TABLE relay_wallet_entries DROP CONSTRAINT IF EXISTS relay_wallet_entries_sign_valid;
+ALTER TABLE relay_wallet_entries ADD CONSTRAINT relay_wallet_entries_sign_valid CHECK (
+	(kind IN ('topup', 'refund') AND amount > 0)
+	OR (kind = 'charge' AND amount < 0)
+	OR (kind IN ('adjustment', 'transfer') AND amount <> 0)
+);
+
+-- One account's statement, newest first (and its cursor).
+CREATE INDEX IF NOT EXISTS relay_wallet_entries_installation_account_created_idx
+	ON relay_wallet_entries (installation_id, account, created_at DESC, id DESC);
+
+-- What a message was charged when it was claimed, refunded if it never went
+-- out. sum(price) over the billable rows is what the shops paid for SMS.
+ALTER TABLE relay_sms_messages ADD COLUMN IF NOT EXISTS price numeric(12, 3) NOT NULL DEFAULT 0;
+
+-- How far each plan is paid for from the wallet, beside the operator's own
+-- subscription window.
+ALTER TABLE relay_installations ADD COLUMN IF NOT EXISTS remote_access_paid_until timestamptz;
+ALTER TABLE relay_installations ADD COLUMN IF NOT EXISTS ai_paid_until timestamptz;
+`,
+	},
+	{
+		version: 18,
+		name:    "sms parts",
+		sql: `
+-- How many SMS each message went out as. A text longer than one SMS (70
+-- Arabic letters) is sent, and billed by the provider, as several parts, and
+-- the shop pays per part. Rows from before were all charged as one.
+ALTER TABLE relay_sms_messages ADD COLUMN IF NOT EXISTS parts integer NOT NULL DEFAULT 1;
+
+-- The approved text a template was last sent with: a new message is rendered
+-- from it to count its parts before it is sent.
+CREATE INDEX IF NOT EXISTS relay_sms_messages_template_body_idx
+	ON relay_sms_messages (template_id, created_at DESC, id DESC)
+	WHERE template_body <> '';
+`,
+	},
+	{
+		version: 19,
+		name:    "sms sent-log check",
+		sql: `
+-- A failed send that may still have gone out (Resala timed out or erred after
+-- taking it, or the relay died mid-call) keeps its price while Resala's sent
+-- log is checked: found, it stays paid for; not found, it is refunded. Set for
+-- as long as the check is open.
+ALTER TABLE relay_sms_messages ADD COLUMN IF NOT EXISTS held_since timestamptz;
+CREATE INDEX IF NOT EXISTS relay_sms_messages_held_idx
+	ON relay_sms_messages (held_since, id)
+	WHERE held_since IS NOT NULL;
+
+-- Which delivery-log rows are already some message's, so a held message is
+-- never matched to another message's row.
+CREATE INDEX IF NOT EXISTS relay_sms_messages_provider_message_idx
+	ON relay_sms_messages (provider_message_id)
+	WHERE provider_message_id <> '';
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

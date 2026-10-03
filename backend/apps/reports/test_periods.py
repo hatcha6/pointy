@@ -14,6 +14,7 @@ from .periods import (
     Comparison,
     Granularity,
     MAX_PERIOD_DAYS,
+    SUMMARY_ROW_LIMIT,
     PeriodValidationError,
     Preset,
     resolve_period,
@@ -164,11 +165,20 @@ class ValidationTests(TestCase):
 
 
 class GranularityTests(TestCase):
-    def test_detail_raises_the_row_caps_and_summary_does_not(self):
+    def test_a_summary_cuts_its_tables_short_and_detail_raises_the_caps(self):
         summary = period(preset=Preset.LAST_MONTH, granularity=Granularity.SUMMARY)
+        daily = period(preset=Preset.LAST_MONTH, granularity=Granularity.DAILY)
         detailed = period(preset=Preset.LAST_MONTH, granularity=Granularity.DETAILED)
-        self.assertEqual(summary.row_limit(120), 120)
+        self.assertEqual(summary.row_limit(120), SUMMARY_ROW_LIMIT)
+        self.assertEqual(daily.row_limit(120), SUMMARY_ROW_LIMIT)
+        # Never above the section's own cap.
+        self.assertEqual(summary.row_limit(4), 4)
         self.assertGreater(detailed.row_limit(120), 120)
+
+    def test_only_detailed_asks_for_the_documents_behind_the_totals(self):
+        self.assertFalse(period(granularity=Granularity.SUMMARY).wants_detail)
+        self.assertFalse(period(granularity=Granularity.DAILY).wants_detail)
+        self.assertTrue(period(granularity=Granularity.DETAILED).wants_detail)
 
     def test_only_daily_and_detailed_ask_for_a_day_by_day_breakdown(self):
         self.assertFalse(period(granularity=Granularity.SUMMARY).wants_daily_breakdown)

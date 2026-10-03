@@ -80,8 +80,27 @@ class ReportsViewModel extends ChangeNotifier {
 
   ReportRunType get selectedType => _selectedType;
   String get preset => _preset;
-  String get granularity => _granularity;
-  String get comparison => _comparison;
+
+  /// The levels of detail the selected report offers — every level until the
+  /// catalogue has said otherwise.
+  List<String> get availableGranularities =>
+      selectedEntry?.granularities ?? ReportGranularityOption.all;
+
+  /// The level the report will be built at: the one chosen, or the summary
+  /// when the selected report has no such level (daily, for a report with no
+  /// day-by-day table). The choice itself is kept, so moving back to a report
+  /// that offers it restores it.
+  String get granularity => availableGranularities.contains(_granularity)
+      ? _granularity
+      : ReportGranularityOption.summary;
+
+  /// Whether the selected report can be compared with an earlier period. One
+  /// that can only state today has nothing to compare.
+  bool get offersComparison => !(selectedEntry?.statesToday ?? false);
+
+  /// The comparison the report will be built with.
+  String get comparison =>
+      offersComparison ? _comparison : ReportComparisonOption.none;
   int? get customerId => _customerId;
   String get customerName => _customerName;
   int? get supplierId => _supplierId;
@@ -244,8 +263,8 @@ class ReportsViewModel extends ChangeNotifier {
         'end_date': _apiDate(customRange.end),
       } else
         'preset': _preset,
-      'granularity': _granularity,
-      'comparison': _comparison,
+      'granularity': granularity,
+      'comparison': comparison,
       if (_customerId != null) 'customer_id': _customerId,
       if (_supplierId != null) 'supplier_id': _supplierId,
       // Only for the report that asks for it: a code is free text naming one

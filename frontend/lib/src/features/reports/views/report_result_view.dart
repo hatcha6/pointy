@@ -5,6 +5,7 @@ import '../../../data/models/report_run.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../report_labels.dart';
+import '../report_titles.dart';
 
 /// The report, on screen.
 ///
@@ -152,6 +153,13 @@ class _PeriodBanner extends StatelessWidget {
           icon: closed ? Icons.lock_outline : Icons.lock_open_outlined,
           color: closed ? context.pointyColors.primaryStrong : null,
         ),
+        // Which level of detail this result was built at, so a short summary
+        // is never mistaken for a report that left rows out — or the reverse.
+        if (period['granularity'] is String)
+          PointyStatusPill(
+            label: reportGranularityLabel(l10n, '${period['granularity']}'),
+            icon: Icons.view_agenda_outlined,
+          ),
         if (audit['truncated'] == true)
           PointyStatusPill(
             label: l10n.reportTruncatedChip('${audit['omitted_count']}'),

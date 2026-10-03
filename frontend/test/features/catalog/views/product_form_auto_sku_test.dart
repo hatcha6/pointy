@@ -102,27 +102,22 @@ void main() {
     return built.posted;
   }
 
-  Future<void> goToVariantStep(
-    WidgetTester tester,
-    AppLocalizations l10n,
-  ) async {
-    await tester.enterText(find.byType(TextFormField).first, 'أرز');
-    await tester.tap(find.text(l10n.nextButton));
+  Finder field(String label) => find.widgetWithText(TextFormField, label);
+
+  Future<void> enterName(WidgetTester tester, AppLocalizations l10n) async {
+    await tester.enterText(field(l10n.productNameLabel), 'أرز');
     await tester.pumpAndSettle();
   }
 
-  // Step two, in order: variant name, SKU, barcode, price.
-  String fieldText(WidgetTester tester, int index) => tester
-      .widget<TextFormField>(find.byType(TextFormField).at(index))
-      .controller!
-      .text;
+  String fieldText(WidgetTester tester, String label) =>
+      tester.widget<TextFormField>(field(label)).controller!.text;
 
   Future<Map<String, Object?>> create(
     WidgetTester tester,
     AppLocalizations l10n,
     List<Map<String, Object?>> posted,
   ) async {
-    await tester.enterText(find.byType(TextFormField).at(3), '5');
+    await tester.enterText(field(l10n.unitPriceLabel), '5');
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
     await tester.tap(find.text(l10n.createProductButton));
@@ -136,9 +131,9 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     final posted = await pumpForm(tester, nextSkus: ['1042']);
-    await goToVariantStep(tester, l10n);
+    await enterName(tester, l10n);
 
-    expect(fieldText(tester, 1), '1042');
+    expect(fieldText(tester, l10n.skuLabel), '1042');
     expect(find.text(l10n.skuAutomaticHelper), findsOneWidget);
 
     final sent = await create(tester, l10n, posted);
@@ -149,12 +144,12 @@ void main() {
   testWidgets('one click makes the barcode the SKU', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     final posted = await pumpForm(tester, nextSkus: ['1042']);
-    await goToVariantStep(tester, l10n);
+    await enterName(tester, l10n);
 
     await tester.tap(find.byTooltip(l10n.useSkuAsBarcodeTooltip));
     await tester.pump();
 
-    expect(fieldText(tester, 2), '1042');
+    expect(fieldText(tester, l10n.barcodeLabel), '1042');
     final sent = await create(tester, l10n, posted);
     expect(sent['sku'], '1042');
     expect(sent['barcode'], '1042');
@@ -165,14 +160,14 @@ void main() {
   ) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await pumpForm(tester, nextSkus: ['1042']);
-    await goToVariantStep(tester, l10n);
+    await enterName(tester, l10n);
 
-    await tester.enterText(find.byType(TextFormField).at(1), 'rice-5');
+    await tester.enterText(field(l10n.skuLabel), 'rice-5');
     await tester.tap(find.byTooltip(l10n.useSkuAsBarcodeTooltip));
     await tester.pump();
 
     // Upper-cased, the way the server stores the SKU it is copied from.
-    expect(fieldText(tester, 2), 'RICE-5');
+    expect(fieldText(tester, l10n.barcodeLabel), 'RICE-5');
   });
 
   testWidgets(
@@ -181,7 +176,7 @@ void main() {
       final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
       // 1042 when the form opened; by the time it is saved, 1042 is gone.
       final posted = await pumpForm(tester, nextSkus: ['1042', '1043']);
-      await goToVariantStep(tester, l10n);
+      await enterName(tester, l10n);
       await tester.tap(find.byTooltip(l10n.useSkuAsBarcodeTooltip));
       await tester.pump();
 
@@ -195,36 +190,35 @@ void main() {
   testWidgets('a SKU the owner typed is never renumbered', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     final posted = await pumpForm(tester, nextSkus: ['1042', '1043']);
-    await goToVariantStep(tester, l10n);
+    await enterName(tester, l10n);
 
-    await tester.enterText(find.byType(TextFormField).at(1), 'RICE-5');
+    await tester.enterText(field(l10n.skuLabel), 'RICE-5');
     final sent = await create(tester, l10n, posted);
 
     expect(sent['sku'], 'RICE-5');
   });
 
-  testWidgets("a scanner's Enter in the barcode field moves on to the price", (
+  testWidgets('Enter in the barcode field moves on to the name', (
     tester,
   ) async {
-    // A scanner types the code and presses Enter. Landing on the copy button
-    // instead would put the next keystroke there — and replace the scanned
-    // code with the SKU.
+    // A code typed in and confirmed with Enter. Landing on the copy button
+    // instead would put the next keystroke there — and replace the code with
+    // the SKU.
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     await pumpForm(tester, nextSkus: ['1042']);
-    await goToVariantStep(tester, l10n);
 
-    await tester.enterText(find.byType(TextFormField).at(2), '6281234567890');
+    await tester.enterText(field(l10n.barcodeLabel), '6281234567890');
     await tester.testTextInput.receiveAction(TextInputAction.next);
     await tester.pumpAndSettle();
 
-    final price = tester.widget<EditableText>(
+    final name = tester.widget<EditableText>(
       find.descendant(
-        of: find.byType(TextFormField).at(3),
+        of: field(l10n.productNameLabel),
         matching: find.byType(EditableText),
       ),
     );
-    expect(FocusManager.instance.primaryFocus, price.focusNode);
-    expect(fieldText(tester, 2), '6281234567890');
+    expect(FocusManager.instance.primaryFocus, name.focusNode);
+    expect(fieldText(tester, l10n.barcodeLabel), '6281234567890');
   });
 
   testWidgets('a scanned product keeps its barcode and gets the next number', (
@@ -236,10 +230,10 @@ void main() {
       nextSkus: ['1042'],
       initialBarcode: '6281234567890',
     );
-    await goToVariantStep(tester, l10n);
+    await enterName(tester, l10n);
 
-    expect(fieldText(tester, 1), '1042');
-    expect(fieldText(tester, 2), '6281234567890');
+    expect(fieldText(tester, l10n.skuLabel), '1042');
+    expect(fieldText(tester, l10n.barcodeLabel), '6281234567890');
     final sent = await create(tester, l10n, posted);
     expect(sent['sku'], '1042');
     expect(sent['barcode'], '6281234567890');
@@ -258,7 +252,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await tester.enterText(find.byType(TextFormField).first, 'قميص');
+    await tester.enterText(field(l10n.productNameLabel), 'قميص');
     await tester.pumpAndSettle();
     await tapVisible(find.byKey(const ValueKey('variant_option_search_field')));
     await tapVisible(find.text('اللون'));

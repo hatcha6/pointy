@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/parsing.dart';
@@ -14,41 +15,71 @@ import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/unit_of_measure.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/components/components.dart';
-import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/keyboard/route_keyboard_shortcuts.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
+import '../view_models/product_entry_run.dart';
+import '../view_models/similar_product.dart';
 import '../view_models/variant_generation.dart';
 import 'auto_sku_filler.dart';
-import 'pricing_currency_field.dart';
-import 'product_form_fields.dart';
 import 'modifier_group_selector.dart';
 import 'opening_stock_fields.dart';
+import 'pricing_currency_field.dart';
+import 'product_entry_pins.dart';
+import 'product_entry_status.dart';
+import 'product_essentials_fields.dart';
+import 'product_form_actions.dart';
 import 'product_form_section.dart';
+import 'product_form_shortcuts.dart';
+import 'product_generated_variants_step.dart';
 import 'product_image_picker.dart';
+import 'product_more_details.dart';
 import 'product_units_editor.dart';
-import '../../../shared/tutor/anchors.dart';
-import '../../../shared/tutor/tutor_target.dart';
-import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 import 'variant_identity_watcher.dart';
+import 'variant_option_creation_dialogs.dart';
 
+/// The new-product form.
+///
+/// One page for a simple product — barcode, name, price and what a shelf
+/// shares first, the rest folded away — and a second step only when the
+/// product generates variants. Keyboard-first: Enter walks the essential
+/// fields onto the save button, Ctrl+Enter creates, and a scan from any field
+/// lands in the barcode.
+///
+/// Where the caller offers it, «إنشاء وإضافة آخر» saves and starts the next
+/// product in the same panel, carrying over whichever fields are pinned — for
+/// a shop typing in its whole catalogue, product after product.
 class ProductForm extends StatefulWidget {
   const ProductForm({
     super.key,
     required this.viewModel,
     this.onCreated,
+    this.offerAddAnother = false,
+    this.onOpenCreated,
     this.initialBarcode,
     this.showOpeningStock = false,
+    this.similarTo,
   });
 
   final CatalogViewModel viewModel;
 
-  /// Called with the freshly created product once creation succeeds. The
-  /// catalog closes its sheet; the purchasing workspace also adds the
+  /// Called with the freshly created product once a plain create succeeds.
+  /// The catalog closes its sheet; the purchasing workspace also adds the
   /// product's default variant to the current purchase order.
   final void Function(Product product)? onCreated;
+
+  /// Offers «إنشاء وإضافة آخر», which creates the product and starts the next
+  /// one in the same panel instead of calling [onCreated]. Off where a created
+  /// product has somewhere to go (a purchase order adds it and closes).
+  final bool offerAddAnother;
+
+  /// Opens a product created by «إنشاء وإضافة آخر» — the panel's way back to
+  /// the one just saved, to fix it without losing the run.
+  final ValueChanged<Product>? onOpenCreated;
 
   /// Prefills the default variant's barcode — used when the form is opened for
   /// a scanned code that matched no existing product, so the created product
@@ -64,15 +95,32 @@ class ProductForm extends StatefulWidget {
   /// again, since a hidden field is a courtesy and not a control.
   final bool showOpeningStock;
 
+  /// Starts from an existing product — «منتج مشابه»: whatever describes it is
+  /// filled in and marked as copied, nothing that identifies it (see
+  /// [SimilarProduct]). Nothing is saved until the owner creates it, so a
+  /// copy changed their mind about leaves no product behind.
+  final Product? similarTo;
+
   @override
   State<ProductForm> createState() => _ProductFormState();
 }
 
+/// What the form holds, compared against what it held after opening or after
+/// the last «إنشاء وإضافة آخر» — anything different is work an accidental
+/// dismiss would lose.
+typedef _FormSnapshot = ({
+  String text,
+  String selections,
+  bool hasImage,
+  int units,
+});
+
 class _ProductFormState extends State<ProductForm> {
-  final _parentFormKey = GlobalKey<FormState>();
-  final _variantFormKey = GlobalKey<FormState>();
+  final _detailsFormKey = GlobalKey<FormState>();
+  final _variantsFormKey = GlobalKey<FormState>();
   final _skuFieldKey = GlobalKey();
   final _barcodeFieldKey = GlobalKey();
+  final _scrollController = ScrollController();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _variantNameController = TextEditingController();
@@ -94,6 +142,33 @@ class _ProductFormState extends State<ProductForm> {
   final Map<String, TextEditingController> _generatedOpeningCostControllers =
       {};
   final Map<String, bool> _generatedActiveBySignature = {};
+
+  // The Enter path, and the buttons it ends on.
+  final _barcodeFocusNode = FocusNode(debugLabel: 'product_form_barcode');
+  final _nameFocusNode = FocusNode(debugLabel: 'product_form_name');
+  final _priceFocusNode = FocusNode(debugLabel: 'product_form_price');
+  final _openingQuantityFocusNode = FocusNode(
+    debugLabel: 'product_form_opening_quantity',
+  );
+  final _openingCostFocusNode = FocusNode(
+    debugLabel: 'product_form_opening_cost',
+  );
+  final _primaryActionFocusNode = FocusNode(
+    debugLabel: 'product_form_primary_action',
+  );
+  final _addAnotherFocusNode = FocusNode(
+    debugLabel: 'product_form_add_another',
+  );
+
+  /// One per carried field: whether focus is inside it, for the pin key.
+  final Map<ProductCarryField, FocusNode> _pinScopes = {
+    for (final field in ProductCarryField.values)
+      field: FocusNode(
+        debugLabel: 'product_form_pin_scope_${field.name}',
+        canRequestFocus: false,
+        skipTraversal: true,
+      ),
+  };
 
   /// Blank = the shop's own currency, which is every product unless said
   /// otherwise. Holds an ISO code once the owner picks a price-sheet currency.
@@ -120,14 +195,41 @@ class _ProductFormState extends State<ProductForm> {
   var _isService = false;
   var _isPrepared = false;
   var _isVariantActive = true;
-  var _isDefaultVariant = true;
   var _isLoadingVariantOptions = false;
   var _variantOptionsLoadFailed = false;
   var _step = 0;
+  var _moreDetailsExpanded = false;
   String? _generationErrorKey;
   var _lastBasePrice = '';
   late final VariantIdentityWatcher _identity;
   late final AutoSkuFiller _autoSku;
+
+  /// Products created back to back in this panel, and what carries over.
+  final _run = ProductEntryRun();
+  var _pinsHintDismissed = false;
+
+  /// The product a «منتج مشابه» copies. Its variant grid is laid out once the
+  /// variant options load, so the rows can be matched to its variants.
+  SimilarProduct? _similar;
+  var _similarGridApplied = false;
+
+  /// The owner tried to save a name still identical to the previous product's
+  /// and was asked to confirm; the next save goes through.
+  var _confirmedRepeatedName = false;
+  var _lastNameText = '';
+
+  /// The save in flight came from «إنشاء وإضافة آخر».
+  var _savingAddAnother = false;
+
+  /// Bumped on each «إنشاء وإضافة آخر», so a sub-form keeping state of its own
+  /// (the packaging units) starts over with the product.
+  var _entryGeneration = 0;
+
+  /// When the last scan landed. A consumed scan's Enter still reaches the
+  /// focused widget, so a button focused at that moment must not take it as a
+  /// press.
+  DateTime? _lastScanAt;
+  late _FormSnapshot _baseline;
 
   /// Per-generated-row identity errors, keyed by combination signature then
   /// field. Generated rows are not watched live (one product can generate
@@ -145,12 +247,19 @@ class _ProductFormState extends State<ProductForm> {
 
   bool get _usesGeneratedVariants => _selectedVariantOptions.isNotEmpty;
 
+  /// The barcode, SKU and price on the first page describe the one variant a
+  /// simple product has; a product that generates variants gives each row its
+  /// own instead.
+  bool get _showsSellingFields => !_usesGeneratedVariants;
+
   /// Opening stock is offered only for products that actually keep stock. A
   /// service has no shelf and a made-to-order dish is assembled when it is
   /// ordered, so the server refuses the pair for both — the form agrees rather
   /// than letting somebody type a number that will be rejected.
   bool get _showsOpeningStock =>
       widget.showOpeningStock && !_isService && !_isPrepared;
+
+  bool get _isFinalStep => !_usesGeneratedVariants || _step == 1;
 
   List<VariantCombination> get _generatedCombinations {
     return generateVariantCombinations(
@@ -169,7 +278,10 @@ class _ProductFormState extends State<ProductForm> {
   }
 
   void _onPricingCurrencyChanged(String code) {
-    setState(() => _pricingCurrency = code);
+    setState(() {
+      _pricingCurrency = code;
+      _run.unkeep(ProductCarryField.price);
+    });
   }
 
   @override
@@ -179,12 +291,17 @@ class _ProductFormState extends State<ProductForm> {
     if (initialBarcode.isNotEmpty) {
       _barcodeController.text = initialBarcode;
     }
+    if (widget.similarTo case final source?) {
+      _startFromSimilar(SimilarProduct.of(source));
+    }
     _lastBasePrice = _priceController.text;
-    _nameController.addListener(_refreshImageSearchSeed);
+    _nameController.addListener(_onNameChanged);
     _skuPrefixController.addListener(_fillGeneratedSkus);
     _priceController.addListener(_syncGeneratedPricesFromBase);
     // Redraws the conversion preview as the price is typed.
     _priceController.addListener(_refreshPricePreview);
+    _priceController.addListener(_onPriceChanged);
+    _openingCostController.addListener(_onOpeningCostChanged);
     // Fire-and-forget: the picker stays hidden until (and unless) this lands,
     // so a slow or unreachable rate endpoint never delays the form.
     unawaited(widget.viewModel.loadPricingCurrencies());
@@ -201,6 +318,18 @@ class _ProductFormState extends State<ProductForm> {
     _loadVariantOptions();
     _loadModifierGroups();
     _loadUnits();
+    // A code the form was opened for is the scanner's, not the owner's work:
+    // closing such a form unchanged asks nothing.
+    _baseline = _snapshot();
+    // Scanned in already, the name is next; otherwise the barcode, so the
+    // first scan needs no click.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      (initialBarcode.isEmpty ? _barcodeFocusNode : _nameFocusNode)
+          .requestFocus();
+    });
   }
 
   Future<void> _loadUnits() async {
@@ -229,7 +358,7 @@ class _ProductFormState extends State<ProductForm> {
   @override
   void dispose() {
     _identity.dispose();
-    _nameController.removeListener(_refreshImageSearchSeed);
+    _nameController.removeListener(_onNameChanged);
     _nameController.dispose();
     _descriptionController.dispose();
     _variantNameController.dispose();
@@ -239,53 +368,111 @@ class _ProductFormState extends State<ProductForm> {
     _barcodeController.dispose();
     _priceController.removeListener(_syncGeneratedPricesFromBase);
     _priceController.removeListener(_refreshPricePreview);
+    _priceController.removeListener(_onPriceChanged);
     _priceController.dispose();
     _openingQuantityController.dispose();
+    _openingCostController.removeListener(_onOpeningCostChanged);
     _openingCostController.dispose();
-    for (final controller in _generatedNameControllers.values) {
+    for (final controller in [
+      ..._generatedNameControllers.values,
+      ..._generatedSkuControllers.values,
+      ..._generatedBarcodeControllers.values,
+      ..._generatedPriceControllers.values,
+      ..._generatedOpeningQuantityControllers.values,
+      ..._generatedOpeningCostControllers.values,
+    ]) {
       controller.dispose();
     }
-    for (final controller in _generatedSkuControllers.values) {
-      controller.dispose();
+    for (final node in [
+      _barcodeFocusNode,
+      _nameFocusNode,
+      _priceFocusNode,
+      _openingQuantityFocusNode,
+      _openingCostFocusNode,
+      _primaryActionFocusNode,
+      _addAnotherFocusNode,
+      ..._pinScopes.values,
+    ]) {
+      node.dispose();
     }
-    for (final controller in _generatedBarcodeControllers.values) {
-      controller.dispose();
-    }
-    for (final controller in _generatedPriceControllers.values) {
-      controller.dispose();
-    }
-    for (final controller in _generatedOpeningQuantityControllers.values) {
-      controller.dispose();
-    }
-    for (final controller in _generatedOpeningCostControllers.values) {
-      controller.dispose();
-    }
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _refreshImageSearchSeed() {
-    if (_selectedImage == null && mounted) {
+  /// Redraws on every edit: the image search follows the name, and so does
+  /// the warning that the name is still the previous product's.
+  ///
+  /// The controller also reports a cursor that merely moved — which focusing
+  /// the field does on web and desktop — and that is not an edit: it must not
+  /// take back a confirmation the owner was just asked for.
+  void _onNameChanged() {
+    final text = _nameController.text;
+    if (!mounted || text == _lastNameText) {
+      return;
+    }
+    _lastNameText = text;
+    final previous = _run.previous;
+    if (previous != null && text.trim() != previous.name) {
+      _run.unkeep(ProductCarryField.name);
+    }
+    setState(() => _confirmedRepeatedName = false);
+  }
+
+  void _onPriceChanged() {
+    final previous = _run.previous;
+    if (previous != null &&
+        _priceController.text.trim() != previous.price &&
+        _run.unkeep(ProductCarryField.price) &&
+        mounted) {
       setState(() {});
     }
   }
 
+  void _onOpeningCostChanged() {
+    final previous = _run.previous;
+    if (previous != null &&
+        _openingCostController.text.trim() != previous.openingCost &&
+        _run.unkeep(ProductCarryField.openingCost) &&
+        mounted) {
+      setState(() {});
+    }
+  }
+
+  _FormSnapshot _snapshot() {
+    return (
+      text: [
+        _nameController.text.trim(),
+        _descriptionController.text.trim(),
+        _variantNameController.text.trim(),
+        // The number the form filled in is not the user's work.
+        _autoSku.holdsFilledValue(_skuController)
+            ? ''
+            : _skuController.text.trim(),
+        _skuPrefixController.text.trim(),
+        _barcodeController.text.trim(),
+        _priceController.text.trim(),
+        _openingQuantityController.text.trim(),
+        _openingCostController.text.trim(),
+        _pricingCurrency,
+        _unit,
+      ].join('\u0000'),
+      selections: [
+        for (final category in _selectedCategories) 'c${category.id}',
+        for (final id in _selectedVariantOptionIds) 'o$id',
+        for (final id in _selectedModifierGroupIds) 'm$id',
+        'e$_tracksExpiry',
+        's$_isService',
+        'p$_isPrepared',
+        'a$_isProductActive$_isVariantActive',
+      ].join(','),
+      hasImage: _selectedImage != null,
+      units: _units.length,
+    );
+  }
+
   /// Any entry the user would lose on an accidental dismiss. Used by the
   /// unsaved-changes guard (evaluated fresh on each back/dismiss attempt).
-  bool get _isDirty =>
-      _nameController.text.trim().isNotEmpty ||
-      _descriptionController.text.trim().isNotEmpty ||
-      _variantNameController.text.trim().isNotEmpty ||
-      // The number the form filled in is not the user's work.
-      (_skuController.text.trim().isNotEmpty &&
-          !_autoSku.holdsFilledValue(_skuController)) ||
-      _skuPrefixController.text.trim().isNotEmpty ||
-      _barcodeController.text.trim().isNotEmpty ||
-      _priceController.text.trim().isNotEmpty ||
-      _selectedImage != null ||
-      _selectedCategories.isNotEmpty ||
-      _selectedVariantOptionIds.isNotEmpty ||
-      _selectedModifierGroupIds.isNotEmpty ||
-      _units.isNotEmpty;
+  bool get _isDirty => _snapshot() != _baseline;
 
   @override
   Widget build(BuildContext context) {
@@ -300,384 +487,536 @@ class _ProductFormState extends State<ProductForm> {
     return ListenableBuilder(
       listenable: Listenable.merge([widget.viewModel, _identity]),
       builder: (context, _) {
-        return Material(
-          color: context.pointyColors.surface,
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
+        final isSaving = widget.viewModel.isSaving;
+        return RouteKeyboardShortcuts(
+          enabled: !isSaving,
+          bindings: _shortcutBindings(),
+          child: BarcodeScanListener(
+            enabled: !isSaving,
+            onBarcodeScanned: _onBarcodeScanned,
+            child: Material(
+              color: context.pointyColors.surface,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: Text(
-                              l10n.newProductTitle,
-                              style: Theme.of(context).textTheme.titleLarge,
+                          _buildHeader(context, l10n),
+                          const SizedBox(height: 16),
+                          if (_showsPins && !_pinsHintDismissed) ...[
+                            ProductEntryPinsHint(
+                              onDismiss: () =>
+                                  setState(() => _pinsHintDismissed = true),
                             ),
+                            const SizedBox(height: 12),
+                          ],
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 180),
+                            child: _step == 0
+                                ? _buildDetailsPage(context, l10n)
+                                : _buildVariantsPage(context, l10n),
                           ),
-                          Text(l10n.productWizardStepLabel(_step + 1, 2)),
+                          if (widget.viewModel.errorMessage ==
+                              'catalog_create_error') ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              // With a known field conflict the offending
+                              // input is already marked — point at it instead
+                              // of repeating a generic "could not create".
+                              _hasFieldConflict
+                                  ? l10n.formFixHighlightedFieldsError
+                                  : l10n.productCreateError,
+                              style: TextStyle(
+                                color: context.pointyColors.danger,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      PointyProgressBar(value: _step == 0 ? 0.5 : 1),
-                      const SizedBox(height: 18),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
-                        child: _step == 0
-                            ? Form(
-                                key: _parentFormKey,
-                                child: Column(
-                                  key: const ValueKey('product_parent_step'),
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    ProductFormSection(
-                                      icon: Icons.inventory_2_outlined,
-                                      title: l10n.parentProductStepTitle,
-                                      children: [
-                                        ProductParentFormFields(
-                                          nameController: _nameController,
-                                          descriptionController:
-                                              _descriptionController,
-                                          selectedCategories:
-                                              _selectedCategories,
-                                          isActive: _isProductActive,
-                                          tracksExpiry: _tracksExpiry,
-                                          onPickCategories: _pickCategories,
-                                          onClearCategories: () => setState(
-                                            () => _selectedCategories = [],
-                                          ),
-                                          onActiveChanged: (value) => setState(
-                                            () => _isProductActive = value,
-                                          ),
-                                          onTracksExpiryChanged: (value) =>
-                                              setState(
-                                                () => _tracksExpiry = value,
-                                              ),
-                                          unit: _unit,
-                                          isService: _isService,
-                                          isPrepared: _isPrepared,
-                                          onUnitChanged: (value) =>
-                                              setState(() => _unit = value),
-                                          onIsServiceChanged: (value) =>
-                                              setState(
-                                                () => _isService = value,
-                                              ),
-                                          onIsPreparedChanged: (value) =>
-                                              setState(
-                                                () => _isPrepared = value,
-                                              ),
-                                          requiredValidator: (value) =>
-                                              _requiredValidator(
-                                                context,
-                                                value,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        ProductImageField(
-                                          catalogRepository: widget
-                                              .viewModel
-                                              .catalogRepository,
-                                          initialSearchQuery: _nameController
-                                              .text
-                                              .trim(),
-                                          selection: _selectedImage,
-                                          onChanged: (selection) => setState(
-                                            () => _selectedImage = selection,
-                                          ),
-                                          enabled: !widget.viewModel.isSaving,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        VariantOptionField(
-                                          availableOptions:
-                                              _availableVariantOptions,
-                                          selectedOptions:
-                                              _selectedVariantOptions,
-                                          isLoading: _isLoadingVariantOptions,
-                                          hasError: _variantOptionsLoadFailed,
-                                          onReload: _loadVariantOptions,
-                                          onToggleOption: _toggleVariantOption,
-                                          onCreateOption: _createVariantOption,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        ModifierGroupSelector(
-                                          available: _availableModifierGroups,
-                                          selectedIds:
-                                              _selectedModifierGroupIds,
-                                          isLoading: _isLoadingModifierGroups,
-                                          hasError: _modifierGroupsLoadFailed,
-                                          onReload: _loadModifierGroups,
-                                          onToggle: _toggleModifierGroup,
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ProductFormSection(
-                                      icon: Icons.straighten_outlined,
-                                      title: l10n.productUnitsSectionTitle,
-                                      children: [
-                                        ProductUnitsEditor(
-                                          availableUnits: _availableUnits,
-                                          baseUnitCode: _unit,
-                                          units: _units,
-                                          defaultSaleUnit: _defaultSaleUnit,
-                                          defaultPurchaseUnit:
-                                              _defaultPurchaseUnit,
-                                          enabled: !widget.viewModel.isSaving,
-                                          isLoading: _isLoadingUnits,
-                                          hasError: _unitsLoadFailed,
-                                          onReload: _loadUnits,
-                                          onUnitsChanged: (units) =>
-                                              setState(() => _units = units),
-                                          onDefaultSaleChanged: (code) =>
-                                              setState(
-                                                () => _defaultSaleUnit = code,
-                                              ),
-                                          onDefaultPurchaseChanged: (code) =>
-                                              setState(
-                                                () =>
-                                                    _defaultPurchaseUnit = code,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : Form(
-                                key: _variantFormKey,
-                                child: Column(
-                                  key: const ValueKey('product_variant_step'),
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    ProductFormSection(
-                                      icon: Icons.qr_code_2,
-                                      title: l10n.defaultVariantStepTitle,
-                                      children: [
-                                        if (_usesGeneratedVariants)
-                                          _GeneratedVariantFormStep(
-                                            skuController: _skuPrefixController,
-                                            priceController: _priceController,
-                                            selectedOptions:
-                                                _selectedVariantOptions,
-                                            selectedValueIdsByOption:
-                                                _selectedValueIdsByOption,
-                                            errorOptionIds:
-                                                _valueErrorOptionIds,
-                                            combinations:
-                                                _generatedCombinations,
-                                            nameControllers:
-                                                _generatedNameControllers,
-                                            skuControllers:
-                                                _generatedSkuControllers,
-                                            barcodeControllers:
-                                                _generatedBarcodeControllers,
-                                            priceControllers:
-                                                _generatedPriceControllers,
-                                            activeBySignature:
-                                                _generatedActiveBySignature,
-                                            defaultSignature:
-                                                _defaultGeneratedSignature,
-                                            onToggleValue: _toggleOptionValue,
-                                            onCreateValue:
-                                                _createVariantOptionValue,
-                                            onSelectAllValues:
-                                                _selectAllVariantOptionValues,
-                                            onDefaultChanged: (signature) =>
-                                                setState(
-                                                  () =>
-                                                      _defaultGeneratedSignature =
-                                                          signature,
-                                                ),
-                                            onVariantActiveChanged:
-                                                (signature, value) => setState(
-                                                  () =>
-                                                      _generatedActiveBySignature[signature] =
-                                                          value,
-                                                ),
-                                            numberValidator: (value) =>
-                                                _numberValidator(
-                                                  context,
-                                                  value,
-                                                ),
-                                            generationErrorText:
-                                                _generationErrorText(context),
-                                            conflictsBySignature:
-                                                _generatedConflicts,
-                                            openingQuantityControllers:
-                                                _showsOpeningStock
-                                                ? _generatedOpeningQuantityControllers
-                                                : null,
-                                            openingCostControllers:
-                                                _showsOpeningStock
-                                                ? _generatedOpeningCostControllers
-                                                : null,
-                                          )
-                                        else ...[
-                                          PricingCurrencyField(
-                                            currencies: widget
-                                                .viewModel
-                                                .pricingCurrencies,
-                                            baseCurrencyCode: widget
-                                                .viewModel
-                                                .baseCurrencyCode,
-                                            selectedCode: _pricingCurrency,
-                                            onChanged:
-                                                _onPricingCurrencyChanged,
-                                            rate: _pricingCurrency.isEmpty
-                                                ? null
-                                                : widget.viewModel.rateFor(
-                                                    _pricingCurrency,
-                                                  ),
-                                            enteredAmount: _parseNumber(
-                                              _priceController.text,
-                                            ),
-                                          ),
-                                          if (widget
-                                              .viewModel
-                                              .pricingCurrencies
-                                              .isNotEmpty)
-                                            const SizedBox(height: 12),
-                                          ProductVariantFormFields(
-                                            variantNameController:
-                                                _variantNameController,
-                                            skuController: _skuController,
-                                            barcodeController:
-                                                _barcodeController,
-                                            priceController: _priceController,
-                                            selectedOptionValues: const [],
-                                            isActive: _isVariantActive,
-                                            isDefault: _isDefaultVariant,
-                                            onPickOptionValues: () {},
-                                            onClearOptionValues: null,
-                                            onActiveChanged: (value) =>
-                                                setState(
-                                                  () =>
-                                                      _isVariantActive = value,
-                                                ),
-                                            onDefaultChanged: (value) =>
-                                                setState(
-                                                  () =>
-                                                      _isDefaultVariant = value,
-                                                ),
-                                            numberValidator: (value) =>
-                                                _numberValidator(
-                                                  context,
-                                                  value,
-                                                ),
-                                            showDefaultToggle: false,
-                                            showOptionValues: false,
-                                            skuState: _identity.skuState,
-                                            barcodeState:
-                                                _identity.barcodeState,
-                                            skuIsAutomatic: _autoSku
-                                                .holdsFilledValue(
-                                                  _skuController,
-                                                ),
-                                            skuFieldKey: _skuFieldKey,
-                                            barcodeFieldKey: _barcodeFieldKey,
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    if (_showsOpeningStock &&
-                                        !_usesGeneratedVariants) ...[
-                                      const SizedBox(height: 20),
-                                      ProductFormSection(
-                                        icon: Icons.play_circle_outline,
-                                        title: l10n.openingStockSectionTitle,
-                                        children: [
-                                          OpeningStockFields(
-                                            key: const ValueKey(
-                                              'product_opening_stock',
-                                            ),
-                                            quantityController:
-                                                _openingQuantityController,
-                                            costController:
-                                                _openingCostController,
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                      ),
-                      if (widget.viewModel.errorMessage ==
-                          'catalog_create_error') ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          // With a known field conflict the offending input is
-                          // already marked — point at it instead of repeating a
-                          // generic "could not create".
-                          _hasFieldConflict
-                              ? l10n.formFixHighlightedFieldsError
-                              : l10n.productCreateError,
-                          style: TextStyle(color: context.pointyColors.danger),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Row(
-                  children: [
-                    if (_step > 0)
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: widget.viewModel.isSaving
-                              ? null
-                              : () => setState(() => _step = 0),
-                          icon: const Icon(Icons.arrow_back),
-                          label: Text(l10n.backButton),
-                        ),
-                      ),
-                    if (_step > 0) const SizedBox(width: 12),
-                    Expanded(
-                      child: TutorTarget(
-                        anchor: TutorAnchor.productFormPrimaryButton,
-                        child: FilledButton.icon(
-                          onPressed: widget.viewModel.isSaving
-                              ? null
-                              : _step == 0
-                              ? _continueToVariant
-                              : _submit,
-                          icon: widget.viewModel.isSaving
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: PointySpinner(strokeWidth: 2),
-                                )
-                              : Icon(
-                                  _step == 0 ? Icons.arrow_forward : Icons.add,
-                                ),
-                          label: Text(
-                            widget.viewModel.isSaving
-                                ? l10n.creatingProductButton
-                                : _step == 0
-                                ? l10n.nextButton
-                                : l10n.createProductButton,
-                          ),
-                        ),
-                      ),
                     ),
-                  ],
-                ),
+                  ),
+                  _buildFooter(context, l10n),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.newProductTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            if (_run.createdCount > 0) ...[
+              ProductEntryCountPill(count: _run.createdCount),
+              const SizedBox(width: 8),
+            ],
+            if (_usesGeneratedVariants)
+              Text(l10n.productWizardStepLabel(_step + 1, 2)),
+            if (_showsShortcutHints(context))
+              IconButton(
+                tooltip: l10n.productFormShortcutsTooltip,
+                onPressed: () => showProductFormShortcutsSheet(
+                  context,
+                  offersAddAnother: widget.offerAddAnother,
+                ),
+                icon: const Icon(Icons.keyboard_outlined),
+              ),
+          ],
+        ),
+        if (_usesGeneratedVariants) ...[
+          const SizedBox(height: 10),
+          PointyProgressBar(value: _step == 0 ? 0.5 : 1),
+        ],
+        if (_similar case final similar? when _run.copiesProduct) ...[
+          const SizedBox(height: 10),
+          PointyInlineMessage(
+            message: l10n.similarProductNotice(similar.sourceName),
+            icon: Icons.copy_all_outlined,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Pins arrive with the first «إنشاء وإضافة آخر», when there is a next
+  /// product for them to keep a value for. Until then a «منتج مشابه» only
+  /// marks what it copied.
+  bool get _showsPins => _run.createdCount > 0;
+
+  Widget _buildDetailsPage(BuildContext context, AppLocalizations l10n) {
+    final isSaving = widget.viewModel.isSaving;
+    final copies = _run.copiesProduct;
+    final pins = <ProductCarryField, FieldPin>{
+      if (_run.hasStarted)
+        for (final field in ProductCarryField.values)
+          field: FieldPin(
+            pinned: _run.isPinned(field),
+            kept: _run.isKept(field),
+            onToggle: _showsPins ? () => _togglePin(field) : null,
+            keptLabel: copies ? l10n.productFieldCopiedLabel : null,
+          ),
+    };
+    return Form(
+      key: _detailsFormKey,
+      child: Column(
+        key: const ValueKey('product_details_page'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ProductFormSection(
+            icon: Icons.inventory_2_outlined,
+            title: l10n.parentProductStepTitle,
+            children: [
+              ProductEssentialsFields(
+                showsSellingFields: _showsSellingFields,
+                barcodeController: _barcodeController,
+                barcodeFocusNode: _barcodeFocusNode,
+                barcodeFieldKey: _barcodeFieldKey,
+                barcodeState: _identity.barcodeState,
+                skuController: _skuController,
+                skuFieldKey: _skuFieldKey,
+                skuState: _identity.skuState,
+                skuIsAutomatic: _autoSku.holdsFilledValue(_skuController),
+                nameController: _nameController,
+                nameFocusNode: _nameFocusNode,
+                priceController: _priceController,
+                priceFocusNode: _priceFocusNode,
+                selectedCategories: _selectedCategories,
+                onPickCategories: _pickCategories,
+                onClearCategories: () => _setCategories(const []),
+                unit: _unit,
+                onUnitChanged: (value) => setState(() {
+                  _unit = value;
+                  _run.unkeep(ProductCarryField.unit);
+                }),
+                tracksExpiry: _tracksExpiry,
+                onTracksExpiryChanged: (value) => setState(() {
+                  _tracksExpiry = value;
+                  _run.unkeep(ProductCarryField.tracksExpiry);
+                }),
+                onEnter: _advanceFrom,
+                requiredValidator: (value) =>
+                    _requiredValidator(context, value),
+                numberValidator: (value) => _numberValidator(context, value),
+                pricingCurrencyField: widget.viewModel.pricingCurrencies.isEmpty
+                    ? null
+                    : PricingCurrencyField(
+                        currencies: widget.viewModel.pricingCurrencies,
+                        baseCurrencyCode: widget.viewModel.baseCurrencyCode,
+                        selectedCode: _pricingCurrency,
+                        onChanged: _onPricingCurrencyChanged,
+                        rate: _pricingCurrency.isEmpty
+                            ? null
+                            : widget.viewModel.rateFor(_pricingCurrency),
+                        enteredAmount: _parseNumber(_priceController.text),
+                      ),
+                pins: pins,
+                pinScopes: _pinScopes,
+                nameWarning: !_run.repeatsPreviousName(_nameController.text)
+                    ? null
+                    : copies
+                    ? l10n.similarProductNameUnchangedWarning
+                    : l10n.productNameUnchangedWarning,
+              ),
+            ],
+          ),
+          if (_showsOpeningStock && _showsSellingFields) ...[
+            const SizedBox(height: 20),
+            ProductFormSection(
+              icon: Icons.play_circle_outline,
+              title: l10n.openingStockSectionTitle,
+              children: [
+                OpeningStockFields(
+                  key: const ValueKey('product_opening_stock'),
+                  quantityController: _openingQuantityController,
+                  costController: _openingCostController,
+                  quantityFocusNode: _openingQuantityFocusNode,
+                  costFocusNode: _openingCostFocusNode,
+                  onQuantityEditingComplete: () =>
+                      _advanceFrom(_openingQuantityFocusNode),
+                  onCostEditingComplete: () =>
+                      _advanceFrom(_openingCostFocusNode),
+                  costPin: pins[ProductCarryField.openingCost],
+                  costPinScope: _pinScopes[ProductCarryField.openingCost],
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          ProductMoreDetails(
+            expanded: _moreDetailsExpanded,
+            onToggle: () =>
+                setState(() => _moreDetailsExpanded = !_moreDetailsExpanded),
+            children: [
+              TextFormField(
+                controller: _descriptionController,
+                minLines: 2,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: l10n.descriptionLabel,
+                  hintText: l10n.descriptionHint,
+                  prefixIcon: const Icon(Icons.notes_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_showsSellingFields) ...[
+                TextFormField(
+                  controller: _variantNameController,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: l10n.variantNameLabel,
+                    hintText: l10n.variantNameHint,
+                    prefixIcon: const Icon(Icons.tune_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              ProductImageField(
+                catalogRepository: widget.viewModel.catalogRepository,
+                initialSearchQuery: _nameController.text.trim(),
+                selection: _selectedImage,
+                onChanged: (selection) =>
+                    setState(() => _selectedImage = selection),
+                enabled: !isSaving,
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.activeProductLabel),
+                value: _isProductActive,
+                onChanged: (value) => setState(() => _isProductActive = value),
+              ),
+              if (_showsSellingFields)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.activeVariantLabel),
+                  value: _isVariantActive,
+                  onChanged: (value) =>
+                      setState(() => _isVariantActive = value),
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.productIsPreparedTitle),
+                subtitle: Text(l10n.productIsPreparedDescription),
+                value: _isPrepared,
+                onChanged: (value) => setState(() => _isPrepared = value),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.productIsServiceTitle),
+                subtitle: Text(l10n.productIsServiceDescription),
+                value: _isService,
+                onChanged: (value) => setState(() => _isService = value),
+              ),
+              const SizedBox(height: 12),
+              ModifierGroupSelector(
+                available: _availableModifierGroups,
+                selectedIds: _selectedModifierGroupIds,
+                isLoading: _isLoadingModifierGroups,
+                hasError: _modifierGroupsLoadFailed,
+                onReload: _loadModifierGroups,
+                onToggle: _toggleModifierGroup,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          VariantOptionField(
+            availableOptions: _availableVariantOptions,
+            selectedOptions: _selectedVariantOptions,
+            isLoading: _isLoadingVariantOptions,
+            hasError: _variantOptionsLoadFailed,
+            onReload: _loadVariantOptions,
+            onToggleOption: _toggleVariantOption,
+            onCreateOption: _createVariantOption,
+          ),
+          const SizedBox(height: 20),
+          ProductFormSection(
+            icon: Icons.straighten_outlined,
+            title: l10n.productUnitsSectionTitle,
+            children: [
+              ProductUnitsEditor(
+                // Holds rows of its own; a new product starts with none.
+                key: ValueKey('product_units_$_entryGeneration'),
+                availableUnits: _availableUnits,
+                baseUnitCode: _unit,
+                units: _units,
+                defaultSaleUnit: _defaultSaleUnit,
+                defaultPurchaseUnit: _defaultPurchaseUnit,
+                enabled: !isSaving,
+                isLoading: _isLoadingUnits,
+                hasError: _unitsLoadFailed,
+                onReload: _loadUnits,
+                onUnitsChanged: (units) => setState(() => _units = units),
+                onDefaultSaleChanged: (code) =>
+                    setState(() => _defaultSaleUnit = code),
+                onDefaultPurchaseChanged: (code) =>
+                    setState(() => _defaultPurchaseUnit = code),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVariantsPage(BuildContext context, AppLocalizations l10n) {
+    return Form(
+      key: _variantsFormKey,
+      child: Column(
+        key: const ValueKey('product_variants_page'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ProductFormSection(
+            icon: Icons.qr_code_2,
+            title: l10n.defaultVariantStepTitle,
+            children: [
+              ProductGeneratedVariantsStep(
+                skuController: _skuPrefixController,
+                priceController: _priceController,
+                selectedOptions: _selectedVariantOptions,
+                selectedValueIdsByOption: _selectedValueIdsByOption,
+                errorOptionIds: _valueErrorOptionIds,
+                combinations: _generatedCombinations,
+                nameControllers: _generatedNameControllers,
+                skuControllers: _generatedSkuControllers,
+                barcodeControllers: _generatedBarcodeControllers,
+                priceControllers: _generatedPriceControllers,
+                activeBySignature: _generatedActiveBySignature,
+                defaultSignature: _defaultGeneratedSignature,
+                onToggleValue: _toggleOptionValue,
+                onCreateValue: _createVariantOptionValue,
+                onSelectAllValues: _selectAllVariantOptionValues,
+                onDefaultChanged: (signature) =>
+                    setState(() => _defaultGeneratedSignature = signature),
+                onVariantActiveChanged: (signature, value) => setState(
+                  () => _generatedActiveBySignature[signature] = value,
+                ),
+                numberValidator: (value) => _numberValidator(context, value),
+                generationErrorText: _generationErrorText(context),
+                conflictsBySignature: _generatedConflicts,
+                openingQuantityControllers: _showsOpeningStock
+                    ? _generatedOpeningQuantityControllers
+                    : null,
+                openingCostControllers: _showsOpeningStock
+                    ? _generatedOpeningCostControllers
+                    : null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context, AppLocalizations l10n) {
+    final lastCreated = _run.lastCreated;
+    final Widget? status = _confirmedRepeatedName
+        ? PointyInlineMessage.warning(
+            message: _run.copiesProduct
+                ? l10n.similarProductNameUnchangedConfirm
+                : l10n.productNameUnchangedConfirm,
+            compact: true,
+          )
+        : lastCreated == null
+        ? null
+        : ProductEntryLastCreated(
+            name: lastCreated.name,
+            imageFailed: _run.lastCreatedImageFailed,
+            onEdit: widget.onOpenCreated == null ? null : _openLastCreated,
+          );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (status != null) ...[status, const SizedBox(height: 10)],
+          ProductFormActions(
+            isSaving: widget.viewModel.isSaving,
+            isFinalStep: _isFinalStep,
+            primaryFocusNode: _primaryActionFocusNode,
+            onPrimary: () => _onActionPressed(addAnother: false),
+            showShortcutHints: _showsShortcutHints(context),
+            savingAddAnother: _savingAddAnother,
+            onBack: _step > 0 ? () => setState(() => _step = 0) : null,
+            addAnotherFocusNode: _addAnotherFocusNode,
+            onAddAnother: widget.offerAddAnother
+                ? () => _onActionPressed(addAnother: true)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shortcut hints are for a machine with a keyboard; a phone has none.
+  bool _showsShortcutHints(BuildContext context) {
+    return switch (Theme.of(context).platform) {
+      TargetPlatform.windows ||
+      TargetPlatform.linux ||
+      TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  Map<ShortcutActivator, bool Function()> _shortcutBindings() {
+    bool create() {
+      unawaited(_submit(addAnother: false));
+      return true;
+    }
+
+    bool createAnother() {
+      unawaited(_submit(addAnother: widget.offerAddAnother));
+      return true;
+    }
+
+    return {
+      for (final enter in const [
+        LogicalKeyboardKey.enter,
+        LogicalKeyboardKey.numpadEnter,
+      ]) ...{
+        SingleActivator(enter, control: true, shift: true): createAnother,
+        SingleActivator(enter, meta: true, shift: true): createAnother,
+        SingleActivator(enter, control: true): create,
+        SingleActivator(enter, meta: true): create,
+      },
+      // F8 is the counter camera's preview, anywhere in the app.
+      const SingleActivator(LogicalKeyboardKey.f7): _togglePinOfFocusedField,
+    };
+  }
+
+  /// Enter in an essential field: on to the next one, and from the last onto
+  /// the button a run of products presses — never through the category,
+  /// unit or switches, which Tab still visits.
+  void _advanceFrom(FocusNode node) {
+    final path = [
+      if (_showsSellingFields) _barcodeFocusNode,
+      _nameFocusNode,
+      if (_showsSellingFields) _priceFocusNode,
+      if (_showsSellingFields && _showsOpeningStock) ...[
+        _openingQuantityFocusNode,
+        _openingCostFocusNode,
+      ],
+    ];
+    final index = path.indexOf(node);
+    if (index >= 0 && index < path.length - 1) {
+      path[index + 1].requestFocus();
+      return;
+    }
+    (widget.offerAddAnother && _isFinalStep
+            ? _addAnotherFocusNode
+            : _primaryActionFocusNode)
+        .requestFocus();
+  }
+
+  /// A scan typed into any field of the first page goes to the barcode, and
+  /// the field it landed in is put back as it was (the listener does that).
+  /// Whoever was typing elsewhere keeps their place; from the barcode itself,
+  /// or from nowhere, the name is next.
+  void _onBarcodeScanned(String code) {
+    _lastScanAt = DateTime.now();
+    if (!_showsSellingFields || _step != 0) {
+      // Each generated row holds its own barcode, scanned into that row.
+      return;
+    }
+    final focus = FocusManager.instance.primaryFocus;
+    final typingElsewhere =
+        focus != null && focus != _barcodeFocusNode && _isTextField(focus);
+    _barcodeController.text = code;
+    if (!typingElsewhere) {
+      _nameFocusNode.requestFocus();
+    }
+  }
+
+  static bool _isTextField(FocusNode node) {
+    final context = node.context;
+    if (context == null) {
+      return false;
+    }
+    return context.widget is EditableText ||
+        context.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  bool get _scanJustLanded {
+    final lastScanAt = _lastScanAt;
+    return lastScanAt != null &&
+        DateTime.now().difference(lastScanAt) <
+            const Duration(milliseconds: 300);
+  }
+
+  void _onActionPressed({required bool addAnother}) {
+    // The Enter ending a scan reaches a focused button even after the
+    // listener consumed it; that is not somebody pressing it.
+    if (_scanJustLanded) {
+      return;
+    }
+    unawaited(_submit(addAnother: addAnother));
+  }
+
+  void _openLastCreated() {
+    final product = _run.lastCreated;
+    if (product == null || _scanJustLanded) {
+      return;
+    }
+    widget.onOpenCreated?.call(product);
+  }
+
   void _continueToVariant() {
-    final isValid = _parentFormKey.currentState?.validate() ?? false;
+    final isValid = _detailsFormKey.currentState?.validate() ?? false;
     if (!isValid) {
       return;
     }
@@ -706,7 +1045,15 @@ class _ProductFormState extends State<ProductForm> {
     return parseDecimal(value);
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit({required bool addAnother}) async {
+    if (widget.viewModel.isSaving) {
+      return;
+    }
+    if (!_isFinalStep) {
+      _continueToVariant();
+      return;
+    }
+    final continueAdding = addAnother && widget.offerAddAnother;
     final l10n = AppLocalizations.of(context)!;
     // The number filled in when the form opened may have gone to another till
     // since; an untouched field moves to the next free one before it is sent.
@@ -720,7 +1067,8 @@ class _ProductFormState extends State<ProductForm> {
     if (!mounted) {
       return;
     }
-    final isValid = _variantFormKey.currentState?.validate() ?? false;
+    final formKey = _usesGeneratedVariants ? _variantsFormKey : _detailsFormKey;
+    final isValid = formKey.currentState?.validate() ?? false;
     if (!isValid) {
       _scrollToFirstConflict();
       return;
@@ -728,6 +1076,17 @@ class _ProductFormState extends State<ProductForm> {
 
     _syncGeneratedVariantControllers();
     if (_usesGeneratedVariants && !_validateGeneratedVariants()) {
+      return;
+    }
+
+    // A name carried over and never edited gives two products the same name.
+    // Said once; saving again means it was meant.
+    if (_run.repeatsPreviousName(_nameController.text) &&
+        !_confirmedRepeatedName) {
+      setState(() => _confirmedRepeatedName = true);
+      if (_step == 0) {
+        _nameFocusNode.requestFocus();
+      }
       return;
     }
 
@@ -814,10 +1173,13 @@ class _ProductFormState extends State<ProductForm> {
     );
 
     final imageSelection = _selectedImage;
+    setState(() => _savingAddAnother = continueAdding);
     final result = await widget.viewModel.createProduct(
       draft,
       imageUpload: imageSelection?.upload,
       imageImportToken: imageSelection?.importToken,
+      // The next product should not wait on the catalogue list redrawing.
+      waitForListRefresh: !continueAdding,
     );
     if (!mounted) {
       return;
@@ -831,20 +1193,271 @@ class _ProductFormState extends State<ProductForm> {
     }
 
     final createdProduct = result.product;
-    if (createdProduct != null) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              result.outcome == ProductCreateOutcome.createdWithImageError
-                  ? l10n.productCreatedImageAttachError
-                  : l10n.productCreatedMessage,
-            ),
-          ),
-        );
-      widget.onCreated?.call(createdProduct);
+    if (createdProduct == null) {
+      return;
     }
+    final imageFailed =
+        result.outcome == ProductCreateOutcome.createdWithImageError;
+    if (continueAdding) {
+      _startNextProduct(createdProduct, imageFailed: imageFailed);
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            imageFailed
+                ? l10n.productCreatedImageAttachError
+                : l10n.productCreatedMessage,
+          ),
+        ),
+      );
+    widget.onCreated?.call(createdProduct);
+  }
+
+  /// After «إنشاء وإضافة آخر»: the panel stays, the product just created is
+  /// named in it, and the form starts the next one — pinned fields carried
+  /// over and marked as the previous product's, everything else as a fresh
+  /// form has it.
+  void _startNextProduct(Product created, {required bool imageFailed}) {
+    final carried = ProductCarryOverValues(
+      name: _nameController.text.trim(),
+      price: _priceController.text.trim(),
+      pricingCurrency: _pricingCurrency,
+      categories: List.of(_selectedCategories),
+      unit: _unit,
+      tracksExpiry: _tracksExpiry,
+      openingCost: _openingCostController.text.trim(),
+    );
+    _run.recordCreated(created, carried, imageFailed: imageFailed);
+    bool carries(ProductCarryField field) => _run.isPinned(field);
+
+    _setText(
+      _nameController,
+      carries(ProductCarryField.name) ? carried.name : '',
+    );
+    _setText(
+      _priceController,
+      carries(ProductCarryField.price) ? carried.price : '',
+    );
+    _setText(
+      _openingCostController,
+      carries(ProductCarryField.openingCost) ? carried.openingCost : '',
+    );
+    // Codes belong to one product, a picture to one product, and a shelf is
+    // counted rather than copied — none of these ever carry.
+    _barcodeController.clear();
+    _skuController.clear();
+    _skuPrefixController.clear();
+    _variantNameController.clear();
+    _descriptionController.clear();
+    _openingQuantityController.clear();
+
+    setState(() {
+      _pricingCurrency = carries(ProductCarryField.price)
+          ? carried.pricingCurrency
+          : '';
+      _selectedCategories = carries(ProductCarryField.category)
+          ? List.of(carried.categories)
+          : [];
+      _unit = carries(ProductCarryField.unit) ? carried.unit : 'piece';
+      _tracksExpiry =
+          carries(ProductCarryField.tracksExpiry) && carried.tracksExpiry;
+      _selectedImage = null;
+      _isProductActive = true;
+      _isVariantActive = true;
+      _isService = false;
+      _isPrepared = false;
+      _selectedVariantOptionIds.clear();
+      _selectedValueIdsByOption.clear();
+      _valueErrorOptionIds = {};
+      _generationErrorKey = null;
+      _selectedModifierGroupIds.clear();
+      _units = [];
+      _defaultSaleUnit = '';
+      _defaultPurchaseUnit = '';
+      _step = 0;
+      _entryGeneration += 1;
+      _confirmedRepeatedName = false;
+      _savingAddAnother = false;
+      _syncGeneratedVariantControllers();
+      _syncIdentityWatcher();
+      _lastBasePrice = _priceController.text;
+    });
+    _baseline = _snapshot();
+    unawaited(_refreshAutoSkus());
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _barcodeFocusNode.requestFocus();
+      }
+    });
+  }
+
+  /// «منتج مشابه»: the form opens on [similar]'s values, each marked as
+  /// copied, and the run starts from it — so the unchanged-name check holds
+  /// the new name against the product being copied.
+  void _startFromSimilar(SimilarProduct similar) {
+    _similar = similar;
+    final carried = similar.carried;
+    _run.startFrom(carried);
+    _setText(_nameController, carried.name);
+    _lastNameText = carried.name;
+    _setText(_priceController, carried.price);
+    _pricingCurrency = carried.pricingCurrency;
+    _selectedCategories = List.of(carried.categories);
+    _unit = carried.unit;
+    _tracksExpiry = carried.tracksExpiry;
+    _descriptionController.text = similar.description;
+    _isService = similar.isService;
+    _isPrepared = similar.isPrepared;
+    _selectedModifierGroupIds.addAll(similar.modifierGroupIds);
+    _units = similar.units;
+    _defaultSaleUnit = similar.defaultSaleUnit;
+    _defaultPurchaseUnit = similar.defaultPurchaseUnit;
+    _moreDetailsExpanded = similar.fillsMoreDetails;
+    // Laid out as rows once the options load: _applySimilarGrid.
+    _selectedVariantOptionIds.addAll(similar.variantOptionIds);
+    for (final MapEntry(key: optionId, value: valueIds)
+        in similar.valueIdsByOption.entries) {
+      _selectedValueIdsByOption[optionId] = {...valueIds};
+    }
+  }
+
+  /// The copied product's grid, once its options are known: the same values
+  /// where they are still on offer, and each row priced and switched on or off
+  /// as the copied product's variant was. A row it never had starts switched
+  /// off — the grid is every combination of the values, and only the owner
+  /// knows whether this product comes in one the original did not.
+  void _applySimilarGrid() {
+    final similar = _similar;
+    if (similar == null ||
+        !similar.hasVariantGrid ||
+        _similarGridApplied ||
+        !_run.copiesProduct) {
+      return;
+    }
+    _similarGridApplied = true;
+    // Whatever arrives with the options is the copy, not the owner's work.
+    final untouched = !_isDirty;
+    for (final optionId in similar.variantOptionIds) {
+      final option = _availableVariantOptions
+          .where((option) => option.id == optionId)
+          .firstOrNull;
+      final offered = {
+        if (option != null)
+          for (final value in option.values)
+            if (value.isActive) value.id,
+      };
+      final values = similar.valueIdsByOption[optionId]!.intersection(offered);
+      if (values.isEmpty) {
+        // Switched off, or every value it used retired, since the original
+        // was made: not offered to the copy.
+        _selectedVariantOptionIds.remove(optionId);
+        _selectedValueIdsByOption.remove(optionId);
+      } else {
+        _selectedValueIdsByOption[optionId] = values;
+      }
+    }
+    _syncGeneratedVariantControllers();
+    final combinations = _generatedCombinations;
+    for (final combination in combinations) {
+      final row = similar.rowsBySignature[combination.signature];
+      _generatedActiveBySignature[combination.signature] =
+          row?.isActive ?? false;
+      if (row != null && row.price.isNotEmpty) {
+        _generatedPriceControllers[combination.signature]?.text = row.price;
+      }
+    }
+    final defaultSignature = similar.defaultSignature;
+    if (combinations.any((row) => row.signature == defaultSignature)) {
+      _defaultGeneratedSignature = defaultSignature;
+    }
+    _syncIdentityWatcher();
+    if (untouched) {
+      _baseline = _snapshot();
+    }
+  }
+
+  /// Writes [text] with the cursor after it, so a carried name is edited from
+  /// its end — Ctrl+Backspace takes off the last word.
+  static void _setText(TextEditingController controller, String text) {
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  /// Pins or unpins [field]. Pinning a field that is still fresh brings back
+  /// the previous product's value, so the choice can be made after the save.
+  void _togglePin(ProductCarryField field) {
+    final previous = _run.previous;
+    if (previous == null) {
+      return;
+    }
+    if (_run.togglePin(field) && _holdsFreshValue(field)) {
+      _restoreCarried(field, previous);
+      _run.markKept(field);
+    }
+    setState(() {});
+  }
+
+  /// F7: the pin of whichever field holds focus.
+  bool _togglePinOfFocusedField() {
+    if (!_showsPins) {
+      return false;
+    }
+    for (final MapEntry(key: field, value: scope) in _pinScopes.entries) {
+      if (scope.hasFocus) {
+        _togglePin(field);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Whether [field] still shows what a fresh form starts with.
+  bool _holdsFreshValue(ProductCarryField field) {
+    return switch (field) {
+      ProductCarryField.name => _nameController.text.trim().isEmpty,
+      ProductCarryField.price => _priceController.text.trim().isEmpty,
+      ProductCarryField.category => _selectedCategories.isEmpty,
+      ProductCarryField.unit => _unit == 'piece',
+      ProductCarryField.tracksExpiry => !_tracksExpiry,
+      ProductCarryField.openingCost =>
+        _openingCostController.text.trim().isEmpty,
+    };
+  }
+
+  void _restoreCarried(
+    ProductCarryField field,
+    ProductCarryOverValues previous,
+  ) {
+    switch (field) {
+      case ProductCarryField.name:
+        _setText(_nameController, previous.name);
+      case ProductCarryField.price:
+        _setText(_priceController, previous.price);
+        _pricingCurrency = previous.pricingCurrency;
+      case ProductCarryField.category:
+        _selectedCategories = List.of(previous.categories);
+      case ProductCarryField.unit:
+        _unit = previous.unit;
+      case ProductCarryField.tracksExpiry:
+        _tracksExpiry = previous.tracksExpiry;
+      case ProductCarryField.openingCost:
+        _setText(_openingCostController, previous.openingCost);
+    }
+  }
+
+  void _setCategories(List<AsyncSelectionOption<int>> categories) {
+    setState(() {
+      _selectedCategories = categories;
+      _run.unkeep(ProductCarryField.category);
+    });
   }
 
   /// Routes a rejected save's conflicts to the input that carries the value:
@@ -863,6 +1476,7 @@ class _ProductFormState extends State<ProductForm> {
     }
 
     setState(() {
+      _savingAddAnother = false;
       _generatedConflicts.clear();
       for (final conflict in generated) {
         final index = conflict.index;
@@ -915,6 +1529,7 @@ class _ProductFormState extends State<ProductForm> {
           _availableVariantOptions = result.value;
           _isLoadingVariantOptions = false;
           _variantOptionsLoadFailed = false;
+          _applySimilarGrid();
         });
       case Error<List<VariantOption>>():
         setState(() {
@@ -1365,129 +1980,6 @@ class _ProductFormState extends State<ProductForm> {
     if (!mounted || picked == null) {
       return;
     }
-    setState(() => _selectedCategories = picked);
-  }
-}
-
-class _GeneratedVariantFormStep extends StatelessWidget {
-  const _GeneratedVariantFormStep({
-    required this.skuController,
-    required this.priceController,
-    required this.selectedOptions,
-    required this.selectedValueIdsByOption,
-    required this.errorOptionIds,
-    required this.combinations,
-    required this.nameControllers,
-    required this.skuControllers,
-    required this.barcodeControllers,
-    required this.priceControllers,
-    required this.activeBySignature,
-    required this.defaultSignature,
-    required this.onToggleValue,
-    required this.onCreateValue,
-    required this.onSelectAllValues,
-    required this.onDefaultChanged,
-    required this.onVariantActiveChanged,
-    required this.numberValidator,
-    required this.generationErrorText,
-    required this.conflictsBySignature,
-    this.openingQuantityControllers,
-    this.openingCostControllers,
-  });
-
-  final TextEditingController skuController;
-  final TextEditingController priceController;
-  final List<VariantOption> selectedOptions;
-  final Map<int, Set<int>> selectedValueIdsByOption;
-  final Set<int> errorOptionIds;
-  final List<VariantCombination> combinations;
-  final Map<String, TextEditingController> nameControllers;
-  final Map<String, TextEditingController> skuControllers;
-  final Map<String, TextEditingController> barcodeControllers;
-  final Map<String, TextEditingController> priceControllers;
-  final Map<String, TextEditingController>? openingQuantityControllers;
-  final Map<String, TextEditingController>? openingCostControllers;
-  final Map<String, bool> activeBySignature;
-  final String? defaultSignature;
-  final void Function(VariantOption option, int valueId) onToggleValue;
-  final void Function(VariantOption option, String initialName) onCreateValue;
-  final void Function(VariantOption option) onSelectAllValues;
-  final ValueChanged<String> onDefaultChanged;
-  final void Function(String signature, bool value) onVariantActiveChanged;
-  final FormFieldValidator<String> numberValidator;
-  final String? generationErrorText;
-  final Map<String, Map<CatalogIdentityField, CatalogIdentityConflict>>
-  conflictsBySignature;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TutorTarget(
-          anchor: TutorAnchor.productSkuPrefixField,
-          child: TextFormField(
-            controller: skuController,
-            textInputAction: TextInputAction.next,
-            textCapitalization: TextCapitalization.characters,
-            decoration: InputDecoration(
-              labelText: l10n.skuPrefixLabel,
-              hintText: l10n.skuPrefixHint,
-              prefixIcon: const Icon(Icons.qr_code_2),
-              helperText: l10n.skuOptionalHelper,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TutorTarget(
-          anchor: TutorAnchor.productGeneratedPriceField,
-          child: TextFormField(
-            controller: priceController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            textInputAction: TextInputAction.done,
-            decoration: InputDecoration(
-              labelText: l10n.generatedVariantPriceLabel,
-              prefixIcon: const Icon(Icons.sell_outlined),
-            ),
-            inputFormatters: [DecimalTextInputFormatter()],
-            validator: numberValidator,
-          ),
-        ),
-        const SizedBox(height: 12),
-        VariantOptionValuesField(
-          options: selectedOptions,
-          selectedValueIdsByOption: selectedValueIdsByOption,
-          errorOptionIds: errorOptionIds,
-          onToggleValue: onToggleValue,
-          onCreateValue: onCreateValue,
-          onSelectAllValues: onSelectAllValues,
-        ),
-        if (generationErrorText != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            generationErrorText!,
-            style: TextStyle(color: context.pointyColors.danger),
-          ),
-        ],
-        const SizedBox(height: 12),
-        GeneratedVariantsPreview(
-          combinations: combinations,
-          nameControllers: nameControllers,
-          skuControllers: skuControllers,
-          barcodeControllers: barcodeControllers,
-          priceControllers: priceControllers,
-          activeBySignature: activeBySignature,
-          defaultSignature: defaultSignature,
-          onDefaultChanged: onDefaultChanged,
-          onActiveChanged: onVariantActiveChanged,
-          numberValidator: numberValidator,
-          conflictsBySignature: conflictsBySignature,
-          openingQuantityControllers: openingQuantityControllers,
-          openingCostControllers: openingCostControllers,
-        ),
-      ],
-    );
+    _setCategories(picked);
   }
 }

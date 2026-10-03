@@ -29,6 +29,7 @@ import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_form.dart';
+import 'package:pointy_frontend/src/shared/barcode/barcode_scan_listener.dart';
 import 'package:pointy_frontend/src/data/repositories/attendance_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/device_settings_repository.dart';
@@ -1571,15 +1572,12 @@ void main() {
     expect(find.text('منتج جديد'), findsOneWidget);
     expect(find.text('اسم المنتج'), findsOneWidget);
     expect(find.text('بيانات المنتج'), findsOneWidget);
-    expect(find.text('التالي'), findsOneWidget);
-
-    await tester.enterText(find.byType(TextFormField).first, 'قهوة عربية');
-    await tester.tap(find.text('التالي'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('الخيار الافتراضي'), findsOneWidget);
+    // One page for a simple product: its code sits beside the name, and the
+    // catalogue offers entering several products in a row.
     expect(find.text('رمز المنتج'), findsOneWidget);
     expect(find.text('إنشاء المنتج'), findsOneWidget);
+    expect(find.text('إنشاء وإضافة آخر'), findsOneWidget);
+    expect(find.text('التالي'), findsNothing);
   });
 
   testWidgets('category tree lazily pages roots and children', (
@@ -1771,6 +1769,84 @@ void main() {
     expect(find.text('قهوة البيت'), findsWidgets);
   });
 
+  String barcodeInForm(WidgetTester tester) => tester
+      .widget<TextFormField>(
+        find.descendant(
+          of: find.byType(ProductForm),
+          matching: find.widgetWithText(TextFormField, 'الباركود'),
+        ),
+      )
+      .controller!
+      .text;
+
+  testWidgets('a typed barcode nobody owns offers to create the product', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(productBarcode: '123456')),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
+
+    await tester.enterText(
+      find.byKey(const ValueKey('catalog_product_lookup_field')),
+      '6281999000017',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    // Typed into the search, so offered from the message rather than opened.
+    expect(find.byType(ProductForm), findsNothing);
+    await tester.tap(find.text('إنشاء منتج'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.byType(ProductForm), findsOneWidget);
+    expect(barcodeInForm(tester), '6281999000017');
+  });
+
+  testWidgets('a scanned barcode nobody owns opens a new product for it', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(productBarcode: '123456')),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
+
+    tester
+        .widget<BarcodeScanListener>(
+          find
+              .ancestor(
+                of: find.byKey(const ValueKey('catalog_product_lookup_field')),
+                matching: find.byType(BarcodeScanListener),
+              )
+              .first,
+        )
+        .onBarcodeScanned('6281999000017');
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.byType(ProductForm), findsOneWidget);
+    expect(barcodeInForm(tester), '6281999000017');
+    // The catalogue offers a run of products, not just the one.
+    expect(find.text('إنشاء وإضافة آخر'), findsOneWidget);
+  });
+
+  testWidgets('Ctrl+N opens a new product on the catalogue', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
+    expect(find.byType(ProductForm), findsNothing);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.byType(ProductForm), findsOneWidget);
+  });
+
   testWidgets(
     'device settings turns on the search-mode picker for the catalog',
     (WidgetTester tester) async {
@@ -1930,6 +2006,86 @@ void main() {
     expect(variantBody?['product'], 1);
     expect(variantBody?['unit_price'], '4.25');
     expect(variantBody?['is_active'], isTrue);
+  });
+
+  testWidgets('a similar product starts from the details and opens once made', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(520, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    final similar = find.text('منتج مشابه');
+    await tester.ensureVisible(similar);
+    await tester.pumpAndSettle();
+    await tester.tap(similar);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    final name = find.descendant(
+      of: find.byType(ProductForm),
+      matching: find.widgetWithText(TextFormField, 'اسم المنتج'),
+    );
+    expect(tester.widget<TextFormField>(name).controller!.text, 'قهوة البيت');
+
+    await tester.enterText(name, 'قهوة البيت المحمصة');
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('إنشاء المنتج'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    // The copy is what the owner lands on, not the original it came from.
+    expect(find.byType(ProductForm), findsNothing);
+    expect(find.byType(ProductDetailsScreen), findsOneWidget);
+    expect(find.text('قهوة البيت المحمصة'), findsWidgets);
+    expect(find.text('قهوة البيت'), findsNothing);
+  });
+
+  testWidgets('on a wide screen the similar product is selected once made', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    final similar = find.text('منتج مشابه');
+    await tester.ensureVisible(similar);
+    await tester.pumpAndSettle();
+    await tester.tap(similar);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(ProductForm),
+        matching: find.widgetWithText(TextFormField, 'اسم المنتج'),
+      ),
+      'قهوة البيت المحمصة',
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('إنشاء المنتج'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    // The inline pane moves to the copy; nothing is pushed over the list.
+    expect(find.byType(ProductForm), findsNothing);
+    expect(find.byType(ProductDetailsScreen), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(ProductDetailsView),
+        matching: find.text('قهوة البيت المحمصة'),
+      ),
+      findsWidgets,
+    );
   });
 
   testWidgets('catalog shows inline product details pane on wide screens', (
@@ -2192,16 +2348,12 @@ void main() {
       );
       expect(find.text('إضافة منتج سريع'), findsNothing);
 
-      // Step 1 — parent details.
+      // One page for a simple product: the barcode arrives prefilled with
+      // the scanned code; name it, price it and create.
       await tester.enterText(
         find.widgetWithText(TextFormField, 'اسم المنتج'),
         'سكر المورد',
       );
-      await tester.tap(find.text('التالي'));
-      await tester.pumpAndSettle(const Duration(seconds: 1));
-
-      // Step 2 — the default variant's SKU and barcode arrive prefilled with
-      // the scanned code; supply the sale price and create.
       await tester.enterText(
         find.widgetWithText(TextFormField, 'السعر'),
         '4.25',
@@ -4705,6 +4857,18 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('الخيارات'), findsWidgets);
+    // The details list is built as it scrolls: reach the variants section
+    // the way a user would, rather than hoping it is built already.
+    await tester.scrollUntilVisible(
+      find.text('إضافة خيار'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ProductDetailsView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.ensureVisible(find.text('COF-001').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('COF-001').last);

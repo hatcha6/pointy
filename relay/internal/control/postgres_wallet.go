@@ -17,6 +17,7 @@ import (
 // query aliases relay_wallet_entries as e.
 const walletEntryColumns = `e.id,
 	e.installation_id,
+	e.account,
 	e.kind,
 	e.service,
 	e.amount::text,
@@ -40,6 +41,8 @@ const walletTopUpColumns = `t.id,
 	t.checkout_url,
 	t.idempotency_key,
 	t.requested_by,
+	t.payer_hint,
+	t.otp_attempts,
 	t.test_mode,
 	t.error_code,
 	t.error_detail,
@@ -71,42 +74,93 @@ func pgErrorCode(err error) (string, string) {
 	return "", ""
 }
 
+// The main wallet's running balance is relay_wallets (migration 15); every
+// other account's is a row of relay_wallet_accounts (migration 17). These
+// three statements per table are the only place that difference shows.
+const (
+	selectMainWalletBalanceSQL = `SELECT balance::text, updated_at FROM relay_wallets WHERE installation_id = $1`
+	selectAccountBalanceSQL    = `SELECT balance::text, updated_at FROM relay_wallet_accounts
+		WHERE installation_id = $1 AND account = $2`
+	ensureMainWalletSQL = `INSERT INTO relay_wallets (installation_id, balance, created_at, updated_at)
+		VALUES ($1, 0, $2::timestamptz, $2::timestamptz)
+		ON CONFLICT (installation_id) DO NOTHING`
+	ensureAccountSQL = `INSERT INTO relay_wallet_accounts (installation_id, account, balance, created_at, updated_at)
+		VALUES ($1, $3, 0, $2::timestamptz, $2::timestamptz)
+		ON CONFLICT (installation_id, account) DO NOTHING`
+	lockMainWalletSQL = `SELECT balance::text FROM relay_wallets WHERE installation_id = $1 FOR UPDATE`
+	lockAccountSQL    = `SELECT balance::text FROM relay_wallet_accounts
+		WHERE installation_id = $1 AND account = $2 FOR UPDATE`
+	setMainWalletSQL = `UPDATE relay_wallets SET balance = $2::text::numeric, updated_at = $3::timestamptz
+		WHERE installation_id = $1`
+	setAccountSQL = `UPDATE relay_wallet_accounts SET balance = $2::text::numeric, updated_at = $3::timestamptz
+		WHERE installation_id = $1 AND account = $4`
+)
+
 func (s *PostgresStore) GetWallet(ctx context.Context, installationID string) (Wallet, error) {
+	return s.GetWalletAccount(ctx, installationID, WalletAccountMain)
+}
+
+func (s *PostgresStore) GetWalletAccount(ctx context.Context, installationID, account string) (Wallet, error) {
 	installationID = strings.TrimSpace(installationID)
+	account = NormalizeWalletAccount(account)
+	if !ValidWalletAccount(account) {
+		return Wallet{}, fmt.Errorf("unknown wallet account %q", account)
+	}
 	var balance string
 	var updatedAt time.Time
-	err := s.pool.QueryRow(
-		ctx,
-		`SELECT balance::text, updated_at FROM relay_wallets WHERE installation_id = $1`,
-		installationID,
-	).Scan(&balance, &updatedAt)
+	var err error
+	if account == WalletAccountMain {
+		err = s.pool.QueryRow(ctx, selectMainWalletBalanceSQL, installationID).Scan(&balance, &updatedAt)
+	} else {
+		err = s.pool.QueryRow(ctx, selectAccountBalanceSQL, installationID, account).Scan(&balance, &updatedAt)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Wallet{InstallationID: installationID, Balance: FormatWalletAmount(nil)}, nil
+		return Wallet{InstallationID: installationID, Account: account, Balance: FormatWalletAmount(nil)}, nil
 	}
 	if err != nil {
 		return Wallet{}, err
 	}
 	updated := updatedAt.UTC()
-	return Wallet{InstallationID: installationID, Balance: NormalizeWalletAmount(balance), UpdatedAt: &updated}, nil
+	return Wallet{InstallationID: installationID, Account: account, Balance: NormalizeWalletAmount(balance), UpdatedAt: &updated}, nil
 }
 
-func (s *PostgresStore) ListWallets(ctx context.Context, limit int) ([]Wallet, error) {
-	rows, err := s.pool.Query(
-		ctx,
-		`SELECT w.installation_id, COALESCE(i.shop_name, ''), w.balance::text, w.updated_at
-		FROM relay_wallets w
-		LEFT JOIN relay_installations i ON i.id = w.installation_id
-		ORDER BY w.balance DESC, w.installation_id
-		LIMIT $1`,
-		normalizedWalletListLimit(limit),
-	)
+func (s *PostgresStore) ListWallets(ctx context.Context, account string, limit int) ([]Wallet, error) {
+	account = NormalizeWalletAccount(account)
+	if !ValidWalletAccount(account) {
+		return nil, fmt.Errorf("unknown wallet account %q", account)
+	}
+	var rows pgx.Rows
+	var err error
+	if account == WalletAccountMain {
+		rows, err = s.pool.Query(
+			ctx,
+			`SELECT w.installation_id, COALESCE(i.shop_name, ''), w.balance::text, w.updated_at
+			FROM relay_wallets w
+			LEFT JOIN relay_installations i ON i.id = w.installation_id
+			ORDER BY w.balance DESC, w.installation_id
+			LIMIT $1`,
+			normalizedWalletListLimit(limit),
+		)
+	} else {
+		rows, err = s.pool.Query(
+			ctx,
+			`SELECT w.installation_id, COALESCE(i.shop_name, ''), w.balance::text, w.updated_at
+			FROM relay_wallet_accounts w
+			LEFT JOIN relay_installations i ON i.id = w.installation_id
+			WHERE w.account = $2
+			ORDER BY w.balance DESC, w.installation_id
+			LIMIT $1`,
+			normalizedWalletListLimit(limit),
+			account,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	wallets := []Wallet{}
 	for rows.Next() {
-		var wallet Wallet
+		wallet := Wallet{Account: account}
 		var updatedAt time.Time
 		if err := rows.Scan(&wallet.InstallationID, &wallet.ShopName, &wallet.Balance, &updatedAt); err != nil {
 			return nil, err
@@ -117,6 +171,47 @@ func (s *PostgresStore) ListWallets(ctx context.Context, limit int) ([]Wallet, e
 		wallets = append(wallets, wallet)
 	}
 	return wallets, rows.Err()
+}
+
+// lockWalletBalanceTx makes sure the account's balance row exists and locks it
+// for the rest of the transaction, returning the balance.
+func lockWalletBalanceTx(ctx context.Context, tx pgx.Tx, installationID, account string, now time.Time) (*big.Rat, error) {
+	var err error
+	if account == WalletAccountMain {
+		_, err = tx.Exec(ctx, ensureMainWalletSQL, installationID, now)
+	} else {
+		_, err = tx.Exec(ctx, ensureAccountSQL, installationID, now, account)
+	}
+	if err != nil {
+		if code, _ := pgErrorCode(err); code == pgForeignKeyViolation {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	var balanceText string
+	if account == WalletAccountMain {
+		err = tx.QueryRow(ctx, lockMainWalletSQL, installationID).Scan(&balanceText)
+	} else {
+		err = tx.QueryRow(ctx, lockAccountSQL, installationID, account).Scan(&balanceText)
+	}
+	if err != nil {
+		return nil, err
+	}
+	balance, ok := new(big.Rat).SetString(balanceText)
+	if !ok {
+		return nil, fmt.Errorf("stored %s balance %q is not a decimal", account, balanceText)
+	}
+	return balance, nil
+}
+
+func setWalletBalanceTx(ctx context.Context, tx pgx.Tx, installationID, account string, balance *big.Rat, now time.Time) error {
+	var err error
+	if account == WalletAccountMain {
+		_, err = tx.Exec(ctx, setMainWalletSQL, installationID, FormatWalletAmount(balance), now)
+	} else {
+		_, err = tx.Exec(ctx, setAccountSQL, installationID, FormatWalletAmount(balance), now, account)
+	}
+	return err
 }
 
 func (s *PostgresStore) PostWalletEntry(ctx context.Context, posting WalletPosting) (WalletEntry, bool, error) {
@@ -141,34 +236,19 @@ func (s *PostgresStore) PostWalletEntry(ctx context.Context, posting WalletPosti
 }
 
 // postWalletEntryTx records a prepared posting inside the caller's
-// transaction. It locks the shop's wallet row first, so the idempotency
+// transaction. It locks the account's balance row first, so the idempotency
 // check, the balance check and the insert are one step: two debits racing for
 // the last dinar cannot both get it, and a retried key cannot slip between.
+// Locking a row the transaction already holds is a no-op, so callers that
+// locked it themselves can still post through here.
 func (s *PostgresStore) postWalletEntryTx(
 	ctx context.Context,
 	tx pgx.Tx,
 	posting preparedWalletPosting,
 ) (WalletEntry, bool, error) {
 	now := s.clock.Now().UTC()
-	if _, err := tx.Exec(
-		ctx,
-		`INSERT INTO relay_wallets (installation_id, balance, created_at, updated_at)
-		VALUES ($1, 0, $2::timestamptz, $2::timestamptz)
-		ON CONFLICT (installation_id) DO NOTHING`,
-		posting.InstallationID,
-		now,
-	); err != nil {
-		if code, _ := pgErrorCode(err); code == pgForeignKeyViolation {
-			return WalletEntry{}, false, ErrNotFound
-		}
-		return WalletEntry{}, false, err
-	}
-	var balanceText string
-	if err := tx.QueryRow(
-		ctx,
-		`SELECT balance::text FROM relay_wallets WHERE installation_id = $1 FOR UPDATE`,
-		posting.InstallationID,
-	).Scan(&balanceText); err != nil {
+	balance, err := lockWalletBalanceTx(ctx, tx, posting.InstallationID, posting.Account, now)
+	if err != nil {
 		return WalletEntry{}, false, err
 	}
 	existing, err := scanWalletEntry(tx.QueryRow(
@@ -184,10 +264,6 @@ func (s *PostgresStore) postWalletEntryTx(
 	if !errors.Is(err, ErrWalletEntryNotFound) {
 		return WalletEntry{}, false, err
 	}
-	balance, ok := new(big.Rat).SetString(balanceText)
-	if !ok {
-		return WalletEntry{}, false, fmt.Errorf("stored wallet balance %q is not a decimal", balanceText)
-	}
 	next, err := nextWalletBalance(balance, posting)
 	if err != nil {
 		return WalletEntry{}, false, err
@@ -199,14 +275,15 @@ func (s *PostgresStore) postWalletEntryTx(
 	inserted, err := scanWalletEntry(tx.QueryRow(
 		ctx,
 		`INSERT INTO relay_wallet_entries AS e (
-			id, installation_id, kind, service, amount, balance_after, reference,
+			id, installation_id, account, kind, service, amount, balance_after, reference,
 			description, idempotency_key, actor, test_mode, created_at
 		) VALUES (
-			$1, $2, $3, $4, $5::text::numeric, $6::text::numeric, $7,
-			$8, $9, $10, $11, $12::timestamptz
+			$1, $2, $3, $4, $5, $6::text::numeric, $7::text::numeric, $8,
+			$9, $10, $11, $12, $13::timestamptz
 		) RETURNING `+walletEntryColumns,
 		entry.ID,
 		entry.InstallationID,
+		entry.Account,
 		entry.Kind,
 		entry.Service,
 		entry.Amount,
@@ -221,14 +298,7 @@ func (s *PostgresStore) postWalletEntryTx(
 	if err != nil {
 		return WalletEntry{}, false, err
 	}
-	if _, err := tx.Exec(
-		ctx,
-		`UPDATE relay_wallets SET balance = $2::text::numeric, updated_at = $3::timestamptz
-		WHERE installation_id = $1`,
-		posting.InstallationID,
-		FormatWalletAmount(next),
-		now,
-	); err != nil {
+	if err := setWalletBalanceTx(ctx, tx, posting.InstallationID, posting.Account, next, now); err != nil {
 		return WalletEntry{}, false, err
 	}
 	return inserted, true, nil
@@ -240,6 +310,10 @@ func (s *PostgresStore) ListWalletEntries(ctx context.Context, filter WalletEntr
 	if id := strings.TrimSpace(filter.InstallationID); id != "" {
 		args = append(args, id)
 		conditions = append(conditions, fmt.Sprintf("e.installation_id = $%d", len(args)))
+	}
+	if account := strings.TrimSpace(filter.Account); account != "" {
+		args = append(args, NormalizeWalletAccount(account))
+		conditions = append(conditions, fmt.Sprintf("e.account = $%d", len(args)))
 	}
 	if kind := strings.TrimSpace(filter.Kind); kind != "" {
 		args = append(args, kind)
@@ -279,6 +353,147 @@ func (s *PostgresStore) ListWalletEntries(ctx context.Context, filter WalletEntr
 	return entries, rows.Err()
 }
 
+func (s *PostgresStore) findWalletEntryByKeyTx(ctx context.Context, tx pgx.Tx, installationID, key string) (WalletEntry, error) {
+	return scanWalletEntry(tx.QueryRow(
+		ctx,
+		`SELECT `+walletEntryColumns+` FROM relay_wallet_entries e
+		WHERE e.installation_id = $1 AND e.idempotency_key = $2`,
+		installationID,
+		key,
+	), false)
+}
+
+func (s *PostgresStore) TransferWalletFunds(ctx context.Context, transfer WalletTransfer) (WalletTransferResult, bool, error) {
+	out, in, err := walletTransferPostings(transfer)
+	if err != nil {
+		return WalletTransferResult{}, false, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return WalletTransferResult{}, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Both rows are locked in one fixed order (main before any other account,
+	// then by name), so two transfers in opposite directions can never each
+	// hold the row the other is waiting for.
+	now := s.clock.Now().UTC()
+	first, second := out.Account, in.Account
+	if second == WalletAccountMain || (first != WalletAccountMain && second < first) {
+		first, second = second, first
+	}
+	for _, account := range []string{first, second} {
+		if _, err := lockWalletBalanceTx(ctx, tx, out.InstallationID, account, now); err != nil {
+			return WalletTransferResult{}, false, err
+		}
+	}
+	if existing, err := s.findWalletEntryByKeyTx(ctx, tx, out.InstallationID, out.IdempotencyKey); err == nil {
+		incoming, err := s.findWalletEntryByKeyTx(ctx, tx, in.InstallationID, in.IdempotencyKey)
+		if err != nil {
+			return WalletTransferResult{}, false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return WalletTransferResult{}, false, err
+		}
+		return WalletTransferResult{Out: existing, In: incoming}, false, nil
+	} else if !errors.Is(err, ErrWalletEntryNotFound) {
+		return WalletTransferResult{}, false, err
+	}
+	outEntry, _, err := s.postWalletEntryTx(ctx, tx, out)
+	if err != nil {
+		return WalletTransferResult{}, false, err
+	}
+	inEntry, _, err := s.postWalletEntryTx(ctx, tx, in)
+	if err != nil {
+		return WalletTransferResult{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return WalletTransferResult{}, false, err
+	}
+	return WalletTransferResult{Out: outEntry, In: inEntry}, true, nil
+}
+
+func (s *PostgresStore) PurchaseWalletPlan(ctx context.Context, purchase WalletPlanPurchase) (WalletPlanPurchaseResult, bool, error) {
+	purchase, _, err := prepareWalletPlanPurchase(purchase)
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Lock order is wallet, then installation. The installation row is taken
+	// FOR NO KEY UPDATE, which never waits on the key-share locks every ledger
+	// insert takes on it through its foreign key.
+	now := s.clock.Now().UTC()
+	if _, err := lockWalletBalanceTx(ctx, tx, purchase.InstallationID, WalletAccountMain, now); err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	installation, err := scanInstallation(tx.QueryRow(
+		ctx,
+		selectInstallationSQL+" WHERE id = $1 FOR NO KEY UPDATE",
+		purchase.InstallationID,
+	))
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	if existing, err := s.findWalletEntryByKeyTx(ctx, tx, purchase.InstallationID, walletPlanPurchaseKey(purchase.IdempotencyKey)); err == nil {
+		if err := tx.Commit(ctx); err != nil {
+			return WalletPlanPurchaseResult{}, false, err
+		}
+		return WalletPlanPurchaseResult{Entry: existing, Installation: installation}, false, nil
+	} else if !errors.Is(err, ErrWalletEntryNotFound) {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	from, until, err := walletPlanPeriod(installation, purchase, now)
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	posting, err := prepareWalletPosting(walletPlanCharge(purchase, until))
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	entry, _, err := s.postWalletEntryTx(ctx, tx, posting)
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	column := "remote_access_paid_until"
+	if purchase.Plan == WalletPlanAI {
+		column = "ai_paid_until"
+	}
+	updated, err := scanInstallation(tx.QueryRow(
+		ctx,
+		`UPDATE relay_installations SET `+column+` = $2::timestamptz, updated_at = $3::timestamptz
+		WHERE id = $1
+		RETURNING `+installationColumns,
+		purchase.InstallationID,
+		until,
+		now,
+	))
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	event, err := newAdminAuditEvent(
+		installation.ID,
+		walletPlanAuditMetadata(purchase, entry),
+		InstallationSubscriptionAuditState(installation, now),
+		InstallationSubscriptionAuditState(updated, now),
+		now,
+	)
+	if err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	if err := insertAdminAuditEventTx(ctx, tx, event); err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return WalletPlanPurchaseResult{}, false, err
+	}
+	return WalletPlanPurchaseResult{Entry: entry, Installation: updated, From: from, Until: until}, true, nil
+}
+
 func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp) (WalletTopUp, bool, error) {
 	// An invoice number clash is 1 in 32^10 per pair; a fresh draw settles it.
 	for attempt := 0; attempt < 3; attempt++ {
@@ -291,13 +506,15 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 			`INSERT INTO relay_wallet_topups AS t (
 				id, installation_id, method, amount, status, invoice_no,
 				provider_transaction_id, checkout_url, idempotency_key, requested_by,
+				payer_hint, otp_attempts,
 				test_mode, error_code, error_detail, entry_id, confirmed_by,
 				created_at, updated_at, paid_at
 			) VALUES (
 				$1, $2, $3, $4::text::numeric, $5, $6,
 				'', '', $7, $8,
-				$9, '', '', '', '',
-				$10::timestamptz, $10::timestamptz, NULL
+				$9, 0,
+				$10, '', '', '', '',
+				$11::timestamptz, $11::timestamptz, NULL
 			)
 			ON CONFLICT (installation_id, idempotency_key) DO NOTHING
 			RETURNING `+walletTopUpColumns,
@@ -309,6 +526,7 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 			prepared.InvoiceNo,
 			prepared.IdempotencyKey,
 			prepared.RequestedBy,
+			prepared.PayerHint,
 			prepared.TestMode,
 			prepared.CreatedAt,
 		), false)
@@ -339,14 +557,18 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 	return WalletTopUp{}, false, errors.New("could not mint a unique top-up invoice number")
 }
 
-func (s *PostgresStore) AttachWalletTopUpCheckout(ctx context.Context, id, checkoutURL string) (WalletTopUp, error) {
+func (s *PostgresStore) AttachWalletTopUpPayment(
+	ctx context.Context,
+	id, providerTransactionID, checkoutURL string,
+) (WalletTopUp, error) {
 	updated, err := scanWalletTopUp(s.pool.QueryRow(
 		ctx,
 		`UPDATE relay_wallet_topups AS t
-		SET checkout_url = $2, updated_at = $3::timestamptz
-		WHERE t.id = $1 AND t.status = 'pending' AND t.checkout_url = ''
+		SET provider_transaction_id = $2, checkout_url = $3, updated_at = $4::timestamptz
+		WHERE t.id = $1 AND t.status = 'pending' AND t.provider_transaction_id = ''
 		RETURNING `+walletTopUpColumns,
 		id,
+		strings.TrimSpace(providerTransactionID),
 		strings.TrimSpace(checkoutURL),
 		s.clock.Now().UTC(),
 	), false)
@@ -357,6 +579,59 @@ func (s *PostgresStore) AttachWalletTopUpCheckout(ctx context.Context, id, check
 		return WalletTopUp{}, err
 	}
 	return s.GetWalletTopUp(ctx, id)
+}
+
+// RecordWalletTopUpOTPAttempt counts the attempt in the same statement that
+// checks the cap, so codes sent in parallel cannot slip past it.
+func (s *PostgresStore) RecordWalletTopUpOTPAttempt(ctx context.Context, id string, limit int) (WalletTopUp, bool, error) {
+	updated, err := scanWalletTopUp(s.pool.QueryRow(
+		ctx,
+		`UPDATE relay_wallet_topups AS t
+		SET otp_attempts = t.otp_attempts + 1, updated_at = $3::timestamptz
+		WHERE t.id = $1 AND t.status = 'pending' AND t.otp_attempts < $2
+		RETURNING `+walletTopUpColumns,
+		id,
+		limit,
+		s.clock.Now().UTC(),
+	), false)
+	if err == nil {
+		return updated, true, nil
+	}
+	if !errors.Is(err, ErrWalletTopUpNotFound) {
+		return WalletTopUp{}, false, err
+	}
+	existing, err := s.GetWalletTopUp(ctx, id)
+	if err != nil {
+		return WalletTopUp{}, false, err
+	}
+	return existing, false, nil
+}
+
+func (s *PostgresStore) ListOpenWalletTopUps(ctx context.Context, createdAfter time.Time, limit int) ([]WalletTopUp, error) {
+	rows, err := s.pool.Query(
+		ctx,
+		selectWalletTopUpWithShopSQL+`
+		WHERE t.status IN ('pending', 'expired')
+			AND t.created_at >= $1::timestamptz
+			AND t.provider_transaction_id <> ''
+		ORDER BY t.created_at DESC, t.id DESC
+		LIMIT $2`,
+		createdAfter.UTC(),
+		normalizedWalletListLimit(limit),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	topUps := []WalletTopUp{}
+	for rows.Next() {
+		topUp, err := scanWalletTopUp(rows, true)
+		if err != nil {
+			return nil, err
+		}
+		topUps = append(topUps, topUp)
+	}
+	return topUps, rows.Err()
 }
 
 func (s *PostgresStore) GetWalletTopUp(ctx context.Context, id string) (WalletTopUp, error) {
@@ -462,7 +737,7 @@ func (s *PostgresStore) SettleWalletTopUp(
 		`UPDATE relay_wallet_topups AS t
 		SET
 			status = 'paid',
-			provider_transaction_id = $2,
+			provider_transaction_id = COALESCE(NULLIF($2, ''), t.provider_transaction_id),
 			confirmed_by = $3,
 			entry_id = $4,
 			error_code = '',
@@ -539,6 +814,7 @@ func scanWalletEntry(row pgx.Row, withShop bool) (WalletEntry, error) {
 	dest := []any{
 		&entry.ID,
 		&entry.InstallationID,
+		&entry.Account,
 		&entry.Kind,
 		&entry.Service,
 		&entry.Amount,
@@ -579,6 +855,8 @@ func scanWalletTopUp(row pgx.Row, withShop bool) (WalletTopUp, error) {
 		&topUp.CheckoutURL,
 		&topUp.IdempotencyKey,
 		&topUp.RequestedBy,
+		&topUp.PayerHint,
+		&topUp.OTPAttempts,
 		&topUp.TestMode,
 		&topUp.ErrorCode,
 		&topUp.ErrorDetail,

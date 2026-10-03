@@ -100,11 +100,13 @@ class BalanceNetOfReturnsTests(TestCase):
         )
 
     def _report(self, report_type, day, **params):
+        # Detailed, so the statement carries its lines as well as its figures.
         return generate_report_payload(
             report_type=report_type,
             params={
                 "start_date": day.isoformat(),
                 "end_date": day.isoformat(),
+                "granularity": "detailed",
                 **params,
             },
             user=self.user,

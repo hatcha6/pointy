@@ -478,6 +478,10 @@ class RefundRec:
     primary_method: str
     lines: list
     order_id: int = 0
+    #: ``void`` or ``return`` — the adjustment type the backend writes. The
+    #: reports count a void as a void on the day it is done, and a sale
+    #: returned in full as a return, whatever status either leaves the order in.
+    kind: str = "return"
 
     @property
     def cost_total(self) -> Decimal:
@@ -3250,6 +3254,7 @@ class Simulation:
             request=None,
         )
         refund = self._apply_refund(rec, refund_lines)
+        refund.kind = "void"
         self._assert_adjustment(adjustment, refund)
         rec.voided = True
         self._assert_order(rec)
@@ -5035,9 +5040,11 @@ class Simulation:
             sum(1 for rec in txn if rec.status == Order.Status.PAID),
             "report paid_order_count",
         )
+        # Voids performed in the window — not orders whose status ended VOID,
+        # which a sale returned in full does too.
         self.assert_equal(
             summary["voided_order_count"],
-            sum(1 for rec in txn if rec.status == Order.Status.VOID),
+            sum(1 for refund in self.oracle.refunds if refund.kind == "void"),
             "report voided_order_count",
         )
         # Units the shop actually sold. Stated gross this sat next to a
@@ -5223,9 +5230,12 @@ class Simulation:
             for variant_id, bucket in by_variant.items()
         ]
 
+        # The report is asked for its summary, which keeps the largest ten.
+        from apps.reports.periods import SUMMARY_ROW_LIMIT
+
         report_rows = self._report_section("sales_summary", "top_products")
         self._assert_ranking(
-            report_rows, product_rows, order_by="revenue", limit=24,
+            report_rows, product_rows, order_by="revenue", limit=SUMMARY_ROW_LIMIT,
             what="report top_products",
         )
         # The dashboard is a second, independently written implementation of the

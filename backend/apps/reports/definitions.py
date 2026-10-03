@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from apps.core.roles import user_has_full_visibility
 
 from .models import ReportRun
+from .periods import Granularity
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,24 @@ class ReportDefinition:
     #: Reports assembled from other reports. Listed so the pack can build only
     #: the parts the user may see, and say which it left out.
     composed_of: tuple[str, ...] = field(default=())
+    #: The report can only state the shop as it is today, whatever period is
+    #: picked — the reorder list, the shelf's age, one article's whole life.
+    #: It is built without a comparison column: one would compare today with
+    #: today and print "no change" under every figure.
+    states_today: bool = False
+    #: The report has a day-by-day table, so asking for the daily breakdown
+    #: changes what it prints. One that has none is offered the summary and
+    #: the detail only: a choice that changes nothing is not a choice.
+    daily_breakdown: bool = False
+
+    @property
+    def granularities(self):
+        """The levels of detail this report can actually be built at."""
+        return tuple(
+            choice.value
+            for choice in Granularity
+            if self.daily_breakdown or choice != Granularity.DAILY
+        )
 
     def is_allowed(self, user):
         """Reports are the shop's books — profit, cost, cash, stock value, who
@@ -60,12 +79,14 @@ REPORT_DEFINITIONS = {
         category="sales",
         permissions=("sales.view_order",),
         headline=("net_sales", "gross_profit", "profit_margin_percent", "items_sold"),
+        daily_breakdown=True,
     ),
     ReportType.PAYMENT_METHODS: ReportDefinition(
         key=ReportType.PAYMENT_METHODS,
         category="payments",
         permissions=("payments.view_payment",),
         headline=("payment_total", "commission_total", "payment_count"),
+        daily_breakdown=True,
     ),
     ReportType.REGISTER_CLOSURE: ReportDefinition(
         key=ReportType.REGISTER_CLOSURE,
@@ -98,6 +119,7 @@ REPORT_DEFINITIONS = {
         permissions=("inventory.view_stockitem",),
         headline=("reorder_item_count", "out_of_stock_count", "suggested_units"),
         point_in_time=True,
+        states_today=True,
     ),
     ReportType.PAYROLL_SUMMARY: ReportDefinition(
         key=ReportType.PAYROLL_SUMMARY,
@@ -173,6 +195,7 @@ REPORT_DEFINITIONS = {
         category="sales",
         permissions=("sales.view_order",),
         headline=("net_sales", "staff_count", "busiest_hour"),
+        daily_breakdown=True,
     ),
     ReportType.MONTH_END_PACK: ReportDefinition(
         key=ReportType.MONTH_END_PACK,
@@ -182,7 +205,15 @@ REPORT_DEFINITIONS = {
         # assembles: a cashier who may read their own orders has no business
         # holding the month's payroll, payables and cash position in one file.
         permissions=("reports.view_reportrun",),
-        headline=("net_sales", "gross_profit", "net_operating_profit", "closing_cash"),
+        # The pack's figures are named for the report they come from, so its
+        # headline is too. Named bare ("net_sales", "closing_cash") it matched
+        # nothing, and the page led with how many sections it had included.
+        headline=(
+            "profit_costs__net_sales",
+            "profit_costs__gross_profit",
+            "profit_costs__net_operating_profit",
+            "cash_position__closing_total",
+        ),
         composed_of=(
             ReportType.PROFIT_COSTS,
             ReportType.CASH_POSITION,
@@ -211,6 +242,7 @@ REPORT_DEFINITIONS = {
         # What is on the shelf *now*, and for how long. A window would answer a
         # question nobody asks: an article's age is measured from today.
         point_in_time=True,
+        states_today=True,
     ),
     ReportType.UNIT_MARGIN: ReportDefinition(
         key=ReportType.UNIT_MARGIN,
@@ -227,6 +259,7 @@ REPORT_DEFINITIONS = {
         headline=("status", "spell_count", "event_count"),
         required_params=("code",),
         point_in_time=True,
+        states_today=True,
     ),
     ReportType.CONSIGNMENT_LEDGER: ReportDefinition(
         key=ReportType.CONSIGNMENT_LEDGER,
@@ -252,6 +285,8 @@ def report_catalog_for_user(user):
             "headline": definition.headline,
             "required_params": definition.required_params,
             "point_in_time": definition.point_in_time,
+            "granularities": definition.granularities,
+            "states_today": definition.states_today,
         }
         for definition in REPORT_DEFINITIONS.values()
         if definition.is_allowed(user)

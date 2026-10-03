@@ -559,9 +559,15 @@ class EmployeeBooksTests(_EmployeeCase):
         self.assertEqual(wages_payable(timezone.localdate()), Decimal("1000.00"))
 
     def _report(self, report_type, *, start, end):
+        # Detailed: the bridge and the account balances are schedules a
+        # summary leaves out.
         return generate_report_payload(
             report_type=report_type,
-            params={"start_date": start.isoformat(), "end_date": end.isoformat()},
+            params={
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "granularity": "detailed",
+            },
             user=self.manager,
         )
 

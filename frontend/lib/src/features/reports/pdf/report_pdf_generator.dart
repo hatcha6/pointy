@@ -84,13 +84,13 @@ List<pw.Widget> _reportSectionWidgets(ReportPdfSection section) {
   return [
     PointyPdfSectionTitle(section.heading),
     for (final paragraph in section.paragraphs) ...[
-      pw.SizedBox(height: 6),
+      pw.SizedBox(height: section.compact ? 3 : 6),
       pw.Text(
         paragraph,
-        style: const pw.TextStyle(
+        style: pw.TextStyle(
           color: PointyPdfPalette.ink,
-          fontSize: 10,
-          lineSpacing: 3,
+          fontSize: section.compact ? 8.5 : 10,
+          lineSpacing: section.compact ? 1.5 : 3,
         ),
         textAlign: pw.TextAlign.right,
       ),
@@ -279,6 +279,7 @@ class _MetadataPanel extends pw.StatelessWidget {
       if (report.reference != null)
         ReportPdfField(label: labels.reference, value: report.reference!),
       if (report.period != null) ..._periodFields(report.period!, labels),
+      ?report.detailLevel,
     ];
 
     return pw.Container(

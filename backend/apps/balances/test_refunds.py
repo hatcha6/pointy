@@ -130,6 +130,7 @@ class CustomerCreditRefundTests(_RefundCase):
                 "customer_id": self.customer.pk,
                 "start_date": (self.today - timedelta(days=5)).isoformat(),
                 "end_date": self.today.isoformat(),
+                "granularity": "detailed",
             },
             user=self.manager,
         )
@@ -151,6 +152,7 @@ class CustomerCreditRefundTests(_RefundCase):
             params={
                 "start_date": self.today.isoformat(),
                 "end_date": self.today.isoformat(),
+                "granularity": "detailed",
             },
             user=self.manager,
         )

@@ -1121,6 +1121,10 @@ class PosApiService {
     return _customers.fetchCustomerSalesSummary(customerId);
   }
 
+  Future<MessagingSendResult> sendCustomerBalanceSms(int customerId) {
+    return _customers.sendCustomerBalanceSms(customerId);
+  }
+
   Future<CustomerSalesSummary> recordCustomerAccountPayment(
     int customerId, {
     required String method,
@@ -1840,6 +1844,10 @@ class PosApiService {
     );
   }
 
+  Future<MessagingSendResult> notifyJobReady(int jobId) {
+    return _operations.notifyJobReady(jobId);
+  }
+
   Future<OperationsJob> reopenJob(int jobId, {String note = ''}) {
     return _operations.reopenJob(jobId, note: note);
   }
@@ -2384,6 +2392,12 @@ class PosApiService {
     required int id,
     required String to,
   }) => _messaging.testSend(id: id, to: to);
+
+  Future<MessagingGateway> setMessagingAutoMessage(
+    int id, {
+    required String kind,
+    required bool enabled,
+  }) => _messaging.setAutoMessage(id, kind: kind, enabled: enabled);
 
   Future<List<IntegrationProvider>> fetchIntegrationProviders() =>
       _integrations.fetchProviders();

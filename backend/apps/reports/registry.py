@@ -91,6 +91,20 @@ class ReportContext:
 
     # -- sections ----------------------------------------------------------
 
+    def wants_daily(self):
+        """Whether to build the day-by-day table: asked for, and not a
+        headline-only pass."""
+        return not self.summary_only and self.period.wants_daily_breakdown
+
+    def wants_detail(self):
+        """Whether to build what a summary leaves out — every document or line
+        behind a total, and the reconciliations under a statement.
+
+        A builder asks before it queries, not after: a summary of a year of
+        trade costs no more than the headline above it.
+        """
+        return not self.summary_only and self.period.wants_detail
+
     def row_limit(self, section_key):
         if self.summary_only:
             return 0

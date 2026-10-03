@@ -10,16 +10,21 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/messaging_settings_view_model.dart';
 import 'messaging_presentation.dart';
+import 'messaging_auto_messages_section.dart';
 import 'messaging_settings_sections.dart';
+import 'messaging_templates_section.dart';
+import 'wallet_presentation.dart';
+import 'wallet_sms_sheet.dart';
 
 /// Shop Settings sub-page for SMS.
 ///
-/// SMS leaves through Daftar's relay on the company's provider account, as a
-/// paid add-on — so there is nothing here to connect. The page says where the
-/// shop stands (not in the subscription, switched off, or working and how much
-/// of the month's allowance is gone), holds the shop's own brakes (the switch,
-/// pacing, a daily cap, quiet hours for promotions), sends a test, and lists
-/// every text Daftar sends so the shop knows exactly what its customers read.
+/// SMS leaves through Daftar's relay on the company's provider account, paid
+/// per message from the shop's SMS balance — so there is nothing here to
+/// connect. The page says where the shop stands (working, switched off, or an
+/// empty balance and how to fill it), shows the balance and this month's
+/// sends, holds the shop's own brakes (the switch, pacing, a daily cap, quiet
+/// hours for promotions), sends a test, and lists every text Daftar sends so
+/// the shop knows exactly what its customers read.
 class MessagingSettingsPage extends StatefulWidget {
   const MessagingSettingsPage({super.key, required this.viewModel});
 
@@ -86,6 +91,30 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
     await widget.viewModel.sendTest(_testPhone.text);
   }
 
+  /// Turns one automatic text on or off; says so when it could not be saved
+  /// (the switch has already moved back).
+  Future<void> _setAutoMessage(String kind, bool enabled) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final saved = await widget.viewModel.setAutoMessage(kind, enabled);
+    if (!saved && mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.messagingAutoSaveFailed)),
+      );
+    }
+  }
+
+  /// Fills the SMS balance from the wallet, then re-reads what SMS can do.
+  Future<void> _allocate() async {
+    final wallet = widget.viewModel.wallet;
+    if (wallet == null) {
+      return;
+    }
+    if (await showSmsAllocationSheet(context: context, wallet: wallet)) {
+      await widget.viewModel.load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewModel = widget.viewModel;
@@ -137,10 +166,17 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
 
     final spacing = AdaptiveSpacing.of(context);
     final usage = viewModel.usage;
+    final smsWallet = viewModel.smsWallet;
     final sections = <Widget>[
       _buildHero(l10n, viewModel),
       ..._buildCallouts(l10n, viewModel),
-      if (viewModel.isEntitled && usage != null)
+      if (smsWallet != null)
+        MessagingBalanceSection(
+          smsWallet: smsWallet,
+          usage: usage,
+          onAllocate: viewModel.wallet == null ? null : _allocate,
+        )
+      else if (viewModel.isEntitled && usage != null)
         PointyDetailSection(
           icon: Icons.data_usage_outlined,
           title: l10n.messagingUsageTitle,
@@ -162,8 +198,15 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
         ),
       if (viewModel.canEdit) _buildSettingsSection(context, l10n, viewModel),
       if (viewModel.canTest) _buildTestSection(context, l10n, viewModel),
+      if (viewModel.automaticTemplates.isNotEmpty)
+        MessagingAutoMessagesSection(
+          templates: viewModel.automaticTemplates,
+          enabled: viewModel.canEdit,
+          isSaving: viewModel.isSavingAutoMessage,
+          onChanged: _setAutoMessage,
+        ),
       if (viewModel.templates.isNotEmpty)
-        MessagingTemplatesSection(templates: viewModel.templates),
+        MessagingTemplatesSection(sections: viewModel.templateSections),
     ];
 
     return RefreshIndicator(
@@ -200,6 +243,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
           l10n.messagingStatusNotSubscribed,
         MessagingServiceState.notReady => l10n.messagingStatusNotReady,
         MessagingServiceState.disabled => l10n.messagingStatusDisabled,
+        MessagingServiceState.noBalance => l10n.messagingStatusNoBalance,
         MessagingServiceState.active => l10n.messagingStatusActive,
       },
       valueSubtitle: state == MessagingServiceState.notSubscribed
@@ -252,9 +296,17 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
           title: l10n.messagingDisabledTitle,
           message: l10n.messagingDisabledMessage,
         ),
+        MessagingServiceState.noBalance => PointyDetailCallout(
+          icon: Icons.account_balance_wallet_outlined,
+          tone: PointyCalloutTone.warning,
+          title: l10n.messagingBalanceEmptyTitle,
+          message: l10n.messagingBalanceEmptyMessage(
+            formatWalletMoney(vm.smsWallet?.price ?? 0),
+          ),
+        ),
         MessagingServiceState.active => null,
       },
-      if (vm.isEntitled && vm.isTestMode)
+      if ((vm.isEntitled || vm.isPrepaid) && vm.isTestMode)
         PointyDetailCallout(
           icon: Icons.science_outlined,
           tone: PointyCalloutTone.warning,

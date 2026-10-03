@@ -1610,7 +1610,7 @@ class CheckoutSerializer(serializers.Serializer):
             request=self.context.get("request"),
         )
         if not trade_in:
-            return sale()
+            return self._texted(sale())
         # The customer handed a handset over as part of the payment. That is a
         # purchase and a sale in one act, and both have to stand or fall
         # together — so the sale runs inside the trade-in's transaction rather
@@ -1626,6 +1626,20 @@ class CheckoutSerializer(serializers.Serializer):
             checkout=sale,
             request=self.context.get("request"),
         )
+        return self._texted(order)
+
+    @staticmethod
+    def _texted(order):
+        """A credit sale texts its customer what they now owe, and a sale of
+        serial-numbered stock under warranty sends each article's cover (each
+        when the shop has it on). Here, at the till's checkout, rather than in
+        the service the simulations and demo seeding also drive."""
+        from apps.crm.transactional import notify_credit_invoice, notify_warranties
+
+        if order.sale_type == Order.SaleType.CREDIT:
+            notify_credit_invoice(order)
+        if order.sale_type in (Order.SaleType.STANDARD, Order.SaleType.CREDIT):
+            notify_warranties(order)
         return order
 
     @staticmethod

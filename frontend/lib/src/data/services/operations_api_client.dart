@@ -1,6 +1,7 @@
 import '../models/bill_of_materials.dart';
 import '../models/customer_asset.dart';
 import '../models/employee.dart';
+import '../models/messaging_gateway.dart';
 import '../models/operations_job.dart';
 import '../models/workflow.dart';
 import 'api_session.dart';
@@ -282,6 +283,17 @@ class OperationsApiClient {
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  /// Texts the customer that the job is ready for pickup (the approved
+  /// "ready" template, with what is still owed when the job is invoiced).
+  Future<MessagingSendResult> notifyJobReady(int jobId) async {
+    final response = await _session.post('jobs/$jobId/notify-ready/');
+    _session.throwApiException(response, 'Job ready SMS failed with status');
+    final decoded = _session.decodedBodyOrNull(response);
+    return decoded is Map<String, Object?>
+        ? MessagingSendResult.fromJson(decoded)
+        : const MessagingSendResult(status: 'queued');
   }
 
   Future<OperationsJob> invoiceJob(

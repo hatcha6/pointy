@@ -25,10 +25,11 @@ from .models import (
     MessagingGateway,
     OutboundMessage,
 )
+from .approvals import TEMPLATE_REFUSAL_CODES, note_kind_unapproved
 from .phone import normalize_phone
 from .segments import count_segments
 from .sms_templates import SmsTemplate
-from .transports import SendResult, UnknownProvider, transport_for
+from .transports import UNCERTAIN_FAILURE_CODES, SendResult, UnknownProvider, transport_for
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,11 @@ _NEVER_REACHED = {
 
 class NoGatewayConfigured(Exception):
     """Raised when nothing can be sent: no gateway, SMS switched off by the
-    shop, or SMS not part of the shop's subscription.
+    shop, an SMS balance that cannot pay for a message, or no SMS at all.
 
     ``code`` says which (``no_gateway`` | ``service_disabled`` |
-    ``not_entitled``) so a view can tell the user what to do about it.
+    ``insufficient_balance`` | ``not_entitled``) so a view can tell the user
+    what to do about it.
     """
 
     def __init__(self, message: str = "", *, code: str = "no_gateway"):
@@ -59,6 +61,7 @@ class NoGatewayConfigured(Exception):
 
 
 _UNAVAILABLE_MESSAGES = {
+    "insufficient_balance": "رصيد الرسائل لا يكفي لهذه الرسالة. حوّل مبلغاً من المحفظة إلى رصيد الرسائل من صفحة الاشتراك.",
     "not_entitled": "خدمة الرسائل غير مفعّلة في اشتراك المحل. تواصل مع الدعم لإضافتها.",
     "service_disabled": "خدمة الرسائل موقوفة من إعدادات الرسائل في المحل.",
     "no_gateway": "خدمة الرسائل غير متاحة حاليًا.",
@@ -117,8 +120,9 @@ def enqueue_message(
     (``template_required``) on one that cannot.
 
     Raises ``NoGatewayConfigured`` when nothing can be sent at all — no gateway,
-    SMS switched off, or not in the shop's subscription — so callers that treat
-    SMS as best-effort simply carry on.
+    SMS switched off, or not in the shop's subscription — or when the SMS
+    balance cannot pay for this message's parts, so callers that treat SMS as
+    best-effort simply carry on.
     """
     gateway = _sending_gateway(gateway)
 
@@ -141,6 +145,7 @@ def enqueue_message(
         consent_class = OutboundMessage.ConsentClass.TRANSACTIONAL
 
     normalized = normalize_phone(to)
+    segments = count_segments(body)
     message = OutboundMessage(
         gateway=gateway,
         channel=channel,
@@ -150,7 +155,7 @@ def enqueue_message(
         template_kind=template.kind if template is not None else "",
         template_values=list(template.values) if template is not None else [],
         consent_class=consent_class,
-        segments=count_segments(body),
+        segments=segments,
         max_attempts=max_attempts,
         dedup_key=dedup_key or None,
         not_before=not_before,
@@ -174,6 +179,14 @@ def enqueue_message(
         message.status = OutboundMessage.Status.FAILED
         message.error_code = "template_required"
         message.error_detail = "the SMS provider only delivers approved templates"
+    else:
+        # Paid per SMS part: a balance that covers a short message may not
+        # cover this one. Better said at the button than as a failed message.
+        reason = transport_for(gateway).unaffordable_reason(segments)
+        if reason:
+            raise NoGatewayConfigured(
+                f"gateway {gateway.pk}: {reason} for {segments} part(s)", code=reason
+            )
 
     try:
         with transaction.atomic():
@@ -205,6 +218,11 @@ def _apply_result(message: OutboundMessage, result: SendResult) -> None:
             message.body = result.sent_body
             message.segments = count_segments(result.sent_body)
             fields += ["body", "segments"]
+        if result.segments and result.segments != message.segments:
+            # What the provider billed it as is what it cost.
+            message.segments = result.segments
+            if "segments" not in fields:
+                fields.append("segments")
         message.save(update_fields=fields)
         _note_gateway_reachable(message.gateway, now=now)
         return
@@ -230,6 +248,12 @@ def _apply_result(message: OutboundMessage, result: SendResult) -> None:
 
     message.error_code = result.error_code
     message.error_detail = result.error_detail
+    fields = ["status", "error_code", "error_detail", "next_attempt_at", "updated_at"]
+    if result.provider_message_id:
+        # A failure that may still have gone out keeps the provider's id, so
+        # the delivery poll can learn that it did.
+        message.provider_message_id = result.provider_message_id
+        fields.append("provider_message_id")
     # A deferral that reaches here has waited out the whole horizon: give up
     # rather than spend the ordinary retries on a provider that never came back.
     if result.retryable and not result.defer and message.attempts < message.max_attempts:
@@ -238,11 +262,12 @@ def _apply_result(message: OutboundMessage, result: SendResult) -> None:
     else:
         message.status = OutboundMessage.Status.FAILED
         message.next_attempt_at = None
-    message.save(
-        update_fields=[
-            "status", "error_code", "error_detail", "next_attempt_at", "updated_at",
-        ]
-    )
+    message.save(update_fields=fields)
+    if result.error_code in TEMPLATE_REFUSAL_CODES:
+        # One kind waiting for its template, not a gateway in trouble: the
+        # settings page lists that kind as not approved yet.
+        note_kind_unapproved(message.template_kind)
+        return
     _note_gateway_error(message.gateway, result)
 
 
@@ -390,24 +415,35 @@ def apply_receipt(
 _DELIVERY_WINDOW = timedelta(hours=48)
 _DELIVERY_BATCH = 500
 
-
 def sync_delivery_statuses(gateway: MessagingGateway, *, transport=None, now=None) -> int:
     """Ask the gateway's provider what became of recently sent messages.
 
     The relay learns delivery from Resala's log rather than being called back,
     so this is the receipt webhook turned around: poll, then record each answer
-    as a ``DeliveryReceipt`` exactly as a pushed one would be. Returns how many
-    messages it advanced.
+    as a ``DeliveryReceipt`` exactly as a pushed one would be. It also asks
+    after sends that failed in doubt, which the relay may yet find went out.
+    Returns how many messages it advanced.
     """
     now = now or timezone.now()
+    since = now - _DELIVERY_WINDOW
     candidates = list(
         OutboundMessage.objects.filter(
             gateway=gateway,
             status=OutboundMessage.Status.SENT,
-            sent_at__gte=now - _DELIVERY_WINDOW,
+            sent_at__gte=since,
         )
         .exclude(provider_message_id="")
         .order_by("-sent_at")[:_DELIVERY_BATCH]
+    )
+    candidates += list(
+        OutboundMessage.objects.filter(
+            gateway=gateway,
+            status=OutboundMessage.Status.FAILED,
+            error_code__in=UNCERTAIN_FAILURE_CODES,
+            created_at__gte=since,
+        )
+        .exclude(provider_message_id="")
+        .order_by("-created_at")[:_DELIVERY_BATCH]
     )
     if not candidates:
         return 0
@@ -419,6 +455,11 @@ def sync_delivery_statuses(gateway: MessagingGateway, *, transport=None, now=Non
         message = by_pk.get(pk)
         if message is None:
             continue
+        if message.status == OutboundMessage.Status.FAILED:
+            applied += _recover_doubtful_send(gateway, message, status, now=now)
+            continue
+        if (status or "").strip().lower() == "sent":
+            continue  # still on its way: nothing new to record
         apply_receipt(
             gateway,
             provider_message_id=message.provider_message_id,
@@ -427,6 +468,40 @@ def sync_delivery_statuses(gateway: MessagingGateway, *, transport=None, now=Non
         )
         applied += 1
     return applied
+
+
+def _recover_doubtful_send(gateway, message: OutboundMessage, status: str, *, now) -> int:
+    """A send that failed in doubt went out after all: the relay found it in
+    Resala's sent log and kept its price. Record what it became — sent,
+    delivered, or out but never delivered. Any other answer leaves it failed:
+    not found (refunded), or still being checked."""
+    state = (status or "").strip().lower()
+    if state not in {"sent", "delivered", "undelivered"}:
+        return 0
+    message.sent_at = message.sent_at or now
+    message.error_detail = ""
+    fields = ["sent_at", "error_code", "error_detail", "updated_at"]
+    if state == "undelivered":
+        message.error_code = "delivery_failed"
+    else:
+        message.error_code = ""
+        message.status = (
+            OutboundMessage.Status.DELIVERED if state == "delivered" else OutboundMessage.Status.SENT
+        )
+        fields.append("status")
+        if state == "delivered":
+            message.delivered_at = now
+            fields.append("delivered_at")
+    message.save(update_fields=fields)
+    DeliveryReceipt.objects.create(
+        gateway=gateway,
+        outbound=message,
+        provider_message_id=message.provider_message_id,
+        status=state,
+        raw={"source": "poll", "status": state, "recovered": True},
+        received_at=now,
+    )
+    return 1
 
 
 def _advance_from_receipt(outbound: OutboundMessage, status: str) -> None:

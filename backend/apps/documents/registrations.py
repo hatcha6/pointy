@@ -90,6 +90,10 @@ def _register_sale():
         corrections=(Correction.COUNTER, Correction.ALLOW_AFTER_SUBMIT),
         mutable_after_submit=(
             "customer",
+            # When an آجل debt falls due — the one term a shop renegotiates
+            # (``reschedule_credit_invoice_due_date``). It moves when the money
+            # is owed, never how much, so it carries no financial consequence.
+            "due_date",
             # The legacy name for ``superseded_by``, kept in step until the
             # column goes; written only by the supersede transition's caller.
             "converted_to",

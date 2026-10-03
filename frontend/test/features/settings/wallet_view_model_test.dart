@@ -8,27 +8,71 @@ import 'package:pointy_frontend/src/features/settings/view_models/wallet_view_mo
 WalletTopUp topUp({
   WalletTopUpStatus status = WalletTopUpStatus.pending,
   String errorCode = '',
-  String? checkoutUrl = 'https://checkout.plutus.test/pay/abc',
+  String method = WalletTopUpMethod.bankCards,
+  String? checkoutUrl = 'https://pay.dafa.test/pay-1',
   int? expenseId,
 }) {
+  final hostedPage = method == WalletTopUpMethod.bankCards;
   return WalletTopUp(
     id: 'topup-1',
     invoiceNo: 'DFW-ABCDEFGH23',
-    method: WalletTopUpMethod.localBankCards,
+    method: method,
+    kind: hostedPage
+        ? WalletTopUpMethod.kindHostedPage
+        : WalletTopUpMethod.kindOtp,
+    payerHint: hostedPage ? '' : '091•••678',
     amount: 100,
     status: status,
     testMode: false,
     createdAt: DateTime(2026, 9, 30, 10),
     errorCode: errorCode,
-    checkoutUrl: status == WalletTopUpStatus.pending ? checkoutUrl : null,
+    checkoutUrl: status == WalletTopUpStatus.pending && hostedPage
+        ? checkoutUrl
+        : null,
     expenseId: expenseId,
   );
 }
+
+WalletTopUp sadadTopUp({
+  WalletTopUpStatus status = WalletTopUpStatus.pending,
+  String errorCode = '',
+  int? expenseId,
+}) => topUp(
+  status: status,
+  errorCode: errorCode,
+  method: 'dafa_sadad',
+  expenseId: expenseId,
+);
+
+const bankCards = WalletTopUpMethod(
+  key: WalletTopUpMethod.bankCards,
+  gateway: 'dafa',
+  provider: 'moamalat',
+  kind: WalletTopUpMethod.kindHostedPage,
+);
+const sadad = WalletTopUpMethod(
+  key: 'dafa_sadad',
+  gateway: 'dafa',
+  provider: 'sadad',
+  kind: WalletTopUpMethod.kindOtp,
+  payer: WalletPayer.phone,
+  needsBirthYear: true,
+);
+const yussor = WalletTopUpMethod(
+  key: 'dafa_yussor_pay',
+  gateway: 'dafa',
+  provider: 'yussor-pay',
+  kind: WalletTopUpMethod.kindOtp,
+  payer: WalletPayer.card,
+);
 
 WalletOverview overview({
   double balance = 50,
   bool recordExpenses = true,
   Duration ttl = const Duration(minutes: 30),
+  List<WalletTopUpMethod> methods = const [bankCards, sadad, yussor],
+  SmsWallet? sms,
+  List<WalletPlan> plans = const [],
 }) {
   return WalletOverview(
     available: true,
@@ -37,13 +81,7 @@ WalletOverview overview({
     testMode: false,
     topUpOptions: WalletTopUpOptions(
       available: true,
-      methods: const [
-        WalletTopUpMethod(
-          key: WalletTopUpMethod.localBankCards,
-          gateway: 'plutu',
-          kind: 'hosted_checkout',
-        ),
-      ],
+      methods: methods,
       minAmount: 10,
       maxAmount: 5000,
       maxDecimals: 2,
@@ -56,6 +94,8 @@ WalletOverview overview({
       recordTopUpsAsExpenses: recordExpenses,
       defaultExpenseCategoryName: 'خدمات دفتر',
     ),
+    sms: sms,
+    plans: plans,
   );
 }
 
@@ -66,11 +106,18 @@ class FakeWalletRepository extends WalletRepository {
   Result<WalletTopUpStart> startResult = Ok(
     WalletTopUpStart(
       topUp: topUp(),
-      checkoutUrl: 'https://checkout.plutus.test/pay/abc',
+      checkoutUrl: 'https://pay.dafa.test/pay-1',
+      nextAction: WalletTopUpMethod.kindHostedPage,
       replayed: false,
     ),
   );
   Result<WalletTopUp> topUpResult = Ok(topUp());
+  Result<WalletTopUpConfirmation> confirmResult = Ok(
+    WalletTopUpConfirmation(
+      topUp: sadadTopUp(status: WalletTopUpStatus.paid, expenseId: 9),
+      awaitingGateway: false,
+    ),
+  );
   Result<WalletSettings> settingsResult = const Ok(
     WalletSettings(recordTopUpsAsExpenses: false),
   );
@@ -80,6 +127,8 @@ class FakeWalletRepository extends WalletRepository {
   int walletLoads = 0;
   int topUpLoads = 0;
   final List<Map<String, Object?>> starts = [];
+  final List<String> codes = [];
+  final List<String> cancels = [];
   final List<String?> topUpPageCursors = [];
 
   @override
@@ -94,14 +143,33 @@ class FakeWalletRepository extends WalletRepository {
     required String method,
     required String idempotencyKey,
     bool? recordAsExpense,
+    String userIdentifier = '',
+    String birthYear = '',
   }) async {
     starts.add({
       'amount': amount,
       'method': method,
       'key': idempotencyKey,
       'record': recordAsExpense,
+      'payer': userIdentifier,
+      'birth': birthYear,
     });
     return startResult;
+  }
+
+  @override
+  Future<Result<WalletTopUpConfirmation>> confirmTopUp({
+    required String id,
+    required String otp,
+  }) async {
+    codes.add(otp);
+    return confirmResult;
+  }
+
+  @override
+  Future<Result<WalletTopUp>> cancelTopUp(String id) async {
+    cancels.add(id);
+    return Ok(sadadTopUp(status: WalletTopUpStatus.canceled));
   }
 
   @override
@@ -122,9 +190,67 @@ class FakeWalletRepository extends WalletRepository {
   }
 
   @override
-  Future<Result<WalletPage<WalletEntry>>> loadEntries({String? before}) async =>
-      entryPages.removeAt(0);
+  Future<Result<WalletPage<WalletEntry>>> loadEntries({
+    String? before,
+    WalletAccount account = WalletAccount.main,
+  }) async {
+    entryAccounts.add(account);
+    return entryPages.removeAt(0);
+  }
+
+  final List<WalletAccount> entryAccounts = [];
+  final List<Map<String, Object?>> allocations = [];
+  final List<Map<String, Object?>> purchases = [];
+  Result<WalletSmsAllocation> allocationResult = const Ok(
+    WalletSmsAllocation(
+      balance: 85,
+      sms: SmsWallet(balance: 15, price: 0.15, messagesLeft: 100),
+      replayed: false,
+    ),
+  );
+  Result<WalletPlanPurchase> purchaseResult = Ok(
+    WalletPlanPurchase(
+      plan: WalletPlan(
+        key: WalletPlan.ai,
+        available: true,
+        active: true,
+        price: 30,
+        until: DateTime(2026, 11, 1),
+      ),
+      balance: 70,
+      replayed: false,
+    ),
+  );
+
+  @override
+  Future<Result<WalletSmsAllocation>> allocateToSms({
+    required String amount,
+    required String idempotencyKey,
+  }) async {
+    allocations.add({'amount': amount, 'key': idempotencyKey});
+    return allocationResult;
+  }
+
+  @override
+  Future<Result<WalletPlanPurchase>> purchasePlan({
+    required String plan,
+    required int periods,
+    required String idempotencyKey,
+  }) async {
+    purchases.add({'plan': plan, 'periods': periods, 'key': idempotencyKey});
+    return purchaseResult;
+  }
 }
+
+/// A code-confirmed start: the provider texted the payer a code.
+Result<WalletTopUpStart> codeStart() => Ok(
+  WalletTopUpStart(
+    topUp: sadadTopUp(),
+    checkoutUrl: '',
+    nextAction: WalletTopUpMethod.kindOtp,
+    replayed: false,
+  ),
+);
 
 void main() {
   late FakeWalletRepository repo;
@@ -175,12 +301,15 @@ void main() {
     await vm.startTopUp(100);
 
     expect(repo.starts.single, {
-      'amount': '100.00',
-      'method': WalletTopUpMethod.localBankCards,
+      'amount': '100',
+      'method': WalletTopUpMethod.bankCards,
       'key': 'key-1',
       'record': true,
+      'payer': '',
+      'birth': '',
     });
-    expect(opened.single.toString(), 'https://checkout.plutus.test/pay/abc');
+    expect(opened.single.toString(), 'https://pay.dafa.test/pay-1');
+    expect(vm.awaitingHostedPage, isTrue);
     expect(vm.topUpStage, WalletTopUpStage.awaitingPayment);
     expect(vm.isPolling, isTrue);
 
@@ -371,6 +500,213 @@ void main() {
       expect(vm.settingsSaveFailed, isTrue);
     },
   );
+
+  test(
+    'the form starts on the first method offered and keeps the pick',
+    () async {
+      final vm = build();
+      await vm.load();
+      vm.beginTopUp();
+      expect(vm.selectedMethod?.key, WalletTopUpMethod.bankCards);
+      vm.selectMethod('dafa_sadad');
+      expect(vm.selectedMethod?.key, 'dafa_sadad');
+      vm.beginTopUp();
+      expect(vm.selectedMethod?.key, 'dafa_sadad', reason: 'kept next time');
+      // Withdrawn by the company: back to the first one offered.
+      repo.walletResult = Ok(overview(methods: const [yussor, bankCards]));
+      await vm.load();
+      expect(vm.selectedMethod?.key, 'dafa_yussor_pay');
+    },
+  );
+
+  test('a code method asks for the code, then lands on paid', () async {
+    repo.startResult = codeStart();
+    final vm = build();
+    await vm.load();
+    vm.beginTopUp();
+    vm.selectMethod('dafa_sadad');
+    await vm.startTopUp(
+      10.5,
+      userIdentifier: ' 0912345678 ',
+      birthYear: '1990',
+    );
+    expect(repo.starts.single, {
+      'amount': '10.5',
+      'method': 'dafa_sadad',
+      'key': 'key-1',
+      'record': true,
+      'payer': '0912345678',
+      'birth': '1990',
+    });
+    expect(vm.topUpStage, WalletTopUpStage.awaitingCode);
+    expect(opened, isEmpty, reason: 'nothing to open for a texted code');
+    expect(vm.isPolling, isFalse);
+
+    final loadsBefore = repo.walletLoads;
+    await vm.confirmCode('111111');
+    expect(repo.codes, ['111111']);
+    expect(vm.topUpStage, WalletTopUpStage.paid);
+    expect(vm.activeTopUp?.isBookedAsExpense, isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(repo.walletLoads, loadsBefore + 1, reason: 'the balance moved');
+  });
+
+  test('a wrong code stays on the code step with the tries left', () async {
+    repo.startResult = codeStart();
+    repo.confirmResult = Error(
+      WalletException(
+        code: 'otp_rejected',
+        message: '',
+        attemptsLeft: 4,
+        topUp: sadadTopUp(),
+      ),
+    );
+    final vm = build();
+    await vm.load();
+    vm.beginTopUp();
+    vm.selectMethod('dafa_sadad');
+    await vm.startTopUp(100, userIdentifier: '0912345678', birthYear: '1990');
+    await vm.confirmCode('123456');
+    expect(vm.topUpStage, WalletTopUpStage.awaitingCode);
+    expect(vm.codeError?.code, 'otp_rejected');
+    expect(vm.codeError?.attemptsLeft, 4);
+    await Future<void>.delayed(Duration.zero);
+    expect(repo.topUpLoads, 0, reason: 'a wrong code is a verdict on the code');
+
+    // The next code clears the old complaint.
+    repo.confirmResult = Ok(
+      WalletTopUpConfirmation(
+        topUp: sadadTopUp(status: WalletTopUpStatus.paid),
+        awaitingGateway: false,
+      ),
+    );
+    await vm.confirmCode('111111');
+    expect(vm.codeError, isNull);
+    expect(vm.topUpStage, WalletTopUpStage.paid);
+  });
+
+  test('a decline ends the top-up with the gateway\'s own words', () async {
+    repo.startResult = codeStart();
+    repo.confirmResult = Error(
+      WalletException(
+        code: 'declined',
+        message: '',
+        gatewayCode: 'PAYER_INSUFFICIENT_FUNDS',
+        gatewayMessage: 'تعذّر إتمام العملية، يرجى مراجعة المصرف.',
+        topUp: sadadTopUp(
+          status: WalletTopUpStatus.failed,
+          errorCode: 'declined',
+        ),
+      ),
+    );
+    final vm = build();
+    await vm.load();
+    vm.beginTopUp();
+    vm.selectMethod('dafa_sadad');
+    await vm.startTopUp(100, userIdentifier: '0912345678', birthYear: '1990');
+    await vm.confirmCode('222222');
+    expect(vm.topUpStage, WalletTopUpStage.failed);
+    expect(vm.verdictError?.gatewayMessage, contains('المصرف'));
+    expect(vm.codeError, isNull);
+  });
+
+  test('a lost answer is checked before the code is asked again', () async {
+    repo.startResult = codeStart();
+    repo.confirmResult = Error(
+      WalletException(
+        code: 'confirm_unknown',
+        message: '',
+        topUp: sadadTopUp(),
+      ),
+    );
+    repo.topUpResult = Ok(sadadTopUp(status: WalletTopUpStatus.paid));
+    final vm = build();
+    await vm.load();
+    vm.beginTopUp();
+    vm.selectMethod('dafa_sadad');
+    await vm.startTopUp(100, userIdentifier: '0912345678', birthYear: '1990');
+    await vm.confirmCode('111111');
+    expect(vm.codeError?.code, 'confirm_unknown');
+    await Future<void>.delayed(Duration.zero);
+    expect(repo.topUpLoads, 1);
+    expect(vm.topUpStage, WalletTopUpStage.paid, reason: 'it went through');
+    expect(vm.codeError, isNull);
+  });
+
+  test(
+    'a code taken without a verdict is followed like a card payment',
+    () async {
+      repo.startResult = codeStart();
+      repo.confirmResult = Ok(
+        WalletTopUpConfirmation(topUp: sadadTopUp(), awaitingGateway: true),
+      );
+      final vm = build();
+      await vm.load();
+      vm.beginTopUp();
+      vm.selectMethod('dafa_sadad');
+      await vm.startTopUp(100, userIdentifier: '0912345678', birthYear: '1990');
+      await vm.confirmCode('111111');
+      expect(vm.topUpStage, WalletTopUpStage.awaitingPayment);
+      expect(vm.awaitingHostedPage, isFalse, reason: 'no page to reopen');
+      expect(vm.isPolling, isTrue);
+      repo.topUpResult = Ok(sadadTopUp(status: WalletTopUpStatus.paid));
+      await vm.checkActiveTopUp();
+      expect(vm.topUpStage, WalletTopUpStage.paid);
+      expect(opened, isEmpty);
+      vm.dispose();
+    },
+  );
+
+  test(
+    'changing the details calls the waiting payment off; the next is new',
+    () async {
+      repo.startResult = codeStart();
+      final vm = build();
+      await vm.load();
+      vm.beginTopUp();
+      vm.selectMethod('dafa_sadad');
+      await vm.startTopUp(100, userIdentifier: '0912345678', birthYear: '1990');
+      vm.changeDetails();
+      expect(repo.cancels, ['topup-1']);
+      expect(vm.topUpStage, WalletTopUpStage.form);
+      expect(vm.activeTopUp, isNull);
+      await vm.startTopUp(100, userIdentifier: '0912345678', birthYear: '1990');
+      expect(repo.starts.map((start) => start['key']), ['key-1', 'key-2']);
+    },
+  );
+
+  test('closing the sheet on the code step calls the payment off', () async {
+    repo.startResult = codeStart();
+    final vm = build();
+    await vm.load();
+    vm.beginTopUp();
+    vm.selectMethod('dafa_sadad');
+    await vm.startTopUp(100, userIdentifier: '0912345678', birthYear: '1990');
+    vm.endTopUp();
+    expect(repo.cancels, ['topup-1']);
+    // A card payment is never called off: the payer may be on the page.
+    repo.startResult = Ok(
+      WalletTopUpStart(
+        topUp: topUp(),
+        checkoutUrl: 'https://pay.dafa.test/pay-1',
+        nextAction: WalletTopUpMethod.kindHostedPage,
+        replayed: false,
+      ),
+    );
+    vm.beginTopUp();
+    vm.selectMethod(WalletTopUpMethod.bankCards);
+    await vm.startTopUp(100);
+    vm.endTopUp();
+    expect(repo.cancels, ['topup-1']);
+  });
+
+  test('the amount goes out without trailing zeros, at most three places', () {
+    expect(walletAmountText(100, 3), '100');
+    expect(walletAmountText(10.5, 3), '10.5');
+    expect(walletAmountText(10.125, 3), '10.125');
+    expect(walletAmountText(10.5, 2), '10.5');
+    expect(walletAmountText(25, 0), '25');
+  });
 
   test(
     'a failed history page keeps "more" so the next scroll retries it',

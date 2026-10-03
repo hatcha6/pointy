@@ -49,6 +49,10 @@ class MessagingGateway(TimeStampedModel):
     quiet_hours_start = models.TimeField(blank=True, null=True)
     quiet_hours_end = models.TimeField(blank=True, null=True)
     send_timeout_seconds = models.PositiveIntegerField(default=20)
+    # Which texts go out by themselves when their event happens, by template
+    # kind ({"job_ready": true}). A kind not listed follows its template's
+    # default (SmsTemplateSpec.auto_default); see apps.messaging.automation.
+    auto_messages = models.JSONField(default=dict, blank=True, db_default={})
 
     # Health / observability.
     last_seen_at = models.DateTimeField(blank=True, null=True)

@@ -814,6 +814,7 @@
   "reportHistoryVerifyAction": "تحقّق من الأرقام",
   "reportVerifyMatchMessage": "الأرقام لم تتغير منذ إصدار التقرير.",
   "reportVerifyChangedMessage": "تغيّرت {count} من الأرقام منذ إصدار التقرير.",
+  "reportVerifyDetailChangedMessage": "الأرقام الرئيسية لم تتغير، لكن تفاصيل الجداول اختلفت عمّا صدر.",
   "reportTruncatedNotice": "معروض {shown} من {total} صفًا.",
   "reportTotalsShownLabel": "إجمالي المعروض",
   "reportTotalsFullLabel": "إجمالي كل الصفوف",
@@ -2594,6 +2595,38 @@
   "workflowStageSettlementHelp": "لا يمكن نقل المهمة إلى هذه المرحلة قبل إصدار الفاتورة واستلام المبلغ أو تسجيلها آجل.",
   "workflowStageCustodyLabel": "تسليم الجهاز للزبون",
   "workflowStageCustodyHelp": "دخول هذه المرحلة يعني أن الزبون استلم جهازه.",
+  "customerSendBalanceSmsButton": "إرسال الرصيد برسالة",
+  "@customerSendBalanceSmsButton": {
+    "description": "Customer page: text the customer what their account owes today."
+  },
+  "customerSendBalanceSmsSent": "أُرسل للعميل رصيد حسابه برسالة.",
+  "@customerSendBalanceSmsSent": {
+    "description": "Snack bar after the balance text was queued."
+  },
+  "customerSendBalanceSmsError": "تعذّر إرسال الرسالة. أعد المحاولة.",
+  "@customerSendBalanceSmsError": {
+    "description": "Fallback when the balance text could not be sent."
+  },
+  "jobTextReadyAction": "إرسال رسالة «جاهز للاستلام»",
+  "@jobTextReadyAction": {
+    "description": "Job menu action: text the customer that the job is ready for pickup."
+  },
+  "jobTextReadySent": "أُرسلت للزبون رسالة بأن طلبه جاهز.",
+  "@jobTextReadySent": {
+    "description": "Snack bar after the ready text was queued."
+  },
+  "jobTextReadyError": "تعذّر إرسال الرسالة. أعد المحاولة.",
+  "@jobTextReadyError": {
+    "description": "Fallback when the ready text could not be sent."
+  },
+  "workflowStageReadyLabel": "جاهز للاستلام",
+  "@workflowStageReadyLabel": {
+    "description": "Stage flag: the job waits here for the customer to collect it."
+  },
+  "workflowStageReadyHelp": "عند الوصول إلى هذه المرحلة تُرسل للزبون رسالة بأن طلبه جاهز، ويُذكَّر إن لم يستلمه.",
+  "@workflowStageReadyHelp": {
+    "description": "Explains the ready-for-pickup flag: the customer is texted, and reminded if they do not come."
+  },
   "shopTypeCarWorkshop": "ورشة سيارات",
   "shopTypeCarWorkshopDescription": "استلام السيارات، تشخيص، تسعيرة، تصليح، ثم التسليم بعد السداد.",
   "assetVinLabel": "رقم الشاصي (VIN)",
@@ -4585,6 +4618,73 @@
   "productUpdatedMessage": "تم حفظ المنتج",
   "productCreatedImageAttachError": "تم إنشاء المنتج، لكن تعذر حفظ الصورة.",
   "productCreateError": "تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.",
+  "createAndAddAnotherButton": "إنشاء وإضافة آخر",
+  "productMoreDetailsTitle": "تفاصيل إضافية",
+  "productMoreDetailsSummary": "الوصف، الصورة، الإضافات، ونوع المنتج",
+  "productFieldPinTooltip": "تثبيت القيمة للمنتج التالي",
+  "productFieldUnpinTooltip": "إلغاء التثبيت — لن تُنسخ للمنتج التالي",
+  "productFieldKeptLabel": "من المنتج السابق",
+  "productEntryPinsHint": "الحقول المثبّتة تبقى كما هي للمنتج التالي. اضغط الدبوس بجانب أي حقل لتثبيته أو إلغائه.",
+  "productEntryCreatedCount": "{count, plural, =1{أضفت منتجًا واحدًا} =2{أضفت منتجين} few{أضفت {count} منتجات} many{أضفت {count} منتجًا} other{أضفت {count} منتج}}",
+  "@productEntryCreatedCount": {
+    "description": "How many products were created in a row without closing the new-product panel.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "productEntryLastCreated": "تم إنشاء «{name}»",
+  "@productEntryLastCreated": {
+    "description": "Inline status in the new-product panel naming the product just created by «create and add another».",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "productEntryEditLastButton": "تعديل",
+  "productNameUnchangedWarning": "الاسم مطابق للمنتج السابق. عدّل الجزء المختلف.",
+  "productNameUnchangedConfirm": "الاسم ما زال مطابقًا للمنتج السابق. اضغط الحفظ مرة أخرى للمتابعة على أي حال.",
+  "similarProductAction": "منتج مشابه",
+  "@similarProductAction": {
+    "description": "Product details: starts an unsaved new-product form prefilled from this product."
+  },
+  "similarProductTooltip": "منتج جديد يبدأ ببيانات هذا المنتج، دون الباركود ورمز المنتج",
+  "similarProductNotice": "نسخة من «{name}». الباركود ورمز المنتج والصورة والكمية لا تُنسخ، ولا يُحفظ شيء حتى تضغط الإنشاء.",
+  "@similarProductNotice": {
+    "description": "Top of the new-product form opened by «منتج مشابه»: what it copies from, and what it never copies.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "productFieldCopiedLabel": "من المنتج الأصلي",
+  "similarProductNameUnchangedWarning": "الاسم مطابق للمنتج الأصلي. عدّل الجزء المختلف.",
+  "similarProductNameUnchangedConfirm": "الاسم ما زال مطابقًا للمنتج الأصلي. اضغط الحفظ مرة أخرى للمتابعة على أي حال.",
+  "productBarcodeScanAnywhereHelper":"امسح من أي حقل ويصل الرمز إلى هنا",
+  "productFormShortcutsTooltip": "اختصارات لوحة المفاتيح",
+  "productFormShortcutsTitle": "اختصارات إضافة المنتجات",
+  "productFormShortcutsSectionSave": "التنقل والحفظ",
+  "productFormShortcutsSectionRun": "منتجات متتالية",
+  "productFormShortcutNextField": "الحقل التالي، ثم زر الحفظ",
+  "productFormShortcutCreate": "إنشاء المنتج وإغلاق النافذة",
+  "productFormShortcutCreateAnother": "إنشاء المنتج والبدء بالتالي",
+  "productFormShortcutClose": "إغلاق النافذة",
+  "productFormShortcutPinField": "تثبيت الحقل الحالي للمنتج التالي، أو إلغاء تثبيته",
+  "productFormShortcutNewProduct": "منتج جديد من شاشة الأصناف",
+  "productFormShortcutsScanNote": "المسح بالقارئ يعمل وأنت في أي حقل: يذهب الرمز إلى خانة الباركود ويبقى المؤشر حيث هو.",
+  "barcodeScanNotFoundCreateAction": "إنشاء منتج",
+  "addProductShortcutTooltip": "إضافة منتج ({shortcut})",
+  "@addProductShortcutTooltip": {
+    "description": "Tooltip on the catalog's add-product button naming its keyboard shortcut.",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
   "productUpdateError": "تعذر حفظ المنتج. راجع البيانات وحاول مرة أخرى.",
   "catalogLoadError": "تعذر تحميل المنتجات من الخادم.",
   "activeStatus": "متاح",
@@ -11205,6 +11305,56 @@
   "@messagingTemplateMarketingBadge": {
     "description": "Badge on promotional message kinds (they obey quiet hours and opt-outs)."
   },
+  "messagingTemplateAutoOn": "تُرسل تلقائيًا",
+  "@messagingTemplateAutoOn": {
+    "description": "Badge on a text that goes out by itself when its event happens, switched on."
+  },
+  "messagingTemplateAutoOff": "التلقائي موقوف",
+  "@messagingTemplateAutoOff": {
+    "description": "Badge on an automatic text whose switch is off: it goes out only from a button, if at all."
+  },
+  "messagingTemplateParts": "{count, plural, =1{رسالة واحدة} =2{رسالتان} few{{count} رسائل} many{{count} رسالة} other{{count} رسالة}}",
+  "@messagingTemplateParts": {
+    "description": "How many SMS a text goes out as (one SMS holds 70 Arabic letters).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "messagingTemplateExampleCost": "هذا المثال: {parts} بـ {price}",
+  "@messagingTemplateExampleCost": {
+    "description": "Under a template's example: how many SMS it takes and what that costs from the SMS balance.",
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingTemplateExampleParts": "هذا المثال: {parts}",
+  "@messagingTemplateExampleParts": {
+    "description": "Under a template's example when SMS is not sold from a balance: how many SMS it takes.",
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingAutoTitle": "الرسائل التلقائية",
+  "@messagingAutoTitle": {
+    "description": "Section of switches for the texts that go out by themselves."
+  },
+  "messagingAutoIntro": "تُرسل هذه الرسائل وحدها حين يحدث ما تخصّه، ويُدفع ثمن كل واحدة من رصيد الرسائل. أوقف ما لا تريد إرساله.",
+  "@messagingAutoIntro": {
+    "description": "Explains the automatic texts and that each is paid from the SMS balance."
+  },
+  "messagingAutoSaveFailed": "تعذّر حفظ إعداد الرسالة التلقائية. أعد المحاولة.",
+  "@messagingAutoSaveFailed": {
+    "description": "Snack bar when turning an automatic text on or off failed."
+  },
   "messagingErrorNotEntitled": "خدمة الرسائل غير مشمولة في اشتراك المحل. تواصل مع الدعم لإضافتها.",
   "@messagingErrorNotEntitled": {
     "description": "SMS error code not_entitled."
@@ -11245,7 +11395,7 @@
   "@messagingErrorProviderRejected": {
     "description": "SMS error code provider_rejected."
   },
-  "messagingErrorOutcomeUnknown": "تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.",
+  "messagingErrorOutcomeUnknown": "تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. إن لم تكن أُرسلت يعود ثمنها إلى رصيد الرسائل تلقائياً بعد التحقق. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.",
   "@messagingErrorOutcomeUnknown": {
     "description": "SMS error codes provider_error / outcome_unknown."
   },
@@ -17712,7 +17862,7 @@
   "@walletRecordExpensesTitle": {
     "description": "Switch that books every paid wallet top-up as a shop expense."
   },
-  "walletRecordExpensesSubtitle": "كل شحن مدفوع يُسجَّل مصروفاً بالبطاقة ضمن «{category}».",
+  "walletRecordExpensesSubtitle": "كل شحن مدفوع يُسجَّل مصروفاً ضمن «{category}».",
   "@walletRecordExpensesSubtitle": {
     "description": "Explains where auto-booked top-up expenses go.",
     "placeholders": {
@@ -17931,7 +18081,7 @@
       }
     }
   },
-  "walletPaidBooked": "سُجّل كمصروف بالبطاقة ضمن «{category}».",
+  "walletPaidBooked": "سُجّل كمصروف ضمن «{category}».",
   "@walletPaidBooked": {
     "description": "The paid top-up was booked as an expense.",
     "placeholders": {
@@ -17969,7 +18119,7 @@
   "@walletReviewTitle": {
     "description": "The gateway approved a different amount; held for review."
   },
-  "walletReviewMessage": "إن خُصم المبلغ من بطاقتك فسيُضاف إلى محفظتك بعد المراجعة.",
+  "walletReviewMessage": "إن خُصم المبلغ من حسابك فسيُضاف إلى محفظتك بعد المراجعة.",
   "@walletReviewMessage": {
     "description": "Explains a payment held for review."
   },
@@ -18113,5 +18263,592 @@
   "walletServiceVouchers": "الكروت",
   "@walletServiceVouchers": {
     "description": "Service a charge was for: prepaid vouchers."
+  },
+  "walletMethodSadad": "سداد",
+  "@walletMethodSadad": {
+    "description": "Wallet top-up method: Sadad (Libyana's mobile wallet). Brand name."
+  },
+  "walletMethodEdfali": "إدفعلي",
+  "@walletMethodEdfali": {
+    "description": "Wallet top-up method: Edfali mobile wallet. Brand name."
+  },
+  "walletMethodMobiCash": "موبي كاش",
+  "@walletMethodMobiCash": {
+    "description": "Wallet top-up method: MobiCash. Brand name."
+  },
+  "walletMethodYussorPay": "يسر باي",
+  "@walletMethodYussorPay": {
+    "description": "Wallet top-up method: Yussor Pay. Brand name."
+  },
+  "walletMethodMasrafiPay": "مصرفي باي",
+  "@walletMethodMasrafiPay": {
+    "description": "Wallet top-up method: Masrafi Pay. Brand name."
+  },
+  "walletMethodSaharaPay": "صحارى باي",
+  "@walletMethodSaharaPay": {
+    "description": "Wallet top-up method: Sahara Pay. Brand name."
+  },
+  "walletMethodHintHostedPage": "صفحة دفع آمنة",
+  "@walletMethodHintHostedPage": {
+    "description": "Under a method tile: the payer pays on the gateway's secure page."
+  },
+  "walletMethodHintPhone": "برقم الهاتف",
+  "@walletMethodHintPhone": {
+    "description": "Under a method tile: the payer pays with their phone number and a texted code."
+  },
+  "walletMethodHintCard": "برقم البطاقة",
+  "@walletMethodHintCard": {
+    "description": "Under a method tile: the payer pays with their wallet card number and a texted code."
+  },
+  "walletPayerDialogTitle": "الدفع عبر {method}",
+  "@walletPayerDialogTitle": {
+    "description": "Title of the dialog asking for the payer's details, with the method's name.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPayerDialogMessage": "أدخل بيانات حسابك في {method}، وسيصلك رمز تحقق برسالة نصية لتأكيد دفع {amount}.",
+  "@walletPayerDialogMessage": {
+    "description": "Message of the payer dialog: method name and the amount to pay.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPayerPhoneLabel": "رقم الهاتف المسجّل في {method}",
+  "@walletPayerPhoneLabel": {
+    "description": "Label of the payer's phone field.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPayerPhoneHint": "09XXXXXXXX",
+  "@walletPayerPhoneHint": {
+    "description": "Placeholder showing the Libyan mobile number format."
+  },
+  "walletPayerPhoneInvalid": "أدخل رقم هاتف ليبياً صحيحاً، مثل 0912345678.",
+  "@walletPayerPhoneInvalid": {
+    "description": "Validation: the phone is not a Libyan mobile number."
+  },
+  "walletPayerCardLabel": "رقم بطاقة {method}",
+  "@walletPayerCardLabel": {
+    "description": "Label of the payer's wallet card number field.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPayerCardInvalid": "أدخل رقم البطاقة كاملاً، من 6 إلى 19 رقماً.",
+  "@walletPayerCardInvalid": {
+    "description": "Validation: the card number is not 6-19 digits."
+  },
+  "walletPayerBirthYearLabel": "سنة الميلاد",
+  "@walletPayerBirthYearLabel": {
+    "description": "Label of Sadad's birth year field."
+  },
+  "walletPayerBirthYearInvalid": "أدخل سنة الميلاد بأربعة أرقام.",
+  "@walletPayerBirthYearInvalid": {
+    "description": "Validation: the birth year is not a four-digit year."
+  },
+  "walletTopUpCodeNote": "سيصلك رمز تحقق برسالة نصية لتأكيد الدفع، ولا يُخصم شيء قبل إدخاله.",
+  "@walletTopUpCodeNote": {
+    "description": "Note under the form for methods confirmed with a texted code."
+  },
+  "walletTopUpSendCode": "إرسال رمز التحقق",
+  "@walletTopUpSendCode": {
+    "description": "Button that starts a code-confirmed payment."
+  },
+  "walletTopUpSendingCode": "نرسل رمز التحقق…",
+  "@walletTopUpSendingCode": {
+    "description": "Button label while the code-confirmed payment starts."
+  },
+  "walletCodeTitle": "أدخل رمز التحقق",
+  "@walletCodeTitle": {
+    "description": "Title of the code step."
+  },
+  "walletCodeSentTo": "أُرسل رمز التحقق عبر {method} إلى {payer}.",
+  "@walletCodeSentTo": {
+    "description": "Where the payer's code went: method name and masked phone or card.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "payer": {
+        "type": "String"
+      }
+    }
+  },
+  "walletCodeSent": "أُرسل رمز التحقق عبر {method}.",
+  "@walletCodeSent": {
+    "description": "Where the payer's code went, when no masked payer is known.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "walletCodeLabel": "رمز التحقق",
+  "@walletCodeLabel": {
+    "description": "Label of the code field."
+  },
+  "walletCodeRequired": "أدخل رمز التحقق كما وصلك.",
+  "@walletCodeRequired": {
+    "description": "Validation: the code is missing or not 4-8 digits."
+  },
+  "walletCodeConfirm": "تأكيد الدفع",
+  "@walletCodeConfirm": {
+    "description": "Button that sends the code."
+  },
+  "walletCodeConfirming": "نؤكد الدفع…",
+  "@walletCodeConfirming": {
+    "description": "Button label while the code is sent."
+  },
+  "walletCodeChangeDetails": "تغيير البيانات",
+  "@walletCodeChangeDetails": {
+    "description": "Button going back from the code to the form (another number or method)."
+  },
+  "walletCodeTestHint": "وضع تجريبي: الرمز 111111 يُكمل الدفع، و222222 يرفضه.",
+  "@walletCodeTestHint": {
+    "description": "Shown on the code step in test mode only: the gateway's test codes."
+  },
+  "walletCodeWrong": "رمز التحقق غير صحيح.",
+  "@walletCodeWrong": {
+    "description": "The code the payer typed was wrong."
+  },
+  "walletCodeAttemptsLeft": "{count, plural, =0{لم تبقَ محاولات.} =1{بقيت محاولة واحدة.} =2{بقيت محاولتان.} few{بقيت {count} محاولات.} other{بقيت {count} محاولة.}}",
+  "@walletCodeAttemptsLeft": {
+    "description": "How many codes the payer may still try.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "walletCodeUnknown": "لم يصلنا رد بوابة الدفع. أعد إرسال الرمز نفسه، ولن يُخصم المبلغ مرتين.",
+  "@walletCodeUnknown": {
+    "description": "The answer to the code was lost; sending it again is safe."
+  },
+  "walletAwaitingGatewayTitle": "نتحقق من الدفع",
+  "@walletAwaitingGatewayTitle": {
+    "description": "Title while the gateway took the code but has not said paid yet."
+  },
+  "walletAwaitingGatewayMessage": "وصل الرمز إلى بوابة الدفع، ونتحقق من نتيجة العملية. سيظهر الرصيد فور التأكيد.",
+  "@walletAwaitingGatewayMessage": {
+    "description": "Message while the gateway took the code but has not said paid yet."
+  },
+  "walletDeclinedTitle": "رُفضت عملية الدفع",
+  "@walletDeclinedTitle": {
+    "description": "Verdict title: the payer's bank or wallet declined."
+  },
+  "walletDeclinedMessage": "لم يُضف شيء إلى رصيدك. يمكنك المحاولة مجدداً أو بطريقة دفع أخرى.",
+  "@walletDeclinedMessage": {
+    "description": "Verdict message after a decline."
+  },
+  "walletAttemptsExceededMessage": "أُدخل رمز خاطئ مرات كثيرة فأُلغيت العملية. ابدأ عملية شحن جديدة.",
+  "@walletAttemptsExceededMessage": {
+    "description": "Verdict message after too many wrong codes."
+  },
+  "walletErrorInvalidPhone": "لم تقبل بوابة الدفع رقم الهاتف. تحقق منه وأعد المحاولة.",
+  "@walletErrorInvalidPhone": {
+    "description": "The gateway refused the payer's phone number."
+  },
+  "walletErrorInvalidCard": "لم تقبل بوابة الدفع رقم البطاقة. تحقق منه وأعد المحاولة.",
+  "@walletErrorInvalidCard": {
+    "description": "The gateway refused the payer's card number."
+  },
+  "walletErrorInvalidBirthYear": "لم تقبل بوابة الدفع سنة الميلاد. تحقق منها وأعد المحاولة.",
+  "@walletErrorInvalidBirthYear": {
+    "description": "The gateway refused Sadad's birth year."
+  },
+  "walletErrorMethodUnavailable": "طريقة الدفع هذه غير متاحة الآن. اختر طريقة أخرى.",
+  "@walletErrorMethodUnavailable": {
+    "description": "The chosen method is switched off at the gateway."
+  },
+  "walletErrorPayerRejected": "رفض مزوّد الخدمة عملية الدفع. تحقق من البيانات وأعد المحاولة.",
+  "@walletErrorPayerRejected": {
+    "description": "The payer's provider refused to start the payment."
+  },
+  "walletErrorTopUpClosed": "انتهت عملية الشحن هذه. ابدأ عملية جديدة.",
+  "@walletErrorTopUpClosed": {
+    "description": "The top-up is closed; start another."
+  },
+  "walletSmsBalanceTitle": "رصيد الرسائل",
+  "@walletSmsBalanceTitle": {
+    "description": "Title of the SMS balance: the sub-wallet each text message is paid from."
+  },
+  "walletSmsMessagesLeft": "{count, plural, =0{لا يكفي لأي رسالة} =1{يكفي لرسالة واحدة} =2{يكفي لرسالتين} few{يكفي لـ {count} رسائل} many{يكفي لـ {count} رسالة} other{يكفي لـ {count} رسالة}}",
+  "@walletSmsMessagesLeft": {
+    "description": "How many text messages an SMS balance (or an amount moved into it) pays for.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "walletSmsPricePerMessage": "{price} للرسالة",
+  "@walletSmsPricePerMessage": {
+    "description": "What one text message (one SMS, up to 70 Arabic letters) costs, under the SMS balance.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSmsAllocateButton": "تحويل من المحفظة",
+  "@walletSmsAllocateButton": {
+    "description": "Button that opens the sheet moving money from the main wallet into the SMS balance."
+  },
+  "walletSmsNotReady": "خدمة الرسائل غير جاهزة بعد لدى دفتر.",
+  "@walletSmsNotReady": {
+    "description": "Under the SMS balance when the company's SMS provider is not set up yet."
+  },
+  "walletSmsAllocateTitle": "تحويل إلى رصيد الرسائل",
+  "@walletSmsAllocateTitle": {
+    "description": "Title of the sheet moving money from the main wallet into the SMS balance."
+  },
+  "walletSmsAllocateIntro": "يُخصم المبلغ من المحفظة ويُضاف إلى رصيد الرسائل، وتُدفع منه كل رسالة بـ {price}. الرسالة حتى 70 حرفاً، والنص الأطول يُحسب رسالتين أو أكثر.",
+  "@walletSmsAllocateIntro": {
+    "description": "Explains the transfer at the top of the sheet.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSmsAllocateAmountLabel": "المبلغ",
+  "@walletSmsAllocateAmountLabel": {
+    "description": "Label of the amount field in the SMS transfer sheet."
+  },
+  "walletSmsAllocateAvailable": "رصيد المحفظة: {balance}",
+  "@walletSmsAllocateAvailable": {
+    "description": "How much the main wallet holds, in the SMS transfer sheet.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSmsAllocateConfirm": "تحويل {amount}",
+  "@walletSmsAllocateConfirm": {
+    "description": "Confirm button of the SMS transfer sheet.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSmsAllocateDone": "حُوِّل {amount} إلى رصيد الرسائل.",
+  "@walletSmsAllocateDone": {
+    "description": "Snack bar after money was moved into the SMS balance.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSmsAllocateTooMuch": "المبلغ أكبر من رصيد المحفظة.",
+  "@walletSmsAllocateTooMuch": {
+    "description": "The typed amount is more than the main wallet holds."
+  },
+  "walletSmsAllocateTooLittle": "أقل مبلغ هو ثمن رسالة واحدة ({price}).",
+  "@walletSmsAllocateTooLittle": {
+    "description": "The typed amount does not pay for one message.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSpendTopUpFirstTitle": "رصيد المحفظة لا يكفي",
+  "@walletSpendTopUpFirstTitle": {
+    "description": "Callout when the main wallet cannot pay for a transfer or a plan."
+  },
+  "walletSpendTopUpFirstMessage": "اشحن المحفظة أولاً ثم أكمل من هنا.",
+  "@walletSpendTopUpFirstMessage": {
+    "description": "Callout message: top up the wallet, then come back."
+  },
+  "walletErrorInsufficientBalance": "رصيد المحفظة لا يكفي ({balance}). اشحن المحفظة ثم أعد المحاولة.",
+  "@walletErrorInsufficientBalance": {
+    "description": "A transfer or plan the main wallet could not cover.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "walletErrorInsufficientBalanceShort": "رصيد المحفظة لا يكفي. اشحن المحفظة ثم أعد المحاولة.",
+  "@walletErrorInsufficientBalanceShort": {
+    "description": "A transfer or plan the main wallet could not cover, when the balance is unknown."
+  },
+  "walletErrorPlanUnavailable": "هذا الاشتراك غير متاح للدفع من المحفظة الآن.",
+  "@walletErrorPlanUnavailable": {
+    "description": "The plan is not sold through the wallet right now."
+  },
+  "walletErrorPlanIncluded": "هذه الخدمة مشمولة في اشتراكك دون تاريخ انتهاء، فلا حاجة للدفع.",
+  "@walletErrorPlanIncluded": {
+    "description": "The subscription already includes the plan with no end date."
+  },
+  "walletErrorInvalidPeriods": "مدة الاشتراك غير مقبولة.",
+  "@walletErrorInvalidPeriods": {
+    "description": "The number of periods was refused."
+  },
+  "walletPlanRemoteAccessTitle": "الوصول عن بُعد",
+  "@walletPlanRemoteAccessTitle": {
+    "description": "Name of the remote-access plan paid from the wallet."
+  },
+  "walletPlanAiTitle": "المساعد الذكي",
+  "@walletPlanAiTitle": {
+    "description": "Name of the AI assistant plan paid from the wallet."
+  },
+  "walletPlanMonths": "{count, plural, =1{شهر} =2{شهرين} few{{count} أشهر} many{{count} شهراً} other{{count} شهر}}",
+  "@walletPlanMonths": {
+    "description": "A plan's length in months.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "walletPlanDays": "{count, plural, =1{يوم واحد} =2{يومين} few{{count} أيام} many{{count} يوماً} other{{count} يوم}}",
+  "@walletPlanDays": {
+    "description": "A plan's length in days, when it is not whole months.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "walletPlanPricePer": "{price} لكل {period}",
+  "@walletPlanPricePer": {
+    "description": "One period's price, e.g. 50.00 د.ل لكل شهر.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPlanBuyButton": "اشترك من المحفظة",
+  "@walletPlanBuyButton": {
+    "description": "Button paying for a plan that is not running, from the wallet."
+  },
+  "walletPlanRenewButton": "جدّد من المحفظة",
+  "@walletPlanRenewButton": {
+    "description": "Button paying for more of a plan that is running, from the wallet."
+  },
+  "walletPlanPaidFromWallet": "يُدفع من المحفظة",
+  "@walletPlanPaidFromWallet": {
+    "description": "Row label: the plan is paid from the wallet."
+  },
+  "walletPlanSheetTitle": "اشتراك {plan}",
+  "@walletPlanSheetTitle": {
+    "description": "Title of the sheet paying for a plan.",
+    "placeholders": {
+      "plan": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPlanPeriodLabel": "المدة",
+  "@walletPlanPeriodLabel": {
+    "description": "Label above the plan length choices."
+  },
+  "walletPlanTotalLabel": "المبلغ",
+  "@walletPlanTotalLabel": {
+    "description": "Summary row: what the purchase costs."
+  },
+  "walletPlanWalletLabel": "رصيد المحفظة",
+  "@walletPlanWalletLabel": {
+    "description": "Summary row: what the main wallet holds now."
+  },
+  "walletPlanBalanceAfterLabel": "الرصيد بعد الدفع",
+  "@walletPlanBalanceAfterLabel": {
+    "description": "Summary row: what the main wallet holds after paying."
+  },
+  "walletPlanEndsLabel": "ينتهي في",
+  "@walletPlanEndsLabel": {
+    "description": "Summary row: when the plan ends after this purchase."
+  },
+  "walletPlanRenewNote": "تُضاف المدة بعد نهاية اشتراكك الحالي، فلا يضيع شيء من أيامه.",
+  "@walletPlanRenewNote": {
+    "description": "Note when renewing a plan that is still running."
+  },
+  "walletPlanPayButton": "ادفع {amount}",
+  "@walletPlanPayButton": {
+    "description": "Confirm button of the plan sheet.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPlanPaidMessage": "تم الدفع — {plan} مُفعّل حتى {date}.",
+  "@walletPlanPaidMessage": {
+    "description": "Snack bar after a plan was paid for.",
+    "placeholders": {
+      "plan": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPlanIncludedMessage": "مشمول في اشتراكك دون تاريخ انتهاء.",
+  "@walletPlanIncludedMessage": {
+    "description": "Under a plan the subscription includes for good."
+  },
+  "walletPlanNotSold": "غير متاح للدفع من المحفظة حالياً. تواصل مع الدعم لتفعيله.",
+  "@walletPlanNotSold": {
+    "description": "Under a plan the wallet does not sell, while it is not running."
+  },
+  "walletEntryTransfer": "تحويل",
+  "@walletEntryTransfer": {
+    "description": "Statement line: the shop moving its own money between the wallet and the SMS balance."
+  },
+  "walletServiceRemoteAccess": "الوصول عن بُعد",
+  "@walletServiceRemoteAccess": {
+    "description": "The remote-access service a charge was for."
+  },
+  "walletHistorySmsTab": "رصيد الرسائل",
+  "@walletHistorySmsTab": {
+    "description": "History tab listing the SMS balance's movements."
+  },
+  "walletHistoryEmptySms": "لا توجد حركات على رصيد الرسائل بعد.",
+  "@walletHistoryEmptySms": {
+    "description": "Empty SMS balance history."
+  },
+  "subscriptionRemoteAccessWalletMessage": "اشترك من المحفظة لاستخدام التطبيق خارج المتجر عبر خادم دفتر.",
+  "@subscriptionRemoteAccessWalletMessage": {
+    "description": "Remote access is off and the wallet sells it."
+  },
+  "subscriptionAiWalletMessage": "اشترك من المحفظة لتستفيد من المساعد الذكي في تحليل مبيعاتك ومخزونك.",
+  "@subscriptionAiWalletMessage": {
+    "description": "The assistant is off and the wallet sells it."
+  },
+  "subscriptionSmsPrepaidActiveTitle": "الرسائل النصية تعمل",
+  "@subscriptionSmsPrepaidActiveTitle": {
+    "description": "SMS works: the SMS balance pays for messages."
+  },
+  "subscriptionSmsPrepaidActiveMessage": "تُدفع الرسائل من رصيد الرسائل: {price} للرسالة حتى 70 حرفاً، والنص الأطول يُحسب رسالتين أو أكثر. الإعدادات ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.",
+  "@subscriptionSmsPrepaidActiveMessage": {
+    "description": "SMS works, paid per SMS (70 Arabic letters each) from the SMS balance.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionSmsPrepaidEmptyTitle": "رصيد الرسائل فارغ",
+  "@subscriptionSmsPrepaidEmptyTitle": {
+    "description": "SMS cannot be sent: the SMS balance is empty."
+  },
+  "subscriptionSmsPrepaidEmptyMessage": "حوّل مبلغاً من المحفظة إلى رصيد الرسائل لإرسال الفواتير والتذكيرات والعروض إلى عملائك.",
+  "@subscriptionSmsPrepaidEmptyMessage": {
+    "description": "How to start sending SMS."
+  },
+  "messagingStatusNoBalance": "الرصيد فارغ",
+  "@messagingStatusNoBalance": {
+    "description": "SMS page status when the SMS balance cannot pay for a message."
+  },
+  "messagingBalanceTitle": "رصيد الرسائل",
+  "@messagingBalanceTitle": {
+    "description": "Title of the SMS balance section on the SMS settings page."
+  },
+  "messagingBalanceSentThisMonth": "{count, plural, =0{لم تُرسل رسائل هذا الشهر} =1{أُرسلت رسالة واحدة هذا الشهر} =2{أُرسلت رسالتان هذا الشهر} few{أُرسلت {count} رسائل هذا الشهر} many{أُرسلت {count} رسالة هذا الشهر} other{أُرسلت {count} رسالة هذا الشهر}}",
+  "@messagingBalanceSentThisMonth": {
+    "description": "How many messages went out this month.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "messagingBalanceEmptyTitle": "رصيد الرسائل فارغ",
+  "@messagingBalanceEmptyTitle": {
+    "description": "Callout when the SMS balance cannot pay for a message."
+  },
+  "messagingBalanceEmptyMessage": "لن تُرسل الرسائل حتى تحوّل مبلغاً من المحفظة إلى رصيد الرسائل. تُدفع كل رسالة بـ {price}.",
+  "@messagingBalanceEmptyMessage": {
+    "description": "Callout message for an empty SMS balance.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingErrorInsufficientBalance": "رصيد الرسائل لا يكفي لهذه الرسالة. حوّل مبلغاً من المحفظة إلى رصيد الرسائل ثم أعد الإرسال.",
+  "@messagingErrorInsufficientBalance": {
+    "description": "A message refused because the SMS balance could not pay for it (a long message costs several SMS)."
+  },
+  "walletSmsLengthNote": "الرسالة حتى 70 حرفاً، والنص الأطول يُرسل ويُحسب رسالتين أو أكثر.",
+  "@walletSmsLengthNote": {
+    "description": "Explains that SMS are paid by length: one SMS holds 70 Arabic letters, a longer text goes out (and is paid) as several."
+  },
+  "walletSmsOwed": "عليه {amount} عن رسائل خرجت أطول من المتوقع، تُخصم من التحويل القادم.",
+  "@walletSmsOwed": {
+    "description": "Under an SMS balance that went below zero: messages sent longer than they were held for; the next transfer pays it.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "campaignPreviewCostLabel": "التكلفة التقديرية",
+  "@campaignPreviewCostLabel": {
+    "description": "Campaign preview row: what the campaign will cost from the SMS balance."
+  },
+  "campaignPreviewCost": "≈ {amount}",
+  "@campaignPreviewCost": {
+    "description": "Approximate campaign cost: every recipient's message, per SMS.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "campaignPreviewBalanceShortTitle": "رصيد الرسائل لا يكفي للحملة كاملة",
+  "@campaignPreviewBalanceShortTitle": {
+    "description": "Warning in the campaign preview: the SMS balance pays for only part of the campaign."
+  },
+  "campaignPreviewBalanceShortMessage": "في رصيد الرسائل {balance} والحملة تحتاج نحو {cost}. تتوقف الرسائل حين ينفد الرصيد، فحوّل مبلغاً إليه من المحفظة قبل الإرسال.",
+  "@campaignPreviewBalanceShortMessage": {
+    "description": "Explains the shortfall and how to cover it before sending.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      },
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSmsAllocateAll": "كامل الرصيد",
+  "@walletSmsAllocateAll": {
+    "description": "Quick amount moving the whole main wallet into the SMS balance."
+  },
+  "walletSpendCancel": "إلغاء",
+  "@walletSpendCancel": {
+    "description": "Cancel button of the wallet spending sheets."
+  },
+  "walletPlanActiveUntil": "مُفعّل حتى {date}",
+  "@walletPlanActiveUntil": {
+    "description": "A plan that runs, and the day it stops.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
   }
 }

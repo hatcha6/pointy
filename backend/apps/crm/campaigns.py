@@ -14,11 +14,13 @@ campaign's own text for that customer, the part the manager wrote.
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.core.models import ShopSettings
+from apps.core.models import RelayInstallation, ShopSettings
+from apps.core.relay import sms_prepaid
 from apps.customers.models import Customer
 from apps.messaging.models import MessagingGateway, OutboundMessage
 from apps.messaging.phone import normalize_phone
@@ -96,9 +98,25 @@ def _estimate_minutes(count: int, gateway) -> int:
     return -(-count // rate)  # ceil
 
 
+def _sms_cost(sendable: int, segments: int) -> dict:
+    """What the campaign would take from the SMS balance — every recipient's
+    message at the price of each SMS part it goes out as — beside what the
+    balance holds. Blank when SMS is not paid from a balance."""
+    installation = RelayInstallation.load()
+    if not sms_prepaid(installation):
+        return {"estimated_cost": "", "sms_balance": "", "sms_price": ""}
+    cost = installation.sms_price * sendable * max(segments, 1)
+    places = Decimal("0.001")
+    return {
+        "estimated_cost": str(cost.quantize(places)),
+        "sms_balance": str(installation.sms_balance.quantize(places)),
+        "sms_price": str(installation.sms_price.quantize(places)),
+    }
+
+
 def preview_campaign(campaign) -> dict:
-    """Audience size, a rendered sample, segment count, and drip duration — the
-    numbers the approver sees before pulling the trigger. Creates no rows."""
+    """Audience size, a rendered sample, segment count, cost and drip duration —
+    the numbers the approver sees before pulling the trigger. Creates no rows."""
     audience = resolve_audience(campaign)
     total = audience.count()
     sendable = audience.filter(
@@ -110,12 +128,14 @@ def preview_campaign(campaign) -> dict:
         shop_name,
         render_template(campaign.body_template, sample_customer, shop_name=shop_name),
     )
+    segments = count_segments(sample)
     return {
         "audience_total": total,
         "sendable_estimate": sendable,
         "skipped_estimate": max(total - sendable, 0),
         "sample_message": sample,
-        "segments": count_segments(sample),
+        "segments": segments,
+        **_sms_cost(sendable, segments),
         "estimated_minutes": _estimate_minutes(
             sendable,
             campaign.gateway

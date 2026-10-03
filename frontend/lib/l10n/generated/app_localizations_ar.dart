@@ -1472,6 +1472,10 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get reportVerifyDetailChangedMessage =>
+      'الأرقام الرئيسية لم تتغير، لكن تفاصيل الجداول اختلفت عمّا صدر.';
+
+  @override
   String reportTruncatedNotice(String shown, String total) {
     return 'معروض $shown من $total صفًا.';
   }
@@ -4299,6 +4303,32 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get workflowStageCustodyHelp =>
       'دخول هذه المرحلة يعني أن الزبون استلم جهازه.';
+
+  @override
+  String get customerSendBalanceSmsButton => 'إرسال الرصيد برسالة';
+
+  @override
+  String get customerSendBalanceSmsSent => 'أُرسل للعميل رصيد حسابه برسالة.';
+
+  @override
+  String get customerSendBalanceSmsError =>
+      'تعذّر إرسال الرسالة. أعد المحاولة.';
+
+  @override
+  String get jobTextReadyAction => 'إرسال رسالة «جاهز للاستلام»';
+
+  @override
+  String get jobTextReadySent => 'أُرسلت للزبون رسالة بأن طلبه جاهز.';
+
+  @override
+  String get jobTextReadyError => 'تعذّر إرسال الرسالة. أعد المحاولة.';
+
+  @override
+  String get workflowStageReadyLabel => 'جاهز للاستلام';
+
+  @override
+  String get workflowStageReadyHelp =>
+      'عند الوصول إلى هذه المرحلة تُرسل للزبون رسالة بأن طلبه جاهز، ويُذكَّر إن لم يستلمه.';
 
   @override
   String get shopTypeCarWorkshop => 'ورشة سيارات';
@@ -7575,6 +7605,130 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get productCreateError =>
       'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get createAndAddAnotherButton => 'إنشاء وإضافة آخر';
+
+  @override
+  String get productMoreDetailsTitle => 'تفاصيل إضافية';
+
+  @override
+  String get productMoreDetailsSummary =>
+      'الوصف، الصورة، الإضافات، ونوع المنتج';
+
+  @override
+  String get productFieldPinTooltip => 'تثبيت القيمة للمنتج التالي';
+
+  @override
+  String get productFieldUnpinTooltip =>
+      'إلغاء التثبيت — لن تُنسخ للمنتج التالي';
+
+  @override
+  String get productFieldKeptLabel => 'من المنتج السابق';
+
+  @override
+  String get productEntryPinsHint =>
+      'الحقول المثبّتة تبقى كما هي للمنتج التالي. اضغط الدبوس بجانب أي حقل لتثبيته أو إلغائه.';
+
+  @override
+  String productEntryCreatedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'أضفت $count منتج',
+      many: 'أضفت $count منتجًا',
+      few: 'أضفت $count منتجات',
+      two: 'أضفت منتجين',
+      one: 'أضفت منتجًا واحدًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String productEntryLastCreated(String name) {
+    return 'تم إنشاء «$name»';
+  }
+
+  @override
+  String get productEntryEditLastButton => 'تعديل';
+
+  @override
+  String get productNameUnchangedWarning =>
+      'الاسم مطابق للمنتج السابق. عدّل الجزء المختلف.';
+
+  @override
+  String get productNameUnchangedConfirm =>
+      'الاسم ما زال مطابقًا للمنتج السابق. اضغط الحفظ مرة أخرى للمتابعة على أي حال.';
+
+  @override
+  String get similarProductAction => 'منتج مشابه';
+
+  @override
+  String get similarProductTooltip =>
+      'منتج جديد يبدأ ببيانات هذا المنتج، دون الباركود ورمز المنتج';
+
+  @override
+  String similarProductNotice(String name) {
+    return 'نسخة من «$name». الباركود ورمز المنتج والصورة والكمية لا تُنسخ، ولا يُحفظ شيء حتى تضغط الإنشاء.';
+  }
+
+  @override
+  String get productFieldCopiedLabel => 'من المنتج الأصلي';
+
+  @override
+  String get similarProductNameUnchangedWarning =>
+      'الاسم مطابق للمنتج الأصلي. عدّل الجزء المختلف.';
+
+  @override
+  String get similarProductNameUnchangedConfirm =>
+      'الاسم ما زال مطابقًا للمنتج الأصلي. اضغط الحفظ مرة أخرى للمتابعة على أي حال.';
+
+  @override
+  String get productBarcodeScanAnywhereHelper =>
+      'امسح من أي حقل ويصل الرمز إلى هنا';
+
+  @override
+  String get productFormShortcutsTooltip => 'اختصارات لوحة المفاتيح';
+
+  @override
+  String get productFormShortcutsTitle => 'اختصارات إضافة المنتجات';
+
+  @override
+  String get productFormShortcutsSectionSave => 'التنقل والحفظ';
+
+  @override
+  String get productFormShortcutsSectionRun => 'منتجات متتالية';
+
+  @override
+  String get productFormShortcutNextField => 'الحقل التالي، ثم زر الحفظ';
+
+  @override
+  String get productFormShortcutCreate => 'إنشاء المنتج وإغلاق النافذة';
+
+  @override
+  String get productFormShortcutCreateAnother => 'إنشاء المنتج والبدء بالتالي';
+
+  @override
+  String get productFormShortcutClose => 'إغلاق النافذة';
+
+  @override
+  String get productFormShortcutPinField =>
+      'تثبيت الحقل الحالي للمنتج التالي، أو إلغاء تثبيته';
+
+  @override
+  String get productFormShortcutNewProduct => 'منتج جديد من شاشة الأصناف';
+
+  @override
+  String get productFormShortcutsScanNote =>
+      'المسح بالقارئ يعمل وأنت في أي حقل: يذهب الرمز إلى خانة الباركود ويبقى المؤشر حيث هو.';
+
+  @override
+  String get barcodeScanNotFoundCreateAction => 'إنشاء منتج';
+
+  @override
+  String addProductShortcutTooltip(String shortcut) {
+    return 'إضافة منتج ($shortcut)';
+  }
 
   @override
   String get productUpdateError =>
@@ -17097,6 +17251,47 @@ class AppLocalizationsAr extends AppLocalizations {
   String get messagingTemplateMarketingBadge => 'ترويجية';
 
   @override
+  String get messagingTemplateAutoOn => 'تُرسل تلقائيًا';
+
+  @override
+  String get messagingTemplateAutoOff => 'التلقائي موقوف';
+
+  @override
+  String messagingTemplateParts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count رسالة',
+      many: '$count رسالة',
+      few: '$count رسائل',
+      two: 'رسالتان',
+      one: 'رسالة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String messagingTemplateExampleCost(String parts, String price) {
+    return 'هذا المثال: $parts بـ $price';
+  }
+
+  @override
+  String messagingTemplateExampleParts(String parts) {
+    return 'هذا المثال: $parts';
+  }
+
+  @override
+  String get messagingAutoTitle => 'الرسائل التلقائية';
+
+  @override
+  String get messagingAutoIntro =>
+      'تُرسل هذه الرسائل وحدها حين يحدث ما تخصّه، ويُدفع ثمن كل واحدة من رصيد الرسائل. أوقف ما لا تريد إرساله.';
+
+  @override
+  String get messagingAutoSaveFailed =>
+      'تعذّر حفظ إعداد الرسالة التلقائية. أعد المحاولة.';
+
+  @override
   String get messagingErrorNotEntitled =>
       'خدمة الرسائل غير مشمولة في اشتراك المحل. تواصل مع الدعم لإضافتها.';
 
@@ -17137,7 +17332,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get messagingErrorOutcomeUnknown =>
-      'تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.';
+      'تعذّر التأكد من وصول الرسالة بسبب عطل لدى مزوّد الرسائل. إن لم تكن أُرسلت يعود ثمنها إلى رصيد الرسائل تلقائياً بعد التحقق. تحقّق مع العميل قبل إعادة الإرسال حتى لا تصله مرتين.';
 
   @override
   String get messagingErrorSmsUnconfigured =>
@@ -22972,7 +23167,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String walletRecordExpensesSubtitle(String category) {
-    return 'كل شحن مدفوع يُسجَّل مصروفاً بالبطاقة ضمن «$category».';
+    return 'كل شحن مدفوع يُسجَّل مصروفاً ضمن «$category».';
   }
 
   @override
@@ -23126,7 +23321,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String walletPaidBooked(String category) {
-    return 'سُجّل كمصروف بالبطاقة ضمن «$category».';
+    return 'سُجّل كمصروف ضمن «$category».';
   }
 
   @override
@@ -23152,7 +23347,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get walletReviewMessage =>
-      'إن خُصم المبلغ من بطاقتك فسيُضاف إلى محفظتك بعد المراجعة.';
+      'إن خُصم المبلغ من حسابك فسيُضاف إلى محفظتك بعد المراجعة.';
 
   @override
   String get walletUnconfirmedTitle => 'لم يصلنا تأكيد الدفع بعد';
@@ -23262,4 +23457,457 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get walletServiceVouchers => 'الكروت';
+
+  @override
+  String get walletMethodSadad => 'سداد';
+
+  @override
+  String get walletMethodEdfali => 'إدفعلي';
+
+  @override
+  String get walletMethodMobiCash => 'موبي كاش';
+
+  @override
+  String get walletMethodYussorPay => 'يسر باي';
+
+  @override
+  String get walletMethodMasrafiPay => 'مصرفي باي';
+
+  @override
+  String get walletMethodSaharaPay => 'صحارى باي';
+
+  @override
+  String get walletMethodHintHostedPage => 'صفحة دفع آمنة';
+
+  @override
+  String get walletMethodHintPhone => 'برقم الهاتف';
+
+  @override
+  String get walletMethodHintCard => 'برقم البطاقة';
+
+  @override
+  String walletPayerDialogTitle(String method) {
+    return 'الدفع عبر $method';
+  }
+
+  @override
+  String walletPayerDialogMessage(String method, String amount) {
+    return 'أدخل بيانات حسابك في $method، وسيصلك رمز تحقق برسالة نصية لتأكيد دفع $amount.';
+  }
+
+  @override
+  String walletPayerPhoneLabel(String method) {
+    return 'رقم الهاتف المسجّل في $method';
+  }
+
+  @override
+  String get walletPayerPhoneHint => '09XXXXXXXX';
+
+  @override
+  String get walletPayerPhoneInvalid =>
+      'أدخل رقم هاتف ليبياً صحيحاً، مثل 0912345678.';
+
+  @override
+  String walletPayerCardLabel(String method) {
+    return 'رقم بطاقة $method';
+  }
+
+  @override
+  String get walletPayerCardInvalid =>
+      'أدخل رقم البطاقة كاملاً، من 6 إلى 19 رقماً.';
+
+  @override
+  String get walletPayerBirthYearLabel => 'سنة الميلاد';
+
+  @override
+  String get walletPayerBirthYearInvalid => 'أدخل سنة الميلاد بأربعة أرقام.';
+
+  @override
+  String get walletTopUpCodeNote =>
+      'سيصلك رمز تحقق برسالة نصية لتأكيد الدفع، ولا يُخصم شيء قبل إدخاله.';
+
+  @override
+  String get walletTopUpSendCode => 'إرسال رمز التحقق';
+
+  @override
+  String get walletTopUpSendingCode => 'نرسل رمز التحقق…';
+
+  @override
+  String get walletCodeTitle => 'أدخل رمز التحقق';
+
+  @override
+  String walletCodeSentTo(String method, String payer) {
+    return 'أُرسل رمز التحقق عبر $method إلى $payer.';
+  }
+
+  @override
+  String walletCodeSent(String method) {
+    return 'أُرسل رمز التحقق عبر $method.';
+  }
+
+  @override
+  String get walletCodeLabel => 'رمز التحقق';
+
+  @override
+  String get walletCodeRequired => 'أدخل رمز التحقق كما وصلك.';
+
+  @override
+  String get walletCodeConfirm => 'تأكيد الدفع';
+
+  @override
+  String get walletCodeConfirming => 'نؤكد الدفع…';
+
+  @override
+  String get walletCodeChangeDetails => 'تغيير البيانات';
+
+  @override
+  String get walletCodeTestHint =>
+      'وضع تجريبي: الرمز 111111 يُكمل الدفع، و222222 يرفضه.';
+
+  @override
+  String get walletCodeWrong => 'رمز التحقق غير صحيح.';
+
+  @override
+  String walletCodeAttemptsLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'بقيت $count محاولة.',
+      few: 'بقيت $count محاولات.',
+      two: 'بقيت محاولتان.',
+      one: 'بقيت محاولة واحدة.',
+      zero: 'لم تبقَ محاولات.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get walletCodeUnknown =>
+      'لم يصلنا رد بوابة الدفع. أعد إرسال الرمز نفسه، ولن يُخصم المبلغ مرتين.';
+
+  @override
+  String get walletAwaitingGatewayTitle => 'نتحقق من الدفع';
+
+  @override
+  String get walletAwaitingGatewayMessage =>
+      'وصل الرمز إلى بوابة الدفع، ونتحقق من نتيجة العملية. سيظهر الرصيد فور التأكيد.';
+
+  @override
+  String get walletDeclinedTitle => 'رُفضت عملية الدفع';
+
+  @override
+  String get walletDeclinedMessage =>
+      'لم يُضف شيء إلى رصيدك. يمكنك المحاولة مجدداً أو بطريقة دفع أخرى.';
+
+  @override
+  String get walletAttemptsExceededMessage =>
+      'أُدخل رمز خاطئ مرات كثيرة فأُلغيت العملية. ابدأ عملية شحن جديدة.';
+
+  @override
+  String get walletErrorInvalidPhone =>
+      'لم تقبل بوابة الدفع رقم الهاتف. تحقق منه وأعد المحاولة.';
+
+  @override
+  String get walletErrorInvalidCard =>
+      'لم تقبل بوابة الدفع رقم البطاقة. تحقق منه وأعد المحاولة.';
+
+  @override
+  String get walletErrorInvalidBirthYear =>
+      'لم تقبل بوابة الدفع سنة الميلاد. تحقق منها وأعد المحاولة.';
+
+  @override
+  String get walletErrorMethodUnavailable =>
+      'طريقة الدفع هذه غير متاحة الآن. اختر طريقة أخرى.';
+
+  @override
+  String get walletErrorPayerRejected =>
+      'رفض مزوّد الخدمة عملية الدفع. تحقق من البيانات وأعد المحاولة.';
+
+  @override
+  String get walletErrorTopUpClosed =>
+      'انتهت عملية الشحن هذه. ابدأ عملية جديدة.';
+
+  @override
+  String get walletSmsBalanceTitle => 'رصيد الرسائل';
+
+  @override
+  String walletSmsMessagesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'يكفي لـ $count رسالة',
+      many: 'يكفي لـ $count رسالة',
+      few: 'يكفي لـ $count رسائل',
+      two: 'يكفي لرسالتين',
+      one: 'يكفي لرسالة واحدة',
+      zero: 'لا يكفي لأي رسالة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String walletSmsPricePerMessage(String price) {
+    return '$price للرسالة';
+  }
+
+  @override
+  String get walletSmsAllocateButton => 'تحويل من المحفظة';
+
+  @override
+  String get walletSmsNotReady => 'خدمة الرسائل غير جاهزة بعد لدى دفتر.';
+
+  @override
+  String get walletSmsAllocateTitle => 'تحويل إلى رصيد الرسائل';
+
+  @override
+  String walletSmsAllocateIntro(String price) {
+    return 'يُخصم المبلغ من المحفظة ويُضاف إلى رصيد الرسائل، وتُدفع منه كل رسالة بـ $price. الرسالة حتى 70 حرفاً، والنص الأطول يُحسب رسالتين أو أكثر.';
+  }
+
+  @override
+  String get walletSmsAllocateAmountLabel => 'المبلغ';
+
+  @override
+  String walletSmsAllocateAvailable(String balance) {
+    return 'رصيد المحفظة: $balance';
+  }
+
+  @override
+  String walletSmsAllocateConfirm(String amount) {
+    return 'تحويل $amount';
+  }
+
+  @override
+  String walletSmsAllocateDone(String amount) {
+    return 'حُوِّل $amount إلى رصيد الرسائل.';
+  }
+
+  @override
+  String get walletSmsAllocateTooMuch => 'المبلغ أكبر من رصيد المحفظة.';
+
+  @override
+  String walletSmsAllocateTooLittle(String price) {
+    return 'أقل مبلغ هو ثمن رسالة واحدة ($price).';
+  }
+
+  @override
+  String get walletSpendTopUpFirstTitle => 'رصيد المحفظة لا يكفي';
+
+  @override
+  String get walletSpendTopUpFirstMessage =>
+      'اشحن المحفظة أولاً ثم أكمل من هنا.';
+
+  @override
+  String walletErrorInsufficientBalance(String balance) {
+    return 'رصيد المحفظة لا يكفي ($balance). اشحن المحفظة ثم أعد المحاولة.';
+  }
+
+  @override
+  String get walletErrorInsufficientBalanceShort =>
+      'رصيد المحفظة لا يكفي. اشحن المحفظة ثم أعد المحاولة.';
+
+  @override
+  String get walletErrorPlanUnavailable =>
+      'هذا الاشتراك غير متاح للدفع من المحفظة الآن.';
+
+  @override
+  String get walletErrorPlanIncluded =>
+      'هذه الخدمة مشمولة في اشتراكك دون تاريخ انتهاء، فلا حاجة للدفع.';
+
+  @override
+  String get walletErrorInvalidPeriods => 'مدة الاشتراك غير مقبولة.';
+
+  @override
+  String get walletPlanRemoteAccessTitle => 'الوصول عن بُعد';
+
+  @override
+  String get walletPlanAiTitle => 'المساعد الذكي';
+
+  @override
+  String walletPlanMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شهر',
+      many: '$count شهراً',
+      few: '$count أشهر',
+      two: 'شهرين',
+      one: 'شهر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String walletPlanDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count يوم',
+      many: '$count يوماً',
+      few: '$count أيام',
+      two: 'يومين',
+      one: 'يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String walletPlanPricePer(String price, String period) {
+    return '$price لكل $period';
+  }
+
+  @override
+  String get walletPlanBuyButton => 'اشترك من المحفظة';
+
+  @override
+  String get walletPlanRenewButton => 'جدّد من المحفظة';
+
+  @override
+  String get walletPlanPaidFromWallet => 'يُدفع من المحفظة';
+
+  @override
+  String walletPlanSheetTitle(String plan) {
+    return 'اشتراك $plan';
+  }
+
+  @override
+  String get walletPlanPeriodLabel => 'المدة';
+
+  @override
+  String get walletPlanTotalLabel => 'المبلغ';
+
+  @override
+  String get walletPlanWalletLabel => 'رصيد المحفظة';
+
+  @override
+  String get walletPlanBalanceAfterLabel => 'الرصيد بعد الدفع';
+
+  @override
+  String get walletPlanEndsLabel => 'ينتهي في';
+
+  @override
+  String get walletPlanRenewNote =>
+      'تُضاف المدة بعد نهاية اشتراكك الحالي، فلا يضيع شيء من أيامه.';
+
+  @override
+  String walletPlanPayButton(String amount) {
+    return 'ادفع $amount';
+  }
+
+  @override
+  String walletPlanPaidMessage(String plan, String date) {
+    return 'تم الدفع — $plan مُفعّل حتى $date.';
+  }
+
+  @override
+  String get walletPlanIncludedMessage => 'مشمول في اشتراكك دون تاريخ انتهاء.';
+
+  @override
+  String get walletPlanNotSold =>
+      'غير متاح للدفع من المحفظة حالياً. تواصل مع الدعم لتفعيله.';
+
+  @override
+  String get walletEntryTransfer => 'تحويل';
+
+  @override
+  String get walletServiceRemoteAccess => 'الوصول عن بُعد';
+
+  @override
+  String get walletHistorySmsTab => 'رصيد الرسائل';
+
+  @override
+  String get walletHistoryEmptySms => 'لا توجد حركات على رصيد الرسائل بعد.';
+
+  @override
+  String get subscriptionRemoteAccessWalletMessage =>
+      'اشترك من المحفظة لاستخدام التطبيق خارج المتجر عبر خادم دفتر.';
+
+  @override
+  String get subscriptionAiWalletMessage =>
+      'اشترك من المحفظة لتستفيد من المساعد الذكي في تحليل مبيعاتك ومخزونك.';
+
+  @override
+  String get subscriptionSmsPrepaidActiveTitle => 'الرسائل النصية تعمل';
+
+  @override
+  String subscriptionSmsPrepaidActiveMessage(String price) {
+    return 'تُدفع الرسائل من رصيد الرسائل: $price للرسالة حتى 70 حرفاً، والنص الأطول يُحسب رسالتين أو أكثر. الإعدادات ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.';
+  }
+
+  @override
+  String get subscriptionSmsPrepaidEmptyTitle => 'رصيد الرسائل فارغ';
+
+  @override
+  String get subscriptionSmsPrepaidEmptyMessage =>
+      'حوّل مبلغاً من المحفظة إلى رصيد الرسائل لإرسال الفواتير والتذكيرات والعروض إلى عملائك.';
+
+  @override
+  String get messagingStatusNoBalance => 'الرصيد فارغ';
+
+  @override
+  String get messagingBalanceTitle => 'رصيد الرسائل';
+
+  @override
+  String messagingBalanceSentThisMonth(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'أُرسلت $count رسالة هذا الشهر',
+      many: 'أُرسلت $count رسالة هذا الشهر',
+      few: 'أُرسلت $count رسائل هذا الشهر',
+      two: 'أُرسلت رسالتان هذا الشهر',
+      one: 'أُرسلت رسالة واحدة هذا الشهر',
+      zero: 'لم تُرسل رسائل هذا الشهر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get messagingBalanceEmptyTitle => 'رصيد الرسائل فارغ';
+
+  @override
+  String messagingBalanceEmptyMessage(String price) {
+    return 'لن تُرسل الرسائل حتى تحوّل مبلغاً من المحفظة إلى رصيد الرسائل. تُدفع كل رسالة بـ $price.';
+  }
+
+  @override
+  String get messagingErrorInsufficientBalance =>
+      'رصيد الرسائل لا يكفي لهذه الرسالة. حوّل مبلغاً من المحفظة إلى رصيد الرسائل ثم أعد الإرسال.';
+
+  @override
+  String get walletSmsLengthNote =>
+      'الرسالة حتى 70 حرفاً، والنص الأطول يُرسل ويُحسب رسالتين أو أكثر.';
+
+  @override
+  String walletSmsOwed(String amount) {
+    return 'عليه $amount عن رسائل خرجت أطول من المتوقع، تُخصم من التحويل القادم.';
+  }
+
+  @override
+  String get campaignPreviewCostLabel => 'التكلفة التقديرية';
+
+  @override
+  String campaignPreviewCost(String amount) {
+    return '≈ $amount';
+  }
+
+  @override
+  String get campaignPreviewBalanceShortTitle =>
+      'رصيد الرسائل لا يكفي للحملة كاملة';
+
+  @override
+  String campaignPreviewBalanceShortMessage(String balance, String cost) {
+    return 'في رصيد الرسائل $balance والحملة تحتاج نحو $cost. تتوقف الرسائل حين ينفد الرصيد، فحوّل مبلغاً إليه من المحفظة قبل الإرسال.';
+  }
+
+  @override
+  String get walletSmsAllocateAll => 'كامل الرصيد';
+
+  @override
+  String get walletSpendCancel => 'إلغاء';
+
+  @override
+  String walletPlanActiveUntil(String date) {
+    return 'مُفعّل حتى $date';
+  }
 }

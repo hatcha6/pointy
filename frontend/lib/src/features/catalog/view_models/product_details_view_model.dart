@@ -84,6 +84,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
   final bool _shouldLoadPurchaseHistory;
   Product _product;
   bool _isLoading = false;
+  bool _hasLoadedProduct = false;
   bool _isSavingProduct = false;
   bool _isSavingVariant = false;
   bool _isSavingImage = false;
@@ -129,6 +130,11 @@ class ProductDetailsViewModel extends ChangeNotifier {
   }
 
   bool get isLoading => _isLoading;
+
+  /// Whether the product has come back from the server in full. Until then
+  /// [product] may be the list row or link it was opened from, which can leave
+  /// out what a copy of it needs.
+  bool get hasLoadedProduct => _hasLoadedProduct;
   bool get isSavingProduct => _isSavingProduct;
   bool get isSavingVariant => _isSavingVariant;
   bool get isSavingImage => _isSavingImage;
@@ -165,6 +171,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<Product>():
         _product = result.value;
+        _hasLoadedProduct = true;
       case Error<Product>():
         _errorMessage = 'product_detail_load_error';
     }

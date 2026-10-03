@@ -72,7 +72,7 @@ func TestMatchSMSDeliveriesPrefersContentThenNearestTime(t *testing.T) {
 		// A test send never matches a real one.
 		testRow,
 	}
-	got := matchedPairs(matchSMSDeliveries(candidates, rows))
+	got := matchedPairs(matchSMSDeliveries(candidates, rows, nil))
 	want := map[string]string{"c1": "r2", "c2": "r1", "c3": "r3", "c5": "p-5"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -91,7 +91,7 @@ func TestMatchSMSDeliveriesUsesEachRowOnce(t *testing.T) {
 		ledgerRow("near", "218912345678", t0, ""),
 	}
 	rows := []resala.SentMessage{logRow("only", "912345678", "", "Delivered", t0.Add(20*time.Second))}
-	got := matchedPairs(matchSMSDeliveries(candidates, rows))
+	got := matchedPairs(matchSMSDeliveries(candidates, rows, nil))
 	if len(got) != 1 || got["near"] != "only" {
 		t.Fatalf("one log row belongs to one message, the nearest: %v", got)
 	}
@@ -113,7 +113,7 @@ func TestMatchSMSDeliveriesReadsEveryNumberForm(t *testing.T) {
 	other := logRow("rx", "944444444", "", "Delivered", t0)
 	other.Code = "20"
 	other.Number = "1044444444" // an Egyptian number: never ours
-	got := matchedPairs(matchSMSDeliveries(candidates, []resala.SentMessage{national, full, trunk, split, other}))
+	got := matchedPairs(matchSMSDeliveries(candidates, []resala.SentMessage{national, full, trunk, split, other}, nil))
 	if len(got) != 4 || got["a"] != "ra" || got["b"] != "rb" || got["c"] != "rc" || got["d"] != "rd" {
 		t.Fatalf("unexpected matches %v", got)
 	}
@@ -187,7 +187,7 @@ func (f *deliveryFixture) sent(t *testing.T, key, recipient, content string, tes
 		TemplateID:     "tpl",
 		TestMode:       test,
 		CreatedAt:      f.sentAt.Add(-time.Second),
-	}, control.SMSClaimLimit{})
+	}, control.SMSClaimTerms{})
 	if err != nil {
 		t.Fatal(err)
 	}

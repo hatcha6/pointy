@@ -74,14 +74,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextFormField).first, 'أرز');
-    await tester.tap(find.text(l10n.nextButton));
-    await tester.pumpAndSettle();
-
-    // Step two, in order: variant name, SKU, barcode, price.
-    await tester.enterText(find.byType(TextFormField).at(1), sku);
-    await tester.enterText(find.byType(TextFormField).at(2), barcode);
-    await tester.enterText(find.byType(TextFormField).at(3), '5');
+    Finder field(String label) => find.widgetWithText(TextFormField, label);
+    await tester.enterText(field(l10n.productNameLabel), 'أرز');
+    await tester.enterText(field(l10n.skuLabel), sku);
+    await tester.enterText(field(l10n.barcodeLabel), barcode);
+    await tester.enterText(field(l10n.unitPriceLabel), '5');
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 
@@ -134,8 +131,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField).first, 'أرز');
-    await tester.tap(find.text(l10n.nextButton));
+    await tester.enterText(
+      find.widgetWithText(TextFormField, l10n.productNameLabel),
+      'أرز',
+    );
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.skuOptionalHelper), findsOneWidget);

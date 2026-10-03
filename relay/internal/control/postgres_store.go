@@ -1109,7 +1109,9 @@ const installationColumns = `id,
 	last_update_at,
 	agent_last_seen_at,
 	sms_enabled,
-	sms_monthly_limit`
+	sms_monthly_limit,
+	remote_access_paid_until,
+	ai_paid_until`
 
 const selectInstallationSQL = `SELECT ` + installationColumns + ` FROM relay_installations`
 
@@ -1130,6 +1132,8 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	var lastConnectorConnectedAt pgtype.Timestamptz
 	var lastUpdateAt pgtype.Timestamptz
 	var agentLastSeenAt pgtype.Timestamptz
+	var remoteAccessPaidUntil pgtype.Timestamptz
+	var aiPaidUntil pgtype.Timestamptz
 	err := row.Scan(
 		&installation.ID,
 		&installation.BusinessID,
@@ -1158,6 +1162,8 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 		&agentLastSeenAt,
 		&installation.SMSEnabled,
 		&installation.SMSMonthlyLimit,
+		&remoteAccessPaidUntil,
+		&aiPaidUntil,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Installation{}, ErrNotFound
@@ -1188,6 +1194,14 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	if agentLastSeenAt.Valid {
 		value := agentLastSeenAt.Time.UTC()
 		installation.AgentLastSeenAt = &value
+	}
+	if remoteAccessPaidUntil.Valid {
+		value := remoteAccessPaidUntil.Time.UTC()
+		installation.RemoteAccessPaidUntil = &value
+	}
+	if aiPaidUntil.Valid {
+		value := aiPaidUntil.Time.UTC()
+		installation.AIPaidUntil = &value
 	}
 	installation.CreatedAt = installation.CreatedAt.UTC()
 	installation.UpdatedAt = installation.UpdatedAt.UTC()

@@ -7,6 +7,7 @@ library;
 
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../data/models/report_catalog.dart';
 import '../../data/models/report_run.dart';
 
 String reportTitle(AppLocalizations l10n, ReportRunType type) {
@@ -82,5 +83,16 @@ String reportCategoryLabel(AppLocalizations l10n, String category) {
     'expenses' => l10n.reportCategoryExpenses,
     'close' => l10n.reportCategoryClose,
     _ => category,
+  };
+}
+
+/// The name of a level of detail — on the selector, and on a result so the
+/// reader knows which one they are looking at. An unknown level reads as the
+/// summary, which is what the server builds for one.
+String reportGranularityLabel(AppLocalizations l10n, String granularity) {
+  return switch (granularity) {
+    ReportGranularityOption.daily => l10n.reportGranularityDaily,
+    ReportGranularityOption.detailed => l10n.reportGranularityDetailed,
+    _ => l10n.reportGranularitySummary,
   };
 }

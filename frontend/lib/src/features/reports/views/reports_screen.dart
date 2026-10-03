@@ -277,9 +277,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
     if (!mounted || verification == null) {
       return;
     }
+    // A run whose headline figures all hold but whose tables differ — a row
+    // added after it was issued, or a report rebuilt in a newer layout — is
+    // not "0 figures changed"; it says what did change.
     _showMessage(
       verification.matches
           ? l10n.reportVerifyMatchMessage
+          : verification.changedFigures.isEmpty
+          ? l10n.reportVerifyDetailChangedMessage
           : l10n.reportVerifyChangedMessage(
               '${verification.changedFigures.length}',
             ),
@@ -1034,6 +1039,7 @@ class _DetailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final levels = viewModel.availableGranularities;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1044,19 +1050,15 @@ class _DetailPanel extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: SegmentedButton<String>(
               showSelectedIcon: false,
+              // Only the levels this report has: "daily" on a report with no
+              // day-by-day table used to build the summary under another name.
               segments: [
-                ButtonSegment(
-                  value: ReportGranularityOption.summary,
-                  label: Text(l10n.reportGranularitySummary),
-                ),
-                ButtonSegment(
-                  value: ReportGranularityOption.daily,
-                  label: Text(l10n.reportGranularityDaily),
-                ),
-                ButtonSegment(
-                  value: ReportGranularityOption.detailed,
-                  label: Text(l10n.reportGranularityDetailed),
-                ),
+                for (final level in ReportGranularityOption.all)
+                  if (levels.contains(level))
+                    ButtonSegment(
+                      value: level,
+                      label: Text(reportGranularityLabel(l10n, level)),
+                    ),
               ],
               selected: {viewModel.granularity},
               onSelectionChanged: (selection) =>
@@ -1064,34 +1066,40 @@ class _DetailPanel extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 20),
-        _SettingsSection(
-          title: l10n.reportComparisonTitle,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SegmentedButton<String>(
-              showSelectedIcon: false,
-              segments: [
-                ButtonSegment(
-                  value: ReportComparisonOption.none,
-                  label: Text(l10n.reportComparisonNone),
-                ),
-                ButtonSegment(
-                  value: ReportComparisonOption.previousPeriod,
-                  label: Text(l10n.reportComparisonPreviousPeriod),
-                ),
-                ButtonSegment(
-                  value: ReportComparisonOption.previousYear,
-                  label: Text(l10n.reportComparisonPreviousYear),
-                ),
-              ],
-              selected: {viewModel.comparison},
-              onSelectionChanged: (selection) =>
-                  viewModel.selectComparison(selection.first),
-            ),
-          ),
-        ),
+        if (viewModel.offersComparison) ...[
+          const SizedBox(height: 20),
+          _comparisonSection(l10n),
+        ],
       ],
+    );
+  }
+
+  Widget _comparisonSection(AppLocalizations l10n) {
+    return _SettingsSection(
+      title: l10n.reportComparisonTitle,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: [
+            ButtonSegment(
+              value: ReportComparisonOption.none,
+              label: Text(l10n.reportComparisonNone),
+            ),
+            ButtonSegment(
+              value: ReportComparisonOption.previousPeriod,
+              label: Text(l10n.reportComparisonPreviousPeriod),
+            ),
+            ButtonSegment(
+              value: ReportComparisonOption.previousYear,
+              label: Text(l10n.reportComparisonPreviousYear),
+            ),
+          ],
+          selected: {viewModel.comparison},
+          onSelectionChanged: (selection) =>
+              viewModel.selectComparison(selection.first),
+        ),
+      ),
     );
   }
 }

@@ -12,6 +12,7 @@ String? messagingErrorMessage(String code, AppLocalizations l10n) {
     'not_entitled' || 'unauthorized' => l10n.messagingErrorNotEntitled,
     'service_disabled' => l10n.messagingErrorServiceDisabled,
     'monthly_limit' => l10n.messagingErrorMonthlyLimit,
+    'insufficient_balance' => l10n.messagingErrorInsufficientBalance,
     'rate_limited' => l10n.messagingErrorRateLimited,
     'template_not_configured' ||
     'unknown_kind' => l10n.messagingErrorTemplateNotConfigured,

@@ -100,7 +100,12 @@ class AuthApiClient {
 
   Future<PosUser> updateCurrentUser(CurrentUserProfileDraft draft) async {
     final response = await _session.patch('auth/me/', body: draft.toJson());
-    _session.ensureSuccess(response, 'Current user update failed with status');
+    // throwApiException, so the field errors survive: the profile form says
+    // "username taken" / "email invalid" in Arabic from the field key alone.
+    _session.throwApiException(
+      response,
+      'Current user update failed with status',
+    );
     return _decodeUserResponse(response);
   }
 

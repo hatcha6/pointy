@@ -1,20 +1,25 @@
 import 'messaging_gateway.dart';
+import 'wallet.dart';
 
-/// What `GET /api/messaging/status/` reports, in one read: whether the shop's
-/// subscription includes SMS, the shop's gateway, this month's usage against
-/// the relay's cap, and the catalogue of texts Daftar sends to customers.
+/// What `GET /api/messaging/status/` reports, in one read: whether the shop
+/// can send (its SMS balance pays for a message), the shop's gateway, the SMS
+/// balance and this month's sends, and the catalogue of texts Daftar sends to
+/// customers.
 class MessagingServiceStatus {
   const MessagingServiceStatus({
     required this.entitled,
     required this.available,
     this.testMode = false,
     this.gateway,
+    this.smsWallet,
     this.usage,
     this.usageError = '',
     this.templates = const [],
+    this.templateGroups = const [],
   });
 
-  /// The relay says SMS is in this shop's subscription.
+  /// The shop can send: its SMS balance pays for a message (from a backend
+  /// before the SMS balance: the subscription includes SMS).
   final bool entitled;
 
   /// [entitled] and the shop's gateway is switched on — what the auth
@@ -26,6 +31,10 @@ class MessagingServiceStatus {
   final bool testMode;
   final MessagingGateway? gateway;
 
+  /// The SMS balance each message is paid from; null from a backend that does
+  /// not sell SMS by the message.
+  final SmsWallet? smsWallet;
+
   /// Null when the relay could not say; [usageError] names why.
   final MessagingUsage? usage;
 
@@ -34,6 +43,10 @@ class MessagingServiceStatus {
   final String usageError;
   final List<MessagingTemplateInfo> templates;
 
+  /// The families the templates are listed under, in order.
+  final List<MessagingTemplateGroup> templateGroups;
+
+  bool get isPrepaid => smsWallet != null;
   bool get isRelayUnreachable => usageError == 'relay_unreachable';
   bool get isNotConfigured => usageError == 'not_configured';
 
@@ -50,22 +63,47 @@ class MessagingServiceStatus {
       available: entitled && gateway.isActive,
       testMode: testMode,
       gateway: gateway,
+      smsWallet: smsWallet,
       usage: usage,
       usageError: usageError,
       templates: templates,
+      templateGroups: templateGroups,
+    );
+  }
+
+  /// This status with one template replaced (matched by kind).
+  MessagingServiceStatus withTemplate(MessagingTemplateInfo template) {
+    return MessagingServiceStatus(
+      entitled: entitled,
+      available: available,
+      testMode: testMode,
+      gateway: gateway,
+      smsWallet: smsWallet,
+      usage: usage,
+      usageError: usageError,
+      templates: [
+        for (final current in templates)
+          current.kind == template.kind ? template : current,
+      ],
+      templateGroups: templateGroups,
     );
   }
 
   factory MessagingServiceStatus.fromJson(Map<String, Object?> json) {
     final gateway = json['gateway'];
+    final smsWallet = json['sms_wallet'];
     final usage = json['usage'];
     final templates = json['templates'];
+    final groups = json['template_groups'];
     return MessagingServiceStatus(
       entitled: json['entitled'] == true,
       available: json['available'] == true,
       testMode: json['test_mode'] == true,
       gateway: gateway is Map<String, Object?>
           ? MessagingGateway.fromJson(gateway)
+          : null,
+      smsWallet: smsWallet is Map<String, Object?>
+          ? SmsWallet.fromJson(smsWallet)
           : null,
       usage: usage is Map<String, Object?>
           ? MessagingUsage.fromJson(usage)
@@ -77,12 +115,33 @@ class MessagingServiceStatus {
                 .map(MessagingTemplateInfo.fromJson)
                 .toList(growable: false)
           : const [],
+      templateGroups: groups is List
+          ? groups
+                .whereType<Map<String, Object?>>()
+                .map(MessagingTemplateGroup.fromJson)
+                .toList(growable: false)
+          : const [],
     );
   }
 }
 
-/// This calendar month's sends against the shop's monthly cap (the month is
-/// Libya's, and so is the reset).
+/// A family of texts on the settings page — the invoices, the repair jobs.
+class MessagingTemplateGroup {
+  const MessagingTemplateGroup({required this.key, required this.title});
+
+  final String key;
+  final String title;
+
+  factory MessagingTemplateGroup.fromJson(Map<String, Object?> json) {
+    return MessagingTemplateGroup(
+      key: json['key']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+    );
+  }
+}
+
+/// This calendar month's sends, and the company's monthly brake on them when
+/// it set one for this shop (the month is Libya's, and so is the reset).
 class MessagingUsage {
   const MessagingUsage({
     required this.used,
@@ -138,6 +197,12 @@ class MessagingTemplateInfo {
     this.example = '',
     this.consentClass = 'transactional',
     this.configured,
+    this.group = 'other',
+    this.automatic = false,
+    this.autoEnabled,
+    this.autoLabel = '',
+    this.exampleParts = 1,
+    this.examplePrice,
   });
 
   final String kind;
@@ -156,7 +221,40 @@ class MessagingTemplateInfo {
   /// relay could not be asked.
   final bool? configured;
 
+  /// The family it is listed under ([MessagingTemplateGroup.key]).
+  final String group;
+
+  /// It goes out by itself when its event happens, under the switch
+  /// [autoEnabled]; [autoLabel] says when.
+  final bool automatic;
+  final bool? autoEnabled;
+  final String autoLabel;
+
+  /// How many SMS the example goes out as, and what that costs from the SMS
+  /// balance (null when SMS is not sold from a balance).
+  final int exampleParts;
+  final double? examplePrice;
+
   bool get isMarketing => consentClass == 'marketing';
+
+  MessagingTemplateInfo withAutoEnabled(bool enabled) {
+    return MessagingTemplateInfo(
+      kind: kind,
+      title: title,
+      description: description,
+      text: text,
+      variables: variables,
+      example: example,
+      consentClass: consentClass,
+      configured: configured,
+      group: group,
+      automatic: automatic,
+      autoEnabled: enabled,
+      autoLabel: autoLabel,
+      exampleParts: exampleParts,
+      examplePrice: examplePrice,
+    );
+  }
 
   factory MessagingTemplateInfo.fromJson(Map<String, Object?> json) {
     final variables = json['variables'];
@@ -172,6 +270,14 @@ class MessagingTemplateInfo {
       example: json['example']?.toString() ?? '',
       consentClass: json['consent_class']?.toString() ?? 'transactional',
       configured: configured is bool ? configured : null,
+      group: json['group']?.toString() ?? 'other',
+      automatic: json['automatic'] == true,
+      autoEnabled: json['auto_enabled'] is bool
+          ? json['auto_enabled'] as bool
+          : null,
+      autoLabel: json['auto_label']?.toString() ?? '',
+      exampleParts: _int(json['example_parts'], fallback: 1),
+      examplePrice: double.tryParse(json['example_price']?.toString() ?? ''),
     );
   }
 }

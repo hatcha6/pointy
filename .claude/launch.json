@@ -138,6 +138,14 @@
       "port": 8080
     },
     {
+      "name": "campaigns-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-campaigns-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "user-settings-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

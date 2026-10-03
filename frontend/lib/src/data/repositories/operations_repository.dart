@@ -2,6 +2,7 @@ import '../../core/result.dart';
 import '../models/bill_of_materials.dart';
 import '../models/customer_asset.dart';
 import '../models/employee.dart';
+import '../models/messaging_gateway.dart';
 import '../models/operations_job.dart';
 import '../models/workflow.dart';
 import '../services/pos_api_service.dart';
@@ -232,6 +233,10 @@ class OperationsRepository {
         idempotencyKey: idempotencyKey,
       ),
     );
+  }
+
+  Future<Result<MessagingSendResult>> notifyJobReady(int jobId) {
+    return Result.guard(() => _service.notifyJobReady(jobId));
   }
 
   Future<Result<OperationsJob>> reopenJob(int jobId, {String note = ''}) async {

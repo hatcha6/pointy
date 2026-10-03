@@ -748,10 +748,13 @@ holds a credential it could spend from.
 Pointy feature (invoice SMS, debt reminder, recall, consignment, month-end, ...)
   -> on-prem Django: queues the message, renders its local copy from its catalog
   -> Pointy Relay: POST /v1/sms/send   (X-Pointy-Relay-Token: ptr1...)
-       configured -> identity -> sms entitlement -> body -> burst limit
-       -> idempotency (replay) -> monthly cap -> kind -> approved template id
-       -> ledger row (pending) -> Resala POST /messages/send-template -> ledger (sent|failed)
-  <- {id, status, content, cost, usage}
+       configured -> identity -> body -> burst limit
+       -> idempotency (replay) -> monthly brake -> kind -> approved template id
+       -> count the message's SMS parts -> ledger row (pending) + parts x 0.150
+          held from the shop's SMS balance (one step)
+       -> Resala POST /messages/send-template -> ledger (sent|failed; failed is refunded,
+          sent is settled to the parts it went out as)
+  <- {id, status, content, cost, parts, charged, balance, usage}
 Delivery sync (every 5m): Resala's sent log -> ledger delivered | undelivered
 ```
 
@@ -760,36 +763,75 @@ must use a template approved in the Resala dashboard. Pointy sends template
 messages only (Resala's OTP `/pins` API is not used). The SMS sender ID is the
 company's, which is why every template carries the shop's name.
 
-### Entitlement and monthly cap
+### Paid from the SMS balance, per SMS part
 
-SMS is its own entitlement: an **active, unexpired subscription** plus the
-**`sms_enabled`** flag — exactly like `ai_enabled`, and deliberately not
-requiring `relay_enabled`. A shop that is not entitled gets
-`402 not_entitled`.
+SMS is **prepaid by the SMS part**. Each shop has an **SMS balance** — an
+account of its wallet (see *Shop Wallets*) that the owner fills from the main
+wallet in the app — and every real message costs `POINTY_RELAY_SMS_PRICE`
+(default `0.150` dinars; Resala charges the company `0.100`) **for each SMS it
+goes out as**. Arabic is sent as UCS-2: up to 70 letters is one SMS, and a
+longer text goes out — and is billed by Resala — as parts of 67 (a Latin-only
+text as GSM-7: 160, then 153 a part). Most templates with a real shop name and
+amount run past 70 letters, so pricing by the message would sell the second
+part below cost. No subscription is needed: a shop with money in its SMS
+balance can send, and one without enough for the message gets
+`402 insufficient_balance` with its `balance`, the message's `parts`, the
+`price` of one and the `amount` they come to.
 
-Each installation also has a **monthly cap** over the calendar month in Libya
-(UTC+2): its own `sms_monthly_limit` when above 0, otherwise
-`POINTY_RELAY_SMS_MONTHLY_LIMIT` (default `500`; `0` = unlimited). A message
-counts when it was, or may have been, sent for real (`pending`, `sent`,
-`delivered`, `undelivered`); failures and test sends are free. The count and the
-ledger insert run under a per-shop Postgres advisory lock, so two concurrent
-sends cannot both take the month's last message. Separately, a short per-shop
+**Held, then settled.** Before sending, the relay counts the message's parts:
+Resala hands back the approved text on every send, so once a template has gone
+out the relay renders the new message exactly as Resala will (the latest
+`template_body` for that template id in the ledger) and counts it the way the
+shop's backend does (`apps/messaging/segments.py`). A template that has never
+gone out is held as if its text were 160 letters, longer than any approved one.
+That many parts are taken **when the message is claimed**, in the same step as
+the ledger row and under the same per-shop lock, so concurrent sends cannot
+spend the last dinar twice. When Resala answers, the message is **settled** to
+the parts it really went out as — the relay's count of the text Resala sent, or
+Resala's own `total_messages` when that is higher (by at most two; more is a
+provider glitch and is logged, not billed). Parts held beyond that come back; a
+message that went out longer than held is charged the difference **even past
+an empty balance** — it has gone out, and Resala bills every part — so the
+balance goes below zero, nothing more is sent until money comes in, and the next
+transfer settles the debt. Counting from the approved text keeps that rare.
+
+A message that does not go out — Resala refused it, the call never reached
+Resala, or Resala ran it as a test — is **refunded** in full when its outcome is
+recorded, exactly once. A failure that **may still have gone out** — Resala
+answered 5xx, timed out, broke the connection after taking the request or sent
+an unreadable answer, or the relay died mid-call (`outcome_unknown`) — is not
+refunded blind: its price is **held** (`held_since`, the failure answer says
+`"held": true`) until Resala's sent log settles it (see *Delivery sync*). Found
+there, it went out after all: it stays paid for and becomes sent/delivered.
+Not found, it is refunded. Only a message the relay can recognise in the log is
+held — the claim records the hash of the text it rendered from the approved
+template — so the first send of a never-sent template, and any relay running
+without the sync (`POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL=0`), still refund at
+once. Test sends are free and need no balance.
+A replayed idempotency key never pays again. Each movement is a line on the
+shop's SMS statement: `تذكير بدين (رسالتان)` for the charge,
+`استرداد فرق عدد الرسائل: …` / `فرق عدد الرسائل: …` for a settlement, and
+`استرداد رسالة لم تُرسل` for a refund.
+
+**Margin.** `pointy-relay sms usage` sets what the shops paid (`CHARGED`)
+against what Resala charged the company (`COST`) for the same messages, with
+the `MARGIN` between them; and a send that cost the company more than the shop
+paid logs an **ERROR** (`an sms cost the company more than the shop paid for
+it; raise POINTY_RELAY_SMS_PRICE`).
+
+The old `sms_enabled` flag no longer decides anything; it stays on the
+installation only because old rows and tools carry it. What remains is the
+operator's **monthly brake**: a shop's own `sms_monthly_limit` when above 0,
+otherwise `POINTY_RELAY_SMS_MONTHLY_LIMIT` (default `0` = no brake), over the
+calendar month in Libya (UTC+2), answering `429 monthly_limit`. A short per-shop
 burst limit (`POINTY_RELAY_SMS_RATE_LIMIT`, `60/minute`) answers
 `429 rate_limited` with `Retry-After`.
 
-Both fields are company-owned and set through the audited subscription path —
-the CLI below, the `/admin` console (*SMS entitlement*, *SMS monthly limit*), or
-`PATCH /v1/installations/{id}/subscription` with `sms_enabled` /
-`sms_monthly_limit`. Provisioning accepts both too, and the installation JSON
-(including the shop's self-serviceable `GET /v1/installations/{id}`) exposes
-them.
-
 ```sh
-pointy-relay subscription set <id> --sms                          # SMS add-on on
-pointy-relay subscription set <id> --months 12 --sms --sms-monthly-limit 2000
-pointy-relay subscription set <id> --sms-monthly-limit 0          # back to the relay default
-pointy-relay subscription set <id> --no-sms
-pointy-relay subscription update <id> --sms-enabled true --sms-monthly-limit 750 --reason 'plan upgrade'
+pointy-relay subscription set <id> --sms-monthly-limit 2000      # brake one shop
+pointy-relay subscription set <id> --sms-monthly-limit 0         # back to the relay default
+pointy-relay wallet credit <id> --account sms --amount 1.5 --reason 'ten free messages'
+pointy-relay wallet show <id> --account sms                      # the shop's SMS statement
 ```
 
 ### API
@@ -800,7 +842,7 @@ served on the public listener:
 | Route | Purpose |
 |---|---|
 | `POST /v1/sms/send` | Send one templated message. |
-| `GET /v1/sms/usage/self` | This month's allowance. Identity only, so it also answers an unentitled shop (`"entitled": false`). |
+| `GET /v1/sms/usage/self` | The SMS `balance`, the `price` of a message, `messages_left`, `available`, and this month's sends. Identity only, so it also answers a shop with an empty balance. |
 | `GET /v1/sms/status?ids=a,b` | Ledger status of up to 100 of the shop's **own** messages. |
 
 Admin routes (admin bearer token, admin listener):
@@ -816,8 +858,8 @@ POST /v1/sms/send
  "idempotency_key":"4821-20260927101500123456","consent_class":"transactional","test":false}
 
 201 {"id":"<ledger id>","status":"sent","test_mode":false,
-     "content":"<approved template body with the values filled in>","cost":"0.10","replayed":false,
-     "usage":{"used":13,"limit":500,"remaining":487,
+     "content":"<approved template body with the values filled in>","cost":"0.10","balance":"14.850","replayed":false,
+     "usage":{"used":13,"limit":0,"remaining":-1,
               "period_start":"2026-09-01T00:00:00+02:00","resets_at":"2026-10-01T00:00:00+02:00"}}
 ```
 
@@ -829,18 +871,18 @@ else. Errors are always `{"error": "<english>", "code": "<code>", ...}`:
 |---|---|---|
 | 503 | `sms_unconfigured` | the relay has no Resala token |
 | 401 | `unauthorized` | token missing or invalid |
-| 402 | `not_entitled` | no active subscription, or `sms_enabled` is off |
+| 402 | `insufficient_balance` | the SMS balance cannot pay for the message; the body adds `balance`, `parts`, `price` (of one part) and `amount` |
 | 400 | `invalid_request` | bad JSON, missing key, bad variables, wrong variable count or consent class for the kind |
 | 422 | `invalid_phone` | not a Libyan mobile number |
 | 422 | `unknown_kind` / `template_not_configured` | no template id for the kind |
 | 429 | `rate_limited` | per-shop burst limit (with `Retry-After`) |
-| 429 | `monthly_limit` | cap reached; the body adds `limit`, `used`, `resets_at` |
+| 429 | `monthly_limit` | the operator's brake reached; the body adds `limit`, `used`, `resets_at` |
 | 409 | `in_flight` | the same key is being sent right now (with `Retry-After`) |
 | 502 | `provider_credit` | Resala's wallet is empty — the company must top up |
 | 502 | `provider_unauthorized` | Resala rejected the relay's token (401/403) |
 | 502 | `provider_rejected` | Resala refused the message (4xx, 422, or `failed > 0`); `detail` carries Resala's message |
-| 502 | `provider_error` | Resala 5xx, network error or timeout — the outcome is unknown |
-| 502 | `outcome_unknown` | a repeat of a key whose earlier send never finished |
+| 502 | `provider_error` | Resala 5xx, network error or timeout — the outcome is unknown; `held: true` when the price waits on the sent log |
+| 502 | `outcome_unknown` | a repeat of a key whose earlier send never finished; `held` as above |
 | 500 | `internal_error` | the relay's own store failed; nothing was sent, safe to retry |
 
 **Never twice.** A send claims `(installation, idempotency_key)` in the ledger
@@ -871,8 +913,10 @@ sends later.
   (Resala's production API, despite the name).
 - `POINTY_RELAY_SMS_TEMPLATES` — JSON object, kind → approved Resala template id.
 - `POINTY_RELAY_SMS_TEST_MODE` — `true` sends everything in Resala test mode.
-- `POINTY_RELAY_SMS_MONTHLY_LIMIT` — default per-shop monthly cap (`500`;
-  `0` = unlimited) for shops whose own `sms_monthly_limit` is 0.
+- `POINTY_RELAY_SMS_PRICE` — what one SMS part costs a shop, from its SMS
+  balance (`0.150`; up to three decimals). A message pays it once per part.
+- `POINTY_RELAY_SMS_MONTHLY_LIMIT` — the operator's monthly brake for shops
+  whose own `sms_monthly_limit` is 0 (`0` = none: the balance limits sending).
 - `POINTY_RELAY_SMS_RATE_LIMIT` — per-shop burst limit (`60/minute`; also
   `N/second|hour|day` or `N/<duration>`; `0` disables).
 - `POINTY_RELAY_SMS_REQUEST_TIMEOUT` — one Resala call (`20s`).
@@ -903,6 +947,22 @@ on.
 | `month_end_report` | transactional | `$1 - إقفال $2: المبيعات $3، الربح الإجمالي $4، صافي الربح $5، النقدية $6، ذمم العملاء $7. التقرير الكامل في التطبيق.` | `$1` shop, `$2` month, `$3` sales, `$4` gross profit, `$5` net profit, `$6` cash, `$7` customer receivables |
 | `direct` | transactional | `رسالة من $1: $2` | `$1` shop, `$2` the staff member's free text |
 | `marketing` | marketing | `عرض من $1: $2 (لإيقاف العروض أبلغ المحل)` | `$1` shop, `$2` the offer's free text |
+| `quotation` | transactional | `$1: عرض السعر $2 بقيمة $3، $4.` | `$1` shop, `$2` quotation number, `$3` quotation total, `$4` how long it holds (e.g. «ساري حتى 2026/10/20») |
+| `quotation_link` | transactional | `$1: عرض السعر $2 بقيمة $3، $4. لعرضه: $5` | as `quotation`, `$5` quotation link |
+| `refund_issued` | transactional | `$1: سُجّل مرتجع بقيمة $2 على فاتورتكم رقم $3.` | `$1` shop, `$2` amount returned, `$3` invoice number |
+| `warranty_registered` | transactional | `$1: ضمان $2 ($3) حتى $4.` | `$1` shop, `$2` item name, `$3` serial number / IMEI, `$4` warranty end date |
+| `credit_invoice` | transactional | `$1: عليكم $3 من الفاتورة $2، $4.` | `$1` shop, `$2` invoice number, `$3` amount still owed, `$4` when it falls due (e.g. «تستحق في 2026/10/15») |
+| `payment_received` | transactional | `$1: استلمنا منكم $2، والمتبقي على حسابكم $3.` | `$1` shop, `$2` amount paid, `$3` what the account still owes |
+| `account_balance` | transactional | `$1: المستحق على حسابكم حتى $2 هو $3.` | `$1` shop, `$2` date, `$3` amount owed |
+| `due_date_changed` | transactional | `$1: استحقاق فاتورتكم $2 أصبح $3، المتبقي $4.` | `$1` shop, `$2` invoice number, `$3` new due date, `$4` amount still owed |
+| `job_received` | transactional | `$1: استلمنا $2، رقم طلبكم $3.` | `$1` shop, `$2` the item (e.g. «هاتف سامسونج A54»), `$3` job number |
+| `job_estimate` | transactional | `$1: تكلفة طلبكم ($2) $3، ننتظر موافقتكم.` | `$1` shop, `$2` the item, `$3` estimated cost |
+| `job_ready` | transactional | `$1: طلبكم ($2) جاهز للاستلام.` | `$1` shop, `$2` the item |
+| `job_ready_due` | transactional | `$1: طلبكم ($2) جاهز للاستلام، المتبقي $3.` | `$1` shop, `$2` the item, `$3` amount still owed |
+| `job_returned` | transactional | `$1: طلبكم ($2) جاهز للاستلام دون إصلاح.` | `$1` shop, `$2` the item |
+| `job_pickup_reminder` | transactional | `$1: طلبكم ($2) بانتظار استلامكم منذ $3.` | `$1` shop, `$2` the item, `$3` how long it has waited (e.g. «3 أيام») |
+| `job_delivered` | transactional | `$1: شكرًا لكم، ضمان ($2) ساري حتى $3.` | `$1` shop, `$2` the item, `$3` warranty end date |
+| `payroll_paid` | transactional | `$1: صُرف راتبكم عن $2، والصافي $3.` | `$1` shop, `$2` month, `$3` net pay |
 
 `direct` and `marketing` carry free text in `$2`, and Resala may refuse to
 approve a free-text template; those kinds then stay unconfigured and fail with
@@ -959,13 +1019,30 @@ Resala's id on the row (pinning the match for later syncs); `null`/`accepted`
 wait for the next sync. The sync runs only with a token configured, and never
 calls Resala when nothing awaits a report.
 
+**Held messages.** The same read settles every held message (oldest 200). One
+matches a log row only with the **identical text** (the hash recorded at claim),
+the same number, a Resala timestamp within 15 minutes of the send, and a row no
+other ledger row owns already (a resend of the same text that went out keeps
+its own row; between two candidates the nearer in time wins). Found: the hold
+ends, the message takes the row's status and id and stays paid for (settled to
+the parts of the logged text); its cost — which only Resala's lost answer
+carried — is estimated at what Resala charged per part on the latest send, so
+`sms usage` keeps a true margin. Not found: refunded once it has been held 15
+minutes **and** the read reached back past its window — paging goes up to 50
+pages for a held message, so a busy log does not leave it unsettled; a read that
+did not reach back far enough leaves it for the next sync. A hold the log could
+not settle in 48 hours (Resala's log unreadable all that time) is refunded
+unchecked with an **ERROR** log. `/v1/status` counts the outcomes in
+`sms_checks_by_outcome` (`kept`, `refunded`, `expired`), and `sms log` shows an
+open hold as `checking`, its price `held`.
+
 ### Operator CLI
 
 ```sh
-pointy-relay sms usage                                     # this month, busiest shop first
+pointy-relay sms usage                                     # this month, busiest shop first; parts, cost, charged, margin
 pointy-relay sms usage --from 2026-09-01 --to 2026-09-30   # Libyan days, --to inclusive
-pointy-relay sms log --installation <id> --status failed --limit 20   # numbers masked; --json for full rows
-pointy-relay sms config                                    # templates (MISSING ones flagged), test mode, limits
+pointy-relay sms log --installation <id> --status failed --limit 20   # parts and charge per message; numbers masked; --json for full rows
+pointy-relay sms config                                    # templates (MISSING ones flagged), price per part, which approved texts are known, test mode, limits
 ```
 
 ### Operations
@@ -983,73 +1060,121 @@ pointy-relay sms config                                    # templates (MISSING 
   (`sms_deliveries_by_outcome`). Per-shop numbers live in the ledger
   (`pointy-relay sms usage`), not in metric labels.
 
-## Shop Wallets (Plutu top-ups)
+## Shop Wallets (Dafa top-ups)
 
 Every installation has a **wallet**: a prepaid balance with the company that
-the shop owner tops up from the app with a local bank card, and that the
-company's services draw on — the subscription, SMS, AI, vouchers. The payment
-gateway is **[Plutu](https://docs.plutu.ly)** on one company merchant account;
-the API key, access token and secret key live only in relay env.
+the shop owner tops up from the app, and that the company's services draw on.
+The money sits in two accounts:
+
+- the **main wallet** — what top-ups credit, and what the plans are paid from:
+  remote access and the AI assistant, a period at a time
+  (`POINTY_RELAY_REMOTE_ACCESS_PRICE`, `POINTY_RELAY_AI_PRICE`,
+  `POINTY_RELAY_PLAN_DAYS`);
+- the **SMS balance** — money the owner moves there from the main wallet, which
+  every message is paid from (see *Relay-Hosted SMS*).
+
+The payment gateway is **[Dafa](https://dafa.ly)**: one API for every Libyan
+payment method, on one company workspace. The API key lives only in relay env.
+
+| Method key | Dafa provider | The payer gives | Then |
+| --- | --- | --- | --- |
+| `dafa_moamalat` | `moamalat` (local bank cards) | nothing | pays on Dafa's page in the browser |
+| `dafa_sadad` | `sadad` | mobile number + birth year | types the code Sadad texts them |
+| `dafa_edfali` | `edfali` | mobile number | types the code |
+| `dafa_mobicash` | `mobicash` | wallet card number | types the code |
+| `dafa_yussor_pay` | `yussor-pay` | wallet card number | types the code |
+| `dafa_masrafi_pay` | `masrafi-pay` | wallet card number | types the code |
+| `dafa_sahara_pay` | `sahara-pay` | wallet card number | types the code |
 
 ```text
-Pointy app: Settings -> الاشتراك -> المحفظة -> شحن المحفظة (amount)
+Pointy app: Settings -> الاشتراك -> المحفظة -> شحن المحفظة (amount, method, payer)
   -> on-prem Django: POST /api/wallet/topups/
   -> Pointy Relay: POST /v1/wallet/topups   (X-Pointy-Relay-Token: ptr1...)
-       identity only -> amount rules -> burst limit -> idempotency (replay)
-       -> top-up row (pending, invoice DFW-XXXXXXXXXX)
-       -> Plutu POST /transaction/localbankcards/confirm -> checkout page
-  <- {top_up, checkout_url}
-Owner pays on Plutu's page -> browser redirected to
-  GET /v1/wallet/plutu/return?gateway&approved|canceled&invoice_no&amount&transaction_id&hashed
-       signature (HMAC-SHA256, secret key) -> invoice match -> amount match
-       -> paid + ONE ledger credit (keyed on the top-up) -> Arabic result page
-App polls GET /api/wallet/topups/<id>/ until paid; Django books the expense.
+       identity only -> method + payer + amount rules -> burst limit
+       -> idempotency (replay) -> top-up row (pending, DFW-XXXXXXXXXX)
+       -> Dafa POST /payments/initiate {provider, amount, user_identifier,
+          birthyear, callback_url} -> payment id stored on the top-up
+  <- {top_up, next_action: otp | hosted_page, checkout_url?}
+
+OTP methods:   app sends the code -> POST /v1/wallet/topups/{id}/confirm
+               -> Dafa POST /payments/{id}/confirm -> is_paid -> ONE credit
+Bank cards:    owner pays on Dafa's page; the relay reads GET /payments/{id}
+               when the app polls, when Dafa's webhook nudges it, and on a
+               background sweep -> is_paid -> ONE credit
+App polls GET /api/wallet/topups/<id>/ until a verdict; Django books the expense.
 ```
 
 ### Why verification works the way it does
 
-Plutu's local-card gateway has **no status API and no server-to-server
-callback**: the only proof of payment is the signed query string on the payer's
-redirect. So:
+- **What is proof.** Only Dafa's own answer to a call the relay made with its
+  key: the confirm, or the payment read back. Dafa's webhook carries **no
+  signature**, so its body is never believed — it only makes the relay read
+  the payment back. Its URL carries a per-top-up token (HMAC of the top-up id
+  under the Dafa key), so a stranger cannot even make the relay call Dafa.
+- **OTP payments can only be paid by the relay**: confirming needs the key. So a
+  cancelled OTP top-up can never be paid behind the relay's back, and the sweep
+  never asks about one nobody sent a code for.
+- **A lost answer is read back, not guessed.** A confirm that times out or gets
+  a 5xx is followed by `GET /payments/{id}`. Dafa answers a confirm on a paid
+  payment with "paid" again, so the owner re-sending the same code is safe.
+- **Wrong codes** keep the top-up open (Dafa's Arabic sentence goes back to the
+  app) up to **5 per top-up**, counted atomically, so nobody can grind out the
+  code for someone else's wallet. A **decline** (`retryable: false`, e.g.
+  `PAYER_INSUFFICIENT_FUNDS`) ends the top-up; the owner starts another.
+- **A paid payment that does not match** — another amount, or a test payment on
+  a live top-up — credits nothing: the top-up fails with `amount_mismatch` /
+  `environment_mismatch`, logged at ERROR for the operator.
+- **Exactly once**: the ledger credit's idempotency key is the top-up, under a
+  row lock, however many of confirm / poll / webhook / sweep prove it.
+- **A late payment wins**: a top-up written off as `expired`, or even closed, is
+  still credited when Dafa proves it paid — the payer's money has left either way.
+- **Initiate is never retried**: a retry would start a second payment. A create
+  replayed by idempotency key hands back the same next step, or the same failure.
+- **The sweep** (`WalletTopUpReconciler`) reads every open top-up that can
+  complete without the relay — bank cards, and codes whose answer was lost —
+  every minute for its first hour, then every 15 minutes for a day.
 
-- An unsigned, mis-signed or edited return changes **nothing** (`400` page).
-  The signature is Plutu's: upper-case hex HMAC-SHA256, keyed with the secret,
-  over the parameters PHP-`http_build_query`-encoded **in the order they
-  arrived** (the docs sign "everything but `hashed`", the SDK a fixed list —
-  both readings are accepted, and both need the secret). Tested against the
-  vector in Plutu's own SDK.
-- A valid return for an invoice the relay never issued changes nothing (`404`).
-- A valid approval for a **different amount** credits nothing: the top-up is
-  failed with `amount_mismatch` and logged at ERROR for the operator.
-- Replays (refresh, back button, a second tab) credit **once**: the ledger
-  credit's idempotency key is the top-up, under a row lock.
-- A **late approval wins**: a top-up written off as `expired`, or even marked
-  `canceled`, is still credited by a valid signed approval — the payer's money
-  has left their bank either way. A paid top-up can never be cancelled.
-- The checkout request is **never retried**: a retry would reuse the invoice
-  number, which Plutu refuses. A create replayed by idempotency key hands back
-  the same checkout page, or the same recorded failure.
-- A payer who paid but **never came back** (closed the tab, lost network, relay
-  down) leaves a top-up that expires after `POINTY_RELAY_WALLET_TOPUP_TTL`. The
-  operator reconciles it against Plutu's dashboard with
-  `pointy-relay wallet confirm` (below).
+Read against Dafa's live test API (2026-10-01), where it differs from its docs:
+bodies are **JSON** (the documented form encoding is refused), `amount` takes up
+to **three decimals** and answers repeat it as `amount_str` (the relay still
+takes two: the shop's books keep two, and every top-up must book exactly), `birthyear` must be
+a JSON **string**, the test card page lives on another host than the docs show
+(so only `https` is checked), and `GET /payments/{id}` exists although the docs
+do not list it.
 
 ### The ledger
 
-`relay_wallet_entries` holds one signed row per movement with the balance it
-left: `topup` (+, only from a paid top-up), `charge` (−, for a `service`),
-`refund` (+, gives a charge back) and `adjustment` (either sign, an operator's
-correction). `relay_wallets` keeps the running balance so a debit locks one row
-and checks it. A **charge can never overdraw** a wallet; an adjustment can,
-only with `allow_overdraft`. Rows are never edited or deleted, and nothing
-cascades from an installation (migration v15).
+`relay_wallet_entries` holds one signed row per movement, in one `account`
+(`main` or `sms`), with the balance it left: `topup` (+, only from a paid
+top-up, main only), `charge` (−, for a `service`), `refund` (+, gives a charge
+back), `transfer` (the shop moving its own money: − out of one account, + into
+the other, both in one step with one reference) and `adjustment` (either sign,
+an operator's correction). `relay_wallets` keeps the main wallet's running
+balance and `relay_wallet_accounts` every other account's, so a debit locks one
+row and checks it. A **charge or transfer can never overdraw** — save the
+settlement of an SMS that went out longer than it was held for, which the shop
+owes for a message already sent; an adjustment can, only with
+`allow_overdraft`. Rows are never edited or deleted, and nothing
+cascades from an installation (migration v15; v16 adds the top-up's masked
+payer and its code count; v17 the accounts, transfers, the SMS price on each
+message and the plans' paid-through dates; v18 the SMS parts each message went
+out as; v19 the hold on a doubtful send's refund).
 
-**For services to come.** A service charges with `control.WalletStore.PostWalletEntry`
-(`kind=charge`, `service=subscription|sms|ai|vouchers|…`, a negative amount, an
-idempotency key per purchase). An insufficient balance comes back as
-`*control.WalletBalanceError` carrying the balance and the amount — that is the
-"top up to continue" answer. Until a service charges on its own, the operator
-charges by hand (`wallet debit --service`).
+**What draws on it.** Each SMS holds the price of its parts from the SMS
+balance when it is claimed, is settled to the parts it went out as, and is
+refunded if it never went out — the one charge that may take the SMS balance
+below zero, because the message has already gone. A plan purchase charges the main wallet and
+moves the installation's `remote_access_paid_until` / `ai_paid_until` in the
+same transaction, with a `subscription.purchased` audit event: the periods
+start where the shop's current coverage ends (its operator subscription or what
+it already paid for), so renewing early loses nothing, and a plan the operator
+subscription includes with no end date is not sold (`409 plan_included`).
+Remote access and the assistant run while **either** the operator's
+subscription (flag + active + unexpired) **or** the paid-through date covers
+them. Another service charges with `control.WalletStore.PostWalletEntry`
+(`kind=charge`, a `service`, a negative amount, an idempotency key per
+purchase); an insufficient balance comes back as `*control.WalletBalanceError`
+carrying the balance and the amount — the "top up to continue" answer.
 
 ### API
 
@@ -1058,59 +1183,72 @@ its balance and pay in, since paying in may be how it renews):
 
 | Route | Purpose |
 | --- | --- |
-| `GET /v1/wallet` | balance, top-up options (methods, min/max, quick amounts), the 10 latest top-ups and entries |
-| `GET /v1/wallet/entries?limit=&before=&kind=` | statement, newest first, cursor-paged |
+| `GET /v1/wallet` | balance, the `sms` balance (`balance`, `price`, `messages_left`, `available`), the `plans` (`key`, `available`, `price`, `period_days`, `max_periods`, `active`, `until`, `included`), top-up options (methods with `kind`/`payer`/`birth_year`, min/max, quick amounts), the 10 latest top-ups and main-wallet entries |
+| `GET /v1/wallet/entries?account=main\|sms&limit=&before=&kind=` | one account's statement (main by default), newest first, cursor-paged |
+| `POST /v1/wallet/sms/allocations` | `{amount, idempotency_key, requested_by}` (at least one message's price, up to three decimals) → `201 {balance, sms, transfer:{out,in}}`; a replayed key answers `200` with the same transfer |
+| `POST /v1/wallet/subscriptions` | `{plan: remote_access\|ai, periods: 1..12, idempotency_key, requested_by}` → `201 {plan, balance, entry}`; a replayed key answers `200` |
 | `GET /v1/wallet/topups?limit=&before=&status=` | top-ups |
-| `POST /v1/wallet/topups` | `{amount, method, idempotency_key, requested_by}` → `201 {top_up, checkout_url}` |
-| `GET /v1/wallet/topups/{id}` | one top-up (what the app polls); another shop's is `404` |
+| `POST /v1/wallet/topups` | `{amount, method, idempotency_key, requested_by, user_identifier, birth_year}` → `201 {top_up, next_action, checkout_url?}` |
+| `GET /v1/wallet/topups/{id}` | one top-up (what the app polls; reads an open bank-card payment back from Dafa, at most every 3s); another shop's is `404` |
+| `POST /v1/wallet/topups/{id}/confirm` | `{otp}` → `200 {top_up}` paid, or a refusal below |
+| `POST /v1/wallet/topups/{id}/cancel` | an OTP top-up the owner backs out of; bank cards cannot be called off |
 
-Public: `GET|POST /v1/wallet/plutu/return` (the signed return; HTML, `no-store`).
+Public: `POST /v1/wallet/dafa/webhook/{top-up id}?token=…` (Dafa's webhook).
 
-Admin (bearer token): `GET /v1/wallet/admin/wallets`, `GET|POST /v1/wallet/admin/entries`,
-`GET /v1/wallet/admin/topups`, `POST /v1/wallet/admin/topups/{id}/confirm`,
-`GET /v1/wallet/admin/config`.
+Admin (bearer token): `GET /v1/wallet/admin/wallets?account=`, `GET|POST /v1/wallet/admin/entries` (`account` in the query or body),
+`GET /v1/wallet/admin/topups`, `POST /v1/wallet/admin/topups/{id or DFW-ref}/check`,
+`POST /v1/wallet/admin/topups/{id}/confirm`, `GET /v1/wallet/admin/config`.
 
 Error `code`s: `topups_unconfigured` (503), `invalid_amount` (422, with
-`min_amount`/`max_amount`), `unsupported_method`, `rate_limited`, `in_flight`
-(409), `gateway_unauthorized` (the company's Plutu account is misconfigured —
-ERROR log), `amount_not_allowed`, `gateway_busy`, `gateway_error`,
-`outcome_unknown`, `insufficient_balance`.
+`min_amount`/`max_amount`), `unsupported_method`, `method_unavailable`,
+`invalid_phone`, `invalid_card_number`, `invalid_birth_year`, `payer_rejected`
+(with Dafa's Arabic `gateway_message`), `invalid_otp`, `otp_rejected` (with
+`attempts_left`), `otp_attempts_exceeded`, `declined` (with `gateway_code` and
+`gateway_message`), `topup_closed` (409), `not_otp_method` (409),
+`confirm_unknown` (send the code again), `rate_limited`, `in_flight` (409),
+`gateway_unauthorized` (the company's Dafa key is wrong — ERROR log),
+`amount_not_allowed`, `gateway_busy`, `gateway_error`, `gateway_rejected`,
+`outcome_unknown`, `insufficient_balance` (409, with `balance` and `amount`),
+`plan_unavailable` (422: not sold through the wallet), `plan_included` (409),
+`invalid_periods` (422, with `max_periods`).
 
 ### Configuration
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `POINTY_RELAY_PLUTU_API_KEY` | empty | Plutu API key |
-| `POINTY_RELAY_PLUTU_ACCESS_TOKEN` | empty | Plutu access token (test or live) |
-| `POINTY_RELAY_PLUTU_SECRET_KEY` | empty | `sk_…`; verifies returns, never sent anywhere |
-| `POINTY_RELAY_PLUTU_MODE` | — | `test` or `live`, **required** with credentials; must match the token |
-| `POINTY_RELAY_PLUTU_BASE_URL` | `https://api.plutus.ly/api/v1` | |
-| `POINTY_RELAY_PUBLIC_URL` | derived per request | the relay's public origin the payer returns to — set it in production |
-| `POINTY_RELAY_WALLET_TOPUP_MIN` / `_MAX` | `10` / `5000` | bounds of one top-up (test mode also caps at Plutu's sandbox 500) |
+| `POINTY_RELAY_DAFA_API_KEY` | empty | `dafa_test_…` (simulated payments) or `dafa_live_…` (real) — the prefix **is** the mode |
+| `POINTY_RELAY_DAFA_BASE_URL` | `https://dev.dafa.ly/api/v1` | as the project's **Integration** page shows it |
+| `POINTY_RELAY_DAFA_REQUEST_TIMEOUT` | `20s` | one Dafa call |
+| `POINTY_RELAY_WALLET_METHODS` | all seven | methods to offer, in order (`moamalat,sadad,edfali` or `dafa_…` keys) |
+| `POINTY_RELAY_PUBLIC_URL` | derived per request | the relay's public **https** origin, where Dafa's webhook is sent — set it in production |
+| `POINTY_RELAY_WALLET_TOPUP_MIN` / `_MAX` | `10` / `5000` | bounds of one top-up |
 | `POINTY_RELAY_WALLET_QUICK_AMOUNTS` | `50,100,200,500` | one-tap amounts in the app |
 | `POINTY_RELAY_WALLET_TOPUP_TTL` | `30m` | pending → expired |
 | `POINTY_RELAY_WALLET_TOPUP_RATE_LIMIT` | `10/minute` | per shop |
-| `POINTY_RELAY_PLUTU_REQUEST_TIMEOUT` | `20s` | one Plutu call |
+| `POINTY_RELAY_REMOTE_ACCESS_PRICE` | empty | one period of remote access, paid from the wallet; empty = not sold through the wallet |
+| `POINTY_RELAY_AI_PRICE` | empty | one period of the AI assistant, likewise |
+| `POINTY_RELAY_PLAN_DAYS` | `30` | the length of one period |
 
-All three credentials or none (none leaves top-ups off; the wallet still reads).
-An **incomplete** account also leaves top-ups off, with a startup warning naming
-the missing value — the relay keeps serving remote access, AI and SMS. A
-complete account without a stated mode (or a misspelt one), or bad bounds,
-**stop the relay at startup**: a wrong mode would credit test money as real. Test mode marks every top-up and its credit `test_mode`, and the
-return page says no real money moved. If Plutu's **IP whitelist** is enabled on
-the merchant account, add the relay's outbound IP there.
+No key leaves top-ups off; the wallet still reads. A key with neither prefix
+also leaves them off, with a startup warning — the relay keeps serving remote
+access, AI and SMS. A bad base URL, method list or bounds **stop the relay at
+startup**. A test key marks every top-up and its credit `test_mode` (code
+`111111` pays, `222222` is declined, the test card page shows its test card).
+Leftover `POINTY_RELAY_PLUTU_*` variables are reported and ignored.
 
 ### Operator CLI
 
 ```sh
 pointy-relay wallet list                                   # balances, largest first, with the fleet total
-pointy-relay wallet show <installation-id>                 # statement
-pointy-relay wallet topups --status expired                # payers who never came back: check Plutu
-pointy-relay wallet confirm <top-up-id> --transaction-id 100900 --reason 'paid per Plutu dashboard'
+pointy-relay wallet list --account sms                     # SMS balances
+pointy-relay wallet show <installation-id>                 # statement (--account sms for the SMS one)
+pointy-relay wallet topups --status expired                # unfinished payments, with method and masked payer
+pointy-relay wallet check DFW-XXXXXXXXXX                   # ask Dafa now; credits it if it is paid
+pointy-relay wallet confirm <top-up-id> --transaction-id <dafa payment id> --reason 'bank statement shows it'
 pointy-relay wallet credit <installation-id> --amount 50 --reason 'welcome credit'
-pointy-relay wallet debit <installation-id> --amount 150 --service subscription --reason 'October'
-pointy-relay wallet refund <installation-id> --amount 150 --service subscription --reference <entry-id> --reason '...'
-pointy-relay wallet config                                 # mode, bounds, return URL, which credentials are set
+pointy-relay wallet debit <installation-id> --amount 150 --service remote_access --reason 'October'
+pointy-relay wallet refund <installation-id> --amount 150 --service remote_access --reference <entry-id> --reason '...'
+pointy-relay wallet config                                 # key environment, methods, bounds, webhook base (no key)
 ```
 
 ## State

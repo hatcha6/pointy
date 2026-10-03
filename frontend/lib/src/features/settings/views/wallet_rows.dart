@@ -5,11 +5,12 @@ import '../../../data/models/wallet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import 'wallet_presentation.dart';
 
-/// One top-up: how much, when, by whom, where it stands, and whether it made
-/// it into the books.
+/// One top-up: how much, by which method and payer, when, by whom, where it
+/// stands, and whether it made it into the books.
 class WalletTopUpTile extends StatelessWidget {
   const WalletTopUpTile({super.key, required this.topUp});
 
@@ -22,8 +23,13 @@ class WalletTopUpTile extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final textTheme = Theme.of(context).textTheme;
     final statusColor = walletTopUpStatusColor(topUp.status, colors);
+    final method = [
+      walletMethodLabel(topUp.method, l10n),
+      if (topUp.payerHint.isNotEmpty) ltrIsolated(topUp.payerHint),
+    ].join(' ');
     final facts = <String>[
       formatDateTime(topUp.paidAt ?? topUp.createdAt),
+      if (topUp.method.isNotEmpty) method,
       if (topUp.requestedBy.isNotEmpty)
         l10n.walletTopUpRequestedBy(topUp.requestedBy),
       l10n.walletTopUpInvoice(walletInvoiceText(topUp.invoiceNo)),
@@ -34,15 +40,7 @@ class WalletTopUpTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: statusColor.withValues(alpha: 0.12),
-            child: Icon(
-              walletTopUpStatusIcon(topUp.status),
-              size: 20,
-              color: statusColor,
-            ),
-          ),
+          WalletMethodMark(methodKey: topUp.method, size: 36),
           SizedBox(width: spacing.sm),
           Expanded(
             child: Column(
@@ -66,6 +64,7 @@ class WalletTopUpTile extends StatelessWidget {
                   children: [
                     PointyStatusPill(
                       label: walletTopUpStatusLabel(topUp.status, l10n),
+                      icon: walletTopUpStatusIcon(topUp.status),
                       color: statusColor,
                     ),
                     if (topUp.testMode)

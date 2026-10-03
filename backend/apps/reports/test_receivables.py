@@ -208,13 +208,14 @@ class CustomerStatementTests(TestCase):
             paid_at=timezone.now() - timedelta(days=days_ago),
         )
 
-    def _statement(self, start, end):
+    def _statement(self, start, end, granularity="detailed"):
         return generate_report_payload(
             report_type=ReportRun.ReportType.CUSTOMER_STATEMENT,
             params={
                 "customer_id": self.customer.pk,
                 "start_date": start.isoformat(),
                 "end_date": end.isoformat(),
+                "granularity": granularity,
             },
             user=self.manager,
         )

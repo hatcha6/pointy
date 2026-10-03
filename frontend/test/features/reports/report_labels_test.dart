@@ -61,6 +61,40 @@ void main() {
     });
   }
 
+  test(
+    'the sales and supplier figures added for the summaries have Arabic',
+    () {
+      for (final key in [
+        'sales_after_discount',
+        'paid_to_supplier_total',
+        'provider_float',
+      ]) {
+        expect(reportLabel(key), isNot('بيان'), reason: key);
+        expect(reportValue(key, '5.00'), contains('5.00'), reason: key);
+        expect(reportValue(key, '5.00'), isNot('5.00'), reason: key);
+      }
+      // A supplier statement no longer borrows the payroll figure's name.
+      expect(
+        reportLabel('paid_to_supplier_total'),
+        isNot(reportLabel('paid_total')),
+      );
+      expect(reportNote('hours_in_shop_time'), isNotNull);
+      expect(
+        reportNote('aging_is_today', args: {'date': '2026-10-03'}),
+        contains('2026-10-03'),
+      );
+    },
+  );
+
+  test('a stored quantity in exponent form reads as plain digits', () {
+    // Runs stored before the server's fix sent forty as 4E+1.
+    expect(reportValue('quantity', '4E+1', columnType: 'quantity'), '40');
+    expect(reportValue('quantity', '1.2E+3', columnType: 'quantity'), '1200');
+    expect(reportValue('quantity', '2.5', columnType: 'quantity'), '2.5');
+    // Text keeps its letters: a code like 2E10 is not a number.
+    expect(reportValue('sku', '2E10', columnType: 'text'), '2E10');
+  });
+
   test('a customer statement words every figure and line it sends', () {
     // One figure per kind of line: invoices, the goods that came back, the
     // money collected and the money handed back again.

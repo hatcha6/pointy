@@ -4,19 +4,25 @@ import '../../../core/result.dart';
 import '../../../data/models/clock_time.dart';
 import '../../../data/models/messaging_gateway.dart';
 import '../../../data/models/messaging_status.dart';
+import '../../../data/models/wallet.dart';
 import '../../../data/repositories/messaging_repository.dart';
 import '../../../data/services/api_error_detail.dart';
+import 'wallet_view_model.dart';
 
 /// Where the shop stands with SMS, in the order the page explains it.
 enum MessagingServiceState {
-  /// SMS is not in the subscription: a paid add-on to ask support for.
+  /// SMS is not in the subscription: a paid add-on to ask support for. Only
+  /// from a backend before the SMS balance.
   notSubscribed,
 
-  /// In the subscription, but not set up on Daftar's side yet.
+  /// Not set up on Daftar's side yet.
   notReady,
 
   /// The shop switched it off.
   disabled,
+
+  /// The SMS balance cannot pay for a message: move money into it.
+  noBalance,
   active,
 }
 
@@ -30,9 +36,13 @@ enum MessagingTestOutcome { none, sending, sent, queued, failed }
 /// There is nothing to connect: the provider account lives on the company's
 /// relay, so this is a status page with a few brakes on it.
 class MessagingSettingsViewModel extends ChangeNotifier {
-  MessagingSettingsViewModel(this._repository);
+  MessagingSettingsViewModel(this._repository, {this.wallet});
 
   final MessagingRepository _repository;
+
+  /// The Daftar wallet the SMS balance is filled from; null where the page is
+  /// shown without one (older call sites, tests).
+  final WalletViewModel? wallet;
 
   MessagingServiceStatus? _status;
   bool _isLoading = false;
@@ -43,6 +53,10 @@ class MessagingSettingsViewModel extends ChangeNotifier {
   bool _saveFailed = false;
   String _saveErrorCode = '';
   String _saveErrorDetail = '';
+
+  // Automatic texts whose switch is being saved, and the one that failed.
+  final Set<String> _savingAutoKinds = {};
+  String _autoMessageFailedKind = '';
 
   MessagingTestOutcome _testOutcome = MessagingTestOutcome.none;
   String _testBody = '';
@@ -61,12 +75,69 @@ class MessagingSettingsViewModel extends ChangeNotifier {
   MessagingUsage? get usage => _status?.usage;
   List<MessagingTemplateInfo> get templates => _status?.templates ?? const [];
 
-  /// In the subscription, by the relay's live word when it gave one: a stale
-  /// local mirror must not offer dials for a service the relay refuses.
+  /// The templates under their families, in the order the backend lists the
+  /// families; a template in a family it does not list comes last.
+  List<({MessagingTemplateGroup group, List<MessagingTemplateInfo> templates})>
+  get templateSections {
+    final groups = _status?.templateGroups ?? const <MessagingTemplateGroup>[];
+    final known = {for (final group in groups) group.key};
+    final sections =
+        <
+          ({
+            MessagingTemplateGroup group,
+            List<MessagingTemplateInfo> templates,
+          })
+        >[
+          for (final group in groups)
+            (
+              group: group,
+              templates: [
+                for (final template in templates)
+                  if (template.group == group.key) template,
+              ],
+            ),
+        ];
+    final rest = [
+      for (final template in templates)
+        if (!known.contains(template.group)) template,
+    ];
+    if (rest.isNotEmpty) {
+      sections.add((
+        group: const MessagingTemplateGroup(key: '', title: ''),
+        templates: rest,
+      ));
+    }
+    return [
+      for (final section in sections)
+        if (section.templates.isNotEmpty) section,
+    ];
+  }
+
+  /// The texts that go out by themselves, each with its switch — family by
+  /// family, in the order the list of every text shows them.
+  List<MessagingTemplateInfo> get automaticTemplates => [
+    for (final section in templateSections)
+      for (final template in section.templates)
+        if (template.automatic) template,
+  ];
+
+  bool isSavingAutoMessage(String kind) => _savingAutoKinds.contains(kind);
+
+  /// The automatic text whose switch could not be saved, or empty.
+  String get autoMessageFailedKind => _autoMessageFailedKind;
+
+  /// Can send, by the relay's live word when it gave one: a stale local
+  /// mirror must not offer a service the relay refuses.
   bool get isEntitled {
     final status = _status;
     return status != null && status.entitled && !status.isRefusedByRelay;
   }
+
+  /// SMS is paid per message from the SMS balance: the shop has the service,
+  /// and an empty balance only stops the sending.
+  bool get isPrepaid => _status?.isPrepaid ?? false;
+
+  SmsWallet? get smsWallet => _status?.smsWallet;
 
   bool get isTestMode => _status?.testMode ?? false;
   bool get isLoading => _isLoading;
@@ -82,28 +153,35 @@ class MessagingSettingsViewModel extends ChangeNotifier {
 
   MessagingServiceState get serviceState {
     final status = _status;
-    if (status == null || !isEntitled) {
+    if (status == null || (!isEntitled && !isPrepaid)) {
       return MessagingServiceState.notSubscribed;
     }
     final gateway = status.gateway;
     if (gateway == null || status.isNotConfigured) {
       return MessagingServiceState.notReady;
     }
-    return gateway.isActive
+    if (!gateway.isActive) {
+      return MessagingServiceState.disabled;
+    }
+    return isEntitled
         ? MessagingServiceState.active
-        : MessagingServiceState.disabled;
+        : MessagingServiceState.noBalance;
   }
 
-  /// The dials are the shop's to set only once SMS is in its subscription.
-  bool get canEdit => isEntitled && gateway != null;
+  /// The dials are the shop's to set once it has the service: in the
+  /// subscription, or prepaid — an empty SMS balance stops the sending, not
+  /// the shop's own brakes.
+  bool get canEdit => (isEntitled || isPrepaid) && gateway != null;
 
   /// A test send needs the service switched on — as saved, since that is what
-  /// the server sends with.
-  bool get canTest => canEdit && (gateway?.isActive ?? false);
+  /// the server sends with — and a message the balance can pay for.
+  bool get canTest => canEdit && isEntitled && (gateway?.isActive ?? false);
 
   /// The relay could not be asked for this month's usage; retrying may help.
   bool get isUsageUnavailable =>
-      isEntitled && usage == null && (_status?.isRelayUnreachable ?? false);
+      (isEntitled || isPrepaid) &&
+      usage == null &&
+      (_status?.isRelayUnreachable ?? false);
 
   bool get isDirty {
     final gateway = this.gateway;
@@ -260,6 +338,45 @@ class MessagingSettingsViewModel extends ChangeNotifier {
     }
 
     _isSaving = false;
+    notifyListeners();
+    return ok;
+  }
+
+  /// Turns one automatic text on or off, at once: the switch moves now and
+  /// moves back if the shop's backend refuses.
+  Future<bool> setAutoMessage(String kind, bool enabled) async {
+    final gateway = this.gateway;
+    final current = _status;
+    final template = templates.where((item) => item.kind == kind).firstOrNull;
+    if (gateway == null || current == null || template == null || !canEdit) {
+      return false;
+    }
+    if (_savingAutoKinds.contains(kind)) {
+      return false;
+    }
+    _savingAutoKinds.add(kind);
+    _autoMessageFailedKind = '';
+    _status = current.withTemplate(template.withAutoEnabled(enabled));
+    notifyListeners();
+
+    final result = await _repository.setAutoMessage(
+      gateway.id,
+      kind: kind,
+      enabled: enabled,
+    );
+    var ok = false;
+    switch (result) {
+      case Ok<MessagingGateway>(value: final saved):
+        final settled = saved.autoMessages[kind] ?? enabled;
+        _status = _status
+            ?.withGateway(saved)
+            .withTemplate(template.withAutoEnabled(settled));
+        ok = true;
+      case Error<MessagingGateway>():
+        _status = _status?.withTemplate(template);
+        _autoMessageFailedKind = kind;
+    }
+    _savingAutoKinds.remove(kind);
     notifyListeners();
     return ok;
   }

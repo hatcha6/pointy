@@ -6,6 +6,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import 'product_entry_pins.dart';
 
 /// What the shop already has of a product on the day it types it in, and what
 /// one unit of it cost.
@@ -25,10 +26,28 @@ class OpeningStockFields extends StatelessWidget {
     required this.quantityController,
     required this.costController,
     this.dense = false,
+    this.quantityFocusNode,
+    this.costFocusNode,
+    this.onQuantityEditingComplete,
+    this.onCostEditingComplete,
+    this.costPin,
+    this.costPinScope,
   });
 
   final TextEditingController quantityController;
   final TextEditingController costController;
+  final FocusNode? quantityFocusNode;
+  final FocusNode? costFocusNode;
+
+  /// Enter in each field — the new-product form walks its essential fields in
+  /// a fixed order, ending on the save button.
+  final VoidCallback? onQuantityEditingComplete;
+  final VoidCallback? onCostEditingComplete;
+
+  /// The cost's pin in a run of new products. The quantity never carries: a
+  /// shelf is counted, never copied.
+  final FieldPin? costPin;
+  final FocusNode? costPinScope;
 
   /// Laid out for a generated-variant tile, which is already a stack of fields
   /// and does not want a second heading inside it.
@@ -40,8 +59,10 @@ class OpeningStockFields extends StatelessWidget {
     final fields = [
       TextFormField(
         controller: quantityController,
+        focusNode: quantityFocusNode,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textInputAction: TextInputAction.next,
+        onEditingComplete: onQuantityEditingComplete,
         inputFormatters: [DecimalTextInputFormatter()],
         decoration: InputDecoration(
           labelText: l10n.openingStockQuantityLabel,
@@ -49,20 +70,27 @@ class OpeningStockFields extends StatelessWidget {
         ),
         validator: (value) => _quantityError(context, value),
       ),
-      TextFormField(
-        controller: costController,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        textInputAction: TextInputAction.next,
-        inputFormatters: [DecimalTextInputFormatter()],
-        decoration: InputDecoration(
-          labelText: l10n.openingStockUnitCostLabel,
-          helperText: dense ? null : l10n.openingStockUnitCostHelper,
-          prefixIcon: const Icon(Icons.payments_outlined),
+      PinnableField(
+        pin: costPin,
+        focusScope: costPinScope,
+        child: TextFormField(
+          controller: costController,
+          focusNode: costFocusNode,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textInputAction: TextInputAction.next,
+          onEditingComplete: onCostEditingComplete,
+          inputFormatters: [DecimalTextInputFormatter()],
+          decoration: InputDecoration(
+            labelText: l10n.openingStockUnitCostLabel,
+            helperText: dense ? null : l10n.openingStockUnitCostHelper,
+            prefixIcon: const Icon(Icons.payments_outlined),
+            fillColor: costPin?.fillColor(context),
+          ),
+          // A cost with no quantity would be silently dropped by the server
+          // (it has nothing to value), so it is caught here where the owner
+          // can see which of the two they forgot.
+          validator: (value) => _costError(context, value),
         ),
-        // A cost with no quantity would be silently dropped by the server (it
-        // has nothing to value), so it is caught here where the owner can see
-        // which of the two they forgot.
-        validator: (value) => _costError(context, value),
       ),
     ];
 

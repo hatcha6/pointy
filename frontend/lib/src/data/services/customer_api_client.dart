@@ -1,5 +1,6 @@
 import '../models/customer_activity.dart';
 import '../models/contact.dart';
+import '../models/messaging_gateway.dart';
 import '../models/payment_card.dart';
 import '../models/sale_order_page.dart';
 import 'api_session.dart';
@@ -85,6 +86,18 @@ class CustomerApiClient {
   /// Records a payment against the customer's account (cash/transfer only —
   /// the backend allocates it oldest-first across open debt invoices) and
   /// returns the refreshed sales-summary.
+  /// Texts the customer what their account owes today.
+  Future<MessagingSendResult> sendCustomerBalanceSms(int customerId) async {
+    final response = await _session.post(
+      'crm/customers/$customerId/send-balance-sms/',
+    );
+    _session.throwApiException(response, 'Balance SMS failed with status');
+    final decoded = _session.decodedBodyOrNull(response);
+    return decoded is Map<String, Object?>
+        ? MessagingSendResult.fromJson(decoded)
+        : const MessagingSendResult(status: 'queued');
+  }
+
   Future<CustomerSalesSummary> recordCustomerAccountPayment(
     int customerId, {
     required String method,

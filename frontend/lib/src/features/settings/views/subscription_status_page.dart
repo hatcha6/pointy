@@ -6,19 +6,24 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/ai_chat.dart';
 import '../../../data/models/relay_installation_status.dart';
+import '../../../data/models/wallet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/subscription_status_view_model.dart';
+import '../view_models/wallet_view_model.dart';
 import 'wallet_presentation.dart';
 import 'wallet_section.dart';
+import 'wallet_sms_sheet.dart';
+import 'wallet_spend_rows.dart';
 
 /// Shop Settings sub-page surfacing the relay installation ID (so owners can
-/// send it to support) alongside the remote-access, AI and SMS subscription
-/// state — including how much AI usage is left. Read-only; the relay owns the
-/// truth.
+/// send it to support) alongside the Daftar wallet and what it pays for:
+/// remote access and the assistant (a period at a time) and SMS (per message,
+/// from the SMS balance) — including how much AI usage is left. The relay owns
+/// the truth; the wallet is where the owner pays for each service.
 class SubscriptionStatusPage extends StatefulWidget {
   const SubscriptionStatusPage({super.key, required this.viewModel});
 
@@ -70,10 +75,12 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      // The hero shows the wallet balance, so the wallet redraws it too.
+      // The hero shows the wallet balance and every service section its
+      // wallet row, so the wallet (and its spending) redraws them too.
       listenable: Listenable.merge([
         widget.viewModel,
         ?widget.viewModel.wallet,
+        ?widget.viewModel.wallet?.spending,
       ]),
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
@@ -139,16 +146,29 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
                 _buildHero(context, l10n, status),
                 SizedBox(height: spacing.md),
                 if (wallet != null) ...[
-                  WalletSection(viewModel: wallet),
+                  WalletSection(viewModel: wallet, onSpent: viewModel.load),
                   SizedBox(height: spacing.md),
                 ],
                 _InstallationIdSection(status: status),
                 SizedBox(height: spacing.md),
-                _RemoteAccessSection(status: status),
+                _RemoteAccessSection(
+                  status: status,
+                  wallet: wallet,
+                  onPurchased: viewModel.load,
+                ),
                 SizedBox(height: spacing.md),
-                _AiSection(status: status, usage: viewModel.usage),
+                _AiSection(
+                  status: status,
+                  usage: viewModel.usage,
+                  wallet: wallet,
+                  onPurchased: viewModel.load,
+                ),
                 SizedBox(height: spacing.md),
-                _SmsSection(status: status),
+                _SmsSection(
+                  status: status,
+                  wallet: wallet,
+                  onMoved: viewModel.load,
+                ),
                 if (status.lastSyncedAt != null) ...[
                   SizedBox(height: spacing.md),
                   Text(
@@ -184,6 +204,7 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
               ? l10n.subscriptionUntilDate(formatDate(endsAt))
               : null)
         : null;
+    final sms = widget.viewModel.wallet?.overview?.sms;
 
     return PointyDetailHero(
       icon: Icons.workspace_premium_outlined,
@@ -212,9 +233,11 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
         PointyHeroPill(
           icon: Icons.sms_outlined,
           label: l10n.subscriptionSmsPill(
-            status.smsAvailable
-                ? l10n.subscriptionStateOn
-                : l10n.subscriptionStateOff,
+            sms != null
+                ? formatWalletMoney(sms.balance)
+                : (status.smsAvailable
+                      ? l10n.subscriptionStateOn
+                      : l10n.subscriptionStateOff),
           ),
         ),
         if (widget.viewModel.wallet?.overview?.balance case final balance?)
@@ -234,7 +257,9 @@ String _subscriptionStatusLabel(
   if (!status.configured) {
     return l10n.subscriptionStatusInactive;
   }
-  if (status.subscriptionActive && !status.subscriptionExpired) {
+  // A plan paid from the wallet counts as much as the company's subscription.
+  if ((status.subscriptionActive && !status.subscriptionExpired) ||
+      status.anyPlanActive) {
     return l10n.subscriptionStatusActive;
   }
   if (status.subscriptionExpired) {
@@ -348,12 +373,33 @@ class _CopyableInstallationId extends StatelessWidget {
   }
 }
 
-/// Remote-access state: a plain-language callout plus a ledger of the subscription
-/// facts (active, expiry, days left, last connector check-in).
+/// The wallet row a plan's section shows: the plan as the wallet sells it, or
+/// nothing on a page without a wallet (or from a relay that sells no plans).
+Widget? _planRow(
+  WalletViewModel? wallet,
+  String key,
+  VoidCallback onPurchased,
+) {
+  final plan = wallet?.overview?.planFor(key);
+  if (wallet == null || plan == null) {
+    return null;
+  }
+  return WalletPlanRow(wallet: wallet, plan: plan, onPurchased: onPurchased);
+}
+
+/// Remote-access state: a plain-language callout, a ledger of the facts (on or
+/// off, until when, days left, last connector check-in) and, where the wallet
+/// sells it, the row that pays for it.
 class _RemoteAccessSection extends StatelessWidget {
-  const _RemoteAccessSection({required this.status});
+  const _RemoteAccessSection({
+    required this.status,
+    required this.wallet,
+    required this.onPurchased,
+  });
 
   final RelayInstallationStatus status;
+  final WalletViewModel? wallet;
+  final VoidCallback onPurchased;
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +407,10 @@ class _RemoteAccessSection extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
     final supported = status.remoteAccessSupported;
-    final endsAt = status.subscriptionEndsAt;
+    final until = status.remoteAccessUntil;
+    final planRow = _planRow(wallet, WalletPlan.remoteAccess, onPurchased);
+    final sold = wallet?.overview?.planFor(WalletPlan.remoteAccess)?.available;
+    final daysLeft = until?.difference(DateTime.now()).inDays;
 
     final rows = <PointySummaryRow>[
       PointySummaryRow(
@@ -370,23 +419,15 @@ class _RemoteAccessSection extends StatelessWidget {
         valueColor: supported ? colors.success : colors.mutedInk,
       ),
       PointySummaryRow(
-        label: l10n.subscriptionFieldSubscription,
-        value: _subscriptionStatusLabel(l10n, status),
-        valueColor: status.subscriptionExpired ? colors.danger : null,
-      ),
-      PointySummaryRow(
         label: l10n.subscriptionFieldExpiresOn,
-        value: endsAt != null
-            ? formatDate(endsAt)
-            : (status.subscriptionActive ? l10n.subscriptionExpiryNever : '—'),
+        value: until != null
+            ? formatDate(until)
+            : (supported ? l10n.subscriptionExpiryNever : '—'),
       ),
-      if (endsAt != null)
+      if (daysLeft != null)
         PointySummaryRow(
           label: l10n.subscriptionFieldRemaining,
-          value: status.subscriptionExpired
-              ? l10n.subscriptionStatusExpired
-              : l10n.subscriptionDaysLeft(status.daysUntilExpiry ?? 0),
-          valueColor: status.subscriptionExpired ? colors.danger : null,
+          value: l10n.subscriptionDaysLeft(daysLeft),
         ),
       PointySummaryRow(
         label: l10n.subscriptionFieldLastConnected,
@@ -414,23 +455,34 @@ class _RemoteAccessSection extends StatelessWidget {
                 : l10n.subscriptionRemoteAccessInactiveTitle,
             message: supported
                 ? l10n.subscriptionRemoteAccessActiveMessage
+                : (sold ?? false)
+                ? l10n.subscriptionRemoteAccessWalletMessage
                 : l10n.subscriptionRemoteAccessInactiveMessage,
           ),
           SizedBox(height: spacing.md),
           PointySummaryList(rows: rows),
+          if (planRow != null) ...[SizedBox(height: spacing.md), planRow],
         ],
       ),
     );
   }
 }
 
-/// AI-assistant state: entitlement callout and, when entitled, the 5h + weekly
-/// usage bars (mirrors the in-chat usage sheet) so owners see how much is left.
+/// AI-assistant state: entitlement callout, the 5h + weekly usage bars when it
+/// runs (mirrors the in-chat usage sheet) and, where the wallet sells it, the
+/// row that pays for it.
 class _AiSection extends StatelessWidget {
-  const _AiSection({required this.status, required this.usage});
+  const _AiSection({
+    required this.status,
+    required this.usage,
+    required this.wallet,
+    required this.onPurchased,
+  });
 
   final RelayInstallationStatus status;
   final AiUsage? usage;
+  final WalletViewModel? wallet;
+  final VoidCallback onPurchased;
 
   @override
   Widget build(BuildContext context) {
@@ -439,6 +491,8 @@ class _AiSection extends StatelessWidget {
     final colors = context.pointyColors;
     final available = status.aiAvailable;
     final snapshot = usage;
+    final planRow = _planRow(wallet, WalletPlan.ai, onPurchased);
+    final sold = wallet?.overview?.planFor(WalletPlan.ai)?.available;
 
     return PointyDetailSection(
       icon: Icons.auto_awesome_outlined,
@@ -456,6 +510,8 @@ class _AiSection extends StatelessWidget {
                 : l10n.subscriptionAiInactiveTitle,
             message: available
                 ? l10n.subscriptionAiActiveMessage
+                : (sold ?? false)
+                ? l10n.subscriptionAiWalletMessage
                 : l10n.subscriptionAiInactiveMessage,
           ),
           if (available) ...[
@@ -478,24 +534,70 @@ class _AiSection extends StatelessWidget {
                 ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
               ),
           ],
+          if (planRow != null) ...[SizedBox(height: spacing.md), planRow],
         ],
       ),
     );
   }
 }
 
-/// SMS state: whether the subscription includes it. Usage, the shop's own
-/// switch and the texts sent live on the SMS settings page, so this stays one
-/// sentence.
+/// SMS state. SMS is paid per message from the SMS balance, so this says
+/// whether the balance can pay for one and offers the transfer that fills it;
+/// usage, the shop's own switch and the texts sent live on the SMS settings
+/// page. From a relay that does not sell SMS by the message it says whether
+/// the subscription includes it.
 class _SmsSection extends StatelessWidget {
-  const _SmsSection({required this.status});
+  const _SmsSection({
+    required this.status,
+    required this.wallet,
+    required this.onMoved,
+  });
 
   final RelayInstallationStatus status;
+  final WalletViewModel? wallet;
+  final VoidCallback onMoved;
+
+  Future<void> _allocate(BuildContext context, WalletViewModel wallet) async {
+    if (await showSmsAllocationSheet(context: context, wallet: wallet)) {
+      onMoved();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final available = status.smsAvailable;
+    final wallet = this.wallet;
+    final sms = wallet?.overview?.sms;
+
+    if (wallet != null && sms != null) {
+      final canSend = sms.canSend;
+      return PointyDetailSection(
+        icon: Icons.sms_outlined,
+        title: l10n.subscriptionSmsTitle,
+        child: PointyDetailCallout(
+          icon: canSend
+              ? Icons.sms_outlined
+              : Icons.account_balance_wallet_outlined,
+          tone: canSend ? PointyCalloutTone.success : PointyCalloutTone.warning,
+          title: canSend
+              ? l10n.subscriptionSmsPrepaidActiveTitle
+              : l10n.subscriptionSmsPrepaidEmptyTitle,
+          message: canSend
+              ? l10n.subscriptionSmsPrepaidActiveMessage(
+                  formatWalletMoney(sms.price),
+                )
+              : l10n.subscriptionSmsPrepaidEmptyMessage,
+          trailing: canSend
+              ? null
+              : TextButton(
+                  key: const ValueKey('subscription_sms_allocate'),
+                  onPressed: () => _allocate(context, wallet),
+                  child: Text(l10n.walletSmsAllocateButton),
+                ),
+        ),
+      );
+    }
 
     return PointyDetailSection(
       icon: Icons.sms_outlined,

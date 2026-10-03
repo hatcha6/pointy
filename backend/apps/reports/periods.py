@@ -58,10 +58,23 @@ class Preset(models.TextChoices):
 class Granularity(models.TextChoices):
     """How much of the report to build.
 
-    ``SUMMARY`` is the headline plus short supporting tables. ``DAILY`` adds a
-    day-by-day breakdown to every report whose subject moves over time.
-    ``DETAILED`` keeps the breakdown and raises the row caps, for the copy that
-    goes in the file rather than on the wall.
+    ``SUMMARY`` is the headline figures and the report's own short tables — the
+    statement, the totals by method, category, staff or age — each cut to its
+    largest ``SUMMARY_ROW_LIMIT`` rows, with what the rest add up to stated
+    under them. No list of documents, no reconciliation, no day-by-day table:
+    a summary of a busy month is the same page as a summary of a quiet one.
+
+    ``DAILY`` is the summary plus the day-by-day table, for the reports whose
+    subject moves over time (``ReportDefinition.daily_breakdown``).
+
+    ``DETAILED`` is everything: the summary tables at their full caps, the
+    day-by-day table, the reconciliations, and every document or line behind
+    a total — the copy that goes in the file rather than on the wall.
+
+    It used to be a row multiplier and nothing else. ``SUMMARY`` built every
+    section ``DAILY`` did — the newest orders, every stock line, every
+    expense — at the same caps, so choosing it changed nothing an owner could
+    see, and the balance sheet ignored it altogether.
     """
 
     SUMMARY = "summary", "Summary"
@@ -75,16 +88,16 @@ class Comparison(models.TextChoices):
     PREVIOUS_YEAR = "previous_year", "Same period last year"
 
 
-# What each granularity multiplies the section row caps by. ``DETAILED`` is
-# deliberately bounded rather than unlimited: the payload is stored in a JSON
-# column and re-read on every view of the run, so an unbounded "detailed" would
-# put a shop's whole stock history into one row of the database. The CSV export
-# is the unbounded path (see ``csv_export``) and it stores nothing.
-GRANULARITY_ROW_SCALE = {
-    Granularity.SUMMARY: 1,
-    Granularity.DAILY: 1,
-    Granularity.DETAILED: 8,
-}
+#: The rows a summary table keeps: the largest ten, never more than the
+#: section's own cap. The totals under it are still the whole set's, so a short
+#: table cannot read as a complete one.
+SUMMARY_ROW_LIMIT = 10
+#: What a detailed report multiplies the section row caps by. Deliberately
+#: bounded rather than unlimited: the payload is stored in a JSON column and
+#: re-read on every view of the run, so an unbounded "detailed" would put a
+#: shop's whole stock history into one row of the database. The CSV export is
+#: the unbounded path (see ``csv_export``) and it stores nothing.
+DETAILED_ROW_SCALE = 8
 
 
 @dataclass(frozen=True)
@@ -118,8 +131,16 @@ class ReportPeriod:
     def wants_daily_breakdown(self) -> bool:
         return self.granularity in (Granularity.DAILY, Granularity.DETAILED)
 
+    @property
+    def wants_detail(self) -> bool:
+        """Whether to build what a summary leaves out: the documents and lines
+        behind each total, and the reconciliations under each statement."""
+        return self.granularity == Granularity.DETAILED
+
     def row_limit(self, base_limit: int) -> int:
-        return base_limit * GRANULARITY_ROW_SCALE.get(self.granularity, 1)
+        if self.wants_detail:
+            return base_limit * DETAILED_ROW_SCALE
+        return min(base_limit, SUMMARY_ROW_LIMIT)
 
     def days(self):
         """Every calendar day in the window, in order."""
@@ -320,8 +341,10 @@ def _localize(naive: datetime) -> datetime:
 
 __all__ = [
     "Comparison",
+    "DETAILED_ROW_SCALE",
     "Granularity",
     "MAX_PERIOD_DAYS",
+    "SUMMARY_ROW_LIMIT",
     "PeriodValidationError",
     "Preset",
     "ReportPeriod",

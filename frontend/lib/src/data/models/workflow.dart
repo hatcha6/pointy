@@ -13,6 +13,7 @@ class WorkflowStage {
     required this.producesOutput,
     this.requiresSettlement = false,
     this.releasesCustody = false,
+    this.readyForPickup = false,
   });
 
   final int id;
@@ -34,6 +35,11 @@ class WorkflowStage {
   final bool consumesMaterials;
   final bool producesOutput;
 
+  /// The job waits here for the customer to collect it: entering it texts
+  /// the customer (when the shop has that text on), and a job left here is
+  /// reminded about.
+  final bool readyForPickup;
+
   factory WorkflowStage.fromJson(Map<String, Object?> json) {
     return WorkflowStage(
       id: json['id'] as int,
@@ -47,6 +53,7 @@ class WorkflowStage {
       releasesCustody: json['releases_custody'] == true,
       consumesMaterials: json['consumes_materials'] == true,
       producesOutput: json['produces_output'] == true,
+      readyForPickup: json['ready_for_pickup'] == true,
     );
   }
 }
@@ -125,6 +132,7 @@ class WorkflowStageDraft {
     this.releasesCustody = false,
     this.consumesMaterials = false,
     this.producesOutput = false,
+    this.readyForPickup = false,
   });
 
   final int? id;
@@ -138,6 +146,7 @@ class WorkflowStageDraft {
   final bool releasesCustody;
   final bool consumesMaterials;
   final bool producesOutput;
+  final bool readyForPickup;
 
   Map<String, Object?> toJson() {
     return {
@@ -152,6 +161,7 @@ class WorkflowStageDraft {
       'releases_custody': releasesCustody,
       'consumes_materials': consumesMaterials,
       'produces_output': producesOutput,
+      'ready_for_pickup': readyForPickup,
     };
   }
 }

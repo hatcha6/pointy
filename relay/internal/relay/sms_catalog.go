@@ -15,13 +15,15 @@ const (
 
 // smsKind is a message kind the relay knows. Django owns the canonical text and
 // renders its own copy; the relay keeps only what it enforces — how many
-// positional variables the kind takes and the consent class it goes out under.
-// The approved text itself lives in the Resala dashboard and comes back on
-// every send.
+// positional variables the kind takes and the consent class it goes out under —
+// and the Arabic title the kind's charge prints on the shop's SMS statement
+// (Django's SMSTemplateSpec.title). The approved text itself lives in the
+// Resala dashboard and comes back on every send.
 type smsKind struct {
 	Kind         string
 	ConsentClass string
 	Variables    int
+	Title        string
 }
 
 // smsKindCatalog mirrors the kinds table of the SMS contract (and the relay
@@ -29,18 +31,34 @@ type smsKind struct {
 // still sendable — operators can add one without a deploy — it just skips the
 // variable-count check.
 var smsKindCatalog = []smsKind{
-	{Kind: "test", ConsentClass: smsConsentTransactional, Variables: 1},
-	{Kind: "invoice", ConsentClass: smsConsentTransactional, Variables: 3},
-	{Kind: "invoice_link", ConsentClass: smsConsentTransactional, Variables: 4},
-	{Kind: "debt_reminder", ConsentClass: smsConsentTransactional, Variables: 3},
-	{Kind: "debt_reminder_link", ConsentClass: smsConsentTransactional, Variables: 4},
-	{Kind: "consignment_sale", ConsentClass: smsConsentTransactional, Variables: 5},
-	{Kind: "consignment_payout", ConsentClass: smsConsentTransactional, Variables: 4},
-	{Kind: "consignment_claim", ConsentClass: smsConsentTransactional, Variables: 5},
-	{Kind: "batch_recall", ConsentClass: smsConsentTransactional, Variables: 4},
-	{Kind: "month_end_report", ConsentClass: smsConsentTransactional, Variables: 7},
-	{Kind: "direct", ConsentClass: smsConsentTransactional, Variables: 2},
-	{Kind: "marketing", ConsentClass: smsConsentMarketing, Variables: 2},
+	{Kind: "test", ConsentClass: smsConsentTransactional, Variables: 1, Title: "رسالة تجريبية"},
+	{Kind: "invoice", ConsentClass: smsConsentTransactional, Variables: 3, Title: "فاتورة بيع"},
+	{Kind: "invoice_link", ConsentClass: smsConsentTransactional, Variables: 4, Title: "فاتورة بيع مع رابط"},
+	{Kind: "debt_reminder", ConsentClass: smsConsentTransactional, Variables: 3, Title: "تذكير بدين"},
+	{Kind: "debt_reminder_link", ConsentClass: smsConsentTransactional, Variables: 4, Title: "تذكير بدين مع رابط"},
+	{Kind: "consignment_sale", ConsentClass: smsConsentTransactional, Variables: 5, Title: "بيع أمانة"},
+	{Kind: "consignment_payout", ConsentClass: smsConsentTransactional, Variables: 4, Title: "تسليم مستحقات أمانة"},
+	{Kind: "consignment_claim", ConsentClass: smsConsentTransactional, Variables: 5, Title: "تسوية حادث أمانة"},
+	{Kind: "batch_recall", ConsentClass: smsConsentTransactional, Variables: 4, Title: "استدعاء دفعة"},
+	{Kind: "month_end_report", ConsentClass: smsConsentTransactional, Variables: 7, Title: "ملخص إقفال الشهر"},
+	{Kind: "direct", ConsentClass: smsConsentTransactional, Variables: 2, Title: "رسالة مباشرة"},
+	{Kind: "marketing", ConsentClass: smsConsentMarketing, Variables: 2, Title: "عرض ترويجي"},
+	{Kind: "quotation", ConsentClass: smsConsentTransactional, Variables: 4, Title: "عرض سعر"},
+	{Kind: "quotation_link", ConsentClass: smsConsentTransactional, Variables: 5, Title: "عرض سعر مع رابط"},
+	{Kind: "refund_issued", ConsentClass: smsConsentTransactional, Variables: 3, Title: "تسجيل مرتجع"},
+	{Kind: "warranty_registered", ConsentClass: smsConsentTransactional, Variables: 4, Title: "تسجيل ضمان"},
+	{Kind: "credit_invoice", ConsentClass: smsConsentTransactional, Variables: 4, Title: "فاتورة آجلة"},
+	{Kind: "payment_received", ConsentClass: smsConsentTransactional, Variables: 3, Title: "استلام دفعة"},
+	{Kind: "account_balance", ConsentClass: smsConsentTransactional, Variables: 3, Title: "رصيد الحساب"},
+	{Kind: "due_date_changed", ConsentClass: smsConsentTransactional, Variables: 4, Title: "تغيير موعد الاستحقاق"},
+	{Kind: "job_received", ConsentClass: smsConsentTransactional, Variables: 3, Title: "استلام طلب"},
+	{Kind: "job_estimate", ConsentClass: smsConsentTransactional, Variables: 3, Title: "تكلفة الطلب بانتظار الموافقة"},
+	{Kind: "job_ready", ConsentClass: smsConsentTransactional, Variables: 2, Title: "جاهز للاستلام"},
+	{Kind: "job_ready_due", ConsentClass: smsConsentTransactional, Variables: 3, Title: "جاهز للاستلام مع المتبقي"},
+	{Kind: "job_returned", ConsentClass: smsConsentTransactional, Variables: 2, Title: "جاهز للاستلام دون إصلاح"},
+	{Kind: "job_pickup_reminder", ConsentClass: smsConsentTransactional, Variables: 3, Title: "تذكير بالاستلام"},
+	{Kind: "job_delivered", ConsentClass: smsConsentTransactional, Variables: 3, Title: "التسليم والضمان"},
+	{Kind: "payroll_paid", ConsentClass: smsConsentTransactional, Variables: 3, Title: "صرف الراتب"},
 }
 
 func lookupSMSKind(kind string) (smsKind, bool) {

@@ -382,8 +382,10 @@ def _transfer_totals(*, end, start=None):
     return incoming, outgoing
 
 
-def _last_counts(accounts):
-    """The most recent count per account, in one query.
+def _last_counts(accounts, *, end=None):
+    """The most recent count per account, in one query — at the close of
+    ``end`` when one is given, so a statement for September is not answered
+    with a count taken in October.
 
     ``account.counts.first()`` is ordered ``-counted_at`` and is therefore a
     query per card. One ordered pass and a first-wins dict costs the same for
@@ -392,7 +394,10 @@ def _last_counts(accounts):
     latest = {}
     counts = MoneyCount.objects.filter(
         account__in=[account.pk for account in accounts]
-    ).order_by("account_id", "-counted_at", "-created_at")
+    )
+    if end is not None:
+        counts = counts.filter(counted_at__lt=day_range_end(end))
+    counts = counts.order_by("account_id", "-counted_at", "-created_at")
     for count in counts:
         latest.setdefault(count.account_id, count)
     return latest
@@ -603,7 +608,14 @@ def treasury_statement(*, start, end):
     movements = {}
     cash_default = defaults.get(MoneyAccount.Kind.CASH)
     if cash_default is not None:
-        movements[cash_default.pk] = _cash_components(start=start, end=end)
+        # From the account's own opening date when that falls inside the
+        # window, exactly as its balance is derived. The money taken before
+        # the shop opened the box in Pointy is already inside its opening
+        # balance; replayed here as well, a shop that upgraded mid-month
+        # closed the month with that half-month counted twice.
+        movements[cash_default.pk] = _cash_components(
+            start=max(start, cash_default.opening_at), end=end
+        )
     bank_default = defaults.get(MoneyAccount.Kind.BANK)
     for account in accounts:
         if account.kind == MoneyAccount.Kind.PROVIDER:
@@ -612,14 +624,14 @@ def treasury_statement(*, start, end):
             movements[account.pk] = _provider_components(account, start=start, end=end)
         elif account.kind == MoneyAccount.Kind.BANK:
             movements[account.pk] = _bank_components(
-                start=start,
+                start=max(start, account.opening_at),
                 end=end,
                 account=account,
                 is_default=bank_default is not None and bank_default.pk == account.pk,
             )
 
     incoming, outgoing = _transfer_totals(start=start, end=end)
-    last_counts = _last_counts(accounts)
+    last_counts = _last_counts(accounts, end=end)
 
     rows = []
     for account in accounts:
@@ -675,19 +687,29 @@ def outside_money_totals(*, start, end):
 
 
 def _statement_totals(rows):
-    def total(key):
-        return sum((row[key] for row in rows), ZERO).quantize(MONEY_PLACES)
+    """The statement's totals: cash and bank, with the provider floats beside
+    them and never inside — the same split ``_totals`` makes for the money
+    position, so the closing total here is the screen's total and the balance
+    sheet's cash line for the same day."""
+    money_rows = [
+        row for row in rows if row["account"].kind != MoneyAccount.Kind.PROVIDER
+    ]
 
-    counted = [row for row in rows if row["last_count"] is not None]
+    def total(key, among=money_rows):
+        return sum((row[key] for row in among), ZERO).quantize(MONEY_PLACES)
+
+    counted = [row for row in money_rows if row["last_count"] is not None]
+    floats = [row for row in rows if row["account"].kind == MoneyAccount.Kind.PROVIDER]
     return {
         "opening_total": total("opening_balance"),
         "movement_total": total("movement_total"),
         "closing_total": total("closing_balance"),
+        "provider_float": total("closing_balance", among=floats),
         "counted_variance_total": sum(
             (row["last_count"].variance for row in counted), ZERO
         ).quantize(MONEY_PLACES),
         "accounts_counted": len(counted),
-        "accounts_total": len(rows),
+        "accounts_total": len(money_rows),
     }
 
 

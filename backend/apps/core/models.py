@@ -794,6 +794,18 @@ class RelayInstallation(TimeStampedModel):
     # Mirrored like the entitlements above; apps.integrations.switches acts on it.
     integrations_disabled = models.JSONField(default=list, blank=True, db_default=[])
     subscription_ends_at = models.DateTimeField(null=True, blank=True)
+    # How far the shop has paid for each plan from its Daftar wallet. A plan
+    # runs while the operator's subscription (flag, active, end date) or this
+    # date covers it — the relay's rule, mirrored by ``plan_coverage``.
+    remote_access_paid_until = models.DateTimeField(null=True, blank=True)
+    ai_paid_until = models.DateTimeField(null=True, blank=True)
+    # The shop's SMS balance and what one message costs, as the relay last
+    # said. SMS is prepaid by the message; a price of 0 is a relay from before
+    # the SMS balance, which still gates on ``sms_enabled``. ``db_default`` so
+    # the previous release's INSERT, which names neither, still works while a
+    # live update overlaps.
+    sms_balance = models.DecimalField(max_digits=14, decimal_places=3, default=0, db_default=0)
+    sms_price = models.DecimalField(max_digits=8, decimal_places=3, default=0, db_default=0)
     last_synced_at = models.DateTimeField(null=True, blank=True)
     last_pairing_issued_at = models.DateTimeField(null=True, blank=True)
     connector_last_seen_at = models.DateTimeField(null=True, blank=True)
@@ -818,11 +830,9 @@ class RelayInstallation(TimeStampedModel):
 
     @property
     def remote_access_supported(self):
-        if not self.relay_enabled or not self.subscription_active:
-            return False
-        if self.subscription_ends_at is None:
-            return True
-        return timezone.now() < self.subscription_ends_at
+        from apps.core.relay import plan_coverage
+
+        return plan_coverage(self, "remote_access").active
 
 
 class RelayConnectorSetupToken(TimeStampedModel):

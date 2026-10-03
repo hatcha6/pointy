@@ -123,6 +123,28 @@ void main() {
     expect(find.textContaining('النصاب'), findsOneWidget);
   });
 
+  testWidgets('a summary balance sheet is the statement and says so', (
+    tester,
+  ) async {
+    // What was built is named on the result: a summary must never pass for a
+    // report that lost its zakat working, nor the reverse.
+    await pump(tester, balanceSheetPayload(granularity: 'summary'));
+
+    expect(find.text('ملخص'), findsOneWidget);
+    expect(find.text('لنا — الأصول'), findsOneWidget);
+    expect(find.text('علينا — الخصوم'), findsOneWidget);
+    expect(find.text('حساب الزكاة'), findsNothing);
+    // The zakat is still stated — once, in the headline.
+    expect(find.text('4.25 د.ل'), findsOneWidget);
+  });
+
+  testWidgets('a detailed result says it is the detailed one', (tester) async {
+    await pump(tester, balanceSheetPayload(granularity: 'detailed'));
+
+    expect(find.text('تفصيلي'), findsOneWidget);
+    expect(find.text('حساب الزكاة'), findsOneWidget);
+  });
+
   group('the identified-stock reports', () {
     /// Any text on the page that is still a payload key.
     Iterable<String> untranslated(WidgetTester tester) {

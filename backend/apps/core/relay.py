@@ -6,6 +6,7 @@ import ssl
 import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone as datetime_timezone
+from decimal import Decimal, InvalidOperation
 from urllib import error, request
 from urllib.parse import quote, urljoin, urlparse
 
@@ -347,7 +348,8 @@ class RelayControlClient:
         )
 
     def get_sms_usage(self, *, access_token, timeout=None):
-        """This installation's SMS entitlement and this month's usage (no charge)."""
+        """This installation's SMS balance, the price of a message and this
+        month's sends (no charge)."""
         return self._request(
             "GET", "/v1/sms/usage/self", relay_token=access_token, timeout=timeout
         )
@@ -371,11 +373,16 @@ class RelayControlClient:
         """
         return self._request("GET", "/v1/wallet", relay_token=access_token, timeout=timeout)
 
-    def list_wallet_entries(self, *, access_token, limit=50, before="", kind="", timeout=None):
-        """The wallet statement, newest first; ``before`` is the last entry id seen."""
+    def list_wallet_entries(
+        self, *, access_token, limit=50, before="", kind="", account="", timeout=None
+    ):
+        """One account's statement (``main``, the default, or ``sms``), newest
+        first; ``before`` is the last entry id seen."""
         return self._request(
             "GET",
-            _wallet_path("/v1/wallet/entries", limit=limit, before=before, kind=kind),
+            _wallet_path(
+                "/v1/wallet/entries", limit=limit, before=before, kind=kind, account=account
+            ),
             relay_token=access_token,
             timeout=timeout,
         )
@@ -390,17 +397,78 @@ class RelayControlClient:
         )
 
     def create_wallet_topup(
-        self, *, access_token, amount, method, idempotency_key, requested_by="", timeout=None
+        self,
+        *,
+        access_token,
+        amount,
+        method,
+        idempotency_key,
+        requested_by="",
+        user_identifier="",
+        birth_year="",
+        timeout=None,
     ):
-        """Start a top-up: the relay records it and returns the gateway's checkout
-        page. The idempotency key makes a retry return the SAME checkout instead
-        of a second one. Nothing is credited until the payer comes back paid."""
+        """Start a top-up: the relay records it and asks the gateway to start the
+        payment. The answer says what the payer does next — type the code their
+        provider texted them, or pay on the gateway's page. The idempotency key
+        makes a retry return the SAME payment instead of a second one. Nothing
+        is credited until the gateway proves it paid."""
+        body = {
+            "amount": str(amount),
+            "method": method,
+            "idempotency_key": idempotency_key,
+            "requested_by": requested_by,
+        }
+        if user_identifier:
+            body["user_identifier"] = user_identifier
+        if birth_year:
+            body["birth_year"] = birth_year
+        return self._request(
+            "POST", "/v1/wallet/topups", body=body, relay_token=access_token, timeout=timeout
+        )
+
+    def get_wallet_topup(self, *, access_token, topup_id, timeout=None):
+        """One top-up — what the app polls while the payer pays. For a bank card
+        the relay reads the payment back from the gateway on the way."""
+        return self._request(
+            "GET",
+            f"/v1/wallet/topups/{quote(str(topup_id), safe='')}",
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def confirm_wallet_topup(self, *, access_token, topup_id, otp, timeout=None):
+        """Send the code the payer's provider texted them. The gateway's answer
+        to the relay is the proof of payment."""
         return self._request(
             "POST",
-            "/v1/wallet/topups",
+            f"/v1/wallet/topups/{quote(str(topup_id), safe='')}/confirm",
+            body={"otp": otp},
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def cancel_wallet_topup(self, *, access_token, topup_id, timeout=None):
+        """Call off a top-up waiting for its code (the owner backed out)."""
+        return self._request(
+            "POST",
+            f"/v1/wallet/topups/{quote(str(topup_id), safe='')}/cancel",
+            body={},
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def allocate_wallet_sms(
+        self, *, access_token, amount, idempotency_key, requested_by="", timeout=None
+    ):
+        """Move money from the main wallet into the SMS balance, which every
+        message is paid from. Both sides move in one step on the relay, and a
+        retried key returns the first transfer."""
+        return self._request(
+            "POST",
+            "/v1/wallet/sms/allocations",
             body={
                 "amount": str(amount),
-                "method": method,
                 "idempotency_key": idempotency_key,
                 "requested_by": requested_by,
             },
@@ -408,11 +476,21 @@ class RelayControlClient:
             timeout=timeout,
         )
 
-    def get_wallet_topup(self, *, access_token, topup_id, timeout=None):
-        """One top-up — what the app polls while the payer is on the checkout."""
+    def purchase_wallet_plan(
+        self, *, access_token, plan, periods, idempotency_key, requested_by="", timeout=None
+    ):
+        """Pay for ``periods`` periods of a plan (``remote_access`` or ``ai``)
+        from the main wallet. The relay charges it and moves the plan's
+        paid-through date in one step; a retried key returns the first purchase."""
         return self._request(
-            "GET",
-            f"/v1/wallet/topups/{quote(str(topup_id), safe='')}",
+            "POST",
+            "/v1/wallet/subscriptions",
+            body={
+                "plan": plan,
+                "periods": int(periods),
+                "idempotency_key": idempotency_key,
+                "requested_by": requested_by,
+            },
             relay_token=access_token,
             timeout=timeout,
         )
@@ -605,13 +683,23 @@ def relay_status_payload(installation):
             "ai_enabled": False,
             "sms_enabled": False,
             "subscription_ends_at": None,
+            "remote_access_paid_until": None,
+            "ai_paid_until": None,
+            "remote_access_until": None,
+            "ai_available": False,
+            "ai_until": None,
+            "sms_available": False,
+            "sms_balance": "0.000",
+            "sms_price": "0.000",
             "last_synced_at": None,
             "connector_last_seen_at": None,
             "connector_version": "",
         }
+    remote_access = plan_coverage(installation, "remote_access")
+    ai = plan_coverage(installation, "ai")
     return {
         "configured": True,
-        "remote_access_supported": installation.remote_access_supported,
+        "remote_access_supported": remote_access.active,
         "installation_id": installation.installation_id,
         "shop_name": installation.shop_name,
         "relay_public_api_url": installation.relay_public_api_url,
@@ -621,46 +709,113 @@ def relay_status_payload(installation):
         "ai_enabled": installation.ai_enabled,
         "sms_enabled": installation.sms_enabled,
         "subscription_ends_at": installation.subscription_ends_at,
+        "remote_access_paid_until": installation.remote_access_paid_until,
+        "ai_paid_until": installation.ai_paid_until,
+        # When each plan stops: null while it is not running, or runs with no
+        # end (the operator's subscription includes it).
+        "remote_access_until": remote_access.until,
+        "ai_available": ai.active,
+        "ai_until": ai.until,
+        "sms_available": relay_sms_available(installation),
+        "sms_balance": f"{installation.sms_balance:.3f}",
+        "sms_price": f"{installation.sms_price:.3f}",
         "last_synced_at": installation.last_synced_at,
         "connector_last_seen_at": installation.connector_last_seen_at,
         "connector_version": installation.connector_version,
     }
 
 
+@dataclass(frozen=True)
+class PlanCoverage:
+    """How long one plan's service runs for this shop."""
+
+    active: bool = False
+    # When it stops; None when it is not running, or runs with no end.
+    until: datetime | None = None
+    # The operator's subscription includes the plan with no end date.
+    indefinite: bool = False
+
+
+#: Each plan's feature flag on the operator's subscription, and the date the
+#: shop has paid it through from its wallet.
+_PLAN_FIELDS = {
+    "remote_access": ("relay_enabled", "remote_access_paid_until"),
+    "ai": ("ai_enabled", "ai_paid_until"),
+}
+
+
+def plan_coverage(installation, plan, *, now=None):
+    """Mirror of the relay's ``Installation.PlanCoverage``: a plan runs while the
+    operator's subscription includes it (its flag, active, unexpired) or while
+    the shop has paid for it from its wallet, whichever runs longer."""
+    if installation is None or plan not in _PLAN_FIELDS:
+        return PlanCoverage()
+    now = now or timezone.now()
+    flag_field, paid_field = _PLAN_FIELDS[plan]
+    coverage = PlanCoverage()
+    if getattr(installation, flag_field) and installation.subscription_active:
+        ends_at = installation.subscription_ends_at
+        if ends_at is None:
+            return PlanCoverage(active=True, indefinite=True)
+        if now < ends_at:
+            coverage = PlanCoverage(active=True, until=ends_at)
+    paid_until = getattr(installation, paid_field)
+    if paid_until is not None and now < paid_until and (
+        coverage.until is None or paid_until > coverage.until
+    ):
+        coverage = PlanCoverage(active=True, until=paid_until)
+    return coverage
+
+
 def relay_ai_available(installation=None):
     """Whether relay-hosted AI is currently usable for this shop.
 
-    Mirrors the relay's own gate: an active, unexpired subscription plus the AI
-    flag, independent of remote-access (relay_enabled). The frontend reads this
-    (via the ``me`` payload) to show or hide the AI assistant.
+    Mirrors the relay's own gate: the operator's subscription with the AI flag,
+    or the period the shop paid for from its wallet — independent of remote
+    access. The frontend reads this (via the ``me`` payload) to show or hide the
+    AI assistant.
     """
     if installation is None:
         installation = RelayInstallation.load()
-    if installation is None or not installation.ai_enabled:
-        return False
-    if not installation.subscription_active:
-        return False
-    if (
-        installation.subscription_ends_at is not None
-        and installation.subscription_ends_at <= timezone.now()
-    ):
-        return False
-    return True
+    return plan_coverage(installation, "ai").active
+
+
+def sms_prepaid(installation):
+    """Whether the relay sells SMS from the SMS balance (it reported a price —
+    of one SMS part). A relay from before the SMS balance reports none and
+    still gates on the flag."""
+    return installation is not None and installation.sms_price > 0
+
+
+def sms_affordable(installation, segments):
+    """Whether the mirrored SMS balance pays for a message of ``segments`` SMS
+    parts. The relay charges per part — an Arabic text past 70 letters goes out
+    as several — and holds them all before sending, so a balance that covers a
+    short message may not cover a long one. Always true against a relay that
+    does not sell by the part."""
+    if not sms_prepaid(installation):
+        return True
+    return installation.sms_balance >= installation.sms_price * max(int(segments or 1), 1)
 
 
 def relay_sms_available(installation=None):
-    """Whether this shop's subscription includes SMS right now.
+    """Whether this shop can send SMS right now.
 
-    Mirrors the relay's own gate (``Installation.SMSActive``): an active,
-    unexpired subscription plus the SMS flag, independent of remote access. The
-    relay remains the authority — this mirror only keeps a shop without SMS from
-    queueing messages that would all be refused.
+    SMS is prepaid: its SMS balance must pay for at least one more SMS part,
+    the relay's check at claim time for the shortest message (a longer one is
+    checked against its own parts when it is queued). Against a relay from
+    before the SMS balance it is the old entitlement — an active, unexpired
+    subscription plus the SMS flag. The relay remains the authority; this
+    mirror only keeps a shop that cannot send from queueing messages that would
+    all be refused.
     """
     if installation is None:
         installation = RelayInstallation.load()
-    if installation is None or not installation.sms_enabled:
+    if installation is None:
         return False
-    if not installation.subscription_active:
+    if sms_prepaid(installation):
+        return installation.sms_balance >= installation.sms_price
+    if not installation.sms_enabled or not installation.subscription_active:
         return False
     if (
         installation.subscription_ends_at is not None
@@ -668,6 +823,41 @@ def relay_sms_available(installation=None):
     ):
         return False
     return True
+
+
+def _relay_decimal(value):
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def mirror_sms_wallet(sms, *, installation=None):
+    """Copy an SMS balance the relay reported (``{balance, price, ...}``) onto
+    the shop's mirror, and make devices re-read ``sms_available`` when it
+    flipped. Anything unreadable is ignored: the next sync tries again."""
+    if not isinstance(sms, dict):
+        return None
+    balance = _relay_decimal(sms.get("balance"))
+    if balance is None:
+        return None
+    installation = installation or RelayInstallation.load()
+    if installation is None:
+        return None
+    price = _relay_decimal(sms.get("price"))
+    available_before = relay_sms_available(installation)
+    fields = []
+    if installation.sms_balance != balance:
+        installation.sms_balance = balance
+        fields.append("sms_balance")
+    if price is not None and installation.sms_price != price:
+        installation.sms_price = price
+        fields.append("sms_price")
+    if fields:
+        installation.save(update_fields=[*fields, "updated_at"])
+        if relay_sms_available(installation) != available_before:
+            caching.bump_perm_version()
+    return installation
 
 
 def parse_relay_datetime(value):
@@ -835,6 +1025,17 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     installation.subscription_ends_at = parse_relay_datetime(
         relay_installation.get("subscription_ends_at")
     )
+    installation.remote_access_paid_until = parse_relay_datetime(
+        relay_installation.get("remote_access_paid_until")
+    )
+    installation.ai_paid_until = parse_relay_datetime(relay_installation.get("ai_paid_until"))
+    sms_wallet = relay_installation.get("sms")
+    if isinstance(sms_wallet, dict):
+        balance = _relay_decimal(sms_wallet.get("balance"))
+        price = _relay_decimal(sms_wallet.get("price"))
+        if balance is not None and price is not None:
+            installation.sms_balance = balance
+            installation.sms_price = price
     switched_off = _switched_off_integrations(relay_installation)
     if switched_off is not None:
         installation.integrations_disabled = switched_off
@@ -854,6 +1055,10 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
             "sms_enabled",
             "integrations_disabled",
             "subscription_ends_at",
+            "remote_access_paid_until",
+            "ai_paid_until",
+            "sms_balance",
+            "sms_price",
             "relay_public_api_url",
             "relay_connector_address",
             "last_synced_at",
@@ -905,12 +1110,17 @@ def _apply_integration_switches(before, after):
 
 
 def _entitlement_snapshot(installation):
+    # Whether SMS can be sent, not the balance itself: the balance moves with
+    # every message, and only a flip is worth making every device re-read.
     return (
         installation.relay_enabled,
         installation.subscription_active,
         installation.ai_enabled,
         installation.sms_enabled,
         installation.subscription_ends_at,
+        installation.remote_access_paid_until,
+        installation.ai_paid_until,
+        relay_sms_available(installation),
     )
 
 

@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
+import '../../../data/models/messaging_gateway.dart';
 import '../../../data/models/payment_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/sale_order_page.dart';
@@ -11,6 +12,7 @@ import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/api_error_detail.dart';
 import '../../../data/services/payment_proof_printer.dart';
 
 class CustomerDetailsViewModel extends ChangeNotifier {
@@ -391,6 +393,25 @@ class CustomerDetailsViewModel extends ChangeNotifier {
   /// per-invoice flows do.
   Future<List<String>> loadTrustedCardTerminalIds() {
     return _shopSettingsRepository.loadTrustedCardTerminalIds();
+  }
+
+  /// Texts the customer what their account owes today. Null once it is on
+  /// its way; otherwise why not — the refusal's code and the server's words.
+  Future<({String code, String detail})?> sendBalanceSms() async {
+    final result = await _contactRepository.sendCustomerBalanceSms(
+      _customer.id,
+    );
+    switch (result) {
+      case Ok<MessagingSendResult>(value: final sent):
+        return sent.isFailure
+            ? (code: sent.errorCode, detail: sent.errorDetail)
+            : null;
+      case Error<MessagingSendResult>(exception: final exception):
+        return (
+          code: apiErrorCode(exception) ?? '',
+          detail: apiErrorDetail(exception),
+        );
+    }
   }
 
   /// Records a cash/card/transfer payment against the customer's account (the

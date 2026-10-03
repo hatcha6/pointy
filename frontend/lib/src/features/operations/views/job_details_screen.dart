@@ -22,6 +22,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../settings/views/messaging_presentation.dart';
 import '../view_models/job_details_view_model.dart';
 import 'job_decline_sheet.dart';
 import 'job_declined_callout.dart';
@@ -153,7 +154,22 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         widget.viewModel.canPrintIntakeDocuments &&
         isRepair &&
         (isOpen || job.awaitingHandBack);
+    // Waiting to be collected, with a customer to tell: the "ready" text by
+    // hand, again after the automatic one or at all when that is switched off.
+    final canTextReady =
+        isOpen &&
+        canWork &&
+        widget.capabilities.canSendSms &&
+        (job.currentStageDetails?.readyForPickup ?? false) &&
+        job.customerPhone.trim().isNotEmpty;
     return [
+      if (canTextReady) ...[
+        PopupMenuItem(
+          value: 'text_ready',
+          child: Text(l10n.jobTextReadyAction),
+        ),
+        const PopupMenuDivider(),
+      ],
       if (canPrint) ...[
         PopupMenuItem(
           value: 'print_ticket',
@@ -176,6 +192,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   Future<void> _onMenuAction(String action, OperationsJob job) async {
     switch (action) {
+      case 'text_ready':
+        await _textReady();
       case 'print_ticket':
         await _print(ticket: true);
       case 'print_label':
@@ -191,6 +209,29 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       case 'reopen':
         await _reopen();
     }
+  }
+
+  Future<void> _textReady() async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final failure = await widget.viewModel.sendReadySms();
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          failure == null
+              ? l10n.jobTextReadySent
+              : messagingFailureMessage(
+                  l10n,
+                  code: failure.code,
+                  detail: failure.detail,
+                  fallback: l10n.jobTextReadyError,
+                ),
+        ),
+      ),
+    );
   }
 
   Future<void> _print({required bool ticket}) async {

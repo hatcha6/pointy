@@ -1090,6 +1090,9 @@ class _AuthenticatedRoutes implements AppNavigation {
   }
 
   Widget shopSettingsRouteBuilder(BuildContext routeContext) {
+    // One wallet for both pages that spend it: the subscription page and the
+    // SMS page fill the same SMS balance, and each shows what the other did.
+    final wallet = WalletViewModel(dependencies.walletRepository);
     return _screen(
       'shop_settings',
       ShopSettingsScreen(
@@ -1146,13 +1149,14 @@ class _AuthenticatedRoutes implements AppNavigation {
         migrationViewModel: dependencies.migrationViewModel,
         subscriptionViewModel: SubscriptionStatusViewModel(
           dependencies.subscriptionRepository,
-          wallet: WalletViewModel(dependencies.walletRepository),
+          wallet: wallet,
         ),
         exchangeRatesViewModel: ExchangeRatesViewModel(
           dependencies.fxRepository,
         ),
         messagingViewModel: MessagingSettingsViewModel(
           dependencies.messagingRepository,
+          wallet: wallet,
         ),
         integrationsViewModel: IntegrationsViewModel(
           dependencies.integrationsRepository,

@@ -307,7 +307,8 @@ def transition_job(
     if any(stage.produces_output for stage in entered):
         receive_finished_goods(job, request=request)
         update_fields += ["output_unit_cost", "output_received_at"]
-    if any(stage.releases_custody for stage in entered) and job.handed_over_at is None:
+    handed_over = any(stage.releases_custody for stage in entered) and job.handed_over_at is None
+    if handed_over:
         job.handed_over_at = timezone.now()
         job.handed_over_to = handed_over_to
         update_fields += ["handed_over_at", "handed_over_to"]
@@ -334,13 +335,18 @@ def transition_job(
         from .refurbishment import capitalise
 
         capitalise(job)
-    JobStageEvent.objects.create(
+    stage_event = JobStageEvent.objects.create(
         job=job,
         from_stage=from_stage,
         to_stage=to_stage,
         changed_by=user,
         note=note,
     )
+    # Ready, a price to approve, handed back under warranty: the customer
+    # hears it (each text when the shop has it on), after the move commits.
+    from .customer_sms import notify_job_stage
+
+    notify_job_stage(job, to_stage=to_stage, entered=entered, event=stage_event, handed_over=handed_over)
     record_domain_event(
         name="operations.job.stage_changed",
         event_type=AnalyticsEvent.EventType.AUDIT,
@@ -670,6 +676,10 @@ def decline_job(*, job, reason, note="", fee=None, request=None):
         },
         metrics={"decline_fee": float(job.decline_fee or Decimal("0.00"))},
     )
+    # Closed unrepaired: the customer can come for their property.
+    from .customer_sms import notify_job_returned
+
+    notify_job_returned(job)
     return job
 
 

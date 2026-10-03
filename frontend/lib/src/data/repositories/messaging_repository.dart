@@ -23,6 +23,16 @@ class MessagingRepository {
     return Result.guard(() => _service.updateMessagingGateway(id, update));
   }
 
+  Future<Result<MessagingGateway>> setAutoMessage(
+    int id, {
+    required String kind,
+    required bool enabled,
+  }) {
+    return Result.guard(
+      () => _service.setMessagingAutoMessage(id, kind: kind, enabled: enabled),
+    );
+  }
+
   Future<Result<MessagingSendResult>> testSend({
     required int id,
     required String to,

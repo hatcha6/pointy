@@ -307,8 +307,8 @@ type HTTPServer struct {
 	// approved template ids live only here, and every shop's messages go out
 	// through it, gated by the sms_enabled entitlement and a monthly cap.
 	SMS SMSConfig
-	// Wallet (Plutu). The company's payment gateway account that shops top up
-	// their prepaid balance through; the credentials live only here.
+	// Wallet (Dafa). The company's payment gateway account that shops top up
+	// their prepaid balance through; the API key lives only here.
 	Wallet WalletConfig
 	// Relay-hosted AI (OpenRouter). The key and tier->model catalog live only
 	// here so AI billing and model routing stay company-controlled.
@@ -1380,11 +1380,13 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// The status read is what every shop's backend syncs from, so it also
-		// carries the fleet's switched-off integrations down to it.
-		writeJSON(w, http.StatusOK, s.withDisabledIntegrations(
-			r,
-			adminInstallationPayload(installation, s.clock().Now()),
-		))
+		// carries the fleet's switched-off integrations and the shop's SMS
+		// balance down to it.
+		payload := s.withDisabledIntegrations(r, adminInstallationPayload(installation, s.clock().Now()))
+		if balance := s.smsBalance(r.Context(), installation.ID); balance != "" {
+			payload["sms"] = s.smsWalletPayload(balance)
+		}
+		writeJSON(w, http.StatusOK, payload)
 		return
 	}
 	if len(parts) == 2 && parts[1] == "status" && r.Method == http.MethodGet {
@@ -2212,7 +2214,10 @@ func adminInstallationPayload(
 		"fx_enabled":                        installation.FXEnabled,
 		"sms_enabled":                       installation.SMSEnabled,
 		"sms_monthly_limit":                 installation.SMSMonthlyLimit,
+		"remote_access_paid_until":          installation.RemoteAccessPaidUntil,
+		"ai_paid_until":                     installation.AIPaidUntil,
 		"relay_active":                      installation.RelayActive(now),
+		"ai_active":                         installation.AIActive(now),
 		"created_at":                        installation.CreatedAt,
 		"updated_at":                        installation.UpdatedAt,
 		"last_connector_connected_at":       installation.LastConnectorConnectedAt,

@@ -4,16 +4,28 @@ import '../data/services/api_session.dart';
 
 /// Turns any thrown [error] into a user-safe, localized message.
 ///
-/// Backend [PosApiException]s already carry Arabic-localized messages, so those
-/// are shown as-is; a blank message or a 5xx response falls back to a localized
-/// generic. Use this instead of leaking `error.toString()` into the UI.
+/// Arabic text the error carries is shown as-is: the backend's own sentence
+/// when it wrote one in Arabic, else an Arabic [PosApiException.message].
+/// Anything else falls back to localized copy — a 5xx to the server message,
+/// the rest to the generic one. Use this instead of leaking `error.toString()`
+/// into the UI.
+///
+/// Only Arabic text is ever passed through. `throwApiException` fills
+/// [PosApiException.message] with a developer string ("… failed with status
+/// 400"), and the backend answers many refusals in English or with codes
+/// ("switched_off"). Showing those put English on Arabic screens — integration
+/// errors did exactly that.
 ///
 /// Device/transport errors (printer connection failures, etc.) are intentionally
 /// left to their callers, where the raw text is the useful diagnostic.
 String errorMessageFor(Object error, AppLocalizations l10n) {
   if (error is PosApiException) {
+    final detail = backendDetailFor(error);
+    if (detail != null && _isArabic(detail)) {
+      return detail;
+    }
     final message = error.message.trim();
-    if (message.isNotEmpty) {
+    if (_isArabic(message)) {
       return message;
     }
     if (error.statusCode >= 500) {
@@ -22,6 +34,10 @@ String errorMessageFor(Object error, AppLocalizations l10n) {
   }
   return l10n.errorUnexpectedMessage;
 }
+
+final _arabicLetter = RegExp('[\u0600-\u06FF]');
+
+bool _isArabic(String text) => _arabicLetter.hasMatch(text);
 
 /// The backend's own sentence for a failed call, when the response carries one.
 ///

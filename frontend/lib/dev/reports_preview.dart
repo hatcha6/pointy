@@ -10,6 +10,8 @@
 // Screens: board | reports | result
 // Reports: `?report=` any catalogue key — balance_sheet (default), unit_aging,
 //          unit_margin, unit_ledger, consignment_ledger
+// Levels:  `?level=summary` (default) | `detailed` — what `result` shows; the
+//          screen builds whichever level is picked on it.
 //
 // `?screen=board` lays the screen out at phone and desktop widths side by side
 // (size the viewport large — e.g. 1800x2600 — so Flutter paints both frames).
@@ -95,7 +97,11 @@ class _PreviewRouter extends StatelessWidget {
       'result' => Scaffold(
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: ReportResultView(run: _run(_selectedReport(), const {})),
+          child: ReportResultView(
+            run: _run(_selectedReport(), {
+              'granularity': _query('level') ?? 'summary',
+            }),
+          ),
         ),
       ),
       _ => const _ReportsHost(),
@@ -237,8 +243,25 @@ class _FakeReportRepository extends ReportRepository {
 }
 
 /// Every report the server offers today, in its own order, and one it might
-/// add tomorrow.
-const _serverCatalog = [
+/// add tomorrow — each with the levels the server builds it at and whether it
+/// can only state today, as `ReportDefinition` sends them.
+final _serverCatalog = [
+  for (final entry in _serverReports)
+    {
+      ...entry,
+      'granularities': [
+        'summary',
+        if (_dailyReports.contains(entry['key'])) 'daily',
+        'detailed',
+      ],
+      'states_today': _todayReports.contains(entry['key']),
+    },
+];
+
+const _dailyReports = {'sales_summary', 'payment_methods', 'sales_by_staff'};
+const _todayReports = {'reorder_items', 'unit_aging', 'unit_ledger'};
+
+const _serverReports = [
   {'key': 'sales_summary', 'category': 'sales'},
   {'key': 'payment_methods', 'category': 'payments'},
   {'key': 'register_closure', 'category': 'cash'},
@@ -290,7 +313,10 @@ ReportRun _run(ReportRunType type, Map<String, Object?> params, {int id = 1}) {
     params: params,
     outputFormat: ReportOutputFormat.pdf,
     status: ReportRunStatus.success,
-    payload: previewPayload(type),
+    payload: previewPayload(
+      type,
+      granularity: '${params['granularity'] ?? 'summary'}',
+    ),
     rowCount: 26,
     checksum: 'preview',
     figuresChecksum: 'preview',

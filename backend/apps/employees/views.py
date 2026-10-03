@@ -720,6 +720,9 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             payment_date=payment_date,
             request=request,
         )
+        from .staff_sms import notify_payroll_paid
+
+        notify_payroll_paid(payroll_run)
         return Response(self._serialized_run(payroll_run))
 
     @action(detail=True, methods=["post"])

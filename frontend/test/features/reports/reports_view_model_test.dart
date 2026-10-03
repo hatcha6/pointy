@@ -42,6 +42,72 @@ void main() {
     });
   });
 
+  group('the level of detail', () {
+    test('a report offers the levels its catalogue entry names', () async {
+      final viewModel = FakeReportRepository(
+        extraReports: _levelledReports,
+      ).viewModel();
+      await viewModel.load();
+
+      viewModel.selectType(ReportRunType.paymentMethods);
+      expect(viewModel.availableGranularities, [
+        'summary',
+        'daily',
+        'detailed',
+      ]);
+      viewModel.selectType(ReportRunType.balanceSheet);
+      expect(viewModel.availableGranularities, ['summary', 'detailed']);
+    });
+
+    test(
+      'daily on a report without a daily table builds the summary',
+      () async {
+        // The choice is kept, not overwritten: moving back to a report that has
+        // a day-by-day table asks for it again.
+        final viewModel = FakeReportRepository(
+          extraReports: _levelledReports,
+        ).viewModel();
+        await viewModel.load();
+        viewModel
+          ..selectType(ReportRunType.paymentMethods)
+          ..selectGranularity(ReportGranularityOption.daily)
+          ..selectType(ReportRunType.balanceSheet);
+
+        expect(viewModel.granularity, ReportGranularityOption.summary);
+        expect(viewModel.currentParams()['granularity'], 'summary');
+
+        viewModel.selectType(ReportRunType.paymentMethods);
+        expect(viewModel.currentParams()['granularity'], 'daily');
+      },
+    );
+
+    test('a server that predates the per-report list offers every level', () {
+      final entry = ReportCatalogEntry.fromJson({
+        'key': 'sales_summary',
+        'category': 'sales',
+      });
+      expect(entry.granularities, ReportGranularityOption.all);
+      expect(entry.statesToday, isFalse);
+    });
+
+    test('a report that can only state today asks for no comparison', () async {
+      final viewModel = FakeReportRepository(
+        extraReports: _levelledReports,
+      ).viewModel();
+      await viewModel.load();
+      viewModel
+        ..selectComparison(ReportComparisonOption.previousYear)
+        ..selectType(ReportRunType.reorderItems);
+
+      expect(viewModel.offersComparison, isFalse);
+      expect(viewModel.currentParams()['comparison'], 'none');
+
+      viewModel.selectType(ReportRunType.paymentMethods);
+      expect(viewModel.offersComparison, isTrue);
+      expect(viewModel.currentParams()['comparison'], 'previous_year');
+    });
+  });
+
   group('building once', () {
     test('an unchanged selection reuses the run it already has', () async {
       final repository = FakeReportRepository();
@@ -254,4 +320,26 @@ const _identifiedReports = [
     'point_in_time': true,
   },
   {'key': 'consignment_ledger', 'category': 'inventory'},
+];
+
+/// Reports as a current server lists them: the levels each can be built at,
+/// and whether it can only state today.
+const _levelledReports = [
+  {
+    'key': 'payment_methods',
+    'category': 'payments',
+    'granularities': ['summary', 'daily', 'detailed'],
+  },
+  {
+    'key': 'balance_sheet',
+    'category': 'close',
+    'granularities': ['summary', 'detailed'],
+  },
+  {
+    'key': 'reorder_items',
+    'category': 'inventory',
+    'point_in_time': true,
+    'granularities': ['summary', 'detailed'],
+    'states_today': true,
+  },
 ];

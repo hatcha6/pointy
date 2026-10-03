@@ -10,6 +10,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../settings/views/wallet_presentation.dart';
 import '../view_models/campaigns_view_model.dart';
 
 /// Curated RFM targeting options offered as chips (slug + Arabic label).
@@ -481,12 +482,33 @@ class _CampaignEditorScreenState extends State<CampaignEditorScreen> {
                   label: l10n.campaignPreviewSegments,
                   value: '${preview.segments}',
                 ),
+                if (preview.estimatedCost case final cost?)
+                  PointySummaryRow(
+                    label: l10n.campaignPreviewCostLabel,
+                    value: l10n.campaignPreviewCost(formatWalletMoney(cost)),
+                    valueColor: preview.balanceFallsShort
+                        ? context.pointyColors.warning
+                        : null,
+                  ),
                 PointySummaryRow(
                   label: l10n.campaignPreviewDurationLabel,
                   value: l10n.campaignPreviewDuration(preview.estimatedMinutes),
                 ),
               ],
             ),
+            if (preview.balanceFallsShort) ...[
+              SizedBox(height: spacing.sm),
+              PointyDetailCallout(
+                key: const ValueKey('campaign_balance_short'),
+                icon: Icons.account_balance_wallet_outlined,
+                tone: PointyCalloutTone.warning,
+                title: l10n.campaignPreviewBalanceShortTitle,
+                message: l10n.campaignPreviewBalanceShortMessage(
+                  formatWalletMoney(preview.smsBalance ?? 0),
+                  formatWalletMoney(preview.estimatedCost ?? 0),
+                ),
+              ),
+            ],
             SizedBox(height: spacing.sm),
             PointyDetailCallout(
               icon: Icons.sms_outlined,

@@ -3,10 +3,95 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/clock_time.dart';
 import '../../../data/models/messaging_status.dart';
+import '../../../data/models/wallet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
+import 'wallet_presentation.dart';
+
+/// The SMS balance on the SMS page: what it holds, how many messages that
+/// pays for, what one costs, how many went out this month — and the transfer
+/// that fills it from the wallet. The company's monthly brake, when it set one
+/// for this shop, shows under it as the usual meter.
+class MessagingBalanceSection extends StatelessWidget {
+  const MessagingBalanceSection({
+    super.key,
+    required this.smsWallet,
+    this.usage,
+    this.onAllocate,
+  });
+
+  final SmsWallet smsWallet;
+  final MessagingUsage? usage;
+
+  /// Opens the transfer from the wallet; null where there is no wallet to
+  /// move money from (the button is then left out).
+  final VoidCallback? onAllocate;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final usage = this.usage;
+    final empty = !smsWallet.canSend;
+
+    return PointyDetailSection(
+      icon: Icons.account_balance_wallet_outlined,
+      title: l10n.messagingBalanceTitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            formatWalletMoney(smsWallet.balance),
+            style: PointyTypography.numeric(
+              (textTheme.headlineMedium ?? const TextStyle()).copyWith(
+                fontWeight: FontWeight.w800,
+                color: empty ? colors.warning : colors.ink,
+              ),
+            ),
+          ),
+          SizedBox(height: spacing.xs),
+          Text(
+            smsWalletSummary(smsWallet, l10n),
+            style: textTheme.bodyMedium?.copyWith(
+              color: smsWallet.owed > 0 ? colors.warning : colors.mutedInk,
+            ),
+          ),
+          Text(
+            l10n.walletSmsLengthNote,
+            style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+          if (usage != null) ...[
+            SizedBox(height: spacing.xs),
+            Text(
+              l10n.messagingBalanceSentThisMonth(usage.used),
+              style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+            ),
+            if (!usage.isUnlimited) ...[
+              SizedBox(height: spacing.md),
+              MessagingUsageMeter(usage: usage),
+            ],
+          ],
+          if (onAllocate != null) ...[
+            SizedBox(height: spacing.md),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('messaging_allocate'),
+                onPressed: onAllocate,
+                icon: const Icon(Icons.swap_horiz),
+                label: Text(l10n.walletSmsAllocateButton),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 /// This month's sends against the cap: used / limit, a bar that warns as it
 /// fills, what is left and when it resets. An unlimited plan shows the count
@@ -189,119 +274,6 @@ class MessagingQuietHoursField extends StatelessWidget {
             color: hasIssue ? colors.danger : colors.mutedInk,
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// Every text Daftar sends a customer, as the shop's customers will read it:
-/// what each is for, and an example with the shop's own name in it. Tells the
-/// shop exactly what goes out under its name — and which kinds the provider
-/// has not approved yet.
-class MessagingTemplatesSection extends StatelessWidget {
-  const MessagingTemplatesSection({super.key, required this.templates});
-
-  final List<MessagingTemplateInfo> templates;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
-    final spacing = AdaptiveSpacing.of(context);
-
-    return PointyDetailSection(
-      icon: Icons.chat_outlined,
-      title: l10n.messagingTemplatesTitle,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.messagingTemplatesIntro,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
-          ),
-          for (final template in templates) ...[
-            Divider(height: spacing.lg),
-            _TemplateTile(template: template),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _TemplateTile extends StatelessWidget {
-  const _TemplateTile({required this.template});
-
-  final MessagingTemplateInfo template;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
-    final spacing = AdaptiveSpacing.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final sample = template.example.trim().isNotEmpty
-        ? template.example.trim()
-        : template.text.trim();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: spacing.xs,
-          runSpacing: spacing.xs,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              template.title,
-              style: textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (template.isMarketing)
-              PointyStatusPill(
-                label: l10n.messagingTemplateMarketingBadge,
-                icon: Icons.campaign_outlined,
-                color: colors.primaryStrong,
-              ),
-            if (template.configured == false)
-              PointyStatusPill(
-                label: l10n.messagingTemplateNotConfigured,
-                icon: Icons.hourglass_empty,
-                color: colors.warning,
-              ),
-          ],
-        ),
-        if (template.description.trim().isNotEmpty) ...[
-          SizedBox(height: spacing.xs / 2),
-          Text(
-            template.description.trim(),
-            style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
-          ),
-        ],
-        if (sample.isNotEmpty) ...[
-          SizedBox(height: spacing.xs),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.surfaceSunken,
-              borderRadius: BorderRadius.circular(PointyRadii.chip),
-              border: Border.all(color: colors.line),
-            ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: spacing.md,
-                vertical: spacing.sm,
-              ),
-              child: Text(
-                sample,
-                textDirection: TextDirection.rtl,
-                style: textTheme.bodyMedium?.copyWith(color: colors.ink),
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }

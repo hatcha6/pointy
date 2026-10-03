@@ -99,9 +99,15 @@ class ClosingStockTests(TestCase):
     # -- the report ---------------------------------------------------------
 
     def _report(self, start, end):
+        # Detailed: the schedule and the reconciliation are the detail a
+        # summary leaves out.
         return generate_report_payload(
             report_type=ReportRun.ReportType.INVENTORY_STATUS,
-            params={"start_date": start.isoformat(), "end_date": end.isoformat()},
+            params={
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "granularity": "detailed",
+            },
             user=self.manager,
         )
 

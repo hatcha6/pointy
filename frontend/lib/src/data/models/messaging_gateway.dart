@@ -32,6 +32,7 @@ class MessagingGateway {
     this.lastError = '',
     this.lastErrorAt,
     this.lastSeenAt,
+    this.autoMessages = const {},
   });
 
   final int id;
@@ -62,6 +63,9 @@ class MessagingGateway {
   /// Last send the relay accepted. Null means nothing has gone out yet.
   final DateTime? lastSeenAt;
 
+  /// Which texts go out by themselves, by template kind.
+  final Map<String, bool> autoMessages;
+
   factory MessagingGateway.fromJson(Map<String, Object?> json) {
     return MessagingGateway(
       id: _int(json['id']),
@@ -77,6 +81,7 @@ class MessagingGateway {
       lastError: json['last_error']?.toString() ?? '',
       lastErrorAt: _dateOrNull(json['last_error_at']),
       lastSeenAt: _dateOrNull(json['last_seen_at']),
+      autoMessages: _autoMessages(json['auto_messages']),
     );
   }
 
@@ -101,6 +106,14 @@ class MessagingGateway {
 }
 
 final _lastErrorPattern = RegExp(r'^([a-z][a-z_]*):\s*(.*)$', dotAll: true);
+
+Map<String, bool> _autoMessages(Object? value) {
+  if (value is! Map) return const {};
+  return {
+    for (final entry in value.entries)
+      if (entry.value is bool) entry.key.toString(): entry.value as bool,
+  };
+}
 
 /// The editable half of a gateway, as `PATCH /api/messaging/gateways/{id}/`
 /// takes it. Everything else — provider, name, the error fields — is the
