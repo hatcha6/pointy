@@ -15047,6 +15047,18 @@ abstract class AppLocalizations {
   /// **'تمت إضافة {productName}'**
   String barcodeScanAdded(String productName);
 
+  /// Status shown when a scanned IMEI/serial is already on the current invoice, so it is not added twice.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName} موجود في الفاتورة بالفعل'**
+  String barcodeScanAlreadyInCart(String productName);
+
+  /// Status shown when a scanned serialized unit exists but cannot be sold from this till (reserved, in transit, another branch, stopped lot). The reason is shown on the line below.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن بيع {productName} من هذه النقطة'**
+  String barcodeScanUnitUnavailable(String productName);
+
   /// Status shown when a barcode scan does not match a product.
   ///
   /// In ar, this message translates to:

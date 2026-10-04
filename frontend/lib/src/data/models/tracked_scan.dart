@@ -17,6 +17,7 @@ class TrackedScan {
     this.batch,
     this.expiryDate,
     this.warnings = const [],
+    this.sellable = true,
   });
 
   final String kind;
@@ -30,6 +31,13 @@ class TrackedScan {
   /// GTIN nobody has registered. Shown, never swallowed — each one is a
   /// sentence somebody holding the box can act on.
   final List<TrackedScanWarning> warnings;
+
+  /// Whether this till may ring the article up as it stands. False for a
+  /// handset held by a quotation, on the road, in another branch or in a
+  /// stopped lot; the `stock_unit_unavailable` warning says which, in Arabic.
+  /// An older server sends nothing, which reads as sellable — checkout still
+  /// refuses what it must.
+  final bool sellable;
 
   bool get found => kind != TrackedScanKind.none;
 
@@ -59,6 +67,7 @@ class TrackedScan {
           ? StockBatch.fromJson(batchJson)
           : null,
       expiryDate: _dateOrNull(json['expiry_date']),
+      sellable: json['sellable'] != false,
       warnings: warningsJson is List<Object?>
           ? warningsJson
                 .whereType<Map<String, Object?>>()

@@ -11,6 +11,8 @@ import 'package:pointy_frontend/src/core/storage/app_key_value_store.dart';
 import 'package:pointy_frontend/src/core/storage/local_database.dart';
 import 'package:pointy_frontend/src/core/storage/sqlite_key_value_store.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/stock_unit.dart';
+import 'package:pointy_frontend/src/data/models/tracked_scan.dart';
 import 'package:pointy_frontend/src/data/models/analytics_event.dart';
 import 'package:pointy_frontend/src/data/models/cart_line.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
@@ -1070,6 +1072,121 @@ void main() {
       // Taken once: a rebuilt listener must not open the picker twice.
       expect(viewModel.unitPickRequests.take(), isNull);
       expect(viewModel.barcodeScanStatus, BarcodeScanStatus.found);
+    });
+
+    group('scanning a handset\'s own IMEI', () {
+      const imei = '351234567890116';
+      final handset = TrackedScan(
+        kind: TrackedScanKind.stockUnit,
+        variant: _phoneVariant,
+        unit: StockUnit(id: 900, variantId: 170, code: imei, listPrice: 1650),
+      );
+
+      PosViewModel trackedViewModel(
+        Map<String, TrackedScan> scans, {
+        void Function(ScanFeedback)? scanFeedback,
+      }) {
+        final apiService = _FakePosApiService(
+          catalogPages: const {
+            1: [_phoneVariant],
+          },
+          trackedScans: scans,
+        );
+        return PosViewModel(
+          CatalogRepository(apiService),
+          RegisterSessionRepository(apiService),
+          SaleRepository(apiService),
+          ShopSettingsRepository(apiService),
+          PrintingRepository(
+            apiService,
+            serialTransport: const _NoopPrintTransport(),
+            bluetoothTransport: const _NoopPrintTransport(),
+            wifiTransport: const _NoopPrintTransport(),
+            fakeTransport: const _NoopPrintTransport(),
+          ),
+          trackedStockRepository: TrackedStockRepository(apiService),
+          sessionStorage: MemoryScopedJsonStorage(),
+          scanFeedback: scanFeedback,
+        );
+      }
+
+      test('rings that handset up straight away, at its own price', () async {
+        final viewModel = trackedViewModel({imei: handset});
+        addTearDown(viewModel.dispose);
+
+        expect(await viewModel.addVariantByBarcode(imei), isTrue);
+
+        expect(viewModel.cart, hasLength(1));
+        final line = viewModel.cart.single;
+        expect(line.stockUnitId, 900);
+        expect(line.stockUnitCode, imei);
+        expect(line.quantity, 1);
+        expect(line.unitPriceOverride, 1650);
+        expect(viewModel.barcodeScanStatus, BarcodeScanStatus.found);
+      });
+
+      test('scanned twice, it is still one handset on one line', () async {
+        final feedback = <ScanFeedback>[];
+        final viewModel = trackedViewModel({
+          imei: handset,
+        }, scanFeedback: feedback.add);
+        addTearDown(viewModel.dispose);
+
+        expect(await viewModel.addVariantByBarcode(imei), isTrue);
+        expect(await viewModel.addVariantByBarcode(imei), isTrue);
+
+        // Two lines naming one IMEI would be refused at checkout as a whole.
+        expect(viewModel.cart, hasLength(1));
+        expect(viewModel.barcodeScanStatus, BarcodeScanStatus.alreadyInCart);
+        expect(viewModel.activeCartLine?.stockUnitId, 900);
+        expect(feedback, [ScanFeedback.success, ScanFeedback.notFound]);
+      });
+
+      test('one this till cannot sell is named, not added', () async {
+        const reason = 'الجهاز 351234567890116 محجوز لعرض سعر.';
+        final viewModel = trackedViewModel({
+          imei: TrackedScan(
+            kind: TrackedScanKind.stockUnit,
+            variant: _phoneVariant,
+            unit: const StockUnit(id: 900, variantId: 170, code: imei),
+            sellable: false,
+            warnings: const [
+              TrackedScanWarning(
+                code: 'stock_unit_unavailable',
+                message: reason,
+              ),
+            ],
+          ),
+        });
+        addTearDown(viewModel.dispose);
+
+        await viewModel.addVariantByBarcode(imei);
+
+        expect(viewModel.cart, isEmpty);
+        expect(viewModel.barcodeScanStatus, BarcodeScanStatus.unavailable);
+        expect(viewModel.trackedScanWarnings.single.message, reason);
+      });
+
+      test(
+        'a handset already sold says so instead of unknown barcode',
+        () async {
+          const sold = 'الجهاز 351234567890116 مُباع بالفعل (فاتورة 42).';
+          final viewModel = trackedViewModel({
+            imei: const TrackedScan(
+              warnings: [
+                TrackedScanWarning(code: 'stock_unit_sold', message: sold),
+              ],
+            ),
+          });
+          addTearDown(viewModel.dispose);
+
+          expect(await viewModel.addVariantByBarcode(imei), isFalse);
+
+          expect(viewModel.cart, isEmpty);
+          expect(viewModel.barcodeScanStatus, BarcodeScanStatus.notFound);
+          expect(viewModel.trackedScanWarnings.single.message, sold);
+        },
+      );
     });
 
     test('barcode scans chime by outcome: success then not-found', () async {
@@ -2498,6 +2615,7 @@ class _FakePosApiService extends PosApiService {
     this.shopSettings,
     this.scaleRules = const [],
     this.unitsOfMeasure,
+    this.trackedScans = const {},
   }) : super(
          client: MockClient((_) async => http.Response('{}', 500)),
          baseUrl: 'http://pointy.test/api',
@@ -2506,6 +2624,16 @@ class _FakePosApiService extends PosApiService {
   /// Overrides the settings returned by [fetchShopSettings] (defaults to
   /// [_settings]); lets a test flip flags like `autoPrintReceipts`.
   final ShopSettings? shopSettings;
+
+  /// What the server makes of a scan the catalog missed, by code. Empty by
+  /// default: every other test's unknown code stays a plain miss.
+  final Map<String, TrackedScan> trackedScans;
+
+  @override
+  Future<TrackedScan> resolveTrackedScan(
+    String code, {
+    bool activeOnly = true,
+  }) async => trackedScans[code] ?? const TrackedScan();
 
   /// The scale label layouts this shop has configured. Empty by default, so
   /// every other test in this file scans plain barcodes exactly as before.

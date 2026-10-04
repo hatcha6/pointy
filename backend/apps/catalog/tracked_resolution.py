@@ -39,6 +39,12 @@ class TrackedResolution:
     expiry_date: object = None
     scan: object = None
     warnings: list = field(default_factory=list)
+    #: Whether the till asking may ring this up as it stands. False for an
+    #: article that is live but not *here and free*: held by a quotation, on
+    #: the road, in another branch, or in a stopped lot. The reason is the
+    #: ``stock_unit_unavailable`` warning, in Arabic, so the cashier is told at
+    #: the scan rather than by a refused checkout three lines later.
+    sellable: bool = True
 
     @property
     def found(self) -> bool:
@@ -53,11 +59,108 @@ def resolve(code, *, warehouse_id=None, active_only=True) -> TrackedResolution:
     then a lot barcode. A code that is none of those comes back ``KIND_NONE``
     and the caller falls through to its ordinary barcode handling — which is
     what keeps this whole path invisible to a shop that sells Coca-Cola.
+
+    ``warehouse_id`` is where the asking till sells from. An article found
+    anywhere else, or not free to sell, still resolves — the cashier is
+    holding it and deserves to be told what it is — but ``sellable`` is false
+    and a warning says why. A code that names only an article already sold is
+    still a miss, with a warning naming the sale, rather than "unknown
+    barcode" for a handset the shop itself sold.
     """
     text = str(code or "").strip()
     if not text:
         return TrackedResolution()
+    resolution = _resolve(text, active_only=active_only)
+    if resolution.stock_unit is not None:
+        reason = unit_unavailable_reason(
+            resolution.stock_unit, warehouse_id=warehouse_id
+        )
+        if reason:
+            resolution.sellable = False
+            resolution.warnings.append(
+                {"code": "stock_unit_unavailable", "message": reason}
+            )
+    elif not resolution.found and resolution.scan is None:
+        sold = _sold_unit_warning(text)
+        if sold is not None:
+            resolution.warnings.append(sold)
+    return resolution
 
+
+def unit_unavailable_reason(unit, *, warehouse_id=None):
+    """Why this live article cannot be rung up at this till, or ``""``.
+
+    The same refusals checkout makes (``tracking._refuse_unsellable_units`` and
+    ``_refuse_unsellable_lots``), said at the scan. Checkout still makes them —
+    this only moves the news to where the cashier is looking.
+    """
+    from django.utils import timezone
+
+    from apps.inventory.models import StockUnit
+
+    code = unit.code
+    if unit.status == StockUnit.Status.RESERVED:
+        return f"الجهاز {code} محجوز لعرض سعر — حوّل العرض إلى فاتورة لبيعه."
+    if unit.status == StockUnit.Status.IN_TRANSIT:
+        return f"الجهاز {code} في طريقه بين المستودعات ولم يُستلم بعد."
+    if unit.status != StockUnit.Status.IN_STOCK:
+        return f"الجهاز {code} لم يُستلم في المخزون بعد."
+    if warehouse_id is not None and unit.warehouse_id != warehouse_id:
+        name = getattr(unit.warehouse, "name", "") if unit.warehouse_id else ""
+        where = f" ({name})" if name else ""
+        return f"الجهاز {code} موجود في مستودع آخر{where} — انقله أولًا لبيعه هنا."
+    if not unit.is_identified:
+        return f"الجهاز {code} لم يُسجَّل معرّفه بعد."
+    batch = unit.batch
+    if batch is not None:
+        if not batch.is_sellable:
+            return f"الدفعة {batch.code} محجورة — لا يمكن بيع هذا الجهاز."
+        if (
+            batch.expiry_date is not None
+            and batch.expiry_date < timezone.localdate()
+            and unit.variant.product.prevent_selling_expired
+        ):
+            return f"الدفعة {batch.code} منتهية الصلاحية — لا يمكن بيع هذا الجهاز."
+    return ""
+
+
+def _sold_unit_warning(text):
+    """A warning naming the sale, when the code is an article the shop sold."""
+    from apps.inventory.models import StockUnit
+    from apps.inventory.tracking import historical_units
+
+    for unit in historical_units(text, limit=1):
+        if unit.status != StockUnit.Status.SOLD:
+            return None
+        order = getattr(unit.sold_order_line, "order", None)
+        number = getattr(order, "receipt_number", "") or ""
+        on = _local_date(unit.sold_at)
+        detail = " — ".join(
+            part
+            for part in (
+                f"فاتورة {number}" if number else "",
+                on,
+            )
+            if part
+        )
+        suffix = f" ({detail})" if detail else ""
+        return {
+            "code": "stock_unit_sold",
+            "message": f"الجهاز {unit.code} مُباع بالفعل{suffix}.",
+        }
+    return None
+
+
+def _local_date(value):
+    if value is None:
+        return ""
+    from django.utils import timezone
+
+    return timezone.localtime(value).date().isoformat()
+
+
+def _resolve(text, *, active_only=True) -> TrackedResolution:
+    """What the code names, before asking whether this till may sell it."""
     if gs1.looks_like_gs1(text):
         return _resolve_gs1(text, active_only=active_only)
 
@@ -202,7 +305,7 @@ def _find_unit(code, *, variant=None):
     # needs next and would otherwise be two more queries at the till.
     return (
         type(unit)
-        .objects.select_related("variant", "variant__product", "batch")
+        .objects.select_related("variant", "variant__product", "batch", "warehouse")
         .get(pk=unit.pk)
     )
 

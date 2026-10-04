@@ -1410,5 +1410,13 @@ class ResolveBarcodeView(APIView):
             "false",
             "False",
         )
-        resolution = resolve_tracked_scan(code, active_only=active_only)
+        from apps.sales.registers import selling_warehouse_id
+
+        resolution = resolve_tracked_scan(
+            code,
+            # Where this till sells from, so a handset on another branch's
+            # shelf is named as such at the scan instead of at checkout.
+            warehouse_id=selling_warehouse_id(request),
+            active_only=active_only,
+        )
         return Response(serialize_tracked_resolution(resolution, request=request))

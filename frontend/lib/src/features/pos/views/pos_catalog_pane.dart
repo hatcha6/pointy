@@ -652,12 +652,21 @@ class _BarcodeScanStatusLine extends StatelessWidget {
         viewModel.lastScannedBarcode ?? '',
       ),
       BarcodeScanStatus.error => l10n.barcodeScanError,
+      BarcodeScanStatus.alreadyInCart => l10n.barcodeScanAlreadyInCart(
+        viewModel.lastScannedProductName ?? '',
+      ),
+      BarcodeScanStatus.unavailable => l10n.barcodeScanUnitUnavailable(
+        viewModel.lastScannedProductName ?? '',
+      ),
       BarcodeScanStatus.idle => '',
     };
     final color = switch (status) {
       BarcodeScanStatus.found =>
         scaleWarning == null ? colors.primaryStrong : colors.warning,
-      BarcodeScanStatus.notFound || BarcodeScanStatus.error => colors.danger,
+      BarcodeScanStatus.alreadyInCart => colors.warning,
+      BarcodeScanStatus.notFound ||
+      BarcodeScanStatus.error ||
+      BarcodeScanStatus.unavailable => colors.danger,
       BarcodeScanStatus.resolving || BarcodeScanStatus.idle => colors.mutedInk,
     };
 

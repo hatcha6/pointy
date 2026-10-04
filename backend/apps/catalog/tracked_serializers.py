@@ -19,6 +19,9 @@ def serialize_tracked_resolution(resolution, *, request=None) -> dict:
     payload = {
         "kind": resolution.kind,
         "found": resolution.found,
+        # False when the article is live but cannot be rung up at this till;
+        # the ``stock_unit_unavailable`` warning says why.
+        "sellable": resolution.sellable,
         "warnings": list(resolution.warnings),
         "variant": _variant(resolution.variant),
         "stock_unit": _unit(resolution.stock_unit, request=request),

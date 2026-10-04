@@ -5243,6 +5243,24 @@
       }
     }
   },
+  "barcodeScanAlreadyInCart": "{productName} موجود في الفاتورة بالفعل",
+  "@barcodeScanAlreadyInCart": {
+    "description": "Status shown when a scanned IMEI/serial is already on the current invoice, so it is not added twice.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "barcodeScanUnitUnavailable": "لا يمكن بيع {productName} من هذه النقطة",
+  "@barcodeScanUnitUnavailable": {
+    "description": "Status shown when a scanned serialized unit exists but cannot be sold from this till (reserved, in transit, another branch, stopped lot). The reason is shown on the line below.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
   "barcodeScanNotFound": "لم يتم العثور على منتج للباركود {barcode}",
   "@barcodeScanNotFound": {
     "description": "Status shown when a barcode scan does not match a product.",

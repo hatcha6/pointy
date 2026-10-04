@@ -167,12 +167,16 @@ extension PosBarcodeActions on PosViewModel {
     // One chime per scan outcome, mirroring the status line the cashier sees.
     _scanFeedback?.call(switch (_barcodeScanStatus) {
       BarcodeScanStatus.found => ScanFeedback.success,
-      BarcodeScanStatus.notFound => ScanFeedback.notFound,
+      BarcodeScanStatus.notFound ||
+      BarcodeScanStatus.alreadyInCart => ScanFeedback.notFound,
       _ => ScanFeedback.error,
     });
 
     _notifyChanged();
-    return _barcodeScanStatus == BarcodeScanStatus.found;
+    // The handset is already on the invoice: the scan was understood, so the
+    // lookup box clears exactly as it does after an add.
+    return _barcodeScanStatus == BarcodeScanStatus.found ||
+        _barcodeScanStatus == BarcodeScanStatus.alreadyInCart;
   }
 
   /// Ring up what the server made of a scan the catalog could not place.
@@ -200,6 +204,30 @@ extension PosBarcodeActions on PosViewModel {
     if (variant == null) {
       return false;
     }
+    final label = _trackedScanLabel(scan, variant.displayLabel);
+    final scannedUnit = scan.unit;
+    if (scannedUnit != null) {
+      // The same IMEI scanned twice is the same handset, not a second one:
+      // two lines naming it would be refused at checkout as a whole sale.
+      final existing = _cart.indexWhere(
+        (line) => line.stockUnitId == scannedUnit.id,
+      );
+      if (existing != -1) {
+        _activeCartLineKey = _cart[existing].lineKey;
+        _lastScannedProductName = label;
+        _trackedScanWarnings = const [];
+        _barcodeScanStatus = BarcodeScanStatus.alreadyInCart;
+        return true;
+      }
+    }
+    if (!scan.sellable) {
+      // Named at the scan rather than refused at checkout: the warning line
+      // says why (a quotation holds it, another branch has it, its lot is
+      // stopped).
+      _lastScannedProductName = label;
+      _barcodeScanStatus = BarcodeScanStatus.unavailable;
+      return true;
+    }
     if (scan.batch != null && !scan.batch!.isSellable) {
       _barcodeScanStatus = BarcodeScanStatus.notFound;
       _lastScannedProductName = variant.displayLabel;
@@ -214,7 +242,7 @@ extension PosBarcodeActions on PosViewModel {
       stockBatch: scan.batch,
     );
     _activeCartLineKey = _cart.isEmpty ? null : _cart.last.lineKey;
-    _lastScannedProductName = _trackedScanLabel(scan, variant.displayLabel);
+    _lastScannedProductName = label;
     _barcodeScanStatus = BarcodeScanStatus.found;
     unawaited(refreshDiscountPreview());
     return true;

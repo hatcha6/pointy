@@ -67,7 +67,22 @@ enum RegisterSessionGateStatus {
   active,
 }
 
-enum BarcodeScanStatus { idle, resolving, found, notFound, error }
+enum BarcodeScanStatus {
+  idle,
+  resolving,
+  found,
+  notFound,
+  error,
+
+  /// An identified article scanned again: the line that already holds it is
+  /// made active instead of adding the same handset twice.
+  alreadyInCart,
+
+  /// An identified article this till cannot sell as it stands — held by a
+  /// quotation, on the road, in another branch, in a stopped lot. Named, not
+  /// added; the scan warning says why.
+  unavailable,
+}
 
 /// Lets the POS view model ask the catalog search field to reclaim keyboard
 /// focus at natural resting points in the cashier's flow — a completed sale, a

@@ -8623,6 +8623,16 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String barcodeScanAlreadyInCart(String productName) {
+    return '$productName موجود في الفاتورة بالفعل';
+  }
+
+  @override
+  String barcodeScanUnitUnavailable(String productName) {
+    return 'لا يمكن بيع $productName من هذه النقطة';
+  }
+
+  @override
   String barcodeScanNotFound(String barcode) {
     return 'لم يتم العثور على منتج للباركود $barcode';
   }

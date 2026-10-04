@@ -97,6 +97,102 @@ class SerialResolutionTests(TestCase):
         )
 
 
+class ScanAvailabilityTests(TestCase):
+    """The till is told at the scan whether it may ring the handset up.
+
+    Before, any live unit resolved and was added to the invoice; one held by a
+    quotation or sitting in another branch was then refused at checkout, three
+    lines and a customer's patience later. And a handset the shop had already
+    sold read as "unknown barcode".
+    """
+
+    def setUp(self):
+        self.product = tracked_product(
+            name="Galaxy S23",
+            sku="RES-S23",
+            mode=Product.TrackingMode.SERIAL,
+            unit_price="2000.00",
+        )
+        self.variant = self.product.default_variant
+        receive(
+            variant=self.variant,
+            quantity=1,
+            unit_cost="1500.00",
+            units=[{"code": IMEI}],
+        )
+        self.unit = StockUnit.objects.get()
+        self.client = _client("catalog.view_productvariant")
+
+    def _warning(self, response, code):
+        return next(
+            (w for w in response.data["warnings"] if w["code"] == code), None
+        )
+
+    def test_a_handset_on_this_shelf_is_sellable_and_says_nothing(self):
+        response = _resolve(self.client, IMEI)
+
+        self.assertTrue(response.data["sellable"])
+        self.assertEqual(response.data["warnings"], [])
+
+    def test_a_handset_held_by_a_quotation_resolves_but_is_not_sellable(self):
+        from apps.inventory import tracking
+
+        tracking.transition_unit(self.unit, StockUnit.Status.RESERVED)
+
+        response = _resolve(self.client, IMEI)
+
+        self.assertEqual(response.data["kind"], "stock_unit")
+        self.assertFalse(response.data["sellable"])
+        warning = self._warning(response, "stock_unit_unavailable")
+        self.assertIn("محجوز", warning["message"])
+
+    def test_a_handset_in_another_branch_is_named_as_such(self):
+        from apps.inventory.models import Warehouse
+
+        branch = Warehouse.objects.create(name="فرع السوق", code="SOUQ")
+        self.unit.warehouse = branch
+        self.unit.save(update_fields=["warehouse", "updated_at"])
+
+        response = _resolve(self.client, IMEI)
+
+        self.assertFalse(response.data["sellable"])
+        warning = self._warning(response, "stock_unit_unavailable")
+        self.assertIn("فرع السوق", warning["message"])
+
+    def test_a_sold_handset_names_its_sale_instead_of_unknown_barcode(self):
+        from apps.sales.models import RegisterSession
+        from apps.sales.services import checkout_order
+
+        order = checkout_order(
+            register_session=RegisterSession.objects.create(
+                owner_key="scan-sold",
+                status=RegisterSession.Status.OPEN,
+                opening_cash=Decimal("0.00"),
+            ),
+            lines_data=[
+                {
+                    "variant": self.variant,
+                    "quantity": Decimal("1"),
+                    "stock_unit_codes": [IMEI],
+                }
+            ],
+            payments_data=[{"method": "cash", "amount": Decimal("2000.00")}],
+        )
+
+        response = _resolve(self.client, IMEI)
+
+        self.assertFalse(response.data["found"])
+        warning = self._warning(response, "stock_unit_sold")
+        self.assertIn("مُباع", warning["message"])
+        self.assertIn(str(order.receipt_number), warning["message"])
+
+    def test_a_plain_miss_carries_no_warning(self):
+        response = _resolve(self.client, "6221031492015")
+
+        self.assertFalse(response.data["found"])
+        self.assertEqual(response.data["warnings"], [])
+
+
 class Gs1ResolutionTests(TestCase):
     """One DataMatrix, and the till knows which pack it is holding."""
 
