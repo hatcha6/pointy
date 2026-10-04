@@ -98,26 +98,59 @@ void main() {
     expect(privacyButton, findsNothing);
   });
 
-  testWidgets('a privacy block says how to fix it, with the button to do it', (
-    tester,
-  ) async {
-    final controller = CameraWedgeController(
-      source: _Source(
-        const CameraWedgeHealth(
-          state: CameraWedgeState.recovering,
-          fault: CameraWedgeFault.accessDenied,
-        ),
+  CameraWedgeController refused() => CameraWedgeController(
+    source: _Source(
+      const CameraWedgeHealth(
+        state: CameraWedgeState.recovering,
+        fault: CameraWedgeFault.accessDenied,
       ),
-    );
-    await tester.pumpWidget(screen(controller));
+    ),
+  );
 
-    expect(find.text(l10n.cameraWedgeFaultAccessDenied), findsOneWidget);
-    expect(privacyButton, findsOneWidget);
-    expect(
-      CameraWedgeSettingsStatus.privacySettingsUri.toString(),
-      'ms-settings:privacy-webcam',
-    );
-  });
+  testWidgets(
+    'a privacy block says how to fix it, with the button to do it',
+    (tester) async {
+      await tester.pumpWidget(screen(refused()));
+
+      expect(find.text(l10n.cameraWedgeFaultAccessDenied), findsOneWidget);
+      expect(privacyButton, findsOneWidget);
+      expect(
+        CameraWedgeSettingsStatus.privacySettingsUri.toString(),
+        'ms-settings:privacy-webcam',
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
+  testWidgets(
+    'on Linux a refused camera is a group membership, with no page to open',
+    (tester) async {
+      // EACCES on /dev/video*: an administrator adds the till's user to the
+      // "video" group, and it takes a new login. Windows' settings page means
+      // nothing there.
+      await tester.pumpWidget(screen(refused()));
+
+      expect(find.text(l10n.cameraWedgeFaultAccessDeniedLinux), findsOneWidget);
+      expect(find.text(l10n.cameraWedgeFaultAccessDenied), findsNothing);
+      expect(privacyButton, findsNothing);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
+    'elsewhere a refused camera is the app permission, never Windows',
+    (tester) async {
+      await tester.pumpWidget(screen(refused()));
+
+      expect(
+        find.text(l10n.cameraWedgeFaultAccessDeniedDevice),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.cameraWedgeFaultAccessDenied), findsNothing);
+      expect(privacyButton, findsNothing);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
 
   testWidgets('each fault has its own sentence', (tester) async {
     final source = _Source(CameraWedgeHealth.stopped);

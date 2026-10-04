@@ -100,8 +100,8 @@ final class NativeWedgeStatus extends NativeWedgeEvent {
   final NativeWedgeState state;
   final NativeWedgeError error;
 
-  /// Raw detail (an HRESULT, the step that failed). For logs and support,
-  /// never shown to a cashier as it is.
+  /// Raw detail (an HRESULT or errno, the step that failed). For logs and
+  /// support, never shown to a cashier as it is.
   final String message;
   final String deviceId;
   final String deviceLabel;
@@ -211,8 +211,9 @@ final class NativeWedgePreview extends NativeWedgeEvent {
 class NativeCameraDevice {
   const NativeCameraDevice({required this.id, required this.label});
 
-  /// Whatever the native side needs to find it again (a Media Foundation
-  /// symbolic link on Windows). Never shown.
+  /// Whatever the native side needs to find it again: a Media Foundation
+  /// symbolic link on Windows, a udev `/dev/v4l/by-id` or `by-path` link on
+  /// Linux. Never shown.
   final String id;
   final String label;
 }

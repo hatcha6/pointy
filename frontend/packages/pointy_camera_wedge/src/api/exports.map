@@ -1,0 +1,12 @@
+/*
+ * What the Linux library exports: the C ABI of include/pointy_camera_wedge.h
+ * and nothing else. A Windows DLL exports only what it marks; an ELF shared
+ * library exports every symbol it links in — here, all of zxing-cpp and the
+ * C++ runtime linked into it — unless it is told otherwise.
+ */
+{
+  global:
+    pcw_*;
+  local:
+    *;
+};

@@ -6,10 +6,11 @@
 /// | backend | platforms | decodes | confirms |
 /// |---|---|---|---|
 /// | `mobile_scanner` | android, ios, macos, web | the OS (ML Kit, Vision) | Dart ([CameraWedgePolicy]) |
-/// | native (`packages/pointy_camera_wedge`) | windows | zxing-cpp, in C++ | C++ (the same rule) |
+/// | native (`packages/pointy_camera_wedge`) | windows, linux | zxing-cpp, in C++ | C++ (the same rule) |
 ///
-/// The tills are Windows, and there the whole wedge — the camera's video
-/// stream, zxing-cpp, the agreement between looks — runs on native threads;
+/// The tills are Windows and Linux PCs, and there the whole wedge — the
+/// camera's video stream (Media Foundation, V4L2), zxing-cpp, the agreement
+/// between looks — runs on native threads;
 /// Dart receives finished scans and nothing else, the way it receives
 /// keystrokes from a hardware scanner. It replaced a Dart loop that took a
 /// PHOTO about once a second through `camera_windows`, saved it as a JPEG and
@@ -40,6 +41,11 @@ import 'camera_wedge_policy.dart';
 /// library reads the symbolic link back out of it. Only the display half is
 /// ever shown — showing the whole string once put a Media Foundation symbolic
 /// link in front of a cashier.
+///
+/// On Linux the same shape holds a udev link, which outlives the reboots and
+/// re-plugs that renumber `/dev/videoN`:
+///
+///     HD Pro Webcam C920 </dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A1B2C3D4-video-index0>
 class CameraWedgeDevice {
   const CameraWedgeDevice({required this.id, required this.label});
 

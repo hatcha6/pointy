@@ -133,7 +133,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check \
@@ -504,6 +504,30 @@ frontend-camera-wedge-test: ## Build and run the native counter-camera wedge tes
 	"$(CAMERA_WEDGE_BUILD)/pcw_tests"
 	cd "$(CAMERA_WEDGE_DIR)" && $(FLUTTER) pub get && \
 		POINTY_CAMERA_WEDGE_LIBRARY="$$(ls "$(abspath $(CAMERA_WEDGE_BUILD))"/libpointy_camera_wedge.* | head -n 1)" $(FLUTTER) test
+
+CAMERA_WEDGE_LINUX_RIG ?= pointy-camera-wedge-linux-rig
+CAMERA_WEDGE_LINUX_RIG_DIR := $(abspath $(CAMERA_WEDGE_DIR))/src/tools/linux_rig
+# Set to keep the rig's image (about 1.4 GB) between runs instead of
+# downloading its packages again every time.
+CAMERA_WEDGE_LINUX_RIG_KEEP ?=
+
+frontend-camera-wedge-linux: docker-check ## Test the counter-camera wedge's Linux (V4L2) backend against a real Ubuntu kernel under QEMU, from any machine with Docker: vivid + v4l2loopback cameras, barcodes as YUYV and MJPEG, unplug, stall, permissions. Leaves nothing behind unless CAMERA_WEDGE_LINUX_RIG_KEEP=1.
+	@docker image inspect "$(CAMERA_WEDGE_LINUX_RIG)" >/dev/null 2>&1 || { \
+		docker rm -f -v "$(CAMERA_WEDGE_LINUX_RIG)-setup" >/dev/null 2>&1; \
+		docker run --name "$(CAMERA_WEDGE_LINUX_RIG)-setup" -v "$(CAMERA_WEDGE_LINUX_RIG_DIR):/rig:ro" \
+			ubuntu:24.04 bash /rig/setup.sh && \
+		docker commit "$(CAMERA_WEDGE_LINUX_RIG)-setup" "$(CAMERA_WEDGE_LINUX_RIG)" >/dev/null; \
+		rc=$$?; docker rm -f -v "$(CAMERA_WEDGE_LINUX_RIG)-setup" >/dev/null 2>&1; exit $$rc; }
+	@rc=0; docker run --rm $$( [ -e /dev/kvm ] && echo --device /dev/kvm ) \
+		-v "$(abspath $(CAMERA_WEDGE_DIR)):/pkg:ro" -v "$(CAMERA_WEDGE_LINUX_RIG_DIR):/rig:ro" \
+		"$(CAMERA_WEDGE_LINUX_RIG)" bash /rig/boot.sh || rc=$$?; \
+	if [ -z "$(CAMERA_WEDGE_LINUX_RIG_KEEP)" ]; then docker image rm "$(CAMERA_WEDGE_LINUX_RIG)" >/dev/null; \
+	else echo "kept the rig image; make frontend-camera-wedge-linux-clean removes it"; fi; \
+	exit $$rc
+
+frontend-camera-wedge-linux-clean: ## Remove the Linux rig's image, kept by CAMERA_WEDGE_LINUX_RIG_KEEP=1.
+	-docker rm -f -v "$(CAMERA_WEDGE_LINUX_RIG)-setup" >/dev/null 2>&1
+	-docker image rm "$(CAMERA_WEDGE_LINUX_RIG)"
 
 frontend-e2e: frontend-install ## Run Flutter end-to-end pilot flow tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test test/e2e

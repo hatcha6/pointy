@@ -21558,6 +21558,14 @@ class AppLocalizationsAr extends AppLocalizations {
       'ويندوز يمنع التطبيقات من استخدام الكاميرا. فعّل «السماح لتطبيقات سطح المكتب بالوصول إلى الكاميرا» من إعدادات الخصوصية، وستبدأ القراءة تلقائيًا.';
 
   @override
+  String get cameraWedgeFaultAccessDeniedLinux =>
+      'لينكس يمنع مستخدم هذا الجهاز من استخدام الكاميرا. اطلب من الدعم الفني إضافته إلى مجموعة video، ثم سجّل الخروج وادخل من جديد.';
+
+  @override
+  String get cameraWedgeFaultAccessDeniedDevice =>
+      'النظام يمنع التطبيق من استخدام الكاميرا. اسمح له باستخدامها من إعدادات الجهاز.';
+
+  @override
   String get cameraWedgeFaultInUse =>
       'الكاميرا مستخدمة من برنامج آخر. أغلق ذلك البرنامج وستعود القراءة تلقائيًا.';
 

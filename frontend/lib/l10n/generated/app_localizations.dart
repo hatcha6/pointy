@@ -36826,6 +36826,18 @@ abstract class AppLocalizations {
   /// **'ويندوز يمنع التطبيقات من استخدام الكاميرا. فعّل «السماح لتطبيقات سطح المكتب بالوصول إلى الكاميرا» من إعدادات الخصوصية، وستبدأ القراءة تلقائيًا.'**
   String get cameraWedgeFaultAccessDenied;
 
+  /// Camera wedge on Linux: the user may not open /dev/video* (not in the video group); an administrator has to add them and they must log in again
+  ///
+  /// In ar, this message translates to:
+  /// **'لينكس يمنع مستخدم هذا الجهاز من استخدام الكاميرا. اطلب من الدعم الفني إضافته إلى مجموعة video، ثم سجّل الخروج وادخل من جديد.'**
+  String get cameraWedgeFaultAccessDeniedLinux;
+
+  /// Camera wedge on Android, iOS, macOS and the web: the camera permission was refused
+  ///
+  /// In ar, this message translates to:
+  /// **'النظام يمنع التطبيق من استخدام الكاميرا. اسمح له باستخدامها من إعدادات الجهاز.'**
+  String get cameraWedgeFaultAccessDeniedDevice;
+
   /// Camera wedge: another program holds the camera
   ///
   /// In ar, this message translates to:

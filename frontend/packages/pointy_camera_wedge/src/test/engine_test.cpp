@@ -134,8 +134,10 @@ PCW_TEST(a_qr_is_scanned_on_the_first_look) {
 }
 
 PCW_TEST(every_pixel_format_reaches_the_decoder) {
-  for (const char* pixel :
-       {"gray", "nv12", "yuy2", "uyvy", "rgb24", "rgb32", "rgb32_bottom_up"}) {
+  // mjpeg and mjpeg_nodht are decoded on the camera's thread, as the Linux
+  // backend decodes a webcam's MJPEG; nodht is how UVC cameras send it.
+  for (const char* pixel : {"gray", "nv12", "yuy2", "uyvy", "rgb24", "rgb32",
+                            "rgb32_bottom_up", "mjpeg", "mjpeg_nodht"}) {
     Rig rig(std::string("synthetic:qr=format-") + pixel + ";pixel=" + pixel);
     const bool read = rig.sink->WaitFor(
         [](const RecordingSink& s) { return !s.scans.empty(); }, milliseconds(3000));
@@ -143,6 +145,18 @@ PCW_TEST(every_pixel_format_reaches_the_decoder) {
     if (!read) pcwtest::Fail(__FILE__, __LINE__, std::string("nothing read as ") + pixel);
     CHECK_EQ(rig.sink->scans.front().text, std::string("format-") + pixel);
   }
+}
+
+PCW_TEST(an_mjpeg_camera_says_it_is_decoded_to_grey) {
+  // What the settings page shows a support call: what the camera sends, and
+  // what the wedge turns it into.
+  Rig rig("synthetic:blank;pixel=mjpeg_nodht");
+  CHECK(rig.sink->WaitFor(Running, milliseconds(3000)));
+  rig.Stop();
+  const auto running = std::find_if(
+      rig.sink->statuses.begin(), rig.sink->statuses.end(),
+      [](const auto& s) { return s.state == WedgeState::kRunning; });
+  CHECK_EQ(running->stream.pixel_format, std::string("MJPG>GRAY8"));
 }
 
 PCW_TEST(an_empty_counter_scans_nothing_and_decodes_at_the_idle_pace) {

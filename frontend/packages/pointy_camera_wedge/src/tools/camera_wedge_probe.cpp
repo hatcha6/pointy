@@ -6,15 +6,18 @@
 //
 //   camera_wedge_probe --list
 //   camera_wedge_probe [--device N|ID] [--seconds S] [--size 1280x720]
-//                      [--snapshot frame.pgm]
+//                      [--snapshot frame.pgm] [--expect TEXT]
 //
 // Every confirmed scan is printed as it happens, with how long after the
 // previous one it came; a stats line every second shows frames delivered and
 // decoded, how long a decode pass takes, and what was rejected. --snapshot
 // writes the newest frame as a greyscale PGM (any image viewer opens it), to
-// see whether the camera is aimed and in focus.
+// see whether the camera is aimed and in focus. --expect stops at the first
+// scan of TEXT with exit status 0, or fails with 1 when --seconds pass
+// without one: "does this camera read this code", for a support call or CI.
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -62,7 +65,11 @@ const char* ErrorName(pcw::CaptureError error) {
     case pcw::CaptureError::kDeviceNotFound:
       return "chosen camera not connected";
     case pcw::CaptureError::kAccessDenied:
+#if defined(_WIN32)
       return "blocked by the Windows camera privacy setting";
+#else
+      return "this user may not open the camera (not in the video group?)";
+#endif
     case pcw::CaptureError::kInUse:
       return "in use by another program";
     case pcw::CaptureError::kDeviceLost:
@@ -81,8 +88,14 @@ const char* ErrorName(pcw::CaptureError error) {
 
 class PrintingSink final : public pcw::EventSink {
  public:
-  explicit PrintingSink(std::string snapshot_path)
-      : snapshot_path_(std::move(snapshot_path)) {}
+  PrintingSink(std::string snapshot_path, std::string expect)
+      : snapshot_path_(std::move(snapshot_path)), expect_(std::move(expect)) {}
+
+  // Waits up to `timeout` for the expected scan; true when it came.
+  bool WaitForExpected(std::chrono::seconds timeout) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return expected_seen_.wait_for(lock, timeout, [&] { return expected_; });
+  }
 
   bool OnStatus(const pcw::StatusEvent& event) override {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -109,6 +122,10 @@ class PrintingSink final : public pcw::EventSink {
     std::cout << Stamp() << "SCAN " << scan.symbology << " \"" << scan.text << "\" ("
               << scan.confirmations << " look" << (scan.confirmations == 1 ? "" : "s")
               << ")" << std::endl;
+    if (!expect_.empty() && scan.text == expect_) {
+      expected_ = true;
+      expected_seen_.notify_all();
+    }
     return true;
   }
 
@@ -153,8 +170,11 @@ class PrintingSink final : public pcw::EventSink {
 
   const std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
   std::string snapshot_path_;
+  std::string expect_;
   std::atomic<bool> snapshot_written_{false};
   std::mutex mutex_;
+  std::condition_variable expected_seen_;
+  bool expected_ = false;
 };
 
 int ListDevices(pcw::CaptureBackend& backend) {
@@ -180,6 +200,7 @@ int main(int argc, char** argv) {
 #endif
   std::string device;
   std::string snapshot;
+  std::string expect;
   int seconds = 60;
   pcw::WedgeEngine::Options options;
   auto backend = std::shared_ptr<pcw::CaptureBackend>(pcw::CreatePlatformBackend());
@@ -191,6 +212,7 @@ int main(int argc, char** argv) {
     if (arg == "--device" && has_value) device = argv[++i];
     else if (arg == "--seconds" && has_value) seconds = std::atoi(argv[++i]);
     else if (arg == "--snapshot" && has_value) snapshot = argv[++i];
+    else if (arg == "--expect" && has_value) expect = argv[++i];
     else if (arg == "--size" && has_value) {
       const std::string size = argv[++i];
       const auto x = size.find('x');
@@ -201,7 +223,7 @@ int main(int argc, char** argv) {
     } else {
       std::cout << "usage: camera_wedge_probe --list\n"
                    "       camera_wedge_probe [--device N|ID] [--seconds S] "
-                   "[--size WxH] [--snapshot frame.pgm]\n";
+                   "[--size WxH] [--snapshot frame.pgm] [--expect TEXT]\n";
       return arg == "--help" ? 0 : 2;
     }
   }
@@ -220,13 +242,22 @@ int main(int argc, char** argv) {
   }
   options.open.device_id = device;
 
-  auto sink = std::make_shared<PrintingSink>(snapshot);
+  auto sink = std::make_shared<PrintingSink>(snapshot, expect);
   pcw::WedgeEngine engine(backend, sink, options);
   if (!snapshot.empty()) engine.SetPreview(1 << 14, milliseconds(1000));
   engine.Start();
   std::cout << "watching for " << seconds << " s; put barcodes under the camera" << std::endl;
-  std::this_thread::sleep_for(std::chrono::seconds(seconds));
+  bool expected = false;
+  if (expect.empty()) {
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+  } else {
+    expected = sink->WaitForExpected(std::chrono::seconds(seconds));
+  }
   engine.RequestStop();
   engine.Join();
+  if (!expect.empty() && !expected) {
+    std::cout << "no scan of \"" << expect << "\" in " << seconds << " s" << std::endl;
+    return 1;
+  }
   return 0;
 }

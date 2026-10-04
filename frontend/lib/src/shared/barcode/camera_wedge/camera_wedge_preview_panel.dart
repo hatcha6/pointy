@@ -283,7 +283,11 @@ class CameraWedgeStatusLines extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colors = context.pointyColors;
-    final status = cameraWedgeStatusText(l10n, health);
+    final status = cameraWedgeStatusText(
+      l10n,
+      health,
+      platform: theme.platform,
+    );
     final stream = cameraWedgeStreamText(l10n, health);
     final lastScan = health.lastScan;
     final statusColor = switch (status.tone) {

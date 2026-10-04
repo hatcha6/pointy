@@ -15476,6 +15476,14 @@
   "@cameraWedgeFaultAccessDenied": {
     "description": "Camera wedge: the Windows camera privacy setting blocks desktop apps"
   },
+  "cameraWedgeFaultAccessDeniedLinux": "لينكس يمنع مستخدم هذا الجهاز من استخدام الكاميرا. اطلب من الدعم الفني إضافته إلى مجموعة video، ثم سجّل الخروج وادخل من جديد.",
+  "@cameraWedgeFaultAccessDeniedLinux": {
+    "description": "Camera wedge on Linux: the user may not open /dev/video* (not in the video group); an administrator has to add them and they must log in again"
+  },
+  "cameraWedgeFaultAccessDeniedDevice": "النظام يمنع التطبيق من استخدام الكاميرا. اسمح له باستخدامها من إعدادات الجهاز.",
+  "@cameraWedgeFaultAccessDeniedDevice": {
+    "description": "Camera wedge on Android, iOS, macOS and the web: the camera permission was refused"
+  },
   "cameraWedgeFaultInUse": "الكاميرا مستخدمة من برنامج آخر. أغلق ذلك البرنامج وستعود القراءة تلقائيًا.",
   "@cameraWedgeFaultInUse": {
     "description": "Camera wedge: another program holds the camera"

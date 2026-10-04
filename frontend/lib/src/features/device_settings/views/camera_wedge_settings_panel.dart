@@ -193,9 +193,10 @@ class _CameraWedgeSettingsPanelState extends State<CameraWedgeSettingsPanel> {
 ///
 /// Listens to the running wedge rather than to the switch, because those are
 /// different facts: a camera can be switched on and still not be reading — no
-/// camera plugged in, Windows' privacy setting blocking it, another program
-/// holding it, frames that stopped arriving. Each gets its own sentence, and
-/// the one only a person can fix gets the button that opens the right page.
+/// camera plugged in, the system refusing it (Windows' privacy setting,
+/// Linux's video group), another program holding it, frames that stopped
+/// arriving. Each gets its own sentence, and the one only a person can fix
+/// gets the button that opens the right page where there is one: Windows.
 class CameraWedgeSettingsStatus extends StatelessWidget {
   const CameraWedgeSettingsStatus({super.key});
 
@@ -235,7 +236,11 @@ class _StatusBody extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
     final theme = Theme.of(context);
-    final status = cameraWedgeStatusText(l10n, health);
+    final status = cameraWedgeStatusText(
+      l10n,
+      health,
+      platform: theme.platform,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -265,7 +270,8 @@ class _StatusBody extends StatelessWidget {
             compact: true,
           ),
         ],
-        if (health.fault == CameraWedgeFault.accessDenied) ...[
+        if (health.fault == CameraWedgeFault.accessDenied &&
+            cameraWedgeHasPrivacySettingsPage(theme.platform)) ...[
           SizedBox(height: spacing.xs),
           Align(
             alignment: AlignmentDirectional.centerStart,

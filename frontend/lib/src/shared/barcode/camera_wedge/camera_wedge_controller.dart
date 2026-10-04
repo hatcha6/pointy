@@ -38,7 +38,7 @@ class CameraWedgeController extends ChangeNotifier {
   /// Whether this platform can run a camera wedge at all, and how.
   ///
   /// `mobile_scanner` where it exists; the native wedge where its library
-  /// loads (Windows, and Linux once it has a capture backend); otherwise
+  /// loads (Windows and Linux); otherwise
   /// nothing, and the setting says so instead of offering a dead switch.
   static CameraWedgeBackend get backend {
     if (cameraScanningSupported) return CameraWedgeBackend.platformScanner;

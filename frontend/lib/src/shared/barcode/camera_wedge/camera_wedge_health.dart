@@ -80,8 +80,8 @@ class CameraWedgeHealth {
   final CameraWedgeState state;
   final CameraWedgeFault fault;
 
-  /// Raw detail (an HRESULT, the step that failed): for support, never shown
-  /// to a cashier on its own.
+  /// Raw detail (an HRESULT or errno, the step that failed): for support,
+  /// never shown to a cashier on its own.
   final String detail;
   final String deviceLabel;
   final int width;

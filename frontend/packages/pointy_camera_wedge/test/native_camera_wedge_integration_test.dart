@@ -87,6 +87,27 @@ void main() {
     expect(later.whereType<NativeWedgeScan>(), isEmpty);
   }, skip: skip);
 
+  test('an MJPEG camera reads like any other, and says it is decoded',
+      () async {
+    // How a Linux webcam sends 720p: MJPEG, Huffman tables left out. The
+    // library decodes it before anything is read; Dart sees only the scan
+    // and, for support, what the camera sent.
+    final wedge = NativeCameraWedge.start(
+      deviceId: 'synthetic:ean13=3600523434725;angle=15;pixel=mjpeg_nodht',
+    );
+    final seen = await collectUntil(
+      wedge,
+      (events) => events.whereType<NativeWedgeScan>().isNotEmpty,
+    );
+    await wedge.stop();
+
+    final running = seen.whereType<NativeWedgeStatus>().firstWhere(
+          (s) => s.state == NativeWedgeState.running,
+        );
+    expect(running.pixelFormat, 'MJPG>GRAY8');
+    expect(seen.whereType<NativeWedgeScan>().single.text, '3600523434725');
+  }, skip: skip);
+
   test('preview frames arrive only while asked for, at the size asked',
       () async {
     final wedge = NativeCameraWedge.start(deviceId: 'synthetic:blank');

@@ -5,6 +5,7 @@
 //
 //   synthetic:ean13=3600523434725;angle=30;pixel=yuy2
 //   synthetic:qr=hello;fps=15
+//   synthetic:qr=hello;pixel=mjpeg_nodht   MJPEG as a UVC camera sends it
 //   synthetic:blank
 //   synthetic:fail=access_denied        open fails the way Windows would
 //   synthetic:ean13=...;lose_after=20   unplugged after 20 frames
@@ -21,6 +22,8 @@
 
 #include "capture/capture_backend.h"
 #include "capture/device_selection.h"
+#include "capture/jpeg_decoder.h"
+#include "platform/synthetic/jpeg_writer.h"
 #include "platform/synthetic/scene.h"
 
 namespace pcw {
@@ -36,6 +39,11 @@ struct Recipe {
   int stall_after = 0;
   PixelFormat pixel = PixelFormat::kNV12;
   bool bottom_up = false;
+  // Compressed frames, decoded on the camera's thread the way the V4L2
+  // backend decodes them; optionally without Huffman tables, like most UVC
+  // cameras send them.
+  bool mjpeg = false;
+  bool mjpeg_without_tables = false;
 };
 
 bool StartsWith(const std::string& text, const std::string& prefix) {
@@ -95,6 +103,10 @@ Recipe Parse(const std::string& id) {
       if (value == "rgb32_bottom_up") {
         recipe.pixel = PixelFormat::kRGB32;
         recipe.bottom_up = true;
+      }
+      if (value == "mjpeg" || value == "mjpeg_nodht") {
+        recipe.mjpeg = true;
+        recipe.mjpeg_without_tables = value == "mjpeg_nodht";
       }
     }
   }
@@ -188,10 +200,15 @@ EncodedFrame Encode(const LumaImage& luma, PixelFormat format, bool bottom_up) {
 class SyntheticSession final : public CaptureSession {
  public:
   SyntheticSession(const Recipe& recipe, StreamInfo info, FrameSink& sink)
-      : info_(std::move(info)),
-        sink_(sink),
-        frame_(Encode(RenderScene(recipe.scene), recipe.pixel, recipe.bottom_up)),
-        recipe_(recipe) {
+      : info_(std::move(info)), sink_(sink), recipe_(recipe) {
+    const auto scene = RenderScene(recipe.scene);
+    if (recipe.mjpeg) {
+      JpegWriteOptions options;
+      options.without_huffman_tables = recipe.mjpeg_without_tables;
+      jpeg_ = EncodeJpeg(scene, options);
+    } else {
+      frame_ = Encode(scene, recipe.pixel, recipe.bottom_up);
+    }
     thread_ = std::thread(&SyntheticSession::Run, this);
   }
 
@@ -223,14 +240,21 @@ class SyntheticSession final : public CaptureSession {
         return;
       }
       if (recipe_.stall_after > 0 && delivered > recipe_.stall_after) continue;
+      if (recipe_.mjpeg) {
+        PixelBuffer decoded;
+        if (decoder_.Decode(jpeg_.data(), jpeg_.size(), decoded)) sink_.OnFrame(decoded);
+        continue;
+      }
       sink_.OnFrame(frame_.buffer);
     }
   }
 
   StreamInfo info_;
   FrameSink& sink_;
-  EncodedFrame frame_;
   Recipe recipe_;
+  EncodedFrame frame_;
+  std::vector<uint8_t> jpeg_;
+  JpegDecoder decoder_;
   std::mutex mutex_;
   std::condition_variable wake_;
   bool stop_ = false;
@@ -282,7 +306,8 @@ class SyntheticBackend final : public CaptureBackend {
     info.width = recipe.scene.width;
     info.height = recipe.scene.height;
     info.fps = recipe.fps;
-    info.pixel_format = PixelFormatName(recipe.pixel);
+    info.pixel_format = recipe.mjpeg ? std::string("MJPG>") + PixelFormatName(PixelFormat::kGray8)
+                                     : PixelFormatName(recipe.pixel);
     info.substituted = substituted;
     return std::make_unique<SyntheticSession>(recipe, std::move(info), sink);
   }

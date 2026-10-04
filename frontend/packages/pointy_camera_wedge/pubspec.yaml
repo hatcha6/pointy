@@ -25,7 +25,9 @@ dev_dependencies:
 flutter:
   plugin:
     platforms:
-      # Only where a capture backend exists. Linux is the next one: see
-      # README.md for the three steps it takes.
+      # Only where a capture backend exists: Media Foundation on Windows,
+      # V4L2 on Linux (src/platform/).
+      linux:
+        ffiPlugin: true
       windows:
         ffiPlugin: true

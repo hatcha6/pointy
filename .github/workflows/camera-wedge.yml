@@ -1,9 +1,10 @@
 # The counter camera's native engine (frontend/packages/pointy_camera_wedge):
-# its tests under MSVC — the compiler the tills' build uses — and under GCC
-# with sanitizers, the Media Foundation backend on real Windows, and the
-# package built into the Flutter app the way release.yml builds it.
+# its tests under MSVC — the compiler the Windows tills' build uses — and
+# under GCC with sanitizers; the Media Foundation backend on real Windows; the
+# V4L2 backend against real kernel camera drivers on Linux; and the package
+# built into the Flutter app on both, the way release.yml builds it.
 #
-# release.yml only compiles Windows when a release is cut; this catches a
+# release.yml only compiles the apps when a release is cut; this catches a
 # break in the C++ the day it is made. It runs only when the package (or this
 # file) changes.
 name: Camera wedge (native)
@@ -99,6 +100,128 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread -DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=thread
           cmake --build build/tsan --parallel
           TSAN_OPTIONS=halt_on_error=1 build/tsan/pcw_tests
+
+  linux-v4l2:
+    name: Linux backend on real V4L2 drivers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner has no camera, but its kernel can have two V4L2 drivers
+      # that behave like one: vivid (the kernel's own virtual camera, with a
+      # simulated USB unplug) and v4l2loopback (a real V4L2 camera that
+      # v4l2_loopback_feed writes drawn barcodes into). The same scenarios run
+      # from a Mac under QEMU: `make frontend-camera-wedge-linux`.
+      - name: Camera drivers in the runner's kernel
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)" \
+            "linux-headers-$(uname -r)" v4l2loopback-dkms v4l-utils
+          if sudo modprobe vivid n_devs=1 node_types=0x1 multiplanar=1 vid_cap_nr=10; then
+            echo "PCW_NO_VIVID=0" >> "$GITHUB_ENV"
+          else
+            echo "::warning::vivid is not in this runner's kernel ($(uname -r)); its scenarios are skipped"
+            echo "PCW_NO_VIVID=1" >> "$GITHUB_ENV"
+          fi
+          sudo modprobe v4l2loopback devices=1 video_nr=20 exclusive_caps=1 card_label=PointyLoopback
+          v4l2-ctl --list-devices || true
+
+      - name: Library, probe and loopback feeder
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          cmake -S src -B build/linux -DCMAKE_BUILD_TYPE=Release \
+            -DPCW_BUILD_PROBE=ON -DPCW_BUILD_LOOPBACK_FEED=ON
+          cmake --build build/linux --parallel
+          # Built on 24.04, it must still load on Mint 21 (22.04).
+          sh src/tools/check_linux_library.sh build/linux/libpointy_camera_wedge.so
+
+      - name: Scenarios against the drivers
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          sudo env PATH="$PWD/build/linux:$PATH" PCW_NO_VIVID="$PCW_NO_VIVID" \
+            sh src/tools/v4l2_scenarios.sh
+
+      # The console probe for Linux tills, as portable as the library.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: camera-wedge-probe-linux
+          path: ${{ env.PACKAGE_DIR }}/build/linux/camera_wedge_probe
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-app:
+    name: Linux app build with the plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # As release.yml's build-linux installs them.
+      - name: Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        working-directory: frontend
+        run: |
+          flutter config --enable-linux-desktop
+          flutter pub get
+
+      # The same workaround as release.yml's build-linux (see the comment
+      # there): flutter_bluetooth_classic_serial ships no Linux plugin target.
+      - name: Work around broken Bluetooth plugin Linux support
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pubspec in "$HOME"/.pub-cache/hosted/pub.dev/flutter_bluetooth_classic_serial-*/pubspec.yaml; do
+            [ -f "$pubspec" ] || continue
+            python3 - "$pubspec" <<'EOF'
+          import re, sys
+          path = sys.argv[1]
+          src = open(path).read()
+          out, n = re.subn(r'(?m)^[ \t]+linux:\n[ \t]+pluginClass:[^\n]*\n', '', src)
+          if n:
+              open(path, 'w').write(out)
+          if re.search(r'(?m)^[ \t]+linux:[ \t]*\n', out):
+              sys.exit(f"linux platform block still present in {path}")
+          EOF
+          done
+
+      - name: Build
+        working-directory: frontend
+        run: |
+          flutter gen-l10n
+          flutter build linux --release
+
+      - name: The library ships in the bundle, loadable on Mint 21
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          library=build/linux/x64/release/bundle/lib/libpointy_camera_wedge.so
+          test -f "$library" || { echo "libpointy_camera_wedge.so is not in the bundle's lib/"; exit 1; }
+          sh packages/pointy_camera_wedge/src/tools/check_linux_library.sh "$library"
+
+      # Not a gate: what every other binary in the bundle needs, since a till
+      # whose glibc or libstdc++ is older than any of these cannot start the
+      # app at all, camera or not.
+      - name: What the rest of the bundle needs (informational)
+        working-directory: frontend/build/linux/x64/release/bundle
+        run: |
+          for elf in pointy_frontend lib/*.so; do
+            versions=$(objdump -T "$elf" 2>/dev/null | grep -oE '(GLIBC|GLIBCXX)_[0-9.]+' | sort -t_ -k2 -V |
+              awk -F_ '{ newest[$1] = $0 } END { for (k in newest) printf "%s ", newest[k] }')
+            echo "$elf: $versions"
+          done
 
   windows-app:
     name: Windows app build with the plugin

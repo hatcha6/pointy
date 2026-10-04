@@ -48,6 +48,7 @@
 
 #include "capture/capture_backend.h"
 #include "capture/device_selection.h"
+#include "capture/mode_score.h"
 
 #ifndef MF_E_VIDEO_DEVICE_LOCKED
 #define MF_E_VIDEO_DEVICE_LOCKED _HRESULT_TYPEDEF_(0xC00D4E24L)
@@ -297,34 +298,17 @@ double FrameRate(IMFMediaType* type) {
   return static_cast<double>(numerator) / denominator;
 }
 
-// Lower is better. The ideal is the preferred size (1280x720 by default: the
-// camera lab's working resolution, fine enough for a narrow bar at counter
-// distance and cheap enough to decode every frame), at least 15 frames a
-// second, in a format read directly. Smaller than asked costs twice what
-// larger does — resolution is what a 1-D barcode lives or dies by — and a
-// frame rate under 15 costs most of all: agreement between looks has to
-// arrive inside 600 ms.
+// The preference itself is shared with the Linux backend: capture/mode_score.h.
 double Score(const Mode& mode, int preferred_width, int preferred_height) {
-  const double preferred_area =
-      static_cast<double>(std::max(1, preferred_width)) * std::max(1, preferred_height);
-  const double ratio = static_cast<double>(mode.width) * mode.height / preferred_area;
-  double score = ratio >= 1 ? (ratio - 1) : (1 / std::max(ratio, 1e-6) - 1) * 2;
-  if (mode.fps < 14.5) {
-    score += 8 + (15 - mode.fps);
-  } else {
-    score += (30 - std::min(mode.fps, 30.0)) / 30 * 0.6;
-  }
-  if (DirectFormat(mode.subtype) != PixelFormat::kUnknown) {
-    // Read as delivered: no decoder, no copy.
-  } else if (mode.subtype == MFVideoFormat_MJPG) {
-    // Decoding MJPEG costs CPU; worth it only when the camera cannot send
-    // the size uncompressed fast enough (USB 2 cannot, at 720p30).
-    score += 0.25;
-  } else {
-    // H.264 and friends: possible, but the decode is heavy for a till.
-    score += 5;
-  }
-  return score;
+  ModeCandidate candidate;
+  candidate.width = static_cast<int>(mode.width);
+  candidate.height = static_cast<int>(mode.height);
+  candidate.fps = mode.fps;
+  candidate.encoding = DirectFormat(mode.subtype) != PixelFormat::kUnknown
+                           ? ModeEncoding::kRaw
+                       : mode.subtype == MFVideoFormat_MJPG ? ModeEncoding::kMjpeg
+                                                            : ModeEncoding::kOtherCompressed;
+  return ScoreMode(candidate, preferred_width, preferred_height);
 }
 
 // ---------------------------------------------------------------------------

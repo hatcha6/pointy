@@ -196,17 +196,24 @@ class _Board extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
-    Widget panel(String title, CameraWedgeHealth health, {bool paint = true}) =>
-        _Labelled(
-          title: title,
-          child: SizedBox(
-            width: 380,
-            child: CameraWedgePreviewPanel(
-              controller: _controller(health, painting: paint),
-              onClose: () {},
-            ),
+    Widget panel(
+      String title,
+      CameraWedgeHealth health, {
+      bool paint = true,
+      TargetPlatform? platform,
+    }) => _Labelled(
+      title: title,
+      child: SizedBox(
+        width: 380,
+        child: _OnPlatform(
+          platform: platform,
+          child: CameraWedgePreviewPanel(
+            controller: _controller(health, painting: paint),
+            onClose: () {},
           ),
-        );
+        ),
+      ),
+    );
     return Scaffold(
       backgroundColor: context.pointyColors.page,
       body: SingleChildScrollView(
@@ -217,23 +224,29 @@ class _Board extends StatelessWidget {
           children: [
             panel('F8: running', _running),
             panel(
-              'F8: privacy blocks it',
-              const CameraWedgeHealth(
-                state: CameraWedgeState.recovering,
-                fault: CameraWedgeFault.accessDenied,
-                retryIn: Duration(seconds: 5),
-              ),
+              'F8: Windows privacy blocks it',
+              _refused,
               paint: false,
+              platform: TargetPlatform.windows,
+            ),
+            panel(
+              'F8: Linux refuses it (video group)',
+              _refused,
+              paint: false,
+              platform: TargetPlatform.linux,
             ),
             panel(
               'F8: starting',
               const CameraWedgeHealth(state: CameraWedgeState.starting),
               paint: false,
             ),
-            for (final (title, health) in _settingsCases)
+            for (final (title, health, platform) in _settingsCases)
               _Labelled(
                 title: 'Settings: $title',
-                child: SizedBox(width: 520, child: _SettingsSection(health)),
+                child: SizedBox(
+                  width: 520,
+                  child: _SettingsSection(health, platform: platform),
+                ),
               ),
           ],
         ),
@@ -242,21 +255,25 @@ class _Board extends StatelessWidget {
   }
 }
 
-const _settingsCases = [
-  ('running', _running),
-  (
-    'privacy',
-    CameraWedgeHealth(
-      state: CameraWedgeState.recovering,
-      fault: CameraWedgeFault.accessDenied,
-    ),
-  ),
+const _refused = CameraWedgeHealth(
+  state: CameraWedgeState.recovering,
+  fault: CameraWedgeFault.accessDenied,
+  retryIn: Duration(seconds: 5),
+);
+
+/// Each state, and the platform whose wording it shows when that differs: a
+/// refused camera is a privacy switch on Windows and a group on Linux.
+const List<(String, CameraWedgeHealth, TargetPlatform?)> _settingsCases = [
+  ('running', _running, null),
+  ('refused, Windows', _refused, TargetPlatform.windows),
+  ('refused, Linux', _refused, TargetPlatform.linux),
   (
     'in use',
     CameraWedgeHealth(
       state: CameraWedgeState.recovering,
       fault: CameraWedgeFault.inUse,
     ),
+    null,
   ),
   (
     'substituted',
@@ -268,6 +285,7 @@ const _settingsCases = [
       height: 480,
       fps: 30,
     ),
+    null,
   ),
 ];
 
@@ -282,8 +300,11 @@ class _SettingsStates extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.all(spacing.lg),
         children: [
-          for (final (title, health) in _settingsCases) ...[
-            _Labelled(title: title, child: _SettingsSection(health)),
+          for (final (title, health, platform) in _settingsCases) ...[
+            _Labelled(
+              title: title,
+              child: _SettingsSection(health, platform: platform),
+            ),
             SizedBox(height: spacing.lg),
           ],
         ],
@@ -294,20 +315,43 @@ class _SettingsStates extends StatelessWidget {
 
 /// The camera section as device settings shows it once the switch is on.
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection(this.health);
+  const _SettingsSection(this.health, {this.platform});
 
   final CameraWedgeHealth health;
+  final TargetPlatform? platform;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return CameraWedgeScope(
       controller: _controller(health, painting: health.isRunning),
-      child: PointyDetailSection(
-        icon: Icons.photo_camera_outlined,
-        title: l10n.cameraWedgeSectionTitle,
-        child: const CameraWedgeSettingsStatus(),
+      child: _OnPlatform(
+        platform: platform,
+        child: PointyDetailSection(
+          icon: Icons.photo_camera_outlined,
+          title: l10n.cameraWedgeSectionTitle,
+          child: const CameraWedgeSettingsStatus(),
+        ),
       ),
+    );
+  }
+}
+
+/// [child] as it renders on [platform] (the camera's wording follows
+/// `Theme.of(context).platform`); unchanged when null.
+class _OnPlatform extends StatelessWidget {
+  const _OnPlatform({required this.platform, required this.child});
+
+  final TargetPlatform? platform;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = platform;
+    if (target == null) return child;
+    return Theme(
+      data: Theme.of(context).copyWith(platform: target),
+      child: child,
     );
   }
 }

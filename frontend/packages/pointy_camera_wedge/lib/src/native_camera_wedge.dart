@@ -34,7 +34,7 @@ class NativeWedgeAvailability {
 
   final bool isAvailable;
 
-  /// Why not, for logs and support: a missing DLL, Windows without Media
+  /// Why not, for logs and support: a missing library, Windows without Media
   /// Foundation (the "N" editions), an ABI mismatch.
   final String? reason;
 }
@@ -209,8 +209,8 @@ _LoadedLibrary _load() {
   try {
     library = _open();
   } on Object catch (error) {
-    // The DLL is missing, or Windows could not load what it links against —
-    // on the "N" editions of Windows that is Media Foundation itself, until
+    // The library is missing, or the OS could not load what it links against
+    // — on the "N" editions of Windows that is Media Foundation itself, until
     // the Media Feature Pack is installed.
     return _LoadedLibrary(error: 'could not load the camera library: $error');
   }
