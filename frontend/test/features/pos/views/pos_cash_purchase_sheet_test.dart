@@ -10,6 +10,7 @@ import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
+import 'package:pointy_frontend/src/data/models/tracking_mode.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
@@ -32,6 +33,44 @@ const Product _bread = Product(
   quantityOnHand: 4,
   defaultVariant: _breadVariant,
   variants: [_breadVariant],
+);
+
+const ProductVariant _milkVariant = ProductVariant(
+  id: 21,
+  productId: 2,
+  sku: 'MILK',
+  unitPrice: 1.5,
+  isDefault: true,
+);
+
+/// Lot-tracked, so the line offers a lot — optionally.
+const Product _milk = Product(
+  id: 2,
+  name: 'حليب طازج',
+  quantityOnHand: 0,
+  tracksExpiry: true,
+  trackingMode: TrackingMode.batch,
+  defaultVariant: _milkVariant,
+  variants: [_milkVariant],
+);
+
+const ProductVariant _vaccineVariant = ProductVariant(
+  id: 31,
+  productId: 3,
+  sku: 'VAX',
+  unitPrice: 60,
+  isDefault: true,
+);
+
+/// A serialised pack inside a lot: both the lot and every pack's number.
+const Product _vaccine = Product(
+  id: 3,
+  name: 'لقاح مسلسل',
+  quantityOnHand: 0,
+  tracksExpiry: true,
+  trackingMode: TrackingMode.serialBatch,
+  defaultVariant: _vaccineVariant,
+  variants: [_vaccineVariant],
 );
 
 SupplierContact _supplier(int id, String name) => SupplierContact(
@@ -61,7 +100,9 @@ class _FakeContactRepository extends ContactRepository {
 }
 
 class _FakeCatalogRepository extends CatalogRepository {
-  _FakeCatalogRepository() : super(PosApiService());
+  _FakeCatalogRepository(this.product) : super(PosApiService());
+
+  final Product product;
 
   @override
   Future<Result<ProductPage>> loadProducts({
@@ -69,7 +110,7 @@ class _FakeCatalogRepository extends CatalogRepository {
     int page = 1,
     bool bypassCache = false,
   }) async {
-    return const Ok(ProductPage(products: [_bread], hasMore: false));
+    return Ok(ProductPage(products: [product], hasMore: false));
   }
 }
 
@@ -137,6 +178,7 @@ class _FakeShopSettingsRepository extends ShopSettingsRepository {
 Future<_FakePurchaseRepository> _pumpSheet(
   WidgetTester tester, {
   double? limit,
+  Product product = _bread,
 }) async {
   final purchases = _FakePurchaseRepository();
   await tester.pumpWidget(
@@ -153,7 +195,7 @@ Future<_FakePurchaseRepository> _pumpSheet(
       home: Scaffold(
         body: PosCashPurchaseSheet(
           contactRepository: _FakeContactRepository(),
-          catalogRepository: _FakeCatalogRepository(),
+          catalogRepository: _FakeCatalogRepository(product),
           purchaseRepository: purchases,
           shopSettingsRepository: _FakeShopSettingsRepository(limit: limit),
         ),
@@ -164,16 +206,53 @@ Future<_FakePurchaseRepository> _pumpSheet(
   return purchases;
 }
 
-/// Picks the supplier, searches for bread, and adds it as a line.
-Future<void> _buildOneLinePurchase(WidgetTester tester) async {
+/// Picks the supplier, searches for [product], and adds it as a line.
+Future<void> _buildOneLinePurchase(
+  WidgetTester tester, {
+  Product product = _bread,
+}) async {
   await tester.tap(find.text('مخبز الصباح'));
   await tester.pumpAndSettle();
 
-  await tester.enterText(find.byType(TextField).last, 'خبز');
+  await tester.enterText(find.byType(TextField).last, product.name);
   // The search is debounced by 250ms.
   await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('خبز صامولي').last);
+  await tester.tap(find.text(product.name).last);
+  await tester.pumpAndSettle();
+}
+
+void _useTallView(WidgetTester tester) {
+  tester.view.physicalSize = const Size(900, 1600);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+/// Opens the line's lot chip, types [code], takes the one-year expiry
+/// shortcut, and confirms — the receiving bay's own sheet.
+Future<void> _captureLot(
+  WidgetTester tester, {
+  required String chipLabel,
+  required String code,
+}) async {
+  await tester.tap(find.text(chipLabel));
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'رقم الدفعة'),
+    code,
+  );
+  // A frame between typing and the shortcut, as a person always leaves: the
+  // shortcut edits the row the last frame built.
+  await tester.pump();
+  await tester.tap(find.text('+12ش'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('تأكيد الدفعات'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapSubmit(WidgetTester tester) async {
+  await tester.tap(find.text('تسجيل الشراء والدفع نقداً'));
   await tester.pumpAndSettle();
 }
 
@@ -230,4 +309,83 @@ void main() {
     await tester.pumpAndSettle();
     expect(purchases.submittedLines, isNull);
   });
+
+  testWidgets('a lot-tracked line sends the lot the cashier read off the box', (
+    tester,
+  ) async {
+    _useTallView(tester);
+    final purchases = await _pumpSheet(tester, product: _milk);
+    await _buildOneLinePurchase(tester, product: _milk);
+
+    // Optional: the chip says so, and only the expiry is owed.
+    expect(find.text('رقم الدفعة (اختياري)'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextFormField, '1'), '6');
+    await tester.pumpAndSettle();
+
+    await _captureLot(
+      tester,
+      chipLabel: 'رقم الدفعة (اختياري)',
+      code: 'M-2026-10',
+    );
+    expect(find.text('دفعة M-2026-10'), findsOneWidget);
+
+    // The lot's expiry filled the line's, so nothing else is owed.
+    await _tapSubmit(tester);
+    final line = purchases.submittedLines!.single;
+    expect(line.batches.single.code, 'M-2026-10');
+    // Base units: the whole line, which the sheet seeded.
+    expect(line.batches.single.quantity, 6);
+    expect(line.expiryDate, isNotNull);
+    expect(line.batches.single.expiryDate, line.expiryDate);
+  });
+
+  testWidgets('a single lot follows the line when its quantity changes', (
+    tester,
+  ) async {
+    _useTallView(tester);
+    final purchases = await _pumpSheet(tester, product: _milk);
+    await _buildOneLinePurchase(tester, product: _milk);
+    await _captureLot(tester, chipLabel: 'رقم الدفعة (اختياري)', code: 'M-1');
+
+    await tester.enterText(find.widgetWithText(TextFormField, '1'), '4');
+    await tester.pumpAndSettle();
+    await _tapSubmit(tester);
+
+    expect(purchases.submittedLines!.single.batches.single.quantity, 4);
+  });
+
+  testWidgets(
+    'a serial+lot line stays blocked until both its lot and its numbers are in',
+    (tester) async {
+      _useTallView(tester);
+      final purchases = await _pumpSheet(tester, product: _vaccine);
+      await _buildOneLinePurchase(tester, product: _vaccine);
+
+      // Required, so the chip does not say «optional».
+      expect(find.text('رقم الدفعة (اختياري)'), findsNothing);
+
+      // The pack's number first.
+      await tester.tap(find.text('0 / 1'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'PACK-0001');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('تأكيد المعرّفات'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 / 1'), findsOneWidget);
+
+      // Numbers alone are not enough: nothing submits without the lot.
+      await _tapSubmit(tester);
+      expect(purchases.submittedLines, isNull);
+
+      await _captureLot(tester, chipLabel: 'رقم الدفعة', code: 'VX-01');
+      expect(find.text('دفعة VX-01'), findsOneWidget);
+
+      await _tapSubmit(tester);
+      final line = purchases.submittedLines!.single;
+      expect(line.units.single.code, 'PACK-0001');
+      expect(line.batches.single.code, 'VX-01');
+      expect(line.expiryDate, isNotNull);
+    },
+  );
 }

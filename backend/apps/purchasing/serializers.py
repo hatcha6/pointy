@@ -326,6 +326,31 @@ class ReceiptUnitCaptureSerializer(serializers.Serializer):
         return attrs
 
 
+class ReceiptBatchCaptureSerializer(serializers.Serializer):
+    """One production lot on a delivery, with the quantity that arrived of it.
+
+    Deliveries routinely bundle several lots under one order line, so a line may
+    carry more than one of these and their quantities must sum to what was
+    accepted.
+    """
+
+    code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    quantity = _quantity_input_field(min_value=Decimal("0"), required=False)
+    expiry_date = serializers.DateField(required=False, allow_null=True)
+    manufactured_on = serializers.DateField(required=False, allow_null=True)
+    gtin = serializers.CharField(
+        max_length=14, required=False, allow_blank=True, trim_whitespace=True
+    )
+    barcode = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    unit_cost = serializers.DecimalField(
+        max_digits=18, decimal_places=6, required=False, allow_null=True
+    )
+
+
 class PurchaseLineSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = _PurchaseLineVariantField(
@@ -357,6 +382,11 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     # stripped before the line is written — the units belong to the receipt the
     # POS cash purchase immediately makes, not to the order line.
     units = ReceiptUnitCaptureSerializer(many=True, required=False, write_only=True)
+    # The lots the goods came in, captured at the same counter for the same
+    # reason: a ``batch`` or ``serial_batch`` article bought over the counter is
+    # received the moment it is bought. The receive endpoint's own shape, so a
+    # row means the same thing on both paths — quantities in BASE units.
+    batches = ReceiptBatchCaptureSerializer(many=True, required=False, write_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discount_amount = serializers.DecimalField(
         max_digits=10,
@@ -474,6 +504,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "net_line_total",
             "line_total",
             "units",
+            "batches",
         ]
         read_only_fields = (
             "id",
@@ -658,6 +689,23 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         variant = attrs.get("variant", getattr(self.instance, "variant", None))
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
+        # Captured identifiers and lots belong to a receipt. Only the counter
+        # purchase (and the trade-in, which is one) receives in the same call,
+        # so only those flows may carry them on an order line. Anywhere else
+        # they are refused rather than dropped: a client that sent a lot code
+        # with an ordinary order believes it was recorded, and it would not be
+        # — the receiving dialog is where that order's lots are captured.
+        if (attrs.get("units") or attrs.get("batches")) and not self.context.get(
+            "pos_cash_purchase"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "batches": (
+                        "تُسجَّل الدفعات والمعرّفات عند استلام أمر الشراء، "
+                        "لا على سطوره."
+                    )
+                }
+            )
         expiry_date = attrs.get(
             "expiry_date",
             getattr(self.instance, "expiry_date", None),
@@ -2171,31 +2219,6 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
             request=self.context.get("request"),
             **validated_data,
         )
-
-
-class ReceiptBatchCaptureSerializer(serializers.Serializer):
-    """One production lot on a delivery, with the quantity that arrived of it.
-
-    Deliveries routinely bundle several lots under one order line, so a line may
-    carry more than one of these and their quantities must sum to what was
-    accepted.
-    """
-
-    code = serializers.CharField(
-        max_length=120, required=False, allow_blank=True, trim_whitespace=True
-    )
-    quantity = _quantity_input_field(min_value=Decimal("0"), required=False)
-    expiry_date = serializers.DateField(required=False, allow_null=True)
-    manufactured_on = serializers.DateField(required=False, allow_null=True)
-    gtin = serializers.CharField(
-        max_length=14, required=False, allow_blank=True, trim_whitespace=True
-    )
-    barcode = serializers.CharField(
-        max_length=120, required=False, allow_blank=True, trim_whitespace=True
-    )
-    unit_cost = serializers.DecimalField(
-        max_digits=18, decimal_places=6, required=False, allow_null=True
-    )
 
 
 class PurchaseReceiptLineInputSerializer(serializers.Serializer):

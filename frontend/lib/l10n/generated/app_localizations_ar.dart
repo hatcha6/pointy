@@ -11660,6 +11660,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posCashPurchaseRemoveLineTooltip => 'إزالة الصنف';
 
   @override
+  String get posCashPurchaseLotOptionalLabel => 'رقم الدفعة (اختياري)';
+
+  @override
+  String posCashPurchaseLotLabel(String code) {
+    return 'دفعة $code';
+  }
+
+  @override
+  String posCashPurchaseLotsCountLabel(int count) {
+    return 'الدفعات: $count';
+  }
+
+  @override
+  String get posCashPurchaseLotRequiredError =>
+      'هذا الصنف يُشترى برقم دفعة — أدخل رقم الدفعة.';
+
+  @override
+  String get posCashPurchaseLotsMismatchError =>
+      'كميات الدفعات لا تطابق الكمية المشتراة — عدّل الدفعات.';
+
+  @override
   String get collectDebtSessionDescription =>
       'استلام دفعة من عميل عليه رصيد آجل';
 

@@ -219,7 +219,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
       // The lots carry their own dates. A line that also asks for one gets
       // the first to expire, rather than making the receiver type it twice.
       final expiryController = _expiryControllers[line.id];
-      final earliest = _earliestExpiry(batches);
+      final earliest = earliestLotExpiry(batches);
       if (expiryController != null &&
           earliest != null &&
           _parseReceiveDate(expiryController.text.trim()) == null) {
@@ -645,15 +645,4 @@ class _ReceiveDateDashInputFormatter extends TextInputFormatter {
       selection: TextSelection.collapsed(offset: text.length),
     );
   }
-}
-
-DateTime? _earliestExpiry(List<ReceiptBatchCapture> batches) {
-  DateTime? earliest;
-  for (final batch in batches) {
-    final expiry = batch.expiryDate;
-    if (expiry != null && (earliest == null || expiry.isBefore(earliest))) {
-      earliest = expiry;
-    }
-  }
-  return earliest;
 }

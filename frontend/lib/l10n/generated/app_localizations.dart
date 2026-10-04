@@ -20017,6 +20017,36 @@ abstract class AppLocalizations {
   /// **'إزالة الصنف'**
   String get posCashPurchaseRemoveLineTooltip;
 
+  /// Lot chip on a batch-tracked cash purchase line before any lot is captured; the lot may be left out.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الدفعة (اختياري)'**
+  String get posCashPurchaseLotOptionalLabel;
+
+  /// Lot chip on a cash purchase line once one lot is captured.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة {code}'**
+  String posCashPurchaseLotLabel(String code);
+
+  /// Lot chip on a cash purchase line split across several lots.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات: {count}'**
+  String posCashPurchaseLotsCountLabel(int count);
+
+  /// Shown when a serial+lot tracked line has no lot captured.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الصنف يُشترى برقم دفعة — أدخل رقم الدفعة.'**
+  String get posCashPurchaseLotRequiredError;
+
+  /// Shown when a line's captured lot quantities no longer add up to its quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'كميات الدفعات لا تطابق الكمية المشتراة — عدّل الدفعات.'**
+  String get posCashPurchaseLotsMismatchError;
+
   /// No description provided for @collectDebtSessionDescription.
   ///
   /// In ar, this message translates to:

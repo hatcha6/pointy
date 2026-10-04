@@ -168,6 +168,20 @@ class ReceiptLineCapture {
   }
 }
 
+/// The first of [batches] to expire, or null when none carries a date — what
+/// a line that also asks for one expiry takes from its lots, so nobody types
+/// the same date twice.
+DateTime? earliestLotExpiry(Iterable<ReceiptBatchCapture> batches) {
+  DateTime? earliest;
+  for (final batch in batches) {
+    final expiry = batch.expiryDate;
+    if (expiry != null && (earliest == null || expiry.isBefore(earliest))) {
+      earliest = expiry;
+    }
+  }
+  return earliest;
+}
+
 String _dateOnly(DateTime value) {
   final month = value.month.toString().padLeft(2, '0');
   final day = value.day.toString().padLeft(2, '0');

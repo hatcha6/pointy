@@ -603,6 +603,7 @@ class PurchaseOrderDraft {
               unit: line.unitCode,
               expiryDate: line.expiryDate,
               units: line.units,
+              batches: line.batches,
             ),
           )
           .toList(growable: false),
@@ -844,6 +845,7 @@ class PurchaseDraftLine {
     this.unitAllowsFractional = false,
     this.expiryDate,
     this.units = const [],
+    this.batches = const [],
   });
 
   final ProductVariant variant;
@@ -869,6 +871,10 @@ class PurchaseDraftLine {
 
   /// Identifiers scanned at the counter; see [PurchaseOrderLineDraft.units].
   final List<ReceiptUnitCapture> units;
+
+  /// Lots read off the boxes at the counter; see
+  /// [PurchaseOrderLineDraft.batches].
+  final List<ReceiptBatchCapture> batches;
 
   double get subtotal => unitCost * quantity;
 
@@ -961,6 +967,7 @@ class PurchaseOrderLineDraft {
     this.expiryDate,
     this.unitCostInCurrency,
     this.units = const [],
+    this.batches = const [],
   });
 
   final int variantId;
@@ -979,10 +986,15 @@ class PurchaseOrderLineDraft {
 
   /// Identifiers captured at the counter, for the one flow where ordering and
   /// receiving are the same act: a shop buying a handset off a walk-in seller
-  /// scans the IMEI while the person is still standing there. Ignored by every
-  /// other purchase path, and empty for everything a shop counts rather than
-  /// identifies.
+  /// scans the IMEI while the person is still standing there. Refused by the
+  /// server on every other purchase path, and empty for everything a shop
+  /// counts rather than identifies.
   final List<ReceiptUnitCapture> units;
+
+  /// The lots the goods came in, captured at the same counter for the same
+  /// reason, in base units. The server refuses them on any order that does not
+  /// receive in the same call, so only the counter purchase ever sets them.
+  final List<ReceiptBatchCapture> batches;
 
   Map<String, Object?> toJson() {
     final normalizedUnit = unit.trim();
@@ -996,6 +1008,11 @@ class PurchaseOrderLineDraft {
         'unit_cost_in_currency': unitCostJson(unitCostInCurrency!),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
       if (units.isNotEmpty) 'units': [for (final unit in units) unit.toJson()],
+      if (batches.isNotEmpty)
+        'batches': [
+          for (final batch in batches)
+            if (!batch.isEmpty) batch.toJson(),
+        ],
     };
   }
 }

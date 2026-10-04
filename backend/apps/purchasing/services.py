@@ -744,13 +744,21 @@ def _add_expected_stock(purchase_order, *, created_by):
     create_stock_movements(movements)
 
 
+_RECEIPT_CAPTURE_KEYS = frozenset({"units", "batches"})
+
+
 def _seeded_purchase_line(purchase_order, line_data):
-    # ``units`` is a capture payload, not a column: the counter purchase reads
-    # it off the line and hands it to the receipt (see
-    # ``_counter_purchase_receipt_lines``). Dropped here rather than in each
-    # caller so an ordinary purchase order that happens to carry one is saved
-    # rather than refused with a TypeError.
-    line_data = {key: value for key, value in line_data.items() if key != "units"}
+    # ``units`` and ``batches`` are capture payloads, not columns: the counter
+    # purchase reads them off the line and hands them to the receipt (see
+    # ``_counter_purchase_receipt_lines``). The API refuses them on any other
+    # order (``PurchaseLineSerializer.validate``); dropped here as well so a
+    # service-level caller that passes one gets an order rather than a
+    # TypeError.
+    line_data = {
+        key: value
+        for key, value in line_data.items()
+        if key not in _RECEIPT_CAPTURE_KEYS
+    }
     line = PurchaseLine(purchase_order=purchase_order, **line_data)
     line.net_line_total = line.line_total
     line.net_unit_cost = line.unit_cost
@@ -2411,22 +2419,90 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
 
 
 def _counter_purchase_receipt_lines(purchase_order, captures):
-    """Pair each captured identifier list with the line it was scanned against.
+    """Pair what was captured on each line with the line it was captured on.
 
+    ``captures`` is one ``(units, batches)`` pair per posted line, in order.
     ``None`` when nothing was captured at all, which is every counter purchase
     of anything a shop counts rather than identifies — and which makes
-    ``receive_purchase_order`` take its ordinary default-everything path.
+    ``receive_purchase_order`` take its ordinary default-everything path. A
+    ``batch`` line takes that path too when the cashier named no lot: the
+    receipt files the goods under one generated lot (``LOT-PO…``, marked
+    «بدون رقم دفعة») carrying the line's own expiry date, so bread and milk
+    bought from the drawer keep selling earliest-expiry-first exactly as
+    before. Only ``serial_batch`` cannot fall back — its lot is required, and
+    the receipt refuses it in Arabic.
     """
-    if not any(captures):
+    if not any(units or batches for units, batches in captures):
         return None
     lines = list(purchase_order.lines.select_related("variant__product").order_by("id"))
     rows = []
-    for line, captured in zip(lines, captures):
+    for line, (units, batches) in zip(lines, captures):
         row = {"line": line, "accepted_quantity": line.outstanding_quantity}
-        if captured:
-            row["units"] = captured
+        if units:
+            row["units"] = units
+        if batches:
+            row["batches"] = _counter_purchase_lots(line, batches)
         rows.append(row)
     return rows
+
+
+def _counter_purchase_lots(line, batches):
+    """The lot rows of one counter line, made to say what the cashier meant.
+
+    The receive endpoint's shape, with the two defaults a counter needs: one
+    lot sent without a quantity is the whole line (the cashier read one code off
+    the box), and a lot sent without an expiry takes the line's — the date the
+    sheet already asked for. Quantities are base units, so a carton of 24 is a
+    lot of 24, never of 1.
+    """
+    mode = tracking.mode_of(line.variant)
+    rows = [dict(row) for row in batches]
+    if not tracking.tracks_lots(mode):
+        # Passed through untouched, exactly as the receive endpoint passes
+        # them: a counted product ignores lot rows, and a ``serial`` one takes
+        # the first as an optional lot header for its articles.
+        return rows
+    for row in rows:
+        if not row.get("expiry_date") and line.expiry_date:
+            row["expiry_date"] = line.expiry_date
+    base_quantity = line.to_base_quantity(line.outstanding_quantity)
+    if tracking.tracks_units(mode):
+        # ``serial_batch``: one lot header over the whole scan loop. The
+        # receipt gives every article the first row and ignores the rest, so a
+        # second row would be a lot that silently names nothing.
+        if len(rows) > 1:
+            raise serializers.ValidationError(
+                {
+                    "batches": (
+                        "الصنف المسلسل ضمن دفعة يُشترى بدفعة واحدة لكل سطر."
+                    )
+                }
+            )
+        return rows
+    if len(rows) == 1 and not rows[0].get("quantity"):
+        rows[0]["quantity"] = base_quantity
+    captured = sum((Decimal(row.get("quantity") or 0) for row in rows), Decimal("0"))
+    # Checked here as well as by the receipt: a set of lots that all came in
+    # with no quantity would otherwise be skipped row by row and land, without
+    # a word, in a generated lot — the one outcome a cashier who typed a lot
+    # code did not ask for.
+    if captured != base_quantity:
+        raise serializers.ValidationError(
+            {
+                "batches": (
+                    f"مجموع كميات الدفعات ({_plain_quantity(captured)}) لا "
+                    f"يساوي الكمية المشتراة ({_plain_quantity(base_quantity)})."
+                ),
+                "captured": str(captured),
+                "expected": str(base_quantity),
+            }
+        )
+    return rows
+
+
+def _plain_quantity(value):
+    """``24`` rather than ``24.000000`` in a sentence a cashier reads."""
+    return format(Decimal(value).normalize(), "f")
 
 
 @transaction.atomic
@@ -2470,10 +2546,13 @@ def create_pos_cash_purchase(*, request, validated_data):
     landed_cost_entries_data = validated_data.pop("landed_cost_entries", None)
     # The counter purchase is the one flow where ordering and receiving are the
     # same act — a shop buying a handset off a walk-in scans the IMEI while the
-    # seller is still standing there — so the identifiers ride in on the order's
-    # own lines and are handed to the receipt below. Stripped here because they
-    # belong to the receipt, not to the order line.
-    captures = [line.pop("units", None) for line in lines_data]
+    # seller is still standing there — so the identifiers, and the lots the
+    # goods came in, ride in on the order's own lines and are handed to the
+    # receipt below. Stripped here because they belong to the receipt, not to
+    # the order line.
+    captures = [
+        (line.pop("units", None), line.pop("batches", None)) for line in lines_data
+    ]
 
     # Hard stop, with no acknowledgement path: a cashier cannot judge whether
     # 130.00 per loaf is plausible and has no permission to override it. In the

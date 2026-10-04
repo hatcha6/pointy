@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../core/parsing.dart';
+import '../../../core/error_messages.dart';
 import '../../../core/result.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/product.dart';
@@ -12,6 +12,7 @@ import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/receipt_capture.dart';
+import '../../inventory/views/batch_capture_sheet.dart';
 import '../../inventory/views/unit_capture_sheet.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/catalog_repository.dart';
@@ -19,11 +20,11 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/api_session.dart';
-import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
+import 'pos_cash_purchase_line.dart';
 import 'pos_variant_picker_sheet.dart';
 import '../../../data/models/purchase_cost_warning.dart';
 import '../../../shared/components/pointy_progress.dart';
@@ -92,7 +93,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
   List<Product> _productResults = const [];
   bool _searchingProducts = false;
 
-  final List<_CashPurchaseLine> _lines = [];
+  final List<PosCashPurchaseLine> _lines = [];
 
   ShopSettings? _settings;
   bool _submitting = false;
@@ -205,6 +206,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
     if (existing != null) {
       setState(() {
         existing.quantity += 1;
+        existing.syncSingleLot();
         existing.revision += 1;
       });
       return;
@@ -214,7 +216,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
     final defaultUnit = options
         .where((option) => option.code == product.defaultPurchaseUnit)
         .firstOrNull;
-    final line = _CashPurchaseLine(
+    final line = PosCashPurchaseLine(
       product: product,
       variant: variant,
       unitOptions: options,
@@ -229,7 +231,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
   /// One widget, several callers: what differs between buying forty handsets
   /// from a distributor and buying one off a walk-in is the paperwork, not the
   /// act of reading a number off a box.
-  Future<void> _captureIdentifiers(_CashPurchaseLine line) async {
+  Future<void> _captureIdentifiers(PosCashPurchaseLine line) async {
     final captured = await showUnitCaptureSheet(
       context,
       productLabel: line.product.name,
@@ -246,7 +248,30 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
     setState(() => line.units = captured);
   }
 
-  Future<void> _prefillLastCost(_CashPurchaseLine line) async {
+  /// The receiving bay's own lot sheet, so a lot means the same thing on both
+  /// paths: code, expiry, and quantity in base units. A serialised pack's lot
+  /// is one header over its scan loop, so that line gets a single row.
+  Future<void> _captureLots(PosCashPurchaseLine line) async {
+    final captured = await showBatchCaptureSheet(
+      context,
+      productLabel: line.product.name,
+      expectedQuantity: line.baseQuantity,
+      initial: line.batches,
+      suggestedExpiry: line.expiryDate,
+      singleLot: line.needsIdentifiers,
+    );
+    if (captured == null || !mounted) {
+      return;
+    }
+    setState(() {
+      line.batches = captured;
+      // The lot carries its own date; a line that also asks for one takes the
+      // first to expire rather than making the cashier type it twice.
+      line.expiryDate ??= earliestLotExpiry(captured);
+    });
+  }
+
+  Future<void> _prefillLastCost(PosCashPurchaseLine line) async {
     final result = await widget.purchaseRepository.loadLastProductCost(
       line.product.id,
       variantId: line.variant.id,
@@ -267,7 +292,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
     });
   }
 
-  void _changeLineUnit(_CashPurchaseLine line, UnitOption unit) {
+  void _changeLineUnit(PosCashPurchaseLine line, UnitOption unit) {
     setState(() {
       line.unit = unit;
       // A not-yet-touched cost keeps tracking the last known cost in the newly
@@ -275,11 +300,12 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
       if (!line.costEdited && line.lastBaseCost != null) {
         line.unitCost = line.lastBaseCost! * unit.factorToBase;
       }
+      line.syncSingleLot();
       line.revision += 1;
     });
   }
 
-  void _removeLine(_CashPurchaseLine line) {
+  void _removeLine(PosCashPurchaseLine line) {
     setState(() => _lines.remove(line));
   }
 
@@ -312,6 +338,11 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
       if (line.product.tracksExpiry && line.expiryDate == null) {
         return l10n.posCashPurchaseExpiryRequiredError;
       }
+      if (!line.lotsComplete) {
+        return line.batches.isEmpty
+            ? l10n.posCashPurchaseLotRequiredError
+            : l10n.posCashPurchaseLotsMismatchError;
+      }
     }
     if (_overLimit) {
       return l10n.posCashPurchaseOverLimitError(formatMoney(_limit!));
@@ -332,7 +363,10 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
           // number, here rather than at the server: the seller is standing in
           // front of the cashier and the handset is in their hand, which is the
           // only moment the number is free to get.
-          line.identifiersComplete,
+          line.identifiersComplete &&
+          // The same for a serialised pack's lot, and for lots that no longer
+          // add up to the line after its quantity changed.
+          line.lotsComplete,
     );
   }
 
@@ -358,6 +392,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
           unitAllowsFractional: line.unit.allowsFractional,
           expiryDate: line.expiryDate,
           units: line.units,
+          batches: line.capturesLots ? line.batches : const [],
         ),
     ];
     final result = await widget.purchaseRepository.submitPosCashPurchase(
@@ -407,7 +442,10 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
         return l10n.posCashPurchaseExpiryRequiredError;
       }
     }
-    return l10n.posCashPurchaseCreateError;
+    // A lot or identifier the server refused — a known lot with another
+    // expiry, an IMEI already in stock — comes back as an Arabic sentence that
+    // names it; that beats a generic failure for a cashier holding the box.
+    return arabicBackendDetailFor(exception) ?? l10n.posCashPurchaseCreateError;
   }
 
   // --- build ----------------------------------------------------------------
@@ -642,13 +680,16 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final line = _lines[index];
-        return _CashPurchaseLineRow(
+        return PosCashPurchaseLineRow(
           key: ValueKey(
             '${line.variant.id}:${line.unit.code}:${line.revision}',
           ),
           line: line,
           enabled: !_submitting,
-          onQuantityChanged: (value) => line.quantity = value,
+          onQuantityChanged: (value) {
+            line.quantity = value;
+            line.syncSingleLot();
+          },
           onUnitCostChanged: (value) {
             line.unitCost = value;
             line.costEdited = true;
@@ -662,6 +703,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
           onCaptureIdentifiers: line.needsIdentifiers
               ? () => _captureIdentifiers(line)
               : null,
+          onCaptureLots: line.capturesLots ? () => _captureLots(line) : null,
         );
       },
     );
@@ -722,270 +764,5 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
         ),
       ],
     );
-  }
-}
-
-/// Mutable in-sheet draft line. [revision] keys the row widget so programmatic
-/// changes (cost prefill arriving, unit switches, re-add increments) rebuild
-/// the row's text fields with fresh values, while plain typing never does.
-class _CashPurchaseLine {
-  _CashPurchaseLine({
-    required this.product,
-    required this.variant,
-    required this.unitOptions,
-    required this.unit,
-  });
-
-  final Product product;
-  final ProductVariant variant;
-  final List<UnitOption> unitOptions;
-  UnitOption unit;
-  double quantity = 1;
-  double? unitCost;
-  bool costEdited = false;
-  double? lastBaseCost;
-  DateTime? expiryDate;
-  int revision = 0;
-
-  /// The identifiers scanned off the goods the customer is handing over. The
-  /// counter purchase is the one flow where ordering and receiving are the same
-  /// act, so they are captured here rather than at a receiving bay the article
-  /// will never see.
-  List<ReceiptUnitCapture> units = const [];
-
-  bool get needsIdentifiers => product.trackingMode.tracksUnits;
-
-  /// How many articles this line is, in base units — what the identifiers
-  /// are counted against.
-  int get baseUnitCount => (quantity * unit.factorToBase).round();
-
-  bool get identifiersComplete =>
-      !needsIdentifiers || units.length == baseUnitCount;
-}
-
-class _CashPurchaseLineRow extends StatefulWidget {
-  const _CashPurchaseLineRow({
-    super.key,
-    required this.line,
-    required this.enabled,
-    required this.onQuantityChanged,
-    required this.onUnitCostChanged,
-    required this.onUnitChanged,
-    required this.onExpiryChanged,
-    required this.onRemove,
-    required this.onTotalDirty,
-    this.onCaptureIdentifiers,
-  });
-
-  final _CashPurchaseLine line;
-  final bool enabled;
-  final ValueChanged<double> onQuantityChanged;
-  final ValueChanged<double> onUnitCostChanged;
-  final ValueChanged<UnitOption> onUnitChanged;
-  final ValueChanged<DateTime?> onExpiryChanged;
-  final VoidCallback onRemove;
-  final VoidCallback onTotalDirty;
-
-  /// Null for anything a shop counts rather than identifies, which is how this
-  /// row stays exactly as it was for the bread and the cooking oil.
-  final VoidCallback? onCaptureIdentifiers;
-
-  @override
-  State<_CashPurchaseLineRow> createState() => _CashPurchaseLineRowState();
-}
-
-class _CashPurchaseLineRowState extends State<_CashPurchaseLineRow> {
-  late final TextEditingController _quantityController = TextEditingController(
-    text: _trimmedNumber(widget.line.quantity),
-  );
-  late final TextEditingController _costController = TextEditingController(
-    text: widget.line.unitCost == null
-        ? ''
-        : widget.line.unitCost!.toStringAsFixed(2),
-  );
-
-  @override
-  void dispose() {
-    _quantityController.dispose();
-    _costController.dispose();
-    super.dispose();
-  }
-
-  static String _trimmedNumber(double value) {
-    if (value == value.roundToDouble()) {
-      return value.toStringAsFixed(0);
-    }
-    return value.toString();
-  }
-
-  static String _isoDate(DateTime date) =>
-      date.toIso8601String().split('T').first;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
-    final textTheme = Theme.of(context).textTheme;
-    final line = widget.line;
-    final lineTotal = (line.unitCost ?? 0) * line.quantity;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  line.product.name,
-                  style: textTheme.titleSmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                formatMoney(lineTotal),
-                style: textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              IconButton(
-                tooltip: l10n.posCashPurchaseRemoveLineTooltip,
-                onPressed: widget.enabled ? widget.onRemove : null,
-                icon: const Icon(Icons.delete_outline, size: 20),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              if (line.unitOptions.length > 1) ...[
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: line.unit.code,
-                    isDense: true,
-                    items: [
-                      for (final option in line.unitOptions)
-                        DropdownMenuItem(
-                          value: option.code,
-                          child: Text(option.label),
-                        ),
-                    ],
-                    onChanged: widget.enabled
-                        ? (code) {
-                            final option = line.unitOptions
-                                .where((candidate) => candidate.code == code)
-                                .firstOrNull;
-                            if (option != null) {
-                              widget.onUnitChanged(option);
-                            }
-                          }
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              SizedBox(
-                width: 88,
-                child: TextFormField(
-                  controller: _quantityController,
-                  enabled: widget.enabled,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [DecimalTextInputFormatter()],
-                  decoration: InputDecoration(
-                    labelText: l10n.posCashPurchaseQuantityLabel,
-                    isDense: true,
-                  ),
-                  onChanged: (value) {
-                    widget.onQuantityChanged(parseDecimal(value) ?? 0);
-                    widget.onTotalDirty();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 112,
-                child: TextFormField(
-                  controller: _costController,
-                  enabled: widget.enabled,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [DecimalTextInputFormatter()],
-                  decoration: InputDecoration(
-                    labelText: l10n.posCashPurchaseUnitCostLabel,
-                    isDense: true,
-                  ),
-                  onChanged: (value) {
-                    widget.onUnitCostChanged(parseDecimal(value) ?? 0);
-                  },
-                ),
-              ),
-            ],
-          ),
-          if (line.product.tracksExpiry)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: ActionChip(
-                  avatar: Icon(
-                    Icons.event_outlined,
-                    size: 18,
-                    color: line.expiryDate == null
-                        ? colors.danger
-                        : colors.mutedInk,
-                  ),
-                  label: Text(
-                    line.expiryDate == null
-                        ? l10n.posCashPurchaseExpiryLabel
-                        : _isoDate(line.expiryDate!),
-                  ),
-                  onPressed: widget.enabled ? _pickExpiry : null,
-                ),
-              ),
-            ),
-          if (widget.onCaptureIdentifiers != null)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: ActionChip(
-                  avatar: Icon(
-                    Icons.qr_code_2_outlined,
-                    size: 18,
-                    color: line.identifiersComplete
-                        ? colors.mutedInk
-                        : colors.danger,
-                  ),
-                  label: Text(
-                    l10n.unitCaptureProgress(
-                      line.units.length,
-                      line.baseUnitCount,
-                    ),
-                  ),
-                  onPressed: widget.enabled
-                      ? widget.onCaptureIdentifiers
-                      : null,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _pickExpiry() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: widget.line.expiryDate ?? now.add(const Duration(days: 7)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365 * 5)),
-    );
-    if (picked != null) {
-      widget.onExpiryChanged(picked);
-    }
   }
 }

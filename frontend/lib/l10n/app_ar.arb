@@ -7438,6 +7438,36 @@
   "posCashPurchaseNoSessionError": "تحتاج وردية صندوق مفتوحة لتسجيل شراء نقدي",
   "posCashPurchaseCreateError": "تعذر تسجيل الشراء. تحقق من البيانات وحاول مرة أخرى.",
   "posCashPurchaseRemoveLineTooltip": "إزالة الصنف",
+  "posCashPurchaseLotOptionalLabel": "رقم الدفعة (اختياري)",
+  "@posCashPurchaseLotOptionalLabel": {
+    "description": "Lot chip on a batch-tracked cash purchase line before any lot is captured; the lot may be left out."
+  },
+  "posCashPurchaseLotLabel": "دفعة {code}",
+  "@posCashPurchaseLotLabel": {
+    "description": "Lot chip on a cash purchase line once one lot is captured.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "posCashPurchaseLotsCountLabel": "الدفعات: {count}",
+  "@posCashPurchaseLotsCountLabel": {
+    "description": "Lot chip on a cash purchase line split across several lots.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posCashPurchaseLotRequiredError": "هذا الصنف يُشترى برقم دفعة — أدخل رقم الدفعة.",
+  "@posCashPurchaseLotRequiredError": {
+    "description": "Shown when a serial+lot tracked line has no lot captured."
+  },
+  "posCashPurchaseLotsMismatchError": "كميات الدفعات لا تطابق الكمية المشتراة — عدّل الدفعات.",
+  "@posCashPurchaseLotsMismatchError": {
+    "description": "Shown when a line's captured lot quantities no longer add up to its quantity."
+  },
   "collectDebtSessionDescription": "استلام دفعة من عميل عليه رصيد آجل",
   "refreshCatalogDescription": "مزامنة قائمة المنتجات مع الخادم",
   "closeRegisterSessionDescription": "إنهاء الجلسة وعدّ النقدية في الدرج",
