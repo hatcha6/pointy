@@ -2,11 +2,17 @@
 
 **Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17,
 Phase C shipped 2026-09-18, A & B reviewed 2026-09-18, C reviewed 2026-09-19,
-Phase D shipped 2026-09-19, Phase E shipped 2026-09-19)
+Phase D shipped 2026-09-19, Phase E shipped 2026-09-19, client pass
+2026-10-04, remaining gaps closed 2026-10-05)
 **Status:** **Phases A–E shipped** — the shared allocation core and
 ledger, the shop operating both from the client, the used-goods trade with
 consignment carrying a real liability, safety, recall and warehouse
 operations, and the migration that converts the prospect's catalogue (§15).
+**Closed 2026-10-05:** selling a serialized article without naming it is now
+refused, with open orders keeping their selection until paid (§6.3); recalled
+lots and unscanned units go back to the supplier (§5.5); the counter purchase
+captures lots (§6.2). What is still deliberately out is listed under each
+phase's **DEFERRED, and honestly out** and in §17.
 **Phase D's first job was to un-gate the feature**: a
 transfer, a stock count, a manual adjustment and a job's materials all *raised*
 on a tracked product, so no shop could have turned this on. They allocate now.
@@ -1338,9 +1344,26 @@ the shelf's own rate, record the order's supplier, and leave anything not
 scanned on the missing-identifier worklist (a `serial_batch` replacement still
 needs its lot). The old path's `consume_expiring_stock_batches` **applied** a
 lot drawdown and dropped the plan; it was replaced rather than supplemented,
-or the lots would have been drawn twice. Still open: a quarantined lot cannot
-go back to its supplier, because `pick_balances` serves sellable balances only.
-Tests: `apps/purchasing/test_adjustment_identified_stock.py`.
+or the lots would have been drawn twice. Tests:
+`apps/purchasing/test_adjustment_identified_stock.py`.
+
+**CLOSED 2026-10-05 — a recalled lot, and an unscanned unit, go back to the
+supplier.** A quarantine is a stop-*sale*, and sending the lot back is the
+normal end of a recall (§6.8.1), yet `pick_balances` served sellable balances
+only and `_refuse_unsellable_units` refused placeholders. The purchase return,
+refund and exchange path now passes `releasing_to_supplier=True` through
+`allocate_adjustment` → `plan_adjustment` → `plan_issue` (`include_unsellable`
+at `pick_balances`), and **nothing else does** — the till, transfers, counts,
+write-offs and job materials keep every stop-sale. With it, named lots may be
+quarantined or expired (drained before a good lot named beside them), a pack in
+a quarantined lot may leave, and a «بانتظار المعرّف» placeholder may go back
+unscanned. An unnamed lot return keeps to sellable balances and reaches a
+quarantined one only for what they cannot cover. Damaged units stay out:
+`damaged` is not on-hand, so returning one through a door that subtracts the bin
+would push the bin wrong. The return dialog gained a lot step
+(`shared/tracking/lot_pick_sheet.dart`) listing the order's lots, stopped ones
+first and badged; the unit sheet lists placeholders and quarantined packs.
+Tests: `apps/purchasing/test_supplier_return_recalled_stock.py`.
 
 Rule: **re-stamp the units, and the balances, of any receipt line whose
 `allocated_landed_cost` changed, then `repost_variant`.** For a lot this means
@@ -1736,6 +1759,18 @@ purchase order with one line.
 - **Counter purchase.** The POS cash-purchase flow (`pos-cash-purchases`) already
   creates a received-and-paid PO with a linked register pay-out. Serialized, it
   becomes: pick or create the model → scan/type primary code (IMEI/Serial/VIN/Cert) → complete condition & accessory checklist → enter agreed buy price → the drawer opens. One sheet, one unit, one pay-out, correct ledger.
+  **Lots landed 2026-10-05.** The counter purchase used to carry `units` only,
+  so a `serial_batch` product was refused at the counter and a `batch` one
+  landed in a generated lot. PO lines now take receipt-shaped `batches`
+  (`ReceiptBatchCaptureSerializer`, base units) — honoured only where the
+  serializer context says `pos_cash_purchase` (the counter and the trade-in);
+  an ordinary order carrying `units` or `batches` is refused rather than
+  silently dropping them. `batch`: one lot without a quantity is the whole
+  line, lots must sum to the base quantity, a lot without an expiry takes the
+  line's, and no lot at all keeps the generated-lot fallback (bread and milk
+  need no lot code). `serial_batch`: one lot header plus the IMEIs. The sheet
+  reuses the receiving bay's `showBatchCaptureSheet`. Tests:
+  `apps/purchasing/test_pos_cash_purchase_lots.py`.
 - **Condition & Included Accessories Checklist.** Intake across any domain (laptops, cameras, watches, bikes, tools) renders the asset type's `UnitAttributeDefinition` form. Cashiers fill required condition metrics (e.g., battery health, shutter count, cosmetic grade) and check included accessories (box, charger, cables, certificate of authenticity). This checklist is saved into `unit.attributes`, printed on the intake receipt, and displayed on the POS unit picker sheet.
 - **Trade-in.** Customer buys a phone/laptop/watch and gives one in part-payment. That is a
   purchase and a sale in one transaction. `OrderExchange`
@@ -2049,6 +2084,16 @@ Everything else is fallback and guard rails:
   `pos-keyboard-shortcuts`).
 - **Selling without picking is refused**, always, whatever `allow_overselling`
   says (§3.5). The error names the product in Arabic and offers the picker.
+  **CLOSED 2026-10-05.** `prepare_sale_stock_adjustments` refuses a serial or
+  serial_batch issue that names no unit (`code: stock_unit_required`), and
+  `OrderLine.stock_selection` (sales `0040`, nullable, no default) is the
+  column the paragraph below asked for: an order written open through
+  `/api/orders/` keeps `stock_units` / `stock_unit_codes` / `stock_batches`
+  until the payment issues the stock, and the order serializer refuses a serial
+  line that names none, or the wrong count, when it is written. The refusal is
+  universal by decision — the compat/win8 till has no picker and gets it too;
+  serialized goods are sold from a current till. Tests:
+  `apps/sales/test_serialized_sale_naming.py`. What it replaced:
   **DEFERRED 2026-09-18 — not implemented.** `_plan_unit_issue` silently takes
   the oldest sellable article instead, so the invoice, the printed warranty
   document and `StockUnit.sold_order_line` can all name a handset still in the
@@ -3705,7 +3750,10 @@ deleted row's text over the row that shifted up.
 client-version gate needs a device registry the shop does not have — only
 telemetry carries `app_version` — and its purpose was to stop an old till hitting
 a hard 400 it cannot recover from, which is mostly moot while §6.3's refusal is
-deferred and the settings flags now gate the surfaces. And `tracks_expiry` still
+deferred and the settings flags now gate the surfaces. *(2026-10-05: the refusal
+now ships, and the decision was to apply it to every client — the compat/win8
+till included, which cannot pick a unit and so cannot sell serialized goods. The
+gate stays unbuilt; the Arabic refusal is the old till's answer.)* And `tracks_expiry` still
 coexists with `tracking_mode` rather than becoming the derived property of §18.4;
 folding it in would move every expiry-tracking shop onto the lot path, changing
 what receiving asks for and what checkout refuses, so it belongs with the contract
