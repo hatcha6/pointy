@@ -2022,6 +2022,15 @@ variant barcode, unit (carton) barcode and scale barcode: a live `StockUnit`
 quantity 1, the unit's own price, and the identifier as the line subtitle. One
 endpoint call, one indexed lookup, no dialog.
 
+> **Hardened 2026-10-05.** The same IMEI scanned twice no longer adds a second
+> line (which checkout refused as a whole sale): the line already holding it
+> becomes active and the status line says so. The resolve endpoint now takes the
+> till's selling warehouse and answers `sellable: false` with an Arabic
+> `stock_unit_unavailable` warning for a handset held by a quotation, on the
+> road, in another branch or in a stopped lot — named at the scan, not refused
+> three lines later at checkout. A handset the shop already sold carries a
+> `stock_unit_sold` warning naming its invoice instead of "unknown barcode".
+
 **And a fifth: the GS1 DataMatrix, which resolves everything at once.** A
 pharmaceutical pack does not carry a bare serial; it carries a symbol encoding
 GTIN + lot + expiry + serial as Application Identifiers, which is what makes
