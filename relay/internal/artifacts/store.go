@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"os"
@@ -65,7 +66,19 @@ func (s *Store) Put(version string, content io.Reader) (Meta, error) {
 
 // put is Put with an optional expected sha256: on a mismatch nothing is
 // published, so a corrupt download never replaces a good bundle.
-func (s *Store) put(version string, content io.Reader, expectedSHA256 string) (_ Meta, err error) {
+func (s *Store) put(version string, content io.Reader, expectedSHA256 string) (Meta, error) {
+	return s.write(version, expectedSHA256, func(tmp *os.File, hasher hash.Hash) (int64, error) {
+		return io.Copy(io.MultiWriter(tmp, hasher), content)
+	})
+}
+
+// write publishes whatever fill streams into the temp file and hasher. fill
+// owns both, so a resumable download can append across connections or start
+// over (truncate + Reset) without the store knowing.
+func (s *Store) write(
+	version, expectedSHA256 string,
+	fill func(tmp *os.File, hasher hash.Hash) (int64, error),
+) (_ Meta, err error) {
 	clean, err := safeVersion(version)
 	if err != nil {
 		return Meta{}, err
@@ -88,7 +101,7 @@ func (s *Store) put(version string, content io.Reader, expectedSHA256 string) (_
 	defer os.Remove(tmpName)
 
 	hasher := sha256.New()
-	size, err := io.Copy(io.MultiWriter(tmp, hasher), content)
+	size, err := fill(tmp, hasher)
 	if err != nil {
 		tmp.Close()
 		return Meta{}, err

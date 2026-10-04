@@ -4,11 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -138,5 +141,184 @@ func TestFetchRejectsBadInputAndConcurrentFetch(t *testing.T) {
 	close(release)
 	if status := waitFetch(t, store, "1.4.0"); status.State != FetchDone {
 		t.Fatalf("status = %+v", status)
+	}
+}
+
+// fastRetries shrinks the stall watchdog and backoff so resume paths run in
+// milliseconds.
+func fastRetries(t *testing.T) {
+	t.Helper()
+	stall, delay, maxDelay := fetchStallTimeout, fetchRetryDelay, fetchMaxRetryDelay
+	fetchStallTimeout, fetchRetryDelay, fetchMaxRetryDelay = 100*time.Millisecond, time.Millisecond, 5*time.Millisecond
+	t.Cleanup(func() { fetchStallTimeout, fetchRetryDelay, fetchMaxRetryDelay = stall, delay, maxDelay })
+}
+
+// freezingServer serves content with Range support but sends at most perConn
+// bytes on each connection and then goes silent with the socket still open —
+// the relay egress's behaviour that froze every GitHub fetch at ~128 MB.
+func freezingServer(t *testing.T, content []byte, perConn int, honorRange bool) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("ETag", `"v1"`)
+		start := 0
+		if spec, ok := strings.CutPrefix(r.Header.Get("Range"), "bytes="); ok && honorRange {
+			if r.Header.Get("If-Range") != `"v1"` {
+				t.Errorf("resume sent If-Range %q", r.Header.Get("If-Range"))
+			}
+			start, _ = strconv.Atoi(strings.TrimSuffix(spec, "-"))
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, len(content)-1, len(content)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)-start))
+			w.WriteHeader(http.StatusPartialContent)
+		} else {
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+		}
+		end := min(start+perConn, len(content))
+		_, _ = w.Write(content[start:end])
+		w.(http.Flusher).Flush()
+		if end < len(content) {
+			<-r.Context().Done() // frozen: no bytes, no close
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, &requests
+}
+
+func bigBundle() []byte {
+	content := make([]byte, 64<<10)
+	copy(content, zipMagic)
+	for i := len(zipMagic); i < len(content); i++ {
+		content[i] = byte(i * 7)
+	}
+	return content
+}
+
+func TestFetchResumesAFrozenDownload(t *testing.T) {
+	fastRetries(t)
+	content := bigBundle()
+	sum := sha256.Sum256(content)
+	server, requests := freezingServer(t, content, 10_000, true)
+	store, _ := New(t.TempDir())
+
+	if _, err := store.Fetch("1.4.0", FetchRequest{URL: server.URL, SHA256: hex.EncodeToString(sum[:])}); err != nil {
+		t.Fatal(err)
+	}
+	status := waitFetch(t, store, "1.4.0")
+	if status.State != FetchDone || status.Artifact == nil || status.Artifact.SHA256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("status = %+v", status)
+	}
+	if status.BytesReceived != int64(len(content)) || status.BytesTotal != int64(len(content)) {
+		t.Fatalf("progress = %d/%d, want %d", status.BytesReceived, status.BytesTotal, len(content))
+	}
+	if got := requests.Load(); got != 7 || status.Retries != 6 {
+		t.Fatalf("requests = %d, retries = %d; want 7 connections of 10 KB", got, status.Retries)
+	}
+	if !strings.Contains(status.RetryReason, "no data received") {
+		t.Fatalf("retry reason = %q", status.RetryReason)
+	}
+}
+
+func TestFetchGivesUpWhenNoAttemptMakesProgress(t *testing.T) {
+	fastRetries(t)
+	content := bigBundle()
+	// Ignoring Range means every attempt restarts at zero and freezes at the same
+	// spot: bytes arrive each time, yet the download never gets further.
+	server, requests := freezingServer(t, content, 10_000, false)
+	store, _ := New(t.TempDir())
+
+	if _, err := store.Fetch("1.4.0", FetchRequest{URL: server.URL}); err != nil {
+		t.Fatal(err)
+	}
+	status := waitFetch(t, store, "1.4.0")
+	if status.State != FetchFailed || !strings.Contains(status.Error, "no progress") {
+		t.Fatalf("status = %+v", status)
+	}
+	if got := requests.Load(); got != fetchMaxIdleAttempts+1 {
+		t.Fatalf("requests = %d, want %d", got, fetchMaxIdleAttempts+1)
+	}
+	if store.Has("1.4.0") {
+		t.Fatal("an incomplete download must not publish a bundle")
+	}
+}
+
+func TestFetchStartsOverWhenTheServerIgnoresRange(t *testing.T) {
+	fastRetries(t)
+	content := bigBundle()
+	sum := sha256.Sum256(content)
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+		if requests.Add(1) == 1 {
+			_, _ = w.Write(content[:20_000])
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		}
+		_, _ = w.Write(content) // full 200 despite the Range header
+	}))
+	t.Cleanup(server.Close)
+	store, _ := New(t.TempDir())
+
+	if _, err := store.Fetch("1.4.0", FetchRequest{URL: server.URL, SHA256: hex.EncodeToString(sum[:])}); err != nil {
+		t.Fatal(err)
+	}
+	status := waitFetch(t, store, "1.4.0")
+	if status.State != FetchDone || status.Artifact.Size != int64(len(content)) || status.BytesReceived != int64(len(content)) {
+		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestFetchRetriesServerErrors(t *testing.T) {
+	fastRetries(t)
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) < 3 {
+			http.Error(w, "busy", http.StatusBadGateway)
+			return
+		}
+		_, _ = w.Write(fakeBundle)
+	}))
+	t.Cleanup(server.Close)
+	store, _ := New(t.TempDir())
+
+	if _, err := store.Fetch("1.4.0", FetchRequest{URL: server.URL}); err != nil {
+		t.Fatal(err)
+	}
+	if status := waitFetch(t, store, "1.4.0"); status.State != FetchDone || status.Retries != 2 {
+		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestFetchRefusesToSpliceAChangedFile(t *testing.T) {
+	fastRetries(t)
+	content := bigBundle()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") == "" {
+			w.Header().Set("ETag", `"v1"`)
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+			_, _ = w.Write(content[:20_000])
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		}
+		// Re-uploaded meanwhile, and (like Azure) If-Range is ignored.
+		w.Header().Set("ETag", `"v2"`)
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 20000-%d/%d", len(content)-1, len(content)))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(content[20_000:])
+	}))
+	t.Cleanup(server.Close)
+	store, _ := New(t.TempDir())
+
+	if _, err := store.Fetch("1.4.0", FetchRequest{URL: server.URL}); err != nil {
+		t.Fatal(err)
+	}
+	status := waitFetch(t, store, "1.4.0")
+	if status.State != FetchFailed || !strings.Contains(status.Error, "changed on the server") {
+		t.Fatalf("status = %+v", status)
+	}
+	if store.Has("1.4.0") {
+		t.Fatal("a spliced download must not publish a bundle")
 	}
 }

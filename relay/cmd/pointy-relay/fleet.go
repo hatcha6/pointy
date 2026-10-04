@@ -73,6 +73,7 @@ type artifactFetchStatus struct {
 	State         string          `json:"state"`
 	BytesReceived int64           `json:"bytes_received"`
 	BytesTotal    int64           `json:"bytes_total"`
+	Retries       int             `json:"retries"`
 	Error         string          `json:"error"`
 	Artifact      json.RawMessage `json:"artifact"`
 }
@@ -145,12 +146,16 @@ func waitForArtifactFetch(admin *adminControlFlags, version string) error {
 
 func formatFetchProgress(status artifactFetchStatus) string {
 	const mb = 1 << 20
+	progress := fmt.Sprintf("%s %.0f MB", status.State, float64(status.BytesReceived)/mb)
 	if status.BytesTotal > 0 {
-		return fmt.Sprintf("%s %.0f/%.0f MB (%d%%)   ", status.State,
+		progress = fmt.Sprintf("%s %.0f/%.0f MB (%d%%)", status.State,
 			float64(status.BytesReceived)/mb, float64(status.BytesTotal)/mb,
 			status.BytesReceived*100/status.BytesTotal)
 	}
-	return fmt.Sprintf("%s %.0f MB   ", status.State, float64(status.BytesReceived)/mb)
+	if status.Retries > 0 {
+		progress += fmt.Sprintf(", resumed %d×", status.Retries)
+	}
+	return progress + "   "
 }
 
 func artifactFetchPath(version string) string {

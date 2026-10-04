@@ -406,9 +406,12 @@ downloads the zip on its own connection, then publishes it exactly as an upload
 would (`fleet set-version` accepts it the moment it lands). The command waits and
 shows progress; Ctrl-C only stops the waiting, and `artifacts status --version X
 --wait` picks it back up. A download that fails, is not a zip (a share page
-instead of the file), or fails the `--sha256` check publishes nothing. Download
-progress lives in the relay's memory, so a relay restart mid-download drops it —
-just run the command again.
+instead of the file), or fails the `--sha256` check publishes nothing. A
+connection that drops or goes silent for a minute is resumed from the last byte
+with a Range request (`resumed N×` in the progress line); the fetch fails only
+after six attempts in a row get no further, or if the file changes on the server
+mid-download. Download progress lives in the relay's memory, so a relay restart
+mid-download drops it — just run the command again.
 
 ```sh
 pointy-relay artifacts upload --version 1.4.0 \

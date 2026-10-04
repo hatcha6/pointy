@@ -6,10 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -42,6 +45,23 @@ const (
 // fetch slot forever.
 const fetchTimeout = 3 * time.Hour
 
+// fetchMaxIdleAttempts is how many attempts in a row may add no bytes before a
+// download gives up; an attempt that makes any progress resets the count.
+const fetchMaxIdleAttempts = 6
+
+// Variables so tests can run the resume path in milliseconds.
+var (
+	// fetchStallTimeout drops a connection that has delivered nothing for this
+	// long, so the next attempt can resume instead of waiting on the kernel.
+	fetchStallTimeout = time.Minute
+	// fetchRetryDelay is the first pause between attempts; it doubles with each
+	// attempt that makes no progress, up to fetchMaxRetryDelay.
+	fetchRetryDelay    = 2 * time.Second
+	fetchMaxRetryDelay = 30 * time.Second
+)
+
+var errFetchStalled = errors.New("no data received")
+
 // zipMagic is a zip's local-file-header signature. Checking it catches the
 // common wrong-link failure: a share page or login form served as 200 HTML.
 var zipMagic = []byte("PK\x03\x04")
@@ -60,15 +80,18 @@ type FetchRequest struct {
 
 // FetchStatus is a snapshot of a background download.
 type FetchStatus struct {
-	Version       string     `json:"version"`
-	URL           string     `json:"url"`
-	State         string     `json:"state"`
-	BytesReceived int64      `json:"bytes_received"`
-	BytesTotal    int64      `json:"bytes_total"`
-	Error         string     `json:"error,omitempty"`
-	StartedAt     time.Time  `json:"started_at"`
-	FinishedAt    *time.Time `json:"finished_at,omitempty"`
-	Artifact      *Meta      `json:"artifact,omitempty"`
+	Version       string `json:"version"`
+	URL           string `json:"url"`
+	State         string `json:"state"`
+	BytesReceived int64  `json:"bytes_received"`
+	BytesTotal    int64  `json:"bytes_total"`
+	// Retries counts resumed connections; RetryReason is why the last one dropped.
+	Retries     int        `json:"retries,omitempty"`
+	RetryReason string     `json:"retry_reason,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	StartedAt   time.Time  `json:"started_at"`
+	FinishedAt  *time.Time `json:"finished_at,omitempty"`
+	Artifact    *Meta      `json:"artifact,omitempty"`
 }
 
 type fetchJob struct {
@@ -155,35 +178,271 @@ func (s *Store) runFetch(job *fetchJob, version, source, expected string, header
 func (s *Store) download(job *fetchJob, version, source, expected string, headers map[string]string) (Meta, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
+	return s.write(version, expected, func(tmp *os.File, hasher hash.Hash) (int64, error) {
+		d := &resumableDownload{
+			store: s, job: job, source: source, headers: headers,
+			file: tmp, hasher: hasher, total: -1,
+		}
+		return d.run(ctx)
+	})
+}
+
+// resumableDownload streams one bundle into the store's temp file across as
+// many connections as it takes. The relay's egress has been seen to freeze a
+// GitHub download at the same ~128 MB on every try, the socket left open until
+// the kernel gave up minutes later; so each attempt is watched for stalls and
+// the next one asks only for the rest with a Range request.
+type resumableDownload struct {
+	store   *Store
+	job     *fetchJob
+	source  string
+	headers map[string]string
+	file    *os.File
+	hasher  hash.Hash
+
+	written   int64  // bytes on disk, which are exactly the bytes hashed
+	total     int64  // -1 until a full response gives a length
+	validator string // the first response's ETag or Last-Modified, sent as If-Range
+}
+
+func (d *resumableDownload) run(ctx context.Context) (int64, error) {
+	// Progress is the furthest point reached, not bytes received: a server
+	// that ignores Range restarts from zero and must not count as advancing.
+	idle, furthest := 0, int64(0)
+	for {
+		err := d.attempt(ctx)
+		if err == nil {
+			return d.written, nil
+		}
+		var final *permanentError
+		if errors.As(err, &final) {
+			return d.written, final.err
+		}
+		if ctx.Err() != nil {
+			return d.written, err
+		}
+		if d.written > furthest {
+			idle, furthest = 0, d.written
+		} else {
+			idle++
+		}
+		if idle >= fetchMaxIdleAttempts {
+			return d.written, fmt.Errorf("gave up after %d attempts with no progress at %s: %w",
+				idle, formatMB(d.written), err)
+		}
+		d.store.noteFetchRetry(d.job, err)
+		select {
+		case <-ctx.Done():
+			return d.written, err
+		case <-time.After(fetchBackoff(idle)):
+		}
+	}
+}
+
+// attempt makes one request for whatever is still missing. Errors wrapped in
+// permanentError end the download; any other error is a dropped or stalled
+// connection worth resuming.
+func (d *resumableDownload) attempt(parent context.Context) error {
+	ctx, cancel := context.WithCancelCause(parent)
+	defer cancel(nil)
+	stall := time.AfterFunc(fetchStallTimeout, func() { cancel(errFetchStalled) })
+	defer stall.Stop()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, d.source, nil)
 	if err != nil {
-		return Meta{}, err
+		return permanent(err)
 	}
 	// GitHub's release-asset API returns the bytes only for octet-stream.
 	request.Header.Set("Accept", "application/octet-stream")
-	for name, value := range headers {
+	for name, value := range d.headers {
 		request.Header.Set(name, value)
 	}
-	response, err := s.fetchClient().Do(request)
+	resuming := d.written > 0
+	if resuming {
+		request.Header.Set("Range", fmt.Sprintf("bytes=%d-", d.written))
+		if d.validator != "" {
+			request.Header.Set("If-Range", d.validator)
+		}
+	}
+	// The original URL is requested every time: GitHub answers it with a fresh
+	// signed CDN redirect, so a long download never trips the link's expiry.
+	response, err := d.store.fetchClient().Do(request)
 	if err != nil {
-		return Meta{}, err
+		return stalledOr(ctx, err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return Meta{}, fmt.Errorf("download returned HTTP %d", response.StatusCode)
-	}
-	if response.ContentLength >= 0 {
-		s.mu.Lock()
-		job.status.BytesTotal = response.ContentLength
-		s.mu.Unlock()
+
+	switch status := response.StatusCode; {
+	case resuming && status == http.StatusPartialContent:
+		start, total, ok := parseContentRange(response.Header.Get("Content-Range"))
+		if !ok || start != d.written {
+			return permanent(fmt.Errorf("server resumed at the wrong offset (Content-Range %q, want %d)",
+				response.Header.Get("Content-Range"), d.written))
+		}
+		// GitHub's CDN (Azure Blob) ignores If-Range, so check the file is the
+		// one the first connection started rather than splicing two versions.
+		validator := rangeValidator(response.Header)
+		if (total >= 0 && d.total >= 0 && total != d.total) ||
+			(validator != "" && d.validator != "" && validator != d.validator) {
+			return permanent(errors.New("the bundle changed on the server mid-download; run the command again"))
+		}
+	case status == http.StatusOK:
+		// On a resume this means the server ignored the range or the file
+		// changed under If-Range; either way only a fresh start is correct.
+		if resuming {
+			if err := d.restart(); err != nil {
+				return permanent(err)
+			}
+		}
+		d.total = response.ContentLength
+		d.validator = rangeValidator(response.Header)
+		d.store.setFetchTotal(d.job, d.total)
+	case resuming && status == http.StatusRequestedRangeNotSatisfiable && d.written == d.total:
+		return nil
+	default:
+		err := fmt.Errorf("download returned HTTP %d", status)
+		if retryableStatus(status) {
+			return err
+		}
+		return permanent(err)
 	}
 
-	body := bufio.NewReaderSize(&countingReader{r: response.Body, n: &job.received}, 64<<10)
-	head, err := body.Peek(len(zipMagic))
-	if err != nil || !bytes.Equal(head, zipMagic) {
-		return Meta{}, errors.New("download is not a zip file (check the URL points at the bundle itself, not a web page)")
+	var body io.Reader = response.Body
+	if d.written == 0 {
+		buffered := bufio.NewReaderSize(response.Body, 64<<10)
+		head, err := buffered.Peek(len(zipMagic))
+		if (len(head) == len(zipMagic) && !bytes.Equal(head, zipMagic)) || errors.Is(err, io.EOF) {
+			return permanent(errors.New("download is not a zip file (check the URL points at the bundle itself, not a web page)"))
+		}
+		if err != nil {
+			return stalledOr(ctx, err)
+		}
+		body = buffered
 	}
-	return s.put(version, body, expected)
+
+	sink := &progressWriter{file: d.file, hasher: d.hasher, received: &d.job.received, stall: stall}
+	n, err := io.Copy(sink, body)
+	d.written += n
+	if sink.err != nil {
+		return permanent(sink.err) // the disk failed, not the network
+	}
+	if err != nil {
+		return stalledOr(ctx, err)
+	}
+	if d.total >= 0 && d.written < d.total {
+		return fmt.Errorf("connection closed at %s of %s", formatMB(d.written), formatMB(d.total))
+	}
+	return nil
+}
+
+// restart discards what was downloaded so far.
+func (d *resumableDownload) restart() error {
+	if _, err := d.file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	if err := d.file.Truncate(0); err != nil {
+		return err
+	}
+	d.hasher.Reset()
+	d.written = 0
+	d.job.received.Store(0)
+	return nil
+}
+
+func (s *Store) setFetchTotal(job *fetchJob, total int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	job.status.BytesTotal = total
+}
+
+func (s *Store) noteFetchRetry(job *fetchJob, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	job.status.Retries++
+	job.status.RetryReason = err.Error()
+}
+
+// progressWriter writes to the temp file and hasher together, publishes
+// progress, and holds off the stall timer while bytes keep arriving.
+type progressWriter struct {
+	file     *os.File
+	hasher   hash.Hash
+	received *atomic.Int64
+	stall    *time.Timer
+	err      error
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	n, err := w.file.Write(p)
+	w.hasher.Write(p[:n])
+	w.received.Add(int64(n))
+	w.stall.Reset(fetchStallTimeout)
+	if err != nil {
+		w.err = err
+	}
+	return n, err
+}
+
+type permanentError struct{ err error }
+
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
+
+func permanent(err error) error { return &permanentError{err: err} }
+
+// stalledOr names a stall instead of the bare "context canceled" it surfaces as.
+func stalledOr(ctx context.Context, err error) error {
+	if errors.Is(context.Cause(ctx), errFetchStalled) {
+		return fmt.Errorf("%w for %s", errFetchStalled, fetchStallTimeout)
+	}
+	return err
+}
+
+func fetchBackoff(idle int) time.Duration {
+	delay := fetchRetryDelay
+	for i := 1; i < idle && delay < fetchMaxRetryDelay; i++ {
+		delay *= 2
+	}
+	return min(delay, fetchMaxRetryDelay)
+}
+
+func retryableStatus(status int) bool {
+	return status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= 500
+}
+
+// rangeValidator picks what If-Range may carry: a strong ETag, else Last-Modified.
+func rangeValidator(header http.Header) string {
+	if etag := header.Get("ETag"); etag != "" && !strings.HasPrefix(etag, "W/") {
+		return etag
+	}
+	return header.Get("Last-Modified")
+}
+
+// parseContentRange reads "bytes 100-199/200" as start 100, total 200; an
+// unknown total ("/*") is -1.
+func parseContentRange(value string) (start, total int64, ok bool) {
+	rest, found := strings.CutPrefix(value, "bytes ")
+	if !found {
+		return 0, 0, false
+	}
+	span, size, found := strings.Cut(rest, "/")
+	first, _, found2 := strings.Cut(span, "-")
+	if !found || !found2 {
+		return 0, 0, false
+	}
+	start, err := strconv.ParseInt(first, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	if size == "*" {
+		return start, -1, true
+	}
+	total, err = strconv.ParseInt(size, 10, 64)
+	return start, total, err == nil
+}
+
+func formatMB(n int64) string {
+	return fmt.Sprintf("%.0f MB", float64(n)/(1<<20))
 }
 
 func (s *Store) fetchClient() *http.Client {
@@ -196,17 +455,6 @@ func (s *Store) fetchClient() *http.Client {
 		TLSHandshakeTimeout:   30 * time.Second,
 		ResponseHeaderTimeout: 2 * time.Minute,
 	}}
-}
-
-type countingReader struct {
-	r io.Reader
-	n *atomic.Int64
-}
-
-func (c *countingReader) Read(p []byte) (int, error) {
-	n, err := c.r.Read(p)
-	c.n.Add(int64(n))
-	return n, err
 }
 
 func parseFetchURL(raw string) (*url.URL, error) {
