@@ -919,6 +919,16 @@ class OrderLine(TimeStampedModel):
     # Free-text kitchen instruction for a single line (e.g. "no onions").
     # Short by design so it never blows out a thermal kitchen chit.
     notes = models.CharField(max_length=255, blank=True, default="")
+    # Which identified stock this line was written against, as the caller
+    # named it: ``{"stock_units": [ids], "stock_unit_codes": [codes],
+    # "stock_batches": [lot ids]}``. An order created open and paid later
+    # (``/api/orders/`` then a payment) issues its stock at payment, from this —
+    # without it the issue was re-planned from a variant and a quantity, and
+    # the invoice named whichever handset happened to be oldest. Null for every
+    # line that names nothing, which is every line of everything a shop counts.
+    # Nullable with no default so the previous release can still insert lines
+    # during the flip minute (§15.1).
+    stock_selection = models.JSONField(null=True, blank=True)
 
     class Meta:
         ordering = ["created_at"]

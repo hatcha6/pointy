@@ -175,6 +175,7 @@ def create_order_with_lines(
             unit_cost=money(base_unit_cost * unit_factor),
             discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
             notes=line_data.get("notes", ""),
+            stock_selection=line_stock_selection(line_data),
         )
         _persist_order_line_modifiers(line, line_data.get("modifiers", []))
         # A top-up's cost is what the provider quoted, not what the warehouse
@@ -1349,6 +1350,36 @@ def checkout_order(
     return order
 
 
+def refuse_unnamed_serial_issue(variant, selection):
+    """A serialized article is sold by naming it — never by the server's pick.
+
+    §6.3: whatever the shop's overselling preference says. The planner used to
+    take the oldest sellable article when a sale named none, so the invoice,
+    the printed warranty and ``StockUnit.sold_order_line`` could all name a
+    handset that was still in the drawer. Every till route opens the picker; this refuses the
+    callers that did not — an API order, an old client — in words a cashier can
+    act on. A partial selection is left to the planner, whose count check names
+    both numbers.
+    """
+    if not tracking.tracks_units(tracking.mode_of(variant)):
+        return
+    selection = selection or {}
+    if selection.get("unit_ids") or selection.get("unit_codes"):
+        return
+    name = variant.full_name or variant.product.name
+    raise serializers.ValidationError(
+        {
+            "detail": (
+                f"«{name}» صنف مسلسل — اختر الوحدة المباعة "
+                "(IMEI أو الرقم التسلسلي) قبل إتمام البيع."
+            ),
+            "code": "stock_unit_required",
+            "product": variant.product_id,
+            "variant": variant.pk,
+        }
+    )
+
+
 def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None):
     settings = settings or ShopSettings.load()
     quantities_by_variant = {}
@@ -1421,6 +1452,9 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
         # Plan the issue *before* the shortage check, so a cart that names an
         # unavailable unit is refused by the identity rather than by arithmetic.
         if tracked:
+            refuse_unnamed_serial_issue(
+                variant, selections_by_variant.get(variant_id)
+            )
             plan = tracking.plan_issue(
                 variant=variant,
                 warehouse=stock_item.warehouse_id,
@@ -1462,6 +1496,25 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
     return stock_adjustments
 
 
+#: The keys a cart line names identified stock under, and the only keys
+#: ``OrderLine.stock_selection`` keeps.
+STOCK_SELECTION_KEYS = ("stock_units", "stock_unit_codes", "stock_batches")
+
+
+def line_stock_selection(line_data):
+    """What a cart line named, in the shape ``OrderLine.stock_selection`` keeps.
+
+    ``None`` when it named nothing, so the column stays null for every line of
+    everything a shop counts rather than identifies.
+    """
+    selection = {
+        key: list(line_data.get(key) or []) for key in STOCK_SELECTION_KEYS
+    }
+    if not any(selection.values()):
+        return None
+    return selection
+
+
 def prepare_sale_stock_adjustments_for_order(order):
     lines = lock_order_lines_for_update(order)
     if not lines:
@@ -1474,6 +1527,13 @@ def prepare_sale_stock_adjustments_for_order(order):
                 "variant": line.variant,
                 "quantity": line.quantity,
                 "unit_factor": line.unit_factor,
+                # The articles the order was written against. Re-planning an
+                # open order from its variant alone took the oldest handset on
+                # the shelf, not the one the customer was sold.
+                **{
+                    key: (line.stock_selection or {}).get(key) or []
+                    for key in STOCK_SELECTION_KEYS
+                },
             }
             for line in lines
         ]

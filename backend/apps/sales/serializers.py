@@ -367,6 +367,24 @@ class OrderLineSerializer(serializers.ModelSerializer):
     # lines where it is not: a receipt that does not name the IMEI is a receipt
     # that cannot settle a warranty claim two years later.
     identifiers = serializers.SerializerMethodField()
+    # Which identified stock an order written here and paid later will issue:
+    # the same three keys a checkout line takes, kept on the line
+    # (``OrderLine.stock_selection``) until the payment issues the stock.
+    stock_units = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        write_only=True,
+    )
+    stock_unit_codes = serializers.ListField(
+        child=serializers.CharField(max_length=120, trim_whitespace=True),
+        required=False,
+        write_only=True,
+    )
+    stock_batches = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        write_only=True,
+    )
     # A top-up sold on this line: whose card, what was bought, and whether the
     # provider has actually done it. The invoice is where a shop looks when a
     # customer comes back saying their TV is still off, so it has to say more
@@ -449,6 +467,9 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "identifiers",
             "integration",
             "notes",
+            "stock_units",
+            "stock_unit_codes",
+            "stock_batches",
         ]
         read_only_fields = ("unit_price", "unit_cost", "discount_total")
 
@@ -491,7 +512,44 @@ class OrderLineSerializer(serializers.ModelSerializer):
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
         attrs["variant"] = variant
+        self._refuse_unnamed_articles(attrs)
         return attrs
+
+    def _refuse_unnamed_articles(self, attrs):
+        """An order of a serialized product names its articles when written.
+
+        Refused here as well as at payment, because an open order that names
+        none could otherwise be created and then never paid — the refusal would
+        only arrive at the till, on a document already handed to a customer.
+        """
+        from apps.inventory import tracking
+
+        variant = attrs["variant"]
+        if not tracking.tracks_units(tracking.mode_of(variant)):
+            return
+        named = len(attrs.get("stock_units") or []) + len(
+            attrs.get("stock_unit_codes") or []
+        )
+        quantity = attrs.get("quantity")
+        if named == 0:
+            raise serializers.ValidationError(
+                {
+                    "stock_units": (
+                        f"«{variant.full_name or variant.product.name}» صنف "
+                        "مسلسل — حدّد الوحدات المباعة (IMEI أو الرقم التسلسلي)."
+                    ),
+                    "code": "stock_unit_required",
+                }
+            )
+        if quantity is not None and Decimal(named) != quantity:
+            raise serializers.ValidationError(
+                {
+                    "stock_units": (
+                        f"تم تحديد {named} وحدة لكمية قدرها {quantity.normalize():f}."
+                    ),
+                    "code": "stock_unit_count_mismatch",
+                }
+            )
 
 
 class OrderPaymentSerializer(serializers.Serializer):

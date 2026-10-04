@@ -221,9 +221,16 @@ class ConcurrentSaleTests(TestCase):
                 status=RegisterSession.Status.OPEN,
                 opening_cash=Decimal("0.00"),
             )
+            # Both tills scanned the same handset.
             return checkout_order(
                 register_session=session,
-                lines_data=[{"variant": self.variant, "quantity": Decimal("1")}],
+                lines_data=[
+                    {
+                        "variant": self.variant,
+                        "quantity": Decimal("1"),
+                        "stock_unit_codes": ["SER-ONLY"],
+                    }
+                ],
                 payments_data=[
                     {"method": "cash", "amount": Decimal("1500.00")}
                 ],
@@ -333,23 +340,27 @@ class CheckoutQueryBudgetTests(TestCase):
             unit_cost="1000.00",
             units=[{"code": f"Q-{index}"} for index in range(4)],
         )
-        self._checkout(
-            "warm-t", [{"variant": variant, "quantity": Decimal("1")}], "1500.00"
+        units = list(
+            StockUnit.objects.filter(variant=variant)
+            .order_by("pk")
+            .values_list("pk", flat=True)
         )
 
+        def line(unit_id):
+            return {
+                "variant": variant,
+                "quantity": Decimal("1"),
+                "stock_units": [unit_id],
+            }
+
+        self._checkout("warm-t", [line(units[0])], "1500.00")
+
         one_line = _queries_for(
-            lambda: self._checkout(
-                "one", [{"variant": variant, "quantity": Decimal("1")}], "1500.00"
-            )
+            lambda: self._checkout("one", [line(units[1])], "1500.00")
         )
         two_lines = _queries_for(
             lambda: self._checkout(
-                "two",
-                [
-                    {"variant": variant, "quantity": Decimal("1")},
-                    {"variant": variant, "quantity": Decimal("1")},
-                ],
-                "3000.00",
+                "two", [line(units[2]), line(units[3])], "3000.00"
             )
         )
 

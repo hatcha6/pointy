@@ -128,7 +128,13 @@ class FootageOpensOnTheRightMinuteTests(TestCase):
                 owner_key="cctv", status=RegisterSession.Status.OPEN,
                 opening_cash=Decimal("0.00"),
             ),
-            lines_data=[{"variant": self.variant, "quantity": Decimal("1")}],
+            lines_data=[
+                {
+                    "variant": self.variant,
+                    "quantity": Decimal("1"),
+                    "stock_unit_codes": ["IMEI-CCTV"],
+                }
+            ],
             payments_data=[{"method": "cash", "amount": Decimal("12000.00")}],
         )
         unit = StockUnit.objects.get(code="IMEI-CCTV")

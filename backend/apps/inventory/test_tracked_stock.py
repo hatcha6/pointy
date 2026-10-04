@@ -293,7 +293,7 @@ class SerializedReceiptTests(TestCase):
             unit_cost="1200.00",
             units=[{"code": IMEI_A}],
         )
-        _sell(self.variant, 1, price="1500.00")
+        _sell(self.variant, 1, price="1500.00", stock_unit_codes=[IMEI_A])
         receive(
             variant=self.variant,
             quantity=1,
@@ -314,7 +314,7 @@ class SerializedReceiptTests(TestCase):
             unit_cost="1200.00",
             units=[{"code": IMEI_A}],
         )
-        _sell(self.variant, 1, price="1500.00")
+        _sell(self.variant, 1, price="1500.00", stock_unit_codes=[IMEI_A])
         history = tracking.historical_units(IMEI_A)
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0].status, StockUnit.Status.SOLD)
@@ -378,8 +378,18 @@ class SerializedReceiptTests(TestCase):
         assert_tracking_invariants()
 
         # Two are on the shelf, but only one of them can be rung up.
-        with self.assertRaises(serializers.ValidationError):
-            _sell(self.variant, 2, price="1500.00")
+        with self.assertRaises(serializers.ValidationError) as caught:
+            _sell(
+                self.variant,
+                2,
+                price="1500.00",
+                stock_units=list(
+                    StockUnit.objects.filter(variant=self.variant).values_list(
+                        "pk", flat=True
+                    )
+                ),
+            )
+        self.assertIn("لم يُسجَّل معرّفها", str(caught.exception))
 
 
 class SerializedSaleTests(TestCase):
@@ -416,11 +426,14 @@ class SerializedSaleTests(TestCase):
         self.assertEqual(line.unit_cost, Decimal("1100.00"))
         assert_tracking_invariants()
 
-    def test_selling_without_naming_one_takes_the_oldest(self):
-        order = _sell(self.variant, 1, price="1500.00")
-        sold = StockUnit.objects.get(status=StockUnit.Status.SOLD)
-        self.assertEqual(sold.code_normalized, IMEI_A)
-        self.assertEqual(order.lines.get().unit_cost, Decimal("1300.00"))
+    def test_selling_without_naming_one_is_refused(self):
+        """§6.3: the server never picks the handset. It used to take the
+        oldest, and the invoice then named an article still in the drawer."""
+        with self.assertRaises(serializers.ValidationError) as caught:
+            _sell(self.variant, 1, price="1500.00")
+        self.assertEqual(str(caught.exception.detail["code"]), "stock_unit_required")
+        self.assertFalse(StockUnit.objects.filter(status=StockUnit.Status.SOLD).exists())
+        assert_tracking_invariants()
 
     def test_selling_by_scanned_code_resolves_the_unit(self):
         _sell(self.variant, 1, price="1500.00", stock_unit_codes=[" 351234-567890124 "])
@@ -428,7 +441,12 @@ class SerializedSaleTests(TestCase):
         self.assertEqual(sold.code_normalized, IMEI_B)
 
     def test_a_sale_of_three_writes_three_allocations_under_one_entry(self):
-        _sell(self.variant, 3, price="1500.00")
+        _sell(
+            self.variant,
+            3,
+            price="1500.00",
+            stock_unit_codes=[IMEI_A, IMEI_B, IMEI_C],
+        )
         entry = StockLedgerEntry.objects.filter(
             variant=self.variant, quantity_change__lt=0
         ).get()
@@ -452,8 +470,15 @@ class SerializedSaleTests(TestCase):
         settings.allow_overselling = True
         settings.save(update_fields=["allow_overselling", "updated_at"])
 
+        # Every handset on the shelf named, and a fourth asked for: there is
+        # no fourth to name, whatever the overselling preference says.
         with self.assertRaises(serializers.ValidationError):
-            _sell(self.variant, 4, price="1500.00")
+            _sell(
+                self.variant,
+                4,
+                price="1500.00",
+                stock_unit_codes=[IMEI_A, IMEI_B, IMEI_C],
+            )
         self.assertEqual(
             StockItem.objects.get(variant=self.variant).quantity_on_hand,
             Decimal("3.000"),
@@ -820,7 +845,7 @@ class SerialBatchTests(TestCase):
 
     def test_a_sale_writes_one_allocation_naming_both_identities(self):
         self._receive(["S1", "S2"])
-        _sell(self.variant, 1, price="90.00")
+        _sell(self.variant, 1, price="90.00", stock_unit_codes=["S1"])
 
         entry = StockLedgerEntry.objects.filter(
             variant=self.variant, quantity_change__lt=0
@@ -859,7 +884,7 @@ class SerialBatchTests(TestCase):
     def test_an_expired_lot_is_refused_even_though_the_pack_has_a_serial(self):
         self._receive(["S1"], days=-1)
         with self.assertRaises(serializers.ValidationError) as caught:
-            _sell(self.variant, 1, price="90.00")
+            _sell(self.variant, 1, price="90.00", stock_unit_codes=["S1"])
         self.assertIn("منتهية الصلاحية", str(caught.exception))
 
 
@@ -1229,7 +1254,12 @@ class SaleLineIdentifierTests(TestCase):
             unit_cost="1000.00",
             units=[{"code": IMEI_A}, {"code": IMEI_B}],
         )
-        order = _sell(product.default_variant, 2, price="1500.00")
+        order = _sell(
+            product.default_variant,
+            2,
+            price="1500.00",
+            stock_unit_codes=[IMEI_A, IMEI_B],
+        )
 
         rows = order_line_identifiers(order.lines.get())
         self.assertEqual({row["kind"] for row in rows}, {"unit"})

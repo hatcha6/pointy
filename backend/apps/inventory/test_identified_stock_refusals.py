@@ -37,13 +37,20 @@ class RecallUX(TestCase):
                 batches=[{"code": "LOTB", "quantity": Decimal("1")}],
                 units=[{"code": "PACK-B", "batch_code": "LOTB"}])
 
-    def test_a_recall_skips_to_the_good_pack(self):
+    def test_a_recalled_pack_is_refused_and_the_good_pack_sells(self):
         lota = StockBatch.objects.get(code="LOTA")
         lota.is_locked = True
         lota.status = StockBatch.Status.QUARANTINED
         lota.save()
-        checkout_order(register_session=_sess("ux1"),
-            lines_data=[{"variant": self.v, "quantity": Decimal("1")}],
+        with self.assertRaises(drf.ValidationError) as c:
+            checkout_order(register_session=_sess("ux1"),
+                lines_data=[{"variant": self.v, "quantity": Decimal("1"),
+                             "stock_unit_codes": ["PACK-A"]}],
+                payments_data=[{"method": "cash", "amount": Decimal("10.00")}])
+        self.assertIn("محجورة", str(c.exception.detail))
+        checkout_order(register_session=_sess("ux1b"),
+            lines_data=[{"variant": self.v, "quantity": Decimal("1"),
+                         "stock_unit_codes": ["PACK-B"]}],
             payments_data=[{"method": "cash", "amount": Decimal("10.00")}])
         sold = StockUnit.objects.get(status=StockUnit.Status.SOLD)
         self.assertEqual(sold.code, "PACK-B")
@@ -55,7 +62,8 @@ class RecallUX(TestCase):
             lot.save()
         with self.assertRaises(drf.ValidationError) as c:
             checkout_order(register_session=_sess("ux2"),
-                lines_data=[{"variant": self.v, "quantity": Decimal("1")}],
+                lines_data=[{"variant": self.v, "quantity": Decimal("1"),
+                             "stock_unit_codes": ["PACK-A"]}],
                 payments_data=[{"method": "cash", "amount": Decimal("10.00")}])
         self.assertIn("محجورة", str(c.exception.detail))
 

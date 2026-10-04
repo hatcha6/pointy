@@ -485,11 +485,17 @@ class RecallTests(TestCase):
         )
         checkout_order(
             register_session=_session(),
-            lines_data=[{"variant": variant, "quantity": Decimal("1")}],
+            lines_data=[
+                {
+                    "variant": variant,
+                    "quantity": Decimal("1"),
+                    "stock_unit_codes": ["PACK-2"],
+                }
+            ],
             payments_data=[{"method": "cash", "amount": Decimal("50")}],
             customer=self.customer,
         )
 
         report = recall.recall_report(StockBatch.objects.get(code_normalized="V1"))
         self.assertEqual(len(report["outward"]), 1)
-        self.assertIn(report["outward"][0]["unit_code"], {"PACK-1", "PACK-2"})
+        self.assertEqual(report["outward"][0]["unit_code"], "PACK-2")
