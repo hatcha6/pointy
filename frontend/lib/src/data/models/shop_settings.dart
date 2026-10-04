@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'attachment_summary.dart';
 import 'contact.dart' show PaymentTermsBasis, ResolvedPaymentTerms;
+import 'identified_stock_settings.dart';
 
 /// How the cost of goods sold is decided when the same product was bought at
 /// more than one price.
@@ -81,6 +82,7 @@ class ShopSettings {
     this.surveillancePostRollSeconds = 40,
     this.surveillanceArchiveRetentionDays = 30,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
+    this.identifiedStock = const IdentifiedStockSettings(),
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
     this.logoAttachment,
@@ -241,6 +243,10 @@ class ShopSettings {
 
   /// How stock is costed. See [InventoryValuationMethod].
   final InventoryValuationMethod inventoryValuationMethod;
+
+  /// Serials, lots and consignment. Read-only here: its own page saves it, so
+  /// the whole-payload [ShopSettingsDraft] never carries — or resets — it.
+  final IdentifiedStockSettings identifiedStock;
   final String currencyCode;
   final String currencySymbol;
   final AttachmentSummary? logoAttachment;
@@ -430,6 +436,7 @@ class ShopSettings {
       inventoryValuationMethod: InventoryValuationMethod.fromWire(
         json['inventory_valuation_method'],
       ),
+      identifiedStock: IdentifiedStockSettings.fromJson(json),
       currencyCode: json['currency_code']?.toString() ?? 'LYD',
       currencySymbol: json['currency_symbol']?.toString() ?? 'د.ل',
       logoAttachment: logoJson is Map<String, Object?>

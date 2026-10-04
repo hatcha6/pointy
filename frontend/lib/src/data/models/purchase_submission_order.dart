@@ -27,6 +27,7 @@ class PurchaseOrder {
     this.landedCostEntries = const [],
     this.landedCostTotal = 0,
     this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
+    this.warehouseId,
     this.supplierId,
     this.supplierName,
     this.supplierContactName,
@@ -115,6 +116,10 @@ class PurchaseOrder {
   final bool canReturn;
   final bool canRefund;
   final bool canExchange;
+
+  /// Where the delivery landed. A supplier return sends back goods from this
+  /// place, so it is also where the handsets to pick from are standing.
+  final int? warehouseId;
   final int? supplierId;
   final String? supplierName;
   final String? supplierContactName;
@@ -208,6 +213,7 @@ class PurchaseOrder {
       cancelledByUsername: json['cancelled_by_username']?.toString(),
       cancelReason: json['cancel_reason']?.toString(),
       amendmentIndex: _intFromJson(json['amendment_index']),
+      warehouseId: _nullableIntFromJson(json['warehouse']),
       supplierId: _nullableIntFromJson(json['supplier']),
       supplierName: json['supplier_name']?.toString(),
       supplierContactName: json['supplier_contact_name']?.toString(),
@@ -278,14 +284,21 @@ class PurchaseOrder {
     );
   }
 
-  PurchaseSubmission toSubmission() {
+  PurchaseSubmission toSubmission({bool awaitsIdentifiers = false}) {
     return PurchaseSubmission(
       draftNumber: orderNumber,
       lineCount: lineCount,
       total: total,
       status: status,
+      orderId: id,
+      awaitsIdentifiers: awaitsIdentifiers,
     );
   }
+
+  /// Whether receiving what is still open needs identifiers scanned first.
+  bool get receiptNeedsIdentifiers => lines.any(
+    (line) => line.trackingMode.isTracked && line.receivableQuantity > 0,
+  );
 }
 
 class AppliedPurchaseDiscount {

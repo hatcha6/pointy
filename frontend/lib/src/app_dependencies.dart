@@ -280,6 +280,16 @@ class PointyAppDependencies {
         await _refreshSessionViewModels();
       },
     );
+    // Some of who-we-are is the shop's settings, delivered with the session:
+    // identified stock, cameras, cashier customer access. An owner switching
+    // serial tracking on must see its screens appear — on this till and every
+    // other — without signing out, so a settings change re-reads the session.
+    revalidator.watch(
+      label: 'session flags',
+      domains: const {ServerStateDomain.settings},
+      minInterval: const Duration(seconds: 10),
+      onStale: authViewModel.refreshCurrentUser,
+    );
     // The sell screen's own rules live with the sell screen.
     registerPosRevalidation(
       revalidator: revalidator,

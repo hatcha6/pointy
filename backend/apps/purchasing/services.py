@@ -27,8 +27,8 @@ from apps.inventory.models import (
 )
 from apps.sales.registers import selling_warehouse_id
 from apps.inventory.services import (
+    allocate_adjustment,
     build_stock_movement,
-    consume_expiring_stock_batches,
     create_expiring_stock_batch,
     discard_expiring_stock_batches,
     create_stock_movement,
@@ -1911,7 +1911,9 @@ def record_purchase_adjustment_stock_movements(
     lines,
     stock_items,
     created_by,
+    identified=None,
 ):
+    identified = identified or {}
     for line, quantity in lines:
         stock_item = stock_items[line.variant_id]
         before = stock_snapshot(stock_item)
@@ -1919,10 +1921,19 @@ def record_purchase_adjustment_stock_movements(
         base_quantity = line.to_base_quantity(quantity)
         stock_item.quantity_on_hand -= base_quantity
         save_stock_item_quantities(stock_item)
-        consume_expiring_stock_batches(
+        # Which articles go back to the supplier: the handsets the buyer named,
+        # or the earliest-expiring lots unless the buyer named lots. This used
+        # to draw the lots down and then drop the plan, so the movement named
+        # nothing and the ledger refused every tracked return (a 500).
+        picks = identified.get(line.pk) or {}
+        plan = allocate_adjustment(
             variant=line.variant,
-            quantity=base_quantity,
             warehouse=stock_item.warehouse_id,
+            delta=-base_quantity,
+            units=picks.get("units"),
+            batches=picks.get("batches"),
+            status=StockUnit.Status.RETURNED,
+            what="هذه المرتجعات",
         )
         create_stock_movement(
             variant=line.variant,
@@ -1934,6 +1945,7 @@ def record_purchase_adjustment_stock_movements(
             before=before,
             voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RETURN,
             voucher_id=purchase_order.pk,
+            tracked_plan=plan,
         )
 
 
@@ -1955,12 +1967,35 @@ def record_purchase_replacement_stock_movements(
     lines,
     stock_items,
     created_by,
+    placeholder_prefix="",
+    identified=None,
 ):
-    for variant, quantity, _ in lines:
+    identified = identified or []
+    for index, (variant, quantity, _) in enumerate(lines):
         stock_item = stock_items[variant.pk]
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += quantity
         save_stock_item_quantities(stock_item)
+        # Identified replacements arrive through the same door as goods with
+        # no paperwork, at the shelf's own rate: what the receiver scanned, and
+        # for anything not scanned a lot or a placeholder unit on the
+        # missing-identifier worklist.
+        picks = identified[index] if index < len(identified) else {}
+        plan = allocate_adjustment(
+            variant=variant,
+            warehouse=stock_item.warehouse_id,
+            delta=quantity,
+            units=picks.get("units") or None,
+            batches=picks.get("batches") or None,
+            supplier=purchase_order.supplier,
+            # Letters between the numbers, because ``normalize_identifier``
+            # strips dashes: ``PX12-0`` + unit 11 and ``PX120-1`` + unit 1 would
+            # be one identifier to the live unique index.
+            placeholder_key=(
+                f"{placeholder_prefix}L{index}N" if placeholder_prefix else ""
+            ),
+            what="هذا البديل",
+        )
         create_stock_movement(
             variant=variant,
             stock_item=stock_item,
@@ -1974,6 +2009,7 @@ def record_purchase_replacement_stock_movements(
             # to the bin's own rate says exactly that.
             voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RECEIPT,
             voucher_id=purchase_order.pk,
+            tracked_plan=plan,
         )
 
 
@@ -1986,6 +2022,8 @@ def create_purchase_order_adjustment(
     replacement_lines=None,
     request=None,
     settlement_method="",
+    identified=None,
+    replacement_identified=None,
 ):
     created_by = purchase_created_by(request)
     # A return goes back from where the delivery landed, and a replacement
@@ -2035,12 +2073,15 @@ def create_purchase_order_adjustment(
         lines=lines,
         stock_items=stock_items,
         created_by=created_by,
+        identified=identified,
     )
     record_purchase_replacement_stock_movements(
         purchase_order=purchase_order,
         lines=replacement_lines,
         stock_items=stock_items,
         created_by=created_by,
+        placeholder_prefix=f"PX{adjustment.pk}",
+        identified=replacement_identified,
     )
     settle_purchase_order_adjustment(adjustment, created_by=created_by)
     record_purchase_order_audit_event(
@@ -2126,6 +2167,8 @@ def adjust_purchase_order_items(
     replacement_lines=None,
     request=None,
     settlement_method="",
+    identified=None,
+    replacement_identified=None,
 ):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
@@ -2146,6 +2189,8 @@ def adjust_purchase_order_items(
         reason=reason,
         request=request,
         settlement_method=settlement_method,
+        identified=identified,
+        replacement_identified=replacement_identified,
     )
 
 

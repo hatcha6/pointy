@@ -283,6 +283,14 @@ def cash_position(context):
     }
     if float_rows:
         figures["provider_float"] = money(totals["provider_float"])
+    # Card takings a processor is holding sit in the money table (they are the
+    # shop's money, inside the closing total) and are stated on their own too,
+    # so the bank's share of the total can be read against its statement.
+    holds_cards = any(row["account"].is_clearing for row in money_rows)
+    if holds_cards:
+        # Named as the balance sheet names its line: "in_transit" already
+        # means goods between warehouses in the report vocabulary.
+        figures["cards_in_transit"] = money(totals["in_transit"])
     sections = [
         context.metrics(figures),
         _account_balances_section("account_balances", money_rows),
@@ -318,6 +326,7 @@ def cash_position(context):
             note("balances_are_derived"),
             note("payroll_assumed_cash"),
             note("commission_assumed_bank"),
+            note("cards_held_until_settled") if holds_cards else None,
         ],
     }
 

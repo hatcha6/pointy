@@ -79,6 +79,7 @@ class PosUser {
     this.surveillanceEnabled = false,
     this.serializedInventoryEnabled = false,
     this.batchTrackingEnabled = false,
+    this.serializedCaptureLaterAllowed = false,
   });
 
   final int id;
@@ -143,6 +144,10 @@ class PosUser {
   final bool serializedInventoryEnabled;
   final bool batchTrackingEnabled;
 
+  /// Whether a delivery of serialized goods may be received before every
+  /// article is scanned; the rest wait on the missing-identifier list.
+  final bool serializedCaptureLaterAllowed;
+
   String get label => displayName.trim().isEmpty ? username : displayName;
 
   factory PosUser.fromJson(Map<String, Object?> json) {
@@ -177,6 +182,8 @@ class PosUser {
       surveillanceEnabled: json['surveillance_enabled'] == true,
       serializedInventoryEnabled: json['serialized_inventory_enabled'] == true,
       batchTrackingEnabled: json['batch_tracking_enabled'] == true,
+      serializedCaptureLaterAllowed:
+          json['serialized_capture_later_allowed'] == true,
     );
   }
 

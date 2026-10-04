@@ -240,4 +240,109 @@ void main() {
       ]);
     });
   });
+
+  test('ipv4Slash24 is the first three octets', () {
+    expect(ipv4Slash24([192, 168, 1, 10]), '192.168.1');
+  });
+
+  group('isLocalNetworkHost', () {
+    test('the shop network and this machine', () {
+      for (final host in [
+        '192.168.1.10',
+        '10.0.0.5',
+        '172.16.0.1',
+        '172.31.255.254',
+        '169.254.10.20',
+        '127.0.0.1',
+        'localhost',
+        '::1',
+      ]) {
+        expect(isLocalNetworkHost(host), isTrue, reason: host);
+      }
+    });
+
+    test('the internet, and any name', () {
+      for (final host in [
+        '8.8.8.8',
+        '172.32.0.1',
+        '100.64.0.1',
+        'relay.pointy.ly',
+        'pointy.local',
+        '',
+      ]) {
+        expect(isLocalNetworkHost(host), isFalse, reason: host);
+      }
+    });
+  });
+
+  group('isAwayFromServerNetwork', () {
+    test('away when no address of this device shares the server /24', () {
+      expect(
+        isAwayFromServerNetwork(
+          serverHosts: ['192.168.1.10'],
+          ownAddresses: ['10.0.0.5', '172.20.0.3'],
+        ),
+        isTrue,
+      );
+    });
+
+    test('not away on the server network, whatever else it is on', () {
+      expect(
+        isAwayFromServerNetwork(
+          serverHosts: ['192.168.1.10'],
+          ownAddresses: ['10.0.0.5', '192.168.1.77'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('never away from a server it cannot place', () {
+      // This machine is the server.
+      expect(
+        isAwayFromServerNetwork(
+          serverHosts: ['127.0.0.1'],
+          ownAddresses: ['10.0.0.5'],
+        ),
+        isFalse,
+      );
+      // A name, or no address at all.
+      expect(
+        isAwayFromServerNetwork(
+          serverHosts: ['pointy.shop'],
+          ownAddresses: ['10.0.0.5'],
+        ),
+        isFalse,
+      );
+      expect(
+        isAwayFromServerNetwork(serverHosts: [], ownAddresses: ['10.0.0.5']),
+        isFalse,
+      );
+      // One placeable server address is not enough when another is not.
+      expect(
+        isAwayFromServerNetwork(
+          serverHosts: ['192.168.1.10', 'pointy.shop'],
+          ownAddresses: ['10.0.0.5'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('never away while this device knows no address of its own', () {
+      expect(
+        isAwayFromServerNetwork(
+          serverHosts: ['192.168.1.10'],
+          ownAddresses: [],
+        ),
+        isFalse,
+      );
+      // Loopback and link-local say nothing about where the device is.
+      expect(
+        isAwayFromServerNetwork(
+          serverHosts: ['192.168.1.10'],
+          ownAddresses: ['127.0.0.1', '169.254.3.4', 'fe80::1'],
+        ),
+        isFalse,
+      );
+    });
+  });
 }

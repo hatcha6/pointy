@@ -79,6 +79,10 @@ MANAGED_CODES = (
     "employees.payroll_ready",
     "operations.backend_error",
     "operations.backup_unhealthy",
+    # Card takings the processor should have paid into the bank by now and
+    # has not — or a deposit that arrived and was never recorded. Either way
+    # the held balance is no longer "on its way".
+    "treasury.card_settlement_overdue",
 )
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
 NOTIFICATION_AUDIENCE_RULES = {
@@ -188,6 +192,13 @@ NOTIFICATION_AUDIENCE_RULES = {
         "permissions": ("core.change_shopsettings",),
         "manager_only": True,
     },
+    "treasury.card_settlement_overdue": {
+        # Whoever records the deposit when it arrives — the accountant as much
+        # as the owner — since the answer is either "record it" or "call the
+        # processor".
+        "permissions": ("treasury.add_cardsettlement",),
+        "manager_only": False,
+    },
 }
 
 
@@ -205,6 +216,7 @@ def sync_business_notifications(now=None):
     desired.extend(_discount_notifications(now))
     desired.extend(_payroll_notifications(now))
     desired.extend(_backup_notifications(now))
+    desired.extend(_card_settlement_notifications(now))
 
     fingerprints = set()
     changed = 0
@@ -1057,6 +1069,45 @@ def _payroll_notifications(now):
                     "period_end": run.period_end.isoformat(),
                     "amount": _money(run.net_total),
                     "count": run.notification_line_count,
+                },
+            )
+        )
+    return specs
+
+
+def _card_settlement_notifications(now):
+    """One alert per clearing account whose held card days are overdue.
+
+    Overdue means the day the processor should have paid has passed with no
+    settlement recorded against those takings. It resolves itself once the
+    deposit is recorded, because the fingerprint stops being generated.
+    """
+    from apps.core.timeutils import business_local_date
+    from apps.treasury import held_days
+    from apps.treasury.models import MoneyAccount
+
+    today = business_local_date(now)
+    specs = []
+    accounts = MoneyAccount.objects.filter(kind=MoneyAccount.Kind.CLEARING)
+    for account in accounts:
+        overdue = held_days.overdue_days(account, today=today)
+        if not overdue:
+            continue
+        oldest = overdue[0]
+        specs.append(
+            _spec(
+                code="treasury.card_settlement_overdue",
+                category=BusinessNotification.Category.SALES,
+                severity=BusinessNotification.Severity.WARNING,
+                fingerprint=f"treasury.card_settlement_overdue:{account.pk}",
+                entity_type="treasury.moneyaccount",
+                entity_id=str(account.pk),
+                payload={
+                    "account": account.name,
+                    "amount": _money(sum((day.net for day in overdue), Decimal("0.00"))),
+                    "count": len(overdue),
+                    "oldest_day": oldest.day.isoformat(),
+                    "expected_on": oldest.expected_on.isoformat(),
                 },
             )
         )

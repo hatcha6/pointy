@@ -11,8 +11,9 @@ import 'barcode_label_document_service.dart';
 /// guessing at them costs a roll of labels and an afternoon. Each sheet turns
 /// one unknown into something a person can read straight off the sticker.
 enum BarcodeLabelCalibrationSheet {
-  /// A millimetre scale across the full head width: where the sticker's left and
-  /// right edges land gives the horizontal offset and the sticker width.
+  /// A millimetre scale across the page a label prints on: where the sticker's
+  /// left and right edges land gives the horizontal offset and the sticker
+  /// width.
   acrossRuler,
 
   /// A millimetre scale down the feed, repeating once per label: where the
@@ -53,6 +54,9 @@ class BarcodeLabelCalibrationDocument {
   double get _heightMm => endpoint.labelHeightMm.toDouble();
   double get _offsetXMm => endpoint.labelPdfOffsetXMm.toDouble();
   double get _offsetYMm => endpoint.labelPdfOffsetYMm.toDouble();
+
+  /// Every sheet is as wide as a label's page; see [barcodeLabelPageWidthMm].
+  double get _pageWidthMm => barcodeLabelPageWidthMm(endpoint);
 
   /// The pitch to centre the combs on, falling back to the sticker itself when
   /// it has never been measured.
@@ -109,10 +113,16 @@ class BarcodeLabelCalibrationDocument {
     );
   }
 
-  /// Scale across the head. Spans the printer's full width, not just the
-  /// sticker: the whole point is to find where the sticker sits within it.
+  /// Scale across the head, on exactly the page a label prints on — the
+  /// sticker and its run-up ([barcodeLabelPageWidthMm]) — so the numbers read
+  /// off it hold for a label. It used to span the printer's whole width (the
+  /// receipt paper width, which a driver printer cannot even set), and a
+  /// driver that centres a page narrower than its head put that ruler and the
+  /// label in different places. A sticker that runs past the end of this one
+  /// is wider, or further in, than the settings say: widen them and print it
+  /// again.
   Future<BarcodeLabelDocument> _acrossRuler() async {
-    final pageWidthMm = endpoint.paperWidthMm.toDouble().clamp(20.0, 210.0);
+    final pageWidthMm = _pageWidthMm;
     final pageHeightMm = _pitchMm;
     final pdf = _document();
     pdf.addPage(
@@ -148,7 +158,7 @@ class BarcodeLabelCalibrationDocument {
   /// Scale down the feed, restarting at every label so each sticker carries the
   /// same numbers — which also shows at a glance whether the pitch is holding.
   Future<BarcodeLabelDocument> _feedRuler() async {
-    final pageWidthMm = _offsetXMm + _widthMm;
+    final pageWidthMm = _pageWidthMm;
     final pageHeightMm = _rulerLabels * _pitchMm;
     final pdf = _document();
     pdf.addPage(
@@ -193,7 +203,7 @@ class BarcodeLabelCalibrationDocument {
         _pitchMm + (c - (_combColumns - 1) / 2) * stepMm,
     ].where((pitch) => pitch > 1).toList();
     final tallest = pitches.reduce((a, b) => a > b ? a : b);
-    final pageWidthMm = _offsetXMm + _widthMm;
+    final pageWidthMm = _pageWidthMm;
     final pageHeightMm = _offsetYMm + _combLabels * tallest;
     final columnWidthMm = _widthMm / pitches.length;
 

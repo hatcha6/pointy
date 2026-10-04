@@ -7,6 +7,7 @@ import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/barcode/scan_burst_guard.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/error_messages.dart';
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/services/api_error_detail.dart';
@@ -31,6 +32,8 @@ import 'supplier_currency_field.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_pricing_sheet.dart';
 import 'purchase_cost_warning_dialog.dart';
+import 'purchase_order_details_screen.dart'
+    show showPurchaseReceiveCaptureDialog;
 import 'purchase_suggestion_strip.dart';
 
 /// Lets the draft pane publish its footer actions to the workspace above it, so
@@ -360,6 +363,17 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       }
     }
 
+    // Goods that carry identity were ordered but not received: the receipt
+    // waits for the receiver to scan them, in the same dialog an order's own
+    // page uses, opened right here while the boxes are still on the counter.
+    if (result case Ok(:final value) when value.awaitsIdentifiers) {
+      await _receiveWithIdentifiers(context, value);
+      if (context.mounted) {
+        widget.onSubmitSuccess?.call();
+      }
+      return;
+    }
+
     // A supplier invoice number already on another order is the one refusal
     // here the buyer fixes by changing what they typed; sending the same order
     // again cannot help, so it gets its own words and no Retry.
@@ -395,6 +409,76 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
 
     if (result is Ok<PurchaseSubmission>) {
       widget.onSubmitSuccess?.call();
+    }
+  }
+
+  /// Receives an order [_submitDraft] just created, once its serials and lots
+  /// are scanned. Closing the dialog leaves the order submitted and waiting —
+  /// said so, because the stock has not moved.
+  Future<void> _receiveWithIdentifiers(
+    BuildContext context,
+    PurchaseSubmission submission,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    void deferred([String? reason]) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              [
+                ?reason,
+                l10n.purchaseOrderReceiptDeferred(submission.draftNumber),
+              ].join(' '),
+            ),
+          ),
+        );
+    }
+
+    final orderId = submission.orderId;
+    final loaded = orderId == null
+        ? null
+        : await viewModel.loadOrderForReceipt(orderId);
+    if (!context.mounted) {
+      return;
+    }
+    if (orderId == null || loaded is! Ok<PurchaseOrder>) {
+      deferred();
+      return;
+    }
+    final draft = await showPurchaseReceiveCaptureDialog(
+      context,
+      order: loaded.value,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (draft == null) {
+      deferred();
+      return;
+    }
+    final received = await viewModel.receiveCreatedOrder(orderId, draft);
+    if (!context.mounted) {
+      return;
+    }
+    switch (received) {
+      case Ok<PurchaseOrder>(:final value):
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                l10n.purchaseOrderReceiveSuccess(
+                  value.orderNumber.isEmpty
+                      ? submission.draftNumber
+                      : value.orderNumber,
+                ),
+              ),
+            ),
+          );
+      case Error<PurchaseOrder>(:final exception):
+        deferred(errorMessageFor(exception, l10n));
     }
   }
 
@@ -2396,6 +2480,34 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
               if (expiryField != null) ...[
                 const SizedBox(height: 12),
                 expiryField,
+              ],
+              // Said on the line, before the buyer submits: an order carries a
+              // count, and the numbers are scanned off the boxes at receipt.
+              if (line.variant.trackingMode.isTracked) ...[
+                const SizedBox(height: 8),
+                Row(
+                  key: ValueKey(
+                    'purchase_line_tracking_${line.variant.id}_hint',
+                  ),
+                  children: [
+                    Icon(
+                      Icons.qr_code_scanner_outlined,
+                      size: 16,
+                      color: colors.mutedInk,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        line.variant.trackingMode.tracksUnits
+                            ? l10n.purchaseLineUnitsAtReceipt
+                            : l10n.purchaseLineLotsAtReceipt,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.mutedInk,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ],
           ),

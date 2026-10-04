@@ -17,6 +17,7 @@ import '../../../data/models/warehouse.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
@@ -52,9 +53,13 @@ class CatalogScreen extends StatefulWidget {
     required this.capabilities,
     this.analyticsEngine,
     this.onOpenSearchMisses,
+    this.trackedStockRepository,
   });
 
   final CatalogViewModel viewModel;
+
+  /// For a tracked product's page: its articles and lots.
+  final TrackedStockRepository? trackedStockRepository;
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
@@ -218,6 +223,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     onOpenProduct: isDualPane ? _selectProduct : null,
                     onCreateSimilar: (product) =>
                         _createSimilar(context, product),
+                    trackedStockRepository: widget.trackedStockRepository,
                   ),
                   placeholder: PointyEmptyState(
                     icon: Icons.inventory_2_outlined,
@@ -240,6 +246,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           onChanged: viewModel.loadProducts,
                           onCreateSimilar: (product) =>
                               _createSimilar(context, product),
+                          trackedStockRepository: widget.trackedStockRepository,
                         ),
                 ),
               ),
@@ -466,6 +473,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       onCreateSimilar: offerSimilar
           ? (source) => _createSimilar(context, source)
           : null,
+      trackedStockRepository: widget.trackedStockRepository,
     );
   }
 }

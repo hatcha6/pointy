@@ -370,6 +370,203 @@ void main() {
     );
   });
 
+  group('the shop bar', () {
+    const shop = 'محلات النسيم للهواتف';
+
+    test('heads every sticker when the printer has it on', () async {
+      final document = await service.buildLabelsDocument(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+        ),
+        shopName: shop,
+      );
+      // The mark at the bar's end is the one even-odd fill on a label: the
+      // page with the pencil cut out of it.
+      expect(_contents(document.bytes), contains('f*'));
+    });
+
+    test('is not drawn without a name, or with the bar switched off', () async {
+      final nameless = await service.buildLabelsPdf(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+        ),
+        shopName: '   ',
+      );
+      final switchedOff = await service.buildLabelsPdf(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+        ).copyWith(labelShopHeader: false),
+        shopName: shop,
+      );
+      expect(_contents(nameless), isNot(contains('f*')));
+      expect(_contents(switchedOff), isNot(contains('f*')));
+    });
+
+    test('leaves a sticker too short to carry it alone', () async {
+      // 20 mm tall leaves a 16.4 mm card: the bar would come out of the bars.
+      final bytes = await service.buildLabelsPdf(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 40,
+          heightMm: 20,
+        ),
+        shopName: shop,
+      );
+      expect(_contents(bytes), isNot(contains('f*')));
+    });
+
+    test('sits over a whole sticker on an A4 sheet too', () async {
+      // The sheet is a MultiPage, where a column a hair too tall carries its
+      // last child over to a continuation that never prints: the bar came
+      // out alone, over an empty cell.
+      final bytes = await service.buildLabelsPdf(
+        lines: [line],
+        endpoint: endpoint(BarcodeLabelPdfSize.a4),
+        shopName: shop,
+      );
+      expect(_contents(bytes), contains('f*'));
+      // Bars, not the 25 mm cut guide, which is all an empty cell draws.
+      expect(_barcodeBarHeightMm(bytes), inInclusiveRange(4, 20));
+    });
+
+    test('costs the type and the bars, never the media', () async {
+      final bare = await service.buildLabelsDocument(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+        ),
+      );
+      final barred = await service.buildLabelsDocument(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+        ),
+        shopName: shop,
+      );
+      expect(barred.mediaWidthMm, bare.mediaWidthMm);
+      expect(barred.mediaHeightMm, bare.mediaHeightMm);
+      final bareBars = _barcodeBarHeightMm(bare.bytes);
+      final barredBars = _barcodeBarHeightMm(barred.bytes);
+      expect(barredBars, lessThan(bareBars));
+      // Still a symbol a scanner can aim at from the counter.
+      expect(barredBars, greaterThan(7));
+    });
+  });
+
+  test('a quarter-turned sticker keeps its whole card', () async {
+    // Turned a quarter, the card is as tall as the sticker is wide. It used to
+    // be laid out inside the sticker's own unturned box, squeezed to 25 mm, and
+    // whatever fell below that — the bars' height first — was lost.
+    for (final shopName in [null, 'محلات النسيم']) {
+      final bytes = await service.buildLabelsPdf(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 40,
+          heightMm: 25,
+          rotation: 1,
+        ),
+        shopName: shopName,
+      );
+      expect(
+        _barcodeBarHeightMm(bytes),
+        greaterThan(8),
+        reason: shopName == null ? 'no bar' : 'with the shop bar',
+      );
+    }
+  });
+
+  test(
+    'a quarter-turned sticker sets the whole price, currency and all',
+    () async {
+      // A short name, so the only text the narrow card cannot hold at headline
+      // size is the price. It used to be laid out at the card's full width and
+      // clipped there: the figure printed, its currency did not.
+      final bytes = await service.buildLabelsPdf(
+        lines: const [
+          BarcodeLabelPrintLine(
+            label: BarcodeLabelDraft(
+              displayName: 'شاي',
+              productName: 'شاي',
+              sku: 'TEA',
+              barcode: '6224000123456',
+              unitPrice: 12.5,
+            ),
+            copies: 1,
+            includePrice: true,
+          ),
+        ],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 40,
+          heightMm: 25,
+          rotation: 1,
+        ),
+      );
+      final priceEms = (await _boldMetrics('12.50 د.ل')).advanceWidth;
+      const cardWidthMm = 25 - 2 * 1.8;
+      final digitsSize = _fontSizes(bytes).reduce(math.min);
+      final sizesThatFit = _fontSizes(bytes).where(
+        (size) =>
+            size > digitsSize &&
+            size * priceEms * 25.4 / PdfPageFormat.inch <= cardWidthMm + 0.01,
+      );
+      expect(sizesThatFit, isNotEmpty);
+    },
+  );
+
+  group('the paper a driver printed on', () {
+    final sticker = BarcodeLabelDocument(
+      bytes: Uint8List(0),
+      mediaWidthMm: 50,
+      mediaHeightMm: 30,
+    );
+
+    test('is the label when it is within a millimetre of it', () {
+      expect(
+        sticker.paperMismatchWith(
+          const PdfPageFormat(50.4 * PdfPageFormat.mm, 29.6 * PdfPageFormat.mm),
+        ),
+        isNull,
+      );
+    });
+
+    test('is named when the driver kept its own preset', () {
+      // A driver left on 4 x 6 in prints every sticker on that page.
+      final mismatch = sticker.paperMismatchWith(
+        const PdfPageFormat(4 * PdfPageFormat.inch, 6 * PdfPageFormat.inch),
+      )!;
+      expect(mismatch.requestedWidthMm, 50);
+      expect(mismatch.requestedHeightMm, 30);
+      expect(mismatch.printedWidthMm, closeTo(101.6, 0.01));
+      expect(mismatch.printedHeightMm, closeTo(152.4, 0.01));
+    });
+
+    test('says nothing when there was no report, or no media', () {
+      expect(sticker.paperMismatchWith(null), isNull);
+      expect(
+        BarcodeLabelDocument(
+          bytes: Uint8List(0),
+        ).paperMismatchWith(PdfPageFormat.a4),
+        isNull,
+      );
+    });
+  });
+
   test(
     'writes sample PDFs for visual inspection when POINTY_LABEL_DUMP set',
     () async {
@@ -412,11 +609,61 @@ void main() {
         final bytes = await service.buildLabelsPdf(
           lines: [line, line],
           endpoint: entry.value,
+          shopName: 'محلات النسيم للهواتف',
         );
         File('$dumpDir/${entry.key}.pdf').writeAsBytesSync(bytes);
+        final bare = await service.buildLabelsPdf(
+          lines: [line, line],
+          endpoint: entry.value,
+        );
+        File('$dumpDir/${entry.key}-nobar.pdf').writeAsBytesSync(bare);
       }
     },
   );
+}
+
+/// Every page content stream, inflated and joined.
+String _contents(Uint8List bytes) {
+  final text = latin1.decode(bytes);
+  final out = StringBuffer();
+  for (final match in RegExp('stream\r?\n').allMatches(text)) {
+    final end = text.indexOf('endstream', match.end);
+    if (end < 0) {
+      continue;
+    }
+    try {
+      out.write(latin1.decode(zlib.decode(bytes.sublist(match.end, end))));
+    } on Object {
+      continue;
+    }
+  }
+  return out.toString();
+}
+
+/// How tall the Code 128 bars are drawn, in millimetres of the card: the height
+/// most `re` rectangles on the page share.
+double _barcodeBarHeightMm(Uint8List bytes) {
+  final counts = <double, int>{};
+  for (final match in RegExp(
+    r'([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) re',
+  ).allMatches(_contents(bytes))) {
+    final height = double.parse(match.group(4)!).abs();
+    final key = (height * 100).roundToDouble() / 100;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  final mostDrawn = counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
+  return mostDrawn.key * 25.4 / PdfPageFormat.inch;
+}
+
+Future<PdfFontMetrics> _boldMetrics(String text) async {
+  final bytes = await File(
+    'assets/fonts/IBMPlexSansArabic-Bold.ttf',
+  ).readAsBytes();
+  final font = PdfTtfFont(
+    pw.Document().document,
+    ByteData.view(Uint8List.fromList(bytes).buffer),
+  );
+  return font.stringMetrics(text);
 }
 
 /// Every font size the document actually sets, read off the page content

@@ -16,6 +16,7 @@ import '../../../data/models/warehouse.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -48,9 +49,13 @@ class ProductList extends StatelessWidget {
     required this.onCreateProduct,
     this.onOpenProduct,
     this.onCreateSimilar,
+    this.trackedStockRepository,
   });
 
   final CatalogViewModel viewModel;
+
+  /// For a tracked product's page: its articles and lots.
+  final TrackedStockRepository? trackedStockRepository;
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
@@ -275,7 +280,6 @@ class ProductList extends StatelessWidget {
     }
     final result = await viewModel.bulkSetFlags(
       isActive: choice.isActive,
-      tracksExpiry: choice.tracksExpiry,
       isService: choice.isService,
       isPrepared: choice.isPrepared,
     );
@@ -312,6 +316,7 @@ class ProductList extends StatelessWidget {
       onChanged: viewModel.loadProducts,
       pricingOptions: viewModel.pricingOptions,
       onCreateSimilar: onCreateSimilar,
+      trackedStockRepository: trackedStockRepository,
     );
   }
 }
@@ -618,6 +623,7 @@ Future<void> openProductDetails(
 
   /// «منتج مشابه». Omitted, the details screen does not offer it.
   ValueChanged<Product>? onCreateSimilar,
+  TrackedStockRepository? trackedStockRepository,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -641,6 +647,7 @@ Future<void> openProductDetails(
         analyticsEngine: analyticsEngine,
         onChanged: onChanged,
         onCreateSimilar: onCreateSimilar,
+        trackedStockRepository: trackedStockRepository,
       ),
     ),
   );

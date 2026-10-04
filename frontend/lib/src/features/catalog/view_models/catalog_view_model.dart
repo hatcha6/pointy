@@ -231,7 +231,6 @@ class CatalogViewModel extends ChangeNotifier {
 
   Future<BulkActionResult> bulkSetFlags({
     bool? isActive,
-    bool? tracksExpiry,
     bool? isService,
     bool? isPrepared,
   }) {
@@ -239,7 +238,6 @@ class CatalogViewModel extends ChangeNotifier {
       (ids) => _catalogRepository.bulkSetProductFlags(
         ids: ids,
         isActive: isActive,
-        tracksExpiry: tracksExpiry,
         isService: isService,
         isPrepared: isPrepared,
       ),

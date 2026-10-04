@@ -10,6 +10,7 @@ import 'package:pointy_frontend/src/data/services/backend_discovery_service.dart
 import 'package:pointy_frontend/src/data/services/connection_coordinator.dart';
 import 'package:pointy_frontend/src/data/services/connection_status_controller.dart';
 import 'package:pointy_frontend/src/data/services/connection_profile_storage.dart';
+import 'package:pointy_frontend/src/data/services/lan_interfaces.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/relay_ticket_refresh_client.dart';
 
@@ -59,6 +60,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://lan.test/api',
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
         ),
         storage: storage,
@@ -98,6 +101,8 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        serverPresence: _absent,
+        readAddresses: _noAddresses,
         udpDiscovery: _noUdp,
       ),
       storage: storage,
@@ -148,6 +153,8 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        serverPresence: _absent,
+        readAddresses: _noAddresses,
         udpDiscovery: _noUdp,
       ),
       storage: storage,
@@ -208,6 +215,8 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        serverPresence: _absent,
+        readAddresses: _noAddresses,
         udpDiscovery: _noUdp,
       ),
       storage: storage,
@@ -278,6 +287,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://lan.test/api',
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
         ),
         storage: storage,
@@ -331,6 +342,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://lan.test/api',
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
         ),
         storage: storage,
@@ -391,6 +404,8 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        serverPresence: _absent,
+        readAddresses: _noAddresses,
         udpDiscovery: _noUdp,
       ),
       storage: storage,
@@ -404,7 +419,9 @@ void main() {
 
     final profile = await storage.loadProfile();
     expect(profile?.relayToken, isEmpty);
-    expect(productRequests, 1);
+    // Tried once more on the LAN (the mock fails any other host), never on
+    // the relay with the expired ticket.
+    expect(productRequests, 2);
     coordinator.dispose();
   });
 
@@ -451,6 +468,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://old.lan/api',
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery:
               ({Duration timeout = const Duration(seconds: 2)}) async => [
                 Uri.parse('http://new.lan/api'),
@@ -503,6 +522,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://old.lan/api',
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           subnetSweep: ({String? expectedInstallationId}) async => [
             'http://swept.lan/api',
@@ -542,6 +563,8 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
+        serverPresence: _absent,
+        readAddresses: _noAddresses,
         udpDiscovery: _noUdp,
       ),
       storage: storage,
@@ -571,6 +594,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
         ),
         storage: storage,
@@ -615,6 +640,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           probeTimeout: const Duration(milliseconds: 50),
         ),
@@ -627,10 +654,12 @@ void main() {
     },
   );
 
-  test('rediscover is single-flight', () async {
+  test('rediscover calls in flight share one discovery', () async {
     final storage = MemoryConnectionProfileStorage();
+    var probes = 0;
     final client = MockClient((request) async {
       if (request.url.toString() == 'http://lan.test/api/discovery/service/') {
+        probes++;
         return _jsonResponse(
           _backendPayload(
             installationId: 'installation-1',
@@ -649,17 +678,22 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        serverPresence: _absent,
+        readAddresses: _noAddresses,
         udpDiscovery: _noUdp,
       ),
       storage: storage,
     );
 
     final first = coordinator.rediscover(includeSweep: false);
-    // Second call while the first is still in flight coalesces to a no-op.
+    // A second call while the first is in flight joins it and shares its
+    // answer. It used to report false at once, and a recovery that asked
+    // while the hunt was looking took that for "the LAN is gone".
     final second = coordinator.rediscover(includeSweep: false);
 
-    expect(await second, isFalse);
+    expect(await second, isTrue);
     expect(await first, isTrue);
+    expect(probes, 1);
     coordinator.dispose();
   });
 
@@ -686,6 +720,8 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        serverPresence: _absent,
+        readAddresses: _noAddresses,
         udpDiscovery: _noUdp,
       ),
       storage: storage,
@@ -721,6 +757,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: shop.client,
           defaultApiBaseUrl: _lanApi,
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           subnetSweep: _noSweep,
         ),
@@ -951,6 +989,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: _lanApi,
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           subnetSweep: _noSweep,
         ),
@@ -1204,6 +1244,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: _lanApi,
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           subnetSweep: _noSweep,
         ),
@@ -1257,6 +1299,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: _lanApi,
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           subnetSweep: _noSweep,
         ),
@@ -1295,6 +1339,8 @@ void main() {
           discovery: BackendDiscoveryService(
             client: client,
             defaultApiBaseUrl: _lanApi,
+            serverPresence: _absent,
+            readAddresses: _noAddresses,
             udpDiscovery: _noUdp,
             subnetSweep: _noSweep,
           ),
@@ -1361,6 +1407,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: _lanApi,
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           subnetSweep: _noSweep,
         ),
@@ -1408,6 +1456,8 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: _lanApi,
+          serverPresence: _absent,
+          readAddresses: _noAddresses,
           udpDiscovery: _noUdp,
           subnetSweep: _noSweep,
         ),
@@ -1516,6 +1566,17 @@ Future<List<Uri>> _noUdp({
 }) async {
   return const [];
 }
+
+/// Nothing accepts a connection anywhere — no real sockets either.
+Future<bool> _absent(
+  Uri url, {
+  Duration timeout = const Duration(milliseconds: 900),
+}) async {
+  return false;
+}
+
+/// This device's interface list, never read for real.
+Future<List<LanAddressCandidate>> _noAddresses() async => const [];
 
 Map<String, Object?> _backendPayload({
   required String installationId,

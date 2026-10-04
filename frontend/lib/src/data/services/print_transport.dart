@@ -45,18 +45,20 @@ class PrintTransportStatus {
 }
 
 class PrintTransportResult {
-  const PrintTransportResult.success(this.message)
+  const PrintTransportResult.success(this.message, {this.paperMismatch})
     : isSuccess = true,
       unassignedRole = null;
 
   const PrintTransportResult.failure(this.message)
     : isSuccess = false,
-      unassignedRole = null;
+      unassignedRole = null,
+      paperMismatch = null;
 
   /// Nothing was sent, because no printer on this device does [role]'s job.
   PrintTransportResult.unassigned(PrinterRole role)
     : isSuccess = false,
       unassignedRole = role,
+      paperMismatch = null,
       message = PrinterRoleUnassigned(role).toString();
 
   final bool isSuccess;
@@ -66,6 +68,42 @@ class PrintTransportResult {
   /// something only the device's printer settings can fix, unlike a printer
   /// that is switched off.
   final PrinterRole? unassignedRole;
+
+  /// Set when the job went out, but on paper other than the page it asked
+  /// for: the printer's driver kept its own paper setting. The print exists,
+  /// it is just not on the label — something only the driver can fix.
+  final PrintPaperMismatch? paperMismatch;
+}
+
+/// The page a job asked for, against the paper its driver printed it on —
+/// both in millimetres. The printed size is unknown when the driver names its
+/// paper without saying how big it is.
+class PrintPaperMismatch {
+  const PrintPaperMismatch({
+    required this.requestedWidthMm,
+    required this.requestedHeightMm,
+    this.printedWidthMm,
+    this.printedHeightMm,
+  });
+
+  final double requestedWidthMm;
+  final double requestedHeightMm;
+  final double? printedWidthMm;
+  final double? printedHeightMm;
+
+  bool get knowsPrintedSize =>
+      printedWidthMm != null && printedHeightMm != null;
+
+  @override
+  String toString() {
+    final asked =
+        'asked for ${_mm(requestedWidthMm)}x${_mm(requestedHeightMm)} mm';
+    return knowsPrintedSize
+        ? '$asked, printed on ${_mm(printedWidthMm!)}x${_mm(printedHeightMm!)} mm'
+        : '$asked, printed on the driver\'s own paper';
+  }
+
+  static String _mm(double value) => value.toStringAsFixed(1);
 }
 
 class PrintTransportResponse {

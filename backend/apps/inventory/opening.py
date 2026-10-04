@@ -164,6 +164,18 @@ def identify_opening_stock(
         )
 
     if tracking.tracks_units(mode):
+        if outstanding != outstanding.to_integral_value():
+            # ``int()`` would name two of 2.5 and leave half a handset that
+            # nothing can ever account for.
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        f"الكمية غير المعرّفة ({outstanding}) ليست عددًا "
+                        "صحيحًا من القطع — صحّح الرصيد بجرد أو تسوية أولًا."
+                    ),
+                    "outstanding": str(outstanding),
+                }
+            )
         wanted = int(outstanding)
         if len(rows) > wanted:
             raise serializers.ValidationError(
@@ -217,7 +229,10 @@ def identify_opening_stock(
         batches=lot_rows or None,
         at=at,
         capture_later=capture_later,
-        placeholder_key=f"OPEN-{variant.pk}",
+        # Provenance, not uniqueness — ``placeholder_unit_code`` makes every
+        # arrival's codes unique on its own. The place is named because one
+        # variant is identified shelf by shelf.
+        placeholder_key=f"OPEN-V{variant.pk}-W{warehouse_id}",
     )
     tracking.apply_receipt(plan, at=at)
     # ``in_stock_since`` is the day the shop started tracking, not a made-up

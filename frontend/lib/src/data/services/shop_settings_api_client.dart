@@ -1,5 +1,6 @@
 import '../models/analytics_export.dart';
 import '../models/factory_reset.dart';
+import '../models/identified_stock_settings.dart';
 import '../models/shop_settings.dart';
 import '../models/system_backup.dart';
 import 'analytics_export_receiver.dart';
@@ -32,6 +33,24 @@ class ShopSettingsApiClient {
     _session.throwApiException(
       response,
       'Shop settings update failed with status',
+    );
+    return ShopSettings.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Saves the identified-stock switches alone. A partial update naming only
+  /// those keys, so nothing else on the shop is touched.
+  Future<ShopSettings> updateIdentifiedStockSettings(
+    IdentifiedStockSettings settings,
+  ) async {
+    final response = await _session.patch(
+      'shop-settings/',
+      body: settings.toJson(),
+    );
+    _session.throwApiException(
+      response,
+      'Identified stock settings update failed with status',
     );
     return ShopSettings.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,

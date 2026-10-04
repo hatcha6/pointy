@@ -275,15 +275,21 @@ class RetentionMomentTests(TestCase):
 class _FootageRootMixin:
     def setUp(self):
         super().setUp()
+        # addCleanup, not tearDown: it also runs when a setUp further down
+        # the chain fails, which tearDown does not.
         self._root = tempfile.mkdtemp(prefix="pointy-footage-")
-        self._override = override_settings(POINTY_FOOTAGE_ROOT=self._root)
+        self.addCleanup(shutil.rmtree, self._root, ignore_errors=True)
+        # A floor of zero, so housekeeping does not prune because the machine
+        # running the tests is short of space; the floor tests patch
+        # disk_budget instead.
+        self._override = override_settings(
+            POINTY_FOOTAGE_ROOT=self._root,
+            POINTY_FOOTAGE_MIN_FREE_GB=0,
+            POINTY_FOOTAGE_MIN_FREE_SHARE=0,
+        )
         self._override.enable()
+        self.addCleanup(self._override.disable)
         storage.ensure_tree()
-
-    def tearDown(self):
-        self._override.disable()
-        shutil.rmtree(self._root, ignore_errors=True)
-        super().tearDown()
 
     def make_recorder(self, *, offset=120, measured=True) -> Recorder:
         recorder = Recorder.objects.create(

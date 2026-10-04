@@ -9,7 +9,7 @@ from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.core.serializer_reuse import render as render_reused
 
 from . import scale_barcodes
-from .tracking_modes import assert_mode_change_allowed
+from .tracking_modes import assert_mode_change_allowed, identify_stock_on_hand
 from .identity import (
     BARCODE_FIELD,
     KIND_PAYLOAD,
@@ -536,6 +536,11 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "is_archived",
             "archived_at",
             "tracks_expiry",
+            # How closely the product's stock is identified. Every client
+            # surface that sells, counts or moves a variant asks it — and the
+            # variant payloads below carry this summary as their only product
+            # context, so without it a serialized product read as `quantity`.
+            "tracking_mode",
             "is_service",
             "is_prepared",
             # A product a feature owns rather than the shop — a recharge
@@ -566,6 +571,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "archived_at",
+            "tracking_mode",
             "is_system",
             "system_kind",
         )
@@ -764,6 +770,13 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         source="product.tracks_expiry",
         read_only=True,
     )
+    # Denormalised from the product like the flags beside it: the catalog
+    # list drops ``product_detail`` from each variant, and a variant found by
+    # barcode is sold, counted and moved on this alone.
+    tracking_mode = serializers.CharField(
+        source="product.tracking_mode",
+        read_only=True,
+    )
     is_service = serializers.BooleanField(source="product.is_service", read_only=True)
     is_prepared = serializers.BooleanField(
         source="product.is_prepared",
@@ -825,6 +838,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "price_rate_at",
             "is_active",
             "tracks_expiry",
+            "tracking_mode",
             "is_service",
             "is_prepared",
             "unit",
@@ -1098,6 +1112,15 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
     is_archived = serializers.BooleanField(read_only=True)
+    # Write-only answer to the tracking guard's identify-later question: the
+    # client sets it only after the user has read what turning tracking on does
+    # to the stock already on the shelf, and the switch then identifies that
+    # stock as owed in the same transaction (``tracking_modes``).
+    tracking_mode_identify_later = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1132,6 +1155,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             # for anything else; changing it re-labels history, so it is
             # guarded by ``apps.catalog.tracking_modes``.
             "tracking_mode",
+            "tracking_mode_identify_later",
             "asset_type",
             "warranty_days",
             # Batch & expiry policy, read when the mode tracks lots or the
@@ -1196,8 +1220,15 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                     attrs["tracking_mode"] = Product.TrackingMode.BATCH
             elif current == Product.TrackingMode.BATCH:
                 attrs["tracking_mode"] = Product.TrackingMode.QUANTITY
+        identify_later = attrs.pop("tracking_mode_identify_later", False)
+        self._tracking_identify_later = identify_later
         if "tracking_mode" in attrs:
-            assert_mode_change_allowed(self.instance, attrs["tracking_mode"])
+            assert_mode_change_allowed(
+                self.instance,
+                attrs["tracking_mode"],
+                identify_later=identify_later,
+                may_identify=self._may_identify_opening_stock(),
+            )
         base_unit = attrs.get("unit") or getattr(self.instance, "unit", None) or "piece"
         units_payload = attrs.get("units")
         if units_payload is not None:
@@ -1223,6 +1254,18 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         self._validate_opening_stock(attrs)
         raise_identity_conflicts(self._identity_conflicts(attrs))
         return attrs
+
+    def _may_identify_opening_stock(self):
+        """Whether this user may turn tracking on over stock already on hand.
+
+        That switch is opening identification (§6.10) wearing a catalog write's
+        clothes — it writes the articles that account for the shelf — so it
+        answers to the permission ``/stock-units/identify-opening/`` asks for,
+        not to ``change_product``. Same reasoning as the opening stock below.
+        """
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return user is not None and user.has_perm("inventory.add_stockunit")
 
     def _validate_opening_stock(self, attrs):
         """Who may open a shelf, and when.
@@ -1528,9 +1571,27 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         )
         try:
             with transaction.atomic():
+                new_mode = validated_data.get("tracking_mode", instance.tracking_mode)
+                opening_rows = []
+                if new_mode != instance.tracking_mode:
+                    # Asked again under lock: ``validate`` read the shelf
+                    # without one, and a sale landing between the two must not
+                    # leave stock the new mode cannot explain.
+                    opening_rows = assert_mode_change_allowed(
+                        instance,
+                        new_mode,
+                        identify_later=getattr(self, "_tracking_identify_later", False),
+                        may_identify=self._may_identify_opening_stock(),
+                        lock=True,
+                    )
                 for field, value in validated_data.items():
                     setattr(instance, field, value)
                 instance.save()
+                if opening_rows:
+                    request = self.context.get("request")
+                    identify_stock_on_hand(
+                        instance, opening_rows, actor=getattr(request, "user", None)
+                    )
                 if categories is not None:
                     instance.categories.set(categories)
                 if variant_options is not None:

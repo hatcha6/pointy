@@ -13,6 +13,10 @@
 //   ?screen=bankqr     the IBAN / account-number code a customer scans
 //   ?screen=bankqr-partial  the same sheet when only one of the two is saved
 //   ?screen=picker     the checkout bank picker, in each of its three states
+//   ?screen=clearing   card takings held by Moamalat, one day overdue
+//   ?screen=settlement the "record the processor's transfer" sheet, open
+//   ?screen=clearing-details  the clearing account's drill-down, open
+//   ?screen=clearing-editor   the clearing account's editor, open
 //
 // See AGENTS.md — a black canvas after start is a browser refresh issue, not a
 // slow compile. Reload once.
@@ -22,11 +26,13 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/card_settlement.dart';
 import 'package:pointy_frontend/src/data/models/money_position.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/repositories/treasury_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/treasury/view_models/money_position_view_model.dart';
+import 'package:pointy_frontend/src/features/treasury/views/card_settlement_sheet.dart';
 import 'package:pointy_frontend/src/features/treasury/views/money_account_details_sheet.dart';
 import 'package:pointy_frontend/src/features/treasury/views/money_account_editor_sheet.dart';
 import 'package:pointy_frontend/src/features/treasury/views/money_funding_sheet.dart';
@@ -98,6 +104,34 @@ class TreasuryPreviewApp extends StatelessWidget {
           ),
         ),
         'picker' => const _PickerGallery(),
+        'clearing' => _screen(_clearingPosition()),
+        'settlement' => _SheetHost(
+          position: _clearingPosition(),
+          open: (context, viewModel) => showCardSettlementSheet(
+            context,
+            viewModel: viewModel,
+            account: viewModel.accountById(_clearingId)!.account,
+          ),
+        ),
+        'clearing-details' => _SheetHost(
+          position: _clearingPosition(),
+          open: (context, viewModel) => showMoneyAccountDetailsSheet(
+            context,
+            viewModel: viewModel,
+            capabilities: _navigation.capabilities,
+            accountId: _clearingId,
+          ),
+        ),
+        'clearing-editor' => _SheetHost(
+          position: _clearingPosition(),
+          open: (context, viewModel) async {
+            await showMoneyAccountEditorSheet(
+              context,
+              viewModel: viewModel,
+              account: viewModel.accountById(_clearingId)?.account,
+            );
+          },
+        ),
         _ => const _Board(),
       },
     );
@@ -317,6 +351,18 @@ class _Board extends StatelessWidget {
               _frame('مصرفان — هاتف', 390, 844, _twoBankPosition()),
               _frame('الوضع الطبيعي — عريض', 900, 844, _healthyPosition()),
               _frame('مصرفان — عريض', 900, 844, _twoBankPosition()),
+              _frame(
+                'بطاقات قيد التسوية — هاتف',
+                390,
+                844,
+                _clearingPosition(),
+              ),
+              _frame(
+                'بطاقات قيد التسوية — عريض',
+                900,
+                844,
+                _clearingPosition(),
+              ),
             ],
           ),
         ),
@@ -383,6 +429,110 @@ class _FakeRepository extends TreasuryRepository {
         ],
       ),
     );
+  }
+
+  // --- card takings held by the processor -----------------------------
+
+  @override
+  Future<Result<HeldTakings>> loadHeldTakings(
+    int accountId, {
+    int? amountCents,
+    DateTime? settledOn,
+  }) async {
+    final days = _heldDays();
+    final due = days.where((day) => !day.expectedOn.isAfter(_today)).toList();
+    final dueNet = due.fold<int>(0, (sum, day) => sum + day.netCents);
+    final match = amountCents == null
+        ? SettlementMatch.due
+        : amountCents == dueNet
+        ? SettlementMatch.exact
+        : SettlementMatch.due;
+    return Ok(
+      HeldTakings(
+        account: _position.accounts
+            .firstWhere((entry) => entry.account.id == accountId)
+            .account,
+        days: days,
+        today: _today,
+        settledOn: settledOn ?? _today,
+        netCents: days.fold(0, (sum, day) => sum + day.netCents),
+        count: days.fold(0, (sum, day) => sum + day.count),
+        suggestion: SettlementSuggestion(
+          days: [for (final day in due) day.key],
+          match: match,
+          expectedCents: dueNet,
+          differenceCents: amountCents == null ? null : amountCents - dueNet,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<Result<List<HeldPayment>>> loadHeldDayPayments(
+    int accountId,
+    String day,
+  ) async {
+    return Ok([
+      HeldPayment(
+        id: 501,
+        invoiceNumber: 'INV-2026-0418',
+        paidAt: DateTime.now().subtract(const Duration(days: 3, hours: 2)),
+        amountCents: 75000,
+        commissionCents: 750,
+        netCents: 74250,
+        maskedPan: '6274 •••• 1043',
+        terminalId: 'T0451',
+      ),
+      HeldPayment(
+        id: 502,
+        invoiceNumber: 'INV-2026-0419',
+        paidAt: DateTime.now().subtract(const Duration(days: 3, hours: 1)),
+        amountCents: 50000,
+        commissionCents: 500,
+        netCents: 49500,
+        maskedPan: '5078 •••• 2210',
+        terminalId: 'T0451',
+      ),
+      const HeldPayment(
+        id: 503,
+        invoiceNumber: 'INV-2026-0418',
+        reversesId: 499,
+        amountCents: -12000,
+        commissionCents: -120,
+        netCents: -11880,
+      ),
+    ]);
+  }
+
+  @override
+  Future<Result<List<CardSettlement>>> loadCardSettlements(
+    int accountId,
+  ) async {
+    return Ok([
+      CardSettlement(
+        id: 41,
+        settledOn: _today.subtract(const Duration(days: 6)),
+        amountReceivedCents: 421500,
+        expectedCents: 422370,
+        differenceCents: -870,
+        paymentCount: 37,
+        firstDay: _today.subtract(const Duration(days: 9)),
+        lastDay: _today.subtract(const Duration(days: 7)),
+        bankAccountName: 'حساب المحل',
+      ),
+      CardSettlement(
+        id: 40,
+        settledOn: _today.subtract(const Duration(days: 8)),
+        amountReceivedCents: 98000,
+        expectedCents: 98000,
+        differenceCents: 0,
+        paymentCount: 9,
+        firstDay: _today.subtract(const Duration(days: 9)),
+        bankAccountName: 'حساب المحل',
+        isCancelled: true,
+        cancelReason: 'سُجّل المبلغ خطأ',
+      ),
+    ]);
   }
 
   MoneyMovement _movement(
@@ -529,6 +679,100 @@ MoneyPosition _twoBankPosition() {
       total: 5860.75,
       accountsCounted: 1,
       accountsTotal: 3,
+    ),
+  );
+}
+
+// --- card takings held by Moamalat -----------------------------------------
+
+const _clearingId = 9;
+
+DateTime get _today {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+}
+
+/// Four held days: the oldest a day late, two due today, one still on its
+/// way — the shape of a Sunday morning after a Libyan weekend.
+List<HeldDay> _heldDays() {
+  HeldDay day(int daysAgo, int expectedIn, int net, int count) {
+    final value = _today.subtract(Duration(days: daysAgo));
+    return HeldDay(
+      day: value,
+      expectedOn: _today.add(Duration(days: expectedIn)),
+      overdue: expectedIn < 0,
+      grossCents: (net / 0.99).round(),
+      commissionCents: (net / 0.99).round() - net,
+      netCents: net,
+      count: count,
+    );
+  }
+
+  return [
+    day(5, -1, 182340, 14),
+    day(3, 0, 241560, 19),
+    day(2, 0, 96030, 8),
+    day(1, 1, 158410, 12),
+  ];
+}
+
+MoneyPosition _clearingPosition() {
+  final base = _twoBankPosition();
+  final held = _heldDays();
+  final net = held.fold<int>(0, (sum, day) => sum + day.netCents) / 100;
+  return MoneyPosition(
+    accounts: [
+      ...base.accounts,
+      MoneyAccountPosition(
+        account: MoneyAccount(
+          id: _clearingId,
+          name: 'معاملات',
+          kind: MoneyAccountKind.clearing,
+          settlesIntoId: 2,
+          settlesIntoName: 'حساب المحل',
+          holdsUntaggedCard: true,
+          openingAt: _today.subtract(const Duration(days: 12)),
+        ),
+        expectedBalance: net,
+        components: [
+          MoneyPositionComponent(
+            code: 'sales',
+            amount: net / 0.99 + 5195.70,
+            isInflow: true,
+          ),
+          MoneyPositionComponent(
+            code: 'commission',
+            amount: -(net / 0.99 - net) - 52.48,
+            isInflow: false,
+          ),
+          const MoneyPositionComponent(
+            code: 'settlement_out',
+            amount: -5134.52,
+            isInflow: false,
+          ),
+          const MoneyPositionComponent(
+            code: 'settlement_difference',
+            amount: -8.70,
+            isInflow: false,
+          ),
+        ],
+        held: HeldSummary(
+          days: held.length,
+          payments: held.fold(0, (sum, day) => sum + day.count),
+          oldestDay: held.first.day,
+          nextExpectedOn: held.first.expectedOn,
+          overdueDays: 1,
+          overdueAmount: held.first.netCents / 100,
+        ),
+      ),
+    ],
+    totals: MoneyPositionTotals(
+      cash: base.totals.cash,
+      bank: base.totals.bank,
+      inTransit: net,
+      total: base.totals.total + net,
+      accountsCounted: base.totals.accountsCounted,
+      accountsTotal: base.totals.accountsTotal,
     ),
   );
 }

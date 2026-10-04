@@ -1624,6 +1624,25 @@
       }
     }
   },
+  "smartNotificationCardSettlementOverdueTitle": "تحويل بطاقات متأخر",
+  "@smartNotificationCardSettlementOverdueTitle": {
+    "description": "Alert title: held card money that should already be in the bank."
+  },
+  "smartNotificationCardSettlementOverdueMessage": "{account}: {amount} لم يصل إلى المصرف بعد، وكان متوقعًا {date}.",
+  "@smartNotificationCardSettlementOverdueMessage": {
+    "description": "Alert message: overdue card settlement.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "smartNotificationUnknownTitle": "تنبيه جديد",
   "smartNotificationUnknownMessage": "يوجد تنبيه يحتاج مراجعة.",
   "dashboardOrderCount": "{count, plural, =0{لا طلبات} =1{طلب واحد} =2{طلبان} other{{count} طلبات}}",
@@ -3799,14 +3818,14 @@
   "printerPdfPageSizeRoll70": "إيصال 70 مم",
   "printerPdfPageSizeRoll80": "إيصال 80 مم",
   "printerBarcodeLabelPdfSizeLabel": "حجم ملصق الباركود",
-  "printerBarcodeLabelPdfSizeHelper": "شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده. على ويندوز اضبط المقاس نفسه في تعريف الطابعة.",
+  "printerBarcodeLabelPdfSizeHelper": "شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده.",
   "printerBarcodeLabelPdfSizeSticker": "ملصق مقصوص (بمقاس الملصق أدناه)",
   "printerBarcodeLabelPdfSizeRoll50": "لفة 50 مم",
   "printerBarcodeLabelPdfSizeRoll70": "لفة 70 مم",
   "printerBarcodeLabelPdfSizeRoll80": "لفة 80 مم",
   "printerBarcodeLabelPdfSizeA4": "A4 (شبكة ملصقات)",
   "printerBarcodeLabelCalibrationTitle": "معايرة مقاس الملصق",
-  "printerBarcodeLabelCalibrationHelper": "اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح).",
+  "printerBarcodeLabelCalibrationHelper": "اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح). إذا تجاوز الملصق نهاية المسطرة العرضية فزِد العرض أو الإزاحة وأعد طباعتها.",
   "printerBarcodeLabelCalibrationAcross": "مسطرة عرضية",
   "printerBarcodeLabelCalibrationFeed": "مسطرة التغذية",
   "printerBarcodeLabelCalibrationCombCoarse": "مشط المسافة (خشن)",
@@ -3824,6 +3843,29 @@
   "printerBarcodeLabelRotation90": "90° يمين",
   "printerBarcodeLabelRotation180": "180°",
   "printerBarcodeLabelRotation270": "270° يسار",
+  "printerBarcodeLabelShopHeaderLabel": "شريط اسم المحل أعلى الملصق",
+  "printerBarcodeLabelShopHeaderHelper": "شريط أسود يحمل اسم المحل وشعار دفتر في أعلى كل ملصق. الملصقات القصيرة جدًا تُطبع بدونه.",
+  "printPaperMismatchMessage": "طُبع على ورق {printed} مم بدل مقاس الملصق {requested} مم، لأن تعريف الطابعة على هذا الجهاز لم يقبل مقاس الملصق. اجعل مقاس الملصق أحد مقاسات تعريف الطابعة، أو أضف مقاس الملصق إلى التعريف، أو استعمل تعريفًا يقبل المقاسات المخصصة.",
+  "@printPaperMismatchMessage": {
+    "description": "Shown when a label printed, but the printer driver used its own paper size instead of the label size Pointy asked for.",
+    "placeholders": {
+      "requested": {
+        "type": "String"
+      },
+      "printed": {
+        "type": "String"
+      }
+    }
+  },
+  "printPaperUnsupportedMessage": "تعريف الطابعة على هذا الجهاز لا يقبل مقاس الملصق {requested} مم، فطبعه على مقاسه الافتراضي. اجعل مقاس الملصق أحد مقاسات تعريف الطابعة، أو أضف مقاس الملصق إلى التعريف، أو استعمل تعريفًا يقبل المقاسات المخصصة.",
+  "@printPaperUnsupportedMessage": {
+    "description": "Shown when a label printed, but the computer's printer driver accepts neither custom sizes nor a size matching the label, so it used its own default paper.",
+    "placeholders": {
+      "requested": {
+        "type": "String"
+      }
+    }
+  },
   "systemDefaultPrinterLabel": "طابعة النظام الافتراضية",
   "paperWidthLabel": "عرض الورق بالملليمتر",
   "printerCodeTableLabel": "جدول ترميز الطابعة",
@@ -4215,6 +4257,9 @@
   "productCategoriesOpenPickerTooltip": "اختيار التصنيفات",
   "productImageLabel": "صورة المنتج",
   "productImageEmpty": "لم يتم اختيار صورة",
+  "productImageViewFullScreenTooltip": "عرض الصورة بالحجم الكامل",
+  "productImageViewerPrevious": "الصورة السابقة",
+  "productImageViewerNext": "الصورة التالية",
   "productImageUploadButton": "رفع صورة",
   "productImageCameraButton": "التقاط صورة",
   "productImageSearchButton": "بحث في الإنترنت",
@@ -4587,6 +4632,205 @@
   "bulkFlagOff": "إيقاف",
   "productTracksExpiryLabel": "يتابع تاريخ الانتهاء",
   "productTracksExpiryHint": "سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.",
+  "trackingModeQuantity": "كمية فقط",
+  "@trackingModeQuantity": {
+    "description": "How a product with no identified stock is tracked: a number in a bin."
+  },
+  "trackingModeQuantityDescription": "عدد في المخزون بلا رقم لكل قطعة — لمعظم المنتجات.",
+  "trackingModeBatch": "دفعات وصلاحية",
+  "@trackingModeBatch": {
+    "description": "Lot/batch tracking with expiry dates."
+  },
+  "trackingModeBatchDescription": "كل توريد دفعة برقمها وتاريخ صلاحيتها، ويُباع الأقرب انتهاءً أولًا.",
+  "trackingModeSerial": "رقم تسلسلي",
+  "@trackingModeSerial": {
+    "description": "Every article identified one at a time (IMEI, serial, VIN)."
+  },
+  "trackingModeSerialDescription": "كل قطعة برقمها (IMEI أو رقم تسلسلي أو رقم الشاصي)، بتكلفتها وسعرها وضمانها.",
+  "trackingModeSerialBatch": "تسلسلي داخل دفعة",
+  "@trackingModeSerialBatch": {
+    "description": "Serialised articles inside a lot — GS1 healthcare packs."
+  },
+  "trackingModeSerialBatchDescription": "كل قطعة برقمها داخل دفعة لها تاريخ صلاحية — مثل عبوات الأدوية برمز GS1.",
+  "batchPickStrategyLabel": "الدفعة التي تُباع أولًا",
+  "@batchPickStrategyLabel": {
+    "description": "Which lot the till takes when the cashier names none."
+  },
+  "batchPickStrategyFefo": "الأقرب انتهاءً أولًا",
+  "batchPickStrategyFifo": "الأقدم وصولًا أولًا",
+  "batchPickStrategyManual": "يختارها الكاشير",
+  "productTrackingSectionTitle": "تتبع المخزون",
+  "@productTrackingSectionTitle": {
+    "description": "Product form section: how this product's stock is identified."
+  },
+  "productTrackingNoStock": "الخدمات والأصناف المحضّرة عند الطلب لا مخزون لها، فلا تُتتبَّع.",
+  "productTrackingChangeWarning": "يسري التغيير على ما يُستلم ويُباع من الآن. وإن كان للمنتج رصيد في المخزون يُطلب تأكيدك قبل الحفظ: القطع المسلسلة لا تُباع حتى يُدخل رقم كل قطعة، والكمية بلا دفعة تدخل في دفعة بلا رقم.",
+  "@productTrackingChangeWarning": {
+    "description": "Shown under the tracking choice when an existing product's mode is being changed."
+  },
+  "productTrackingWarrantyLabel": "مدة الضمان (يوم)",
+  "productTrackingWarrantyHelper": "تُحسب من يوم البيع. اتركها فارغة إن لم يكن هناك ضمان.",
+  "productTrackingVariantOrUnitHint": "إن أمكن أن تتشارك قطعتان القيمة نفسها فهي خيار للمنتج (اللون، السعة). وإن ندر أن تتشاركاها فهي للقطعة نفسها (IMEI، البطارية، الحالة، التكلفة، السعر) وتُسجَّل عند الاستلام.",
+  "@productTrackingVariantOrUnitHint": {
+    "description": "The variant-or-unit rule from the serialized inventory plan, section 4.1."
+  },
+  "productTrackingPreventExpiredLabel": "منع بيع الدفعات المنتهية",
+  "productTrackingPreventExpiredHelper": "لا تُباع دفعة تجاوزت تاريخها إلا بإذن مدير.",
+  "productTrackingAssetTypesFailed": "تعذّر تحميل أنواع الأجهزة.",
+  "productTrackingAssetTypeLabel": "نوع الجهاز",
+  "productTrackingAssetTypeHelper": "يحدد اسم الرقم (IMEI، رقم الشاصي…) ويربط الجهاز المباع بسجل صيانته.",
+  "productTrackingAssetTypeNone": "بدون تحديد",
+  "productTrackingOpeningUnitsHint": "تدخل هذه الكمية بلا أرقام، ولا تُباع قبل تعريف كل قطعة من شاشة الأجهزة المسلسلة.",
+  "productTrackingOpeningLotsHint": "تدخل هذه الكمية كدفعة بلا رقم ولا تاريخ صلاحية.",
+  "productTrackingChangeTitle": "تغيير طريقة التتبع؟",
+  "productTrackingChangeBody": "من «{from}» إلى «{to}». يسري على كل ما يُستلم ويُباع من هذا المنتج من الآن، ولا يغيّر ما سبق.",
+  "@productTrackingChangeBody": {
+    "description": "Confirmation before saving a product with a different tracking mode.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "productTrackingChangeConfirm": "تغيير",
+  "productTrackingIdentifyLaterTitle": "تفعيل التتبّع لرصيد موجود؟",
+  "@productTrackingIdentifyLaterTitle": {
+    "description": "Confirmation when tracking is turned on for a product that already has stock on the shelf."
+  },
+  "productTrackingIdentifyLaterUnitsBody": "في المخزون {quantity} قطعة من هذا المنتج بلا أرقام. ستُسجَّل «بانتظار المعرّف» ولا تُباع قطعة منها حتى يُدخل رقمها من شاشة الأجهزة المسلسلة، فلتر «بانتظار المعرّف».",
+  "@productTrackingIdentifyLaterUnitsBody": {
+    "description": "Serial tracking turned on over anonymous stock: it becomes placeholders the till refuses until each is identified.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "productTrackingIdentifyLaterLotsBody": "في المخزون {quantity} من هذا المنتج بلا دفعة. ستدخل في دفعة واحدة بلا رقم ولا تاريخ صلاحية، وتبقى قابلة للبيع.",
+  "@productTrackingIdentifyLaterLotsBody": {
+    "description": "Lot tracking turned on over stock with no lot: it lands in one generated lot and stays sellable.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "productTrackingIdentifyLaterConfirm": "تفعيل التتبّع",
+  "purchaseOrderReceiptDeferred": "الطلب {number} أُنشئ ولم يُستلم بعد — استلمه من قائمة المشتريات بعد مسح الأرقام.",
+  "@purchaseOrderReceiptDeferred": {
+    "description": "An order whose serial/lot goods were not received because the receiving dialog was closed or refused.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineUnitsAtReceipt": "تُمسح الأرقام التسلسلية عند الاستلام.",
+  "purchaseLineLotsAtReceipt": "تُسجَّل الدفعات وتواريخ صلاحيتها عند الاستلام.",
+  "stockUnitIdentifyTitle": "إدخال رقم الجهاز",
+  "@stockUnitIdentifyTitle": {
+    "description": "Dialog naming a placeholder article (received or opened without its identifier)."
+  },
+  "stockUnitIdentifyCodeLabel": "الرقم التسلسلي / IMEI",
+  "stockUnitIdentifyAction": "إدخال الرقم",
+  "stockUnitIdentified": "تم حفظ الرقم.",
+  "stockUnitsShowMissing": "عرضها",
+  "@stockUnitsShowMissing": {
+    "description": "Callout action listing the articles still owed an identifier."
+  },
+  "unitTimelineEventAdvanceOpened": "تحويل مستحق إلى دفعة مقدّمة",
+  "unitTimelineEventAdvanceSettled": "تسوية دفعة مقدّمة",
+  "unitTimelineEventIdentifierCorrected": "تصحيح المعرّف",
+  "unitTimelineEventAttributesEdited": "تعديل الخصائص",
+  "unitTimelineEventRefurbCost": "تكلفة تجديد",
+  "unitTimelineEventNote": "ملاحظة",
+  "stockVoucherSale": "بيع",
+  "@stockVoucherSale": {
+    "description": "What moved a unit or lot: a ledger voucher type."
+  },
+  "stockVoucherSaleReturn": "مرتجع بيع",
+  "stockVoucherPurchaseReceipt": "استلام مشتريات",
+  "stockVoucherPurchaseReturn": "مرتجع مشتريات",
+  "stockVoucherProduction": "تصنيع",
+  "stockVoucherStockCount": "جرد",
+  "stockVoucherAdjustment": "تسوية يدوية",
+  "stockVoucherOpening": "رصيد افتتاحي",
+  "stockVoucherTransfer": "تحويل مستودع",
+  "stockVoucherTransferReceipt": "استلام تحويل مستودع",
+  "stockVoucherConsignmentCost": "تكلفة أمانة عند بيعها",
+  "stockVoucherConsignmentIntake": "استلام أمانة",
+  "stockVoucherConsignmentReturn": "إرجاع أمانة لصاحبها",
+  "stockVoucherRefurbishment": "إصلاح أُضيف إلى التكلفة",
+  "stockVoucherOther": "حركة مخزون",
+  "productTrackingModeLabel": "طريقة التتبع",
+  "productTrackingWarrantyDays": "{days, plural, one{يوم واحد} two{يومان} few{{days} أيام} many{{days} يومًا} other{{days} يوم}}",
+  "@productTrackingWarrantyDays": {
+    "description": "A warranty length in days.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "productTrackingNoWarranty": "بدون ضمان",
+  "productTrackingWarrantyCardLabel": "الضمان",
+  "productTrackingYes": "نعم",
+  "productTrackingNo": "لا",
+  "productTrackingOpenUnits": "الأجهزة",
+  "productTrackingOpenLots": "الدفعات",
+  "invoiceLineLotQuantity": "دفعة {code} × {quantity}",
+  "@invoiceLineLotQuantity": {
+    "description": "A lot a sale line drew from, with how much of the line came from it.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "identifiedStockSettingsTitle": "تتبع الأجهزة والدفعات",
+  "@identifiedStockSettingsTitle": {
+    "description": "Settings page for serial, lot and consignment tracking."
+  },
+  "identifiedStockSettingsSubtitle": "الأرقام التسلسلية، الدفعات وتواريخ الصلاحية، والأمانات",
+  "identifiedStockModesTitle": "ما الذي يتتبعه المحل؟",
+  "identifiedStockModesHint": "كلاهما مطفأ في البداية. التشغيل يُظهر الشاشات والخيارات، وكل منتج يختار طريقة تتبعه من صفحته.",
+  "identifiedStockSerialTitle": "الأجهزة بالرقم التسلسلي",
+  "identifiedStockSerialDescription": "IMEI أو رقم تسلسلي أو رقم شاصي لكل قطعة، بتكلفتها وسعرها وضمانها.",
+  "identifiedStockBatchTitle": "الدفعات وتواريخ الصلاحية",
+  "identifiedStockBatchDescription": "رقم دفعة وتاريخ صلاحية لكل توريد، والبيع من الأقرب انتهاءً أولًا.",
+  "identifiedStockSerialSectionTitle": "الأجهزة المسلسلة",
+  "identifiedStockCaptureLaterTitle": "الاستلام قبل إدخال كل الأرقام",
+  "identifiedStockCaptureLaterDescription": "تدخل البضاعة المخزون وتنتظر أرقامها في قائمة النواقص، ولا تُباع قبل تعريفها.",
+  "identifiedStockAssetTitle": "تسجيل الجهاز المباع باسم الزبون",
+  "identifiedStockAssetDescription": "عند البيع لزبون مسمّى يُضاف الجهاز إلى أجهزته، فيصل إلى الصيانة بتاريخه كاملًا.",
+  "identifiedStockConsignmentTitle": "الأمانات",
+  "identifiedStockConsignmentHint": "بضاعة يتركها أصحابها في المحل ليبيعها نيابة عنهم.",
+  "identifiedStockConsignmentSmsTitle": "رسالة لصاحب الأمانة عند البيع",
+  "identifiedStockConsignmentSmsDescription": "يعرف صاحب الأمانة أنها بيعت في نفس اللحظة.",
+  "identifiedStockDeclaredValueTitle": "القيمة المقدّرة إلزامية عند الاستلام",
+  "identifiedStockDeclaredValueDescription": "عليها تُحسب العهدة وأي مطالبة عند الفقد أو التلف.",
+  "identifiedStockReminderDaysLabel": "تذكير بالمستحقات غير المستلمة بعد (يوم)",
+  "identifiedStockReminderDaysHelper": "0 يوقف التذكير.",
+  "identifiedStockClausesHint": "نص كل بند كما يُطبع على سند استلام الأمانة. السندات الموقّعة تبقى بالنص الذي طُبعت به.",
+  "identifiedStockClauseLabel": "نص البند: {policy}",
+  "@identifiedStockClauseLabel": {
+    "description": "Label of the editable printed clause for one liability policy.",
+    "placeholders": {
+      "policy": {
+        "type": "String"
+      }
+    }
+  },
+  "identifiedStockTurnOffTitle": "إيقاف التتبع؟",
+  "identifiedStockTurnOffBody": "ستختفي شاشات الأجهزة أو الدفعات، لكن المنتجات المتتبَّعة تبقى كما هي وتستمر في طلب أرقامها عند البيع والاستلام. لإيقاف تتبع منتج غيّر طريقة تتبعه من صفحته.",
+  "identifiedStockTurnOffConfirm": "إيقاف",
+  "identifiedStockSaved": "تم حفظ إعدادات التتبع.",
   "activeVariantLabel": "متاح للبيع",
   "defaultVariantLabel": "الخيار الافتراضي",
   "variantNameLabel": "اسم الخيار",
@@ -5858,6 +6102,86 @@
       },
       "unitCost": {
         "type": "String"
+      }
+    }
+  },
+  "purchaseAdjustmentUnitsTitle": "حدّد الأجهزة المُرجَعة للمورد",
+  "@purchaseAdjustmentUnitsTitle": {
+    "description": "Title of the sheet that asks which serialised handsets go back to the supplier on a return, refund or exchange."
+  },
+  "purchaseAdjustmentUnitsBody": "صنف مسلسل: امسح أو اختر كل جهاز يعود فعليًا إلى المورد، فيُسجَّل الإرجاع باسمه.",
+  "@purchaseAdjustmentUnitsBody": {
+    "description": "Explains that each returned handset must be named because the item is serialised."
+  },
+  "purchaseAdjustmentUnitsPickNext": "تُحدَّد الأجهزة بعد التأكيد",
+  "@purchaseAdjustmentUnitsPickNext": {
+    "description": "Hint on a serialised line in the purchase adjustment dialog: the handsets are picked on the next step."
+  },
+  "purchaseAdjustmentUnitsWholeOnly": "الأصناف المسلسلة تُرجَع بأعداد صحيحة فقط.",
+  "@purchaseAdjustmentUnitsWholeOnly": {
+    "description": "Shown when a serialised purchase line is returned by a fraction."
+  },
+  "purchaseAdjustmentUnitsScanReplacement": "امسح معرّفات البديل",
+  "@purchaseAdjustmentUnitsScanReplacement": {
+    "description": "Tooltip of the button that scans the serials or lot of a replacement the supplier sent."
+  },
+  "purchaseAdjustmentUnitsReplacementScanned": "تم مسح معرّفات البديل — اضغط للتعديل",
+  "@purchaseAdjustmentUnitsReplacementScanned": {
+    "description": "Tooltip of the replacement scan button once identifiers were captured."
+  },
+  "purchaseExchangeReplacementBaseUnitHint": "تُدخَل كمية البديل وتكلفته بالوحدة الأساسية للصنف، لا بوحدة الشراء كالكرتون.",
+  "@purchaseExchangeReplacementBaseUnitHint": {
+    "description": "Hint under the exchange's replacement section on orders bought in packs: a replacement's quantity and cost are per base unit."
+  },
+  "purchaseAdjustmentUnitPricePer": "{amount} لكل {unit}",
+  "@purchaseAdjustmentUnitPricePer": {
+    "description": "Price of one purchase unit on a pack line in the return/refund/exchange dialogs, e.g. 48.00 per carton.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseExchangeReplacementMirrorHint": "يظهر هنا بديل مطابق لكل عنصر صادر، ويمكنك تعديله أو إضافة غيره.",
+  "@purchaseExchangeReplacementMirrorHint": {
+    "description": "Shown in the empty replacement section before anything is chosen to go out."
+  },
+  "purchaseAdjustmentUnitsReplacementLotRequired": "البديل صنف مسلسل بدفعة: امسح رقم الدفعة قبل التأكيد.",
+  "@purchaseAdjustmentUnitsReplacementLotRequired": {
+    "description": "Shown when a serial-and-lot replacement has no lot captured."
+  },
+  "unitPickSearchHint": "امسح أو اكتب الرقم التسلسلي / IMEI",
+  "@unitPickSearchHint": {
+    "description": "Hint of the scan/search field in the shared unit pick sheet."
+  },
+  "unitPickNotFound": "لا يوجد جهاز متاح بهذا المعرّف ضمن هذه الأسطر.",
+  "@unitPickNotFound": {
+    "description": "Shown when a scanned identifier matches no available unit in the pick sheet."
+  },
+  "unitPickLoadFailed": "تعذّر تحميل الأجهزة.",
+  "@unitPickLoadFailed": {
+    "description": "Shown when the pick sheet could not load the available units."
+  },
+  "unitPickEmpty": "لا توجد أجهزة متاحة لهذا الصنف في هذا المستودع.",
+  "@unitPickEmpty": {
+    "description": "Shown under a line that has no units available to pick."
+  },
+  "unitPickIncomplete": "أكمل تحديد الأجهزة قبل المتابعة.",
+  "@unitPickIncomplete": {
+    "description": "Shown while some line still has fewer picked units than its quantity."
+  },
+  "unitPickProgress": "{picked} من {needed}",
+  "@unitPickProgress": {
+    "description": "How many units are picked out of the line quantity in the shared unit pick sheet.",
+    "placeholders": {
+      "picked": {
+        "type": "int"
+      },
+      "needed": {
+        "type": "int"
       }
     }
   },
@@ -17573,6 +17897,371 @@
   "treasuryComponentStaffLoans": "سلف الموظفين",
   "@treasuryComponentStaffLoans": {
     "description": "Treasury component: loans paid out to employees."
+  },
+  "treasuryInTransitLabel": "قيد التسوية",
+  "@treasuryInTransitLabel": {
+    "description": "Hero pill label: card takings the processor is holding."
+  },
+  "treasurySectionClearing": "مبيعات بطاقات قيد التسوية",
+  "@treasurySectionClearing": {
+    "description": "Treasury section header for clearing accounts (card takings held by the processor)."
+  },
+  "treasuryAccountKindClearing": "قيد التسوية",
+  "@treasuryAccountKindClearing": {
+    "description": "Account kind choice: a clearing account holding card takings until the processor pays them into the bank."
+  },
+  "treasuryClearingIntro": "تبقى مبيعات البطاقات هنا حتى تُحوِّلها شركة الدفع (معاملات) إلى المصرف، فيطابق رصيد المصرف كشفه.",
+  "@treasuryClearingIntro": {
+    "description": "Editor explanation of what a clearing account does."
+  },
+  "treasuryClearingSettlesInto": "تُحوَّل إلى {bank}",
+  "@treasuryClearingSettlesInto": {
+    "description": "Clearing account card: the bank its takings are paid into.",
+    "placeholders": {
+      "bank": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryClearingNothingHeld": "لا مبالغ معلّقة",
+  "@treasuryClearingNothingHeld": {
+    "description": "Clearing account card: nothing is waiting for the processor."
+  },
+  "treasuryClearingHeldDays": "{count, plural, =1{يوم واحد قيد التسوية} =2{يومان قيد التسوية} few{{count} أيام قيد التسوية} other{{count} يومًا قيد التسوية}}",
+  "@treasuryClearingHeldDays": {
+    "description": "Clearing account card: how many processor days are still held.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "treasuryClearingExpectedOn": "المتوقع وصوله {date}",
+  "@treasuryClearingExpectedOn": {
+    "description": "Clearing account card: when the next held money should reach the bank.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryClearingOverdue": "متأخر {amount}",
+  "@treasuryClearingOverdue": {
+    "description": "Clearing account card pill: held money whose expected day has passed.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryClearingClosed": "متوقف عن الاحتجاز",
+  "@treasuryClearingClosed": {
+    "description": "Clearing account card pill: the shop stopped routing card takings through it."
+  },
+  "treasuryClearingOverdueCalloutTitle": "تحويل بطاقات متأخر: {amount}",
+  "@treasuryClearingOverdueCalloutTitle": {
+    "description": "Treasury callout title: held card money that should already be in the bank.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryClearingOverdueCalloutMessage": "مرّ موعد وصوله إلى المصرف ولم يُسجَّل بعد. سجّل وصوله إن وصل، أو راجع شركة الدفع.",
+  "@treasuryClearingOverdueCalloutMessage": {
+    "description": "Treasury callout message for overdue held card money."
+  },
+  "treasuryActionRecordSettlement": "تسجيل وصول تحويل",
+  "@treasuryActionRecordSettlement": {
+    "description": "Button: record the processor's transfer of held card takings into the bank."
+  },
+  "treasuryComponentSettlementIn": "تحويلات شركة الدفع",
+  "@treasuryComponentSettlementIn": {
+    "description": "Treasury component: deposits the card processor made into this bank."
+  },
+  "treasuryComponentSettlementOut": "حُوِّل إلى المصرف",
+  "@treasuryComponentSettlementOut": {
+    "description": "Treasury component: held card takings the processor paid into the bank."
+  },
+  "treasuryComponentSettlementDifference": "فرق التسوية",
+  "@treasuryComponentSettlementDifference": {
+    "description": "Treasury component: what the processor kept beyond (or short of) the estimated fee."
+  },
+  "treasuryClearingSettlesIntoLabel": "المصرف الذي تُحوَّل إليه المبالغ",
+  "@treasuryClearingSettlesIntoLabel": {
+    "description": "Clearing account editor: the bank the processor pays into."
+  },
+  "treasuryClearingNoBank": "أضف حسابًا مصرفيًا أولًا، فهذا الحساب يحتجز مبالغ البطاقات حتى تصل إلى المصرف.",
+  "@treasuryClearingNoBank": {
+    "description": "Clearing account editor: there is no bank account to settle into."
+  },
+  "treasuryClearingBankRequired": "اختر المصرف.",
+  "@treasuryClearingBankRequired": {
+    "description": "Clearing account editor validation: no bank chosen."
+  },
+  "treasuryClearingStartLabel": "احتجاز مبيعات البطاقات من يوم",
+  "@treasuryClearingStartLabel": {
+    "description": "Clearing account editor: the first processor day held."
+  },
+  "treasuryClearingStartHelper": "اختر أقدم يوم لم تُحوِّل شركة الدفع مبالغه بعد.",
+  "@treasuryClearingStartHelper": {
+    "description": "Clearing account editor helper for the start day."
+  },
+  "treasuryClearingCutoffLabel": "وقت إقفال اليوم لدى شركة الدفع",
+  "@treasuryClearingCutoffLabel": {
+    "description": "Clearing account editor: when the processor closes its day."
+  },
+  "treasuryClearingCutoffMidnight": "منتصف الليل",
+  "@treasuryClearingCutoffMidnight": {
+    "description": "Cut-off choice: midnight."
+  },
+  "treasuryClearingWeekdaysLabel": "أيام التحويل إلى المصرف",
+  "@treasuryClearingWeekdaysLabel": {
+    "description": "Clearing account editor: the weekdays the processor pays into the bank."
+  },
+  "treasuryClearingWeekdaysRequired": "اختر يومًا واحدًا على الأقل.",
+  "@treasuryClearingWeekdaysRequired": {
+    "description": "Clearing account editor validation: no settlement weekday chosen."
+  },
+  "treasuryClearingLagLabel": "تصل المبالغ بعد",
+  "@treasuryClearingLagLabel": {
+    "description": "Clearing account editor: how many paying days after a sale its money lands."
+  },
+  "treasuryClearingLagDays": "{count, plural, =1{يوم عمل واحد} =2{يومَي عمل} few{{count} أيام عمل} other{{count} يوم عمل}}",
+  "@treasuryClearingLagDays": {
+    "description": "Clearing account editor: lag in paying days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "treasuryClearingActiveLabel": "يحتجز مبيعات البطاقات",
+  "@treasuryClearingActiveLabel": {
+    "description": "Clearing account editor switch: still routing card takings through this account."
+  },
+  "treasuryClearingStopConfirmTitle": "إيقاف احتجاز مبيعات البطاقات؟",
+  "@treasuryClearingStopConfirmTitle": {
+    "description": "Confirm dialog title: stop holding card takings."
+  },
+  "treasuryClearingStopConfirmMessage": "مبيعات البطاقات بعد اليوم ستُحسب في المصرف مباشرة. المبالغ المعلّقة الآن تبقى هنا حتى تسجّل وصولها. لا يمكن التراجع عن الإيقاف.",
+  "@treasuryClearingStopConfirmMessage": {
+    "description": "Confirm dialog message: stop holding card takings."
+  },
+  "treasuryClearingStopConfirmAction": "إيقاف",
+  "@treasuryClearingStopConfirmAction": {
+    "description": "Confirm dialog action: stop holding."
+  },
+  "treasuryClearingHeldTitle": "الأيام قيد التسوية",
+  "@treasuryClearingHeldTitle": {
+    "description": "Details sheet section: held processor days."
+  },
+  "treasuryClearingSettlementsTitle": "التحويلات المسجّلة",
+  "@treasuryClearingSettlementsTitle": {
+    "description": "Details sheet section: recorded settlements."
+  },
+  "treasuryClearingSettlementsEmpty": "لم يُسجَّل أي تحويل بعد.",
+  "@treasuryClearingSettlementsEmpty": {
+    "description": "Details sheet: no settlement recorded yet."
+  },
+  "treasuryClearingSettlementsError": "تعذّر تحميل التحويلات.",
+  "@treasuryClearingSettlementsError": {
+    "description": "Details sheet: settlements failed to load."
+  },
+  "treasuryClearingSettlementSubtitle": "{count} عملية · {days}",
+  "@treasuryClearingSettlementSubtitle": {
+    "description": "Settlement row subtitle: sale count and the days covered.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryClearingSettlementDifference": "فرق {amount}",
+  "@treasuryClearingSettlementDifference": {
+    "description": "Settlement row: the difference from the estimate.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryClearingSettlementCancelled": "ملغاة",
+  "@treasuryClearingSettlementCancelled": {
+    "description": "Settlement row pill: cancelled."
+  },
+  "treasuryClearingCancelAction": "إلغاء التسوية",
+  "@treasuryClearingCancelAction": {
+    "description": "Button: cancel a recorded settlement."
+  },
+  "treasuryClearingCancelTitle": "إلغاء هذه التسوية؟",
+  "@treasuryClearingCancelTitle": {
+    "description": "Confirm dialog title: cancel a settlement."
+  },
+  "treasuryClearingCancelMessage": "يعود مبلغها إلى قيد التسوية ويُخصم من المصرف، لتسجّلها من جديد بالأيام أو المبلغ الصحيح.",
+  "@treasuryClearingCancelMessage": {
+    "description": "Confirm dialog message: cancel a settlement."
+  },
+  "treasuryClearingCancelReasonLabel": "السبب",
+  "@treasuryClearingCancelReasonLabel": {
+    "description": "Cancel settlement reason field."
+  },
+  "treasuryClearingCancelled": "أُلغيت التسوية.",
+  "@treasuryClearingCancelled": {
+    "description": "Snackbar: settlement cancelled."
+  },
+  "treasuryClearingCancelFailed": "تعذّر إلغاء التسوية.",
+  "@treasuryClearingCancelFailed": {
+    "description": "Snackbar: settlement cancel failed."
+  },
+  "cardSettlementTitle": "تسجيل وصول تحويل",
+  "@cardSettlementTitle": {
+    "description": "Settlement sheet title."
+  },
+  "cardSettlementSubtitle": "من {account} إلى {bank}",
+  "@cardSettlementSubtitle": {
+    "description": "Settlement sheet subtitle: from the clearing account to the bank.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      },
+      "bank": {
+        "type": "String"
+      }
+    }
+  },
+  "cardSettlementAmountLabel": "المبلغ الذي وصل إلى المصرف",
+  "@cardSettlementAmountLabel": {
+    "description": "Settlement sheet: the deposit amount."
+  },
+  "cardSettlementAmountHelper": "كما في رسالة المصرف أو كشف الحساب.",
+  "@cardSettlementAmountHelper": {
+    "description": "Settlement sheet: where the amount comes from."
+  },
+  "cardSettlementDateLabel": "تاريخ الوصول",
+  "@cardSettlementDateLabel": {
+    "description": "Settlement sheet: the day the deposit landed."
+  },
+  "cardSettlementDaysTitle": "الأيام التي يغطيها التحويل",
+  "@cardSettlementDaysTitle": {
+    "description": "Settlement sheet: the held days the deposit paid."
+  },
+  "cardSettlementNoHeld": "لا مبالغ قيد التسوية الآن.",
+  "@cardSettlementNoHeld": {
+    "description": "Settlement sheet: nothing is held."
+  },
+  "cardSettlementDaySubtitle": "{count} عملية · المتوقع {date}",
+  "@cardSettlementDaySubtitle": {
+    "description": "Settlement sheet day row subtitle.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "cardSettlementDayOverdue": "متأخر",
+  "@cardSettlementDayOverdue": {
+    "description": "Settlement sheet day row pill: overdue."
+  },
+  "cardSettlementMatchExact": "المبلغ يطابق الأيام المحددة تمامًا.",
+  "@cardSettlementMatchExact": {
+    "description": "Settlement match banner: exact."
+  },
+  "cardSettlementMatchGross": "المبلغ يطابق المبيعات قبل العمولة: لم تُخصم عمولة من هذا التحويل.",
+  "@cardSettlementMatchGross": {
+    "description": "Settlement match banner: equals the takings before the fee."
+  },
+  "cardSettlementMatchClose": "المبلغ يقارب الأيام المحددة بفارق بسيط.",
+  "@cardSettlementMatchClose": {
+    "description": "Settlement match banner: within a fee rounding."
+  },
+  "cardSettlementMatchDue": "لا أيام تطابق المبلغ، فحُدِّدت الأيام التي حلّ موعدها. راجع الفرق قبل التأكيد.",
+  "@cardSettlementMatchDue": {
+    "description": "Settlement match banner: nothing adds up; due days proposed."
+  },
+  "cardSettlementMatchNone": "لم يحن موعد أي يوم بعد.",
+  "@cardSettlementMatchNone": {
+    "description": "Settlement match banner: nothing is due yet."
+  },
+  "cardSettlementExpectedLabel": "المتوقع للأيام المحددة",
+  "@cardSettlementExpectedLabel": {
+    "description": "Settlement summary: expected for the chosen days."
+  },
+  "cardSettlementReceivedLabel": "الواصل",
+  "@cardSettlementReceivedLabel": {
+    "description": "Settlement summary: received."
+  },
+  "cardSettlementDifferenceLabel": "الفرق",
+  "@cardSettlementDifferenceLabel": {
+    "description": "Settlement summary: difference."
+  },
+  "cardSettlementKeptMore": "احتجزت شركة الدفع {amount} أكثر من العمولة المقدّرة، ويُسجَّل الفرق مصروفَ عمولة.",
+  "@cardSettlementKeptMore": {
+    "description": "Settlement difference explanation: the processor kept more than estimated.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "cardSettlementKeptLess": "وصل {amount} أكثر من المتوقع: العمولة أقل من المقدّرة.",
+  "@cardSettlementKeptLess": {
+    "description": "Settlement difference explanation: the processor kept less than estimated.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "cardSettlementReferenceLabel": "رقم المرجع (اختياري)",
+  "@cardSettlementReferenceLabel": {
+    "description": "Settlement sheet: reference field."
+  },
+  "cardSettlementNoteLabel": "ملاحظة (اختياري)",
+  "@cardSettlementNoteLabel": {
+    "description": "Settlement sheet: note field."
+  },
+  "cardSettlementSubmit": "تأكيد التسوية",
+  "@cardSettlementSubmit": {
+    "description": "Settlement sheet submit button."
+  },
+  "cardSettlementSaved": "سُجِّل وصول التحويل.",
+  "@cardSettlementSaved": {
+    "description": "Snackbar: settlement recorded."
+  },
+  "cardSettlementFailed": "تعذّر تسجيل التسوية.",
+  "@cardSettlementFailed": {
+    "description": "Settlement failed (generic)."
+  },
+  "cardSettlementForbidden": "لا يمكن تسجيل التسوية: الفترة مقفلة أو لا تملك الصلاحية.",
+  "@cardSettlementForbidden": {
+    "description": "Settlement refused: closed period or no permission."
+  },
+  "cardSettlementLoadFailed": "تعذّر تحميل المبالغ قيد التسوية.",
+  "@cardSettlementLoadFailed": {
+    "description": "Settlement sheet: held takings failed to load."
+  },
+  "cardSettlementShowSales": "العمليات",
+  "@cardSettlementShowSales": {
+    "description": "Settlement sheet: expand a day to its sales."
+  },
+  "cardSettlementSalesFailed": "تعذّر تحميل العمليات.",
+  "@cardSettlementSalesFailed": {
+    "description": "Settlement sheet: a day's sales failed to load."
+  },
+  "cardSettlementReversal": "إلغاء دفعة",
+  "@cardSettlementReversal": {
+    "description": "Settlement sheet sale row: a cancellation's counter payment."
+  },
+  "cardSettlementAmountRequired": "أدخل المبلغ الواصل.",
+  "@cardSettlementAmountRequired": {
+    "description": "Settlement sheet validation: amount missing."
   },
   "balanceEntryEmployeeOpeningHint": "ما كان على الموظف أو له يوم بدء تسجيل حسابه هنا. يُخصم من راتبه أو يُصرف معه في مسير الرواتب القادم، ولا يُحتسب ضمن تكلفة رواتب الفترة.",
   "@balanceEntryEmployeeOpeningHint": {

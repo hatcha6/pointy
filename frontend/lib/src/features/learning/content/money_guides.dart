@@ -617,6 +617,102 @@ const moneyGuides = <LearningGuide>[
     ],
   ),
   LearningGuide(
+    id: 'money.card_settlements',
+    title: 'مبيعات البطاقات قيد التسوية (معاملات)',
+    summary:
+        'اجعل رصيد المصرف يطابق كشفه بينما تحتجز شركة الدفع مبالغ البطاقات.',
+    track: LearningTrack.money,
+    level: LearningLevel.advanced,
+    kind: LearningKind.walkthrough,
+    minutes: 4,
+    capability: AppCapability.viewCardSettlements,
+    opens: AppNavigationDestination.payments,
+    keywords: [
+      'moamalat',
+      'settlement',
+      'card',
+      'معاملات',
+      'تسوية',
+      'بطاقة',
+      'قيد التسوية',
+      'تحويل',
+    ],
+    related: ['money.treasury', 'money.payments_hub'],
+    sections: [
+      LearningSection(
+        title: 'لماذا',
+        blocks: [
+          LearningParagraph(
+            'شركة الدفع لا تودع مبيعات البطاقة في المصرف ساعة البيع: تُقفل يومها '
+            'عند منتصف الليل وتحوّله في يوم العمل التالي، ومبيعات الخميس والجمعة '
+            'والسبت كلها تصل الأحد. حساب «قيد التسوية» يحتفظ بهذه المبالغ حتى '
+            'تصل، فيبقى رصيد المصرف في الخزينة مطابقًا لكشف المصرف.',
+          ),
+          LearningNote(
+            tone: LearningNoteTone.info,
+            title: 'المبيعات والأرباح لا تتغير',
+            message:
+                'البيع يُحسب يوم حدوثه كما كان. ما يتغير فقط هو مكان المال: '
+                'قيد التسوية، ثم المصرف عند وصول التحويل.',
+          ),
+        ],
+      ),
+      LearningSection(
+        title: 'الإعداد مرة واحدة',
+        blocks: [
+          LearningSteps([
+            LearningStep(
+              'في الخزينة اضغط «حساب جديد» واختر «قيد التسوية».',
+              detail: 'اختر المصرف الذي تحوّل إليه شركة الدفع.',
+            ),
+            LearningStep(
+              'اختر يوم البداية: أقدم يوم لم تصل مبالغه بعد.',
+              detail:
+                  'مثلًا: يوم السبت، إن كانت مبيعات الخميس لم تصل حتى الآن.',
+            ),
+            LearningStep(
+              'تأكد من أيام التحويل (الأحد إلى الخميس) ووقت الإقفال (منتصف الليل)، ثم احفظ.',
+            ),
+          ]),
+        ],
+      ),
+      LearningSection(
+        title: 'عند وصول التحويل',
+        blocks: [
+          LearningSteps([
+            LearningStep(
+              'اضغط «تسجيل وصول تحويل» واكتب المبلغ كما في رسالة المصرف.',
+              detail: 'تُحدَّد تلقائيًا الأيام التي يطابقها المبلغ.',
+            ),
+            LearningStep(
+              'راجع الأيام المحددة والفرق، ثم اضغط «تأكيد التسوية».',
+              detail:
+                  'إن احتجزت شركة الدفع عملية بعينها، افتح اليوم وأزل علامتها لتبقى قيد التسوية.',
+            ),
+          ]),
+          LearningDefinitions([
+            LearningDefinition(
+              'فرق التسوية',
+              'ما احتجزته شركة الدفع زيادة على العمولة المقدّرة (أو نقصًا عنها). '
+                  'يظهر سطرًا مستقلًا ويُحسب ضمن مصروف العمولات.',
+            ),
+            LearningDefinition(
+              'متأخر',
+              'مرّ موعد وصول مبالغ هذا اليوم ولم تُسجَّل. سجّلها إن وصلت، أو راجع شركة الدفع.',
+            ),
+          ]),
+          LearningNote(
+            tone: LearningNoteTone.tip,
+            title: 'أخطأت في التسجيل؟',
+            message:
+                'افتح الحساب، ثم ألغِ التسوية من «التحويلات المسجّلة»: تعود '
+                'مبالغها إلى قيد التسوية لتسجيلها من جديد.',
+          ),
+        ],
+      ),
+    ],
+  ),
+  LearningGuide(
     id: 'money.expenses',
     title: 'تسجيل مصروفات المتجر',
     summary: 'إيجار، كهرباء، وقود مولّد — وربطها بالسحب من الدرج.',

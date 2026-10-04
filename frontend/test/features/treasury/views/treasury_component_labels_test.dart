@@ -63,6 +63,9 @@ void main() {
       'consignor_payout',
       'integration_draw',
       'staff_loans',
+      'settlement_in',
+      'settlement_out',
+      'settlement_difference',
     ];
 
     for (final code in codes) {

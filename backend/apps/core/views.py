@@ -156,6 +156,13 @@ def login_view(request):
                 ShopSettings.load().enable_serialized_inventory
             ),
             "batch_tracking_enabled": ShopSettings.load().enable_batch_tracking,
+            # Whether a delivery may be received before every article in it is
+            # scanned. The receiving dialog has to know before it offers to
+            # save a partial capture, and it is opened by purchasing staff who
+            # cannot read the shop's settings.
+            "serialized_capture_later_allowed": (
+                ShopSettings.load().serialized_capture_later_allowed
+            ),
         }
     )
 
@@ -223,6 +230,13 @@ def me_view(request):
                 ShopSettings.load().enable_serialized_inventory
             ),
             "batch_tracking_enabled": ShopSettings.load().enable_batch_tracking,
+            # Whether a delivery may be received before every article in it is
+            # scanned. The receiving dialog has to know before it offers to
+            # save a partial capture, and it is opened by purchasing staff who
+            # cannot read the shop's settings.
+            "serialized_capture_later_allowed": (
+                ShopSettings.load().serialized_capture_later_allowed
+            ),
         }
     )
 

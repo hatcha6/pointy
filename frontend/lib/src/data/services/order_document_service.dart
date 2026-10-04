@@ -771,7 +771,9 @@ class OrderDocumentService {
     }
     final format = render.platformPageFormat;
     // Deferring to the driver's paper is what pads a roll slip out to the
-    // queue's page, so a roll states its page and a sheet does not.
+    // queue's page, so a roll states its page and a sheet does not. A stated
+    // page is the paper itself (`forceCustomPrintPaper`): a slip shorter than
+    // the roll is wide must not turn into landscape on paper of swapped size.
     final usePrinterSettings = width == null || height == null;
     final selectedPrinter = endpoint == null
         ? null
@@ -783,12 +785,14 @@ class OrderDocumentService {
         format: format,
         onLayout: (_) async => bytes,
         usePrinterSettings: usePrinterSettings,
+        forceCustomPrintPaper: !usePrinterSettings,
       );
     }
     return Printing.layoutPdf(
       name: jobName,
       format: format,
       usePrinterSettings: usePrinterSettings,
+      forceCustomPrintPaper: !usePrinterSettings,
       onLayout: (_) async => bytes,
     );
   }

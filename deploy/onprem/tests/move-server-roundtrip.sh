@@ -25,8 +25,11 @@ ok()    { echo "ok   $*"; }
 bad()   { echo "FAIL $*"; fails=$((fails + 1)); }
 check() { if [ "$3" = "$2" ]; then ok "$1"; else bad "$1: want [$2] got [$3]"; fi; }
 # shellcheck disable=SC2329  # runs from the EXIT trap
+# `-v` matters: docker:dind keeps each machine's whole Docker engine (every
+# image loaded into it, ~460 MB) in an anonymous volume, and `docker rm`
+# without it leaves that volume behind on every run.
 cleanup() {
-  docker rm -f "$A" "$B" >/dev/null 2>&1 || true
+  docker rm -f -v "$A" "$B" >/dev/null 2>&1 || true
   if [ -n "${KEEP:-}" ] || [ "$fails" -gt 0 ]; then echo "logs kept in ${WORK}"; else rm -rf "$WORK"; fi
 }
 trap cleanup EXIT
@@ -99,7 +102,7 @@ echo "SETUP DONE"
 SETUP
 
 echo "# starting two throwaway Docker-in-Docker machines"
-docker rm -f "$A" "$B" >/dev/null 2>&1 || true
+docker rm -f -v "$A" "$B" >/dev/null 2>&1 || true
 for c in "$A" "$B"; do docker run -d --privileged --name "$c" docker:dind >/dev/null || exit 1; done
 for c in "$A" "$B"; do
   for _ in $(seq 1 60); do docker exec "$c" docker info >/dev/null 2>&1 && break; sleep 1; done

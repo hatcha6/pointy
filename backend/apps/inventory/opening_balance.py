@@ -113,7 +113,9 @@ def open_stock_balance(
         units=units,
         batches=batches,
         at=at,
-        placeholder_key=f"OPEN-{variant.pk}",
+        # Provenance, not uniqueness — ``placeholder_unit_code`` makes every
+        # arrival's codes unique on its own.
+        placeholder_key=f"OPEN-V{variant.pk}-W{warehouse_id}",
         what="الرصيد الافتتاحي",
     )
     plan = tracking.apply_adjustment(plan, at=at)

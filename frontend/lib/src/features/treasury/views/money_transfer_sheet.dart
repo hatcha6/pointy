@@ -48,7 +48,7 @@ class _MoneyTransferSheetState extends State<_MoneyTransferSheet> {
   @override
   void initState() {
     super.initState();
-    final accounts = widget.viewModel.accounts;
+    final accounts = widget.viewModel.movableAccounts;
     // Default to the shop's most common move: the cash box into the bank.
     _fromAccountId =
         widget.fromAccountId ??
@@ -149,14 +149,14 @@ class _MoneyTransferSheetState extends State<_MoneyTransferSheet> {
                 SizedBox(height: spacing.md),
                 _AccountDropdown(
                   label: l10n.treasuryTransferFrom,
-                  accounts: widget.viewModel.accounts,
+                  accounts: widget.viewModel.movableAccounts,
                   value: _fromAccountId,
                   onChanged: (value) => setState(() => _fromAccountId = value),
                 ),
                 SizedBox(height: spacing.sm),
                 _AccountDropdown(
                   label: l10n.treasuryTransferTo,
-                  accounts: widget.viewModel.accounts,
+                  accounts: widget.viewModel.movableAccounts,
                   value: _toAccountId,
                   onChanged: (value) => setState(() => _toAccountId = value),
                 ),

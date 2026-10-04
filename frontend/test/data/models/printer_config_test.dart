@@ -239,5 +239,20 @@ void main() {
       expect(endpoint.labelPdfSize, BarcodeLabelPdfSize.sticker);
       expect(endpoint.labelRotationQuarterTurns, 0);
     });
+
+    test('the shop bar is on unless a shop turned it off', () {
+      // Printers saved before the bar existed have no key: they get the bar.
+      final legacy = PrinterEndpoint.fromJson(const {
+        'kind': 'system',
+        'name': 'XP-235B',
+        'output_mode': 'pdfA4',
+      });
+      expect(legacy.labelShopHeader, isTrue);
+
+      final off = legacy.copyWith(labelShopHeader: false);
+      expect(off.toJson()['label_shop_header'], isFalse);
+      expect(PrinterEndpoint.fromJson(off.toJson()).labelShopHeader, isFalse);
+      expect(legacy.labelShopHeader, isTrue);
+    });
   });
 }

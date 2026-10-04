@@ -34,7 +34,7 @@ class ProductParentFormFields extends StatelessWidget {
     required this.onPickCategories,
     required this.onClearCategories,
     required this.onActiveChanged,
-    required this.onTracksExpiryChanged,
+    this.onTracksExpiryChanged,
     required this.requiredValidator,
     this.unit = 'piece',
     this.isService = false,
@@ -52,7 +52,10 @@ class ProductParentFormFields extends StatelessWidget {
   final VoidCallback onPickCategories;
   final VoidCallback? onClearCategories;
   final ValueChanged<bool> onActiveChanged;
-  final ValueChanged<bool> onTracksExpiryChanged;
+
+  /// Null hides the expiry switch — the sheet then shows the whole tracking
+  /// choice in a section of its own.
+  final ValueChanged<bool>? onTracksExpiryChanged;
   final FormFieldValidator<String> requiredValidator;
   final String unit;
   final bool isService;
@@ -109,13 +112,14 @@ class ProductParentFormFields extends StatelessWidget {
           value: isActive,
           onChanged: onActiveChanged,
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.productTracksExpiryLabel),
-          subtitle: Text(l10n.productTracksExpiryHint),
-          value: tracksExpiry,
-          onChanged: onTracksExpiryChanged,
-        ),
+        if (onTracksExpiryChanged != null)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.productTracksExpiryLabel),
+            subtitle: Text(l10n.productTracksExpiryHint),
+            value: tracksExpiry,
+            onChanged: onTracksExpiryChanged,
+          ),
         if (onUnitChanged != null) ...[
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(

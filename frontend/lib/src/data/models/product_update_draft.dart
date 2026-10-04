@@ -1,3 +1,4 @@
+import 'product_tracking.dart';
 import 'product_unit.dart';
 import 'product_variant_draft.dart';
 
@@ -18,6 +19,8 @@ class ProductUpdateDraft {
     this.modifierGroupIds,
     this.variants = const [],
     this.pricingCurrency = '',
+    this.tracking,
+    this.identifyStockLater = false,
   });
 
   final String name;
@@ -41,12 +44,48 @@ class ProductUpdateDraft {
   /// because a shelf price must never move as a side effect of a settings edit.
   final String pricingCurrency;
 
+  /// How the product's stock is identified, when the form edited it. Sent in
+  /// place of [tracksExpiry], which is then derived from the mode; null keeps
+  /// the old single flag, for a save that never showed the choice.
+  final ProductTracking? tracking;
+
+  /// The user's yes to the server's question when tracking is turned on over
+  /// stock already on the shelf: put that stock on the worklist to be
+  /// identified later. Only ever set by [identifyingStockLater], after the
+  /// question was shown, so an ordinary save cannot carry a stale answer.
+  final bool identifyStockLater;
+
+  /// This same edit, answering the identify-later question with yes.
+  ProductUpdateDraft identifyingStockLater() => ProductUpdateDraft(
+    name: name,
+    description: description,
+    isActive: isActive,
+    tracksExpiry: tracksExpiry,
+    isService: isService,
+    isPrepared: isPrepared,
+    unit: unit,
+    defaultSaleUnit: defaultSaleUnit,
+    defaultPurchaseUnit: defaultPurchaseUnit,
+    units: units,
+    categoryIds: categoryIds,
+    variantOptionIds: variantOptionIds,
+    modifierGroupIds: modifierGroupIds,
+    variants: variants,
+    pricingCurrency: pricingCurrency,
+    tracking: tracking,
+    identifyStockLater: true,
+  );
+
   Map<String, Object?> toJson() {
     return {
       'name': name,
       'description': description,
       'is_active': isActive,
-      'tracks_expiry': tracksExpiry,
+      if (tracking case final tracking?)
+        ...tracking.toJson()
+      else
+        'tracks_expiry': tracksExpiry,
+      if (identifyStockLater) 'tracking_mode_identify_later': true,
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,

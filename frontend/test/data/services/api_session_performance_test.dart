@@ -132,7 +132,8 @@ void main() {
 
     await expectLater(session.get('products/'), throwsException);
 
-    expect(requests, 1);
+    // Tried once more on the LAN, never on the relay with a dead ticket.
+    expect(requests, 2);
     expect(session.baseUrl, 'http://lan.test/api');
     expect(session.usesRelay, isFalse);
   });

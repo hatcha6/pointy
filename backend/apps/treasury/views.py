@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.db.models import ProtectedError
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import mixins, viewsets
@@ -11,6 +12,7 @@ from rest_framework.views import APIView
 from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
 
+from . import held_days
 from .models import MoneyAccount, MoneyCount, MoneyTransfer
 from .movements import account_movements
 from .position import treasury_position
@@ -37,10 +39,22 @@ class MoneyAccountViewSet(viewsets.ModelViewSet):
         "partial_update": ("treasury.change_moneyaccount",),
         "destroy": ("treasury.delete_moneyaccount",),
     }
-    queryset = MoneyAccount.objects.all()
+    queryset = MoneyAccount.objects.select_related("settles_into")
     filterset_fields = ("kind", "is_active")
     search_fields = ("name", "bank_name", "account_number")
     ordering_fields = ("display_order", "name", "created_at")
+
+    def perform_destroy(self, instance):
+        # Anything that names the account protects it — payments, expenses,
+        # settlements, a clearing account settling into it. Say so in words
+        # instead of failing with a server error; deactivating is the way to
+        # retire an account that has history.
+        try:
+            instance.delete()
+        except ProtectedError as exc:
+            raise ValidationError(
+                "لهذا الحساب حركات مسجّلة، فلا يمكن حذفه. أوقفه بدلًا من ذلك."
+            ) from exc
 
 
 class MoneyTransferViewSet(
@@ -107,8 +121,15 @@ class TreasuryPositionView(APIView):
     permission_map = {"GET": ("treasury.view_moneyaccount",)}
 
     def get(self, request):
-        as_of = _parse_date(request.query_params.get("as_of"), timezone.localdate())
+        today = timezone.localdate()
+        as_of = _parse_date(request.query_params.get("as_of"), today)
         position = treasury_position(as_of=as_of)
+        if as_of >= today:
+            # Today's screen says which held card days are waiting and which
+            # are late. A past position has no "waiting": it is history.
+            for entry in position["accounts"]:
+                if entry["account"].is_clearing:
+                    entry["held"] = held_days.held_summary(entry["account"])
         return Response(TreasuryPositionSerializer(position).data)
 
 

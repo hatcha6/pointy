@@ -47,6 +47,10 @@ ZAKAT_RATE = Decimal("0.025")
 ASSET_LINES = (
     "stock_at_cost",
     "cash_and_bank",
+    # Card takings the processor (Moamalat) is holding before it pays them
+    # into the bank — owed to the shop within days. Beside the bank, not in
+    # it, so the bank line agrees with the bank statement.
+    "cards_in_transit",
     "customer_receivables",
     "employee_loans",
     # What employees owe on their accounts (``apps.balances``) — an advance
@@ -193,9 +197,11 @@ def _position(context, as_of, *, live=False):
     totals = money_position["totals"]
     obligations = money_position["obligations"]
     day = context.at(as_of)
+    in_transit = totals.get("in_transit", ZERO)
     return {
         "stock_at_cost": stock_cost_value(as_of=None if live else as_of),
-        "cash_and_bank": totals["total"],
+        "cash_and_bank": totals["total"] - in_transit,
+        "cards_in_transit": in_transit,
         "customer_receivables": decimal_from(receivables_total(day)["total"]),
         "employee_loans": loans_outstanding(as_of),
         "employee_account_receivables": owed_by_staff,

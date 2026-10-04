@@ -60,6 +60,58 @@ bool isUsableLanIpv4(List<int> raw) {
   return privateIpv4Rank(raw) < unrankedPrivateIpv4;
 }
 
+/// The /24 network [raw] sits in (`"192.168.1"`) — as much of the subnet as
+/// this app can see, since the OS reports no netmask.
+String ipv4Slash24(List<int> raw) => '${raw[0]}.${raw[1]}.${raw[2]}';
+
+/// Whether [host] is reached over the shop's own network rather than the
+/// internet: a private, loopback or link-local IPv4 address, or this machine
+/// by name.
+bool isLocalNetworkHost(String host) {
+  if (isLoopbackHost(host)) return true;
+  final octets = ipv4Octets(host);
+  if (octets == null) return false;
+  return isLoopbackOrLinkLocalIpv4(octets) ||
+      privateIpv4Rank(octets) < unrankedPrivateIpv4;
+}
+
+/// Whether this device is plainly not on the network where it last found its
+/// server.
+///
+/// True only when that is known: every one of [serverHosts] is a LAN IPv4
+/// address (a loopback server is this machine, and a name could be anywhere),
+/// this device has addresses of its own, and none of them shares a /24 with a
+/// server address. A shop network wider than a /24 can make this true on the
+/// shop floor, so it may shorten a search but never skip one.
+bool isAwayFromServerNetwork({
+  required Iterable<String> serverHosts,
+  required Iterable<String> ownAddresses,
+}) {
+  final serverNetworks = <String>{};
+  for (final host in serverHosts) {
+    final octets = ipv4Octets(host);
+    if (octets == null || !isUsableLanIpv4(octets)) {
+      return false;
+    }
+    serverNetworks.add(ipv4Slash24(octets));
+  }
+  if (serverNetworks.isEmpty) {
+    return false;
+  }
+  var ownNetworks = 0;
+  for (final address in ownAddresses) {
+    final octets = ipv4Octets(address);
+    if (octets == null || isLoopbackOrLinkLocalIpv4(octets)) {
+      continue;
+    }
+    if (serverNetworks.contains(ipv4Slash24(octets))) {
+      return false;
+    }
+    ownNetworks++;
+  }
+  return ownNetworks > 0;
+}
+
 /// The /24 directed broadcast address for [raw] (`"192.168.1.255"`).
 ///
 /// Dart's [NetworkInterface] does not expose the netmask, so we assume the

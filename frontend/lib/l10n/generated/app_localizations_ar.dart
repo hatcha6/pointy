@@ -2465,6 +2465,19 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get smartNotificationCardSettlementOverdueTitle =>
+      'تحويل بطاقات متأخر';
+
+  @override
+  String smartNotificationCardSettlementOverdueMessage(
+    String account,
+    String amount,
+    String date,
+  ) {
+    return '$account: $amount لم يصل إلى المصرف بعد، وكان متوقعًا $date.';
+  }
+
+  @override
   String get smartNotificationUnknownTitle => 'تنبيه جديد';
 
   @override
@@ -6237,7 +6250,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get printerBarcodeLabelPdfSizeHelper =>
-      'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده. على ويندوز اضبط المقاس نفسه في تعريف الطابعة.';
+      'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده.';
 
   @override
   String get printerBarcodeLabelPdfSizeSticker =>
@@ -6260,7 +6273,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get printerBarcodeLabelCalibrationHelper =>
-      'اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح).';
+      'اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح). إذا تجاوز الملصق نهاية المسطرة العرضية فزِد العرض أو الإزاحة وأعد طباعتها.';
 
   @override
   String get printerBarcodeLabelCalibrationAcross => 'مسطرة عرضية';
@@ -6317,6 +6330,23 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get printerBarcodeLabelRotation270 => '270° يسار';
+
+  @override
+  String get printerBarcodeLabelShopHeaderLabel => 'شريط اسم المحل أعلى الملصق';
+
+  @override
+  String get printerBarcodeLabelShopHeaderHelper =>
+      'شريط أسود يحمل اسم المحل وشعار دفتر في أعلى كل ملصق. الملصقات القصيرة جدًا تُطبع بدونه.';
+
+  @override
+  String printPaperMismatchMessage(String requested, String printed) {
+    return 'طُبع على ورق $printed مم بدل مقاس الملصق $requested مم، لأن تعريف الطابعة على هذا الجهاز لم يقبل مقاس الملصق. اجعل مقاس الملصق أحد مقاسات تعريف الطابعة، أو أضف مقاس الملصق إلى التعريف، أو استعمل تعريفًا يقبل المقاسات المخصصة.';
+  }
+
+  @override
+  String printPaperUnsupportedMessage(String requested) {
+    return 'تعريف الطابعة على هذا الجهاز لا يقبل مقاس الملصق $requested مم، فطبعه على مقاسه الافتراضي. اجعل مقاس الملصق أحد مقاسات تعريف الطابعة، أو أضف مقاس الملصق إلى التعريف، أو استعمل تعريفًا يقبل المقاسات المخصصة.';
+  }
 
   @override
   String get systemDefaultPrinterLabel => 'طابعة النظام الافتراضية';
@@ -6890,6 +6920,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get productImageEmpty => 'لم يتم اختيار صورة';
+
+  @override
+  String get productImageViewFullScreenTooltip => 'عرض الصورة بالحجم الكامل';
+
+  @override
+  String get productImageViewerPrevious => 'الصورة السابقة';
+
+  @override
+  String get productImageViewerNext => 'الصورة التالية';
 
   @override
   String get productImageUploadButton => 'رفع صورة';
@@ -7541,6 +7580,352 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get productTracksExpiryHint =>
       'سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.';
+
+  @override
+  String get trackingModeQuantity => 'كمية فقط';
+
+  @override
+  String get trackingModeQuantityDescription =>
+      'عدد في المخزون بلا رقم لكل قطعة — لمعظم المنتجات.';
+
+  @override
+  String get trackingModeBatch => 'دفعات وصلاحية';
+
+  @override
+  String get trackingModeBatchDescription =>
+      'كل توريد دفعة برقمها وتاريخ صلاحيتها، ويُباع الأقرب انتهاءً أولًا.';
+
+  @override
+  String get trackingModeSerial => 'رقم تسلسلي';
+
+  @override
+  String get trackingModeSerialDescription =>
+      'كل قطعة برقمها (IMEI أو رقم تسلسلي أو رقم الشاصي)، بتكلفتها وسعرها وضمانها.';
+
+  @override
+  String get trackingModeSerialBatch => 'تسلسلي داخل دفعة';
+
+  @override
+  String get trackingModeSerialBatchDescription =>
+      'كل قطعة برقمها داخل دفعة لها تاريخ صلاحية — مثل عبوات الأدوية برمز GS1.';
+
+  @override
+  String get batchPickStrategyLabel => 'الدفعة التي تُباع أولًا';
+
+  @override
+  String get batchPickStrategyFefo => 'الأقرب انتهاءً أولًا';
+
+  @override
+  String get batchPickStrategyFifo => 'الأقدم وصولًا أولًا';
+
+  @override
+  String get batchPickStrategyManual => 'يختارها الكاشير';
+
+  @override
+  String get productTrackingSectionTitle => 'تتبع المخزون';
+
+  @override
+  String get productTrackingNoStock =>
+      'الخدمات والأصناف المحضّرة عند الطلب لا مخزون لها، فلا تُتتبَّع.';
+
+  @override
+  String get productTrackingChangeWarning =>
+      'يسري التغيير على ما يُستلم ويُباع من الآن. وإن كان للمنتج رصيد في المخزون يُطلب تأكيدك قبل الحفظ: القطع المسلسلة لا تُباع حتى يُدخل رقم كل قطعة، والكمية بلا دفعة تدخل في دفعة بلا رقم.';
+
+  @override
+  String get productTrackingWarrantyLabel => 'مدة الضمان (يوم)';
+
+  @override
+  String get productTrackingWarrantyHelper =>
+      'تُحسب من يوم البيع. اتركها فارغة إن لم يكن هناك ضمان.';
+
+  @override
+  String get productTrackingVariantOrUnitHint =>
+      'إن أمكن أن تتشارك قطعتان القيمة نفسها فهي خيار للمنتج (اللون، السعة). وإن ندر أن تتشاركاها فهي للقطعة نفسها (IMEI، البطارية، الحالة، التكلفة، السعر) وتُسجَّل عند الاستلام.';
+
+  @override
+  String get productTrackingPreventExpiredLabel => 'منع بيع الدفعات المنتهية';
+
+  @override
+  String get productTrackingPreventExpiredHelper =>
+      'لا تُباع دفعة تجاوزت تاريخها إلا بإذن مدير.';
+
+  @override
+  String get productTrackingAssetTypesFailed => 'تعذّر تحميل أنواع الأجهزة.';
+
+  @override
+  String get productTrackingAssetTypeLabel => 'نوع الجهاز';
+
+  @override
+  String get productTrackingAssetTypeHelper =>
+      'يحدد اسم الرقم (IMEI، رقم الشاصي…) ويربط الجهاز المباع بسجل صيانته.';
+
+  @override
+  String get productTrackingAssetTypeNone => 'بدون تحديد';
+
+  @override
+  String get productTrackingOpeningUnitsHint =>
+      'تدخل هذه الكمية بلا أرقام، ولا تُباع قبل تعريف كل قطعة من شاشة الأجهزة المسلسلة.';
+
+  @override
+  String get productTrackingOpeningLotsHint =>
+      'تدخل هذه الكمية كدفعة بلا رقم ولا تاريخ صلاحية.';
+
+  @override
+  String get productTrackingChangeTitle => 'تغيير طريقة التتبع؟';
+
+  @override
+  String productTrackingChangeBody(String from, String to) {
+    return 'من «$from» إلى «$to». يسري على كل ما يُستلم ويُباع من هذا المنتج من الآن، ولا يغيّر ما سبق.';
+  }
+
+  @override
+  String get productTrackingChangeConfirm => 'تغيير';
+
+  @override
+  String get productTrackingIdentifyLaterTitle => 'تفعيل التتبّع لرصيد موجود؟';
+
+  @override
+  String productTrackingIdentifyLaterUnitsBody(String quantity) {
+    return 'في المخزون $quantity قطعة من هذا المنتج بلا أرقام. ستُسجَّل «بانتظار المعرّف» ولا تُباع قطعة منها حتى يُدخل رقمها من شاشة الأجهزة المسلسلة، فلتر «بانتظار المعرّف».';
+  }
+
+  @override
+  String productTrackingIdentifyLaterLotsBody(String quantity) {
+    return 'في المخزون $quantity من هذا المنتج بلا دفعة. ستدخل في دفعة واحدة بلا رقم ولا تاريخ صلاحية، وتبقى قابلة للبيع.';
+  }
+
+  @override
+  String get productTrackingIdentifyLaterConfirm => 'تفعيل التتبّع';
+
+  @override
+  String purchaseOrderReceiptDeferred(String number) {
+    return 'الطلب $number أُنشئ ولم يُستلم بعد — استلمه من قائمة المشتريات بعد مسح الأرقام.';
+  }
+
+  @override
+  String get purchaseLineUnitsAtReceipt =>
+      'تُمسح الأرقام التسلسلية عند الاستلام.';
+
+  @override
+  String get purchaseLineLotsAtReceipt =>
+      'تُسجَّل الدفعات وتواريخ صلاحيتها عند الاستلام.';
+
+  @override
+  String get stockUnitIdentifyTitle => 'إدخال رقم الجهاز';
+
+  @override
+  String get stockUnitIdentifyCodeLabel => 'الرقم التسلسلي / IMEI';
+
+  @override
+  String get stockUnitIdentifyAction => 'إدخال الرقم';
+
+  @override
+  String get stockUnitIdentified => 'تم حفظ الرقم.';
+
+  @override
+  String get stockUnitsShowMissing => 'عرضها';
+
+  @override
+  String get unitTimelineEventAdvanceOpened => 'تحويل مستحق إلى دفعة مقدّمة';
+
+  @override
+  String get unitTimelineEventAdvanceSettled => 'تسوية دفعة مقدّمة';
+
+  @override
+  String get unitTimelineEventIdentifierCorrected => 'تصحيح المعرّف';
+
+  @override
+  String get unitTimelineEventAttributesEdited => 'تعديل الخصائص';
+
+  @override
+  String get unitTimelineEventRefurbCost => 'تكلفة تجديد';
+
+  @override
+  String get unitTimelineEventNote => 'ملاحظة';
+
+  @override
+  String get stockVoucherSale => 'بيع';
+
+  @override
+  String get stockVoucherSaleReturn => 'مرتجع بيع';
+
+  @override
+  String get stockVoucherPurchaseReceipt => 'استلام مشتريات';
+
+  @override
+  String get stockVoucherPurchaseReturn => 'مرتجع مشتريات';
+
+  @override
+  String get stockVoucherProduction => 'تصنيع';
+
+  @override
+  String get stockVoucherStockCount => 'جرد';
+
+  @override
+  String get stockVoucherAdjustment => 'تسوية يدوية';
+
+  @override
+  String get stockVoucherOpening => 'رصيد افتتاحي';
+
+  @override
+  String get stockVoucherTransfer => 'تحويل مستودع';
+
+  @override
+  String get stockVoucherTransferReceipt => 'استلام تحويل مستودع';
+
+  @override
+  String get stockVoucherConsignmentCost => 'تكلفة أمانة عند بيعها';
+
+  @override
+  String get stockVoucherConsignmentIntake => 'استلام أمانة';
+
+  @override
+  String get stockVoucherConsignmentReturn => 'إرجاع أمانة لصاحبها';
+
+  @override
+  String get stockVoucherRefurbishment => 'إصلاح أُضيف إلى التكلفة';
+
+  @override
+  String get stockVoucherOther => 'حركة مخزون';
+
+  @override
+  String get productTrackingModeLabel => 'طريقة التتبع';
+
+  @override
+  String productTrackingWarrantyDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوم',
+      many: '$days يومًا',
+      few: '$days أيام',
+      two: 'يومان',
+      one: 'يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get productTrackingNoWarranty => 'بدون ضمان';
+
+  @override
+  String get productTrackingWarrantyCardLabel => 'الضمان';
+
+  @override
+  String get productTrackingYes => 'نعم';
+
+  @override
+  String get productTrackingNo => 'لا';
+
+  @override
+  String get productTrackingOpenUnits => 'الأجهزة';
+
+  @override
+  String get productTrackingOpenLots => 'الدفعات';
+
+  @override
+  String invoiceLineLotQuantity(String code, String quantity) {
+    return 'دفعة $code × $quantity';
+  }
+
+  @override
+  String get identifiedStockSettingsTitle => 'تتبع الأجهزة والدفعات';
+
+  @override
+  String get identifiedStockSettingsSubtitle =>
+      'الأرقام التسلسلية، الدفعات وتواريخ الصلاحية، والأمانات';
+
+  @override
+  String get identifiedStockModesTitle => 'ما الذي يتتبعه المحل؟';
+
+  @override
+  String get identifiedStockModesHint =>
+      'كلاهما مطفأ في البداية. التشغيل يُظهر الشاشات والخيارات، وكل منتج يختار طريقة تتبعه من صفحته.';
+
+  @override
+  String get identifiedStockSerialTitle => 'الأجهزة بالرقم التسلسلي';
+
+  @override
+  String get identifiedStockSerialDescription =>
+      'IMEI أو رقم تسلسلي أو رقم شاصي لكل قطعة، بتكلفتها وسعرها وضمانها.';
+
+  @override
+  String get identifiedStockBatchTitle => 'الدفعات وتواريخ الصلاحية';
+
+  @override
+  String get identifiedStockBatchDescription =>
+      'رقم دفعة وتاريخ صلاحية لكل توريد، والبيع من الأقرب انتهاءً أولًا.';
+
+  @override
+  String get identifiedStockSerialSectionTitle => 'الأجهزة المسلسلة';
+
+  @override
+  String get identifiedStockCaptureLaterTitle =>
+      'الاستلام قبل إدخال كل الأرقام';
+
+  @override
+  String get identifiedStockCaptureLaterDescription =>
+      'تدخل البضاعة المخزون وتنتظر أرقامها في قائمة النواقص، ولا تُباع قبل تعريفها.';
+
+  @override
+  String get identifiedStockAssetTitle => 'تسجيل الجهاز المباع باسم الزبون';
+
+  @override
+  String get identifiedStockAssetDescription =>
+      'عند البيع لزبون مسمّى يُضاف الجهاز إلى أجهزته، فيصل إلى الصيانة بتاريخه كاملًا.';
+
+  @override
+  String get identifiedStockConsignmentTitle => 'الأمانات';
+
+  @override
+  String get identifiedStockConsignmentHint =>
+      'بضاعة يتركها أصحابها في المحل ليبيعها نيابة عنهم.';
+
+  @override
+  String get identifiedStockConsignmentSmsTitle =>
+      'رسالة لصاحب الأمانة عند البيع';
+
+  @override
+  String get identifiedStockConsignmentSmsDescription =>
+      'يعرف صاحب الأمانة أنها بيعت في نفس اللحظة.';
+
+  @override
+  String get identifiedStockDeclaredValueTitle =>
+      'القيمة المقدّرة إلزامية عند الاستلام';
+
+  @override
+  String get identifiedStockDeclaredValueDescription =>
+      'عليها تُحسب العهدة وأي مطالبة عند الفقد أو التلف.';
+
+  @override
+  String get identifiedStockReminderDaysLabel =>
+      'تذكير بالمستحقات غير المستلمة بعد (يوم)';
+
+  @override
+  String get identifiedStockReminderDaysHelper => '0 يوقف التذكير.';
+
+  @override
+  String get identifiedStockClausesHint =>
+      'نص كل بند كما يُطبع على سند استلام الأمانة. السندات الموقّعة تبقى بالنص الذي طُبعت به.';
+
+  @override
+  String identifiedStockClauseLabel(String policy) {
+    return 'نص البند: $policy';
+  }
+
+  @override
+  String get identifiedStockTurnOffTitle => 'إيقاف التتبع؟';
+
+  @override
+  String get identifiedStockTurnOffBody =>
+      'ستختفي شاشات الأجهزة أو الدفعات، لكن المنتجات المتتبَّعة تبقى كما هي وتستمر في طلب أرقامها عند البيع والاستلام. لإيقاف تتبع منتج غيّر طريقة تتبعه من صفحته.';
+
+  @override
+  String get identifiedStockTurnOffConfirm => 'إيقاف';
+
+  @override
+  String get identifiedStockSaved => 'تم حفظ إعدادات التتبع.';
 
   @override
   String get activeVariantLabel => 'متاح للبيع';
@@ -9417,6 +9802,65 @@ class AppLocalizationsAr extends AppLocalizations {
     String unitCost,
   ) {
     return 'بديل: $product × $quantity بتكلفة $unitCost';
+  }
+
+  @override
+  String get purchaseAdjustmentUnitsTitle => 'حدّد الأجهزة المُرجَعة للمورد';
+
+  @override
+  String get purchaseAdjustmentUnitsBody =>
+      'صنف مسلسل: امسح أو اختر كل جهاز يعود فعليًا إلى المورد، فيُسجَّل الإرجاع باسمه.';
+
+  @override
+  String get purchaseAdjustmentUnitsPickNext => 'تُحدَّد الأجهزة بعد التأكيد';
+
+  @override
+  String get purchaseAdjustmentUnitsWholeOnly =>
+      'الأصناف المسلسلة تُرجَع بأعداد صحيحة فقط.';
+
+  @override
+  String get purchaseAdjustmentUnitsScanReplacement => 'امسح معرّفات البديل';
+
+  @override
+  String get purchaseAdjustmentUnitsReplacementScanned =>
+      'تم مسح معرّفات البديل — اضغط للتعديل';
+
+  @override
+  String get purchaseExchangeReplacementBaseUnitHint =>
+      'تُدخَل كمية البديل وتكلفته بالوحدة الأساسية للصنف، لا بوحدة الشراء كالكرتون.';
+
+  @override
+  String purchaseAdjustmentUnitPricePer(String amount, String unit) {
+    return '$amount لكل $unit';
+  }
+
+  @override
+  String get purchaseExchangeReplacementMirrorHint =>
+      'يظهر هنا بديل مطابق لكل عنصر صادر، ويمكنك تعديله أو إضافة غيره.';
+
+  @override
+  String get purchaseAdjustmentUnitsReplacementLotRequired =>
+      'البديل صنف مسلسل بدفعة: امسح رقم الدفعة قبل التأكيد.';
+
+  @override
+  String get unitPickSearchHint => 'امسح أو اكتب الرقم التسلسلي / IMEI';
+
+  @override
+  String get unitPickNotFound =>
+      'لا يوجد جهاز متاح بهذا المعرّف ضمن هذه الأسطر.';
+
+  @override
+  String get unitPickLoadFailed => 'تعذّر تحميل الأجهزة.';
+
+  @override
+  String get unitPickEmpty => 'لا توجد أجهزة متاحة لهذا الصنف في هذا المستودع.';
+
+  @override
+  String get unitPickIncomplete => 'أكمل تحديد الأجهزة قبل المتابعة.';
+
+  @override
+  String unitPickProgress(int picked, int needed) {
+    return '$picked من $needed';
   }
 
   @override
@@ -22948,6 +23392,280 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get treasuryComponentStaffLoans => 'سلف الموظفين';
+
+  @override
+  String get treasuryInTransitLabel => 'قيد التسوية';
+
+  @override
+  String get treasurySectionClearing => 'مبيعات بطاقات قيد التسوية';
+
+  @override
+  String get treasuryAccountKindClearing => 'قيد التسوية';
+
+  @override
+  String get treasuryClearingIntro =>
+      'تبقى مبيعات البطاقات هنا حتى تُحوِّلها شركة الدفع (معاملات) إلى المصرف، فيطابق رصيد المصرف كشفه.';
+
+  @override
+  String treasuryClearingSettlesInto(String bank) {
+    return 'تُحوَّل إلى $bank';
+  }
+
+  @override
+  String get treasuryClearingNothingHeld => 'لا مبالغ معلّقة';
+
+  @override
+  String treasuryClearingHeldDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count يومًا قيد التسوية',
+      few: '$count أيام قيد التسوية',
+      two: 'يومان قيد التسوية',
+      one: 'يوم واحد قيد التسوية',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String treasuryClearingExpectedOn(String date) {
+    return 'المتوقع وصوله $date';
+  }
+
+  @override
+  String treasuryClearingOverdue(String amount) {
+    return 'متأخر $amount';
+  }
+
+  @override
+  String get treasuryClearingClosed => 'متوقف عن الاحتجاز';
+
+  @override
+  String treasuryClearingOverdueCalloutTitle(String amount) {
+    return 'تحويل بطاقات متأخر: $amount';
+  }
+
+  @override
+  String get treasuryClearingOverdueCalloutMessage =>
+      'مرّ موعد وصوله إلى المصرف ولم يُسجَّل بعد. سجّل وصوله إن وصل، أو راجع شركة الدفع.';
+
+  @override
+  String get treasuryActionRecordSettlement => 'تسجيل وصول تحويل';
+
+  @override
+  String get treasuryComponentSettlementIn => 'تحويلات شركة الدفع';
+
+  @override
+  String get treasuryComponentSettlementOut => 'حُوِّل إلى المصرف';
+
+  @override
+  String get treasuryComponentSettlementDifference => 'فرق التسوية';
+
+  @override
+  String get treasuryClearingSettlesIntoLabel =>
+      'المصرف الذي تُحوَّل إليه المبالغ';
+
+  @override
+  String get treasuryClearingNoBank =>
+      'أضف حسابًا مصرفيًا أولًا، فهذا الحساب يحتجز مبالغ البطاقات حتى تصل إلى المصرف.';
+
+  @override
+  String get treasuryClearingBankRequired => 'اختر المصرف.';
+
+  @override
+  String get treasuryClearingStartLabel => 'احتجاز مبيعات البطاقات من يوم';
+
+  @override
+  String get treasuryClearingStartHelper =>
+      'اختر أقدم يوم لم تُحوِّل شركة الدفع مبالغه بعد.';
+
+  @override
+  String get treasuryClearingCutoffLabel => 'وقت إقفال اليوم لدى شركة الدفع';
+
+  @override
+  String get treasuryClearingCutoffMidnight => 'منتصف الليل';
+
+  @override
+  String get treasuryClearingWeekdaysLabel => 'أيام التحويل إلى المصرف';
+
+  @override
+  String get treasuryClearingWeekdaysRequired => 'اختر يومًا واحدًا على الأقل.';
+
+  @override
+  String get treasuryClearingLagLabel => 'تصل المبالغ بعد';
+
+  @override
+  String treasuryClearingLagDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count يوم عمل',
+      few: '$count أيام عمل',
+      two: 'يومَي عمل',
+      one: 'يوم عمل واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get treasuryClearingActiveLabel => 'يحتجز مبيعات البطاقات';
+
+  @override
+  String get treasuryClearingStopConfirmTitle =>
+      'إيقاف احتجاز مبيعات البطاقات؟';
+
+  @override
+  String get treasuryClearingStopConfirmMessage =>
+      'مبيعات البطاقات بعد اليوم ستُحسب في المصرف مباشرة. المبالغ المعلّقة الآن تبقى هنا حتى تسجّل وصولها. لا يمكن التراجع عن الإيقاف.';
+
+  @override
+  String get treasuryClearingStopConfirmAction => 'إيقاف';
+
+  @override
+  String get treasuryClearingHeldTitle => 'الأيام قيد التسوية';
+
+  @override
+  String get treasuryClearingSettlementsTitle => 'التحويلات المسجّلة';
+
+  @override
+  String get treasuryClearingSettlementsEmpty => 'لم يُسجَّل أي تحويل بعد.';
+
+  @override
+  String get treasuryClearingSettlementsError => 'تعذّر تحميل التحويلات.';
+
+  @override
+  String treasuryClearingSettlementSubtitle(int count, String days) {
+    return '$count عملية · $days';
+  }
+
+  @override
+  String treasuryClearingSettlementDifference(String amount) {
+    return 'فرق $amount';
+  }
+
+  @override
+  String get treasuryClearingSettlementCancelled => 'ملغاة';
+
+  @override
+  String get treasuryClearingCancelAction => 'إلغاء التسوية';
+
+  @override
+  String get treasuryClearingCancelTitle => 'إلغاء هذه التسوية؟';
+
+  @override
+  String get treasuryClearingCancelMessage =>
+      'يعود مبلغها إلى قيد التسوية ويُخصم من المصرف، لتسجّلها من جديد بالأيام أو المبلغ الصحيح.';
+
+  @override
+  String get treasuryClearingCancelReasonLabel => 'السبب';
+
+  @override
+  String get treasuryClearingCancelled => 'أُلغيت التسوية.';
+
+  @override
+  String get treasuryClearingCancelFailed => 'تعذّر إلغاء التسوية.';
+
+  @override
+  String get cardSettlementTitle => 'تسجيل وصول تحويل';
+
+  @override
+  String cardSettlementSubtitle(String account, String bank) {
+    return 'من $account إلى $bank';
+  }
+
+  @override
+  String get cardSettlementAmountLabel => 'المبلغ الذي وصل إلى المصرف';
+
+  @override
+  String get cardSettlementAmountHelper => 'كما في رسالة المصرف أو كشف الحساب.';
+
+  @override
+  String get cardSettlementDateLabel => 'تاريخ الوصول';
+
+  @override
+  String get cardSettlementDaysTitle => 'الأيام التي يغطيها التحويل';
+
+  @override
+  String get cardSettlementNoHeld => 'لا مبالغ قيد التسوية الآن.';
+
+  @override
+  String cardSettlementDaySubtitle(int count, String date) {
+    return '$count عملية · المتوقع $date';
+  }
+
+  @override
+  String get cardSettlementDayOverdue => 'متأخر';
+
+  @override
+  String get cardSettlementMatchExact => 'المبلغ يطابق الأيام المحددة تمامًا.';
+
+  @override
+  String get cardSettlementMatchGross =>
+      'المبلغ يطابق المبيعات قبل العمولة: لم تُخصم عمولة من هذا التحويل.';
+
+  @override
+  String get cardSettlementMatchClose =>
+      'المبلغ يقارب الأيام المحددة بفارق بسيط.';
+
+  @override
+  String get cardSettlementMatchDue =>
+      'لا أيام تطابق المبلغ، فحُدِّدت الأيام التي حلّ موعدها. راجع الفرق قبل التأكيد.';
+
+  @override
+  String get cardSettlementMatchNone => 'لم يحن موعد أي يوم بعد.';
+
+  @override
+  String get cardSettlementExpectedLabel => 'المتوقع للأيام المحددة';
+
+  @override
+  String get cardSettlementReceivedLabel => 'الواصل';
+
+  @override
+  String get cardSettlementDifferenceLabel => 'الفرق';
+
+  @override
+  String cardSettlementKeptMore(String amount) {
+    return 'احتجزت شركة الدفع $amount أكثر من العمولة المقدّرة، ويُسجَّل الفرق مصروفَ عمولة.';
+  }
+
+  @override
+  String cardSettlementKeptLess(String amount) {
+    return 'وصل $amount أكثر من المتوقع: العمولة أقل من المقدّرة.';
+  }
+
+  @override
+  String get cardSettlementReferenceLabel => 'رقم المرجع (اختياري)';
+
+  @override
+  String get cardSettlementNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get cardSettlementSubmit => 'تأكيد التسوية';
+
+  @override
+  String get cardSettlementSaved => 'سُجِّل وصول التحويل.';
+
+  @override
+  String get cardSettlementFailed => 'تعذّر تسجيل التسوية.';
+
+  @override
+  String get cardSettlementForbidden =>
+      'لا يمكن تسجيل التسوية: الفترة مقفلة أو لا تملك الصلاحية.';
+
+  @override
+  String get cardSettlementLoadFailed => 'تعذّر تحميل المبالغ قيد التسوية.';
+
+  @override
+  String get cardSettlementShowSales => 'العمليات';
+
+  @override
+  String get cardSettlementSalesFailed => 'تعذّر تحميل العمليات.';
+
+  @override
+  String get cardSettlementReversal => 'إلغاء دفعة';
+
+  @override
+  String get cardSettlementAmountRequired => 'أدخل المبلغ الواصل.';
 
   @override
   String get balanceEntryEmployeeOpeningHint =>

@@ -81,8 +81,11 @@ void main() {
         throwsA(isA<Exception>()),
       );
 
+      // A reset is tried once more on a fresh connection before giving up;
+      // the one timing row names the attempt that went out last.
+      expect(sent, hasLength(2));
       expect(recorded.single.traceId, isNotEmpty);
-      expect(recorded.single.traceId, sent.single['X-Request-ID']);
+      expect(recorded.single.traceId, sent.last['X-Request-ID']);
     });
   });
 

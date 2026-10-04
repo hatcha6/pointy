@@ -120,7 +120,11 @@ class _PurchaseOrderErrors extends StatelessWidget {
       if (viewModel.hasStatusError)
         _purchaseStatusErrorMessage(l10n, viewModel.statusError),
       if (viewModel.hasAdjustmentError)
-        _purchaseAdjustmentErrorMessage(l10n, viewModel.adjustmentError),
+        _purchaseAdjustmentErrorMessage(
+          l10n,
+          viewModel.adjustmentError,
+          detail: viewModel.adjustmentErrorDetail,
+        ),
       if (viewModel.hasPaymentError) l10n.purchaseOrderPaymentError,
     ];
 
@@ -827,7 +831,7 @@ Future<void> _showPurchaseAdjustmentDialog(
     reasonHint: l10n.purchaseAdjustmentReasonHint,
     options: _purchaseAdjustmentOptions(l10n, viewModel.order),
   );
-  if (result == null) {
+  if (result == null || !context.mounted) {
     return;
   }
   if (result.lines.isEmpty) {
@@ -839,10 +843,15 @@ Future<void> _showPurchaseAdjustmentDialog(
     return;
   }
 
-  final didAdjust = await action(
-    lines: _purchaseAdjustmentDrafts(result.lines),
-    reason: result.reason,
+  final lines = await _pickReturnedUnits(
+    context,
+    viewModel,
+    _purchaseAdjustmentDrafts(result.lines),
   );
+  if (lines == null || !context.mounted) {
+    return;
+  }
+  final didAdjust = await action(lines: lines, reason: result.reason);
   if (!context.mounted || !didAdjust) {
     return;
   }
@@ -863,7 +872,7 @@ Future<void> _showExchangeDialog(
     context: context,
     builder: (context) => _PurchaseExchangeDialog(order: viewModel.order),
   );
-  if (result == null) {
+  if (result == null || !context.mounted) {
     return;
   }
   if (result.lines.isEmpty || result.replacementLines.isEmpty) {
@@ -875,8 +884,12 @@ Future<void> _showExchangeDialog(
     return;
   }
 
+  final lines = await _pickReturnedUnits(context, viewModel, result.lines);
+  if (lines == null || !context.mounted) {
+    return;
+  }
   final didAdjust = await viewModel.exchangeItems(
-    lines: result.lines,
+    lines: lines,
     replacementLines: result.replacementLines,
     reason: result.reason,
   );
@@ -909,17 +922,21 @@ String _purchaseStatusErrorMessage(
   };
 }
 
+/// [detail] is the server's own Arabic refusal, preferred over the generic
+/// copy when the request was refused for what it said: which handset is not
+/// in stock tells the buyer what to fix, "check the entries" does not.
 String _purchaseAdjustmentErrorMessage(
   AppLocalizations l10n,
-  PurchaseOrderActionError? error,
-) {
+  PurchaseOrderActionError? error, {
+  String? detail,
+}) {
   return switch (error) {
     PurchaseOrderActionError.receivedStockUnavailable =>
-      l10n.purchaseOrderAdjustmentStockUnavailableError,
+      detail ?? l10n.purchaseOrderAdjustmentStockUnavailableError,
     PurchaseOrderActionError.permissionDenied =>
       l10n.purchaseOrderPermissionError,
     PurchaseOrderActionError.validationFailed =>
-      l10n.purchaseOrderValidationError,
+      detail ?? l10n.purchaseOrderValidationError,
     PurchaseOrderActionError.generic ||
     null => l10n.purchaseOrderAdjustmentError,
   };

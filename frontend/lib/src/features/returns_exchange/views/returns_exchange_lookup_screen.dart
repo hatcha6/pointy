@@ -9,6 +9,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/services/api_session.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
@@ -28,6 +29,7 @@ class ReturnsExchangeLookupScreen extends StatefulWidget {
     required this.printingRepository,
     required this.shopSettingsRepository,
     required this.catalogRepository,
+    this.trackedStockRepository,
     required this.capabilities,
     required this.navigation,
     this.analyticsEngine,
@@ -37,6 +39,10 @@ class ReturnsExchangeLookupScreen extends StatefulWidget {
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final CatalogRepository catalogRepository;
+
+  /// The shelf an exchange picks a serialized replacement from; see
+  /// [SaleOrderDetailsContent.trackedStockRepository].
+  final TrackedStockRepository? trackedStockRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
   final AnalyticsEngine? analyticsEngine;
@@ -195,6 +201,7 @@ class _ReturnsExchangeLookupScreenState
             onProductSearch: widget.capabilities.canCheckoutSale
                 ? viewModel.searchReplacementProducts
                 : null,
+            trackedStockRepository: widget.trackedStockRepository,
           );
         },
       );

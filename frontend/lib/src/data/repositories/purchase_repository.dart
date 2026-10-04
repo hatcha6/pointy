@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../models/purchase_submission.dart';
 import '../models/purchase_suggestion.dart';
+import '../models/stock_unit.dart';
 import '../services/pos_api_service.dart';
 
 class PurchaseRepository {
@@ -206,6 +207,13 @@ class PurchaseRepository {
       if (!receiveImmediately) {
         return submittedOrder.toSubmission();
       }
+      // Handsets and lots are received where they are scanned. Receiving them
+      // here, blind, either fails (serials) or files them under a lot the
+      // server invents (batches); the caller opens the receiving dialog on
+      // this order instead.
+      if (submittedOrder.receiptNeedsIdentifiers) {
+        return submittedOrder.toSubmission(awaitsIdentifiers: true);
+      }
       final receiveDraft = PurchaseReceiveDraft(
         lines: [
           for (final line in submittedOrder.lines)
@@ -338,6 +346,29 @@ class PurchaseRepository {
       () => _service.cancelPurchaseOrder(
         purchaseOrderId,
         idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  /// The handsets of [variantId] that could go back to the supplier: in stock,
+  /// identified, and standing where the order's delivery landed.
+  ///
+  /// The same `stock-units` read the transfer pick sheet makes through
+  /// `TrackedStockRepository.loadUnits`, offered here so the order screen —
+  /// opened from purchasing, a supplier's page or a product's history — needs
+  /// no second repository threaded through every one of those routes.
+  Future<Result<StockUnitPage>> loadReturnableUnits({
+    required int variantId,
+    int? warehouseId,
+    String code = '',
+  }) {
+    return Result.guard(
+      () => _service.fetchStockUnits(
+        variantId: variantId,
+        warehouseId: warehouseId,
+        status: StockUnitStatus.inStock,
+        isIdentified: true,
+        code: code,
       ),
     );
   }

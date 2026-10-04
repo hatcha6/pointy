@@ -1,9 +1,10 @@
 # Pointy's copy of `printing` 5.14.3
 
 This is `printing` 5.14.3 from pub.dev with Windows print fixes. Only
-`windows/print_job.cpp` differs from upstream; every change there is marked
-`POINTY PATCH`. The pub.dev example, tests, screenshot and changelog were left
-out.
+`windows/print_job.cpp`, `windows/print_job.h` and
+`windows/printing_plugin.cpp` differ from upstream; every change there is
+marked `POINTY PATCH`. The pub.dev example, tests, screenshot and changelog
+were left out.
 
 ## Why it is vendored
 
@@ -42,6 +43,15 @@ that started the job"). 5.15 needs Dart 3.12, and this app is on 3.10.
    completes the print with an error, and no job is left open.
 4. The DEVMODE is released with `GlobalFree`. Upstream passed it to
    `ClosePrinter`, as if it were a printer handle.
+5. `forceCustomPrintPaper: true` (upstream: iOS only) now also means, on
+   Windows, that the page IS the paper: a die-cut label or a receipt roll. Such
+   a page is asked for exactly as given, portrait, even when it is wider than
+   it is tall. Upstream turns any page wider than tall into landscape on paper
+   of swapped size. For a 50 x 30 mm sticker that is 30 mm paper fed 50 mm at a
+   time with the artwork turned a quarter, which is a different label. Barcode
+   labels used to avoid that by printing on the driver's own paper
+   (`usePrinterSettings: true`), so a driver left on its 4 x 6 in preset put
+   every sticker in the corner of a 4 x 6 page.
 
 ## Dropping this copy
 
@@ -49,5 +59,8 @@ Once the app is on Dart >= 3.12, go back to `printing: ^5.15.1` (or newer) in
 `frontend/pubspec.yaml` and delete this directory. Upstream 5.15.1 has item 2,
 item 4, and the unreadable-document part of item 3. For item 1 it zeroes the
 DEVMODE rather than starting from the driver's settings, and it still does not
-answer a `CreateDC` failure. Before dropping this copy, check that an HPRT or
-Xprinter receipt still prints on Windows.
+answer a `CreateDC` failure. Upstream has no item 5: until it does, keep it
+(the plugin reads `forceCustomPrintPaper` on Windows only for this). Before
+dropping this copy, check that an HPRT or Xprinter receipt still prints on
+Windows, and that a 50 x 30 mm label prints the right way up on its own
+paper.

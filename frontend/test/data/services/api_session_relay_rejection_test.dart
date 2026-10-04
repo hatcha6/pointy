@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -233,6 +234,52 @@ void main() {
         expect(refreshes, 0);
       },
     );
+
+    // The relay refuses before forwarding, so the request never reached the
+    // backend. When the coordinator found the LAN while the ticket was being
+    // replaced, the refusal used to be handed back to the screen — a 401 that
+    // reads as signed out — instead of the request going where the session
+    // now points.
+    group('when the session went back to the LAN meanwhile', () {
+      late List<String> sentTo;
+      late PosApiSession session;
+
+      setUp(() {
+        sentTo = [];
+        session = PosApiSession(
+          client: MockClient((request) async {
+            sentTo.add(request.url.host);
+            if (request.url.host == 'relay.test') {
+              return _relayRefusal();
+            }
+            return http.Response('{"ok":true}', 200);
+          }),
+          baseUrl: _relay,
+        )..configureConnectionTarget(baseUrl: _relay, relayToken: 'ptt1.old');
+        session.onRelayTicketRejected = () async {
+          session.configureConnectionTarget(baseUrl: 'http://lan.test/api');
+          // No ticket was installed on the relay: the session is not there.
+          return RelayTicketRecovery.failed;
+        };
+      });
+
+      test('a read is answered on the LAN', () async {
+        final response = await session.get('products/');
+
+        expect(response.statusCode, 200);
+        expect(sentTo, ['relay.test', 'lan.test']);
+      });
+
+      test('a byte upload is answered on the LAN', () async {
+        final response = await session.putBytes(
+          'migration/uploads/1/chunk/',
+          bytes: Uint8List.fromList([1, 2, 3]),
+        );
+
+        expect(response.statusCode, 200);
+        expect(sentTo, ['relay.test', 'lan.test']);
+      });
+    });
   });
 
   group('telling the relay from the backend', () {

@@ -10,7 +10,6 @@ import 'app_dependencies.dart';
 import 'authenticated_home.dart';
 import 'core/analytics_interaction_tracker.dart';
 import 'data/models/analytics_event.dart';
-import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
@@ -32,6 +31,7 @@ import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'shared/design/design.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/product_search/product_search_mode_controller.dart';
+import 'shared/tracking/tracking_features.dart';
 import 'shared/shell/shell.dart';
 import 'shared/theme/theme_controller.dart';
 import 'core/analytics_screen_tracker.dart';
@@ -85,12 +85,14 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Returning to the foreground is the cheapest reliable signal that the
-    // network may have changed (Wi-Fi reconnected, roamed APs, DHCP renewed).
-    // Re-hunt for the LAN backend unless we already hold a healthy one.
-    if (state == AppLifecycleState.resumed &&
-        _dependencies.connectionStatus.phase !=
-            ConnectionPhase.connectedLocal) {
-      unawaited(_dependencies.connectionCoordinator.rediscover());
+    // network may have changed (Wi-Fi reconnected, roamed APs, DHCP renewed,
+    // or the device carried out of the shop): the coordinator looks for the
+    // LAN, or checks the one it holds is still there.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_dependencies.connectionCoordinator.noteAppResumed());
+    } else if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _dependencies.connectionCoordinator.noteAppHidden();
     }
     if (state == AppLifecycleState.resumed) {
       // Coming back is when the screen is most likely to be stale — the device
@@ -257,7 +259,18 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                                 child: ProductSearchModeScope(
                                   controller:
                                       _dependencies.productSearchModeController,
-                                  child: railChild ?? const SizedBox.shrink(),
+                                  // Per shop, from the session: whether the
+                                  // product form offers serial and lot
+                                  // tracking, in whichever sheet it opens.
+                                  child: ListenableBuilder(
+                                    listenable: _dependencies.authViewModel,
+                                    builder: (context, scoped) =>
+                                        TrackingFeaturesScope(
+                                          features: _trackingFeatures(),
+                                          child: scoped!,
+                                        ),
+                                    child: railChild ?? const SizedBox.shrink(),
+                                  ),
                                 ),
                               ),
                             ),
@@ -289,6 +302,11 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
               ),
             ),
     );
+  }
+
+  TrackingFeatures _trackingFeatures() {
+    final user = _dependencies.authViewModel.currentUser;
+    return user == null ? TrackingFeatures.none : TrackingFeatures.of(user);
   }
 
   Future<void> _enterPriceCheckerMode(BuildContext context) {

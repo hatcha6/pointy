@@ -7,11 +7,14 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/models/catalog_identity_conflict.dart';
+import '../../../data/models/customer_asset.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
+import '../../../data/models/product_tracking.dart';
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant_draft.dart';
+import '../../../data/models/tracking_mode.dart';
 import '../../../data/models/unit_of_measure.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
@@ -20,6 +23,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/keyboard/route_keyboard_shortcuts.dart';
 import '../../../shared/product_category_picker.dart';
+import '../../../shared/tracking/tracking_features.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/product_entry_run.dart';
 import '../view_models/similar_product.dart';
@@ -37,6 +41,7 @@ import 'product_form_shortcuts.dart';
 import 'product_generated_variants_step.dart';
 import 'product_image_picker.dart';
 import 'product_more_details.dart';
+import 'product_tracking_fields.dart';
 import 'product_units_editor.dart';
 import 'variant_generation_fields.dart';
 import 'variant_identity_watcher.dart';
@@ -63,6 +68,7 @@ class ProductForm extends StatefulWidget {
     this.initialBarcode,
     this.showOpeningStock = false,
     this.similarTo,
+    this.trackingFeatures,
   });
 
   final CatalogViewModel viewModel;
@@ -100,6 +106,14 @@ class ProductForm extends StatefulWidget {
   /// [SimilarProduct]). Nothing is saved until the owner creates it, so a
   /// copy changed their mind about leaves no product behind.
   final Product? similarTo;
+
+  /// Which identified-stock trades the shop has switched on. With either on,
+  /// the form offers the whole tracking choice — serial, lots, both — in a
+  /// section of its own; with neither, the single expiry switch it always had.
+  ///
+  /// Read from [TrackingFeaturesScope] when not given; given only by previews
+  /// and tests, which have no session to read it from.
+  final TrackingFeatures? trackingFeatures;
 
   @override
   State<ProductForm> createState() => _ProductFormState();
@@ -190,7 +204,15 @@ class _ProductFormState extends State<ProductForm> {
   Set<int> _valueErrorOptionIds = {};
   ProductImageSelection? _selectedImage;
   var _isProductActive = true;
-  var _tracksExpiry = false;
+
+  /// How the product's stock is identified. Behind the expiry switch it is
+  /// quantity or lots and nothing else.
+  var _tracking = const ProductTracking();
+  var _features = TrackingFeatures.none;
+  var _assetTypesRequested = false;
+  List<CustomerAssetType> _assetTypes = [];
+  var _isLoadingAssetTypes = false;
+  var _assetTypesLoadFailed = false;
   var _unit = 'piece';
   var _isService = false;
   var _isPrepared = false;
@@ -258,6 +280,19 @@ class _ProductFormState extends State<ProductForm> {
   /// than letting somebody type a number that will be rejected.
   bool get _showsOpeningStock =>
       widget.showOpeningStock && !_isService && !_isPrepared;
+
+  /// The whole tracking choice, in its own section, once the shop identifies
+  /// stock at all — or when the product in hand is serial anyway, copied from
+  /// one in a shop that has since switched the trade off, so nothing is saved
+  /// that the form did not show. Otherwise the expiry switch among the
+  /// essentials.
+  bool get _showsTrackingSection => _features.any || _tracking.mode.tracksUnits;
+
+  /// What is saved: a product with no shelf — a service, a dish — is never
+  /// tracked, whatever was chosen before it became one.
+  ProductTracking get _effectiveTracking => _isService || _isPrepared
+      ? _tracking.copyWith(mode: TrackingMode.quantity)
+      : _tracking;
 
   bool get _isFinalStep => !_usesGeneratedVariants || _step == 1;
 
@@ -329,6 +364,37 @@ class _ProductFormState extends State<ProductForm> {
       }
       (initialBarcode.isEmpty ? _barcodeFocusNode : _nameFocusNode)
           .requestFocus();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _features = widget.trackingFeatures ?? TrackingFeaturesScope.of(context);
+    // Only a shop with serial tracking has a «نوع الجهاز» to choose.
+    if (_features.serial && !_assetTypesRequested) {
+      _assetTypesRequested = true;
+      unawaited(_loadAssetTypes());
+    }
+  }
+
+  Future<void> _loadAssetTypes() async {
+    setState(() {
+      _isLoadingAssetTypes = true;
+      _assetTypesLoadFailed = false;
+    });
+    final result = await widget.viewModel.catalogRepository.loadAssetTypes();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isLoadingAssetTypes = false;
+      switch (result) {
+        case Ok<List<CustomerAssetType>>(value: final types):
+          _assetTypes = types;
+        case Error<List<CustomerAssetType>>():
+          _assetTypesLoadFailed = true;
+      }
     });
   }
 
@@ -460,7 +526,7 @@ class _ProductFormState extends State<ProductForm> {
         for (final category in _selectedCategories) 'c${category.id}',
         for (final id in _selectedVariantOptionIds) 'o$id',
         for (final id in _selectedModifierGroupIds) 'm$id',
-        'e$_tracksExpiry',
+        't${_tracking.toJson()}',
         's$_isService',
         'p$_isPrepared',
         'a$_isProductActive$_isVariantActive',
@@ -643,11 +709,18 @@ class _ProductFormState extends State<ProductForm> {
                   _unit = value;
                   _run.unkeep(ProductCarryField.unit);
                 }),
-                tracksExpiry: _tracksExpiry,
-                onTracksExpiryChanged: (value) => setState(() {
-                  _tracksExpiry = value;
-                  _run.unkeep(ProductCarryField.tracksExpiry);
-                }),
+                tracksExpiry: _tracking.mode.tracksLots,
+                // With the tracking section shown, the switch would be a
+                // second control over the same choice.
+                onTracksExpiryChanged: _showsTrackingSection
+                    ? null
+                    : (value) => _setTracking(
+                        _tracking.copyWith(
+                          mode: value
+                              ? TrackingMode.batch
+                              : TrackingMode.quantity,
+                        ),
+                      ),
                 onEnter: _advanceFrom,
                 requiredValidator: (value) =>
                     _requiredValidator(context, value),
@@ -674,12 +747,48 @@ class _ProductFormState extends State<ProductForm> {
               ),
             ],
           ),
+          if (_showsTrackingSection) ...[
+            const SizedBox(height: 20),
+            ProductFormSection(
+              icon: Icons.qr_code_scanner_outlined,
+              title: l10n.productTrackingSectionTitle,
+              children: [
+                PinnableField(
+                  pin: pins[ProductCarryField.tracksExpiry],
+                  focusScope: _pinScopes[ProductCarryField.tracksExpiry],
+                  child: ProductTrackingFields(
+                    key: ValueKey('product_tracking_$_entryGeneration'),
+                    value: _tracking,
+                    onChanged: _setTracking,
+                    features: _features,
+                    assetTypes: _assetTypes,
+                    assetTypesLoading: _isLoadingAssetTypes,
+                    assetTypesFailed: _assetTypesLoadFailed,
+                    onReloadAssetTypes: _loadAssetTypes,
+                    doesNotKeepStock: _isService || _isPrepared,
+                    enabled: !isSaving,
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (_showsOpeningStock && _showsSellingFields) ...[
             const SizedBox(height: 20),
             ProductFormSection(
               icon: Icons.play_circle_outline,
               title: l10n.openingStockSectionTitle,
               children: [
+                if (_effectiveTracking.mode.isTracked) ...[
+                  PointyInlineMessage(
+                    key: const ValueKey('product_opening_stock_tracked_hint'),
+                    message: _effectiveTracking.mode.tracksUnits
+                        ? l10n.productTrackingOpeningUnitsHint
+                        : l10n.productTrackingOpeningLotsHint,
+                    icon: Icons.info_outline,
+                    compact: true,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 OpeningStockFields(
                   key: const ValueKey('product_opening_stock'),
                   quantityController: _openingQuantityController,
@@ -1141,11 +1250,13 @@ class _ProductFormState extends State<ProductForm> {
           ]
         : const <ProductVariantDraft>[];
 
+    final tracking = _effectiveTracking;
     final draft = ProductDraft(
       name: _nameController.text.trim(),
       description: _descriptionController.text.trim(),
       isActive: _isProductActive,
-      tracksExpiry: _tracksExpiry,
+      tracksExpiry: tracking.mode.tracksLots,
+      tracking: tracking,
       unit: _unit,
       defaultSaleUnit: _defaultSaleUnit,
       defaultPurchaseUnit: _defaultPurchaseUnit,
@@ -1227,7 +1338,8 @@ class _ProductFormState extends State<ProductForm> {
       pricingCurrency: _pricingCurrency,
       categories: List.of(_selectedCategories),
       unit: _unit,
-      tracksExpiry: _tracksExpiry,
+      tracksExpiry: _tracking.mode.tracksLots,
+      tracking: _tracking,
       openingCost: _openingCostController.text.trim(),
     );
     _run.recordCreated(created, carried, imageFailed: imageFailed);
@@ -1262,8 +1374,9 @@ class _ProductFormState extends State<ProductForm> {
           ? List.of(carried.categories)
           : [];
       _unit = carries(ProductCarryField.unit) ? carried.unit : 'piece';
-      _tracksExpiry =
-          carries(ProductCarryField.tracksExpiry) && carried.tracksExpiry;
+      _tracking = carries(ProductCarryField.tracksExpiry)
+          ? carried.tracking
+          : const ProductTracking();
       _selectedImage = null;
       _isProductActive = true;
       _isVariantActive = true;
@@ -1310,7 +1423,7 @@ class _ProductFormState extends State<ProductForm> {
     _pricingCurrency = carried.pricingCurrency;
     _selectedCategories = List.of(carried.categories);
     _unit = carried.unit;
-    _tracksExpiry = carried.tracksExpiry;
+    _tracking = carried.tracking;
     _descriptionController.text = similar.description;
     _isService = similar.isService;
     _isPrepared = similar.isPrepared;
@@ -1426,7 +1539,7 @@ class _ProductFormState extends State<ProductForm> {
       ProductCarryField.price => _priceController.text.trim().isEmpty,
       ProductCarryField.category => _selectedCategories.isEmpty,
       ProductCarryField.unit => _unit == 'piece',
-      ProductCarryField.tracksExpiry => !_tracksExpiry,
+      ProductCarryField.tracksExpiry => _tracking == const ProductTracking(),
       ProductCarryField.openingCost =>
         _openingCostController.text.trim().isEmpty,
     };
@@ -1447,10 +1560,17 @@ class _ProductFormState extends State<ProductForm> {
       case ProductCarryField.unit:
         _unit = previous.unit;
       case ProductCarryField.tracksExpiry:
-        _tracksExpiry = previous.tracksExpiry;
+        _tracking = previous.tracking;
       case ProductCarryField.openingCost:
         _setText(_openingCostController, previous.openingCost);
     }
+  }
+
+  void _setTracking(ProductTracking tracking) {
+    setState(() {
+      _tracking = tracking;
+      _run.unkeep(ProductCarryField.tracksExpiry);
+    });
   }
 
   void _setCategories(List<AsyncSelectionOption<int>> categories) {

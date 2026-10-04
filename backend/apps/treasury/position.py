@@ -39,7 +39,8 @@ from apps.payments.models import Payment
 from apps.purchasing.models import SupplierPayment
 from apps.sales.models import RegisterCashMovement
 
-from .models import MoneyAccount, MoneyCount, MoneyTransfer
+from . import clearing
+from .models import CardSettlement, MoneyAccount, MoneyCount, MoneyTransfer
 
 MONEY_FIELD = DecimalField(max_digits=14, decimal_places=2)
 MONEY_PLACES = Decimal("0.01")
@@ -75,6 +76,15 @@ COMPONENT_INTEGRATION_DRAW = "integration_draw"
 # pay-outs or expenses would put money the shop still has a claim to among
 # money it has spent.
 COMPONENT_STAFF_LOANS = "staff_loans"
+# A card processor paying held takings into the bank (``CardSettlement``):
+# arriving in the bank, and leaving the clearing account that held them. The
+# same deposit seen from its two ends, like a transfer's two codes.
+COMPONENT_SETTLEMENT_IN = "settlement_in"
+COMPONENT_SETTLEMENT_OUT = "settlement_out"
+# What the processor kept beyond the fee estimated at each sale (negative), or
+# kept short of it (positive). Its own line on the clearing account so a fee
+# the shop was not told about is seen, never folded into the takings.
+COMPONENT_SETTLEMENT_DIFFERENCE = "settlement_difference"
 
 # Which payment methods land in which kind of account. Method decides the
 # *kind* of account; ``money_account`` — when a row carries one — decides WHICH
@@ -210,7 +220,9 @@ def bank_account_filter(account, *, is_default, field="money_account"):
     return owned
 
 
-def _bank_components(*, start, end, account, is_default):
+def _bank_components(
+    *, start, end, account, is_default, held=None, receives_settlements=False
+):
     """The money that moves through one bank account.
 
     Sales, supplier payments and expenses are attributed per account. Consignor
@@ -218,6 +230,13 @@ def _bank_components(*, start, end, account, is_default):
     of their own, so they stay with the default — visibly, as their own named
     components, which is the same way payroll's cash assumption is shown rather
     than hidden.
+
+    ``held`` is the card takings a clearing account is holding
+    (``clearing.held_by_any_q``). They are left out here: they reach this bank
+    only when the processor pays them in, as a settlement, and counting them at
+    the sale as well would count them twice. ``receives_settlements`` adds those
+    deposits; it is false for a bank no clearing account settles into, so such
+    a bank costs exactly the queries it always did.
     """
     start_dt, end_dt = day_range_start(start), day_range_end(end)
     owned = bank_account_filter(account, is_default=is_default)
@@ -228,6 +247,8 @@ def _bank_components(*, start, end, account, is_default):
         paid_at__gte=start_dt,
         paid_at__lt=end_dt,
     )
+    if held is not None:
+        card_and_transfer = card_and_transfer.exclude(held)
     # One pass for both figures: the processor keeps its fee, so the shop banks
     # the payment net of it. Refund rows carry a negative commission, so this
     # nets too.
@@ -263,6 +284,18 @@ def _bank_components(*, start, end, account, is_default):
         _component(COMPONENT_EXPENSES, -expenses, direction="out"),
         _component(COMPONENT_STAFF_LOANS, -loans, direction="out"),
     ]
+    if receives_settlements:
+        settled = _sum(
+            clearing.live_settlements().filter(
+                bank_account=account,
+                settled_on__gte=start,
+                settled_on__lte=end,
+            ),
+            "amount_received",
+        )
+        components.append(
+            _component(COMPONENT_SETTLEMENT_IN, settled, direction=_sign(settled))
+        )
     if is_default:
         # Still untagged by nature: a consignor payout names the owner of the
         # goods, not a bank, so it stays with the account untagged money falls
@@ -272,6 +305,61 @@ def _bank_components(*, start, end, account, is_default):
             _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out")
         )
     return components
+
+
+def _sign(amount):
+    return "in" if amount >= 0 else "out"
+
+
+def _clearing_components(account, *, end, start=None):
+    """What a clearing account holds: card takings in, deposits out.
+
+    The takings are the card payments its rule holds (``clearing.claim_q``),
+    net of the fee estimated at each sale — the same two figures a bank showed
+    for them before, moved here. A settlement takes out what reached the bank,
+    and its difference from the estimate is a line of its own, so after a
+    settlement the payments it covered contribute exactly nothing.
+
+    No ``opening_at`` window of its own: the rule already starts at the first
+    held processor day, on the shop's clock. Narrowing it again by the UTC day
+    would drop the takings rung up in the first hours of that day — held, so no
+    bank counts them either, and they would be counted nowhere.
+    """
+    payments = Payment.objects.filter(
+        clearing.claim_q(account), paid_at__lt=day_range_end(end)
+    )
+    settlements = clearing.live_settlements().filter(
+        clearing_account=account, settled_on__lte=end
+    )
+    if start is not None:
+        payments = payments.filter(paid_at__gte=day_range_start(start))
+        settlements = settlements.filter(settled_on__gte=start)
+
+    takings = payments.aggregate(
+        sales=Coalesce(Sum("amount"), Value(ZERO), output_field=MONEY_FIELD),
+        commission=Coalesce(
+            Sum("commission_amount"), Value(ZERO), output_field=MONEY_FIELD
+        ),
+    )
+    paid = settlements.aggregate(
+        received=Coalesce(
+            Sum("amount_received"), Value(ZERO), output_field=MONEY_FIELD
+        ),
+        difference=Coalesce(Sum("difference"), Value(ZERO), output_field=MONEY_FIELD),
+    )
+    difference = paid["difference"] or ZERO
+    return [
+        _component(COMPONENT_SALES, takings["sales"] or ZERO, direction="in"),
+        _component(
+            COMPONENT_COMMISSION, -(takings["commission"] or ZERO), direction="out"
+        ),
+        _component(
+            COMPONENT_SETTLEMENT_OUT, -(paid["received"] or ZERO), direction="out"
+        ),
+        _component(
+            COMPONENT_SETTLEMENT_DIFFERENCE, difference, direction=_sign(difference)
+        ),
+    ]
 
 
 def loan_disbursements(method, start_dt, end_dt, *, account_filter=None):
@@ -438,7 +526,11 @@ def _default_account_ids(accounts):
     Falls back to the first account of the kind when none is flagged, so a shop
     that never opened the settings screen still sees its money somewhere rather
     than seeing it nowhere.
+
+    A clearing account is never one: what it holds is decided by its own rule
+    (``clearing.claim_q``), not by being the account untagged money falls to.
     """
+    accounts = [account for account in accounts if not account.is_clearing]
     defaults = {}
     for account in accounts:
         if account.kind in defaults:
@@ -448,6 +540,30 @@ def _default_account_ids(accounts):
     for account in accounts:
         defaults.setdefault(account.kind, account)
     return defaults
+
+
+def _reported_accounts(all_accounts):
+    """The accounts a position or statement is stated for.
+
+    Every active account, plus any closed clearing account — one that stopped
+    holding still owns the takings of its window, and is shown for as long as
+    it holds any of them (see ``_drop_settled_closed``).
+    """
+    return [
+        account
+        for account in all_accounts
+        if account.is_active or account.is_clearing
+    ]
+
+
+def _drop_settled_closed(rows, *keys):
+    """Leave out a closed clearing account with nothing left in it."""
+    return [
+        row
+        for row in rows
+        if row["account"].is_active
+        or any(row[key] != ZERO for key in keys)
+    ]
 
 
 def account_position(
@@ -500,11 +616,17 @@ def treasury_position(*, as_of=None):
     only be written by pretending they share an opening date.
     """
     as_of = as_of or timezone.localdate()
-    accounts = list(MoneyAccount.objects.filter(is_active=True))
+    all_accounts = list(MoneyAccount.objects.all())
+    accounts = _reported_accounts(all_accounts)
     if not accounts:
         return {"accounts": [], "totals": _totals([]), "as_of": as_of}
 
-    defaults = _default_account_ids(accounts)
+    defaults = _default_account_ids(
+        [account for account in accounts if account.is_active]
+    )
+    clearings = clearing.clearing_accounts(all_accounts)
+    held = clearing.held_by_any_q(clearings)
+    settled_banks = {account.settles_into_id for account in clearings}
     derived = {}
     cash_default = defaults.get(MoneyAccount.Kind.CASH)
     if cash_default is not None:
@@ -526,22 +648,29 @@ def treasury_position(*, as_of=None):
                 account=account,
                 is_default=bank_default is not None
                 and bank_default.pk == account.pk,
+                held=held,
+                receives_settlements=account.pk in settled_banks,
             )
+        elif account.is_clearing:
+            derived[account.pk] = _clearing_components(account, end=as_of)
 
     # Two grouped queries and one ordered pass, whatever the account count.
     transfers = _transfer_totals(end=as_of)
     last_counts = _last_counts(accounts)
 
-    positions = [
-        account_position(
-            account,
-            as_of=as_of,
-            components=derived.get(account.pk),
-            transfers=transfers,
-            last_count=last_counts.get(account.pk),
-        )
-        for account in accounts
-    ]
+    positions = _drop_settled_closed(
+        [
+            account_position(
+                account,
+                as_of=as_of,
+                components=derived.get(account.pk),
+                transfers=transfers,
+                last_count=last_counts.get(account.pk),
+            )
+            for account in accounts
+        ],
+        "expected_balance",
+    )
     return {
         "accounts": positions,
         "totals": _totals(positions),
@@ -596,7 +725,8 @@ def treasury_statement(*, start, end):
     passes ``treasury_position`` makes: one for the cash box, two aggregates
     per bank account, one per provider float.
     """
-    accounts = list(MoneyAccount.objects.filter(is_active=True))
+    all_accounts = list(MoneyAccount.objects.all())
+    accounts = _reported_accounts(all_accounts)
     if not accounts:
         return {"accounts": [], "totals": _statement_totals([]), "start": start, "end": end}
 
@@ -604,7 +734,12 @@ def treasury_statement(*, start, end):
         position["account"].pk: position
         for position in treasury_position(as_of=start - timedelta(days=1))["accounts"]
     }
-    defaults = _default_account_ids(accounts)
+    defaults = _default_account_ids(
+        [account for account in accounts if account.is_active]
+    )
+    clearings = clearing.clearing_accounts(all_accounts)
+    held = clearing.held_by_any_q(clearings)
+    settled_banks = {account.settles_into_id for account in clearings}
     movements = {}
     cash_default = defaults.get(MoneyAccount.Kind.CASH)
     if cash_default is not None:
@@ -628,6 +763,14 @@ def treasury_statement(*, start, end):
                 end=end,
                 account=account,
                 is_default=bank_default is not None and bank_default.pk == account.pk,
+                held=held,
+                receives_settlements=account.pk in settled_banks,
+            )
+        elif account.is_clearing:
+            # The window's own takings and deposits: the earlier ones are in
+            # the opening balance, which is the position the day before.
+            movements[account.pk] = _clearing_components(
+                account, start=start, end=end
             )
 
     incoming, outgoing = _transfer_totals(start=start, end=end)
@@ -656,6 +799,9 @@ def treasury_statement(*, start, end):
                 ),
             }
         )
+    rows = _drop_settled_closed(
+        rows, "opening_balance", "movement_total", "closing_balance"
+    )
     return {
         "accounts": rows,
         "totals": _statement_totals(rows),
@@ -698,18 +844,24 @@ def _statement_totals(rows):
     def total(key, among=money_rows):
         return sum((row[key] for row in among), ZERO).quantize(MONEY_PLACES)
 
-    counted = [row for row in money_rows if row["last_count"] is not None]
+    # A clearing account is proved by the settlements recorded against it,
+    # never by a count, so it is not one of the accounts waiting to be counted.
+    countable = [row for row in money_rows if not row["account"].is_clearing]
+    counted = [row for row in countable if row["last_count"] is not None]
     floats = [row for row in rows if row["account"].kind == MoneyAccount.Kind.PROVIDER]
+    held = [row for row in rows if row["account"].is_clearing]
     return {
         "opening_total": total("opening_balance"),
         "movement_total": total("movement_total"),
         "closing_total": total("closing_balance"),
         "provider_float": total("closing_balance", among=floats),
+        # Inside the closing total, unlike the floats: see ``_totals``.
+        "in_transit": total("closing_balance", among=held),
         "counted_variance_total": sum(
             (row["last_count"].variance for row in counted), ZERO
         ).quantize(MONEY_PLACES),
         "accounts_counted": len(counted),
-        "accounts_total": len(money_rows),
+        "accounts_total": len(countable),
     }
 
 
@@ -732,16 +884,29 @@ def _totals(positions):
     # figure means, which is the same reason consignor obligations sit outside
     # it rather than being netted off.
     provider_float = total_for(MoneyAccount.Kind.PROVIDER)
+    # Card takings the processor is holding ARE inside `total`, unlike a float.
+    # They are cash already earned and owed back to the shop within days — a
+    # receivable from the processor that accountants class with cash — and
+    # until a shop starts holding them they were counted in the bank, inside
+    # this same total. Leaving them out would make the total drop the moment a
+    # shop switched the hold on, with no money having moved.
+    in_transit = total_for(MoneyAccount.Kind.CLEARING)
+    # Proved by its settlements, not by a count: a clearing account never
+    # waits in "not counted yet".
+    countable = [
+        position for position in positions if not position["account"].is_clearing
+    ]
     counted = [
-        position for position in positions if position["last_count"] is not None
+        position for position in countable if position["last_count"] is not None
     ]
     return {
         "cash": cash,
         "bank": bank,
-        "total": (cash + bank).quantize(MONEY_PLACES),
+        "in_transit": in_transit,
+        "total": (cash + bank + in_transit).quantize(MONEY_PLACES),
         "provider_float": provider_float,
         "accounts_counted": len(counted),
-        "accounts_total": len(positions),
+        "accounts_total": len(countable),
         "accounts_with_variance": sum(
             1 for position in counted if position["last_count"].has_variance
         ),
@@ -752,10 +917,13 @@ def expected_balance_for(account, *, as_of=None):
     """The single expected balance for one account — used when recording a
     count, so the snapshot a count stores is the same number the screen showed."""
     as_of = as_of or timezone.localdate()
-    accounts = list(MoneyAccount.objects.filter(is_active=True))
-    defaults = _default_account_ids(accounts)
+    all_accounts = list(MoneyAccount.objects.all())
+    defaults = _default_account_ids(
+        [candidate for candidate in all_accounts if candidate.is_active]
+    )
     default = defaults.get(account.kind)
     is_default = bool(default and default.pk == account.pk)
+    clearings = clearing.clearing_accounts(all_accounts)
     components = None
     if account.kind == MoneyAccount.Kind.PROVIDER:
         components = _provider_components(account, end=as_of)
@@ -767,7 +935,13 @@ def expected_balance_for(account, *, as_of=None):
             end=as_of,
             account=account,
             is_default=is_default,
+            held=clearing.held_by_any_q(clearings),
+            receives_settlements=any(
+                held_by.settles_into_id == account.pk for held_by in clearings
+            ),
         )
+    elif account.is_clearing:
+        components = _clearing_components(account, end=as_of)
     elif is_default:
         components = _cash_components(start=account.opening_at, end=as_of)
     return account_position(account, as_of=as_of, components=components)[
@@ -828,4 +1002,7 @@ __all__ = [
     "COMPONENT_COMMISSION",
     "COMPONENT_TRANSFER_IN",
     "COMPONENT_TRANSFER_OUT",
+    "COMPONENT_SETTLEMENT_IN",
+    "COMPONENT_SETTLEMENT_OUT",
+    "COMPONENT_SETTLEMENT_DIFFERENCE",
 ]

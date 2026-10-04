@@ -274,9 +274,12 @@ WIPED_MODELS = (
     # no longer exist. The recorders, cameras and FTP logins are configuration.
     "surveillance.footageclip",
     "surveillance.footageupload",
-    # treasury — counts and transfers. The money accounts are the seeded chart.
+    # treasury — counts, transfers and card settlements (lines first: they
+    # name the payments being wiped). The money accounts are the seeded chart.
     "treasury.moneycount",
     "treasury.moneytransfer",
+    "treasury.cardsettlementline",
+    "treasury.cardsettlement",
     # wallet — the shop's copy of its wallet top-ups and the expenses they
     # became. The wallet itself (balance, ledger) lives on the relay and a shop
     # reset never touches it; a top-up first seen again after the reset is

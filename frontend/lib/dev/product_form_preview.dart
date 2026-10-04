@@ -26,6 +26,17 @@
 // `?screen=similar-grid` as a copy of a shirt in sizes and colours.
 // `?screen=details` shows the can's details card, whose «منتج مشابه» button
 // opens that copy the way the catalogue does.
+//
+// Identified stock: `?tracking=serial|batch|both` switches the shop's trades on
+// for the new-product form, which then shows its tracking section instead of
+// the expiry switch. `?screen=tracked-details` is a serial handset's page with
+// its tracking card, `?screen=tracked-edit` its edit sheet, and
+// `?screen=tracking-settings` the settings page that switches the trades on.
+// `?screen=tracked-switch` is the edit sheet of a phone still counted by
+// quantity with 30 on the shelf: choose «رقم تسلسلي» or «دفعات وصلاحية» and
+// save to see the server's identify-later question, as the real guard asks it.
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -33,6 +44,8 @@ import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/bought_together_product.dart';
 import 'package:pointy_frontend/src/data/models/catalog_identity_conflict.dart';
+import 'package:pointy_frontend/src/data/models/customer_asset.dart';
+import 'package:pointy_frontend/src/data/models/identified_stock_settings.dart';
 import 'package:pointy_frontend/src/data/models/modifier_group.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
@@ -40,9 +53,13 @@ import 'package:pointy_frontend/src/data/models/product_category.dart';
 import 'package:pointy_frontend/src/data/models/product_category_query.dart';
 import 'package:pointy_frontend/src/data/models/product_draft.dart';
 import 'package:pointy_frontend/src/data/models/product_unit.dart';
+import 'package:pointy_frontend/src/data/models/product_update_draft.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_draft.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
+import 'package:pointy_frontend/src/data/models/shop_settings.dart';
+import 'package:pointy_frontend/src/data/models/system_backup.dart';
+import 'package:pointy_frontend/src/data/models/tracking_mode.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/variant_option.dart';
 import 'package:pointy_frontend/src/data/models/variant_option_value.dart';
@@ -55,11 +72,16 @@ import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.d
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/catalog_view_model.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/product_details_view_model.dart';
+import 'package:pointy_frontend/src/features/catalog/view_models/tracking_mode_refusal.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_form.dart';
+import 'package:pointy_frontend/src/features/catalog/views/product_parent_edit_sheet.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_variant_form_sheet.dart';
+import 'package:pointy_frontend/src/features/settings/view_models/shop_settings_view_model.dart';
+import 'package:pointy_frontend/src/features/settings/views/identified_stock_settings_page.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/responsive/responsive.dart';
+import 'package:pointy_frontend/src/shared/tracking/tracking_features.dart';
 
 void main() => runApp(const _PreviewApp());
 
@@ -120,6 +142,19 @@ class _PreviewApp extends StatelessWidget {
       ],
       theme: PointyTheme.light(),
       darkTheme: PointyTheme.dark(),
+      // The shop's trades, as the app installs them above the Navigator.
+      builder: (context, child) => TrackingFeaturesScope(
+        features: switch (Uri.base.queryParameters['tracking']) {
+          'serial' => const TrackingFeatures(serial: true),
+          'batch' => const TrackingFeatures(batch: true),
+          'both' => const TrackingFeatures(serial: true, batch: true),
+          _ =>
+            Uri.base.queryParameters['screen']?.startsWith('tracked') ?? false
+                ? const TrackingFeatures(serial: true, batch: true)
+                : TrackingFeatures.none,
+        },
+        child: child!,
+      ),
       home: _Home(rejectSaves: rejectSaves),
     );
   }
@@ -164,8 +199,64 @@ class _HomeState extends State<_Home> {
     super.dispose();
   }
 
+  late final _phoneDetails = ProductDetailsViewModel(
+    _catalog,
+    _FakePurchaseRepository(),
+    _FakeSaleRepository(),
+    _trackedPhone,
+    shouldLoadSaleHistory: false,
+    shouldLoadPurchaseHistory: false,
+  );
+
+  late final _untrackedPhoneDetails = ProductDetailsViewModel(
+    _catalog,
+    _FakePurchaseRepository(),
+    _FakeSaleRepository(),
+    _untrackedPhone,
+    shouldLoadSaleHistory: false,
+    shouldLoadPurchaseHistory: false,
+  );
+
   @override
   Widget build(BuildContext context) {
+    final screen = Uri.base.queryParameters['screen'];
+    if (screen == 'tracking-settings') {
+      return IdentifiedStockSettingsPage(
+        viewModel: ShopSettingsViewModel(_FakeShopSettingsRepository()),
+      );
+    }
+    if (screen == 'tracked-edit' || screen == 'tracked-switch') {
+      return Scaffold(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: ProductParentEditSheet(
+              viewModel: screen == 'tracked-edit'
+                  ? _phoneDetails
+                  : _untrackedPhoneDetails,
+            ),
+          ),
+        ),
+      );
+    }
+    if (screen == 'tracked-details') {
+      return Scaffold(
+        body: ProductDetailsView(
+          viewModel: _phoneDetails,
+          inventoryRepository: InventoryRepository(PosApiService()),
+          printingRepository: PrintingRepository(PosApiService()),
+          purchaseRepository: _FakePurchaseRepository(),
+          shopSettingsRepository: ShopSettingsRepository(PosApiService()),
+          capabilities: AuthorizationCapabilities.forUser(
+            PosUser.fromJson(const {
+              'id': 1,
+              'username': 'manager',
+              'role': 'manager',
+            }),
+          ),
+        ),
+      );
+    }
     if (_showDetails) {
       return Scaffold(
         body: ProductDetailsView(
@@ -257,6 +348,77 @@ class _HomeState extends State<_Home> {
   }
 }
 
+/// A handset model whose every article carries an IMEI.
+const _trackedPhone = Product(
+  id: 30,
+  name: 'آيفون 13 برو',
+  quantityOnHand: 4,
+  trackingMode: TrackingMode.serial,
+  assetTypeId: 1,
+  warrantyDays: 365,
+  defaultVariant: ProductVariant(
+    id: 300,
+    productId: 30,
+    sku: 'IP13P-256',
+    unitPrice: 4200,
+    isDefault: true,
+    trackingMode: TrackingMode.serial,
+  ),
+);
+
+/// A handset model the shop has sold by count for a year, thirty on the shelf.
+const _untrackedPhone = Product(
+  id: 31,
+  name: 'سامسونج A54',
+  quantityOnHand: 30,
+  defaultVariant: ProductVariant(
+    id: 310,
+    productId: 31,
+    sku: 'A54-128',
+    unitPrice: 1650,
+    isDefault: true,
+  ),
+);
+
+/// The shop's settings, with handsets switched on and lots not.
+class _FakeShopSettingsRepository extends ShopSettingsRepository {
+  _FakeShopSettingsRepository() : super(PosApiService());
+
+  var _settings = ShopSettings.fromJson(const {
+    'shop_name': 'محل الأمين للهواتف',
+    'enable_serialized_inventory': true,
+    'enable_batch_tracking': false,
+    'serialized_capture_later_allowed': true,
+    'consignment_clause_owner_risk':
+        'الأمانة على مسؤولية صاحبها، ولا يضمن المحل ما يصيبها من تلف أو فقد.',
+    'consignment_clause_shop_liable_except_fm':
+        'يضمن المحل الأمانة ما عدا الظروف القاهرة كالحريق والسرقة بالإكراه.',
+    'consignment_clause_shop_liable': 'يضمن المحل الأمانة ضمانًا كاملًا.',
+  });
+
+  @override
+  Future<Result<ShopSettings>> loadSettings() async => Ok(_settings);
+
+  @override
+  Future<Result<ShopSettings>> updateIdentifiedStockSettings(
+    IdentifiedStockSettings settings,
+  ) async {
+    _settings = ShopSettings.fromJson({
+      'shop_name': _settings.shopName,
+      ...settings.toJson(),
+    });
+    return Ok(_settings);
+  }
+
+  @override
+  Future<Result<BackupOperationsStatus>> loadBackupOperationsStatus() async =>
+      Error(Exception('n/a'));
+
+  @override
+  Future<Result<List<BackupDestination>>> loadBackupDestinations() async =>
+      Error(Exception('n/a'));
+}
+
 const _previewProduct = Product(
   id: 1,
   name: 'شاي أخضر',
@@ -337,6 +499,15 @@ class _FakeCatalogRepository extends CatalogRepository {
 
   @override
   Future<Result<String>> nextVariantSku() async => Ok('$_nextSku');
+
+  @override
+  Future<Result<List<CustomerAssetType>>> loadAssetTypes() async {
+    return const Ok([
+      CustomerAssetType(id: 1, name: 'هاتف', slug: 'phone', tracksImei: true),
+      CustomerAssetType(id: 2, name: 'حاسوب محمول', slug: 'laptop'),
+      CustomerAssetType(id: 3, name: 'مركبة', slug: 'vehicle', tracksVin: true),
+    ]);
+  }
 
   @override
   Future<Result<ProductCategoryPage>> loadProductCategories({
@@ -449,9 +620,54 @@ class _FakeCatalogRepository extends CatalogRepository {
     );
   }
 
+  /// The tracking guard over a stocked shelf: the question first, as the
+  /// product endpoint words it, then the save once the sheet sends the answer.
   @override
-  Future<Result<Product>> loadProduct(int id) async =>
-      Ok(id == _similarCola.id ? _similarCola : _previewProduct);
+  Future<Result<Product>> updateProduct({
+    required int id,
+    required ProductUpdateDraft draft,
+  }) async {
+    if (id != _untrackedPhone.id) {
+      return super.updateProduct(id: id, draft: draft);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final mode = draft.tracking?.mode ?? TrackingMode.quantity;
+    if (mode.isTracked && !draft.identifyStockLater) {
+      return Error(
+        PosApiException(
+          message: 'Product update failed with status 400',
+          statusCode: 400,
+          responseBody: jsonEncode({
+            'tracking_mode': [
+              'في المخزون 30 قطعة من هذا المنتج بلا أرقام. عند التفعيل '
+                  'تُسجَّل «بانتظار المعرّف»، ولا تُباع قطعة منها حتى يُدخل رقمها.',
+            ],
+            'code': [trackingIdentifyLaterCode],
+            'on_hand': ['30'],
+            'current_mode': ['quantity'],
+            'requested_mode': [mode.wire],
+          }),
+        ),
+      );
+    }
+    return Ok(
+      Product(
+        id: id,
+        name: draft.name,
+        quantityOnHand: _untrackedPhone.quantityOnHand,
+        trackingMode: mode,
+        defaultVariant: _untrackedPhone.defaultVariant,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<Product>> loadProduct(int id) async => Ok(switch (id) {
+    _ when id == _similarCola.id => _similarCola,
+    _ when id == _trackedPhone.id => _trackedPhone,
+    _ when id == _untrackedPhone.id => _untrackedPhone,
+    _ => _previewProduct,
+  });
 
   @override
   Future<Result<List<BoughtTogetherProduct>>> loadBoughtTogether(

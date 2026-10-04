@@ -659,6 +659,7 @@ def _profitability_section(request, period):
         payroll_accrued = payroll_cost(period_start, period_end)
 
     payment_commissions = Decimal("0.00")
+    settlement_fees = Decimal("0.00")
     if _can(request.user, "payments.view_payment"):
         payment_commissions = _payments(request).filter(
             created_at__gte=period["start"],
@@ -670,6 +671,13 @@ def _profitability_section(request, period):
                 output_field=MONEY_FIELD,
             )
         )["total"]
+        # The correction to that estimate a card processor's deposit reveals —
+        # the same definition the profit report reads.
+        from apps.treasury.settlements import settlement_fee_total
+
+        settlement_fees = settlement_fee_total(
+            period["start"].date(), period["end"].date()
+        )
 
     purchase_spend = Decimal("0.00")
     if _can(request.user, "purchasing.view_purchaseorder"):
@@ -691,13 +699,16 @@ def _profitability_section(request, period):
             total=Coalesce(Sum("amount"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
         )["total"]
 
-    operating_expenses = payroll_paid + payment_commissions + ad_hoc_expenses
+    operating_expenses = (
+        payroll_paid + payment_commissions + settlement_fees + ad_hoc_expenses
+    )
     return {
         "summary": {
             "gross_profit": _money(gross_profit),
             "payroll_paid_total": _money(payroll_paid),
             "payroll_accrued_total": _money(payroll_accrued),
             "payment_commission_total": _money(payment_commissions),
+            "card_settlement_fee_total": _money(settlement_fees),
             "ad_hoc_expense_total": _money(ad_hoc_expenses),
             "purchase_spend_total": _money(purchase_spend),
             "operating_expense_total": _money(operating_expenses),

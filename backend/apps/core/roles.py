@@ -74,6 +74,7 @@ INITIAL_SETUP_SHOP_ACTIVITY_MODELS = (
     ("discounts", "discountrule"),
     ("treasury", "moneycount"),
     ("treasury", "moneytransfer"),
+    ("treasury", "cardsettlement"),
     # Peripherals somebody configured by hand. Deliberately NOT here:
     # ``printing.printagent`` and ``price_checker.pricecheckerdevice``, which
     # self-register over the LAN — a kiosk or print agent left running from an
@@ -311,6 +312,11 @@ ACCOUNTANT_PERMISSION_CODES = (
     "treasury.add_moneytransfer",
     "treasury.view_moneycount",
     "treasury.add_moneycount",
+    # Recording the processor's deposit of held card takings, and undoing one
+    # recorded against the wrong days — the transfer rights' sibling.
+    "treasury.view_cardsettlement",
+    "treasury.add_cardsettlement",
+    "treasury.cancel_cardsettlement",
     "attendance.view_biotimeconnection",
     "attendance.change_biotimeconnection",
     "attendance.view_attendanceprofile",
@@ -528,6 +534,7 @@ AUDITOR_PERMISSION_CODES = (
     "treasury.view_moneyaccount",
     "treasury.view_moneytransfer",
     "treasury.view_moneycount",
+    "treasury.view_cardsettlement",
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",

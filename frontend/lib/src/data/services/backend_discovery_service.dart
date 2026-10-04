@@ -6,6 +6,10 @@ import 'package:http/http.dart' as http;
 
 import 'backend_discovery_udp_stub.dart'
     if (dart.library.io) 'backend_discovery_udp_io.dart';
+import 'lan_interfaces.dart';
+import 'machine_lan_address.dart';
+import 'server_presence_stub.dart'
+    if (dart.library.io) 'server_presence_io.dart';
 import 'subnet_sweep_stub.dart' if (dart.library.io) 'subnet_sweep_io.dart';
 
 /// The loopback fallbacks, ordered so a **web** build never adopts a backend on
@@ -51,6 +55,14 @@ typedef UdpDiscovery = Future<List<Uri>> Function({Duration timeout});
 typedef SubnetSweep =
     Future<List<String>> Function({String? expectedInstallationId});
 
+/// Whether something accepts a connection at a URL's host and port (see
+/// `probeServerPresence`), injectable for the same reason.
+typedef ServerPresenceProbe =
+    Future<bool> Function(Uri url, {Duration timeout});
+
+/// What a probe that has not answered within the short deadline resolves to.
+final Object _noAnswerYet = Object();
+
 class PointyBackendEndpoint {
   const PointyBackendEndpoint({
     required this.apiBaseUrl,
@@ -85,14 +97,20 @@ class BackendDiscoveryService {
     required http.Client client,
     required String defaultApiBaseUrl,
     this.udpTimeout = const Duration(seconds: 2),
+    this.awayUdpTimeout = const Duration(milliseconds: 800),
     this.probeTimeout = const Duration(milliseconds: 900),
+    this.patientProbeTimeout = const Duration(seconds: 6),
     this.manualProbeTimeout = const Duration(seconds: 5),
     UdpDiscovery? udpDiscovery,
     SubnetSweep? subnetSweep,
+    ServerPresenceProbe? serverPresence,
+    MachineAddressReader? readAddresses,
   }) : _client = client,
        _defaultApiBaseUrl = defaultApiBaseUrl,
        _udpDiscovery = udpDiscovery ?? discoverBackendApiBaseUrls,
-       _subnetSweep = subnetSweep ?? sweepSubnetForBackends;
+       _subnetSweep = subnetSweep ?? sweepSubnetForBackends,
+       _serverPresence = serverPresence ?? probeServerPresence,
+       _readAddresses = readAddresses ?? readMachineIpv4Addresses;
 
   final http.Client _client;
   final String _defaultApiBaseUrl;
@@ -100,9 +118,23 @@ class BackendDiscoveryService {
   /// How long the UDP broadcast listens before giving up.
   final Duration udpTimeout;
 
-  /// Per-HTTP-probe timeout. Kept short so a dead stored IP can't stall the
-  /// race — it loses to UDP/other candidates instead of gating discovery.
+  /// How long it listens when this device is plainly not on the network where
+  /// the shop's server was last found (see [isAwayFromServerNetwork]). A reply
+  /// on a LAN comes back in milliseconds; this only stops a phone at home from
+  /// waiting out the full listen before it may use the relay.
+  final Duration awayUdpTimeout;
+
+  /// How long a candidate has to answer before it must show that it is there
+  /// at all. Nothing waits on a candidate past this unless something accepted
+  /// a connection at its address — so a stored address on another network, or
+  /// a server that is off, costs no more than this.
   final Duration probeTimeout;
+
+  /// How long a candidate whose address accepted a connection may take to
+  /// answer. A busy backend, or the first answer through a Windows port forward
+  /// into its VM, can take seconds; with only [probeTimeout] a till sitting
+  /// next to its server lost every race and went out over the internet.
+  final Duration patientProbeTimeout;
 
   /// Timeout for an address the operator typed. Nothing races it: the operator
   /// is waiting on this one answer, so a server that is merely slow to answer
@@ -112,6 +144,8 @@ class BackendDiscoveryService {
 
   final UdpDiscovery _udpDiscovery;
   final SubnetSweep _subnetSweep;
+  final ServerPresenceProbe _serverPresence;
+  final MachineAddressReader _readAddresses;
 
   /// Finds the LAN backend.
   ///
@@ -121,6 +155,9 @@ class BackendDiscoveryService {
   /// core fix for the "stale IP" problem — a stored IP that has since been
   /// reassigned is just one losing runner in the race, not a gate, and a
   /// different shop's server squatting the old IP is rejected on identity.
+  ///
+  /// Each runner is patient only where something is there: see
+  /// [_probeCandidate].
   ///
   /// When [includeSweep] is set and the fast path finds nothing, the local /24
   /// is swept in a background isolate — the escape hatch for networks that drop
@@ -137,8 +174,8 @@ class BackendDiscoveryService {
     ]);
 
     final fast = await _race([
-      for (final candidate in candidates) () => _probe(candidate),
-      () => _discoverViaUdp(expectedInstallationId),
+      for (final candidate in candidates) () => _probeCandidate(candidate),
+      () => _discoverViaUdp(expectedInstallationId, preferredApiBaseUrls),
     ], expectedInstallationId);
     if (fast != null) {
       return fast;
@@ -150,17 +187,42 @@ class BackendDiscoveryService {
 
     final sweepUrls = await _sweep(expectedInstallationId);
     return _race([
-      for (final url in sweepUrls) () => _probe(url),
+      for (final url in sweepUrls) () => _probeCandidate(url),
     ], expectedInstallationId);
   }
 
   Future<PointyBackendEndpoint?> _discoverViaUdp(
     String? expectedInstallationId,
+    List<String> preferredApiBaseUrls,
   ) async {
-    final uris = await _discoverUDP();
+    final away = await _isAwayFrom(preferredApiBaseUrls);
+    final uris = await _discoverUDP(away ? awayUdpTimeout : udpTimeout);
     return _race([
-      for (final uri in uris) () => _probe(uri.toString()),
+      for (final uri in uris) () => _probeCandidate(uri.toString()),
     ], expectedInstallationId);
+  }
+
+  /// Whether this device is plainly elsewhere than the network its server
+  /// was last found on. Not knowing — no stored address, a stored name, an
+  /// unreadable interface list, a web build — is never "away".
+  Future<bool> _isAwayFrom(List<String> preferredApiBaseUrls) async {
+    final serverHosts = [
+      for (final url in preferredApiBaseUrls)
+        if (url.trim().isNotEmpty)
+          Uri.tryParse(_normalizeApiBaseUrl(url))?.host ?? '',
+    ];
+    if (serverHosts.isEmpty) {
+      return false;
+    }
+    try {
+      final own = await _readAddresses();
+      return isAwayFromServerNetwork(
+        serverHosts: serverHosts,
+        ownAddresses: [for (final candidate in own) candidate.address],
+      );
+    } on Object {
+      return false;
+    }
   }
 
   /// Resolves with the first thunk result that is a non-null, accepted
@@ -224,13 +286,56 @@ class BackendDiscoveryService {
 
   /// Probes a single address the user typed, with [manualProbeTimeout].
   /// Exposed for the manual-connection flow.
-  Future<PointyBackendEndpoint?> probe(String rawApiBaseUrl) =>
-      _probe(rawApiBaseUrl, timeout: manualProbeTimeout);
+  Future<PointyBackendEndpoint?> probe(String rawApiBaseUrl) {
+    final uri = _discoveryUri(rawApiBaseUrl);
+    if (uri == null) {
+      return Future.value(null);
+    }
+    return _fetchEndpoint(
+      uri,
+    ).timeout(manualProbeTimeout, onTimeout: () => null);
+  }
 
-  Future<PointyBackendEndpoint?> _probe(
-    String rawApiBaseUrl, {
-    Duration? timeout,
-  }) async {
+  /// One runner of the race.
+  ///
+  /// An answer within [probeTimeout] settles it, found or not. Past that the
+  /// candidate is kept until [patientProbeTimeout] only if something accepted
+  /// a connection at its address: that is the shop's server, just slow to
+  /// answer. Where nothing did — an address on some other network, a server
+  /// that is switched off — it is dropped at the short deadline, so a device
+  /// away from the shop reaches the relay as quickly as it ever did.
+  Future<PointyBackendEndpoint?> _probeCandidate(String rawApiBaseUrl) async {
+    final uri = _discoveryUri(rawApiBaseUrl);
+    if (uri == null) {
+      return null;
+    }
+    final answer = _fetchEndpoint(uri);
+    final present = _isPresent(uri);
+    final early = await answer
+        .then<Object?>((endpoint) => endpoint)
+        .timeout(probeTimeout, onTimeout: () => _noAnswerYet);
+    if (!identical(early, _noAnswerYet)) {
+      return early as PointyBackendEndpoint?;
+    }
+    if (!await present) {
+      return null;
+    }
+    final remaining = patientProbeTimeout - probeTimeout;
+    if (remaining <= Duration.zero) {
+      return null;
+    }
+    return answer.timeout(remaining, onTimeout: () => null);
+  }
+
+  Future<bool> _isPresent(Uri uri) async {
+    try {
+      return await _serverPresence(uri, timeout: probeTimeout);
+    } on Object {
+      return false;
+    }
+  }
+
+  Uri? _discoveryUri(String rawApiBaseUrl) {
     final apiBaseUrl = _normalizeApiBaseUrl(rawApiBaseUrl);
     if (apiBaseUrl.isEmpty) {
       return null;
@@ -239,8 +344,15 @@ class BackendDiscoveryService {
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
       return null;
     }
+    return uri;
+  }
+
+  /// The endpoint answering at [uri], or null for anything else. Never
+  /// throws, and sets no deadline of its own: each caller decides how long to
+  /// wait.
+  Future<PointyBackendEndpoint?> _fetchEndpoint(Uri uri) async {
     try {
-      final response = await _client.get(uri).timeout(timeout ?? probeTimeout);
+      final response = await _client.get(uri);
       if (response.statusCode != 200) {
         return null;
       }
@@ -260,9 +372,9 @@ class BackendDiscoveryService {
     }
   }
 
-  Future<List<Uri>> _discoverUDP() async {
+  Future<List<Uri>> _discoverUDP(Duration timeout) async {
     try {
-      return await _udpDiscovery(timeout: udpTimeout);
+      return await _udpDiscovery(timeout: timeout);
     } on Object {
       return const [];
     }

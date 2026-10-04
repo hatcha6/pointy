@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/authorization.dart';
+import '../../../core/error_messages.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -72,6 +74,12 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool get hasPaymentError => _hasPaymentError;
   PurchaseOrderActionError? get statusError => _statusError;
   PurchaseOrderActionError? get adjustmentError => _adjustmentError;
+
+  /// The server's own Arabic sentence for a refused adjustment — "SN-2 is not
+  /// in stock", "1 handset named for a quantity of 2" — which says more than
+  /// any generic copy can. Null when it sent none, or none in Arabic.
+  String? get adjustmentErrorDetail => _adjustmentErrorDetail;
+  String? _adjustmentErrorDetail;
 
   bool get canSubmit =>
       _capabilities.canEditDraftPurchaseOrder && _order.status == 'draft';
@@ -183,6 +191,19 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
 
   Future<bool> cancel() {
     return _changeStatus(_purchaseRepository.cancelOrder(_order.id));
+  }
+
+  /// The handsets of [variantId] that could go back on this order: in stock,
+  /// identified, and where its delivery landed. [code] narrows to a scan.
+  Future<Result<StockUnitPage>> loadReturnableUnits(
+    int variantId, {
+    String code = '',
+  }) {
+    return _purchaseRepository.loadReturnableUnits(
+      variantId: variantId,
+      warehouseId: _order.warehouseId,
+      code: code,
+    );
   }
 
   Future<bool> returnItems({
@@ -382,6 +403,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     _isAdjusting = true;
     _hasAdjustmentError = false;
     _adjustmentError = null;
+    _adjustmentErrorDetail = null;
     notifyListeners();
 
     final result = await action;
@@ -395,6 +417,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
       case Error<PurchaseOrder>():
         _hasAdjustmentError = true;
         _adjustmentError = _actionErrorFromException(result.exception);
+        _adjustmentErrorDetail = arabicBackendDetailFor(result.exception);
     }
 
     _isAdjusting = false;

@@ -130,6 +130,7 @@ import 'features/contacts/views/supplier_details_screen.dart';
 import 'shared/async_selection/async_multi_select_picker.dart';
 import 'shared/command_palette/command_palette.dart';
 import 'shared/formatters.dart';
+import 'shared/printing/print_paper_mismatch_message.dart';
 import 'shared/navigation/ai_deep_link.dart';
 import 'shared/navigation/app_navigation.dart';
 import 'core/analytics_screen_tracker.dart';
@@ -597,6 +598,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         saleRepository: dependencies.saleRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
         contactRepository: dependencies.contactRepository,
+        trackedStockRepository: dependencies.trackedStockRepository,
         capabilities: capabilities,
         analyticsEngine: dependencies.analyticsEngine,
         navigation: this,
@@ -772,6 +774,7 @@ class _AuthenticatedRoutes implements AppNavigation {
                 shopSettingsRepository: dependencies.shopSettingsRepository,
                 surveillanceRepository: _surveillanceRepositoryOrNull,
                 catalogRepository: dependencies.catalogRepository,
+                trackedStockRepository: dependencies.trackedStockRepository,
                 contactRepository: dependencies.contactRepository,
                 initialOrder: order,
                 capabilities: capabilities,
@@ -789,6 +792,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           shopSettingsRepository: dependencies.shopSettingsRepository,
           surveillanceRepository: _surveillanceRepositoryOrNull,
           catalogRepository: dependencies.catalogRepository,
+          trackedStockRepository: dependencies.trackedStockRepository,
           contactRepository: dependencies.contactRepository,
           initialOrder: order,
           capabilities: capabilities,
@@ -832,6 +836,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         printingRepository: dependencies.printingRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
         catalogRepository: dependencies.catalogRepository,
+        trackedStockRepository: dependencies.trackedStockRepository,
         capabilities: capabilities,
         navigation: this,
         analyticsEngine: dependencies.analyticsEngine,
@@ -1398,6 +1403,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         navigation: this,
         repository: dependencies.trackedStockRepository,
         canQuarantine: capabilities.canQuarantineBatch,
+        canIdentify: capabilities.canIdentifyStockUnits,
       ),
     );
   }
@@ -1454,6 +1460,29 @@ class _AuthenticatedRoutes implements AppNavigation {
     BuildContext context,
     BusinessAlert alert,
   ) async {
+    // Identified stock is answered where it lives — the articles still owed a
+    // number, the lots about to turn, the owners waiting to be paid — not in
+    // the activity log, which can only say that something happened.
+    final trackedStock = switch (alert.type) {
+      BusinessAlertType.missingIdentifiers
+          when capabilities.canViewStockUnits =>
+        stockUnitsRouteBuilder,
+      BusinessAlertType.expiringStock when capabilities.canViewStockBatches =>
+        stockBatchesRouteBuilder,
+      BusinessAlertType.openCustodyClaims || BusinessAlertType.unclaimedPayouts
+          when capabilities.canViewConsignmentPayables =>
+        consignmentPayablesRouteBuilder,
+      _ => null,
+    };
+    if (trackedStock != null) {
+      if (alert.type == BusinessAlertType.missingIdentifiers) {
+        dependencies.trackedStockViewModel.setMissingOnly(true, reload: false);
+      }
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.pushReplacement(MaterialPageRoute<void>(builder: trackedStock));
+      return;
+    }
     if (alert.type == BusinessAlertType.payrollReady) {
       if (!capabilities.canViewPayroll) {
         return;
@@ -1462,6 +1491,19 @@ class _AuthenticatedRoutes implements AppNavigation {
       navigator.pop();
       navigator.pushReplacement(
         MaterialPageRoute<void>(builder: employeePayrollRouteBuilder),
+      );
+      return;
+    }
+    // Late card money is answered in the treasury: record the deposit that
+    // arrived, or see which day is still missing.
+    if (alert.type == BusinessAlertType.cardSettlementOverdue) {
+      if (!capabilities.canViewMoneyAccounts) {
+        return;
+      }
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.pushReplacement(
+        MaterialPageRoute<void>(builder: paymentsRouteBuilder),
       );
       return;
     }
@@ -1505,6 +1547,7 @@ class _AuthenticatedRoutes implements AppNavigation {
                   shopSettingsRepository: dependencies.shopSettingsRepository,
                   surveillanceRepository: _surveillanceRepositoryOrNull,
                   catalogRepository: dependencies.catalogRepository,
+                  trackedStockRepository: dependencies.trackedStockRepository,
                   contactRepository: dependencies.contactRepository,
                   initialOrder: result.value,
                   capabilities: capabilities,
@@ -2128,10 +2171,13 @@ class _AuthenticatedRoutes implements AppNavigation {
         includePrice: includePrice,
       ),
     ]);
+    final paperMismatch = result.paperMismatch;
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          result.isSuccess
+          paperMismatch != null
+              ? printPaperMismatchMessage(l10n, paperMismatch)
+              : result.isSuccess
               ? l10n.commandPaletteLabelPrinted
               : result.unassignedRole != null
               ? l10n.barcodeLabelNoPrinter
@@ -2364,6 +2410,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           shopSettingsRepository: dependencies.shopSettingsRepository,
           surveillanceRepository: _surveillanceRepositoryOrNull,
           catalogRepository: dependencies.catalogRepository,
+          trackedStockRepository: dependencies.trackedStockRepository,
           contactRepository: dependencies.contactRepository,
           initialOrder: order,
           capabilities: capabilities,

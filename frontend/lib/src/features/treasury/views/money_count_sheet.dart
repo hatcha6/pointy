@@ -16,7 +16,7 @@ Future<void> showMoneyCountPickerSheet(
   BuildContext context, {
   required MoneyPositionViewModel viewModel,
 }) async {
-  final entries = viewModel.accounts;
+  final entries = viewModel.movableAccounts;
   if (entries.length == 1) {
     return showMoneyCountSheet(
       context,

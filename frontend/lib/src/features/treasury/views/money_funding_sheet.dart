@@ -73,11 +73,13 @@ class _MoneyFundingSheetState extends State<_MoneyFundingSheet> {
     // cash in hand, and the picker is one tap away when it is not.
     _accountId =
         widget.accountId ??
-        widget.viewModel.accounts
+        widget.viewModel.movableAccounts
             .where((entry) => entry.account.isCash)
             .map((entry) => entry.account.id)
             .firstOrNull ??
-        widget.viewModel.accounts.map((entry) => entry.account.id).firstOrNull;
+        widget.viewModel.movableAccounts
+            .map((entry) => entry.account.id)
+            .firstOrNull;
   }
 
   @override
@@ -168,7 +170,7 @@ class _MoneyFundingSheetState extends State<_MoneyFundingSheet> {
                 label: _isAddingFunds
                     ? l10n.treasuryAddFundsTo
                     : l10n.treasuryWithdrawFrom,
-                accounts: widget.viewModel.accounts,
+                accounts: widget.viewModel.movableAccounts,
                 value: _accountId,
                 onChanged: (value) => setState(() => _accountId = value),
               ),

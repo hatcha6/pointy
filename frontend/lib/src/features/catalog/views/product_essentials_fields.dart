@@ -43,7 +43,7 @@ class ProductEssentialsFields extends StatelessWidget {
     required this.unit,
     required this.onUnitChanged,
     required this.tracksExpiry,
-    required this.onTracksExpiryChanged,
+    this.onTracksExpiryChanged,
     required this.onEnter,
     required this.requiredValidator,
     required this.numberValidator,
@@ -72,7 +72,11 @@ class ProductEssentialsFields extends StatelessWidget {
   final String unit;
   final ValueChanged<String> onUnitChanged;
   final bool tracksExpiry;
-  final ValueChanged<bool> onTracksExpiryChanged;
+
+  /// Null hides the switch: a shop that identifies stock chooses how in the
+  /// form's tracking section instead, and two controls over one choice is how
+  /// they end up disagreeing.
+  final ValueChanged<bool>? onTracksExpiryChanged;
 
   /// Enter in one of the essential text fields, named by its focus node.
   final ValueChanged<FocusNode> onEnter;
@@ -251,7 +255,7 @@ class ProductEssentialsFields extends StatelessWidget {
             if (showsSellingFields) priceField,
             categoryField,
             unitField,
-            expiryField,
+            if (onTracksExpiryChanged != null) expiryField,
           ],
         ),
       ],

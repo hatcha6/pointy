@@ -83,9 +83,22 @@ class _Running:
 class FtpServerTests(TestCase):
     def setUp(self):
         quiet_library_logging()
+        # addCleanup, not tearDown: it also runs when setUp itself fails,
+        # which tearDown does not, and a failing test must not leave its
+        # uploads behind in the temp folder.
         self._root = tempfile.mkdtemp(prefix="pointy-ftp-")
-        self._override = override_settings(POINTY_FOOTAGE_ROOT=self._root)
+        self.addCleanup(shutil.rmtree, self._root, ignore_errors=True)
+        # A floor of zero: the free space on the machine running the tests
+        # is not the test's business (a full laptop refused every upload with
+        # "452 Insufficient storage space"). The floor itself is tested by
+        # patching disk_budget, in test_archive.
+        self._override = override_settings(
+            POINTY_FOOTAGE_ROOT=self._root,
+            POINTY_FOOTAGE_MIN_FREE_GB=0,
+            POINTY_FOOTAGE_MIN_FREE_SHARE=0,
+        )
         self._override.enable()
+        self.addCleanup(self._override.disable)
         self.recorder = Recorder.objects.create(connection=Recorder.Connection.FTP, name="FTP")
         FtpAccount.objects.create(
             recorder=self.recorder,
@@ -102,10 +115,6 @@ class FtpServerTests(TestCase):
         self.events = EventSink()
         self.guard = StorageGuard()
         self.lockout = LoginLockout()
-
-    def tearDown(self):
-        self._override.disable()
-        shutil.rmtree(self._root, ignore_errors=True)
 
     def serve(self, **overrides):
         options = dict(

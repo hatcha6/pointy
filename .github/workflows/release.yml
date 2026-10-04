@@ -484,6 +484,31 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      # `flutter build linux --build-name` sets the CMake version but never
+      # reaches version.json: Flutter's CMake backend (tool_backend.dart) does
+      # not forward BuildName/BuildNumber to `flutter assemble`, so the bundle
+      # keeps pubspec's 1.0.0+1. package_info_plus reads that file on Linux,
+      # which made every Linux till report 1.0.0 and offer itself the same
+      # update forever. Stamp it before both packages copy the bundle.
+      - name: Stamp version.json (linux)
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          BUILD_NUMBER: ${{ needs.version.outputs.build_number }}
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import json, os
+          path = "frontend/build/linux/x64/release/bundle/data/flutter_assets/version.json"
+          with open(path) as f:
+              info = json.load(f)
+          info["version"] = os.environ["VERSION"]
+          info["build_number"] = os.environ["BUILD_NUMBER"]
+          with open(path, "w") as f:
+              json.dump(info, f)
+          print(f"{path}: {info}")
+          EOF
+
       - name: Package portable tar.gz
         shell: bash
         run: |

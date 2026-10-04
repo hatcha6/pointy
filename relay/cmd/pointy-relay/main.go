@@ -72,6 +72,12 @@ func run(args []string) error {
 	if len(args) == 0 {
 		return usageError("missing command")
 	}
+	// Errors from here on print only this command's usage, not the whole tool's.
+	usageTopic = args[0]
+	if len(args) > 1 && wantsCommandHelp(args[0], args[1]) {
+		printCommandUsage(args[0])
+		return nil
+	}
 	switch args[0] {
 	case "server":
 		return runServer(args[1:])
@@ -103,7 +109,11 @@ func run(args []string) error {
 		fmt.Println(version)
 		return nil
 	case "help", "-h", "--help":
-		printUsage()
+		if len(args) > 1 && findUsageSection(args[1]) != nil {
+			printCommandUsage(args[1])
+		} else {
+			printUsage()
+		}
 		return nil
 	default:
 		return usageError("unknown command %q", args[0])
@@ -3665,105 +3675,4 @@ func secureHTTPListener(
 		return nil, fmt.Errorf("HTTP TLS setup failed: %w", err)
 	}
 	return tls.NewListener(listener, config), nil
-}
-
-func usageError(format string, args ...any) error {
-	printUsage()
-	return fmt.Errorf(format, args...)
-}
-
-func printUsage() {
-	fmt.Fprintln(os.Stderr, `Usage:
-  pointy-relay server [flags]
-  pointy-relay connector [flags]
-  pointy-relay installations <list|show|status|diagnostics|audit|provision> [args]
-  pointy-relay subscription <set|update|enable|disable|extend|audit> <id> [flags]
-  pointy-relay enrollment mint [--count N] [--relay] [--ai] [--subscription DUR]
-  pointy-relay fleet <status|set-version|rollout|pause|pin|unpin|channel> [args]
-  pointy-relay sms <usage|log|config> [flags]
-  pointy-relay wallet <list|show|topups|check|credit|debit|refund|confirm|config> [args]
-  pointy-relay integrations <status|disable|enable> [provider] [flags]
-  pointy-relay artifacts upload --version X --bundle pointy-update-X.zip
-  pointy-relay artifacts upload --version X --url https://host/pointy-update-X.zip [--sha256 H]
-  pointy-relay artifacts status --version X [--wait]
-  pointy-relay provision [flags]
-  pointy-relay migrate [flags]
-  pointy-relay gen-token [flags]
-
-Commands:
-  server         Run relay control, remote HTTP, and connector listeners.
-  connector      Run the on-prem connector beside a Pointy backend.
-  installations  Fleet management over the admin API:
-                   list [--query q] [--active|--inactive] [--limit n] [--json]
-                   show <id> [--json]        full subscription + connector state
-                   status <id> [--json]      live connector / certificate health
-                   diagnostics <id> [--out f]    pull tracking/usage/error export
-                   diagnostics --all [--out-dir d]   pull from every reachable shop
-                   audit <id> [--json]       recent subscription change history
-                   provision [--shop-name .. --relay-enabled ..]   create remotely
-  subscription   Fast subscription changes over the admin API (audited):
-                   set <id> --months N [--ai|--no-ai] [--sms|--no-sms]
-                          [--sms-monthly-limit N] [--remote|--no-remote]
-                                             give an N-month subscription + add-ons
-                   enable <id>               turn relay + subscription on
-                   disable <id>              turn relay + subscription off
-                   extend <id> --days N      set the end date N days out, active
-                   update <id> [flags]       explicit field-by-field control
-                                             (--ai-enabled, --sms-enabled,
-                                             --sms-monthly-limit, ...)
-                   audit <id>                change history (alias)
-  enrollment     Mint single-use license keys (redeemed at /v1/enroll):
-                   mint [--count N] [--expires-in 720h]
-                                             plain keys (operator activates later)
-                   mint [--relay] [--ai] [--subscription 1y|6mo|30d|perpetual]
-                                             bake a subscription in — the shop is
-                                             activated the moment it redeems
-  fleet          Remote on-prem update control plane (admin API):
-                   status [--query q] [--json]   versions across the fleet
-                   set-version <v> [--channel stable] [--rollout canary|all|N%]
-                   rollout <canary|all|N%> [--channel]   advance the rollout
-                   pause [--channel]         kill switch: stop the rollout
-                   pin <id> <v> / unpin <id> / channel <id> <channel>
-  sms            Relay-hosted SMS (Resala) over the admin API:
-                   usage [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--json]
-                                             messages + cost per shop, busiest first
-                   log [--installation ID] [--status S] [--limit N] [--json]
-                                             recent sends, newest first
-                   config [--json]           templates, test mode, limits (no token)
-  wallet         Shop wallets (prepaid balance, Dafa top-ups) over the admin API:
-                   list [--limit N] [--json] balances, largest first, with the total
-                   show <id> [--limit N]     one shop's statement, newest first
-                   topups [--installation ID] [--status S] [--limit N] [--json]
-                                             top-ups; expired = nobody finished paying
-                   check <top-up id | DFW-reference>
-                                             ask Dafa now; credits it if it is paid
-                   credit <id> --amount N --reason "..."        hand-made credit
-                   debit <id> --amount N --reason "..." [--service S]
-                                             a charge (with --service) or adjustment
-                   refund <id> --amount N --service S --reason "..." [--reference E]
-                   confirm <top-up id> --transaction-id T --reason "..."
-                                             credit by hand what Dafa will not show paid
-                   config                    gateway, mode, methods, limits (no key)
-  integrations   Fleet-wide switch per provider integration (hdbox, lnet, qareeb):
-                   status [--json]           which are off, since when, by whom, why
-                   disable <provider> --reason "..."
-                                             off in every shop (a cease-and-desist)
-                   enable <provider> [--reason "..."]   back on in every shop
-  artifacts      upload --version X --bundle pointy-update-X.zip   serve a bundle
-                   upload --version X --url URL   the relay downloads it itself (slow line)
-                   status --version X [--wait]    progress of a --url download
-  provision      Create an installation directly against the database (host-side).
-  migrate        Apply relay PostgreSQL migrations.
-  gen-token      Print a strong random admin token for POINTY_RELAY_ADMIN_TOKEN.
-  version        Print the build version.
-
-Admin API commands read POINTY_RELAY_CONTROL_URL and POINTY_RELAY_ADMIN_TOKEN
-from the environment; export them once for terse, repeatable management.
-
-Deployment profiles (server --platform / POINTY_RELAY_PLATFORM):
-  paas          Single public endpoint behind a TLS-terminating load balancer,
-                bearer-token admin, auto-bind 0.0.0.0, edge TLS, auto-migrate.
-                Requires a strong POINTY_RELAY_ADMIN_TOKEN.
-  (empty)       Self-hosted private-network deployment (set --production to
-                enforce split admin listener + mTLS).`)
 }

@@ -40,6 +40,14 @@ class TrackedStockViewModel extends ChangeNotifier {
   String _batchStatus = '';
   bool _batchExpiredOnly = false;
 
+  /// The *capture later* worklist: articles on the shelf that still owe their
+  /// number. Overrides the status chips while on — they are all in stock.
+  bool _missingOnly = false;
+
+  /// One product's articles and lots, when the lists were opened from it.
+  int? _productId;
+  String _productName = '';
+
   List<StockUnit> get units => _units;
   List<StockBatch> get batches => _batches;
   StockUnitSummary get summary => _summary;
@@ -57,6 +65,9 @@ class TrackedStockViewModel extends ChangeNotifier {
   String get unitSearch => _unitSearch;
   String get batchStatus => _batchStatus;
   bool get batchExpiredOnly => _batchExpiredOnly;
+  bool get missingOnly => _missingOnly;
+  int? get productId => _productId;
+  String get productName => _productName;
 
   /// Articles the shop still owes an identifier for — the *capture later*
   /// worklist. Counted rather than listed here, because the point of the number
@@ -67,11 +78,7 @@ class TrackedStockViewModel extends ChangeNotifier {
     _isLoadingUnits = true;
     _unitPage = 1;
     notifyListeners();
-    final result = await _repository.loadUnits(
-      status: _unitStatus,
-      code: _unitSearch,
-      page: _unitPage,
-    );
+    final result = await _loadUnitPage(_unitPage);
     switch (result) {
       case Ok<StockUnitPage>(:final value):
         _units = value.units;
@@ -93,11 +100,7 @@ class TrackedStockViewModel extends ChangeNotifier {
     }
     _isLoadingMoreUnits = true;
     notifyListeners();
-    final result = await _repository.loadUnits(
-      status: _unitStatus,
-      code: _unitSearch,
-      page: _unitPage + 1,
-    );
+    final result = await _loadUnitPage(_unitPage + 1);
     switch (result) {
       case Ok<StockUnitPage>(:final value):
         _unitPage += 1;
@@ -111,6 +114,17 @@ class TrackedStockViewModel extends ChangeNotifier {
     }
     _isLoadingMoreUnits = false;
     notifyListeners();
+  }
+
+  Future<Result<StockUnitPage>> _loadUnitPage(int page) {
+    return _repository.loadUnits(
+      status: _missingOnly ? '' : _unitStatus,
+      code: _unitSearch,
+      productId: _productId,
+      isIdentified: _missingOnly ? false : null,
+      inStock: _missingOnly ? true : null,
+      page: page,
+    );
   }
 
   Future<void> _loadSummary() async {
@@ -128,6 +142,7 @@ class TrackedStockViewModel extends ChangeNotifier {
     final result = await _repository.loadBatches(
       status: _batchStatus,
       isExpired: _batchExpiredOnly ? true : null,
+      productId: _productId,
       page: _batchPage,
     );
     switch (result) {
@@ -151,6 +166,7 @@ class TrackedStockViewModel extends ChangeNotifier {
     final result = await _repository.loadBatches(
       status: _batchStatus,
       isExpired: _batchExpiredOnly ? true : null,
+      productId: _productId,
       page: _batchPage + 1,
     );
     switch (result) {
@@ -167,11 +183,69 @@ class TrackedStockViewModel extends ChangeNotifier {
   }
 
   void setUnitStatus(String status) {
-    if (_unitStatus == status) {
+    if (_unitStatus == status && !_missingOnly) {
       return;
     }
     _unitStatus = status;
+    _missingOnly = false;
     unawaited(loadUnits());
+  }
+
+  /// Just the articles still owed a number, so they can be named one after
+  /// another.
+  ///
+  /// [reload] is off for a caller about to open the list, which loads itself.
+  void setMissingOnly(bool value, {bool reload = true}) {
+    if (_missingOnly == value) {
+      return;
+    }
+    _missingOnly = value;
+    if (reload) {
+      unawaited(loadUnits());
+    }
+  }
+
+  /// Narrow both lists to one product's stock — set once, by whoever opens
+  /// the lists from that product's page, before the first load.
+  void setProductFilter(int? productId, {String name = ''}) {
+    _productId = productId;
+    _productName = productId == null ? '' : name;
+  }
+
+  /// Back to every product's stock.
+  void clearProductFilter() {
+    if (_productId == null) {
+      return;
+    }
+    _productId = null;
+    _productName = '';
+    unawaited(loadUnits());
+    unawaited(loadBatches());
+  }
+
+  /// Give a placeholder article the number it has been owing.
+  ///
+  /// Returns null on success and the failure otherwise — most often the code
+  /// already belongs to a live article, which the server says in its own
+  /// words — for the screen to render.
+  Future<Object?> identifyUnit(int unitId, String code) async {
+    final result = await _repository.identifyUnit(unitId, code: code);
+    switch (result) {
+      case Ok<StockUnit>(:final value):
+        if (_missingOnly) {
+          _units = [
+            for (final row in _units)
+              if (row.id != value.id) row,
+          ];
+          notifyListeners();
+        } else {
+          _replaceUnit(value);
+        }
+        unawaited(_loadSummary());
+        return null;
+      case Error<StockUnit>(:final exception):
+        return exception;
+    }
   }
 
   void setUnitSearch(String term) {
@@ -293,7 +367,7 @@ class TrackedStockViewModel extends ChangeNotifier {
   /// Returns the error text rather than swallowing it: the one refusal a
   /// person will actually hit here — the goods have already left the shelf —
   /// is worth reading.
-  Future<String?> reportIncident(
+  Future<Object?> reportIncident(
     int unitId,
     ConsignmentIncidentDraft draft,
   ) async {
@@ -306,10 +380,10 @@ class TrackedStockViewModel extends ChangeNotifier {
       notifyListeners();
       return null;
     }
-    final failure = result is Error<ConsignmentIncident>
-        ? result.exception.toString()
-        : '';
-    return failure.isEmpty ? null : failure;
+    // The exception itself, for the screen to word: its toString is the
+    // client's English developer string, which put English on an Arabic
+    // screen exactly when somebody needed to read why.
+    return result is Error<ConsignmentIncident> ? result.exception : null;
   }
 
   Future<List<StockAllocationEntry>> batchHistory(int batchId) async {

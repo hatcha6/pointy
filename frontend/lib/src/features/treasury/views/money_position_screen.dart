@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
+import '../../../data/models/card_settlement.dart';
 import '../../../data/models/money_position.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -13,6 +14,8 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/money_position_view_model.dart';
+import 'card_settlement_sheet.dart';
+import 'clearing_account_card.dart';
 import 'money_account_details_sheet.dart';
 import 'money_account_editor_sheet.dart';
 import 'money_count_sheet.dart';
@@ -162,14 +165,16 @@ class _MoneyPositionBody extends StatelessWidget {
     final cash = viewModel.position!.cashAccounts;
     final bank = viewModel.position!.bankAccounts;
     final provider = viewModel.position!.providerAccounts;
+    final clearing = viewModel.position!.clearingAccounts;
 
     return RefreshIndicator(
       onRefresh: viewModel.load,
       child: ListView(
         padding: spacing.pagePadding,
         children: [
-          _TotalsHero(totals: totals),
+          _TotalsHero(totals: totals, holdsCards: clearing.isNotEmpty),
           SizedBox(height: spacing.md),
+          ..._overdueCallouts(context, l10n, clearing),
           // Beneath the total, never inside it: the cash really is in the
           // drawer, and what is untrue is that all of it is the shop's.
           // Subtracting it here would double-count the money the moment the
@@ -190,6 +195,25 @@ class _MoneyPositionBody extends StatelessWidget {
             PointySectionHeader(title: l10n.treasurySectionBank),
             SizedBox(height: spacing.sm),
             ..._accountCards(context, bank),
+          ],
+          // Beside the banks, never among them: card takings the processor
+          // has not paid in yet, so each bank's figure is its statement's.
+          if (clearing.isNotEmpty) ...[
+            SizedBox(height: spacing.lg),
+            PointySectionHeader(title: l10n.treasurySectionClearing),
+            SizedBox(height: spacing.sm),
+            for (final entry in clearing) ...[
+              ClearingAccountCard(
+                entry: entry,
+                onTap: () => showMoneyAccountDetailsSheet(
+                  context,
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                  accountId: entry.account.id,
+                ),
+              ),
+              SizedBox(height: spacing.sm),
+            ],
           ],
           // Its own heading, not folded in beside the banks: a float is the
           // shop's money sitting with a resale provider, and it cannot settle
@@ -214,6 +238,35 @@ class _MoneyPositionBody extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Card money that should already be in the bank and is not recorded as
+  /// arrived. First on the page after the total: it is the one figure here
+  /// that is waiting on someone outside the shop.
+  List<Widget> _overdueCallouts(
+    BuildContext context,
+    AppLocalizations l10n,
+    List<MoneyAccountPosition> clearing,
+  ) {
+    final spacing = AdaptiveSpacing.of(context);
+    final overdue = clearing
+        .map((entry) => entry.held)
+        .whereType<HeldSummary>()
+        .where((held) => held.hasOverdue)
+        .fold<double>(0, (sum, held) => sum + held.overdueAmount);
+    if (overdue <= 0) {
+      return const [];
+    }
+    return [
+      PointyDetailCallout(
+        key: const ValueKey('treasury_clearing_overdue_callout'),
+        icon: Icons.schedule,
+        tone: PointyCalloutTone.warning,
+        title: l10n.treasuryClearingOverdueCalloutTitle(formatMoney(overdue)),
+        message: l10n.treasuryClearingOverdueCalloutMessage,
+      ),
+      SizedBox(height: spacing.md),
+    ];
   }
 
   List<Widget> _callouts(
@@ -311,9 +364,14 @@ class _ObligationsCallout extends StatelessWidget {
 }
 
 class _TotalsHero extends StatelessWidget {
-  const _TotalsHero({required this.totals});
+  const _TotalsHero({required this.totals, this.holdsCards = false});
 
   final MoneyPositionTotals totals;
+
+  /// Whether the shop holds card takings with a processor. The third pill is
+  /// shown only then, so a shop that never opened a clearing account sees the
+  /// hero it always saw.
+  final bool holdsCards;
 
   @override
   Widget build(BuildContext context) {
@@ -332,6 +390,12 @@ class _TotalsHero extends StatelessWidget {
           label: '${l10n.treasuryBankLabel} ${formatMoney(totals.bank)}',
           icon: Icons.account_balance_outlined,
         ),
+        if (holdsCards || totals.inTransit != 0)
+          PointyHeroPill(
+            label:
+                '${l10n.treasuryInTransitLabel} ${formatMoney(totals.inTransit)}',
+            icon: Icons.hourglass_bottom_outlined,
+          ),
       ],
     );
   }
@@ -349,7 +413,24 @@ class _QuickActions extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final busy = viewModel.isSubmitting;
 
+    final clearing = viewModel.position?.clearingAccounts ?? const [];
     final actions = <Widget>[
+      // The day-to-day action of a shop whose card machine is Moamalat's:
+      // the processor's transfer arrived. First, because it is the one the
+      // owner comes here for on a Sunday.
+      if (capabilities.canRecordCardSettlement && clearing.isNotEmpty)
+        FilledButton.icon(
+          key: const ValueKey('treasury_record_settlement_button'),
+          onPressed: busy
+              ? null
+              : () => recordCardSettlementFor(
+                  context,
+                  viewModel: viewModel,
+                  accounts: [for (final entry in clearing) entry.account],
+                ),
+          icon: const Icon(Icons.credit_score_outlined),
+          label: Text(l10n.treasuryActionRecordSettlement),
+        ),
       // Adding funds, depositing and withdrawing are one write — a transfer,
       // with a side left empty when the money crosses the shop's boundary.
       if (capabilities.canRecordMoneyTransfer) ...[

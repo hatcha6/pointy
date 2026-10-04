@@ -53,6 +53,10 @@ enum BusinessAlertType {
   unresolvedRecharge,
   offbookRecharge,
   providerFloatDrift,
+
+  /// Card takings the processor (Moamalat) should already have paid into the
+  /// bank, with no settlement recorded against them.
+  cardSettlementOverdue,
   unknown,
 }
 
@@ -238,6 +242,8 @@ BusinessAlertType _typeFromCode(String code) {
     'integrations.unresolved_recharge' => BusinessAlertType.unresolvedRecharge,
     'integrations.offbook_recharge' => BusinessAlertType.offbookRecharge,
     'integrations.float_drift' => BusinessAlertType.providerFloatDrift,
+    'treasury.card_settlement_overdue' =>
+      BusinessAlertType.cardSettlementOverdue,
     _ => BusinessAlertType.unknown,
   };
 }
@@ -290,6 +296,8 @@ int _sortScore(BusinessAlertType type) {
     // has already been spent, and neither stops the next sale.
     BusinessAlertType.offbookRecharge => 26,
     BusinessAlertType.providerFloatDrift => 27,
+    // A money question too: the shop's own takings, late from the processor.
+    BusinessAlertType.cardSettlementOverdue => 27,
     BusinessAlertType.lowProfitMargin => 28,
     BusinessAlertType.lowStock => 30,
     BusinessAlertType.payrollReady => 32,
@@ -338,6 +346,8 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.offbookRecharge ||
     BusinessAlertType.providerFloatDrift =>
       payload['provider']?.toString() ?? '',
+    BusinessAlertType.cardSettlementOverdue =>
+      payload['account']?.toString() ?? '',
     BusinessAlertType.stockPositionUntrusted ||
     BusinessAlertType.lowProfitMargin ||
     // Shop-wide counts rather than one row: there is no single article to
@@ -415,6 +425,10 @@ DateTime? _occurredAt(BusinessAlertType type, Map<String, Object?> payload) {
     ),
     BusinessAlertType.unresolvedRecharge => _dateTimeFromJson(
       payload['sent_at'],
+    ),
+    // The day the money should have reached the bank.
+    BusinessAlertType.cardSettlementOverdue => _dateTimeFromJson(
+      payload['expected_on'],
     ),
     _ => null,
   };

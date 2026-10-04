@@ -393,8 +393,15 @@ rig_compose() { ( cd "$RIG_SHOP" && docker compose --env-file .env -f docker-com
 # direction (passing when it should not) is worse than no rig. Swept at both
 # ends of every run.
 rig_sweep_leaked_shops() {
-  local project
+  local project container
   docker rm -f pointy-backend-standby >/dev/null 2>&1
+  # The relay's database containers are plain `docker run`s named after the
+  # run's PID, so only a sweep by name finds the ones an interrupted run left.
+  for container in $(docker ps -a --format '{{.Names}}' 2>/dev/null | grep '^rehearsal-relay-'); do
+    case "$container" in "${RIG_RELAY_PROJECT:-none}"-*) continue ;; esac
+    rig_log "sweeping a leaked rehearsal relay container: ${container}"
+    docker rm -f -v "$container" >/dev/null 2>&1
+  done
   for project in $(docker compose ls --all --format json 2>/dev/null \
       | python3 -c "import json,sys
 try:
@@ -624,11 +631,14 @@ rig_relay_start() {
   RIG_RELAY_CONTROL_URL="http://127.0.0.1:${RIG_RELAY_ADMIN_PORT}"
   mkdir -p "$RIG_RELAY_ARTIFACTS"
 
-  docker rm -f "${RIG_RELAY_PROJECT}-pg" "${RIG_RELAY_PROJECT}-redis" >/dev/null 2>&1
-  docker run -d --name "${RIG_RELAY_PROJECT}-pg" \
+  # Throwaway data in memory: both images declare a data VOLUME, and a plain
+  # `docker run` would leave a new anonymous volume (~48 MB for Postgres)
+  # behind on every rehearsal. --tmpfs mounts over it, so none is created.
+  docker rm -f -v "${RIG_RELAY_PROJECT}-pg" "${RIG_RELAY_PROJECT}-redis" >/dev/null 2>&1
+  docker run -d --name "${RIG_RELAY_PROJECT}-pg" --tmpfs /var/lib/postgresql/data \
     -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=pointy \
     -p "127.0.0.1:${RIG_RELAY_PG_PORT}:5432" "$RIG_POSTGRES_IMAGE" >/dev/null || return 1
-  docker run -d --name "${RIG_RELAY_PROJECT}-redis" \
+  docker run -d --name "${RIG_RELAY_PROJECT}-redis" --tmpfs /data \
     -p "127.0.0.1:${RIG_RELAY_REDIS_PORT}:6379" "$RIG_REDIS_IMAGE" >/dev/null || return 1
 
   RIG_RELAY_DB="postgres://postgres:postgres@127.0.0.1:${RIG_RELAY_PG_PORT}/pointy?sslmode=disable"
@@ -676,7 +686,7 @@ rig_relay_stop() {
     wait "$RIG_RELAY_PID" 2>/dev/null
   fi
   [ -n "${RIG_RELAY_PROJECT:-}" ] && \
-    docker rm -f "${RIG_RELAY_PROJECT}-pg" "${RIG_RELAY_PROJECT}-redis" >/dev/null 2>&1
+    docker rm -f -v "${RIG_RELAY_PROJECT}-pg" "${RIG_RELAY_PROJECT}-redis" >/dev/null 2>&1
   return 0
 }
 

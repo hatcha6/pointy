@@ -155,6 +155,7 @@ class PosApiSession {
     required this.client,
     required String baseUrl,
     this.requestTimeout = defaultRequestTimeout,
+    this.sameTargetRetryWindow = defaultSameTargetRetryWindow,
   }) : _baseUrl = _normalizeBaseUrl(baseUrl);
 
   /// How long a request may stay unanswered before it is abandoned.
@@ -182,6 +183,14 @@ class PosApiSession {
   /// The deadline a genuinely long server-side job needs — a database backup,
   /// a legacy-data import, an attendance pull off the fingerprint device.
   static const Duration longRunningRequestTimeout = Duration(minutes: 10);
+
+  /// How soon a LAN request must have failed for it to be tried on the LAN
+  /// once more before the relay: a connection the server had already closed
+  /// fails at once, while one that never came took the LAN client's whole
+  /// connect deadline to say so.
+  static const Duration defaultSameTargetRetryWindow = Duration(seconds: 2);
+
+  final Duration sameTargetRetryWindow;
 
   final Duration requestTimeout;
   final http.Client client;
@@ -714,7 +723,6 @@ class PosApiSession {
     Map<String, String>? queryParameters,
     Duration? timeout,
   }) async {
-    final target = uri(path, queryParameters: queryParameters);
     return _send(
       method: 'PUT',
       path: path,
@@ -724,7 +732,13 @@ class PosApiSession {
       request: () {
         final requestHeaders = headers(includeCsrf: true);
         requestHeaders['Content-Type'] = 'application/octet-stream';
-        return client.put(target, headers: requestHeaders, body: bytes);
+        // Resolved per attempt, like every other request: one the relay
+        // refused goes again to wherever the session points by then.
+        return client.put(
+          uri(path, queryParameters: queryParameters),
+          headers: requestHeaders,
+          body: bytes,
+        );
       },
     );
   }
@@ -933,8 +947,7 @@ class PosApiSession {
     }
     final stopwatch = Stopwatch()..start();
     final bool wasLocal = !usesRelay;
-    try {
-      final response = await attempt();
+    http.Response recorded(http.Response response) {
       stopwatch.stop();
       captureResponseState(response);
       _recordPerformance(
@@ -947,8 +960,12 @@ class PosApiSession {
         traceId: traceId,
       );
       return response;
-    } on Exception catch (exception) {
-      // Replay this one request on the relay only when both hold:
+    }
+
+    try {
+      return recorded(await attempt());
+    } on Exception catch (firstFailure, firstStackTrace) {
+      // A failed LAN request goes out again only when both hold:
       //
       // - It failed without timing out (refused, reset, unreachable): the LAN
       //   path is broken. A timeout on the LAN is far more often a slow
@@ -962,8 +979,34 @@ class PosApiSession {
       // Either way the coordinator hears about a LAN failure (below) and
       // decides where the session lives from here: back on the LAN once it
       // answers, or on the relay with a probe running to find the way back.
-      final replay = wasLocal && replayable && exception is! TimeoutException;
-      if (replay && _fallbackTarget != null && _fallbackTarget!.isUsable) {
+      var exception = firstFailure;
+      var stackTrace = firstStackTrace;
+      final repeatable =
+          wasLocal && replayable && exception is! TimeoutException;
+      // Once more where the session points now, before the relay is asked.
+      // Usually that is the LAN again, on a fresh connection: one the server
+      // had already let go of — a reload of its front door, a dropped
+      // keep-alive — fails the first request sent on it and nothing after.
+      // Sending that request over the internet moved the whole session there
+      // for a hiccup. And when another request's failure has already moved
+      // the session onto the relay, this one follows it instead of failing.
+      // Only a failure that came back at once is tried on the LAN again: a
+      // slow one was a connection that never came, and would only come late
+      // a second time.
+      if (repeatable &&
+          (usesRelay || stopwatch.elapsed < sameTargetRetryWindow)) {
+        try {
+          return recorded(await attempt());
+        } on Exception catch (retryFailure, retryStackTrace) {
+          exception = retryFailure;
+          stackTrace = retryStackTrace;
+        }
+      }
+      final replay = repeatable && exception is! TimeoutException;
+      if (replay &&
+          !usesRelay &&
+          _fallbackTarget != null &&
+          _fallbackTarget!.isUsable) {
         final fallback = _fallbackTarget!;
         _fallbackTarget = null;
         configureConnectionTarget(
@@ -971,26 +1014,15 @@ class PosApiSession {
           relayToken: fallback.relayToken,
         );
         try {
-          final response = await attempt();
-          stopwatch.stop();
-          captureResponseState(response);
-          _recordPerformance(
-            method: method,
-            path: path,
-            duration: stopwatch.elapsed,
-            statusCode: response.statusCode,
-            requestSizeBytes: requestSizeBytes,
-            responseSizeBytes: response.bodyBytes.length,
-            traceId: traceId,
-          );
+          final response = recorded(await attempt());
           // The relay rescued this request, but the session now lives there.
           // Until this call existed nothing ever brought it back: a till that
           // hit one LAN hiccup ran the rest of the day over the internet.
           onLocalTargetUnreachable?.call();
           return response;
         } on Exception {
-          // Record the original failure below; it is usually the LAN failure
-          // that caused routing to fall back.
+          // Record the LAN failure below; it is what sent routing to the
+          // relay.
         }
       } else if (replay && _fallbackTarget != null) {
         _fallbackTarget = null;
@@ -1011,35 +1043,42 @@ class PosApiSession {
       if (wasLocal) {
         onLocalTargetUnreachable?.call();
       }
-      rethrow;
+      Error.throwWithStackTrace(exception, stackTrace);
     }
   }
 
   /// Whether a request that the relay refused with [ticketUsed] may be sent
-  /// again: a newer ticket is already installed (another request's recovery,
-  /// or a scheduled refresh, beat this one to it), or the coordinator mints one
-  /// now. Rejections of the same ticket coalesce on the coordinator's side.
+  /// again: the session's target has changed since — a newer ticket another
+  /// request's recovery or a scheduled refresh installed, or the LAN the
+  /// session has returned to — or the coordinator mints a ticket now.
+  /// Rejections of the same ticket coalesce on the coordinator's side.
+  ///
+  /// The relay refuses before forwarding, so the request never reached the
+  /// backend and may go anywhere the session points. A till that found its
+  /// LAN again while the ticket was being replaced used to hand the refusal
+  /// back to the screen instead — a 401 that reads as signed out.
   Future<RelayTicketRecovery> _recoverRelayTicket(String ticketUsed) async {
     if (_relayToken != ticketUsed) {
-      return usesRelay
-          ? RelayTicketRecovery.refreshed
-          : RelayTicketRecovery.failed;
+      return RelayTicketRecovery.refreshed;
     }
     final recover = onRelayTicketRejected;
     if (recover == null) {
       return RelayTicketRecovery.failed;
     }
-    final RelayTicketRecovery recovery;
+    RelayTicketRecovery recovery;
     try {
       recovery = await recover();
     } on Object {
-      return RelayTicketRecovery.failed;
+      recovery = RelayTicketRecovery.failed;
     }
-    if (recovery == RelayTicketRecovery.refreshed &&
-        !(usesRelay && _relayToken != ticketUsed)) {
-      return RelayTicketRecovery.failed;
+    if (_relayToken != ticketUsed) {
+      return RelayTicketRecovery.refreshed;
     }
-    return recovery;
+    // Nothing changed, whatever the coordinator said: the same ticket would
+    // meet the same refusal.
+    return recovery == RelayTicketRecovery.refreshed
+        ? RelayTicketRecovery.failed
+        : recovery;
   }
 
   /// The relay's answer to the device's refresh — a lapsed subscription —

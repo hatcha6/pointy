@@ -31,12 +31,14 @@ import 'package:pointy_frontend/src/data/models/query.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
+import 'package:pointy_frontend/src/data/models/tracking_mode.dart';
 import 'package:pointy_frontend/src/data/repositories/analytics_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/register_session_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/tracked_stock_repository.dart';
 import 'package:pointy_frontend/src/data/services/analytics_queue_storage.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/unit_of_measure_api_client.dart';
@@ -1030,6 +1032,44 @@ void main() {
       // The scan marked the carton line as the active one (F2/F4 target).
       expect(viewModel.activeCartLine, isNotNull);
       expect(viewModel.activeCartLine!.unitCode, 'carton');
+    });
+
+    test('a serialized model\'s box barcode asks which handset instead of '
+        'ringing up an unnamed one', () async {
+      final apiService = _FakePosApiService(
+        catalogPages: const {
+          1: [_phoneVariant],
+        },
+      );
+      final viewModel = PosViewModel(
+        CatalogRepository(apiService),
+        RegisterSessionRepository(apiService),
+        SaleRepository(apiService),
+        ShopSettingsRepository(apiService),
+        PrintingRepository(
+          apiService,
+          serialTransport: const _NoopPrintTransport(),
+          bluetoothTransport: const _NoopPrintTransport(),
+          wifiTransport: const _NoopPrintTransport(),
+          fakeTransport: const _NoopPrintTransport(),
+        ),
+        trackedStockRepository: TrackedStockRepository(apiService),
+        sessionStorage: MemoryScopedJsonStorage(),
+      );
+      addTearDown(viewModel.dispose);
+      var asked = 0;
+      viewModel.unitPickRequests.addListener(() => asked += 1);
+
+      expect(await viewModel.addVariantByBarcode('7000007'), isTrue);
+
+      // Nothing in the cart yet: the server would otherwise pick whichever
+      // handset had been on the shelf longest, and the receipt would name it.
+      expect(viewModel.cart, isEmpty);
+      expect(asked, 1);
+      expect(viewModel.unitPickRequests.take()?.id, _phoneVariant.id);
+      // Taken once: a rebuilt listener must not open the picker twice.
+      expect(viewModel.unitPickRequests.take(), isNull);
+      expect(viewModel.barcodeScanStatus, BarcodeScanStatus.found);
     });
 
     test('barcode scans chime by outcome: success then not-found', () async {
@@ -2102,6 +2142,21 @@ SaleOrder _saleOrder({
     total: total,
   );
 }
+
+/// A serialized model: its barcode is on every box, and names none of them.
+const _phoneVariant = ProductVariant(
+  id: 170,
+  productId: 70,
+  productName: 'آيفون 13',
+  displayName: 'آيفون 13',
+  fullName: 'آيفون 13',
+  sku: 'IP13',
+  unitPrice: 1500,
+  quantityOnHand: 3,
+  barcode: '7000007',
+  isDefault: true,
+  trackingMode: TrackingMode.serial,
+);
 
 const _coffeeVariant = ProductVariant(
   id: 101,

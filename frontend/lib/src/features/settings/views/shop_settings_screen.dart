@@ -60,6 +60,7 @@ import 'integrations_page.dart';
 import 'messaging_settings_page.dart';
 import 'exchange_rates_page.dart';
 import 'analytics_purge_section.dart';
+import 'identified_stock_settings_page.dart';
 import 'danger_zone_page.dart';
 import 'subscription_status_page.dart';
 import '../../../shared/formatters.dart';
@@ -877,6 +878,17 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                   icon: Icons.inventory_2_outlined,
                                   children: _buildInventoryFields,
                                 ),
+                        ),
+                        // Serials, lots and consignment. Off for every shop
+                        // until switched on here; the shop-type presets of the
+                        // setup wizard are the only other way in.
+                        PointySettingsTile(
+                          icon: Icons.qr_code_scanner_outlined,
+                          title: l10n.identifiedStockSettingsTitle,
+                          subtitle: l10n.identifiedStockSettingsSubtitle,
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openIdentifiedStockSettings(context),
                         ),
                         if (widget.canManageWorkflows)
                           PointySettingsTile(
@@ -1933,6 +1945,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             IntegrationsPage(viewModel: widget.integrationsViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openIdentifiedStockSettings(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            IdentifiedStockSettingsPage(viewModel: widget.viewModel),
       ),
     );
   }

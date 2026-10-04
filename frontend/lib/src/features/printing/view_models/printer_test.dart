@@ -12,10 +12,14 @@ import '../../../data/services/print_transport.dart';
 enum PrinterTestKind { receipt, barcodeLabel, document, kitchen }
 
 class PrinterTestResult {
-  const PrinterTestResult(this.kind, this.isSuccess);
+  const PrinterTestResult(this.kind, this.isSuccess, {this.paperMismatch});
 
   final PrinterTestKind kind;
   final bool isSuccess;
+
+  /// Set when the test printed, but on the driver's own paper rather than the
+  /// page it asked for — see [PrintTransportResult.paperMismatch].
+  final PrintPaperMismatch? paperMismatch;
 }
 
 /// The tests that prove the jobs [printer] does, most important first.

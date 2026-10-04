@@ -13,6 +13,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/repositories/surveillance_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../cameras/widgets/invoice_footage_section.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
@@ -33,6 +34,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
     required this.shopSettingsRepository,
     this.surveillanceRepository,
     required this.catalogRepository,
+    this.trackedStockRepository,
     required this.contactRepository,
     required this.initialOrder,
     required this.capabilities,
@@ -50,6 +52,10 @@ class InvoiceDetailsScreen extends StatefulWidget {
   /// and in shops with no DVR — the panel then does not exist at all.
   final SurveillanceRepository? surveillanceRepository;
   final CatalogRepository catalogRepository;
+
+  /// The shelf an exchange picks a serialized replacement from; see
+  /// [SaleOrderDetailsContent.trackedStockRepository].
+  final TrackedStockRepository? trackedStockRepository;
   final ContactRepository contactRepository;
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
@@ -150,6 +156,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
               shopSettingsRepository: widget.shopSettingsRepository,
               surveillanceRepository: widget.surveillanceRepository,
               catalogRepository: widget.catalogRepository,
+              trackedStockRepository: widget.trackedStockRepository,
               contactRepository: widget.contactRepository,
               initialOrder: widget.initialOrder,
               capabilities: widget.capabilities,
@@ -175,6 +182,7 @@ class InvoiceDetailsView extends StatefulWidget {
     required this.shopSettingsRepository,
     this.surveillanceRepository,
     required this.catalogRepository,
+    this.trackedStockRepository,
     required this.contactRepository,
     required this.initialOrder,
     required this.capabilities,
@@ -194,6 +202,10 @@ class InvoiceDetailsView extends StatefulWidget {
   /// and in shops with no DVR — the panel then does not exist at all.
   final SurveillanceRepository? surveillanceRepository;
   final CatalogRepository catalogRepository;
+
+  /// The shelf an exchange picks a serialized replacement from; see
+  /// [SaleOrderDetailsContent.trackedStockRepository].
+  final TrackedStockRepository? trackedStockRepository;
   final ContactRepository contactRepository;
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
@@ -296,6 +308,7 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
                   onProductSearch: _canExchange(order)
                       ? _viewModel.searchReplacementProducts
                       : null,
+                  trackedStockRepository: widget.trackedStockRepository,
                   isRecordingPayment: _viewModel.isRecordingPayment,
                   onRecordPayment: _recordPayment,
                   isAssigningCustomer: _viewModel.isAssigningCustomer,
@@ -496,7 +509,9 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
           saleRepository: widget.saleRepository,
           printingRepository: widget.printingRepository,
           shopSettingsRepository: widget.shopSettingsRepository,
+          surveillanceRepository: widget.surveillanceRepository,
           catalogRepository: widget.catalogRepository,
+          trackedStockRepository: widget.trackedStockRepository,
           contactRepository: widget.contactRepository,
           initialOrder: newOrder,
           capabilities: widget.capabilities,

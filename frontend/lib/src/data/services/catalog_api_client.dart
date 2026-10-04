@@ -230,13 +230,11 @@ class CatalogApiClient {
   Future<int> bulkSetProductFlags({
     required List<int> ids,
     bool? isActive,
-    bool? tracksExpiry,
     bool? isService,
     bool? isPrepared,
   }) async {
     final body = <String, Object?>{'ids': ids};
     if (isActive != null) body['is_active'] = isActive;
-    if (tracksExpiry != null) body['tracks_expiry'] = tracksExpiry;
     if (isService != null) body['is_service'] = isService;
     if (isPrepared != null) body['is_prepared'] = isPrepared;
     final response = await _session.post(

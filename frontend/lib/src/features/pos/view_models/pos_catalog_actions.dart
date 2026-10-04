@@ -340,7 +340,8 @@ extension PosCatalogActions on PosViewModel {
           // chosen by scanning it, or by picking it out of the ones on the
           // shelf. Selling "one iPhone 13 Pro" without saying which one is the
           // thing this whole feature exists to make impossible.
-          if (variant.trackingMode.tracksUnits) {
+          if (variant.trackingMode.tracksUnits ||
+              product.trackingMode.tracksUnits) {
             return PosProductSelectionResult.chooseStockUnit(variant);
           }
           final defaultUnit = defaultSaleUnitOption(product, variant.unitPrice);

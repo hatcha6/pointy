@@ -465,6 +465,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
               label: product.sellableName,
               unitPrice: product.effectiveUnitPrice,
               sku: product.effectiveSku,
+              trackingMode: product.trackingMode,
             ),
       ],
       Error<ProductPage>() => const [],

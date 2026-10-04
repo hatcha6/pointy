@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 
 import 'lan_interfaces.dart';
 
@@ -13,6 +13,11 @@ import 'lan_interfaces.dart';
 /// Only used when the fast path (stored IP + UDP broadcast) turned up nothing,
 /// e.g. on networks where the AP/firewall silently drops broadcast frames.
 ///
+/// A host gets [perProbeTimeout] to accept the connection — most addresses on
+/// a /24 hold nothing, and they must cost little — but one that accepts gets
+/// [answerTimeout] to answer: that is a server, and a busy one takes longer
+/// than a connection does.
+///
 /// Returns the advertised `api_base_url` of the first responder that is a
 /// `pointy-backend` and (when [expectedInstallationId] is non-empty) belongs to
 /// the expected shop, or an empty list.
@@ -20,6 +25,7 @@ Future<List<String>> sweepSubnetForBackends({
   String? expectedInstallationId,
   int port = 8000,
   Duration perProbeTimeout = const Duration(milliseconds: 400),
+  Duration answerTimeout = const Duration(seconds: 3),
   int concurrency = 32,
 }) {
   return compute(
@@ -28,6 +34,7 @@ Future<List<String>> sweepSubnetForBackends({
       expectedInstallationId: expectedInstallationId ?? '',
       port: port,
       perProbeTimeoutMs: perProbeTimeout.inMilliseconds,
+      answerTimeoutMs: answerTimeout.inMilliseconds,
       concurrency: concurrency,
     ),
   );
@@ -38,12 +45,14 @@ class _SweepArgs {
     required this.expectedInstallationId,
     required this.port,
     required this.perProbeTimeoutMs,
+    required this.answerTimeoutMs,
     required this.concurrency,
   });
 
   final String expectedInstallationId;
   final int port;
   final int perProbeTimeoutMs;
+  final int answerTimeoutMs;
   final int concurrency;
 }
 
@@ -52,29 +61,28 @@ Future<List<String>> _sweepEntrypoint(_SweepArgs args) async {
   if (hosts.isEmpty) {
     return const [];
   }
-  final timeout = Duration(milliseconds: args.perProbeTimeoutMs);
-  final httpClient = HttpClient()..connectionTimeout = timeout;
-  final expected = args.expectedInstallationId;
-  String? matched;
+  final connectTimeout = Duration(milliseconds: args.perProbeTimeoutMs);
+  final answerTimeout = Duration(milliseconds: args.answerTimeoutMs);
+  final httpClient = HttpClient()..connectionTimeout = connectTimeout;
+  final found = Completer<String?>();
   var cursor = 0;
 
   Future<void> worker() async {
-    while (matched == null) {
+    while (!found.isCompleted) {
       final index = cursor++;
       if (index >= hosts.length) {
-        break;
+        return;
       }
-      final apiBaseUrl = await _probeHost(
+      final apiBaseUrl = await probeHostForBackend(
         httpClient,
         hosts[index],
         args.port,
-        timeout,
-        expected,
+        connectTimeout: connectTimeout,
+        answerTimeout: answerTimeout,
+        expectedInstallationId: args.expectedInstallationId,
       );
-      if (apiBaseUrl != null) {
-        // First matching backend wins; other workers stop after their probe.
-        matched ??= apiBaseUrl;
-        break;
+      if (apiBaseUrl != null && !found.isCompleted) {
+        found.complete(apiBaseUrl);
       }
     }
   }
@@ -82,27 +90,44 @@ Future<List<String>> _sweepEntrypoint(_SweepArgs args) async {
   final workerCount = args.concurrency < hosts.length
       ? args.concurrency
       : hosts.length;
-  await Future.wait([for (var w = 0; w < workerCount; w++) worker()]);
+  unawaited(
+    Future.wait([for (var w = 0; w < workerCount; w++) worker()]).then((_) {
+      if (!found.isCompleted) {
+        found.complete(null);
+      }
+    }),
+  );
+  // The first match ends the sweep: the other workers may be waiting out a
+  // slow host, and nobody needs their answers any more.
+  final matched = await found.future;
   httpClient.close(force: true);
-  return matched == null ? const [] : [matched!];
+  return matched == null ? const [] : [matched];
 }
 
-Future<String?> _probeHost(
+/// Asks [host] whether it is a Pointy backend, and for the shop
+/// [expectedInstallationId] names when that is not empty. Returns the
+/// `api_base_url` it advertises, or null.
+@visibleForTesting
+Future<String?> probeHostForBackend(
   HttpClient client,
   String host,
-  int port,
-  Duration timeout,
-  String expected,
-) async {
+  int port, {
+  required Duration connectTimeout,
+  required Duration answerTimeout,
+  String expectedInstallationId = '',
+}) async {
   try {
     final uri = Uri.parse('http://$host:$port/api/discovery/service/');
-    final request = await client.getUrl(uri).timeout(timeout);
-    final response = await request.close().timeout(timeout);
+    final request = await client.getUrl(uri).timeout(connectTimeout);
+    final response = await request.close().timeout(answerTimeout);
     if (response.statusCode != 200) {
       await response.drain<void>();
       return null;
     }
-    final body = await response.transform(utf8.decoder).join().timeout(timeout);
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(answerTimeout);
     final decoded = jsonDecode(body);
     if (decoded is! Map) {
       return null;
@@ -110,8 +135,8 @@ Future<String?> _probeHost(
     if (decoded['service']?.toString() != 'pointy-backend') {
       return null;
     }
-    if (expected.isNotEmpty &&
-        decoded['installation_id']?.toString() != expected) {
+    if (expectedInstallationId.isNotEmpty &&
+        decoded['installation_id']?.toString() != expectedInstallationId) {
       return null;
     }
     final apiBaseUrl = decoded['api_base_url']?.toString() ?? '';

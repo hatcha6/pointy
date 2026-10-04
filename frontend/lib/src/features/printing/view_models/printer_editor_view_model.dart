@@ -298,6 +298,9 @@ class PrinterEditorViewModel extends ChangeNotifier {
     endpoint.copyWith(labelRotationQuarterTurns: ((quarterTurns % 4) + 4) % 4),
   );
 
+  void updateLabelShopHeader(bool value) =>
+      _updateEndpoint(endpoint.copyWith(labelShopHeader: value));
+
   Future<void> discoverPrinters() => _settings.discoverPrinters();
 
   Future<void> checkConnection() async {
@@ -348,7 +351,11 @@ class PrinterEditorViewModel extends ChangeNotifier {
       return;
     }
     _runningTest = null;
-    _lastTest = PrinterTestResult(kind, result.isSuccess);
+    _lastTest = PrinterTestResult(
+      kind,
+      result.isSuccess,
+      paperMismatch: result.paperMismatch,
+    );
     _connection = result.isSuccess
         ? PrinterConnectionState.connected
         : PrinterConnectionState.disconnected;
@@ -383,6 +390,7 @@ class PrinterEditorViewModel extends ChangeNotifier {
     _lastTest = PrinterTestResult(
       PrinterTestKind.barcodeLabel,
       result.isSuccess,
+      paperMismatch: result.paperMismatch,
     );
     trackAuditEvent(
       _settings.analyticsEngine,

@@ -9,6 +9,7 @@ import '../../../shared/payments/libyan_banks.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/bank_routing.dart';
 import '../view_models/money_position_view_model.dart';
+import 'clearing_account_fields.dart';
 
 /// Create or edit a place the shop's money sits.
 ///
@@ -66,6 +67,11 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
   late bool _isDefault;
   late bool _isActive;
   late DateTime _openingAt;
+  // Clearing accounts only.
+  int? _settlesIntoId;
+  late String _cutoff;
+  late Set<int> _weekdays;
+  late int _lagDays;
   bool _submitting = false;
 
   bool get _isNew => widget.account == null;
@@ -89,6 +95,69 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
     _isDefault = account?.isDefault ?? false;
     _isActive = account?.isActive ?? true;
     _openingAt = account?.openingAt ?? DateTime.now();
+    _settlesIntoId = account?.settlesIntoId;
+    _cutoff = account?.settlementCutoff ?? MoneyAccount.defaultSettlementCutoff;
+    _weekdays = _parseWeekdays(
+      account?.settlementWeekdays ?? MoneyAccount.defaultSettlementWeekdays,
+    );
+    _lagDays = account?.settlementLagDays ?? 1;
+  }
+
+  /// The active bank accounts a processor could pay into.
+  List<MoneyAccount> get _banks => [
+    for (final entry in widget.viewModel.accounts)
+      if (entry.account.isBank && entry.account.isActive) entry.account,
+  ];
+
+  void _chooseKind(MoneyAccountKind kind, AppLocalizations l10n) {
+    setState(() {
+      _kind = kind;
+      if (kind != MoneyAccountKind.clearing) {
+        return;
+      }
+      // What the owner would have typed, and the bank card money already
+      // falls back to.
+      if (_nameController.text.trim().isEmpty) {
+        _nameController.text = l10n.cardProviderMoamalat;
+      }
+      final banks = _banks;
+      _settlesIntoId ??= banks
+          .where((bank) => bank.isRouted)
+          .followedBy(banks)
+          .map((bank) => bank.id)
+          .firstOrNull;
+      _openingAt = DateTime.now();
+    });
+  }
+
+  /// Turning a clearing account off is final, so it is asked once in words.
+  Future<void> _setClearingActive(bool value, AppLocalizations l10n) async {
+    if (value) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.treasuryClearingStopConfirmTitle),
+        content: Text(l10n.treasuryClearingStopConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              MaterialLocalizations.of(dialogContext).cancelButtonLabel,
+            ),
+          ),
+          FilledButton(
+            key: const ValueKey('money_account_clearing_stop_confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.treasuryClearingStopConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      setState(() => _isActive = false);
+    }
   }
 
   @override
@@ -101,10 +170,14 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
   }
 
   bool get _isBank => _kind == MoneyAccountKind.bank;
+  bool get _isClearing => _kind == MoneyAccountKind.clearing;
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    if (_isClearing && (_settlesIntoId == null || _weekdays.isEmpty)) {
       return;
     }
     final messenger = ScaffoldMessenger.of(context);
@@ -121,11 +194,18 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
       bankSlug: _isBank ? _bankSlug : '',
       accountNumber: _isBank ? _accountNumberController.text.trim() : '',
       iban: _isBank ? _ibanController.text.trim() : '',
-      openingBalance:
-          double.tryParse(_openingBalanceController.text.trim()) ?? 0,
+      // A clearing account never has an opening balance or the default flag:
+      // what it holds is card sales Pointy already recorded.
+      openingBalance: _isClearing
+          ? 0
+          : double.tryParse(_openingBalanceController.text.trim()) ?? 0,
       openingAt: _openingAt,
-      isDefault: _isDefault,
+      isDefault: _isClearing ? false : _isDefault,
       isActive: _isActive,
+      settlesIntoId: _isClearing ? _settlesIntoId : null,
+      settlementCutoff: _cutoff,
+      settlementWeekdays: (_weekdays.toList()..sort()).join(','),
+      settlementLagDays: _lagDays,
       // Not on the form, but on the account. The whole form travels on every
       // save, so leaving these to their defaults reset an imported account's
       // notes and its place in the list each time anything was edited.
@@ -193,10 +273,15 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
                       icon: const Icon(Icons.savings_outlined),
                       label: Text(l10n.treasuryAccountKindCash),
                     ),
+                    ButtonSegment(
+                      value: MoneyAccountKind.clearing,
+                      icon: const Icon(Icons.hourglass_bottom_outlined),
+                      label: Text(l10n.treasuryAccountKindClearing),
+                    ),
                   ],
                   selected: {_kind},
                   onSelectionChanged: (selection) =>
-                      setState(() => _kind = selection.first),
+                      _chooseKind(selection.first, l10n),
                 ),
                 SizedBox(height: spacing.md),
               ],
@@ -251,54 +336,91 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
                   ),
                 ),
               ],
-              SizedBox(height: spacing.sm),
-              TextFormField(
-                key: const ValueKey('money_account_opening_balance_field'),
-                controller: _openingBalanceController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: true,
+              if (_isClearing) ...[
+                SizedBox(height: spacing.sm),
+                ClearingAccountFields(
+                  isNew: _isNew,
+                  banks: _banks,
+                  settlesIntoId: _settlesIntoId,
+                  settlesIntoName: widget.account?.settlesIntoName ?? '',
+                  onSettlesIntoChanged: (value) =>
+                      setState(() => _settlesIntoId = value),
+                  startsOn: _openingAt,
+                  onStartsOnChanged: (value) =>
+                      setState(() => _openingAt = value),
+                  cutoff: _cutoff,
+                  onCutoffChanged: (value) => setState(() => _cutoff = value),
+                  weekdays: _weekdays,
+                  onWeekdaysChanged: (value) =>
+                      setState(() => _weekdays = value),
+                  lagDays: _lagDays,
+                  onLagDaysChanged: (value) => setState(() => _lagDays = value),
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
-                ],
-                decoration: InputDecoration(
-                  labelText: l10n.treasuryAccountOpeningBalanceLabel,
+                if (!_isNew)
+                  SwitchListTile(
+                    key: const ValueKey('money_account_active_switch'),
+                    contentPadding: EdgeInsets.zero,
+                    value: _isActive,
+                    // A stopped clearing account stays stopped: reopening it
+                    // would hold again what went straight to the bank.
+                    onChanged: widget.account!.isActive
+                        ? (value) => _setClearingActive(value, l10n)
+                        : null,
+                    title: Text(l10n.treasuryClearingActiveLabel),
+                  ),
+              ] else ...[
+                SizedBox(height: spacing.sm),
+                TextFormField(
+                  key: const ValueKey('money_account_opening_balance_field'),
+                  controller: _openingBalanceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: l10n.treasuryAccountOpeningBalanceLabel,
+                  ),
+                  // An unparseable entry used to be saved as zero without a word
+                  // — the one number an owner correcting an import would never
+                  // notice was wrong.
+                  validator: (value) =>
+                      double.tryParse((value ?? '').trim()) == null
+                      ? l10n.treasuryAccountOpeningBalanceInvalid
+                      : null,
                 ),
-                // An unparseable entry used to be saved as zero without a word
-                // — the one number an owner correcting an import would never
-                // notice was wrong.
-                validator: (value) =>
-                    double.tryParse((value ?? '').trim()) == null
-                    ? l10n.treasuryAccountOpeningBalanceInvalid
-                    : null,
-              ),
-              SizedBox(height: spacing.sm),
-              _OpeningDateField(
-                value: _openingAt,
-                onChanged: (value) => setState(() => _openingAt = value),
-              ),
-              SizedBox(height: spacing.sm),
-              SwitchListTile(
-                key: const ValueKey('money_account_default_switch'),
-                contentPadding: EdgeInsets.zero,
-                value: _isDefault,
-                onChanged: (value) => setState(() => _isDefault = value),
-                title: Text(l10n.treasuryAccountDefaultLabel),
-                subtitle: Text(l10n.treasuryAccountDefaultHint),
-              ),
-              if (!_isNew)
+                SizedBox(height: spacing.sm),
+                _OpeningDateField(
+                  value: _openingAt,
+                  onChanged: (value) => setState(() => _openingAt = value),
+                ),
+                SizedBox(height: spacing.sm),
                 SwitchListTile(
-                  key: const ValueKey('money_account_active_switch'),
+                  key: const ValueKey('money_account_default_switch'),
                   contentPadding: EdgeInsets.zero,
-                  value: _isActive,
-                  onChanged: (value) => setState(() => _isActive = value),
-                  title: Text(l10n.treasuryAccountActiveLabel),
+                  value: _isDefault,
+                  onChanged: (value) => setState(() => _isDefault = value),
+                  title: Text(l10n.treasuryAccountDefaultLabel),
+                  subtitle: Text(l10n.treasuryAccountDefaultHint),
                 ),
+                if (!_isNew)
+                  SwitchListTile(
+                    key: const ValueKey('money_account_active_switch'),
+                    contentPadding: EdgeInsets.zero,
+                    value: _isActive,
+                    onChanged: (value) => setState(() => _isActive = value),
+                    title: Text(l10n.treasuryAccountActiveLabel),
+                  ),
+              ],
               SizedBox(height: spacing.md),
               FilledButton.icon(
                 key: const ValueKey('money_account_save_button'),
-                onPressed: _submitting ? null : _submit,
+                onPressed:
+                    _submitting || (_isClearing && _isNew && _banks.isEmpty)
+                    ? null
+                    : _submit,
                 icon: _submitting
                     ? const SizedBox(
                         width: 18,
@@ -354,6 +476,17 @@ class _OpeningDateField extends StatelessWidget {
       ),
     );
   }
+}
+
+Set<int> _parseWeekdays(String value) {
+  final days = <int>{};
+  for (final part in value.split(',')) {
+    final day = int.tryParse(part.trim());
+    if (day != null && day >= 0 && day <= 6) {
+      days.add(day);
+    }
+  }
+  return days;
 }
 
 /// The bank's Arabic name, or blank when nothing is chosen.

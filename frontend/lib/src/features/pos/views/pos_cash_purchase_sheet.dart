@@ -233,8 +233,11 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
     final captured = await showUnitCaptureSheet(
       context,
       productLabel: line.product.name,
-      expectedCount: line.quantity.round(),
-      lineUnitCost: line.unitCost ?? 0,
+      // Articles, not packs: a box of three handsets is three numbers, and
+      // the server counts the capture in base units.
+      expectedCount: line.baseUnitCount,
+      // What one article cost, which is what each captured one is stamped with.
+      lineUnitCost: (line.unitCost ?? 0) / line.unit.factorToBase,
       initial: line.units,
     );
     if (captured == null || !mounted) {
@@ -752,8 +755,12 @@ class _CashPurchaseLine {
 
   bool get needsIdentifiers => product.trackingMode.tracksUnits;
 
+  /// How many articles this line is, in base units — what the identifiers
+  /// are counted against.
+  int get baseUnitCount => (quantity * unit.factorToBase).round();
+
   bool get identifiersComplete =>
-      !needsIdentifiers || units.length == quantity.round();
+      !needsIdentifiers || units.length == baseUnitCount;
 }
 
 class _CashPurchaseLineRow extends StatefulWidget {
@@ -955,7 +962,7 @@ class _CashPurchaseLineRowState extends State<_CashPurchaseLineRow> {
                   label: Text(
                     l10n.unitCaptureProgress(
                       line.units.length,
-                      line.quantity.round(),
+                      line.baseUnitCount,
                     ),
                   ),
                   onPressed: widget.enabled

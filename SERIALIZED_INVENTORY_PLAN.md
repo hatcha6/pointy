@@ -533,6 +533,22 @@ The two new transitions follow the same rule with one deliberate softening:
   requires a lot. Refusing the transition until history is perfect would mean a
   pharmacy that starts with serials can never adopt lots, which is the wrong
   answer to a shop that is trying to get *more* correct.
+  *Landed 2026-10-04:* the allocation guard and invariant 14 had kept the
+  opposite rule — every `serial_batch` allocation must name a lot — so a
+  grandfathered unit could not be sold (a `ValueError` at the till) and the
+  integrity check reported its whole history. `Product.tracking_mode_since`
+  (stamped at creation and on every change of mode, detected from the mode
+  the row was read with) now decides: while the mode is `serial_batch`, a unit
+  born before it may move without a lot and one born after may not. The same
+  stamp ends every false positive of the class "judged by today's mode":
+  invariant 14 holds history written before it only to what is true in every
+  mode (it names a unit or a lot), so lots sold under `batch` are not read as
+  serials that forgot their unit after an empty-shelf `batch → serial`, nor
+  handsets as lots after `serial → batch`. And `tracking_since` now marks the
+  *current* tracked stretch — cleared when a product goes back to `quantity` —
+  so invariant 5 no longer blames what a product sold while switched off.
+  Tests: `apps/inventory/test_lot_grandfathering.py`,
+  `apps/inventory/test_tracking_history.py`.
 - `serial_batch → serial` is allowed freely; the lots simply stop being required.
   Nothing is unsaid, and the allocations keep naming the batches they named.
 
@@ -1309,6 +1325,22 @@ structured error naming the units, and the correction that still works is a
 purchase return — which moves the articles it names. The rule below is what
 replaces that refusal, and it needs the receipt-line→unit linkage to survive the
 reverse/re-record rather than being rebuilt through it.
+
+**What landed (2026-10-04).** That sentence was not true until today: the
+return, refund and exchange endpoints moved the bin and named nothing, so the
+ledger refused every tracked one (a 500) — on the very correction this refusal
+recommends. They now go through `allocate_adjustment`: each outbound line
+takes `units` (ids, or scanned codes as strings) and `batches` (lot ids). A
+serial line must name exactly its base quantity, refused in Arabic otherwise,
+and its units become `returned`; a lot line goes FEFO unless it names lots.
+Exchange replacements accept receipt-shaped `units`/`batches` capture rows, take
+the shelf's own rate, record the order's supplier, and leave anything not
+scanned on the missing-identifier worklist (a `serial_batch` replacement still
+needs its lot). The old path's `consume_expiring_stock_batches` **applied** a
+lot drawdown and dropped the plan; it was replaced rather than supplemented,
+or the lots would have been drawn twice. Still open: a quarantined lot cannot
+go back to its supplier, because `pick_balances` serves sellable balances only.
+Tests: `apps/purchasing/test_adjustment_identified_stock.py`.
 
 Rule: **re-stamp the units, and the balances, of any receipt line whose
 `allocated_landed_cost` changed, then `repost_variant`.** For a lot this means
@@ -2248,6 +2280,33 @@ identifiers; each becomes a unit whose `incoming_rate` is the current bin rate
 and whose `in_stock_since` is the migration date; the bin is unchanged by
 construction. Refuse to finish while any unit is unaccounted for, and allow
 "identify later" only with the same visible worklist as §6.1.
+
+**What landed (2026-10-04).** The run was reachable only for products already
+tracked, and the mode guard refused the switch itself while stock was on hand —
+so a stocked shop could never start. The switch is now the door: a product
+`PATCH` turning `quantity → serial` or `quantity → batch` over stock answers
+`400` with `code: tracking_mode_change_requires_identification` (plus
+`on_hand`); the edit sheet asks once and resends with
+`tracking_mode_identify_later`, and the serializer saves the mode and runs
+`identify_opening_stock(..., capture_later=True)` for every stock row in the
+same transaction, re-checking the shelf under lock. Serial stock becomes
+placeholders on the «بانتظار المعرّف» worklist (refused by the till until
+scanned); lot stock lands in one generated lot and keeps selling. Refused with
+no code, because no confirmation fixes them: negative stock, a fractional or
+quotation-held shelf for serials, goods in transit, `→ serial_batch` with stock
+(go serial first — `serial → serial_batch` grandfathers), and sideways
+`batch ↔ serial`. It answers to `inventory.add_stockunit`, like the run's own
+endpoint. Tests: `apps/catalog/test_tracking_mode_switch.py`.
+
+Building it surfaced a bug under every capture-later path: placeholder unit
+codes were `#-{key}-{n}`, the live unique index compares *normalised* codes,
+and `normalize_identifier` strips dashes — so `#-OPEN-1-21` and `#-OPEN-12-1`
+were one identifier, and keys that repeat across calls (`MV-<variant>` for
+every manual arrival, `PO<order>L<line>-1` for both partial deliveries of a
+line, `ADJ-<second>`) made the *second* unnamed arrival a 500.
+`tracking.placeholder_unit_code` now puts a random tag, drawn once per
+arrival, between the key and the number; the key is provenance only. Tests:
+`apps/inventory/test_placeholder_codes.py`.
 
 ---
 

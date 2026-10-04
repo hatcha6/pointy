@@ -690,3 +690,41 @@ def _register_employee_balance_entry():
 _register_customer_balance_entry()
 _register_supplier_balance_entry()
 _register_employee_balance_entry()
+
+
+def _register_card_settlement():
+    from apps.treasury import documents as treasury_documents
+    from apps.treasury.models import CardSettlement
+
+    registry.register(
+        key="card_settlement",
+        label="تسوية بطاقات",
+        model=CardSettlement,
+        number_field=None,
+        money_date_field="settled_on",
+        # The deposit either reached the bank or it did not.
+        has_draft_state=False,
+        draft_effects=(),
+        submit_effects=("money_position",),
+        # Never edited: a settlement recorded against the wrong days or with
+        # the wrong amount is cancelled — its payments are held again — and
+        # recorded afresh, so every figure it moved is undone together.
+        corrections=(),
+        mutable_after_submit=(),
+        derived_fields=(),
+        blocks_cancel=(),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "treasury.add_cardsettlement",
+            Transition.CANCEL: "treasury.cancel_cardsettlement",
+        },
+        correction_window=None,
+        reverse=treasury_documents.reverse_settlement,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
+_register_card_settlement()

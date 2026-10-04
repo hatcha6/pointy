@@ -1,4 +1,6 @@
 import '../../../data/models/product.dart';
+import '../../../data/models/product_tracking.dart';
+import '../../../data/models/tracking_mode.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 
 /// The fields a run of new products can carry from one product to the next.
@@ -11,6 +13,11 @@ enum ProductCarryField {
   price,
   category,
   unit,
+
+  /// How the product's stock is identified: the old expiry switch, or the
+  /// whole tracking choice — mode, kind of device, warranty, lot policy —
+  /// where the shop tracks identified stock. A phone shop entering its models
+  /// one after another pins it once.
   tracksExpiry,
   openingCost;
 
@@ -30,7 +37,12 @@ class ProductCarryOverValues {
     required this.unit,
     required this.tracksExpiry,
     required this.openingCost,
-  });
+    ProductTracking? tracking,
+  }) : tracking =
+           tracking ??
+           (tracksExpiry
+               ? const ProductTracking(mode: TrackingMode.batch)
+               : const ProductTracking());
 
   final String name;
   final String price;
@@ -43,6 +55,10 @@ class ProductCarryOverValues {
   final bool tracksExpiry;
   final String openingCost;
 
+  /// The full tracking choice. Derived from [tracksExpiry] when not given, so
+  /// the two cannot disagree.
+  final ProductTracking tracking;
+
   /// Whether this field carried anything worth marking as the previous
   /// product's — not an empty field, nor the value every new product starts
   /// with anyway.
@@ -52,7 +68,7 @@ class ProductCarryOverValues {
       ProductCarryField.price => price.isNotEmpty,
       ProductCarryField.category => categories.isNotEmpty,
       ProductCarryField.unit => unit != 'piece',
-      ProductCarryField.tracksExpiry => tracksExpiry,
+      ProductCarryField.tracksExpiry => tracking.mode.isTracked,
       ProductCarryField.openingCost => openingCost.isNotEmpty,
     };
   }

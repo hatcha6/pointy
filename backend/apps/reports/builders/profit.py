@@ -31,6 +31,7 @@ from apps.employees.reporting import payroll_cost
 from apps.expenses.models import Expense
 from apps.inventory.reporting import shrinkage_value
 from apps.payments.models import Payment
+from apps.treasury.settlements import settlement_fee_total
 
 from ..sections import (
     Column,
@@ -62,6 +63,11 @@ def profit_costs(context):
     commissions = in_period(Payment.objects.all(), period).aggregate(
         total=money_sum("commission_amount")
     )["total"]
+    # The commission above is estimated at each sale; when a card processor's
+    # deposit shows it kept more (or less), the difference is a real cost (or
+    # saving) of the period the deposit landed in. Without it, a fee the shop
+    # was charged but never told about would leave the money and no expense.
+    settlement_fees = settlement_fee_total(start, end)
     ad_hoc = in_period(Expense.objects.live(), period).aggregate(
         total=money_sum("amount")
     )["total"]
@@ -73,6 +79,7 @@ def profit_costs(context):
     operating_expense = (
         decimal_from(labour)
         + decimal_from(commissions)
+        + settlement_fees
         + decimal_from(ad_hoc)
         + decimal_from(shrinkage)
     )
@@ -103,6 +110,10 @@ def profit_costs(context):
         # the cash went; the goods it bought are on the shelf, not consumed.
         "purchase_spend_total": money(purchase_spend),
     }
+    if settlement_fees:
+        # Stated only for a shop that records card settlements and found a
+        # gap: a zero figure on every grocer's statement would be noise.
+        figures["card_settlement_fee_total"] = money(settlement_fees)
 
     sections = [
         context.metrics(figures),
@@ -144,6 +155,16 @@ def _profit_statement_section(figures, purchase_spend):
         _line(
             "payment_commission_total",
             _negated(figures["payment_commission_total"]),
+        ),
+        *(
+            [
+                _line(
+                    "card_settlement_fee_total",
+                    _negated(figures["card_settlement_fee_total"]),
+                )
+            ]
+            if "card_settlement_fee_total" in figures
+            else []
         ),
         _line("ad_hoc_expense_total", _negated(figures["ad_hoc_expense_total"])),
         _line("shrinkage_total", _negated(figures["shrinkage_total"])),

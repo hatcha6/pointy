@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../data/models/sale_order.dart';
+import '../../data/models/stock_unit.dart';
+import '../../data/repositories/tracked_stock_repository.dart';
 import '../../data/services/order_document_service.dart';
 import '../components/components.dart';
 import '../design/design.dart';
@@ -20,6 +22,7 @@ import '../query_controls/debounced_search_field.dart';
 import '../responsive/responsive.dart';
 import '../date_formatters.dart';
 import '../../features/invoices/views/card_receipt_viewer_sheet.dart';
+import '../../features/pos/views/pos_unit_picker_sheet.dart';
 import '../../data/models/bank_account_ref.dart';
 import '../payments/bank_account_row.dart';
 import '../payments/card_receipt_status.dart';
@@ -67,6 +70,7 @@ class SaleOrderDetailsContent extends StatefulWidget {
     this.onReturn,
     this.onExchange,
     this.onProductSearch,
+    this.trackedStockRepository,
     this.onRecordPayment,
     this.onAssignCustomer,
     this.onConvert,
@@ -94,6 +98,12 @@ class SaleOrderDetailsContent extends StatefulWidget {
   /// replacement item(s) in one operation.
   final SaleOrderExchangeAction? onExchange;
   final ExchangeProductSearch? onProductSearch;
+
+  /// Where the exchange dialog lists the handsets on the shelf. A serialized
+  /// replacement is chosen in the till's unit picker, one article per line;
+  /// without this repository such a product cannot be offered at all, rather
+  /// than leaving the server to pick a handset nobody chose.
+  final TrackedStockRepository? trackedStockRepository;
 
   /// When provided and the order is an unpaid credit invoice, surfaces a
   /// prominent "آجل — المتبقّي X" callout with a "تسجيل دفعة" action.
@@ -516,6 +526,7 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
       builder: (context) => _SaleExchangeDialog(
         order: widget.order,
         onProductSearch: widget.onProductSearch!,
+        trackedStockRepository: widget.trackedStockRepository,
       ),
     );
     if (draft == null || widget.onExchange == null) {
@@ -850,6 +861,11 @@ class _LinesSection extends StatelessWidget {
                     ].join(' • '),
                     trailing: Text(formatMoney(line.total)),
                   ),
+                  // Which handset left, or which lot: what a warranty claim, a
+                  // return and a recall are all answered from. The receipt
+                  // printed them; the screen now says them too.
+                  if (line.identifiers.isNotEmpty)
+                    _LineIdentifiers(identifiers: line.identifiers),
                   // A top-up is the one line on an invoice whose delivery is
                   // not obvious from the document. This is where a shop looks
                   // when a customer comes back saying the TV is still off.
@@ -861,6 +877,68 @@ class _LinesSection extends StatelessWidget {
                 ],
               ],
             ),
+    );
+  }
+}
+
+/// The articles and lots a sale line took, as chips under the line.
+class _LineIdentifiers extends StatelessWidget {
+  const _LineIdentifiers({required this.identifiers});
+
+  final List<SaleLineIdentifier> identifiers;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: colors.mutedInk,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    Widget chip(IconData icon, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: colors.mutedInk),
+        const SizedBox(width: 4),
+        Text(label, style: style),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 40, top: 2, bottom: 2),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 4,
+        children: [
+          for (final identifier in identifiers) ...[
+            if (identifier.isUnit)
+              chip(Icons.tag_outlined, identifier.code)
+            else
+              chip(
+                Icons.inventory_2_outlined,
+                identifier.quantity == 1
+                    ? l10n.posCartLineBatchBadge(identifier.code)
+                    : l10n.invoiceLineLotQuantity(
+                        identifier.code,
+                        formatSaleQuantity(identifier.quantity),
+                      ),
+              ),
+            if (identifier.isUnit && identifier.batchCode.isNotEmpty)
+              chip(
+                Icons.inventory_2_outlined,
+                l10n.posCartLineBatchBadge(identifier.batchCode),
+              ),
+            if (identifier.expiryDate != null)
+              chip(
+                Icons.event_outlined,
+                l10n.posCartLineExpiryBadge(
+                  formatExpiry(identifier.expiryDate!),
+                ),
+              ),
+            if (identifier.isConsignment)
+              chip(Icons.handshake_outlined, l10n.posUnitPickerConsignment),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1246,10 +1324,18 @@ class _DetailRow extends StatelessWidget {
 
 /// One chosen replacement product line inside [_SaleExchangeDialog].
 class _ExchangeReplacement {
-  _ExchangeReplacement({required this.option});
+  _ExchangeReplacement({required this.option, this.stockUnit});
 
   final ExchangeProductOption option;
+
+  /// The handset this line hands over, for a serialized product. Such a line
+  /// is the article itself, so its quantity stays one and nothing merges in.
+  final StockUnit? stockUnit;
   double quantity = 1;
+
+  /// What the server will charge: the article's own asking price when it has
+  /// one, as at the till, otherwise the product's.
+  double get unitPrice => stockUnit?.listPrice ?? option.unitPrice;
 }
 
 /// Returns the chosen original line(s) and rings up replacement item(s) in one
@@ -1261,10 +1347,12 @@ class _SaleExchangeDialog extends StatefulWidget {
   const _SaleExchangeDialog({
     required this.order,
     required this.onProductSearch,
+    this.trackedStockRepository,
   });
 
   final SaleOrder order;
   final ExchangeProductSearch onProductSearch;
+  final TrackedStockRepository? trackedStockRepository;
 
   @override
   State<_SaleExchangeDialog> createState() => _SaleExchangeDialogState();
@@ -1315,15 +1403,45 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
     });
   }
 
-  void _addReplacement(ExchangeProductOption option) {
+  Future<void> _addReplacement(ExchangeProductOption option) async {
+    if (option.trackingMode.tracksUnits) {
+      return _addStockUnit(option);
+    }
     setState(() {
       final index = _replacements.indexWhere(
-        (r) => r.option.variantId == option.variantId,
+        (r) => r.stockUnit == null && r.option.variantId == option.variantId,
       );
       if (index >= 0) {
         _replacements[index].quantity += 1;
       } else {
         _replacements.add(_ExchangeReplacement(option: option));
+      }
+      _showError = false;
+    });
+  }
+
+  /// A serialized replacement is chosen the way the till chooses one: out of
+  /// the handsets on this shelf, each its own line. Picking a handset that is
+  /// already on a line keeps that line — the same phone cannot leave twice.
+  Future<void> _addStockUnit(ExchangeProductOption option) async {
+    final repository = widget.trackedStockRepository;
+    if (repository == null) {
+      return;
+    }
+    final unit = await showPosUnitPickerSheet(
+      context,
+      repository: repository,
+      variantId: option.variantId,
+      productLabel: option.label,
+    );
+    if (unit == null || !mounted) {
+      return;
+    }
+    setState(() {
+      if (!_replacements.any((r) => r.stockUnit?.id == unit.id)) {
+        _replacements.add(
+          _ExchangeReplacement(option: option, stockUnit: unit),
+        );
       }
       _showError = false;
     });
@@ -1340,7 +1458,7 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
   double get _replacementValue {
     var total = 0.0;
     for (final replacement in _replacements) {
-      total += replacement.quantity * replacement.option.unitPrice;
+      total += replacement.quantity * replacement.unitPrice;
     }
     return total;
   }
@@ -1417,8 +1535,14 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
                     title: Text(option.label),
                     subtitle: Text(formatMoney(option.unitPrice)),
                     trailing: IconButton(
-                      tooltip: l10n.addOneTooltip,
-                      onPressed: () => _addReplacement(option),
+                      tooltip: option.trackingMode.tracksUnits
+                          ? l10n.posUnitPickerTitle(option.label)
+                          : l10n.addOneTooltip,
+                      onPressed:
+                          option.trackingMode.tracksUnits &&
+                              widget.trackedStockRepository == null
+                          ? null
+                          : () => _addReplacement(option),
                       icon: const Icon(Icons.add),
                     ),
                   )
@@ -1434,27 +1558,42 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(replacement.option.label),
-                  subtitle: Text(formatMoney(replacement.option.unitPrice)),
+                  subtitle: replacement.stockUnit == null
+                      ? Text(formatMoney(replacement.unitPrice))
+                      : Wrap(
+                          spacing: 12,
+                          runSpacing: 2,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(formatMoney(replacement.unitPrice)),
+                            _ExchangeUnitCode(
+                              code: replacement.stockUnit!.code,
+                            ),
+                          ],
+                        ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      PointyQuantityStepper(
-                        quantity: replacement.quantity,
-                        incrementTooltip: l10n.addOneTooltip,
-                        decrementTooltip: l10n.removeOneTooltip,
-                        onDecrement: () {
-                          setState(() {
-                            if (replacement.quantity <= 1) {
-                              _replacements.removeAt(index);
-                            } else {
-                              replacement.quantity -= 1;
-                            }
-                          });
-                        },
-                        onIncrement: () {
-                          setState(() => replacement.quantity += 1);
-                        },
-                      ),
+                      // A handset is one article: there is no second of it
+                      // to step up to, only the line to take back off.
+                      if (replacement.stockUnit == null)
+                        PointyQuantityStepper(
+                          quantity: replacement.quantity,
+                          incrementTooltip: l10n.addOneTooltip,
+                          decrementTooltip: l10n.removeOneTooltip,
+                          onDecrement: () {
+                            setState(() {
+                              if (replacement.quantity <= 1) {
+                                _replacements.removeAt(index);
+                              } else {
+                                replacement.quantity -= 1;
+                              }
+                            });
+                          },
+                          onIncrement: () {
+                            setState(() => replacement.quantity += 1);
+                          },
+                        ),
                       IconButton(
                         tooltip: l10n.removeOneTooltip,
                         onPressed: () {
@@ -1523,6 +1662,7 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
           SaleExchangeReplacementLineDraft(
             variantId: replacement.option.variantId,
             quantity: replacement.quantity,
+            stockUnitId: replacement.stockUnit?.id,
           ),
     ];
     if (lines.isEmpty || replacementLines.isEmpty) {
@@ -1536,6 +1676,32 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
         settlementMethod: _settlement.apiValue,
         reason: _reasonController.text.trim(),
       ),
+    );
+  }
+}
+
+/// The IMEI or serial a replacement line hands over, marked the way the till's
+/// cart marks it: what the cashier checks against the box at the counter.
+class _ExchangeUnitCode extends StatelessWidget {
+  const _ExchangeUnitCode({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.tag_outlined, size: 14, color: colors.primaryStrong),
+        const SizedBox(width: 4),
+        Text(
+          code,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.primaryStrong),
+        ),
+      ],
     );
   }
 }

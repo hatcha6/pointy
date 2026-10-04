@@ -223,6 +223,16 @@ class _PrinterLabelSettingsState extends State<PrinterLabelSettings> {
               }
             : null,
       ),
+      SizedBox(height: spacing.sm),
+      SwitchListTile(
+        key: const ValueKey('printer_label_shop_header'),
+        contentPadding: EdgeInsets.zero,
+        value: endpoint.labelShopHeader,
+        onChanged: enabled ? _editor.updateLabelShopHeader : null,
+        title: Text(l10n.printerBarcodeLabelShopHeaderLabel),
+        subtitle: Text(l10n.printerBarcodeLabelShopHeaderHelper),
+        secondary: const Icon(Icons.storefront_outlined),
+      ),
     ];
   }
 

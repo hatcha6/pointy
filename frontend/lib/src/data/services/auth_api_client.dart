@@ -156,6 +156,19 @@ class AuthApiClient {
     if (decoded.containsKey('surveillance_enabled')) {
       userJson['surveillance_enabled'] = decoded['surveillance_enabled'];
     }
+    // And identified stock's, the same way. These were read off the user
+    // object and never folded onto it, so every shop — including one that had
+    // switched serials or lots on — looked like it had not: the units and
+    // batches screens never appeared for anybody.
+    for (final flag in const [
+      'serialized_inventory_enabled',
+      'batch_tracking_enabled',
+      'serialized_capture_later_allowed',
+    ]) {
+      if (decoded.containsKey(flag)) {
+        userJson[flag] = decoded[flag];
+      }
+    }
     return PosUser.fromJson(userJson);
   }
 }

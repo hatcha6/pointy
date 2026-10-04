@@ -41,6 +41,10 @@ def reverse(payment, *, at, actor, reason="", context=None):
         commission_amount=commission_amount,
         external_reference=f"{COUNTER_REFERENCE_PREFIX}{payment.pk}",
         reverses=payment,
+        # Back out of the account it came into. Left blank, the counter row of
+        # a payment into a second bank fell back to the default bank: one bank
+        # kept the money, the other lost it, and neither statement agreed.
+        money_account_id=payment.money_account_id,
         register_session=(
             context.get("register_session") or payment.register_session
         ),

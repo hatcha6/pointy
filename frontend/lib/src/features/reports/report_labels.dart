@@ -275,6 +275,8 @@ const _moneyKeys = {
   'supplier_paid_total',
   'paid_to_supplier_total',
   'provider_float',
+  'cards_in_transit',
+  'card_settlement_fee_total',
   'sales_after_discount',
   'balance_due',
   'payable_balance',
@@ -379,6 +381,8 @@ const _valueLabels = {
   'salary_deduction': 'خصم من الراتب',
   'account_credit': 'من رصيد العميل',
   'bank': 'مصرف',
+  // A money account holding card takings the processor has not paid in yet.
+  'clearing': 'قيد التسوية',
   'pay_in': 'إيداع نقدي',
   'pay_out': 'سحب نقدي',
   'increase': 'زيادة مخزون',
@@ -421,6 +425,9 @@ const _valueLabels = {
   'unexplained_difference': 'فرق غير مفسَّر',
   'consignor_payout': 'مدفوعات أصحاب الأمانات',
   'integration_draw': 'سحب مزوّد الخدمة',
+  'settlement_in': 'تحويلات شركة الدفع',
+  'settlement_out': 'حُوِّل إلى المصرف',
+  'settlement_difference': 'فرق التسوية',
   // What moved one article: the ledger's voucher types.
   'sale': 'بيع',
   'sale_return': 'مرتجع بيع',
@@ -688,6 +695,8 @@ const _labels = {
   'payroll_cost_total': 'تكلفة الرواتب',
   'payroll_paid_total': 'رواتب مصروفة',
   'payment_commission_total': 'عمولات الدفع',
+  // What a card processor kept beyond the fee estimated at each sale.
+  'card_settlement_fee_total': 'فروقات عمولة البطاقات',
   'ad_hoc_expense_total': 'مصاريف عامة',
   'purchase_spend_total': 'إنفاق المشتريات (ليس مصروفًا)',
   'operating_expense_total': 'إجمالي المصاريف التشغيلية',
@@ -724,6 +733,7 @@ const _labels = {
   'stock_at_cost': 'البضاعة بسعر التكلفة',
   'stock_at_selling_price': 'البضاعة بسعر البيع',
   'cash_and_bank': 'النقدية في الخزينة والمصارف',
+  'cards_in_transit': 'مبيعات بطاقات قيد التسوية',
   'customer_receivables': 'ديون العملاء',
   'employee_loans': 'ديون الموظفين (السلف)',
   'employee_account_receivables': 'أرصدة على الموظفين',
@@ -971,6 +981,9 @@ const _notes = {
       'الرواتب تُنسب إلى الصندوق النقدي لعدم وجود طريقة دفع مسجّلة لها؛ '
       'صحِّح ذلك بتحويل بين حساباتك إن كان الصرف بغير النقد.',
   'commission_assumed_bank': 'عمولات الدفع تُنسب إلى الحساب المصرفي.',
+  'cards_held_until_settled':
+      'مبيعات البطاقات تبقى في حساب «قيد التسوية» حتى يُسجَّل وصول تحويل '
+      'شركة الدفع إلى المصرف، فيطابق رصيد المصرف كشفه.',
   'variance_closed_sessions_only': 'الفروق تُحتسب من الجلسات المغلقة فقط.',
   'open_session_no_variance': 'الجلسة المفتوحة لا فرق لها بعد.',
 

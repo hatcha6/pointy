@@ -363,22 +363,39 @@ def _payroll_rows(start, end):
 def _commission_rows(start_dt, end_dt, period_end):
     from apps.payments.models import Payment
 
+    from apps.treasury.settlements import settlement_fee_total
+
     total = Payment.objects.filter(
         created_at__gte=start_dt,
         created_at__lt=end_dt,
     ).aggregate(
         total=Coalesce(Sum("commission_amount"), Value(Decimal("0.00")), output_field=MONEY_FIELD),
     )["total"]
-    if total <= Decimal("0.00"):
-        return []
-    return [
-        _row(
-            source=SOURCE_COMMISSION,
-            date=period_end,
-            amount=total,
-            description="عمولات الدفع",
+    rows = []
+    if total > Decimal("0.00"):
+        rows.append(
+            _row(
+                source=SOURCE_COMMISSION,
+                date=period_end,
+                amount=total,
+                description="عمولات الدفع",
+            )
         )
-    ]
+    # What a card processor kept beyond that estimate, from the deposits that
+    # landed in the window — the same correction the profit report reads.
+    # Its own row under the same source, so the commission total is the fee
+    # actually paid.
+    adjustment = settlement_fee_total(start_dt.date(), (end_dt - timedelta(days=1)).date())
+    if adjustment:
+        rows.append(
+            _row(
+                source=SOURCE_COMMISSION,
+                date=period_end,
+                amount=adjustment,
+                description="فروقات تسوية البطاقات",
+            )
+        )
+    return rows
 
 
 # --- helpers -----------------------------------------------------------------

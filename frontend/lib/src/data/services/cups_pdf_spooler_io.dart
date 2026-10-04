@@ -1,6 +1,16 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'cups_page_sizes.dart';
+
+export 'cups_page_sizes.dart'
+    show
+        CupsPageSizes,
+        CupsSpoolResult,
+        cupsCustomMediaName,
+        cupsPageOptions,
+        cupsPageSizeMm;
+
 /// Spools a PDF straight to CUPS with an **exact** media size.
 ///
 /// The printing plugin can't express label or roll media on Linux or macOS: its
@@ -15,7 +25,11 @@ import 'dart:typed_data';
 ///
 /// `lp` takes the media size per job (`-o media=Custom.40x25mm`), which pins the
 /// page to the die-cut sticker — or to the measured receipt — so nothing is left
-/// for the driver to fit, rotate or pad.
+/// for the driver to fit, rotate or pad. The page is named to the driver as
+/// `PageSize` as well, in a form it takes ([CupsPageSizes]), because a queue's
+/// saved default size otherwise rides along on every job and the driver goes by
+/// that instead. When the driver has no way to take the page at all, the job
+/// still goes, and the result says what it printed on ([CupsSpoolResult.paperMismatch]).
 ///
 /// Set [registerLabelTop] for die-cut label media, and only for die-cut media:
 /// the job is then preceded by a gap seek that parks the roll on a sticker's
@@ -64,12 +78,22 @@ Future<CupsSpoolResult> spoolPdfToCups({
     final file = File('${workDir.path}/$jobName.pdf');
     await file.writeAsBytes(bytes, flush: true);
 
+    // The driver's own sizes decide how the page can be named to it: as itself
+    // when it takes custom sizes, as its matching preset otherwise. Without
+    // either there is nothing it will take in place of its saved default, and
+    // a `Custom.…` it cannot take would only bring that default back.
+    final sizes = await readCupsPageSizes(queue);
+    final paperMismatch =
+        sizes != null && sizes.choiceFor(mediaWidthMm, mediaHeightMm) == null
+        ? sizes.mismatchFor(mediaWidthMm, mediaHeightMm)
+        : null;
+
     final result = await Process.run('lp', [
       if (queue != null && queue.trim().isNotEmpty) ...['-d', queue.trim()],
       '-t', jobName,
       '-n', '${copies < 1 ? 1 : copies}',
       // The whole point of this path: the media as loaded in the printer.
-      '-o', 'media=${cupsCustomMediaName(mediaWidthMm, mediaHeightMm)}',
+      ...cupsPageOptions(sizes, mediaWidthMm, mediaHeightMm),
       // Portrait, unscaled: the page already *is* the media, so any auto-rotate
       // or fit-to-page the filter chain might apply would only distort it.
       '-o', 'orientation-requested=3',
@@ -101,7 +125,7 @@ Future<CupsSpoolResult> spoolPdfToCups({
       // phase it started: registered, until something else moves the paper.
       cupsLabelRegistration.markRegistered(queue);
     }
-    return const CupsSpoolResult.spooled();
+    return CupsSpoolResult.spooled(paperMismatch: paperMismatch);
   } on ProcessException {
     // No `lp` on this box (CUPS client not installed) — let the caller fall
     // back to the printing plugin.
@@ -116,6 +140,26 @@ Future<CupsSpoolResult> spoolPdfToCups({
     } on Object {
       // Best effort: a leftover temp file must never fail a print.
     }
+  }
+}
+
+/// The page sizes [queue]'s driver takes, read with `lpoptions -l` (the same
+/// CUPS client `lp` comes with, and no root needed: the scheduler hands any
+/// user the driver's options). Null when there is no telling — no such queue,
+/// no client, no `PageSize` option — and then the job is named by `media`
+/// alone, as it always was.
+Future<CupsPageSizes?> readCupsPageSizes(String? queue) async {
+  try {
+    final result = await Process.run('lpoptions', [
+      if (queue != null && queue.trim().isNotEmpty) ...['-p', queue.trim()],
+      '-l',
+    ]).timeout(const Duration(seconds: 3));
+    if (result.exitCode != 0) {
+      return null;
+    }
+    return CupsPageSizes.parse('${result.stdout}');
+  } on Object {
+    return null;
   }
 }
 
@@ -225,30 +269,3 @@ class CupsLabelRegistration {
 
 /// The process-wide registration state used by [spoolPdfToCups].
 final CupsLabelRegistration cupsLabelRegistration = CupsLabelRegistration();
-
-/// CUPS custom media name for a `width × height` mm page. Whole millimetres
-/// print as integers (`Custom.40x25mm`) — the form every CUPS version parses.
-String cupsCustomMediaName(double widthMm, double heightMm) {
-  String fmt(double mm) {
-    final rounded = (mm * 100).round() / 100;
-    return rounded == rounded.roundToDouble()
-        ? '${rounded.round()}'
-        : rounded.toString();
-  }
-
-  return 'Custom.${fmt(widthMm)}x${fmt(heightMm)}mm';
-}
-
-/// Outcome of a `lp` spool attempt. [unsupported] means "this platform has no
-/// CUPS" — distinct from a real failure, because the caller then falls back to
-/// the printing plugin instead of reporting an error.
-class CupsSpoolResult {
-  const CupsSpoolResult.spooled() : supported = true, error = null;
-  const CupsSpoolResult.failed(String this.error) : supported = true;
-  const CupsSpoolResult.unsupported() : supported = false, error = null;
-
-  final bool supported;
-  final String? error;
-
-  bool get succeeded => supported && error == null;
-}

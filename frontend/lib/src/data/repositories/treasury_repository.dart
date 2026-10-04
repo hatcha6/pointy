@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/card_settlement.dart';
 import '../models/card_terminal.dart';
 import '../models/money_position.dart';
 import '../services/pos_api_service.dart';
@@ -66,6 +67,55 @@ class TreasuryRepository {
     Map<String, Object?> changes,
   ) {
     return Result.guard(() => _service.updateMoneyAccount(accountId, changes));
+  }
+
+  Future<Result<HeldTakings>> loadHeldTakings(
+    int accountId, {
+    int? amountCents,
+    DateTime? settledOn,
+  }) {
+    return Result.guard(
+      () => _service.fetchHeldTakings(
+        accountId,
+        amountCents: amountCents,
+        settledOn: settledOn,
+      ),
+    );
+  }
+
+  Future<Result<List<HeldPayment>>> loadHeldDayPayments(
+    int accountId,
+    String day,
+  ) {
+    return Result.guard(() => _service.fetchHeldDayPayments(accountId, day));
+  }
+
+  Future<Result<CardSettlement>> recordCardSettlement(
+    CardSettlementDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return Result.guard(
+      () =>
+          _service.recordCardSettlement(draft, idempotencyKey: idempotencyKey),
+    );
+  }
+
+  Future<Result<List<CardSettlement>>> loadCardSettlements(int accountId) {
+    return Result.guard(() => _service.fetchCardSettlements(accountId));
+  }
+
+  Future<Result<CardSettlement>> cancelCardSettlement(
+    int settlementId, {
+    String reason = '',
+    String? idempotencyKey,
+  }) {
+    return Result.guard(
+      () => _service.cancelCardSettlement(
+        settlementId,
+        reason: reason,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
   }
 
   Future<Result<List<CardTerminal>>> loadCardTerminals() {

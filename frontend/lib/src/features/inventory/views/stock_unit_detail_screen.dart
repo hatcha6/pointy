@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../core/error_messages.dart';
 import '../../../data/models/consignment.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../shared/components/components.dart';
@@ -12,8 +13,10 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/tracking/stock_voucher_labels.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'consignment_incident_sheet.dart';
+import 'identify_unit_dialog.dart';
 
 /// One article of stock, and what became of it.
 ///
@@ -297,13 +300,27 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
         widget.capabilities.canWriteOffStockUnit && !_unit.isConsignment;
     final canReportIncident =
         widget.capabilities.canManageConsignmentIncident && _unit.isConsignment;
-    if (!canReprice && !canWriteOff && !canReportIncident) {
+    // A placeholder on the shelf — received before it was scanned, or stock
+    // the product held before it was tracked. The till will not sell it until
+    // it has its number.
+    final canIdentify =
+        widget.capabilities.canIdentifyStockUnits &&
+        !_unit.isIdentified &&
+        _unit.isOnHand;
+    if (!canReprice && !canWriteOff && !canReportIncident && !canIdentify) {
       return const SizedBox.shrink();
     }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (canIdentify)
+          FilledButton.icon(
+            key: const ValueKey('stock_unit_detail_identify'),
+            onPressed: _identify,
+            icon: const Icon(Icons.qr_code_scanner_outlined),
+            label: Text(l10n.stockUnitIdentifyAction),
+          ),
         if (canReprice && _unit.isOnHand)
           OutlinedButton.icon(
             onPressed: _reprice,
@@ -362,6 +379,7 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
 
   Future<void> _reportIncident() async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final draft = await showConsignmentIncidentSheet(context);
     if (draft == null || !mounted) {
       return;
@@ -373,10 +391,21 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
     if (error != null) {
       messenger
         ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(error)));
+        ..showSnackBar(SnackBar(content: Text(errorMessageFor(error, l10n))));
       return;
     }
     await _reload();
+  }
+
+  Future<void> _identify() async {
+    final named = await showIdentifyUnitDialog(
+      context,
+      viewModel: widget.viewModel,
+      unit: _unit,
+    );
+    if (named && mounted) {
+      await _reload();
+    }
   }
 
   Widget _timeline(BuildContext context, AppLocalizations l10n) {
@@ -404,7 +433,7 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
                           : Icons.north_east_outlined,
                       size: 18,
                     ),
-                    title: Text(entry.voucherType),
+                    title: Text(stockVoucherLabel(l10n, entry.voucherType)),
                     subtitle: Text(
                       [
                         if (entry.postingAt != null)
@@ -445,7 +474,14 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
       'incident' => l10n.unitTimelineEventIncident,
       'counted' => l10n.unitTimelineEventCounted,
       'relocated' => l10n.unitTimelineEventRelocated,
-      _ => kind,
+      'advance_opened' => l10n.unitTimelineEventAdvanceOpened,
+      'advance_settled' => l10n.unitTimelineEventAdvanceSettled,
+      'identifier_corrected' => l10n.unitTimelineEventIdentifierCorrected,
+      'attributes_edited' => l10n.unitTimelineEventAttributesEdited,
+      'refurb_cost' => l10n.unitTimelineEventRefurbCost,
+      // A kind this client has no word for is still something that happened;
+      // it says so in Arabic rather than in the server's own code.
+      _ => l10n.unitTimelineEventNote,
     };
   }
 

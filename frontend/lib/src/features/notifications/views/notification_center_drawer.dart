@@ -346,7 +346,8 @@ class _NotificationAlertRow extends StatelessWidget {
 
   bool get _canReview {
     return alert.hasInvestigationQuery ||
-        alert.type == BusinessAlertType.payrollReady;
+        alert.type == BusinessAlertType.payrollReady ||
+        alert.type == BusinessAlertType.cardSettlementOverdue;
   }
 
   IconData _icon() {
@@ -374,6 +375,7 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.unresolvedRecharge => Icons.help_outline,
       BusinessAlertType.offbookRecharge => Icons.receipt_long_outlined,
       BusinessAlertType.providerFloatDrift => Icons.balance_outlined,
+      BusinessAlertType.cardSettlementOverdue => Icons.credit_score_outlined,
       BusinessAlertType.unknown => Icons.notifications_outlined,
     };
   }
@@ -448,6 +450,8 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationOffbookRechargeTitle,
       BusinessAlertType.providerFloatDrift =>
         l10n.smartNotificationProviderFloatDriftTitle,
+      BusinessAlertType.cardSettlementOverdue =>
+        l10n.smartNotificationCardSettlementOverdueTitle,
       BusinessAlertType.unknown => l10n.smartNotificationUnknownTitle,
     };
   }
@@ -554,6 +558,12 @@ class _NotificationAlertRow extends StatelessWidget {
                 _providerName(alert, l10n),
                 formatMoney(alert.amount),
               ),
+      BusinessAlertType.cardSettlementOverdue =>
+        l10n.smartNotificationCardSettlementOverdueMessage(
+          alert.primaryLabel,
+          formatMoney(_doublePayload(alert, 'amount')),
+          alert.occurredAt == null ? '' : formatDate(alert.occurredAt!),
+        ),
       BusinessAlertType.unknown => l10n.smartNotificationUnknownMessage,
     };
   }
@@ -622,6 +632,7 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.lowProfitMargin ||
       BusinessAlertType.offbookRecharge ||
       BusinessAlertType.providerFloatDrift ||
+      BusinessAlertType.cardSettlementOverdue ||
       BusinessAlertType.unknown => '',
     };
   }

@@ -2,21 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/customer_asset.dart';
 import '../../../data/models/modifier_group.dart';
+import '../../../data/models/product_tracking.dart';
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_update_draft.dart';
+import '../../../data/models/tracking_mode.dart';
 import '../../../data/models/unit_of_measure.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/product_category_picker.dart';
+import '../../../shared/tracking/tracking_features.dart';
+import '../../../shared/tracking/tracking_labels.dart';
 import '../view_models/product_details_view_model.dart';
+import '../view_models/tracking_mode_refusal.dart';
 import 'modifier_group_selector.dart';
 import 'pricing_currency_field.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
+import 'product_tracking_fields.dart';
 import 'product_units_editor.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
@@ -56,7 +64,12 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   var _isLoadingUnits = false;
   var _unitsLoadFailed = false;
   late bool _isActive;
-  late bool _tracksExpiry;
+  late ProductTracking _tracking;
+  var _features = TrackingFeatures.none;
+  var _assetTypesRequested = false;
+  List<CustomerAssetType> _assetTypes = [];
+  var _isLoadingAssetTypes = false;
+  var _assetTypesLoadFailed = false;
   late String _unit;
   late String _pricingCurrency;
   late bool _isService;
@@ -91,7 +104,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       for (final group in product.modifierGroups) group.id,
     };
     _isActive = product.isActive;
-    _tracksExpiry = product.tracksExpiry;
+    _tracking = product.tracking;
     _unit = product.unit;
     _pricingCurrency = product.pricingCurrency;
     _isService = product.isService;
@@ -104,6 +117,49 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     _loadVariantOptions();
     _loadModifierGroups();
     _loadUnits();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _features = TrackingFeaturesScope.of(context);
+    if (_showsTrackingSection &&
+        (_features.serial || _tracking.mode.tracksUnits) &&
+        !_assetTypesRequested) {
+      _assetTypesRequested = true;
+      _loadAssetTypes();
+    }
+  }
+
+  /// The whole tracking choice, once the shop identifies stock at all — or for
+  /// a product already serial, whose articles must stay explained even in a
+  /// shop that has since switched the trade off. Otherwise the expiry switch.
+  bool get _showsTrackingSection =>
+      _features.any || widget.viewModel.product.trackingMode.tracksUnits;
+
+  /// What is saved: a service or a dish is never tracked.
+  ProductTracking get _effectiveTracking => _isService || _isPrepared
+      ? _tracking.copyWith(mode: TrackingMode.quantity)
+      : _tracking;
+
+  Future<void> _loadAssetTypes() async {
+    setState(() {
+      _isLoadingAssetTypes = true;
+      _assetTypesLoadFailed = false;
+    });
+    final result = await widget.viewModel.catalogRepository.loadAssetTypes();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isLoadingAssetTypes = false;
+      switch (result) {
+        case Ok<List<CustomerAssetType>>(value: final types):
+          _assetTypes = types;
+        case Error<List<CustomerAssetType>>():
+          _assetTypesLoadFailed = true;
+      }
+    });
   }
 
   @override
@@ -134,7 +190,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       sortedIds(_selectedModifierGroupIds),
       _selectedImage != null,
       _isActive,
-      _tracksExpiry,
+      _tracking.toJson(),
       _unit,
       _pricingCurrency,
       _isService,
@@ -199,14 +255,21 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                               descriptionController: _descriptionController,
                               selectedCategories: _selectedCategories,
                               isActive: _isActive,
-                              tracksExpiry: _tracksExpiry,
+                              tracksExpiry: _tracking.mode.tracksLots,
                               onPickCategories: _pickCategories,
                               onClearCategories: () =>
                                   setState(() => _selectedCategories = []),
                               onActiveChanged: (value) =>
                                   setState(() => _isActive = value),
-                              onTracksExpiryChanged: (value) =>
-                                  setState(() => _tracksExpiry = value),
+                              onTracksExpiryChanged: _showsTrackingSection
+                                  ? null
+                                  : (value) => setState(
+                                      () => _tracking = _tracking.copyWith(
+                                        mode: value
+                                            ? TrackingMode.batch
+                                            : TrackingMode.quantity,
+                                      ),
+                                    ),
                               unit: _unit,
                               isService: _isService,
                               isPrepared: _isPrepared,
@@ -281,6 +344,30 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                             ),
                           ],
                         ),
+                        if (_showsTrackingSection) ...[
+                          const SizedBox(height: 12),
+                          ProductFormSection(
+                            icon: Icons.qr_code_scanner_outlined,
+                            title: l10n.productTrackingSectionTitle,
+                            children: [
+                              ProductTrackingFields(
+                                value: _tracking,
+                                onChanged: (tracking) =>
+                                    setState(() => _tracking = tracking),
+                                features: _features,
+                                savedMode:
+                                    widget.viewModel.product.tracking.mode,
+                                assetTypes: _assetTypes,
+                                assetTypesLoading: _isLoadingAssetTypes,
+                                assetTypesFailed: _assetTypesLoadFailed,
+                                onReloadAssetTypes: _loadAssetTypes,
+                                doesNotKeepStock: _isService || _isPrepared,
+                                errorText: widget.viewModel.trackingModeError,
+                                enabled: !widget.viewModel.isSavingProduct,
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         // Same units section as the create flow — conversions,
                         // per-unit prices, and defaults stay user-editable
@@ -380,31 +467,77 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     if (!isValid) {
       return;
     }
+    final tracking = _effectiveTracking;
+    // As the form read it: a product an older server sent with only
+    // `tracks_expiry` is already lot-tracked, not a change to confirm.
+    final savedMode = widget.viewModel.product.tracking.mode;
+    // Never a silent flip: a new mode re-labels how everything this product
+    // receives and sells is recorded from now on. Over a stocked shelf the
+    // server asks the sharper question — what becomes of that stock — and it
+    // is asked instead of this one, never as well.
+    if (tracking.mode != savedMode &&
+        !_serverAsksAboutStock(savedMode, tracking.mode)) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (_) => PointyConfirmationDialog(
+          title: l10n.productTrackingChangeTitle,
+          message: l10n.productTrackingChangeBody(
+            trackingModeLabel(l10n, savedMode),
+            trackingModeLabel(l10n, tracking.mode),
+          ),
+          confirmLabel: l10n.productTrackingChangeConfirm,
+          icon: Icons.qr_code_scanner_outlined,
+        ),
+      );
+      if (confirmed != true || !mounted) {
+        return;
+      }
+    }
 
-    final updated = await widget.viewModel.updateProduct(
-      ProductUpdateDraft(
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim(),
-        isActive: _isActive,
-        tracksExpiry: _tracksExpiry,
-        unit: _unit,
-        pricingCurrency: _pricingCurrency,
-        isService: _isService,
-        isPrepared: _isPrepared,
-        defaultSaleUnit: _defaultSaleUnit,
-        defaultPurchaseUnit: _defaultPurchaseUnit,
-        units: _units,
-        categoryIds: [for (final category in _selectedCategories) category.id],
-        variantOptionIds: [
-          for (final optionId in _selectedVariantOptionIds) optionId,
-        ],
-        modifierGroupIds: [
-          for (final groupId in _selectedModifierGroupIds) groupId,
-        ],
-      ),
+    final draft = ProductUpdateDraft(
+      name: _nameController.text.trim(),
+      description: _descriptionController.text.trim(),
+      isActive: _isActive,
+      tracksExpiry: tracking.mode.tracksLots,
+      tracking: tracking,
+      unit: _unit,
+      pricingCurrency: _pricingCurrency,
+      isService: _isService,
+      isPrepared: _isPrepared,
+      defaultSaleUnit: _defaultSaleUnit,
+      defaultPurchaseUnit: _defaultPurchaseUnit,
+      units: _units,
+      categoryIds: [for (final category in _selectedCategories) category.id],
+      variantOptionIds: [
+        for (final optionId in _selectedVariantOptionIds) optionId,
+      ],
+      modifierGroupIds: [
+        for (final groupId in _selectedModifierGroupIds) groupId,
+      ],
     );
+    var updated = await widget.viewModel.updateProduct(draft);
     if (!mounted) {
       return;
+    }
+    // The server held the save back to ask what becomes of the stock already
+    // on the shelf. Ask, then send the same edit again with the answer.
+    if (widget.viewModel.pendingTrackingIdentification case final question?) {
+      final confirmed = await _confirmIdentifyLater(question);
+      if (!mounted) {
+        return;
+      }
+      if (!confirmed) {
+        // Back on the saved mode, so the sheet and the shop agree about what
+        // is in force; the rest of the edit is still here to save.
+        setState(() => _tracking = _tracking.copyWith(mode: savedMode));
+        return;
+      }
+      updated = await widget.viewModel.updateProduct(
+        draft.identifyingStockLater(),
+      );
+      if (!mounted) {
+        return;
+      }
     }
     if (updated) {
       final imageSaved = await _saveSelectedImage();
@@ -422,6 +555,40 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         ..showSnackBar(SnackBar(content: Text(l10n.productUpdatedMessage)));
       widget.onSaved?.call();
     }
+  }
+
+  /// Whether the server, not this sheet, should ask about the change: turning
+  /// serials or lots on over a stocked shelf is answered by its question about
+  /// that stock. The shelf is the one this sheet last saw; a stale zero only
+  /// means the generic question comes first.
+  bool _serverAsksAboutStock(TrackingMode from, TrackingMode to) =>
+      from == TrackingMode.quantity &&
+      (to == TrackingMode.serial || to == TrackingMode.batch) &&
+      widget.viewModel.product.quantityOnHand > 0;
+
+  /// What turning tracking on does to the stock already on the shelf: serials
+  /// wait «بانتظار المعرّف», unsellable until each is scanned; lots land in
+  /// one lot with no number and keep selling.
+  Future<bool> _confirmIdentifyLater(
+    TrackingIdentificationRequest question,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final quantity = question.onHand.isNotEmpty
+        ? question.onHand
+        : formatPrintedQuantity(widget.viewModel.product.quantityOnHand);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => PointyConfirmationDialog(
+        key: const ValueKey('product_tracking_identify_later_dialog'),
+        title: l10n.productTrackingIdentifyLaterTitle,
+        message: question.requestedMode.tracksUnits
+            ? l10n.productTrackingIdentifyLaterUnitsBody(quantity)
+            : l10n.productTrackingIdentifyLaterLotsBody(quantity),
+        confirmLabel: l10n.productTrackingIdentifyLaterConfirm,
+        icon: Icons.pending_actions_outlined,
+      ),
+    );
+    return confirmed == true;
   }
 
   Future<bool> _saveSelectedImage() async {

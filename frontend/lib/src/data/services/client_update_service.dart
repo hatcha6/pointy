@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/app_version.dart';
 import 'linux_self_update.dart';
 import 'machine_lan_address.dart';
 
@@ -144,8 +145,15 @@ class ClientUpdateService {
   final ClientPlatform Function() _platform;
   final MachineAddressReader _localAddresses;
 
-  static Future<String> _packageVersion() async =>
-      (await PackageInfo.fromPlatform()).version;
+  /// The release's own `POINTY_VERSION` wins over the bundle's package
+  /// version: a Linux bundle's version.json is not stamped by
+  /// `--build-name` (Flutter's CMake backend drops it), so older Linux builds
+  /// report pubspec's 1.0.0 and would offer themselves every update forever.
+  static Future<String> _packageVersion() async {
+    final defined = kAppVersion.trim();
+    if (defined.isNotEmpty) return defined;
+    return (await PackageInfo.fromPlatform()).version;
+  }
 
   String _origin() {
     var base = _apiBaseUrl().trim();

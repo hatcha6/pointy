@@ -30,6 +30,23 @@ class PriceLookupDiscount {
   }
 }
 
+/// One condition fact about an identified article — battery 86%, grade A — as
+/// the kiosk may show it. Never a cost: the server writes this block by hand.
+class PriceLookupUnitAttribute {
+  const PriceLookupUnitAttribute({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory PriceLookupUnitAttribute.fromJson(Map<String, Object?> json) {
+    final label = json['label']?.toString() ?? '';
+    return PriceLookupUnitAttribute(
+      label: label.isNotEmpty ? label : json['key']?.toString() ?? '',
+      value: json['value']?.toString() ?? '',
+    );
+  }
+}
+
 /// The display-ready result of scanning a barcode at a price checker.
 ///
 /// The backend already runs the discount engine for a walk-up shopper, so the
@@ -54,6 +71,8 @@ class PriceLookupResult {
     this.finalPriceDisplay = '',
     this.imageUrl = '',
     this.discounts = const [],
+    this.unitCode = '',
+    this.unitAttributes = const [],
   });
 
   final bool found;
@@ -77,6 +96,11 @@ class PriceLookupResult {
   final String imageUrl;
   final List<PriceLookupDiscount> discounts;
 
+  /// The article a scan named, when it named one — an IMEI read at the kiosk
+  /// answers for *that* handset, at its own price, with its own condition.
+  final String unitCode;
+  final List<PriceLookupUnitAttribute> unitAttributes;
+
   bool get hasImage => imageUrl.isNotEmpty;
 
   /// A variant name worth showing (non-empty and different from the product).
@@ -84,6 +108,12 @@ class PriceLookupResult {
 
   factory PriceLookupResult.fromJson(Map<String, Object?> json) {
     final discountsJson = json['discounts'];
+    // ``unit`` is the unit of measure's name — except for an identified
+    // article, where the server puts the article itself there instead. Read
+    // as a string, that block printed as `{code: …}`.
+    final unitJson = json['unit'];
+    final article = unitJson is Map ? unitJson : const <String, Object?>{};
+    final attributesJson = article['attributes'];
     return PriceLookupResult(
       found: json['found'] == true,
       barcode: json['barcode']?.toString() ?? '',
@@ -92,7 +122,15 @@ class PriceLookupResult {
       productName: json['product_name']?.toString() ?? '',
       variantName: json['variant_name']?.toString() ?? '',
       sku: json['sku']?.toString() ?? '',
-      unit: json['unit']?.toString() ?? '',
+      unit: unitJson is String ? unitJson : '',
+      unitCode: article['code']?.toString() ?? '',
+      unitAttributes: attributesJson is List
+          ? attributesJson
+                .whereType<Map<String, Object?>>()
+                .map(PriceLookupUnitAttribute.fromJson)
+                .where((attribute) => attribute.value.isNotEmpty)
+                .toList(growable: false)
+          : const [],
       originalPrice: json['original_price']?.toString() ?? '',
       finalPrice: json['final_price']?.toString() ?? '',
       discountTotal: json['discount_total']?.toString() ?? '',

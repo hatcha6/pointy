@@ -35,6 +35,7 @@ import 'pos_cash_purchase_sheet.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
 import 'pos_shortcuts_sheet.dart';
+import 'pos_unit_pick.dart';
 import 'register_cash_movement_sheet.dart';
 import 'register_session_close_sheet.dart';
 import 'register_session_gate.dart';
@@ -563,6 +564,52 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
     ScaffoldMessenger.maybeOf(context)
       ?..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(l10n.rechargeAddedToCart)));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.viewModel.unitPickRequests.addListener(_openRequestedUnitPicker);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PosWorkspace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.viewModel, widget.viewModel)) {
+      oldWidget.viewModel.unitPickRequests.removeListener(
+        _openRequestedUnitPicker,
+      );
+      widget.viewModel.unitPickRequests.addListener(_openRequestedUnitPicker);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.viewModel.unitPickRequests.removeListener(_openRequestedUnitPicker);
+    super.dispose();
+  }
+
+  /// A scan named a serialized model rather than an article: the cashier
+  /// says which handset. Here rather than in the catalog pane because this
+  /// workspace is mounted whichever pane the phone layout is showing.
+  void _openRequestedUnitPicker() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final variant = widget.viewModel.unitPickRequests.take();
+      if (variant == null) {
+        return;
+      }
+      unawaited(
+        pickAndAddStockUnit(
+          context,
+          viewModel: widget.viewModel,
+          variant: variant,
+          source: 'barcode_unit_pick',
+        ),
+      );
+    });
   }
 
   // The cart pane publishes its checkout closure here so Ctrl/Cmd+Enter runs the

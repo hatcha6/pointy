@@ -41,6 +41,8 @@ extension PosBarcodeActions on PosViewModel {
     _lastScannedBarcode = normalizedBarcode;
     _lastScannedProductName = null;
     _scaleQuantity = null;
+    // A GS1 warning belongs to the scan that raised it, not to the next one.
+    _trackedScanWarnings = const [];
     _barcodeScanStatus = BarcodeScanStatus.resolving;
     // A hardware scan's key burst lands in the (focused) search field and queues
     // a debounced search; clear the field and cancel that debounce now so the
@@ -78,6 +80,18 @@ extension PosBarcodeActions on PosViewModel {
           _recordUnmatchedScan(normalizedBarcode, source: source);
         } else {
           final variant = value.variant;
+          // A serialized model's own barcode — the one on every box of it —
+          // names the model, not the article in the cashier's hand. Ask which
+          // one rather than ringing up "a handset" and leaving the server to
+          // take whichever has sat on the shelf longest; the article's own
+          // number, scanned instead, goes straight in (_addTrackedScan).
+          if (variant.trackingMode.tracksUnits &&
+              _trackedStockRepository != null) {
+            _unitPickRequests.request(variant);
+            _lastScannedProductName = variant.displayLabel;
+            _barcodeScanStatus = BarcodeScanStatus.found;
+            break;
+          }
           final matchedUnit = value.unit;
           // A packaging (unit) barcode — the carton EAN — rings up that unit:
           // one carton at the carton price, deducting its pieces from stock.
@@ -266,6 +280,7 @@ extension PosBarcodeActions on PosViewModel {
     _lastScannedBarcode = null;
     _lastScannedProductName = null;
     _scaleQuantity = null;
+    _trackedScanWarnings = const [];
     _notifyChanged();
   }
 

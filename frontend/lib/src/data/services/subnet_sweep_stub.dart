@@ -4,6 +4,7 @@ Future<List<String>> sweepSubnetForBackends({
   String? expectedInstallationId,
   int port = 8000,
   Duration perProbeTimeout = const Duration(milliseconds: 400),
+  Duration answerTimeout = const Duration(seconds: 3),
   int concurrency = 32,
 }) async {
   return const [];

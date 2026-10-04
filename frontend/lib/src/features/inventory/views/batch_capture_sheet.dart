@@ -21,6 +21,12 @@ Future<List<ReceiptBatchCapture>?> showBatchCaptureSheet(
   required double expectedQuantity,
   List<ReceiptBatchCapture> initial = const [],
   DateTime? suggestedExpiry,
+
+  /// One lot for the whole line, no splitting. A serialised pack's lot is the
+  /// header the scan loop's articles are born into, and the server gives every
+  /// article on the line the first lot it is sent — a second row would be a
+  /// lot that silently names nothing.
+  bool singleLot = false,
 }) {
   return showModalBottomSheet<List<ReceiptBatchCapture>>(
     context: context,
@@ -33,6 +39,7 @@ Future<List<ReceiptBatchCapture>?> showBatchCaptureSheet(
         expectedQuantity: expectedQuantity,
         initial: initial,
         suggestedExpiry: suggestedExpiry,
+        singleLot: singleLot,
       );
     },
   );
@@ -44,12 +51,14 @@ class _BatchCaptureSheet extends StatefulWidget {
     required this.expectedQuantity,
     required this.initial,
     this.suggestedExpiry,
+    this.singleLot = false,
   });
 
   final String productLabel;
   final double expectedQuantity;
   final List<ReceiptBatchCapture> initial;
   final DateTime? suggestedExpiry;
+  final bool singleLot;
 
   @override
   State<_BatchCaptureSheet> createState() => _BatchCaptureSheetState();
@@ -73,14 +82,17 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
   @override
   void initState() {
     super.initState();
-    _rows = widget.initial.isEmpty
+    final initial = widget.singleLot && widget.initial.length > 1
+        ? [widget.initial.first.copyWith(quantity: widget.expectedQuantity)]
+        : widget.initial;
+    _rows = initial.isEmpty
         ? [
             ReceiptBatchCapture(
               quantity: widget.expectedQuantity,
               expiryDate: widget.suggestedExpiry,
             ),
           ]
-        : List<ReceiptBatchCapture>.from(widget.initial);
+        : List<ReceiptBatchCapture>.from(initial);
     _rowIds.addAll(List.generate(_rows.length, (_) => _takeRowId()));
   }
 
@@ -183,14 +195,15 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
               ),
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: TextButton.icon(
-                onPressed: _addRow,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.batchCaptureAddLot),
+            if (!widget.singleLot)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: _addRow,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.batchCaptureAddLot),
+                ),
               ),
-            ),
             const SizedBox(height: 4),
             Row(
               children: [

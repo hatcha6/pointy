@@ -8,6 +8,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/analytics_export.dart';
+import '../../../data/models/identified_stock_settings.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/models/system_backup.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -132,6 +133,34 @@ class ShopSettingsViewModel extends ChangeNotifier {
         current,
       ).copyWith(enableSurveillance: enabled),
     );
+  }
+
+  /// Saves the serial, lot and consignment switches on their own.
+  ///
+  /// A partial update that names only those keys — unlike [updateSettings],
+  /// whose draft is the whole form — so this page can never reset a field it
+  /// does not show.
+  Future<bool> updateIdentifiedStockSettings(
+    IdentifiedStockSettings identifiedStock,
+  ) async {
+    _isSaving = true;
+    _hasSaveError = false;
+    notifyListeners();
+
+    final result = await _repository.updateIdentifiedStockSettings(
+      identifiedStock,
+    );
+    _isSaving = false;
+    switch (result) {
+      case Ok<ShopSettings>():
+        _settings = result.value;
+        notifyListeners();
+        return true;
+      case Error<ShopSettings>():
+        _hasSaveError = true;
+        notifyListeners();
+        return false;
+    }
   }
 
   /// How long invoice footage uploaded over FTP is kept, in days.

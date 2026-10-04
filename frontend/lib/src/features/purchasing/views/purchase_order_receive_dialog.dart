@@ -1,5 +1,25 @@
 part of 'purchase_order_details_screen.dart';
 
+/// The receiving dialog, for a caller outside the order's own screen — the
+/// purchasing workspace, right after it created an order whose goods have to
+/// be scanned before they can be received.
+///
+/// Returns what the receiver confirmed, ready to send, or null when they
+/// closed it: the order then simply waits, submitted, for its receipt.
+Future<PurchaseReceiveDraft?> showPurchaseReceiveCaptureDialog(
+  BuildContext context, {
+  required PurchaseOrder order,
+}) async {
+  final result = await showDialog<_PurchaseReceiveDialogResult>(
+    context: context,
+    builder: (context) => _PurchaseReceiveDialog(order: order),
+  );
+  if (result == null || result.lines.isEmpty) {
+    return null;
+  }
+  return PurchaseReceiveDraft(lines: result.lines, note: result.note);
+}
+
 class _PurchaseReceiveDialog extends StatefulWidget {
   const _PurchaseReceiveDialog({required this.order});
 
@@ -189,11 +209,22 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         expectedQuantity: receivedBase,
         initial: batches,
         suggestedExpiry: line.expiryDate,
+        // A serialised pack's lot is one header over the whole scan loop.
+        singleLot: mode.tracksUnits,
       );
       if (captured == null || !mounted) {
         return;
       }
       batches = captured;
+      // The lots carry their own dates. A line that also asks for one gets
+      // the first to expire, rather than making the receiver type it twice.
+      final expiryController = _expiryControllers[line.id];
+      final earliest = _earliestExpiry(batches);
+      if (expiryController != null &&
+          earliest != null &&
+          _parseReceiveDate(expiryController.text.trim()) == null) {
+        expiryController.text = _formatReceiveDate(earliest);
+      }
     }
 
     var units = existing?.units ?? const <ReceiptUnitCapture>[];
@@ -206,7 +237,10 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         expectedCount: (receivedBase + damagedBase).round(),
         lineUnitCost: line.baseUnitCost,
         initial: units,
-        allowCaptureLater: false,
+        // The shop's own answer to "a truck at six in the evening": receive
+        // now, scan later. The articles not scanned wait, unsellable, on the
+        // missing-identifier list.
+        allowCaptureLater: TrackingFeaturesScope.of(context).captureLater,
       );
       if (captured == null || !mounted) {
         return;
@@ -254,9 +288,15 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         final capture = _captures[line.id];
         // Identifiers are captured where the goods physically are. A line that
         // needs them and has not got them is refused here rather than by the
-        // backend, so the receiver finds out while the boxes are still open.
-        if (line.trackingMode.isTracked &&
-            (capture == null || capture.isEmpty)) {
+        // backend, so the receiver finds out while the boxes are still open —
+        // unless the shop receives articles first and names them later. A lot
+        // is never left to later: one the server invents has no number to
+        // recall by.
+        final owesLots = line.trackingMode.tracksLots;
+        final owesUnits =
+            line.trackingMode.tracksUnits &&
+            !TrackingFeaturesScope.of(context).captureLater;
+        if ((owesLots || owesUnits) && (capture == null || capture.isEmpty)) {
           setState(() => _showCaptureError = true);
           return;
         }
@@ -605,4 +645,15 @@ class _ReceiveDateDashInputFormatter extends TextInputFormatter {
       selection: TextSelection.collapsed(offset: text.length),
     );
   }
+}
+
+DateTime? _earliestExpiry(List<ReceiptBatchCapture> batches) {
+  DateTime? earliest;
+  for (final batch in batches) {
+    final expiry = batch.expiryDate;
+    if (expiry != null && (earliest == null || expiry.isBefore(earliest))) {
+      earliest = expiry;
+    }
+  }
+  return earliest;
 }

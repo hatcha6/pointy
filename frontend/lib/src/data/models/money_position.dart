@@ -1,4 +1,5 @@
 import 'bank_account_ref.dart';
+import 'card_settlement.dart';
 
 /// A place the shop's money sits: the cash box, a bank account, or the float a
 /// resale provider holds for the shop.
@@ -8,7 +9,12 @@ enum MoneyAccountKind {
   // Named here rather than folded into `cash`: a provider float IS the shop's
   // money, but it cannot pay a wage, and the fallback below would otherwise
   // file it under the cash box and add it to the drawer's total.
-  provider('provider');
+  provider('provider'),
+  // Card takings the processor (Moamalat) is holding before it pays them into
+  // the bank. The shop's money, between the sale and the bank statement — and
+  // named here for the same reason as a float: the fallback below would file
+  // it under the cash box.
+  clearing('clearing');
 
   const MoneyAccountKind(this.apiValue);
 
@@ -39,7 +45,21 @@ class MoneyAccount {
     this.isRouted = false,
     this.displayOrder = 0,
     this.notes = '',
+    this.settlesIntoId,
+    this.settlesIntoName = '',
+    this.holdsUntaggedCard = false,
+    this.settlementCutoff = defaultSettlementCutoff,
+    this.settlementWeekdays = defaultSettlementWeekdays,
+    this.settlementLagDays = 1,
+    this.closedOn,
   });
+
+  /// Moamalat closes its day at midnight.
+  static const defaultSettlementCutoff = '00:00:00';
+
+  /// Python weekday numbers (Monday = 0): the Libyan banking week, Sunday to
+  /// Thursday — the days the processor pays into the bank.
+  static const defaultSettlementWeekdays = '6,0,1,2,3';
 
   final int id;
   final String name;
@@ -64,7 +84,31 @@ class MoneyAccount {
   final int displayOrder;
   final String notes;
 
+  // --- Clearing accounts only ---------------------------------------------
+
+  /// The bank the processor pays this account's takings into. Fixed once set.
+  final int? settlesIntoId;
+  final String settlesIntoName;
+
+  /// Whether card payments that name no bank at all are held here too.
+  final bool holdsUntaggedCard;
+
+  /// When the processor closes its day, as the server sends it (`HH:MM:SS`).
+  final String settlementCutoff;
+
+  /// The weekdays the processor pays into the bank, comma-separated Python
+  /// weekday numbers.
+  final String settlementWeekdays;
+
+  /// How many paying days after a sale its money lands.
+  final int settlementLagDays;
+
+  /// The last day this account held card takings, once the shop stopped.
+  final DateTime? closedOn;
+
   bool get isCash => kind == MoneyAccountKind.cash;
+  bool get isBank => kind == MoneyAccountKind.bank;
+  bool get isClearing => kind == MoneyAccountKind.clearing;
 
   factory MoneyAccount.fromJson(Map<String, Object?> json) {
     return MoneyAccount(
@@ -82,6 +126,19 @@ class MoneyAccount {
       isRouted: json['is_routed'] == true,
       displayOrder: _intFromJson(json['display_order']),
       notes: json['notes']?.toString() ?? '',
+      settlesIntoId: json['settles_into'] == null
+          ? null
+          : _intFromJson(json['settles_into']),
+      settlesIntoName: json['settles_into_name']?.toString() ?? '',
+      holdsUntaggedCard: json['holds_untagged_card'] == true,
+      settlementCutoff:
+          json['settlement_cutoff']?.toString() ?? defaultSettlementCutoff,
+      settlementWeekdays:
+          json['settlement_weekdays']?.toString() ?? defaultSettlementWeekdays,
+      settlementLagDays: json['settlement_lag_days'] == null
+          ? 1
+          : _intFromJson(json['settlement_lag_days']),
+      closedOn: _dateTimeFromJson(json['closed_on']),
     );
   }
 
@@ -100,6 +157,14 @@ class MoneyAccount {
       'is_active': isActive,
       'display_order': displayOrder,
       'notes': notes,
+      // Sent only for a clearing account, so every other account's save is
+      // the payload it always was.
+      if (isClearing) ...{
+        'settles_into': settlesIntoId,
+        'settlement_cutoff': settlementCutoff,
+        'settlement_weekdays': settlementWeekdays,
+        'settlement_lag_days': settlementLagDays,
+      },
     };
   }
 
@@ -114,6 +179,10 @@ class MoneyAccount {
     DateTime? openingAt,
     bool? isDefault,
     bool? isActive,
+    int? settlesIntoId,
+    String? settlementCutoff,
+    String? settlementWeekdays,
+    int? settlementLagDays,
   }) {
     return MoneyAccount(
       id: id,
@@ -130,6 +199,13 @@ class MoneyAccount {
       isRouted: isRouted,
       displayOrder: displayOrder,
       notes: notes,
+      settlesIntoId: settlesIntoId ?? this.settlesIntoId,
+      settlesIntoName: settlesIntoName,
+      holdsUntaggedCard: holdsUntaggedCard,
+      settlementCutoff: settlementCutoff ?? this.settlementCutoff,
+      settlementWeekdays: settlementWeekdays ?? this.settlementWeekdays,
+      settlementLagDays: settlementLagDays ?? this.settlementLagDays,
+      closedOn: closedOn,
     );
   }
 
@@ -213,12 +289,17 @@ class MoneyAccountPosition {
     required this.expectedBalance,
     this.components = const [],
     this.lastCount,
+    this.held,
   });
 
   final MoneyAccount account;
   final double expectedBalance;
   final List<MoneyPositionComponent> components;
   final MoneyCount? lastCount;
+
+  /// A clearing account's held days at a glance — how many, and how late.
+  /// Null for every other account, and on a past position.
+  final HeldSummary? held;
 
   bool get hasBeenCounted => lastCount != null;
 
@@ -229,6 +310,7 @@ class MoneyAccountPosition {
   factory MoneyAccountPosition.fromJson(Map<String, Object?> json) {
     final rawComponents = json['components'];
     final rawCount = json['last_count'];
+    final rawHeld = json['held'];
     return MoneyAccountPosition(
       account: MoneyAccount.fromJson(
         (json['account'] as Map?)?.cast<String, Object?>() ?? const {},
@@ -247,6 +329,9 @@ class MoneyAccountPosition {
       lastCount: rawCount is Map
           ? MoneyCount.fromJson(rawCount.cast<String, Object?>())
           : null,
+      held: rawHeld is Map
+          ? HeldSummary.fromJson(rawHeld.cast<String, Object?>())
+          : null,
     );
   }
 }
@@ -256,6 +341,7 @@ class MoneyPositionTotals {
   const MoneyPositionTotals({
     this.cash = 0,
     this.bank = 0,
+    this.inTransit = 0,
     this.total = 0,
     this.accountsCounted = 0,
     this.accountsTotal = 0,
@@ -264,6 +350,10 @@ class MoneyPositionTotals {
 
   final double cash;
   final double bank;
+
+  /// Card takings the processor is holding. Inside [total]: the shop's money,
+  /// owed back within days.
+  final double inTransit;
   final double total;
   final int accountsCounted;
   final int accountsTotal;
@@ -276,6 +366,7 @@ class MoneyPositionTotals {
     return MoneyPositionTotals(
       cash: _moneyFromJson(json['cash']),
       bank: _moneyFromJson(json['bank']),
+      inTransit: _moneyFromJson(json['in_transit']),
       total: _moneyFromJson(json['total']),
       accountsCounted: _intFromJson(json['accounts_counted']),
       accountsTotal: _intFromJson(json['accounts_total']),
@@ -354,6 +445,11 @@ class MoneyPosition {
   List<MoneyAccountPosition> get bankAccounts => _ofKind(MoneyAccountKind.bank);
   List<MoneyAccountPosition> get providerAccounts =>
       _ofKind(MoneyAccountKind.provider);
+
+  /// Card takings held by the processor — beside the banks, never among them,
+  /// so a bank's figure is the one its statement shows.
+  List<MoneyAccountPosition> get clearingAccounts =>
+      _ofKind(MoneyAccountKind.clearing);
 
   List<MoneyAccountPosition> _ofKind(MoneyAccountKind kind) =>
       accounts.where((entry) => entry.account.kind == kind).toList();

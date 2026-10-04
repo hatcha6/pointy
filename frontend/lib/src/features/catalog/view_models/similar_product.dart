@@ -96,6 +96,7 @@ class SimilarProduct {
         ],
         unit: source.unit,
         tracksExpiry: source.tracksExpiry,
+        tracking: source.tracking,
         // An opening cost is what the source's own shelf was bought at.
         openingCost: '',
       ),

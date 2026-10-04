@@ -127,14 +127,20 @@ bool PrintJob::printPdf(const std::string& name,
                         std::string printer,
                         double width,
                         double height,
-                        bool usePrinterSettings) {
+                        bool usePrinterSettings,
+                        bool exactPaper) {
   documentName = name;
 
   // Null to use the driver's own settings as they stand.
   DEVMODE* dm = nullptr;
 
   if (!usePrinterSettings) {
-    const bool landscape = width > height;
+    // POINTY PATCH: a page wider than it is tall is landscape on sheet
+    // paper, but on a label printer it is simply the label. A 50 x 30 mm
+    // sticker asked for as landscape becomes 30 mm paper fed 50 mm at a
+    // time with the artwork turned a quarter, which is a different label.
+    // [exactPaper] pages are the paper itself and stay portrait.
+    const bool landscape = !exactPaper && width > height;
     const auto orientation =
         static_cast<short>(landscape ? DMORIENT_LANDSCAPE : DMORIENT_PORTRAIT);
     const auto paperWidth =

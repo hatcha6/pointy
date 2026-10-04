@@ -127,6 +127,7 @@ class PrinterEndpoint {
     this.labelPdfOffsetYMm = 0,
     this.labelPdfPitchMm = 0,
     this.labelRotationQuarterTurns = 0,
+    this.labelShopHeader = true,
   });
 
   final PrintTransportKind kind;
@@ -192,6 +193,12 @@ class PrinterEndpoint {
 
   /// Quarter-turn clockwise rotation (0–3) for the PDF barcode-label layout.
   final int labelRotationQuarterTurns;
+
+  /// Whether a sticker printed through the PDF/document path opens on a black
+  /// bar carrying the shop's name (and دفتر's mark). On by default: the bar is
+  /// the label's design, and a shop that wants every millimetre for the
+  /// barcode turns it off. Stickers too short to carry it drop it on their own.
+  final bool labelShopHeader;
 
   bool get usesThermalReceipt => outputMode == PrinterOutputMode.escPos;
 
@@ -292,6 +299,7 @@ class PrinterEndpoint {
             json['label_rotation'] ??
             json['label_rotation_degrees'],
       ),
+      labelShopHeader: _boolFromJson(json['label_shop_header'], fallback: true),
     );
   }
 
@@ -323,6 +331,7 @@ class PrinterEndpoint {
       'label_pdf_offset_y_mm': labelPdfOffsetYMm,
       'label_pdf_pitch_mm': labelPdfPitchMm,
       'label_rotation_quarter_turns': labelRotationQuarterTurns,
+      'label_shop_header': labelShopHeader,
     };
   }
 
@@ -351,6 +360,7 @@ class PrinterEndpoint {
     int? labelPdfOffsetYMm,
     double? labelPdfPitchMm,
     int? labelRotationQuarterTurns,
+    bool? labelShopHeader,
   }) {
     return PrinterEndpoint(
       kind: kind ?? this.kind,
@@ -378,6 +388,7 @@ class PrinterEndpoint {
       labelPdfPitchMm: labelPdfPitchMm ?? this.labelPdfPitchMm,
       labelRotationQuarterTurns:
           labelRotationQuarterTurns ?? this.labelRotationQuarterTurns,
+      labelShopHeader: labelShopHeader ?? this.labelShopHeader,
     );
   }
 }

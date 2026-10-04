@@ -2,8 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/data/models/barcode_label.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/services/barcode_label_calibration.dart';
+import 'package:pointy_frontend/src/data/services/barcode_label_document_service.dart';
 import 'package:pointy_frontend/src/shared/pdf/pointy_pdf_fonts.dart';
 
 void main() {
@@ -31,16 +33,43 @@ void main() {
     );
   }
 
-  test('the across ruler spans the whole head, not just the sticker', () async {
-    // Finding where the roll sits under the head is the point, so the scale has
-    // to cover paper the sticker isn't on.
-    final sheet = await (await document()).build(
-      BarcodeLabelCalibrationSheet.acrossRuler,
-    );
-    expect(sheet.mediaWidthMm, 80);
+  test('the across ruler is printed on the very page a label is', () async {
+    // A label driver usually centres a page narrower than its head, so pages of
+    // different widths land in different places. The ruler used to span the
+    // whole head (the 80 mm receipt width): its numbers then held for nothing
+    // but itself, and an offset read off it moved the label by something else.
+    final doc = await document();
+    final sheet = await doc.build(BarcodeLabelCalibrationSheet.acrossRuler);
+    // 22 mm of run-up + the 33 mm sticker, as a label's page is.
+    expect(sheet.mediaWidthMm, 55);
+    expect(sheet.mediaWidthMm, barcodeLabelPageWidthMm(endpoint));
     expect(sheet.mediaHeightMm, closeTo(26.9, 0.01));
     expect(sheet.bytes, isNotEmpty);
   });
+
+  test(
+    'every sheet shares the label page width, whatever the settings',
+    () async {
+      for (final config in [
+        endpoint,
+        endpoint.copyWith(labelPdfOffsetXMm: 0, labelWidthMm: 50),
+        endpoint.copyWith(labelPdfOffsetXMm: 3, labelWidthMm: 40),
+      ]) {
+        final doc = await document(config);
+        final label = await const BarcodeLabelDocumentService(
+          fontLoader: _FileFontLoader(),
+        ).buildLabelsDocument(lines: [_line], endpoint: config);
+        for (final kind in BarcodeLabelCalibrationSheet.values) {
+          final sheet = await doc.build(kind);
+          expect(
+            sheet.mediaWidthMm,
+            label.mediaWidthMm,
+            reason: '${kind.name} at ${config.labelWidthMm} mm',
+          );
+        }
+      }
+    },
+  );
 
   test('the feed ruler repeats across several labels', () async {
     final sheet = await (await document()).build(
@@ -79,6 +108,18 @@ void main() {
     expect(doc.combPitches(0.4), everyElement(greaterThan(1)));
   });
 }
+
+const _line = BarcodeLabelPrintLine(
+  label: BarcodeLabelDraft(
+    displayName: 'شاي',
+    productName: 'شاي',
+    sku: 'TEA',
+    barcode: '6224000123456',
+    unitPrice: 3,
+  ),
+  copies: 1,
+  includePrice: true,
+);
 
 /// Loads the real bundled Arabic TTFs so the sheets render the same glyphs the
 /// printer will see.

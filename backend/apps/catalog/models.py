@@ -163,14 +163,26 @@ class Product(TimeStampedModel):
         default=TrackingMode.QUANTITY,
         db_index=True,
     )
-    #: When this product started being tracked, stamped the first time its mode
-    #: leaves ``quantity``. Nothing reads it to decide behaviour; the integrity
-    #: checks read it to decide **blame**. A shop that switches a product on
-    #: after two years of trading has two years of ledger entries with no
-    #: allocations under them — correctly, because there were no articles to
-    #: name — and an invariant that judged them by today's mode would report a
-    #: permanent violation for a shop that did everything right.
+    #: When this product's current stretch of being tracked began — stamped
+    #: each time its mode leaves ``quantity``, cleared when it goes back.
+    #: Nothing reads it to decide behaviour; the integrity checks read it to
+    #: decide **blame**. A shop that switches a product on after two years of
+    #: trading has two years of ledger entries with no allocations under them —
+    #: correctly, because there were no articles to name — and so does a
+    #: product switched off for a season and on again. An invariant that judged
+    #: them by today's mode would report a permanent violation for a shop that
+    #: did everything right.
     tracking_since = models.DateTimeField(null=True, blank=True, editable=False)
+    #: When the product's current tracking mode began: stamped when it is
+    #: created and whenever its mode changes. History written before it was
+    #: written under another mode, so invariant 14 holds it only to what is
+    #: true in every mode. While the mode is ``serial_batch`` it is also when
+    #: lots became required: ``serial → serial_batch`` grandfathers the units
+    #: already on the shelf (§4.2), and a unit born before it may move without
+    #: a lot because it never had one — the allocation guard asks exactly that.
+    tracking_mode_since = models.DateTimeField(
+        null=True, blank=True, editable=False
+    )
     # What kind of identified thing this is, for identifier labels and (later)
     # per-unit attributes. Reuses the shop-editable registry the workshop side
     # already maintains rather than inventing a second one.
@@ -361,15 +373,64 @@ class Product(TimeStampedModel):
             update_fields = kwargs.get("update_fields")
             if update_fields is not None:
                 kwargs["update_fields"] = {*update_fields, "tracks_expiry"}
-        # Stamped once, the first time this product is tracked at all, and
-        # never cleared: history before it genuinely has no articles to name
-        # and the integrity checks must not judge it as if it did.
+        # The two stamps the integrity checks judge history by (see the
+        # fields). ``tracking_since`` follows the stretch, so a product
+        # switched off and on again is judged from the second switch; the mode
+        # stamp follows every change, so lots sold under ``batch`` are not read
+        # as serials that forgot their unit.
+        stamped = []
+        now = timezone.now()
+        if self._writes_a_new_mode(kwargs.get("update_fields")):
+            self.tracking_mode_since = now
+            stamped.append("tracking_mode_since")
         if self.is_tracked and self.tracking_since is None:
-            self.tracking_since = timezone.now()
-            update_fields = kwargs.get("update_fields")
-            if update_fields is not None:
-                kwargs["update_fields"] = {*update_fields, "tracking_since"}
-        return super().save(*args, **kwargs)
+            self.tracking_since = now
+            stamped.append("tracking_since")
+        elif not self.is_tracked and self.tracking_since is not None:
+            self.tracking_since = None
+            stamped.append("tracking_since")
+        update_fields = kwargs.get("update_fields")
+        if stamped and update_fields is not None:
+            kwargs["update_fields"] = {*update_fields, *stamped}
+        result = super().save(*args, **kwargs)
+        self._stored_tracking_mode = self.tracking_mode
+        return result
+
+    def _writes_a_new_mode(self, update_fields) -> bool:
+        """Does this save put a different tracking mode in the row?
+
+        Answered from the mode the row held when it was read (``from_db``),
+        so an ordinary save asks the database nothing. Only an instance built
+        by hand, or read with the column deferred, costs one query.
+        """
+        if update_fields is not None and "tracking_mode" not in update_fields:
+            return False
+        if self._state.adding:
+            return True
+        stored = getattr(self, "_stored_tracking_mode", None)
+        if stored is None:
+            stored = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("tracking_mode", flat=True)
+                .first()
+            )
+        return stored != self.tracking_mode
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        product = super().from_db(db, field_names, values)
+        # The mode as the row holds it, for ``_writes_a_new_mode``.
+        if "tracking_mode" in field_names:
+            product._stored_tracking_mode = product.tracking_mode
+        return product
+
+    def refresh_from_db(self, using=None, fields=None, from_queryset=None):
+        super().refresh_from_db(
+            using=using, fields=fields, from_queryset=from_queryset
+        )
+        if fields is None or "tracking_mode" in fields:
+            self._stored_tracking_mode = self.tracking_mode
 
     @property
     def is_archived(self) -> bool:

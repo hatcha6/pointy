@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../core/result.dart';
 import '../models/analytics_export.dart';
 import '../models/factory_reset.dart';
+import '../models/identified_stock_settings.dart';
 import '../models/shop_settings.dart';
 import '../models/system_backup.dart';
 import '../services/pos_api_service.dart';
@@ -34,6 +35,12 @@ class ShopSettingsRepository {
 
   Future<Result<ShopSettings>> updateSettings(ShopSettingsDraft draft) async {
     return Result.guard(() => _service.updateShopSettings(draft));
+  }
+
+  Future<Result<ShopSettings>> updateIdentifiedStockSettings(
+    IdentifiedStockSettings settings,
+  ) async {
+    return Result.guard(() => _service.updateIdentifiedStockSettings(settings));
   }
 
   Future<Result<ShopSettings>> setupShop({

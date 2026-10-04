@@ -105,4 +105,47 @@ void main() {
       expect(redVariant.displayLabel, isNot(blueVariant.displayLabel));
     });
   });
+
+  group('Foreign-priced variants', () {
+    // A catalog-list row as the server sends it: each variant carries its
+    // `price_amount` but no `product_detail`, and the currency it is written
+    // in rides on the product alone.
+    Map<String, Object?> variantJson() => {
+      'id': 27,
+      'product': 9,
+      'sku': 'HEADSET',
+      'unit_price': '82.20',
+      'price_amount': '12.00',
+      'is_default': true,
+    };
+    Map<String, Object?> dollarRow() => {
+      'id': 9,
+      'name': 'سماعة',
+      'pricing_currency': 'USD',
+      'default_variant': variantJson(),
+      'variants': [variantJson()],
+    };
+
+    test('a catalog row keeps its foreign price once re-attached', () {
+      final product = Product.fromJson(dollarRow());
+
+      for (final variant in [product.defaultVariant!, ...product.variants]) {
+        expect(variant.productDetail, isNotNull);
+        expect(variant.priceAmount, 12);
+        expect(variant.pricingCurrency, 'USD');
+        expect(variant.hasForeignPrice, isTrue);
+        expect(variant.unitPrice, 82.2, reason: 'the dinar shelf price');
+      }
+    });
+
+    test('a copy keeps the foreign price', () {
+      final copy = Product.fromJson(
+        dollarRow(),
+      ).defaultVariant!.copyWith(quantityOnHand: 3);
+
+      expect(copy.priceAmount, 12);
+      expect(copy.pricingCurrency, 'USD');
+      expect(copy.hasForeignPrice, isTrue);
+    });
+  });
 }

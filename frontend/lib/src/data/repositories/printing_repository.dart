@@ -78,6 +78,9 @@ class PrintingRepository {
   final RepairTicketDocumentService _repairTicketDocumentService;
   final DevicePrintersStorage _printersStorage;
 
+  /// The last shop name a label bar was printed with; see [_labelShopName].
+  String? _lastLabelShopName;
+
   Future<Result<List<PrintJob>>> loadPrintJobs({
     PrintJobStatus? status,
     int page = 1,
@@ -411,6 +414,7 @@ class PrintingRepository {
         return _barcodeLabelDocumentService.printLabels(
           lines: lines,
           endpoint: config.endpoint,
+          shopName: await _labelShopName(config.endpoint),
         );
       }
       if (!config.endpoint.usesThermalReceipt) {
@@ -449,7 +453,10 @@ class PrintingRepository {
     PrinterConfig config,
   ) async {
     if (config.endpoint.usesDocumentInvoice) {
-      return _barcodeLabelDocumentService.printTest(config.endpoint);
+      return _barcodeLabelDocumentService.printTest(
+        config.endpoint,
+        shopName: await _labelShopName(config.endpoint),
+      );
     }
     if (!config.endpoint.usesThermalReceipt) {
       return const PrintTransportResult.failure(
@@ -474,6 +481,28 @@ class PrintingRepository {
     } on Object catch (error) {
       return PrintTransportResult.failure(error.toString());
     }
+  }
+
+  /// The shop's name for the black bar along the top of each sticker, or null
+  /// for no bar ([PrinterEndpoint.labelShopHeader] off, or no name to show).
+  ///
+  /// Read fresh for each print, so a renamed shop shows on its next label, but
+  /// never allowed to hold a label up: a read that fails or takes more than a
+  /// moment falls back to the last name this session printed with.
+  Future<String?> _labelShopName(PrinterEndpoint endpoint) async {
+    if (!endpoint.labelShopHeader) {
+      return null;
+    }
+    try {
+      final settings = await _service.fetchShopSettings().timeout(
+        const Duration(seconds: 2),
+      );
+      final name = settings.shopName.trim();
+      _lastLabelShopName = name.isEmpty ? null : name;
+    } on Object {
+      // Keep the last name: the bar is the shop's, not worth a failed label.
+    }
+    return _lastLabelShopName;
   }
 
   Future<Result<BarcodeLabelLanguageDetectionResult>>

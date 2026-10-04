@@ -81,11 +81,19 @@ class PrintingPlugin : public flutter::Plugin {
       auto usePrinterSettings = std::get<bool>(
           arguments->find(flutter::EncodableValue("usePrinterSettings"))
               ->second);
+      // POINTY PATCH (see POINTY_PATCHES.md): `forceCustomPrintPaper` means
+      // the page IS the paper — a label or a receipt roll — to be asked for
+      // exactly as given.
+      auto vExactPaper =
+          arguments->find(flutter::EncodableValue("forceCustomPrintPaper"));
+      auto exactPaper = vExactPaper != arguments->end() &&
+                        std::holds_alternative<bool>(vExactPaper->second) &&
+                        std::get<bool>(vExactPaper->second);
       auto vJob = arguments->find(flutter::EncodableValue("job"));
       auto jobNum = vJob != arguments->end() ? std::get<int>(vJob->second) : -1;
       auto job = new PrintJob{&printing, jobNum};
-      auto res =
-          job->printPdf(name, printer, width, height, usePrinterSettings);
+      auto res = job->printPdf(name, printer, width, height, usePrinterSettings,
+                               exactPaper);
       if (!res) {
         delete job;
       }

@@ -6,6 +6,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/weekday_labels.dart';
 
 /// Shared vocabulary for the treasury surfaces: the Arabic label behind each
 /// backend component code, the icon for each money source, and the two pills
@@ -30,6 +31,9 @@ String treasuryComponentLabel(AppLocalizations l10n, String code) {
     'integration_draw' => l10n.treasuryComponentIntegrationDraw,
     'consignor_payout' => l10n.treasuryComponentConsignorPayout,
     'staff_loans' => l10n.treasuryComponentStaffLoans,
+    'settlement_in' => l10n.treasuryComponentSettlementIn,
+    'settlement_out' => l10n.treasuryComponentSettlementOut,
+    'settlement_difference' => l10n.treasuryComponentSettlementDifference,
     _ => code,
   };
 }
@@ -49,14 +53,25 @@ IconData treasuryComponentIcon(String code) {
     'integration_draw' => Icons.cell_tower_outlined,
     'consignor_payout' => Icons.handshake_outlined,
     'staff_loans' => Icons.handshake_outlined,
+    'settlement_in' => Icons.credit_score_outlined,
+    'settlement_out' => Icons.credit_score_outlined,
+    'settlement_difference' => Icons.percent,
     _ => Icons.circle_outlined,
   };
 }
 
 IconData treasuryAccountIcon(MoneyAccount account) {
-  return account.isCash
-      ? Icons.savings_outlined
-      : Icons.account_balance_outlined;
+  return switch (account.kind) {
+    MoneyAccountKind.cash => Icons.savings_outlined,
+    MoneyAccountKind.clearing => Icons.hourglass_bottom_outlined,
+    _ => Icons.account_balance_outlined,
+  };
+}
+
+/// "الخميس 2026/10/08" — a processor day is read by its weekday first: the
+/// owner knows Thursday's takings, not the 8th's.
+String treasuryDayLabel(AppLocalizations l10n, DateTime day) {
+  return '${weekdayLabel(l10n, day.weekday - 1)} ${formatDate(day)}';
 }
 
 // Bidi isolate marks, spelled as escapes so the source stays readable and the

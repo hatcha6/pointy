@@ -9,6 +9,7 @@ import '../models/attachment_summary.dart';
 import '../models/barcode_resolution.dart';
 import '../models/bought_together_product.dart';
 import '../models/catalog_identity_conflict.dart';
+import '../models/customer_asset.dart';
 import '../models/modifier_group.dart';
 import '../models/product.dart';
 import '../models/product_bulk_action.dart';
@@ -229,7 +230,6 @@ class CatalogRepository {
   Future<Result<int>> bulkSetProductFlags({
     required List<int> ids,
     bool? isActive,
-    bool? tracksExpiry,
     bool? isService,
     bool? isPrepared,
   }) async {
@@ -237,7 +237,6 @@ class CatalogRepository {
       () => _service.bulkSetProductFlags(
         ids: ids,
         isActive: isActive,
-        tracksExpiry: tracksExpiry,
         isService: isService,
         isPrepared: isPrepared,
       ),
@@ -498,6 +497,24 @@ class CatalogRepository {
         page += 1;
       }
       return groups;
+    });
+  }
+
+  /// The kinds of identified thing the shop registers — phone, vehicle,
+  /// laptop — for a serial product's «نوع الجهاز». The workshop's intake reads
+  /// the same list, so a handset sold here arrives for repair as the same kind.
+  Future<Result<List<CustomerAssetType>>> loadAssetTypes() async {
+    return Result.guard(() async {
+      final types = <CustomerAssetType>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore) {
+        final result = await _service.fetchAssetTypes(page: page);
+        types.addAll(result.types);
+        hasMore = result.hasMore;
+        page += 1;
+      }
+      return types;
     });
   }
 

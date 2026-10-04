@@ -4272,6 +4272,22 @@ abstract class AppLocalizations {
     String amount,
   );
 
+  /// Alert title: held card money that should already be in the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل بطاقات متأخر'**
+  String get smartNotificationCardSettlementOverdueTitle;
+
+  /// Alert message: overdue card settlement.
+  ///
+  /// In ar, this message translates to:
+  /// **'{account}: {amount} لم يصل إلى المصرف بعد، وكان متوقعًا {date}.'**
+  String smartNotificationCardSettlementOverdueMessage(
+    String account,
+    String amount,
+    String date,
+  );
+
   /// No description provided for @smartNotificationUnknownTitle.
   ///
   /// In ar, this message translates to:
@@ -10900,7 +10916,7 @@ abstract class AppLocalizations {
   /// No description provided for @printerBarcodeLabelPdfSizeHelper.
   ///
   /// In ar, this message translates to:
-  /// **'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده. على ويندوز اضبط المقاس نفسه في تعريف الطابعة.'**
+  /// **'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده.'**
   String get printerBarcodeLabelPdfSizeHelper;
 
   /// No description provided for @printerBarcodeLabelPdfSizeSticker.
@@ -10942,7 +10958,7 @@ abstract class AppLocalizations {
   /// No description provided for @printerBarcodeLabelCalibrationHelper.
   ///
   /// In ar, this message translates to:
-  /// **'اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح).'**
+  /// **'اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح). إذا تجاوز الملصق نهاية المسطرة العرضية فزِد العرض أو الإزاحة وأعد طباعتها.'**
   String get printerBarcodeLabelCalibrationHelper;
 
   /// No description provided for @printerBarcodeLabelCalibrationAcross.
@@ -11046,6 +11062,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'270° يسار'**
   String get printerBarcodeLabelRotation270;
+
+  /// No description provided for @printerBarcodeLabelShopHeaderLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'شريط اسم المحل أعلى الملصق'**
+  String get printerBarcodeLabelShopHeaderLabel;
+
+  /// No description provided for @printerBarcodeLabelShopHeaderHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'شريط أسود يحمل اسم المحل وشعار دفتر في أعلى كل ملصق. الملصقات القصيرة جدًا تُطبع بدونه.'**
+  String get printerBarcodeLabelShopHeaderHelper;
+
+  /// Shown when a label printed, but the printer driver used its own paper size instead of the label size Pointy asked for.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبع على ورق {printed} مم بدل مقاس الملصق {requested} مم، لأن تعريف الطابعة على هذا الجهاز لم يقبل مقاس الملصق. اجعل مقاس الملصق أحد مقاسات تعريف الطابعة، أو أضف مقاس الملصق إلى التعريف، أو استعمل تعريفًا يقبل المقاسات المخصصة.'**
+  String printPaperMismatchMessage(String requested, String printed);
+
+  /// Shown when a label printed, but the computer's printer driver accepts neither custom sizes nor a size matching the label, so it used its own default paper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعريف الطابعة على هذا الجهاز لا يقبل مقاس الملصق {requested} مم، فطبعه على مقاسه الافتراضي. اجعل مقاس الملصق أحد مقاسات تعريف الطابعة، أو أضف مقاس الملصق إلى التعريف، أو استعمل تعريفًا يقبل المقاسات المخصصة.'**
+  String printPaperUnsupportedMessage(String requested);
 
   /// No description provided for @systemDefaultPrinterLabel.
   ///
@@ -12066,6 +12106,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لم يتم اختيار صورة'**
   String get productImageEmpty;
+
+  /// No description provided for @productImageViewFullScreenTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض الصورة بالحجم الكامل'**
+  String get productImageViewFullScreenTooltip;
+
+  /// No description provided for @productImageViewerPrevious.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصورة السابقة'**
+  String get productImageViewerPrevious;
+
+  /// No description provided for @productImageViewerNext.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصورة التالية'**
+  String get productImageViewerNext;
 
   /// No description provided for @productImageUploadButton.
   ///
@@ -13188,6 +13246,594 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.'**
   String get productTracksExpiryHint;
+
+  /// How a product with no identified stock is tracked: a number in a bin.
+  ///
+  /// In ar, this message translates to:
+  /// **'كمية فقط'**
+  String get trackingModeQuantity;
+
+  /// No description provided for @trackingModeQuantityDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد في المخزون بلا رقم لكل قطعة — لمعظم المنتجات.'**
+  String get trackingModeQuantityDescription;
+
+  /// Lot/batch tracking with expiry dates.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات وصلاحية'**
+  String get trackingModeBatch;
+
+  /// No description provided for @trackingModeBatchDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل توريد دفعة برقمها وتاريخ صلاحيتها، ويُباع الأقرب انتهاءً أولًا.'**
+  String get trackingModeBatchDescription;
+
+  /// Every article identified one at a time (IMEI, serial, VIN).
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم تسلسلي'**
+  String get trackingModeSerial;
+
+  /// No description provided for @trackingModeSerialDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل قطعة برقمها (IMEI أو رقم تسلسلي أو رقم الشاصي)، بتكلفتها وسعرها وضمانها.'**
+  String get trackingModeSerialDescription;
+
+  /// Serialised articles inside a lot — GS1 healthcare packs.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسلسلي داخل دفعة'**
+  String get trackingModeSerialBatch;
+
+  /// No description provided for @trackingModeSerialBatchDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل قطعة برقمها داخل دفعة لها تاريخ صلاحية — مثل عبوات الأدوية برمز GS1.'**
+  String get trackingModeSerialBatchDescription;
+
+  /// Which lot the till takes when the cashier names none.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة التي تُباع أولًا'**
+  String get batchPickStrategyLabel;
+
+  /// No description provided for @batchPickStrategyFefo.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأقرب انتهاءً أولًا'**
+  String get batchPickStrategyFefo;
+
+  /// No description provided for @batchPickStrategyFifo.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأقدم وصولًا أولًا'**
+  String get batchPickStrategyFifo;
+
+  /// No description provided for @batchPickStrategyManual.
+  ///
+  /// In ar, this message translates to:
+  /// **'يختارها الكاشير'**
+  String get batchPickStrategyManual;
+
+  /// Product form section: how this product's stock is identified.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبع المخزون'**
+  String get productTrackingSectionTitle;
+
+  /// No description provided for @productTrackingNoStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمات والأصناف المحضّرة عند الطلب لا مخزون لها، فلا تُتتبَّع.'**
+  String get productTrackingNoStock;
+
+  /// Shown under the tracking choice when an existing product's mode is being changed.
+  ///
+  /// In ar, this message translates to:
+  /// **'يسري التغيير على ما يُستلم ويُباع من الآن. وإن كان للمنتج رصيد في المخزون يُطلب تأكيدك قبل الحفظ: القطع المسلسلة لا تُباع حتى يُدخل رقم كل قطعة، والكمية بلا دفعة تدخل في دفعة بلا رقم.'**
+  String get productTrackingChangeWarning;
+
+  /// No description provided for @productTrackingWarrantyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة الضمان (يوم)'**
+  String get productTrackingWarrantyLabel;
+
+  /// No description provided for @productTrackingWarrantyHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحسب من يوم البيع. اتركها فارغة إن لم يكن هناك ضمان.'**
+  String get productTrackingWarrantyHelper;
+
+  /// The variant-or-unit rule from the serialized inventory plan, section 4.1.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن أمكن أن تتشارك قطعتان القيمة نفسها فهي خيار للمنتج (اللون، السعة). وإن ندر أن تتشاركاها فهي للقطعة نفسها (IMEI، البطارية، الحالة، التكلفة، السعر) وتُسجَّل عند الاستلام.'**
+  String get productTrackingVariantOrUnitHint;
+
+  /// No description provided for @productTrackingPreventExpiredLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'منع بيع الدفعات المنتهية'**
+  String get productTrackingPreventExpiredLabel;
+
+  /// No description provided for @productTrackingPreventExpiredHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تُباع دفعة تجاوزت تاريخها إلا بإذن مدير.'**
+  String get productTrackingPreventExpiredHelper;
+
+  /// No description provided for @productTrackingAssetTypesFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل أنواع الأجهزة.'**
+  String get productTrackingAssetTypesFailed;
+
+  /// No description provided for @productTrackingAssetTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الجهاز'**
+  String get productTrackingAssetTypeLabel;
+
+  /// No description provided for @productTrackingAssetTypeHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحدد اسم الرقم (IMEI، رقم الشاصي…) ويربط الجهاز المباع بسجل صيانته.'**
+  String get productTrackingAssetTypeHelper;
+
+  /// No description provided for @productTrackingAssetTypeNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تحديد'**
+  String get productTrackingAssetTypeNone;
+
+  /// No description provided for @productTrackingOpeningUnitsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدخل هذه الكمية بلا أرقام، ولا تُباع قبل تعريف كل قطعة من شاشة الأجهزة المسلسلة.'**
+  String get productTrackingOpeningUnitsHint;
+
+  /// No description provided for @productTrackingOpeningLotsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدخل هذه الكمية كدفعة بلا رقم ولا تاريخ صلاحية.'**
+  String get productTrackingOpeningLotsHint;
+
+  /// No description provided for @productTrackingChangeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير طريقة التتبع؟'**
+  String get productTrackingChangeTitle;
+
+  /// Confirmation before saving a product with a different tracking mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'من «{from}» إلى «{to}». يسري على كل ما يُستلم ويُباع من هذا المنتج من الآن، ولا يغيّر ما سبق.'**
+  String productTrackingChangeBody(String from, String to);
+
+  /// No description provided for @productTrackingChangeConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير'**
+  String get productTrackingChangeConfirm;
+
+  /// Confirmation when tracking is turned on for a product that already has stock on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل التتبّع لرصيد موجود؟'**
+  String get productTrackingIdentifyLaterTitle;
+
+  /// Serial tracking turned on over anonymous stock: it becomes placeholders the till refuses until each is identified.
+  ///
+  /// In ar, this message translates to:
+  /// **'في المخزون {quantity} قطعة من هذا المنتج بلا أرقام. ستُسجَّل «بانتظار المعرّف» ولا تُباع قطعة منها حتى يُدخل رقمها من شاشة الأجهزة المسلسلة، فلتر «بانتظار المعرّف».'**
+  String productTrackingIdentifyLaterUnitsBody(String quantity);
+
+  /// Lot tracking turned on over stock with no lot: it lands in one generated lot and stays sellable.
+  ///
+  /// In ar, this message translates to:
+  /// **'في المخزون {quantity} من هذا المنتج بلا دفعة. ستدخل في دفعة واحدة بلا رقم ولا تاريخ صلاحية، وتبقى قابلة للبيع.'**
+  String productTrackingIdentifyLaterLotsBody(String quantity);
+
+  /// No description provided for @productTrackingIdentifyLaterConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل التتبّع'**
+  String get productTrackingIdentifyLaterConfirm;
+
+  /// An order whose serial/lot goods were not received because the receiving dialog was closed or refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطلب {number} أُنشئ ولم يُستلم بعد — استلمه من قائمة المشتريات بعد مسح الأرقام.'**
+  String purchaseOrderReceiptDeferred(String number);
+
+  /// No description provided for @purchaseLineUnitsAtReceipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُمسح الأرقام التسلسلية عند الاستلام.'**
+  String get purchaseLineUnitsAtReceipt;
+
+  /// No description provided for @purchaseLineLotsAtReceipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل الدفعات وتواريخ صلاحيتها عند الاستلام.'**
+  String get purchaseLineLotsAtReceipt;
+
+  /// Dialog naming a placeholder article (received or opened without its identifier).
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال رقم الجهاز'**
+  String get stockUnitIdentifyTitle;
+
+  /// No description provided for @stockUnitIdentifyCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم التسلسلي / IMEI'**
+  String get stockUnitIdentifyCodeLabel;
+
+  /// No description provided for @stockUnitIdentifyAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال الرقم'**
+  String get stockUnitIdentifyAction;
+
+  /// No description provided for @stockUnitIdentified.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الرقم.'**
+  String get stockUnitIdentified;
+
+  /// Callout action listing the articles still owed an identifier.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرضها'**
+  String get stockUnitsShowMissing;
+
+  /// No description provided for @unitTimelineEventAdvanceOpened.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل مستحق إلى دفعة مقدّمة'**
+  String get unitTimelineEventAdvanceOpened;
+
+  /// No description provided for @unitTimelineEventAdvanceSettled.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوية دفعة مقدّمة'**
+  String get unitTimelineEventAdvanceSettled;
+
+  /// No description provided for @unitTimelineEventIdentifierCorrected.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصحيح المعرّف'**
+  String get unitTimelineEventIdentifierCorrected;
+
+  /// No description provided for @unitTimelineEventAttributesEdited.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الخصائص'**
+  String get unitTimelineEventAttributesEdited;
+
+  /// No description provided for @unitTimelineEventRefurbCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة تجديد'**
+  String get unitTimelineEventRefurbCost;
+
+  /// No description provided for @unitTimelineEventNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة'**
+  String get unitTimelineEventNote;
+
+  /// What moved a unit or lot: a ledger voucher type.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع'**
+  String get stockVoucherSale;
+
+  /// No description provided for @stockVoucherSaleReturn.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرتجع بيع'**
+  String get stockVoucherSaleReturn;
+
+  /// No description provided for @stockVoucherPurchaseReceipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام مشتريات'**
+  String get stockVoucherPurchaseReceipt;
+
+  /// No description provided for @stockVoucherPurchaseReturn.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرتجع مشتريات'**
+  String get stockVoucherPurchaseReturn;
+
+  /// No description provided for @stockVoucherProduction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيع'**
+  String get stockVoucherProduction;
+
+  /// No description provided for @stockVoucherStockCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرد'**
+  String get stockVoucherStockCount;
+
+  /// No description provided for @stockVoucherAdjustment.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوية يدوية'**
+  String get stockVoucherAdjustment;
+
+  /// No description provided for @stockVoucherOpening.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد افتتاحي'**
+  String get stockVoucherOpening;
+
+  /// No description provided for @stockVoucherTransfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل مستودع'**
+  String get stockVoucherTransfer;
+
+  /// No description provided for @stockVoucherTransferReceipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام تحويل مستودع'**
+  String get stockVoucherTransferReceipt;
+
+  /// No description provided for @stockVoucherConsignmentCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة أمانة عند بيعها'**
+  String get stockVoucherConsignmentCost;
+
+  /// No description provided for @stockVoucherConsignmentIntake.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام أمانة'**
+  String get stockVoucherConsignmentIntake;
+
+  /// No description provided for @stockVoucherConsignmentReturn.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع أمانة لصاحبها'**
+  String get stockVoucherConsignmentReturn;
+
+  /// No description provided for @stockVoucherRefurbishment.
+  ///
+  /// In ar, this message translates to:
+  /// **'إصلاح أُضيف إلى التكلفة'**
+  String get stockVoucherRefurbishment;
+
+  /// No description provided for @stockVoucherOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركة مخزون'**
+  String get stockVoucherOther;
+
+  /// No description provided for @productTrackingModeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة التتبع'**
+  String get productTrackingModeLabel;
+
+  /// A warranty length in days.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, one{يوم واحد} two{يومان} few{{days} أيام} many{{days} يومًا} other{{days} يوم}}'**
+  String productTrackingWarrantyDays(int days);
+
+  /// No description provided for @productTrackingNoWarranty.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون ضمان'**
+  String get productTrackingNoWarranty;
+
+  /// No description provided for @productTrackingWarrantyCardLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الضمان'**
+  String get productTrackingWarrantyCardLabel;
+
+  /// No description provided for @productTrackingYes.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم'**
+  String get productTrackingYes;
+
+  /// No description provided for @productTrackingNo.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا'**
+  String get productTrackingNo;
+
+  /// No description provided for @productTrackingOpenUnits.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة'**
+  String get productTrackingOpenUnits;
+
+  /// No description provided for @productTrackingOpenLots.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات'**
+  String get productTrackingOpenLots;
+
+  /// A lot a sale line drew from, with how much of the line came from it.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة {code} × {quantity}'**
+  String invoiceLineLotQuantity(String code, String quantity);
+
+  /// Settings page for serial, lot and consignment tracking.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبع الأجهزة والدفعات'**
+  String get identifiedStockSettingsTitle;
+
+  /// No description provided for @identifiedStockSettingsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرقام التسلسلية، الدفعات وتواريخ الصلاحية، والأمانات'**
+  String get identifiedStockSettingsSubtitle;
+
+  /// No description provided for @identifiedStockModesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الذي يتتبعه المحل؟'**
+  String get identifiedStockModesTitle;
+
+  /// No description provided for @identifiedStockModesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلاهما مطفأ في البداية. التشغيل يُظهر الشاشات والخيارات، وكل منتج يختار طريقة تتبعه من صفحته.'**
+  String get identifiedStockModesHint;
+
+  /// No description provided for @identifiedStockSerialTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة بالرقم التسلسلي'**
+  String get identifiedStockSerialTitle;
+
+  /// No description provided for @identifiedStockSerialDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'IMEI أو رقم تسلسلي أو رقم شاصي لكل قطعة، بتكلفتها وسعرها وضمانها.'**
+  String get identifiedStockSerialDescription;
+
+  /// No description provided for @identifiedStockBatchTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات وتواريخ الصلاحية'**
+  String get identifiedStockBatchTitle;
+
+  /// No description provided for @identifiedStockBatchDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم دفعة وتاريخ صلاحية لكل توريد، والبيع من الأقرب انتهاءً أولًا.'**
+  String get identifiedStockBatchDescription;
+
+  /// No description provided for @identifiedStockSerialSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة المسلسلة'**
+  String get identifiedStockSerialSectionTitle;
+
+  /// No description provided for @identifiedStockCaptureLaterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستلام قبل إدخال كل الأرقام'**
+  String get identifiedStockCaptureLaterTitle;
+
+  /// No description provided for @identifiedStockCaptureLaterDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدخل البضاعة المخزون وتنتظر أرقامها في قائمة النواقص، ولا تُباع قبل تعريفها.'**
+  String get identifiedStockCaptureLaterDescription;
+
+  /// No description provided for @identifiedStockAssetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الجهاز المباع باسم الزبون'**
+  String get identifiedStockAssetTitle;
+
+  /// No description provided for @identifiedStockAssetDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند البيع لزبون مسمّى يُضاف الجهاز إلى أجهزته، فيصل إلى الصيانة بتاريخه كاملًا.'**
+  String get identifiedStockAssetDescription;
+
+  /// No description provided for @identifiedStockConsignmentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأمانات'**
+  String get identifiedStockConsignmentTitle;
+
+  /// No description provided for @identifiedStockConsignmentHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'بضاعة يتركها أصحابها في المحل ليبيعها نيابة عنهم.'**
+  String get identifiedStockConsignmentHint;
+
+  /// No description provided for @identifiedStockConsignmentSmsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسالة لصاحب الأمانة عند البيع'**
+  String get identifiedStockConsignmentSmsTitle;
+
+  /// No description provided for @identifiedStockConsignmentSmsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعرف صاحب الأمانة أنها بيعت في نفس اللحظة.'**
+  String get identifiedStockConsignmentSmsDescription;
+
+  /// No description provided for @identifiedStockDeclaredValueTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'القيمة المقدّرة إلزامية عند الاستلام'**
+  String get identifiedStockDeclaredValueTitle;
+
+  /// No description provided for @identifiedStockDeclaredValueDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'عليها تُحسب العهدة وأي مطالبة عند الفقد أو التلف.'**
+  String get identifiedStockDeclaredValueDescription;
+
+  /// No description provided for @identifiedStockReminderDaysLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذكير بالمستحقات غير المستلمة بعد (يوم)'**
+  String get identifiedStockReminderDaysLabel;
+
+  /// No description provided for @identifiedStockReminderDaysHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'0 يوقف التذكير.'**
+  String get identifiedStockReminderDaysHelper;
+
+  /// No description provided for @identifiedStockClausesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'نص كل بند كما يُطبع على سند استلام الأمانة. السندات الموقّعة تبقى بالنص الذي طُبعت به.'**
+  String get identifiedStockClausesHint;
+
+  /// Label of the editable printed clause for one liability policy.
+  ///
+  /// In ar, this message translates to:
+  /// **'نص البند: {policy}'**
+  String identifiedStockClauseLabel(String policy);
+
+  /// No description provided for @identifiedStockTurnOffTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف التتبع؟'**
+  String get identifiedStockTurnOffTitle;
+
+  /// No description provided for @identifiedStockTurnOffBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستختفي شاشات الأجهزة أو الدفعات، لكن المنتجات المتتبَّعة تبقى كما هي وتستمر في طلب أرقامها عند البيع والاستلام. لإيقاف تتبع منتج غيّر طريقة تتبعه من صفحته.'**
+  String get identifiedStockTurnOffBody;
+
+  /// No description provided for @identifiedStockTurnOffConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف'**
+  String get identifiedStockTurnOffConfirm;
+
+  /// No description provided for @identifiedStockSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ إعدادات التتبع.'**
+  String get identifiedStockSaved;
 
   /// No description provided for @activeVariantLabel.
   ///
@@ -16388,6 +17034,102 @@ abstract class AppLocalizations {
     String quantity,
     String unitCost,
   );
+
+  /// Title of the sheet that asks which serialised handsets go back to the supplier on a return, refund or exchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد الأجهزة المُرجَعة للمورد'**
+  String get purchaseAdjustmentUnitsTitle;
+
+  /// Explains that each returned handset must be named because the item is serialised.
+  ///
+  /// In ar, this message translates to:
+  /// **'صنف مسلسل: امسح أو اختر كل جهاز يعود فعليًا إلى المورد، فيُسجَّل الإرجاع باسمه.'**
+  String get purchaseAdjustmentUnitsBody;
+
+  /// Hint on a serialised line in the purchase adjustment dialog: the handsets are picked on the next step.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحدَّد الأجهزة بعد التأكيد'**
+  String get purchaseAdjustmentUnitsPickNext;
+
+  /// Shown when a serialised purchase line is returned by a fraction.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف المسلسلة تُرجَع بأعداد صحيحة فقط.'**
+  String get purchaseAdjustmentUnitsWholeOnly;
+
+  /// Tooltip of the button that scans the serials or lot of a replacement the supplier sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح معرّفات البديل'**
+  String get purchaseAdjustmentUnitsScanReplacement;
+
+  /// Tooltip of the replacement scan button once identifiers were captured.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم مسح معرّفات البديل — اضغط للتعديل'**
+  String get purchaseAdjustmentUnitsReplacementScanned;
+
+  /// Hint under the exchange's replacement section on orders bought in packs: a replacement's quantity and cost are per base unit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُدخَل كمية البديل وتكلفته بالوحدة الأساسية للصنف، لا بوحدة الشراء كالكرتون.'**
+  String get purchaseExchangeReplacementBaseUnitHint;
+
+  /// Price of one purchase unit on a pack line in the return/refund/exchange dialogs, e.g. 48.00 per carton.
+  ///
+  /// In ar, this message translates to:
+  /// **'{amount} لكل {unit}'**
+  String purchaseAdjustmentUnitPricePer(String amount, String unit);
+
+  /// Shown in the empty replacement section before anything is chosen to go out.
+  ///
+  /// In ar, this message translates to:
+  /// **'يظهر هنا بديل مطابق لكل عنصر صادر، ويمكنك تعديله أو إضافة غيره.'**
+  String get purchaseExchangeReplacementMirrorHint;
+
+  /// Shown when a serial-and-lot replacement has no lot captured.
+  ///
+  /// In ar, this message translates to:
+  /// **'البديل صنف مسلسل بدفعة: امسح رقم الدفعة قبل التأكيد.'**
+  String get purchaseAdjustmentUnitsReplacementLotRequired;
+
+  /// Hint of the scan/search field in the shared unit pick sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب الرقم التسلسلي / IMEI'**
+  String get unitPickSearchHint;
+
+  /// Shown when a scanned identifier matches no available unit in the pick sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد جهاز متاح بهذا المعرّف ضمن هذه الأسطر.'**
+  String get unitPickNotFound;
+
+  /// Shown when the pick sheet could not load the available units.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الأجهزة.'**
+  String get unitPickLoadFailed;
+
+  /// Shown under a line that has no units available to pick.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أجهزة متاحة لهذا الصنف في هذا المستودع.'**
+  String get unitPickEmpty;
+
+  /// Shown while some line still has fewer picked units than its quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل تحديد الأجهزة قبل المتابعة.'**
+  String get unitPickIncomplete;
+
+  /// How many units are picked out of the line quantity in the shared unit pick sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'{picked} من {needed}'**
+  String unitPickProgress(int picked, int needed);
 
   /// Message shown after a purchase order is submitted from details.
   ///
@@ -39071,6 +39813,450 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'سلف الموظفين'**
   String get treasuryComponentStaffLoans;
+
+  /// Hero pill label: card takings the processor is holding.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التسوية'**
+  String get treasuryInTransitLabel;
+
+  /// Treasury section header for clearing accounts (card takings held by the processor).
+  ///
+  /// In ar, this message translates to:
+  /// **'مبيعات بطاقات قيد التسوية'**
+  String get treasurySectionClearing;
+
+  /// Account kind choice: a clearing account holding card takings until the processor pays them into the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التسوية'**
+  String get treasuryAccountKindClearing;
+
+  /// Editor explanation of what a clearing account does.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبقى مبيعات البطاقات هنا حتى تُحوِّلها شركة الدفع (معاملات) إلى المصرف، فيطابق رصيد المصرف كشفه.'**
+  String get treasuryClearingIntro;
+
+  /// Clearing account card: the bank its takings are paid into.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحوَّل إلى {bank}'**
+  String treasuryClearingSettlesInto(String bank);
+
+  /// Clearing account card: nothing is waiting for the processor.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا مبالغ معلّقة'**
+  String get treasuryClearingNothingHeld;
+
+  /// Clearing account card: how many processor days are still held.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{يوم واحد قيد التسوية} =2{يومان قيد التسوية} few{{count} أيام قيد التسوية} other{{count} يومًا قيد التسوية}}'**
+  String treasuryClearingHeldDays(int count);
+
+  /// Clearing account card: when the next held money should reach the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتوقع وصوله {date}'**
+  String treasuryClearingExpectedOn(String date);
+
+  /// Clearing account card pill: held money whose expected day has passed.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخر {amount}'**
+  String treasuryClearingOverdue(String amount);
+
+  /// Clearing account card pill: the shop stopped routing card takings through it.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف عن الاحتجاز'**
+  String get treasuryClearingClosed;
+
+  /// Treasury callout title: held card money that should already be in the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل بطاقات متأخر: {amount}'**
+  String treasuryClearingOverdueCalloutTitle(String amount);
+
+  /// Treasury callout message for overdue held card money.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرّ موعد وصوله إلى المصرف ولم يُسجَّل بعد. سجّل وصوله إن وصل، أو راجع شركة الدفع.'**
+  String get treasuryClearingOverdueCalloutMessage;
+
+  /// Button: record the processor's transfer of held card takings into the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل وصول تحويل'**
+  String get treasuryActionRecordSettlement;
+
+  /// Treasury component: deposits the card processor made into this bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويلات شركة الدفع'**
+  String get treasuryComponentSettlementIn;
+
+  /// Treasury component: held card takings the processor paid into the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُوِّل إلى المصرف'**
+  String get treasuryComponentSettlementOut;
+
+  /// Treasury component: what the processor kept beyond (or short of) the estimated fee.
+  ///
+  /// In ar, this message translates to:
+  /// **'فرق التسوية'**
+  String get treasuryComponentSettlementDifference;
+
+  /// Clearing account editor: the bank the processor pays into.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصرف الذي تُحوَّل إليه المبالغ'**
+  String get treasuryClearingSettlesIntoLabel;
+
+  /// Clearing account editor: there is no bank account to settle into.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف حسابًا مصرفيًا أولًا، فهذا الحساب يحتجز مبالغ البطاقات حتى تصل إلى المصرف.'**
+  String get treasuryClearingNoBank;
+
+  /// Clearing account editor validation: no bank chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المصرف.'**
+  String get treasuryClearingBankRequired;
+
+  /// Clearing account editor: the first processor day held.
+  ///
+  /// In ar, this message translates to:
+  /// **'احتجاز مبيعات البطاقات من يوم'**
+  String get treasuryClearingStartLabel;
+
+  /// Clearing account editor helper for the start day.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر أقدم يوم لم تُحوِّل شركة الدفع مبالغه بعد.'**
+  String get treasuryClearingStartHelper;
+
+  /// Clearing account editor: when the processor closes its day.
+  ///
+  /// In ar, this message translates to:
+  /// **'وقت إقفال اليوم لدى شركة الدفع'**
+  String get treasuryClearingCutoffLabel;
+
+  /// Cut-off choice: midnight.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتصف الليل'**
+  String get treasuryClearingCutoffMidnight;
+
+  /// Clearing account editor: the weekdays the processor pays into the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام التحويل إلى المصرف'**
+  String get treasuryClearingWeekdaysLabel;
+
+  /// Clearing account editor validation: no settlement weekday chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر يومًا واحدًا على الأقل.'**
+  String get treasuryClearingWeekdaysRequired;
+
+  /// Clearing account editor: how many paying days after a sale its money lands.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصل المبالغ بعد'**
+  String get treasuryClearingLagLabel;
+
+  /// Clearing account editor: lag in paying days.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{يوم عمل واحد} =2{يومَي عمل} few{{count} أيام عمل} other{{count} يوم عمل}}'**
+  String treasuryClearingLagDays(int count);
+
+  /// Clearing account editor switch: still routing card takings through this account.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتجز مبيعات البطاقات'**
+  String get treasuryClearingActiveLabel;
+
+  /// Confirm dialog title: stop holding card takings.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف احتجاز مبيعات البطاقات؟'**
+  String get treasuryClearingStopConfirmTitle;
+
+  /// Confirm dialog message: stop holding card takings.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبيعات البطاقات بعد اليوم ستُحسب في المصرف مباشرة. المبالغ المعلّقة الآن تبقى هنا حتى تسجّل وصولها. لا يمكن التراجع عن الإيقاف.'**
+  String get treasuryClearingStopConfirmMessage;
+
+  /// Confirm dialog action: stop holding.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف'**
+  String get treasuryClearingStopConfirmAction;
+
+  /// Details sheet section: held processor days.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأيام قيد التسوية'**
+  String get treasuryClearingHeldTitle;
+
+  /// Details sheet section: recorded settlements.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحويلات المسجّلة'**
+  String get treasuryClearingSettlementsTitle;
+
+  /// Details sheet: no settlement recorded yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل أي تحويل بعد.'**
+  String get treasuryClearingSettlementsEmpty;
+
+  /// Details sheet: settlements failed to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل التحويلات.'**
+  String get treasuryClearingSettlementsError;
+
+  /// Settlement row subtitle: sale count and the days covered.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} عملية · {days}'**
+  String treasuryClearingSettlementSubtitle(int count, String days);
+
+  /// Settlement row: the difference from the estimate.
+  ///
+  /// In ar, this message translates to:
+  /// **'فرق {amount}'**
+  String treasuryClearingSettlementDifference(String amount);
+
+  /// Settlement row pill: cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get treasuryClearingSettlementCancelled;
+
+  /// Button: cancel a recorded settlement.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء التسوية'**
+  String get treasuryClearingCancelAction;
+
+  /// Confirm dialog title: cancel a settlement.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء هذه التسوية؟'**
+  String get treasuryClearingCancelTitle;
+
+  /// Confirm dialog message: cancel a settlement.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعود مبلغها إلى قيد التسوية ويُخصم من المصرف، لتسجّلها من جديد بالأيام أو المبلغ الصحيح.'**
+  String get treasuryClearingCancelMessage;
+
+  /// Cancel settlement reason field.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب'**
+  String get treasuryClearingCancelReasonLabel;
+
+  /// Snackbar: settlement cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغيت التسوية.'**
+  String get treasuryClearingCancelled;
+
+  /// Snackbar: settlement cancel failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إلغاء التسوية.'**
+  String get treasuryClearingCancelFailed;
+
+  /// Settlement sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل وصول تحويل'**
+  String get cardSettlementTitle;
+
+  /// Settlement sheet subtitle: from the clearing account to the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {account} إلى {bank}'**
+  String cardSettlementSubtitle(String account, String bank);
+
+  /// Settlement sheet: the deposit amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ الذي وصل إلى المصرف'**
+  String get cardSettlementAmountLabel;
+
+  /// Settlement sheet: where the amount comes from.
+  ///
+  /// In ar, this message translates to:
+  /// **'كما في رسالة المصرف أو كشف الحساب.'**
+  String get cardSettlementAmountHelper;
+
+  /// Settlement sheet: the day the deposit landed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الوصول'**
+  String get cardSettlementDateLabel;
+
+  /// Settlement sheet: the held days the deposit paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأيام التي يغطيها التحويل'**
+  String get cardSettlementDaysTitle;
+
+  /// Settlement sheet: nothing is held.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا مبالغ قيد التسوية الآن.'**
+  String get cardSettlementNoHeld;
+
+  /// Settlement sheet day row subtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} عملية · المتوقع {date}'**
+  String cardSettlementDaySubtitle(int count, String date);
+
+  /// Settlement sheet day row pill: overdue.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخر'**
+  String get cardSettlementDayOverdue;
+
+  /// Settlement match banner: exact.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ يطابق الأيام المحددة تمامًا.'**
+  String get cardSettlementMatchExact;
+
+  /// Settlement match banner: equals the takings before the fee.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ يطابق المبيعات قبل العمولة: لم تُخصم عمولة من هذا التحويل.'**
+  String get cardSettlementMatchGross;
+
+  /// Settlement match banner: within a fee rounding.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ يقارب الأيام المحددة بفارق بسيط.'**
+  String get cardSettlementMatchClose;
+
+  /// Settlement match banner: nothing adds up; due days proposed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا أيام تطابق المبلغ، فحُدِّدت الأيام التي حلّ موعدها. راجع الفرق قبل التأكيد.'**
+  String get cardSettlementMatchDue;
+
+  /// Settlement match banner: nothing is due yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يحن موعد أي يوم بعد.'**
+  String get cardSettlementMatchNone;
+
+  /// Settlement summary: expected for the chosen days.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتوقع للأيام المحددة'**
+  String get cardSettlementExpectedLabel;
+
+  /// Settlement summary: received.
+  ///
+  /// In ar, this message translates to:
+  /// **'الواصل'**
+  String get cardSettlementReceivedLabel;
+
+  /// Settlement summary: difference.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفرق'**
+  String get cardSettlementDifferenceLabel;
+
+  /// Settlement difference explanation: the processor kept more than estimated.
+  ///
+  /// In ar, this message translates to:
+  /// **'احتجزت شركة الدفع {amount} أكثر من العمولة المقدّرة، ويُسجَّل الفرق مصروفَ عمولة.'**
+  String cardSettlementKeptMore(String amount);
+
+  /// Settlement difference explanation: the processor kept less than estimated.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل {amount} أكثر من المتوقع: العمولة أقل من المقدّرة.'**
+  String cardSettlementKeptLess(String amount);
+
+  /// Settlement sheet: reference field.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم المرجع (اختياري)'**
+  String get cardSettlementReferenceLabel;
+
+  /// Settlement sheet: note field.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get cardSettlementNoteLabel;
+
+  /// Settlement sheet submit button.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد التسوية'**
+  String get cardSettlementSubmit;
+
+  /// Snackbar: settlement recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجِّل وصول التحويل.'**
+  String get cardSettlementSaved;
+
+  /// Settlement failed (generic).
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تسجيل التسوية.'**
+  String get cardSettlementFailed;
+
+  /// Settlement refused: closed period or no permission.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن تسجيل التسوية: الفترة مقفلة أو لا تملك الصلاحية.'**
+  String get cardSettlementForbidden;
+
+  /// Settlement sheet: held takings failed to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل المبالغ قيد التسوية.'**
+  String get cardSettlementLoadFailed;
+
+  /// Settlement sheet: expand a day to its sales.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمليات'**
+  String get cardSettlementShowSales;
+
+  /// Settlement sheet: a day's sales failed to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل العمليات.'**
+  String get cardSettlementSalesFailed;
+
+  /// Settlement sheet sale row: a cancellation's counter payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء دفعة'**
+  String get cardSettlementReversal;
+
+  /// Settlement sheet validation: amount missing.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل المبلغ الواصل.'**
+  String get cardSettlementAmountRequired;
 
   /// Entry dialog hint: an employee's opening balance.
   ///

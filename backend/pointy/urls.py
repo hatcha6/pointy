@@ -71,6 +71,11 @@ from apps.treasury.views import (
     MoneyTransferViewSet,
     TreasuryPositionView,
 )
+from apps.treasury.settlement_views import (
+    CardSettlementViewSet,
+    ClearingHeldDayView,
+    ClearingHeldView,
+)
 from apps.employees.views import (
     CompensationPlanViewSet,
     EmployeeViewSet,
@@ -272,6 +277,7 @@ router.register("expenses", ExpenseViewSet)
 router.register("money-accounts", MoneyAccountViewSet, basename="money-account")
 router.register("money-transfers", MoneyTransferViewSet, basename="money-transfer")
 router.register("money-counts", MoneyCountViewSet, basename="money-count")
+router.register("card-settlements", CardSettlementViewSet, basename="card-settlement")
 router.register("suppliers", SupplierViewSet)
 router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)
@@ -433,6 +439,16 @@ urlpatterns = [
         "api/treasury/accounts/<int:pk>/movements/",
         AccountMovementsView.as_view(),
         name="treasury-account-movements",
+    ),
+    path(
+        "api/treasury/clearing/<int:pk>/held/",
+        ClearingHeldView.as_view(),
+        name="treasury-clearing-held",
+    ),
+    path(
+        "api/treasury/clearing/<int:pk>/held/<str:day>/",
+        ClearingHeldDayView.as_view(),
+        name="treasury-clearing-held-day",
     ),
     path(
         "api/discovery/service/",

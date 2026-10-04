@@ -25,7 +25,7 @@ import '../../../shared/tutor/tutor_target.dart';
 import '../view_models/pos_view_model.dart';
 import 'modifier_sheet.dart';
 import 'pos_search_outcome_line.dart';
-import 'pos_unit_picker_sheet.dart';
+import 'pos_unit_pick.dart';
 import 'pos_variant_picker_sheet.dart';
 import 'pos_voucher_picker_sheet.dart';
 import 'weight_entry_sheet.dart';
@@ -250,29 +250,16 @@ class _PosCatalogProducts extends StatelessWidget {
     );
   }
 
-  /// Open the picker and add the article the cashier chose.
-  ///
-  /// One place, because both routes into a serialized product — tapping a
-  /// product with a single variant and choosing one out of the variant sheet —
-  /// have to end the same way. A line that reaches the cart without a unit is a
-  /// receipt naming whichever handset happened to be oldest.
   Future<void> _addPickedStockUnit(
     BuildContext context,
     ProductVariant variant,
-  ) async {
-    final repository = viewModel.trackedStockRepository;
-    if (repository == null) {
-      return;
-    }
-    final unit = await showPosUnitPickerSheet(
+  ) {
+    return pickAndAddStockUnit(
       context,
-      repository: repository,
-      variantId: variant.id,
-      productLabel: variant.displayLabel,
+      viewModel: viewModel,
+      variant: variant,
+      source: 'variant_picker',
     );
-    if (unit != null && context.mounted) {
-      viewModel.addVariant(variant, stockUnit: unit, source: 'variant_picker');
-    }
   }
 
   Future<void> _addWeighedVariant(
@@ -389,7 +376,8 @@ class _PosCatalogProducts extends StatelessWidget {
         );
         if (variant != null && context.mounted) {
           final defaultUnit = defaultSaleUnitOption(product, variant.unitPrice);
-          if (variant.trackingMode.tracksUnits) {
+          if (variant.trackingMode.tracksUnits ||
+              product.trackingMode.tracksUnits) {
             // The same rule the single-variant path applies: an identified
             // article is picked, never implied. A product that happens to have
             // three storage sizes is still a shelf of individual handsets.
@@ -566,6 +554,26 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
       if (_viewModel.isCheckingOut) {
         return;
       }
+      // A serialized model read off its box is one article per pick, chosen
+      // in the picker — never a quantity of "some" handsets.
+      if (entry.variant.trackingMode.tracksUnits) {
+        for (var picked = 0; picked < entry.quantity; picked += 1) {
+          if (!context.mounted || _viewModel.isCheckingOut) {
+            return;
+          }
+          final before = _viewModel.cart.length;
+          await pickAndAddStockUnit(
+            context,
+            viewModel: _viewModel,
+            variant: entry.variant,
+            source: 'camera_scanner',
+          );
+          if (_viewModel.cart.length == before) {
+            break;
+          }
+        }
+        continue;
+      }
       _viewModel.addVariant(
         entry.variant,
         quantity: entry.quantity.toDouble(),
@@ -653,7 +661,14 @@ class _BarcodeScanStatusLine extends StatelessWidget {
       BarcodeScanStatus.resolving || BarcodeScanStatus.idle => colors.mutedInk,
     };
 
-    return Row(
+    // What the server could read off a GS1 symbol but not act on — a lot it
+    // has never received, a date that disagrees with the lot, a reader that
+    // strips its separators. Already in Arabic, and more use to the cashier
+    // than "unknown barcode". The reader one first: it breaks every scan.
+    final scanWarning =
+        viewModel.scannerConfigurationWarning ??
+        viewModel.trackedScanWarnings.firstOrNull;
+    final row = Row(
       children: [
         if (status == BarcodeScanStatus.resolving)
           const SizedBox.square(
@@ -686,6 +701,35 @@ class _BarcodeScanStatusLine extends StatelessWidget {
           onPressed: viewModel.clearBarcodeScanStatus,
           icon: const Icon(Icons.close),
           visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
+    final warningText = scanWarning?.message.trim() ?? '';
+    if (warningText.isEmpty) {
+      return row;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.qr_code_2_outlined, size: 18, color: colors.warning),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                warningText,
+                key: const ValueKey('pos_scan_gs1_warning'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.warning),
+              ),
+            ),
+          ],
         ),
       ],
     );

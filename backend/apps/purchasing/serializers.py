@@ -11,6 +11,7 @@ from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
 from apps.core.period_lock import assert_period_open
+from apps.inventory import tracking
 from apps.inventory.identity import IdentifierKind, check_identifier
 from apps.catalog.services import preload_line_variants
 from apps.catalog.units import (
@@ -2393,6 +2394,13 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                     ),
                     "expiry_date": expiry_date,
                     "notes": line_data.get("notes", ""),
+                    # The identifiers the receiver scanned. Validated above by
+                    # the line serializer and then left behind here, so the
+                    # endpoint received every handset as an unnamed
+                    # placeholder (or refused it outright) while the service
+                    # the tests call directly worked.
+                    "units": line_data.get("units") or [],
+                    "batches": line_data.get("batches") or [],
                 }
             )
 
@@ -2403,6 +2411,65 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
 class PurchaseOrderAdjustmentLineInputSerializer(serializers.Serializer):
     line = serializers.PrimaryKeyRelatedField(queryset=PurchaseLine.objects.all())
     quantity = _quantity_input_field(min_value=Decimal('0.001'))
+    # Which articles go back. A serial line must name its handsets — by unit id
+    # (a number) or by the scanned code (a string); a lot line may name the
+    # lots it leaves from, and otherwise goes earliest-expiry first.
+    units = serializers.ListField(
+        child=serializers.JSONField(), required=False, allow_empty=True
+    )
+    batches = serializers.ListField(
+        child=serializers.JSONField(), required=False, allow_empty=True
+    )
+
+
+def _returned_unit_ids(line, base_quantity, picks):
+    """The units one returned line names, as ids, or a refusal in Arabic.
+
+    Refused here, before anything is locked, so the buyer is told which handset
+    is missing rather than reading the ledger's own backstop. The service still
+    re-checks each unit under its lock (in stock, this product, this place).
+    """
+    ids = []
+    for item in picks:
+        if isinstance(item, dict):
+            item = item.get("id") or item.get("code") or ""
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, int):
+            ids.append(item)
+            continue
+        code = str(item).strip()
+        if not code:
+            continue
+        unit = tracking.find_live_unit(code, variant=line.variant)
+        if unit is None:
+            raise serializers.ValidationError(
+                {"detail": f"لا توجد وحدة في المخزون بالمعرّف {code}."}
+            )
+        ids.append(unit.pk)
+    count = int(base_quantity)
+    if Decimal(count) != base_quantity:
+        raise serializers.ValidationError(
+            {"detail": "الأصناف المسلسلة تُرجَع للمورد بأعداد صحيحة فقط."}
+        )
+    if not ids:
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    "حدّد الوحدات المُرجَعة للمورد — هذا الصنف مسلسل "
+                    "ولا يُرجَع بالكمية فقط."
+                ),
+                "line": line.pk,
+            }
+        )
+    if len(ids) != count or len(set(ids)) != len(ids):
+        raise serializers.ValidationError(
+            {
+                "detail": f"تم تحديد {len(set(ids))} وحدة لكمية قدرها {count}.",
+                "line": line.pk,
+            }
+        )
+    return ids
 
 
 class PurchaseOrderReplacementLineInputSerializer(serializers.Serializer):
@@ -2415,6 +2482,11 @@ class PurchaseOrderReplacementLineInputSerializer(serializers.Serializer):
         decimal_places=2,
         min_value=Decimal("0.00"),
     )
+    # What arrived, scanned the way a receipt scans it. Optional: a handset
+    # nobody scanned waits on the missing-identifier list, and a lot nobody
+    # named gets a generated one — but a serial-and-lot product needs its lot.
+    units = ReceiptUnitCaptureSerializer(many=True, required=False)
+    batches = ReceiptBatchCaptureSerializer(many=True, required=False)
 
     def validate(self, attrs):
         variant = attrs.get("variant")
@@ -2439,6 +2511,7 @@ class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
         validate_purchase_order_adjustment_allowed(purchase_order)
 
         requested_by_line = {}
+        picks_by_line = {}
         for line_data in attrs["lines"]:
             line = line_data["line"]
             if line.purchase_order_id != purchase_order.pk:
@@ -2448,6 +2521,9 @@ class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
             requested_by_line[line.pk] = (
                 requested_by_line.get(line.pk, 0) + line_data["quantity"]
             )
+            picks = picks_by_line.setdefault(line.pk, {"units": [], "batches": []})
+            picks["units"].extend(line_data.get("units") or [])
+            picks["batches"].extend(line_data.get("batches") or [])
 
         lines_by_id = {
             line.pk: line
@@ -2457,6 +2533,8 @@ class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
             ).select_related("variant", "variant__product")
         }
         validated_lines = []
+        identified = {}
+        named_units = set()
         for line_id, quantity in requested_by_line.items():
             line = lines_by_id[line_id]
             if quantity > line.adjustable_quantity:
@@ -2469,8 +2547,22 @@ class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
                     }
                 )
             validated_lines.append((line, quantity))
+            picks = picks_by_line[line_id]
+            if tracking.tracks_units(tracking.mode_of(line.variant)):
+                unit_ids = _returned_unit_ids(
+                    line, line.to_base_quantity(quantity), picks["units"]
+                )
+                if named_units.intersection(unit_ids):
+                    raise serializers.ValidationError(
+                        {"detail": "الوحدة نفسها مُختارة في أكثر من سطر."}
+                    )
+                named_units.update(unit_ids)
+                identified[line_id] = {"units": unit_ids}
+            elif picks["batches"]:
+                identified[line_id] = {"batches": picks["batches"]}
 
         attrs["validated_lines"] = validated_lines
+        attrs["identified"] = identified
         attrs["settlement_method"] = self._settlement_method(attrs)
         return attrs
 
@@ -2493,6 +2585,7 @@ class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
             reason=self.validated_data.get("reason", ""),
             request=self.context.get("request"),
             settlement_method=self.validated_data.get("settlement_method", ""),
+            identified=self.validated_data.get("identified"),
         )
 
 
@@ -2545,6 +2638,23 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
             )
             for line_data in replacement_lines
         ]
+        # Index-aligned with the lines above. A scanned row's own cost is
+        # dropped: a replacement is worth what the shelf says (see
+        # ``record_purchase_replacement_stock_movements``), and a per-handset
+        # cost would only be refused for not adding up to it.
+        attrs["replacement_identified"] = [
+            {
+                "units": [
+                    {key: value for key, value in row.items() if key != "unit_cost"}
+                    for row in line_data.get("units") or []
+                ],
+                "batches": [
+                    {key: value for key, value in row.items() if key != "unit_cost"}
+                    for row in line_data.get("batches") or []
+                ],
+            }
+            for line_data in replacement_lines
+        ]
         return attrs
 
     @staticmethod
@@ -2580,6 +2690,8 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
             reason=self.validated_data.get("reason", ""),
             request=self.context.get("request"),
             settlement_method=self.validated_data.get("settlement_method", ""),
+            identified=self.validated_data.get("identified"),
+            replacement_identified=self.validated_data.get("replacement_identified"),
         )
 
 

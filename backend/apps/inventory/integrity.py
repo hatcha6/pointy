@@ -89,14 +89,16 @@ def counts_toward_bin(status, warehouse_id, transit_id=None) -> bool:
 
 
 def _tracked_since():
-    """``{variant_id: when this product started carrying identity}``.
+    """``{variant_id: when this product's current tracked stretch began}``.
 
     A shop that switches a product on after two years of trading has two years
     of ledger entries with no allocations under them — correctly, because
-    there were no articles to name. Judging those by today's mode would report
-    a permanent violation for a shop that did everything right, which is worse
-    than no check at all: an invariant nobody can ever get to green is one
-    nobody reads.
+    there were no articles to name — and so does a product switched off for a
+    season and on again, which is why this is the *current* stretch rather
+    than the first. Judging those by today's mode would report a permanent
+    violation for a shop that did everything right, which is worse than no
+    check at all: an invariant nobody can ever get to green is one nobody
+    reads.
     """
     from apps.catalog.models import ProductVariant
 
@@ -282,8 +284,8 @@ def check_ledger_allocations(tracked=None) -> list:
     for entry in entries:
         started = since.get(entry["variant_id"])
         if started is not None and entry["posting_at"] < started:
-            # Before this product was tracked. There were no articles, so
-            # there are no allocations, and that is the truth rather than a
+            # Before this stretch of being tracked. There were no articles,
+            # so there are no allocations, and that is the truth rather than a
             # defect. Opening identification (§6.10) is what gives the *stock*
             # names; it does not rewrite the history of how it arrived.
             continue
@@ -297,12 +299,30 @@ def check_ledger_allocations(tracked=None) -> list:
                 f"account for {allocated}."
             )
 
+    mode_since = _tracking_mode_since(tracked)
     shapes = StockAllocation.objects.filter(variant_id__in=tracked).values(
-        "id", "variant_id", "unit_id", "batch_id", "quantity"
+        "id",
+        "variant_id",
+        "unit_id",
+        "batch_id",
+        "quantity",
+        "posting_at",
+        "unit__batch_id",
+        "unit__created_at",
     )
     for row in shapes:
         mode, label = tracked[row["variant_id"]]
-        if mode == Product.TrackingMode.BATCH:
+        began = mode_since.get(row["variant_id"])
+        if began is not None and row["posting_at"] < began:
+            # Written under an earlier mode — a lot sold under ``batch`` names
+            # no unit, a handset sold under ``serial`` no lot — so held only to
+            # what is true in every mode: it names *something*.
+            if row["unit_id"] is None and row["batch_id"] is None:
+                problems.append(
+                    f"[14] {label}: allocation {row['id']} names neither a "
+                    "unit nor a lot."
+                )
+        elif mode == Product.TrackingMode.BATCH:
             if row["unit_id"] is not None:
                 problems.append(
                     f"[14] {label}: allocation {row['id']} names a unit on a "
@@ -320,7 +340,9 @@ def check_ledger_allocations(tracked=None) -> list:
                     "serialized variant."
                 )
         elif mode == Product.TrackingMode.SERIAL_BATCH:
-            if row["unit_id"] is None or row["batch_id"] is None:
+            if (
+                row["unit_id"] is None or row["batch_id"] is None
+            ) and not _grandfathered(row, began):
                 problems.append(
                     f"[14] {label}: allocation {row['id']} must name both a unit "
                     "and its lot — that is what the fourth mode is for."
@@ -331,6 +353,36 @@ def check_ledger_allocations(tracked=None) -> list:
                 f"{row['quantity']} of one article."
             )
     return problems
+
+
+def _tracking_mode_since(tracked):
+    """``{variant_id: when its product's current tracking mode began}``.
+
+    History written before it was written under another mode and is judged
+    by that, not by today's — see ``Product.tracking_mode_since``.
+    """
+    from apps.catalog.models import ProductVariant
+
+    return dict(
+        ProductVariant.objects.filter(pk__in=list(tracked)).values_list(
+            "pk", "product__tracking_mode_since"
+        )
+    )
+
+
+def _grandfathered(row, began) -> bool:
+    """A unit ``serial → serial_batch`` kept on the shelf (§4.2), moving now.
+
+    It names no lot because it never had one: it has none, and it was born
+    before its product began requiring lots. A unit born after that moment
+    gets no such pass — that is the defect this check exists for.
+    """
+    return (
+        began is not None
+        and row["unit_id"] is not None
+        and row["unit__batch_id"] is None
+        and row["unit__created_at"] < began
+    )
 
 
 # ---------------------------------------------------------------------------

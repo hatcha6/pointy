@@ -104,6 +104,10 @@ const devicesGuides = <LearningGuide>[
             ),
             LearningStep('اطبع.'),
           ]),
+          LearningParagraph(
+            'يحمل كل ملصق في أعلاه شريطًا أسود باسم المحل. لإيقافه افتح الطابعة '
+            'من إعدادات الجهاز وأطفئ «شريط اسم المحل أعلى الملصق».',
+          ),
         ],
       ),
       LearningSection(

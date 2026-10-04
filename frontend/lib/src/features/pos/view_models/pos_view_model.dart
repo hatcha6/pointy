@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/error_messages.dart';
 import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
@@ -88,6 +89,28 @@ class PosSearchFocusController extends ChangeNotifier {
 /// [PosSearchFocusController].
 class PosSearchResetController extends ChangeNotifier {
   void requestReset() => notifyListeners();
+}
+
+/// Lets the POS view model ask the sell screen to open the unit picker for a
+/// variant — a scan that named a serialized model's box barcode rather than
+/// the article's own number. The view model cannot open a sheet, and adding
+/// the line without a unit is the one outcome identified stock exists to
+/// prevent: the receipt would name whichever handset happened to be oldest.
+class PosUnitPickRequestController extends ChangeNotifier {
+  ProductVariant? _pending;
+
+  void request(ProductVariant variant) {
+    _pending = variant;
+    notifyListeners();
+  }
+
+  /// The variant waiting for a pick, once: a rebuilt listener must not open
+  /// the same picker twice.
+  ProductVariant? take() {
+    final variant = _pending;
+    _pending = null;
+    return variant;
+  }
 }
 
 enum PosProductSelectionStatus {
@@ -259,6 +282,8 @@ class PosViewModel extends ChangeNotifier {
   // [requestSearchReset].
   final PosSearchResetController _searchResetController =
       PosSearchResetController();
+  final PosUnitPickRequestController _unitPickRequests =
+      PosUnitPickRequestController();
 
   /// Cards or a table: how this till lays out its catalog, remembered per
   /// device. Held here rather than by the catalog pane, which is rebuilt from
@@ -286,6 +311,10 @@ class PosViewModel extends ChangeNotifier {
   /// Observed by the catalog search field so it can clear itself (and cancel any
   /// pending debounce) after a scan. See [requestSearchReset].
   PosSearchResetController get searchResetController => _searchResetController;
+
+  /// Observed by the sell screen, which opens the unit picker for whatever a
+  /// scan asked about. See [PosUnitPickRequestController].
+  PosUnitPickRequestController get unitPickRequests => _unitPickRequests;
 
   /// Asks the catalog search field to reclaim keyboard focus so the cashier can
   /// immediately look up or scan the next item. Fired at natural resting points
@@ -826,6 +855,7 @@ class PosViewModel extends ChangeNotifier {
     _persistDebounce?.cancel();
     _searchFocusController.dispose();
     _searchResetController.dispose();
+    _unitPickRequests.dispose();
     catalogLayout.dispose();
     super.dispose();
   }

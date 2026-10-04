@@ -7,21 +7,9 @@ import '../../../data/models/attendance.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/weekday_labels.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/attendance_view_model.dart';
-
-/// Weekday labels keyed by python weekday number (Monday = 0 .. Sunday = 6).
-String weekdayLabel(AppLocalizations l10n, int weekday) {
-  return switch (weekday) {
-    0 => l10n.weekdayMonday,
-    1 => l10n.weekdayTuesday,
-    2 => l10n.weekdayWednesday,
-    3 => l10n.weekdayThursday,
-    4 => l10n.weekdayFriday,
-    5 => l10n.weekdaySaturday,
-    _ => l10n.weekdaySunday,
-  };
-}
 
 /// Which of the two connection actions the manager started. `isMutating` is
 /// shared by both, so it alone cannot say which button to show as running.

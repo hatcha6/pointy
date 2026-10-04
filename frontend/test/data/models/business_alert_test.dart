@@ -72,6 +72,28 @@ void main() {
     expect(alert.occurredAt, isNotNull, reason: 'how old the reading is');
   });
 
+  test('late card money names its account, amount and expected day', () {
+    final alert = BusinessAlert.fromJson({
+      'id': 41,
+      'code': 'treasury.card_settlement_overdue',
+      'category': 'sales',
+      'severity': 'warning',
+      'is_hidden': false,
+      'payload': {
+        'account': 'معاملات',
+        'amount': '1823.40',
+        'count': 1,
+        'oldest_day': '2026-10-01',
+        'expected_on': '2026-10-04',
+      },
+    });
+
+    expect(alert.type, BusinessAlertType.cardSettlementOverdue);
+    expect(alert.primaryLabel, 'معاملات');
+    expect(alert.amount, 1823.40);
+    expect(alert.occurredAt, DateTime(2026, 10, 4));
+  });
+
   test('an exhausted float sorts above the ordinary money alerts', () {
     final empty = BusinessAlert.fromJson({
       'id': 32,

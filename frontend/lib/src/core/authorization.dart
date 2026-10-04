@@ -174,6 +174,13 @@ enum AppCapability {
   /// empty, so they ride the same permission.
   recordMoneyTransfer,
   recordMoneyCount,
+
+  /// Card takings the processor (Moamalat) is holding: reading the held days
+  /// and the deposits recorded against them, recording one when the
+  /// processor's transfer reaches the bank, and undoing one recorded wrong.
+  viewCardSettlements,
+  recordCardSettlement,
+  cancelCardSettlement,
   viewExchangeRates,
   viewAttendance,
   manageAttendance,
@@ -231,6 +238,11 @@ enum AppCapability {
   /// serials, and neither should have to see the other's screen.
   viewStockUnits,
   viewStockBatches,
+
+  /// Naming what is already on the shelf: an article that arrived without its
+  /// number, or the stock a product held before it was tracked. The server
+  /// asks `inventory.add_stockunit` for both, lots included.
+  identifyStockUnits,
 
   /// الأمانات. Split from the unit list on purpose: a shop can let its counter
   /// staff see what is owed and hand it over — that is where a consignor turns
@@ -294,13 +306,32 @@ class AuthorizationCapabilities {
   /// cameras are removed for a shop with no recorder. Without this the two
   /// drawer entries and their ⌘K matches appeared for every shop that took the
   /// update — cashiers included, by default — for a feature nobody enabled.
+  ///
+  /// Consignment goes with the serial switch: the shop only ever holds
+  /// somebody else's goods as identified articles — intake refuses anything
+  /// else — and the roles grant cashiers the payables view, so «الأمانات» was
+  /// in every drawer of every shop as well.
   static Set<AppCapability> _trackingCapabilitiesOff(PosUser user) {
     final off = <AppCapability>{};
     if (!user.serializedInventoryEnabled) {
-      off.add(AppCapability.viewStockUnits);
+      off.addAll(const {
+        AppCapability.viewStockUnits,
+        AppCapability.viewConsignmentPayables,
+        AppCapability.disburseConsignmentPayout,
+        AppCapability.manageConsignmentAgreement,
+        AppCapability.manageConsignmentIncident,
+        AppCapability.repriceStockUnit,
+        AppCapability.writeOffStockUnit,
+      });
     }
     if (!user.batchTrackingEnabled) {
-      off.add(AppCapability.viewStockBatches);
+      off.addAll(const {
+        AppCapability.viewStockBatches,
+        AppCapability.quarantineBatch,
+      });
+    }
+    if (!user.serializedInventoryEnabled && !user.batchTrackingEnabled) {
+      off.add(AppCapability.identifyStockUnits);
     }
     return off;
   }
@@ -445,6 +476,9 @@ class AuthorizationCapabilities {
         'inventory.view_stockbatch',
       ])) {
         capabilities.add(AppCapability.viewStockBatches);
+      }
+      if (_hasAny(user, const ['add_stockunit', 'inventory.add_stockunit'])) {
+        capabilities.add(AppCapability.identifyStockUnits);
       }
       if (_hasAny(user, const [
         'view_consignment_liability',
@@ -1221,6 +1255,24 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const ['add_moneycount', 'treasury.add_moneycount'])) {
         capabilities.add(AppCapability.recordMoneyCount);
       }
+      if (_hasAny(user, const [
+        'view_cardsettlement',
+        'treasury.view_cardsettlement',
+      ])) {
+        capabilities.add(AppCapability.viewCardSettlements);
+      }
+      if (_hasAny(user, const [
+        'add_cardsettlement',
+        'treasury.add_cardsettlement',
+      ])) {
+        capabilities.add(AppCapability.recordCardSettlement);
+      }
+      if (_hasAny(user, const [
+        'cancel_cardsettlement',
+        'treasury.cancel_cardsettlement',
+      ])) {
+        capabilities.add(AppCapability.cancelCardSettlement);
+      }
       // Reading a rate is not the same as trading in one: an accountant costing
       // imports holds this without any of the dashboard's revenue permissions,
       // so it grants the rates band and nothing else.
@@ -1467,6 +1519,11 @@ class AuthorizationCapabilities {
   bool get canChangeMoneyAccount => allows(AppCapability.changeMoneyAccount);
   bool get canRecordMoneyTransfer => allows(AppCapability.recordMoneyTransfer);
   bool get canRecordMoneyCount => allows(AppCapability.recordMoneyCount);
+  bool get canViewCardSettlements => allows(AppCapability.viewCardSettlements);
+  bool get canRecordCardSettlement =>
+      allows(AppCapability.recordCardSettlement);
+  bool get canCancelCardSettlement =>
+      allows(AppCapability.cancelCardSettlement);
   bool get canViewOperations => allows(AppCapability.viewOperations);
   bool get canCreateJobs => allows(AppCapability.createJobs);
   bool get canChangeJobs => allows(AppCapability.changeJobs);
@@ -1493,6 +1550,7 @@ class AuthorizationCapabilities {
   bool get canViewStock => allows(AppCapability.viewStock);
   bool get canViewStockUnits => allows(AppCapability.viewStockUnits);
   bool get canViewStockBatches => allows(AppCapability.viewStockBatches);
+  bool get canIdentifyStockUnits => allows(AppCapability.identifyStockUnits);
   bool get canViewConsignmentPayables =>
       allows(AppCapability.viewConsignmentPayables);
   bool get canDisburseConsignmentPayout =>

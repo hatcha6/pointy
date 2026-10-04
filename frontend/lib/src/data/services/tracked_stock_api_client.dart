@@ -115,7 +115,10 @@ class TrackedStockApiClient {
         if (identifierKind.isNotEmpty) 'identifier_kind': identifierKind,
       },
     );
-    _session.ensureSuccess(response, 'Unit identification failed with status');
+    _session.throwApiException(
+      response,
+      'Unit identification failed with status',
+    );
     return StockUnit.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -126,7 +129,7 @@ class TrackedStockApiClient {
       'stock-units/$unitId/',
       body: changes,
     );
-    _session.ensureSuccess(response, 'Unit update failed with status');
+    _session.throwApiException(response, 'Unit update failed with status');
     return StockUnit.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -137,7 +140,7 @@ class TrackedStockApiClient {
       'stock-units/$unitId/write-off/',
       body: {'reason': reason},
     );
-    _session.ensureSuccess(response, 'Unit write-off failed with status');
+    _session.throwApiException(response, 'Unit write-off failed with status');
     return StockUnit.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -157,7 +160,7 @@ class TrackedStockApiClient {
       'stock-units/bulk-reprice/',
       body: {'ids': unitIds, 'price': ?price, 'percent': ?percent},
     );
-    _session.ensureSuccess(response, 'Bulk reprice failed with status');
+    _session.throwApiException(response, 'Bulk reprice failed with status');
     final body = _session.decodedBody(response);
     if (body is Map<String, Object?>) {
       final updated = body['updated'];
@@ -223,7 +226,7 @@ class TrackedStockApiClient {
         ? 'stock-batches/$batchId/quarantine/'
         : 'stock-batches/$batchId/release-quarantine/';
     final response = await _session.post(path, body: const {});
-    _session.ensureSuccess(response, 'Lot quarantine failed with status');
+    _session.throwApiException(response, 'Lot quarantine failed with status');
     return StockBatch.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -267,7 +270,7 @@ class TrackedStockApiClient {
       'stock-batches/$batchId/notify-affected/',
       body: const <String, Object?>{},
     );
-    _session.ensureSuccess(response, 'Recall alert failed with status');
+    _session.throwApiException(response, 'Recall alert failed with status');
     return RecallNotifyResult.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -283,7 +286,7 @@ class TrackedStockApiClient {
       'stock-units/$unitId/report-incident/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Recording the incident failed with status',
     );
@@ -329,7 +332,10 @@ class TrackedStockApiClient {
         if (note.trim().isNotEmpty) 'note': note.trim(),
       },
     );
-    _session.ensureSuccess(response, 'Assessing the claim failed with status');
+    _session.throwApiException(
+      response,
+      'Assessing the claim failed with status',
+    );
     return ConsignmentIncident.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -353,7 +359,10 @@ class TrackedStockApiClient {
         if (notes.trim().isNotEmpty) 'notes': notes.trim(),
       },
     );
-    _session.ensureSuccess(response, 'Settling the claim failed with status');
+    _session.throwApiException(
+      response,
+      'Settling the claim failed with status',
+    );
     return ConsignmentIncident.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -400,7 +409,7 @@ class TrackedStockApiClient {
         if (captureLater) 'capture_later': true,
       },
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Opening identification failed with status',
     );

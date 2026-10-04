@@ -26,6 +26,11 @@ Future<List<ReceiptUnitCapture>?> showUnitCaptureSheet(
   required double lineUnitCost,
   List<ReceiptUnitCapture> initial = const [],
   bool allowCaptureLater = false,
+
+  /// Off where the server decides what the articles are worth — a supplier's
+  /// replacement takes the shelf's own rate — so typing a cost per handset
+  /// would be typing a number nothing reads.
+  bool allowSplitCosts = true,
 }) {
   return showModalBottomSheet<List<ReceiptUnitCapture>>(
     context: context,
@@ -39,6 +44,7 @@ Future<List<ReceiptUnitCapture>?> showUnitCaptureSheet(
         lineUnitCost: lineUnitCost,
         initial: initial,
         allowCaptureLater: allowCaptureLater,
+        allowSplitCosts: allowSplitCosts,
       );
     },
   );
@@ -51,6 +57,7 @@ class _UnitCaptureSheet extends StatefulWidget {
     required this.lineUnitCost,
     required this.initial,
     required this.allowCaptureLater,
+    required this.allowSplitCosts,
   });
 
   final String productLabel;
@@ -58,6 +65,7 @@ class _UnitCaptureSheet extends StatefulWidget {
   final double lineUnitCost;
   final List<ReceiptUnitCapture> initial;
   final bool allowCaptureLater;
+  final bool allowSplitCosts;
 
   @override
   State<_UnitCaptureSheet> createState() => _UnitCaptureSheetState();
@@ -74,7 +82,9 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
   void initState() {
     super.initState();
     _captured = List<ReceiptUnitCapture>.from(widget.initial);
-    _splitCosts = _captured.any((unit) => unit.unitCost != null);
+    _splitCosts =
+        widget.allowSplitCosts &&
+        _captured.any((unit) => unit.unitCost != null);
   }
 
   @override
@@ -231,26 +241,29 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
               ),
             ),
             const SizedBox(height: 6),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              value: _splitCosts,
-              onChanged: _toggleSplit,
-              title: Text(
-                l10n.unitCaptureSplitCosts,
-                style: theme.textTheme.bodyMedium,
+            if (widget.allowSplitCosts)
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: _splitCosts,
+                onChanged: _toggleSplit,
+                title: Text(
+                  l10n.unitCaptureSplitCosts,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                subtitle: _splitCosts
+                    ? Text(
+                        l10n.unitCaptureCostResidual(
+                          formatMoney(_costResidual),
+                        ),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _costResidual.abs() < 0.005
+                              ? colors.primaryStrong
+                              : colors.warning,
+                        ),
+                      )
+                    : null,
               ),
-              subtitle: _splitCosts
-                  ? Text(
-                      l10n.unitCaptureCostResidual(formatMoney(_costResidual)),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: _costResidual.abs() < 0.005
-                            ? colors.primaryStrong
-                            : colors.warning,
-                      ),
-                    )
-                  : null,
-            ),
             const Divider(height: 12),
             Flexible(
               child: _captured.isEmpty

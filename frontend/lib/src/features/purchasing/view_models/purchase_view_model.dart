@@ -1411,6 +1411,25 @@ class PurchaseViewModel extends ChangeNotifier {
     return result;
   }
 
+  /// The order a submit just created, read back whole for its receiving
+  /// dialog — the submit result carries only a summary.
+  Future<Result<PurchaseOrder>> loadOrderForReceipt(int orderId) {
+    return _purchaseRepository.loadPurchaseOrder(orderId);
+  }
+
+  /// Receives an order this workspace created, with the identifiers the
+  /// receiver scanned (see [PurchaseSubmission.awaitsIdentifiers]).
+  Future<Result<PurchaseOrder>> receiveCreatedOrder(
+    int orderId,
+    PurchaseReceiveDraft draft,
+  ) {
+    return _purchaseRepository.receiveLines(
+      purchaseOrderId: orderId,
+      draft: draft,
+      idempotencyKey: _newPurchaseIdempotencyKey('purchase-receive'),
+    );
+  }
+
   /// Reopens an existing **draft** purchase [order] in this workspace for
   /// editing. Reconstructs the draft lines — resolving each line's full product
   /// variant from the catalog so units, pricing and expiry behave exactly like

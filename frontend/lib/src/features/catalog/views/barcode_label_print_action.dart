@@ -14,6 +14,7 @@ import '../../../data/services/barcode_label_print_preferences.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/printing/print_paper_mismatch_message.dart';
 import '../../../shared/components/pointy_progress.dart';
 
 class BarcodeLabelPrintDialogResult {
@@ -168,10 +169,13 @@ class _BarcodeLabelPrintButtonState extends State<BarcodeLabelPrintButton> {
       return;
     }
     setState(() => _isPrinting = false);
+    final paperMismatch = result.paperMismatch;
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          result.isSuccess
+          paperMismatch != null
+              ? printPaperMismatchMessage(l10n, paperMismatch)
+              : result.isSuccess
               ? l10n.barcodeLabelPrintSuccess(options.copies)
               : result.unassignedRole != null
               ? l10n.barcodeLabelNoPrinter

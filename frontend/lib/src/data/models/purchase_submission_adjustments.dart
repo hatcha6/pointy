@@ -321,13 +321,31 @@ class PurchaseAdjustmentLineDraft {
   const PurchaseAdjustmentLineDraft({
     required this.lineId,
     required this.quantity,
+    this.unitIds = const [],
   });
 
   final int lineId;
   final double quantity;
 
+  /// The handsets going back, for a serialised line. The server refuses a
+  /// serial line that names none — it will not guess which IMEI left — and a
+  /// lot line names nothing, because the earliest-expiring lot goes first.
+  final List<int> unitIds;
+
+  PurchaseAdjustmentLineDraft copyWith({List<int>? unitIds}) {
+    return PurchaseAdjustmentLineDraft(
+      lineId: lineId,
+      quantity: quantity,
+      unitIds: unitIds ?? this.unitIds,
+    );
+  }
+
   Map<String, Object?> toJson() {
-    return {'line': lineId, 'quantity': quantity.toStringAsFixed(3)};
+    return {
+      'line': lineId,
+      'quantity': quantity.toStringAsFixed(3),
+      if (unitIds.isNotEmpty) 'units': unitIds,
+    };
   }
 }
 
@@ -336,17 +354,23 @@ class PurchaseReplacementLineDraft {
     required this.variantId,
     required this.quantity,
     required this.unitCost,
+    this.capture,
   });
 
   final int variantId;
   final double quantity;
   final double unitCost;
 
+  /// What arrived, scanned exactly as a receipt scans it. Optional: a handset
+  /// nobody scanned waits on the missing-identifier list.
+  final ReceiptLineCapture? capture;
+
   Map<String, Object?> toJson() {
     return {
       'variant': variantId,
       'quantity': quantity.toStringAsFixed(3),
       'unit_cost': unitCost.toStringAsFixed(2),
+      ...?capture?.toJson(),
     };
   }
 }

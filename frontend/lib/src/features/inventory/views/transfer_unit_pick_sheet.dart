@@ -65,8 +65,14 @@ class _TransferUnitPickSheetState extends State<_TransferUnitPickSheet> {
 
   Future<void> _load() async {
     for (final line in _lines) {
-      final result = await widget.repository.loadSellableUnits(
+      // The handsets in the place the van leaves from, which is not
+      // necessarily this till's: "sellable here" offered the wrong shelf for
+      // any transfer sent from another warehouse.
+      final result = await widget.repository.loadUnits(
         variantId: line.variantId,
+        warehouseId: widget.transfer.sourceId,
+        status: StockUnitStatus.inStock,
+        isIdentified: true,
       );
       if (result is Ok<StockUnitPage>) {
         _available[line.id] = result.value.units;

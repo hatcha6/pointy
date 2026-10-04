@@ -46,6 +46,7 @@ import '../models/document_trail_event.dart';
 import '../models/expense.dart';
 import '../models/expense_category.dart';
 import '../models/expense_ledger_entry.dart';
+import '../models/card_settlement.dart';
 import '../models/card_terminal.dart';
 import '../models/money_position.dart';
 import '../models/fraud_finding.dart';
@@ -71,6 +72,7 @@ import '../models/modifier_group.dart';
 import '../models/prep_station.dart';
 import '../models/exchange_rate.dart';
 import '../models/sales_channel.dart';
+import '../models/identified_stock_settings.dart';
 import '../models/shop_settings.dart';
 import '../models/stock_batch.dart';
 import '../models/stock_count.dart';
@@ -774,6 +776,12 @@ class PosApiService {
     return _shopSettings.updateShopSettings(draft);
   }
 
+  Future<ShopSettings> updateIdentifiedStockSettings(
+    IdentifiedStockSettings settings,
+  ) {
+    return _shopSettings.updateIdentifiedStockSettings(settings);
+  }
+
   Future<ShopSettings> setupShop({
     required String shopType,
     String? shopName,
@@ -938,14 +946,12 @@ class PosApiService {
   Future<int> bulkSetProductFlags({
     required List<int> ids,
     bool? isActive,
-    bool? tracksExpiry,
     bool? isService,
     bool? isPrepared,
   }) {
     return _catalog.bulkSetProductFlags(
       ids: ids,
       isActive: isActive,
-      tracksExpiry: tracksExpiry,
       isService: isService,
       isPrepared: isPrepared,
     );
@@ -2237,6 +2243,48 @@ class PosApiService {
     Map<String, Object?> changes,
   ) {
     return _treasury.updateAccount(accountId, changes);
+  }
+
+  Future<HeldTakings> fetchHeldTakings(
+    int accountId, {
+    int? amountCents,
+    DateTime? settledOn,
+  }) {
+    return _treasury.fetchHeldTakings(
+      accountId,
+      amountCents: amountCents,
+      settledOn: settledOn,
+    );
+  }
+
+  Future<List<HeldPayment>> fetchHeldDayPayments(int accountId, String day) {
+    return _treasury.fetchHeldDayPayments(accountId, day);
+  }
+
+  Future<CardSettlement> recordCardSettlement(
+    CardSettlementDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _treasury.recordCardSettlement(
+      draft,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<List<CardSettlement>> fetchCardSettlements(int accountId) {
+    return _treasury.fetchCardSettlements(accountId);
+  }
+
+  Future<CardSettlement> cancelCardSettlement(
+    int settlementId, {
+    String reason = '',
+    String? idempotencyKey,
+  }) {
+    return _treasury.cancelCardSettlement(
+      settlementId,
+      reason: reason,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   Future<List<CardTerminal>> fetchCardTerminals() {

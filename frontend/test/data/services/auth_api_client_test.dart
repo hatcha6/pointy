@@ -136,4 +136,44 @@ void main() {
       );
     });
   });
+
+  group('the shop flags beside the user', () {
+    // Identified stock's two switches ride beside `user`, like the camera
+    // flag. They were read off the user object and never folded onto it, so
+    // every shop — one that had switched serials on included — looked like it
+    // had not, and the units and batches screens never appeared for anyone.
+    test('carry identified stock onto the signed-in user', () async {
+      final session = PosApiSession(
+        client: MockClient(
+          (request) async => _json({
+            ..._userPayload,
+            'serialized_inventory_enabled': true,
+            'batch_tracking_enabled': true,
+            'serialized_capture_later_allowed': true,
+          }, 200),
+        ),
+        baseUrl: _lan,
+      );
+
+      final user = await AuthApiClient(session).fetchCurrentUser();
+
+      expect(user, isNotNull);
+      expect(user!.serializedInventoryEnabled, isTrue);
+      expect(user.batchTrackingEnabled, isTrue);
+      expect(user.serializedCaptureLaterAllowed, isTrue);
+    });
+
+    test('read as off when the server does not say', () async {
+      final session = PosApiSession(
+        client: MockClient((request) async => _json(_userPayload, 200)),
+        baseUrl: _lan,
+      );
+
+      final user = await AuthApiClient(session).fetchCurrentUser();
+
+      expect(user!.serializedInventoryEnabled, isFalse);
+      expect(user.batchTrackingEnabled, isFalse);
+      expect(user.serializedCaptureLaterAllowed, isFalse);
+    });
+  });
 }

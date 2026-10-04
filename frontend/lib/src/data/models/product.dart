@@ -1,6 +1,8 @@
 import 'attachment_summary.dart';
+import 'identified_stock_settings.dart' show BatchPickStrategy;
 import 'modifier_group.dart';
 import 'product_category.dart';
+import 'product_tracking.dart';
 import 'product_unit.dart';
 import 'product_variant.dart';
 import 'tracking_mode.dart';
@@ -18,6 +20,12 @@ class Product {
     this.archivedAt,
     this.tracksExpiry = false,
     this.trackingMode = TrackingMode.quantity,
+    this.assetTypeId,
+    this.warrantyDays = 0,
+    this.shelfLifeDays = 0,
+    this.expiryWarningDays = 30,
+    this.autoPickStrategy = BatchPickStrategy.fefo,
+    this.preventSellingExpired = true,
     this.isService = false,
     this.isPrepared = false,
     this.isSystem = false,
@@ -53,6 +61,29 @@ class Product {
   /// for everything a shop counts rather than names, which is the default and
   /// what every product is until somebody says otherwise.
   final TrackingMode trackingMode;
+
+  /// The facts each tracking mode reads; see [ProductTracking].
+  final int? assetTypeId;
+  final int warrantyDays;
+  final int shelfLifeDays;
+  final int expiryWarningDays;
+  final BatchPickStrategy autoPickStrategy;
+  final bool preventSellingExpired;
+
+  /// The mode and its facts as one value, the shape the forms edit.
+  ProductTracking get tracking => ProductTracking(
+    // A server that predates the mode says only `tracks_expiry` — which was
+    // lot tracking by another name, and is still read as that.
+    mode: trackingMode == TrackingMode.quantity && tracksExpiry
+        ? TrackingMode.batch
+        : trackingMode,
+    assetTypeId: assetTypeId,
+    warrantyDays: warrantyDays,
+    shelfLifeDays: shelfLifeDays,
+    expiryWarningDays: expiryWarningDays,
+    autoPickStrategy: autoPickStrategy,
+    preventSellingExpired: preventSellingExpired,
+  );
   final bool isService;
   final bool isPrepared;
 
@@ -157,6 +188,12 @@ class Product {
       archivedAt: _dateTimeFromJson(json['archived_at']),
       tracksExpiry: (json['tracks_expiry'] as bool?) ?? false,
       trackingMode: TrackingMode.fromWire(json['tracking_mode']),
+      assetTypeId: (json['asset_type'] as num?)?.toInt(),
+      warrantyDays: (json['warranty_days'] as num?)?.toInt() ?? 0,
+      shelfLifeDays: (json['shelf_life_days'] as num?)?.toInt() ?? 0,
+      expiryWarningDays: (json['expiry_warning_days'] as num?)?.toInt() ?? 30,
+      autoPickStrategy: BatchPickStrategy.fromWire(json['auto_pick_strategy']),
+      preventSellingExpired: (json['prevent_selling_expired'] as bool?) ?? true,
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
       isSystem: (json['is_system'] as bool?) ?? false,
@@ -202,6 +239,12 @@ class Product {
       archivedAt: archivedAt,
       tracksExpiry: tracksExpiry,
       trackingMode: trackingMode,
+      assetTypeId: assetTypeId,
+      warrantyDays: warrantyDays,
+      shelfLifeDays: shelfLifeDays,
+      expiryWarningDays: expiryWarningDays,
+      autoPickStrategy: autoPickStrategy,
+      preventSellingExpired: preventSellingExpired,
       isService: isService,
       isPrepared: isPrepared,
       isSystem: isSystem,
@@ -247,6 +290,12 @@ class Product {
       systemKind: detail?.systemKind ?? '',
       tracksExpiry: detail?.tracksExpiry ?? variant.tracksExpiry,
       trackingMode: detail?.trackingMode ?? variant.trackingMode,
+      assetTypeId: detail?.assetTypeId,
+      warrantyDays: detail?.warrantyDays ?? 0,
+      shelfLifeDays: detail?.shelfLifeDays ?? 0,
+      expiryWarningDays: detail?.expiryWarningDays ?? 30,
+      autoPickStrategy: detail?.autoPickStrategy ?? BatchPickStrategy.fefo,
+      preventSellingExpired: detail?.preventSellingExpired ?? true,
       unit: variant.unit,
       pricingCurrency: detail?.pricingCurrency ?? variant.pricingCurrency,
       defaultSaleUnit: detail?.defaultSaleUnit ?? '',
@@ -310,11 +359,18 @@ class Product {
       archivedAt: archivedAt ?? this.archivedAt,
       tracksExpiry: tracksExpiry ?? this.tracksExpiry,
       trackingMode: trackingMode,
+      assetTypeId: assetTypeId,
+      warrantyDays: warrantyDays,
+      shelfLifeDays: shelfLifeDays,
+      expiryWarningDays: expiryWarningDays,
+      autoPickStrategy: autoPickStrategy,
+      preventSellingExpired: preventSellingExpired,
       isService: isService,
       isPrepared: isPrepared,
       isSystem: isSystem,
       systemKind: systemKind,
       unit: unit,
+      pricingCurrency: pricingCurrency,
       defaultSaleUnit: defaultSaleUnit,
       defaultPurchaseUnit: defaultPurchaseUnit,
       units: units,

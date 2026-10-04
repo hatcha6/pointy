@@ -1,3 +1,4 @@
+import 'product_tracking.dart';
 import 'product_unit.dart';
 import 'product_variant_draft.dart';
 
@@ -26,6 +27,7 @@ class ProductDraft {
     this.variantPriceAmount,
     this.openingQuantity,
     this.openingUnitCost,
+    this.tracking,
   });
 
   final String variantSku;
@@ -63,12 +65,19 @@ class ProductDraft {
   final double? openingQuantity;
   final double? openingUnitCost;
 
+  /// How the product's stock is identified, when the form offered the choice.
+  /// Sent in place of [tracksExpiry], which is then derived from the mode.
+  final ProductTracking? tracking;
+
   Map<String, Object?> toJson() {
     return {
       'name': name,
       'description': description,
       'is_active': isActive,
-      'tracks_expiry': tracksExpiry,
+      if (tracking case final tracking?)
+        ...tracking.toJson()
+      else
+        'tracks_expiry': tracksExpiry,
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,

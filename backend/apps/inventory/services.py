@@ -454,6 +454,7 @@ def allocate_adjustment(
     at=None,
     placeholder_key="",
     what="هذه الحركة",
+    supplier=None,
 ):
     """Name the identified stock behind a bin change, and move it.
 
@@ -490,5 +491,6 @@ def allocate_adjustment(
         at=at,
         placeholder_key=placeholder_key,
         what=what,
+        supplier=supplier,
     )
     return tracking.apply_adjustment(plan, status=status, at=at)

@@ -10,6 +10,8 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/money_position_view_model.dart';
 import '../../../shared/payments/bank_account_details_sheet.dart';
+import 'card_settlement_sheet.dart';
+import 'clearing_details_section.dart';
 import 'money_account_editor_sheet.dart';
 import 'money_count_sheet.dart';
 import 'money_transfer_sheet.dart';
@@ -87,6 +89,16 @@ class _MoneyAccountDetailsSheet extends StatelessWidget {
                   _AssumptionNote(text: l10n.treasuryPayrollAssumptionNote),
                 ],
                 SizedBox(height: spacing.lg),
+                if (entry.account.isClearing &&
+                    capabilities.canViewCardSettlements) ...[
+                  ClearingDetailsSection(
+                    positionViewModel: viewModel,
+                    capabilities: capabilities,
+                    accountId: accountId,
+                    balance: entry.expectedBalance,
+                  ),
+                  SizedBox(height: spacing.lg),
+                ],
                 PointySectionHeader(title: l10n.treasuryMovementsTitle),
                 SizedBox(height: spacing.sm),
                 _Movements(viewModel: viewModel, accountId: accountId),
@@ -116,7 +128,11 @@ class _Header extends StatelessWidget {
       title: account.name,
       value: formatMoney(entry.expectedBalance),
       valueSubtitle: l10n.treasuryExpectedLabel,
-      description: account.bankName == account.name ? null : account.bankName,
+      description: account.isClearing
+          ? l10n.treasuryClearingSettlesInto(account.settlesIntoName)
+          : account.bankName == account.name
+          ? null
+          : account.bankName,
       pills: [
         if (account.isRouted)
           PointyHeroPill(
@@ -155,7 +171,21 @@ class _Actions extends StatelessWidget {
         account.iban.isNotEmpty || account.accountNumber.isNotEmpty;
 
     final actions = <Widget>[
-      if (capabilities.canRecordMoneyCount)
+      // A clearing account's one action: the processor's transfer arrived.
+      if (account.isClearing && capabilities.canRecordCardSettlement)
+        FilledButton.icon(
+          key: const ValueKey('treasury_details_settlement_button'),
+          onPressed: busy
+              ? null
+              : () => showCardSettlementSheet(
+                  context,
+                  viewModel: viewModel,
+                  account: account,
+                ),
+          icon: const Icon(Icons.credit_score_outlined),
+          label: Text(l10n.treasuryActionRecordSettlement),
+        ),
+      if (capabilities.canRecordMoneyCount && !account.isClearing)
         FilledButton.icon(
           key: const ValueKey('treasury_details_count_button'),
           onPressed: busy
@@ -168,7 +198,8 @@ class _Actions extends StatelessWidget {
           icon: const Icon(Icons.fact_check_outlined),
           label: Text(l10n.treasuryActionCount),
         ),
-      if (capabilities.canRecordMoneyTransfer)
+      // Held card money leaves only by a settlement that names its sales.
+      if (capabilities.canRecordMoneyTransfer && !account.isClearing)
         OutlinedButton.icon(
           key: const ValueKey('treasury_details_transfer_button'),
           onPressed: busy

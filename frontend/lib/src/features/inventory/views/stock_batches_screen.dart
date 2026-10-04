@@ -14,6 +14,7 @@ import '../../../shared/shell/shell.dart';
 import '../../../shared/units.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'batch_recall_screen.dart';
+import 'opening_identification_screen.dart';
 
 /// The lots this shop has held, and where their goods are now.
 ///
@@ -25,13 +26,21 @@ class StockBatchesScreen extends StatefulWidget {
   const StockBatchesScreen({
     super.key,
     required this.viewModel,
-    required this.navigation,
+    this.navigation,
     this.repository,
     this.canQuarantine = false,
+    this.canIdentify = false,
   });
 
   final TrackedStockViewModel viewModel;
-  final AppNavigation navigation;
+
+  /// The app's drawer, when this is a destination; null when opened from one
+  /// product's page, which it goes back to instead.
+  final AppNavigation? navigation;
+
+  /// Whether the opening-identification run is offered here too — for a shop
+  /// that tracks lots and not serials, this screen is the only way to it.
+  final bool canIdentify;
 
   /// For the recall screen behind a row. Optional so a shop that never
   /// recalls anything pays nothing for it.
@@ -61,16 +70,27 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
+        final navigation = widget.navigation;
         return PointyScaffold(
-          drawer: AppNavigationDrawer(
-            selectedDestination: AppNavigationDestination.stockBatches,
-            navigation: widget.navigation,
-          ),
+          drawer: navigation == null
+              ? null
+              : AppNavigationDrawer(
+                  selectedDestination: AppNavigationDestination.stockBatches,
+                  navigation: navigation,
+                ),
           appBar: PointyAppBar(
-            leading: const PointyNavigationMenuButton(),
+            leading: navigation == null
+                ? null
+                : const PointyNavigationMenuButton(),
             title: Text(l10n.stockBatchesTitle),
             isLoading: viewModel.isLoadingBatches,
             actions: [
+              if (widget.repository != null && widget.canIdentify)
+                IconButton(
+                  tooltip: l10n.openingIdentifyTitle,
+                  onPressed: _openOpeningIdentification,
+                  icon: const Icon(Icons.playlist_add_check_outlined),
+                ),
               IconButton(
                 tooltip: l10n.refreshShopSettingsTooltip,
                 onPressed: viewModel.isLoadingBatches
@@ -86,6 +106,23 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
     );
   }
 
+  Future<void> _openOpeningIdentification() async {
+    final repository = widget.repository;
+    if (repository == null) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            OpeningIdentificationScreen(repository: repository),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    await widget.viewModel.loadBatches();
+  }
+
   Widget _body(
     BuildContext context,
     AppLocalizations l10n,
@@ -95,6 +132,19 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (viewModel.productId != null)
+          Padding(
+            padding: spacing.pagePadding.copyWith(bottom: 0),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: InputChip(
+                key: const ValueKey('stock_batches_product_filter'),
+                avatar: const Icon(Icons.inventory_2_outlined, size: 18),
+                label: Text(viewModel.productName),
+                onDeleted: viewModel.clearProductFilter,
+              ),
+            ),
+          ),
         Padding(
           padding: spacing.pagePadding,
           child: SingleChildScrollView(

@@ -6,6 +6,7 @@ import '../../../data/models/prep_station.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/order/pointy_order_toggle_row.dart';
+import '../../../shared/printing/print_paper_mismatch_message.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/printer_editor_view_model.dart';
 import '../view_models/printing_settings_view_model.dart';
@@ -488,7 +489,15 @@ class _PrinterTestSection extends StatelessWidget {
           ),
           if (lastTest != null) ...[
             SizedBox(height: spacing.sm),
-            lastTest.isSuccess
+            lastTest.isSuccess && lastTest.paperMismatch != null
+                ? PointyInlineMessage.warning(
+                    key: const ValueKey('printer_editor_test_result'),
+                    message: printPaperMismatchMessage(
+                      l10n,
+                      lastTest.paperMismatch!,
+                    ),
+                  )
+                : lastTest.isSuccess
                 ? PointyInlineMessage.success(
                     key: const ValueKey('printer_editor_test_result'),
                     message: printerTestResultMessage(l10n, lastTest),

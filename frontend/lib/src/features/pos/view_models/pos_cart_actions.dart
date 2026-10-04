@@ -473,8 +473,11 @@ extension PosCartActions on PosViewModel {
           stockUnitId: stockUnit?.id,
           stockUnitCode: stockUnit?.code ?? '',
           stockBatchId: stockBatch?.id,
-          stockBatchCode: stockBatch?.label ?? '',
-          stockBatchExpiry: stockBatch?.expiryDate,
+          // A serialised pack picked off the shelf shows the lot it came from,
+          // without pinning it: the unit already decides the lot.
+          stockBatchCode: stockBatch?.label ?? stockUnit?.batchCode ?? '',
+          stockBatchExpiry:
+              stockBatch?.expiryDate ?? stockUnit?.batchExpiryDate,
         ),
       );
     } else {

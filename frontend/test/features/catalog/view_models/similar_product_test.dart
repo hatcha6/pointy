@@ -89,6 +89,28 @@ void main() {
     expect(dollars.carried.pricingCurrency, 'USD');
   });
 
+  test('a foreign price survives the catalog payload', () {
+    // As the list sends it: the currency on the product, the dollar figure on
+    // a variant that arrives without its product.
+    final source = Product.fromJson(const {
+      'id': 1,
+      'name': 'كولا علبة 330',
+      'pricing_currency': 'USD',
+      'default_variant': {
+        'id': 11,
+        'product': 1,
+        'sku': '1001',
+        'unit_price': '84.25',
+        'price_amount': '12.50',
+        'is_default': true,
+      },
+    });
+
+    final similar = SimilarProduct.of(source);
+    expect(similar.carried.price, '12.5');
+    expect(similar.carried.pricingCurrency, 'USD');
+  });
+
   test("a sized and coloured product brings its grid, row by row", () {
     VariantOptionValue value(int id, int optionId, String name) =>
         VariantOptionValue(id: id, optionId: optionId, name: name);

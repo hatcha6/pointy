@@ -11,6 +11,7 @@ import '../../shared/pdf/pdf.dart';
 import '../models/barcode_label.dart';
 import '../models/printer_config.dart';
 import 'barcode_label_calibration.dart';
+import 'barcode_label_shop_bar.dart';
 import 'cups_pdf_spooler_stub.dart'
     if (dart.library.io) 'cups_pdf_spooler_io.dart';
 import 'print_transport.dart';
@@ -34,14 +35,19 @@ class BarcodeLabelDocumentService {
 
   final PointyPdfFontLoader fontLoader;
 
+  /// Prints [lines] as stickers. [shopName] heads each one in a black bar when
+  /// the printer has the bar on ([PrinterEndpoint.labelShopHeader]); without a
+  /// name there is no bar.
   Future<PrintTransportResult> printLabels({
     required List<BarcodeLabelPrintLine> lines,
     required PrinterEndpoint endpoint,
+    String? shopName,
   }) async {
     try {
       final document = await buildLabelsDocument(
         lines: lines,
         endpoint: endpoint,
+        shopName: shopName,
       );
       if (document.bytes.isEmpty) {
         return const PrintTransportResult.failure('no barcode labels to print');
@@ -56,7 +62,10 @@ class BarcodeLabelDocumentService {
     }
   }
 
-  Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) {
+  Future<PrintTransportResult> printTest(
+    PrinterEndpoint endpoint, {
+    String? shopName,
+  }) {
     return printLabels(
       lines: const [
         BarcodeLabelPrintLine(
@@ -72,6 +81,7 @@ class BarcodeLabelDocumentService {
         ),
       ],
       endpoint: endpoint,
+      shopName: shopName,
     );
   }
 
@@ -101,10 +111,12 @@ class BarcodeLabelDocumentService {
   Future<Uint8List> buildLabelsPdf({
     required List<BarcodeLabelPrintLine> lines,
     required PrinterEndpoint endpoint,
+    String? shopName,
   }) async {
     final document = await buildLabelsDocument(
       lines: lines,
       endpoint: endpoint,
+      shopName: shopName,
     );
     return document.bytes;
   }
@@ -114,12 +126,14 @@ class BarcodeLabelDocumentService {
   Future<BarcodeLabelDocument> buildLabelsDocument({
     required List<BarcodeLabelPrintLine> lines,
     required PrinterEndpoint endpoint,
+    String? shopName,
   }) async {
     final stickers = _expand(lines);
     if (stickers.isEmpty) {
       return BarcodeLabelDocument(bytes: Uint8List(0));
     }
     final fonts = await fontLoader.load();
+    final barName = endpoint.labelShopHeader ? shopName?.trim() ?? '' : '';
     return _BarcodeLabelSheet(
       stickers: stickers,
       size: endpoint.labelPdfSize,
@@ -131,6 +145,7 @@ class BarcodeLabelDocumentService {
       dpi: endpoint.labelDpi,
       rotationQuarterTurns: endpoint.labelRotationQuarterTurns,
       fonts: fonts,
+      shopName: barName.isEmpty ? null : barName,
     ).build();
   }
 
@@ -144,8 +159,11 @@ class BarcodeLabelDocumentService {
   /// queue's own page — 80 × 297 mm on a typical label/receipt PPD — so one
   /// sticker came out rotated, softened by the fit-to-page upscale, and trailed
   /// by ~270 mm of blank labels. `lp -o media=Custom.WxHmm` pins the page to the
-  /// sticker instead. The plugin remains the fallback (Windows, Android, and any
-  /// box without a CUPS client), where the driver's own paper setting governs.
+  /// sticker instead.
+  ///
+  /// Everywhere else the printing plugin prints it, and on Windows it states
+  /// the very same page: the sticker (or the strip) as the paper itself,
+  /// portrait, see [_printWithPlugin].
   Future<PrintTransportResult> _printPdf({
     required BarcodeLabelDocument document,
     required PrinterEndpoint endpoint,
@@ -165,7 +183,10 @@ class BarcodeLabelDocumentService {
         registerLabelTop: endpoint.labelPdfSize == BarcodeLabelPdfSize.sticker,
       );
       if (spooled.succeeded) {
-        return const PrintTransportResult.success('barcode labels printed');
+        return PrintTransportResult.success(
+          'barcode labels printed',
+          paperMismatch: spooled.paperMismatch,
+        );
       }
       if (spooled.supported) {
         return PrintTransportResult.failure(
@@ -190,25 +211,69 @@ class BarcodeLabelDocumentService {
       );
     }
 
+    return _printWithPlugin(
+      document: document,
+      endpoint: endpoint,
+      jobName: jobName,
+    );
+  }
+
+  /// Prints through the printing plugin, asking for the label as the paper.
+  ///
+  /// This used to defer to the driver's own paper (`usePrinterSettings`), and
+  /// on Windows that made the driver's paper setting — not this printer's
+  /// label settings — the page every sticker printed on. A label driver left
+  /// on one of its presets (4 × 6 in is a common default) put each 50 × 30 mm
+  /// sticker in the corner of a 4 × 6 page, and whatever that driver does with
+  /// a page wider than its head decided the size and the place of the print.
+  /// No label width or offset entered here could reach the paper, and a strip
+  /// of labels came out as long as the driver's page, not the strip.
+  ///
+  /// So the page is stated, the same way CUPS is told `media=Custom.WxHmm`:
+  /// `forceCustomPrintPaper` asks for the paper exactly as given — portrait,
+  /// even when the sticker is wider than it is tall (POINTY PATCH 5 in
+  /// `packages/printing`). The driver keeps everything else of its own: media
+  /// type, gap sensing, darkness. Only the A4 sheet, which every driver
+  /// already knows, still prints on the driver's paper.
+  Future<PrintTransportResult> _printWithPlugin({
+    required BarcodeLabelDocument document,
+    required PrinterEndpoint endpoint,
+    required String jobName,
+  }) async {
     final format = document.platformPageFormat;
+    final exactPaper = document.hasMedia;
+    // The page the driver actually opened, as the plugin reports it before it
+    // asks for the document: the one witness to whether the paper was taken.
+    PdfPageFormat? driverPage;
+    Future<Uint8List> layout(PdfPageFormat page) async {
+      driverPage = page;
+      return document.bytes;
+    }
+
     final printer = await findSystemPrinter(endpoint);
     final printed = printer != null
         ? await Printing.directPrintPdf(
             printer: printer,
             name: jobName,
             format: format,
-            usePrinterSettings: true,
-            onLayout: (_) async => document.bytes,
+            usePrinterSettings: !exactPaper,
+            forceCustomPrintPaper: exactPaper,
+            onLayout: layout,
           )
         : await Printing.layoutPdf(
             name: jobName,
             format: format,
-            usePrinterSettings: true,
-            onLayout: (_) async => document.bytes,
+            usePrinterSettings: !exactPaper,
+            forceCustomPrintPaper: exactPaper,
+            onLayout: layout,
           );
-    return printed
-        ? const PrintTransportResult.success('barcode labels printed')
-        : const PrintTransportResult.failure('document print canceled');
+    if (!printed) {
+      return const PrintTransportResult.failure('document print canceled');
+    }
+    return PrintTransportResult.success(
+      'barcode labels printed',
+      paperMismatch: exactPaper ? document.paperMismatchWith(driverPage) : null,
+    );
   }
 
   List<_LabelSticker> _expand(List<BarcodeLabelPrintLine> lines) {
@@ -242,6 +307,22 @@ class BarcodeLabelDocumentService {
   }
 }
 
+/// The width of every page the die-cut label path prints on [endpoint]: the
+/// sticker plus its run-up from where the printer starts printing
+/// ([PrinterEndpoint.labelPdfOffsetXMm]).
+///
+/// Labels and every calibration sheet share this one width, and that is what
+/// lets a position read off a sheet stand for a position on a label. A driver
+/// does not always start a page at the head's first dot: a label driver
+/// usually centres a page narrower than its head, and some scale one that is
+/// wider. Pages of different widths then land in different places, so a ruler
+/// printed across the whole head (as the sheet used to be) read numbers that
+/// did not hold for a label — and the offset taken off it moved the label by
+/// something else entirely.
+double barcodeLabelPageWidthMm(PrinterEndpoint endpoint) =>
+    endpoint.labelWidthMm.toDouble().clamp(10.0, 210.0) +
+    endpoint.labelPdfOffsetXMm.toDouble().clamp(0.0, 210.0);
+
 /// A rendered label sheet plus the media its pages were laid out for.
 /// [mediaWidthMm]/[mediaHeightMm] are null only for the A4 grid, whose media is
 /// the standard sheet every driver already knows.
@@ -255,6 +336,36 @@ class BarcodeLabelDocument {
   final Uint8List bytes;
   final double? mediaWidthMm;
   final double? mediaHeightMm;
+
+  /// Whether the pages are the media itself — a sticker, a strip, a roll —
+  /// rather than a standard sheet.
+  bool get hasMedia => mediaWidthMm != null && mediaHeightMm != null;
+
+  /// How far [printedPage] — the page a driver actually opened for this job —
+  /// is from the media these pages were laid out for, or null when it is the
+  /// same paper. A millimetre of slack covers a driver that keeps its paper in
+  /// its own units (dots, hundredths of an inch); anything past that is the
+  /// driver printing on paper of its own choosing.
+  PrintPaperMismatch? paperMismatchWith(PdfPageFormat? printedPage) {
+    final width = mediaWidthMm;
+    final height = mediaHeightMm;
+    if (printedPage == null || width == null || height == null) {
+      return null;
+    }
+    final printedWidth = printedPage.width / PdfPageFormat.mm;
+    final printedHeight = printedPage.height / PdfPageFormat.mm;
+    const slackMm = 1.0;
+    if ((printedWidth - width).abs() <= slackMm &&
+        (printedHeight - height).abs() <= slackMm) {
+      return null;
+    }
+    return PrintPaperMismatch(
+      requestedWidthMm: width,
+      requestedHeightMm: height,
+      printedWidthMm: printedWidth,
+      printedHeightMm: printedHeight,
+    );
+  }
 
   /// Page-format hint for the printing-plugin fallback. The true geometry is
   /// baked into the PDF bytes.
@@ -302,6 +413,7 @@ class _BarcodeLabelSheet {
     required this.dpi,
     required this.rotationQuarterTurns,
     required this.fonts,
+    this.shopName,
   });
 
   final List<_LabelSticker> stickers;
@@ -315,8 +427,16 @@ class _BarcodeLabelSheet {
   final int rotationQuarterTurns;
   final PointyPdfFonts fonts;
 
+  /// The name the shop bar carries; null for no bar.
+  final String? shopName;
+
   static const _ink = PdfColor.fromInt(0xff000000);
   static const double _mm = PdfPageFormat.mm;
+
+  /// The shortest card that carries the shop bar. Below it the bar would take
+  /// its height from the bars and the name, which are what the sticker is
+  /// for — so a sticker that small prints without one.
+  static const _minShopBarCardMm = 18.0;
 
   /// Die-cut sticker sizes outside this range are a mis-entered setting (or a
   /// legacy 0) rather than real media; clamping keeps the page printable.
@@ -399,6 +519,8 @@ class _BarcodeLabelSheet {
     final cardWidth = swap ? contentHeight : contentWidth;
     final cardHeight = swap ? contentWidth : contentHeight;
 
+    // The same width as [barcodeLabelPageWidthMm], which the calibration
+    // sheets print on: what is measured on them is where a label lands.
     final pageWidthMm = widthMm + offsetXMm;
     // CUPS custom media tops out at 8500 pt (~3 m), so a long run spills onto
     // further strips — each costing one re-registration, once every hundred-odd
@@ -451,8 +573,15 @@ class _BarcodeLabelSheet {
                     width: widthMm * _mm,
                     height: heightMm * _mm,
                     child: pw.Center(
+                      // Unconstrained: rotateBox otherwise lays the card out
+                      // in the sticker's own, unturned box, so a quarter-
+                      // turned card — as tall as the sticker is wide — was
+                      // squeezed to the sticker's height and lost whatever
+                      // fell below it (the price's currency, then the rows
+                      // under the bars). The card states its own size.
                       child: pw.Transform.rotateBox(
                         angle: _rotation * (math.pi / 2),
+                        unconstrained: true,
                         child: _card(
                           chunk[i],
                           cardWidth: cardWidth,
@@ -565,14 +694,14 @@ class _BarcodeLabelSheet {
     return BarcodeLabelDocument(bytes: await pdf.save());
   }
 
-  /// The sticker face: product name, barcode (with human-readable digits) and,
-  /// when the line asks for them, the price and an expiry date. RTL, all pure
-  /// black.
+  /// The sticker face: the shop bar when there is one ([_withShopBar]), then
+  /// product name, barcode (with human-readable digits) and, when the line asks
+  /// for them, the price and an expiry date. RTL, all pure black.
   ///
   /// The name and the price are the two things read from arm's length — off a
   /// shelf, at a glance — so they are set in the same face at the same size and
-  /// take an equal share of the card. Nothing else competes with them: the shop
-  /// already owns the shelf the sticker is on, so its name is not repeated here.
+  /// take an equal share of the card. The shop's own name, when it is printed,
+  /// sits apart in its bar and never competes with them.
   ///
   /// Every row is a **fixed** box, the boxes together fill the card exactly, and
   /// each row scales only its own text down to fit. Nothing scales the card as a
@@ -589,6 +718,70 @@ class _BarcodeLabelSheet {
   /// to give — a scanner decodes module *widths*, and bar height buys only
   /// aiming tolerance, which 8 mm of bar still has at counter range.
   pw.Widget _card(
+    _LabelSticker sticker, {
+    required double cardWidth,
+    required double cardHeight,
+  }) {
+    final shop = shopName;
+    if (shop == null || cardHeight < _minShopBarCardMm * _mm) {
+      return _cardBody(sticker, cardWidth: cardWidth, cardHeight: cardHeight);
+    }
+    return _withShopBar(
+      shop,
+      sticker,
+      cardWidth: cardWidth,
+      cardHeight: cardHeight,
+    );
+  }
+
+  /// The card under a black bar carrying the shop's name.
+  ///
+  /// The bar is a fixed share of the card, like every row below it, so the
+  /// sticker's height never moves; what it costs comes out of the rows the
+  /// card body sizes from its own height — the type a little smaller, the bars
+  /// a little shorter — rather than out of any one of them. It sits inside the
+  /// card's margins, not bled to the die-cut edge: across the head that edge is
+  /// exact, but down the feed it is only as good as the printer's registration,
+  /// and a bar printed to the edge shows every fraction of a millimetre of
+  /// drift as a white sliver or a bar run off the label.
+  pw.Widget _withShopBar(
+    String shop,
+    _LabelSticker sticker, {
+    required double cardWidth,
+    required double cardHeight,
+  }) {
+    final barHeight = math.min(cardHeight * 0.19, 7 * _mm);
+    final gap = cardHeight * 0.035;
+    return pw.SizedBox(
+      width: cardWidth,
+      height: cardHeight,
+      child: pw.Column(
+        children: [
+          BarcodeLabelShopBar(
+            shopName: shop,
+            width: cardWidth,
+            height: barHeight,
+            fonts: fonts,
+          ),
+          pw.SizedBox(height: gap),
+          // Expanded, not a box of the computed height: three heights summed
+          // in floating point can come out a hair over the card, and inside
+          // the A4 sheet's MultiPage an overflowing column carries its last
+          // child over to a continuation that is never printed — the whole
+          // body, gone from under the bar.
+          pw.Expanded(
+            child: _cardBody(
+              sticker,
+              cardWidth: cardWidth,
+              cardHeight: cardHeight - barHeight - gap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _cardBody(
     _LabelSticker sticker, {
     required double cardWidth,
     required double cardHeight,
@@ -619,7 +812,7 @@ class _BarcodeLabelSheet {
     final caption = sticker.captionText;
     final footer = caption != null
         ? _caption(caption, fontSize: headlineFontSize, width: cardWidth)
-        : _footer(sticker, fontSize: headlineFontSize);
+        : _footer(sticker, fontSize: headlineFontSize, width: cardWidth);
 
     // Bars wider than ~60 mm buy nothing but ink: a scanner needs module width,
     // not overall length.
@@ -818,7 +1011,16 @@ class _BarcodeLabelSheet {
   /// Price (and expiry, when the line carries one). The price is set in the
   /// name's face at the name's size — [fontSize] is the very number the name
   /// used — so the two read as one pair from across an aisle.
-  pw.Widget? _footer(_LabelSticker sticker, {required double fontSize}) {
+  ///
+  /// A price alone is fitted to [width] the way a caption is: the row it sits
+  /// in lays it out at the card's full width and clips it there, and on a
+  /// quarter-turned sticker — a card as narrow as the label is tall — that cut
+  /// the currency off every price.
+  pw.Widget? _footer(
+    _LabelSticker sticker, {
+    required double fontSize,
+    required double width,
+  }) {
     final price = sticker.priceText;
     final expiry = sticker.expiryLine;
     if (price == null && expiry == null) {
@@ -830,13 +1032,7 @@ class _BarcodeLabelSheet {
       color: _ink,
     );
     if (price == null || expiry == null) {
-      return pw.Text(
-        (price ?? expiry)!,
-        maxLines: 1,
-        overflow: pw.TextOverflow.clip,
-        textAlign: pw.TextAlign.center,
-        style: priceStyle,
-      );
+      return _caption((price ?? expiry)!, fontSize: fontSize, width: width);
     }
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

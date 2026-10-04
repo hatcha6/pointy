@@ -19,6 +19,7 @@ from apps.payments.models import Payment
 from apps.purchasing.models import SupplierPayment
 from apps.sales.models import RegisterCashMovement
 
+from . import clearing
 from .models import MoneyAccount, MoneyTransfer
 from .position import (
     BANK_METHODS,
@@ -30,6 +31,9 @@ from .position import (
     COMPONENT_INTEGRATION_DRAW,
     COMPONENT_PAYROLL,
     COMPONENT_SALES,
+    COMPONENT_SETTLEMENT_DIFFERENCE,
+    COMPONENT_SETTLEMENT_IN,
+    COMPONENT_SETTLEMENT_OUT,
     COMPONENT_STAFF_LOANS,
     COMPONENT_SUPPLIERS,
     COMPONENT_TRANSFER_IN,
@@ -84,13 +88,24 @@ def account_movements(account, *, start, end):
     if account.kind == MoneyAccount.Kind.BANK:
         # Every bank account has rows of its own — the payments that named it —
         # whether or not it is the one untagged money falls back to.
+        clearings = clearing.clearing_accounts()
         rows.extend(
-            _bank_rows(start=start, end=end, account=account, is_default=is_routed)
+            _bank_rows(
+                start=start,
+                end=end,
+                account=account,
+                is_default=is_routed,
+                held=clearing.held_by_any_q(clearings),
+            )
         )
+        if any(held_by.settles_into_id == account.pk for held_by in clearings):
+            rows.extend(_settlement_in_rows(account, start=start, end=end))
     elif is_routed and account.kind == MoneyAccount.Kind.CASH:
         rows.extend(_cash_rows(start=start, end=end))
     elif account.kind == MoneyAccount.Kind.PROVIDER:
         rows.extend(_provider_rows(account, start=start, end=end))
+    elif account.is_clearing:
+        rows.extend(_clearing_rows(account, start=start, end=end))
 
     rows.sort(key=lambda row: (row["date"], row["source"]), reverse=True)
     truncated = len(rows) > MOVEMENT_ROW_LIMIT
@@ -126,10 +141,16 @@ def _transfer_touches(account):
     return Q(from_account=account) | Q(to_account=account)
 
 
-def _payment_rows(methods, *, start, end, with_commission, account_filter=None):
+def _payment_rows(
+    methods, *, start, end, with_commission, account_filter=None, held=None
+):
     queryset = Payment.objects.filter(method__in=methods)
     if account_filter is not None:
         queryset = queryset.filter(account_filter)
+    if held is not None:
+        # Held card takings are the clearing account's rows until the
+        # processor pays them in — the same rule the balance applies.
+        queryset = queryset.exclude(held)
     payments = _newest(money_period(queryset.select_related("order"), start, end))
     for payment in payments:
         order_number = getattr(payment.order, "invoice_number", "") or ""
@@ -269,7 +290,7 @@ def _payroll_rows(*, start, end):
         )
 
 
-def _bank_rows(*, start, end, account, is_default):
+def _bank_rows(*, start, end, account, is_default, held=None):
     owned = bank_account_filter(account, is_default=is_default)
     yield from _payment_rows(
         BANK_METHODS,
@@ -277,6 +298,7 @@ def _bank_rows(*, start, end, account, is_default):
         end=end,
         with_commission=True,
         account_filter=owned,
+        held=held,
     )
     yield from _supplier_rows(
         BANK_METHODS, start=start, end=end, account_filter=owned
@@ -288,6 +310,64 @@ def _bank_rows(*, start, end, account, is_default):
         account_filter=owned,
     )
     yield from _loan_rows("transfer", start=start, end=end, account_filter=owned)
+
+
+def _settlement_rows(settlements):
+    return _newest(
+        settlements.select_related("clearing_account", "bank_account")
+    )
+
+
+def _settlement_in_rows(account, *, start, end):
+    """Deposits the card processor made into this bank."""
+    settlements = _settlement_rows(
+        money_period(
+            clearing.live_settlements().filter(bank_account=account), start, end
+        )
+    )
+    for settlement in settlements:
+        yield _row(
+            source=COMPONENT_SETTLEMENT_IN,
+            date=settlement.settled_on,
+            amount=settlement.amount_received,
+            description=settlement.clearing_account.name,
+            reference=settlement.reference,
+            related_id=settlement.pk,
+        )
+
+
+def _clearing_rows(account, *, start, end):
+    """The held card takings, and the deposits that paid them out."""
+    yield from _payment_rows(
+        [Payment.Method.CARD],
+        start=start,
+        end=end,
+        with_commission=True,
+        account_filter=clearing.claim_q(account),
+    )
+    settlements = _settlement_rows(
+        money_period(
+            clearing.live_settlements().filter(clearing_account=account), start, end
+        )
+    )
+    for settlement in settlements:
+        yield _row(
+            source=COMPONENT_SETTLEMENT_OUT,
+            date=settlement.settled_on,
+            amount=-settlement.amount_received,
+            description=settlement.bank_account.name,
+            reference=settlement.reference,
+            related_id=settlement.pk,
+        )
+        if settlement.difference:
+            yield _row(
+                source=COMPONENT_SETTLEMENT_DIFFERENCE,
+                date=settlement.settled_on,
+                amount=settlement.difference,
+                description=settlement.bank_account.name,
+                reference=settlement.reference,
+                related_id=settlement.pk,
+            )
 
 
 def _provider_rows(account, *, start, end):

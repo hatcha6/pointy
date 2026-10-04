@@ -45,6 +45,9 @@ WRITE_DENY_RESOURCES = frozenset(
         "attachments",
         "attachment-storage-volumes",
         "reports",
+        # A card settlement pays held takings out against named sales; it is
+        # recorded from the treasury screen, where the owner sees the match.
+        "card-settlements",
         # CRM sending is human-only: the AI drafts campaigns via the dedicated
         # draft_campaign tool and never touches these directly (defense in depth —
         # these aren't router resources today, but deny them if ever registered).

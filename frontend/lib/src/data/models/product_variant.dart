@@ -277,7 +277,12 @@ class ProductVariant {
       isActive: isActive,
       isDefault: isDefault,
       tracksExpiry: tracksExpiry,
-      trackingMode: trackingMode,
+      // The mode is the product's, and a variant from a catalog list arrives
+      // without one of its own: re-attached to its product, it takes the
+      // product's. Without this every serialized product in the till's grid
+      // read as `quantity` — no unit picker, a quantity box, and the server
+      // picking a handset nobody chose.
+      trackingMode: productDetail?.trackingMode ?? trackingMode,
       isService: isService,
       isPrepared: isPrepared,
       unit: unit,
@@ -286,6 +291,12 @@ class ProductVariant {
       optionValues: optionValues,
       primaryImage: primaryImage,
       imageAttachments: imageAttachments,
+      priceAmount: priceAmount,
+      // Like the mode, the currency is the product's: a catalog-list row
+      // carries its `price_amount` but not the currency it is written in.
+      // Re-attached to its product, it takes the product's, or the till shows
+      // a dollar-priced shelf as dinars only.
+      pricingCurrency: productDetail?.pricingCurrency ?? pricingCurrency,
     );
   }
 }

@@ -12,12 +12,10 @@ typedef BulkCategorizeChoice = ({
   List<int> categoryIds,
   ProductBulkCategorizeMode mode,
 });
-typedef BulkFlagsChoice = ({
-  bool? isActive,
-  bool? tracksExpiry,
-  bool? isService,
-  bool? isPrepared,
-});
+// No «يتابع تاريخ الانتهاء» here: it is the product's tracking mode now, and
+// changing a mode re-labels history, so it is refused across a multi-select
+// and goes through each product's own form, where the guard can explain.
+typedef BulkFlagsChoice = ({bool? isActive, bool? isService, bool? isPrepared});
 
 Future<BulkRepriceChoice?> showBulkRepriceSheet(BuildContext context) {
   return showDialog<BulkRepriceChoice>(
@@ -274,20 +272,15 @@ class _BulkFlagsDialog extends StatefulWidget {
 
 class _BulkFlagsDialogState extends State<_BulkFlagsDialog> {
   bool? _isActive;
-  bool? _tracksExpiry;
   bool? _isService;
   bool? _isPrepared;
 
   bool get _hasAny =>
-      _isActive != null ||
-      _tracksExpiry != null ||
-      _isService != null ||
-      _isPrepared != null;
+      _isActive != null || _isService != null || _isPrepared != null;
 
   void _submit() {
     Navigator.of(context).pop((
       isActive: _isActive,
-      tracksExpiry: _tracksExpiry,
       isService: _isService,
       isPrepared: _isPrepared,
     ));
@@ -309,11 +302,6 @@ class _BulkFlagsDialogState extends State<_BulkFlagsDialog> {
               label: l10n.activeProductLabel,
               value: _isActive,
               onChanged: (v) => setState(() => _isActive = v),
-            ),
-            _FlagRow(
-              label: l10n.productTracksExpiryLabel,
-              value: _tracksExpiry,
-              onChanged: (v) => setState(() => _tracksExpiry = v),
             ),
             _FlagRow(
               label: l10n.productIsServiceTitle,

@@ -29,12 +29,15 @@ held across both by the surrounding transaction.
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass, field
 from decimal import Decimal
+from uuid import uuid4
 
 from django.db.models import Q, Sum, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import serializers
 
 from apps.catalog.models import Product, ProductVariant
@@ -278,6 +281,54 @@ def generated_lot_code(*, prefix="LOT", key) -> str:
     return f"{prefix}-{key}"
 
 
+def placeholder_tag() -> str:
+    """Eight random hex digits, drawn once per arrival of unnamed articles."""
+    return uuid4().hex[:8]
+
+
+def placeholder_unit_code(*, key, tag, number, prefix="#") -> str:
+    """The stand-in identifier of an article nobody has named yet.
+
+    The article-level sibling of :func:`generated_lot_code`, with the one
+    difference that matters: a lot code that repeats *is* the same lot, while a
+    unit code that repeats is a second live unit the partial unique index
+    refuses — an ``IntegrityError``, a 500, for goods that were only being put
+    on the shelf to scan later. And the caller's ``key`` alone never made it
+    unique. The index compares *normalised* codes and normalising strips
+    dashes, so ``SC-1-23`` and ``SC-12-3`` are one string; and keys repeat
+    across calls — every manual arrival of a variant is ``MV-<variant>``, every
+    adjustment in one second ``ADJ-<second>``, and both partial deliveries of
+    one order line start at ``PO<order>L<line>-1``.
+
+    So each arrival draws a random ``tag`` (:func:`placeholder_tag`) that sits
+    between the key and the article's number: two arrivals collide only if
+    their tags do, one chance in four billion. The key stays in front so
+    whoever reads the code can still tell where the article came from.
+    """
+    return f"{prefix}-{key}-{tag}-{number}"
+
+
+def _lot_date(value, *, field_name):
+    """A lot's date as a date, whichever form it arrived in.
+
+    Receiving validates its rows through a serializer and hands over dates;
+    opening identification and a manual movement pass their lot rows on as the
+    JSON they arrived as, so the same date is a string there. Compared to the
+    date a lot already stores, a string never matches — every delivery of a
+    known lot through those two doors read as an expiry conflict.
+    """
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime.datetime):
+        return value.date()
+    if isinstance(value, datetime.date):
+        return value
+    parsed = parse_date(str(value).strip()[:10])
+    if parsed is None:
+        raise serializers.ValidationError({field_name: "التاريخ غير صالح."})
+    return parsed
+
+
 def resolve_batch(
     *,
     variant,
@@ -303,6 +354,8 @@ def resolve_batch(
     say which. It gets the structured 400 ``catalog/identity.py`` established
     rather than silently keeping whichever date was written first.
     """
+    expiry_date = _lot_date(expiry_date, field_name="expiry_date")
+    manufactured_on = _lot_date(manufactured_on, field_name="manufactured_on")
     normalized = normalize_identifier(code)
     if not normalized:
         raise serializers.ValidationError(
@@ -960,14 +1013,19 @@ def _plan_unit_receipt(
     _refuse_duplicate_codes(unit_rows, variant=variant)
     _refuse_unbalanced_costs(unit_rows, count=count, rate=rate, quantity=quantity)
 
+    # One per arrival, so its unnamed articles cannot collide with another
+    # arrival's however the caller built its key — see placeholder_unit_code.
+    tag = placeholder_tag()
     for index in range(count):
         row = unit_rows[index] if index < len(unit_rows) else {}
         identified = bool(normalize_identifier(row.get("code")))
         code = (
             str(row["code"]).strip()
             if identified
-            else generated_lot_code(
-                prefix="#", key=f"{placeholder_key or int(at.timestamp())}-{index + 1}"
+            else placeholder_unit_code(
+                key=placeholder_key or int(at.timestamp()),
+                tag=tag,
+                number=index + 1,
             )
         )
         unit_rate = _rate(row.get("unit_cost", rate) if row else rate)
@@ -1638,6 +1696,7 @@ def plan_adjustment(
     placeholder_key="",
     allow_expired=True,
     what="هذه الحركة",
+    supplier=None,
 ):
     """The allocation behind a bin change no document itemised.
 
@@ -1674,6 +1733,10 @@ def plan_adjustment(
             # one outcome worse than an unnamed unit.
             capture_later=True,
             placeholder_key=placeholder_key or f"ADJ-{int(at.timestamp())}",
+            # Who the goods came from, when the caller knows — a supplier's
+            # replacement. Recorded on the units and on a lot it opens, the
+            # same as a receipt records it.
+            supplier=supplier,
         )
 
     quantity = -delta
@@ -2408,15 +2471,20 @@ class ReceiptCapture:
         self._unit_cursor += len(rows)
         _refuse_duplicate_codes(rows, variant=self.variant)
         units = []
+        # Damaged is not a live status, but a repaired article goes back to
+        # stock, and then its code has to be as unique as any arrival's.
+        tag = placeholder_tag()
         for index in range(count):
             row = rows[index] if index < len(rows) else {}
             identified = bool(normalize_identifier(row.get("code")))
             code = (
                 str(row["code"]).strip()
                 if identified
-                else generated_lot_code(
+                else placeholder_unit_code(
+                    key=self.key or int(at.timestamp()),
+                    tag=tag,
+                    number=index + 1,
                     prefix="#D",
-                    key=f"{self.key or int(at.timestamp())}-{index + 1}",
                 )
             )
             units.append(
@@ -2491,6 +2559,7 @@ def _refuse_wrong_shape(plan, rows):
     changes when a product's mode changes.
     """
     mode = plan.mode
+    lots_since = {}
     for row in rows:
         if mode == Product.TrackingMode.BATCH:
             if row.unit_id is not None or row.unit is not None:
@@ -2509,13 +2578,44 @@ def _refuse_wrong_shape(plan, rows):
                 raise ValueError(
                     "A serial_batch allocation must name a unit."
                 )
-            if row.batch is None and row.batch_id is None:
+            if (
+                row.batch is None
+                and row.batch_id is None
+                and not _born_before_lots(row.unit, lots_since)
+            ):
                 raise ValueError(
                     "A serial_batch allocation must name the lot its unit was "
                     "born in — that is what the fourth mode is for."
                 )
             if row.quantity != ONE:
                 raise ValueError("A unit allocation moves exactly one article.")
+
+
+def _born_before_lots(unit, cache) -> bool:
+    """Is this a unit ``serial → serial_batch`` grandfathered (§4.2)?
+
+    It names no lot because it never had one: it was on the shelf before its
+    product started requiring lots — the start of its ``serial_batch`` mode,
+    ``Product.tracking_mode_since`` — and it still has to be sold, returned and
+    moved. A unit born after that moment gets no such pass: receiving refuses
+    one without a lot, and this guard is the backstop for a path that ever
+    forgets. Asked only of a lot-less row, so a sale whose units all name their
+    lots never pays for the question; the stamp is read once per variant
+    however many units the plan moves.
+    """
+    if unit is None or unit.batch_id is not None or unit.created_at is None:
+        return False
+    if unit.variant_id not in cache:
+        mode, since = (
+            Product.objects.filter(variants__pk=unit.variant_id)
+            .values_list("tracking_mode", "tracking_mode_since")
+            .first()
+        ) or (None, None)
+        cache[unit.variant_id] = (
+            since if mode == Product.TrackingMode.SERIAL_BATCH else None
+        )
+    since = cache[unit.variant_id]
+    return since is not None and unit.created_at < since
 
 
 __all__ = [
@@ -2536,6 +2636,8 @@ __all__ = [
     "mode_of",
     "modes_for",
     "pick_balances",
+    "placeholder_tag",
+    "placeholder_unit_code",
     "plan_issue",
     "plan_on",
     "plan_receipt",

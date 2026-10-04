@@ -12,11 +12,13 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/product_image_thumbnail.dart';
+import '../../../shared/product_image_viewer.dart';
 import '../../../shared/product_status_pill.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/units.dart';
@@ -26,6 +28,7 @@ import 'barcode_label_print_action.dart';
 import 'change_prices_dialog.dart';
 import 'product_document_history_section.dart';
 import 'product_parent_edit_sheet.dart';
+import 'product_tracking_card.dart';
 import 'product_variant_details_screen.dart';
 import 'product_variant_form_sheet.dart';
 import 'product_variant_generation_sheet.dart';
@@ -44,12 +47,17 @@ class ProductDetailsScreen extends StatelessWidget {
     this.analyticsEngine,
     this.onChanged,
     this.onCreateSimilar,
+    this.trackedStockRepository,
   });
 
   final ProductDetailsViewModel viewModel;
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+
+  /// What a tracked product's page opens its articles and lots with. Absent,
+  /// the page still says how the product is tracked.
+  final TrackedStockRepository? trackedStockRepository;
 
   /// Optional: without it the stock panel simply shows the total and no
   /// per-place breakdown, which is the right answer for a shop with one
@@ -101,6 +109,7 @@ class ProductDetailsScreen extends StatelessWidget {
           analyticsEngine: analyticsEngine,
           onChanged: onChanged,
           onCreateSimilar: onCreateSimilar,
+          trackedStockRepository: trackedStockRepository,
         ),
       ),
     );
@@ -122,12 +131,17 @@ class ProductDetailsView extends StatelessWidget {
     this.analyticsEngine,
     this.onChanged,
     this.onCreateSimilar,
+    this.trackedStockRepository,
   });
 
   final ProductDetailsViewModel viewModel;
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+
+  /// What a tracked product's page opens its articles and lots with. Absent,
+  /// the page still says how the product is tracked.
+  final TrackedStockRepository? trackedStockRepository;
 
   /// Optional: without it the stock panel simply shows the total and no
   /// per-place breakdown, which is the right answer for a shop with one
@@ -200,6 +214,17 @@ class ProductDetailsView extends StatelessWidget {
               // modifiers and options, and the copy would quietly lack them.
               canCreateSimilar: viewModel.hasLoadedProduct,
             ),
+            // Only for a product whose stock is identified — a grocer's page
+            // is exactly what it was.
+            if (product.trackingMode.isTracked) ...[
+              const SizedBox(height: 12),
+              ProductTrackingCard(
+                product: product,
+                capabilities: capabilities,
+                catalogRepository: viewModel.catalogRepository,
+                trackedStockRepository: trackedStockRepository,
+              ),
+            ],
             if (capabilities.canAccessPurchasing) ...[
               const SizedBox(height: 12),
               _PricingAndCostSection(
@@ -415,6 +440,7 @@ class ProductDetailsView extends StatelessWidget {
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,
           onCreateSimilar: onCreateSimilar,
+          trackedStockRepository: trackedStockRepository,
         ),
       ),
     );
@@ -479,6 +505,45 @@ ProductVariant _variantWithParentFallback(
   );
 }
 
+/// The header thumbnail; tapping it opens every product image full screen.
+class _ProductImageButton extends StatelessWidget {
+  const _ProductImageButton({required this.product});
+
+  final Product product;
+
+  List<String> get _imageUrls {
+    final primary = product.primaryImage;
+    return [
+      if (primary != null) primary.contentUrl,
+      for (final image in product.imageAttachments)
+        if (image.id != primary?.id) image.contentUrl,
+    ].where((url) => url.trim().isNotEmpty).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final thumbnail = ProductImageThumbnail(
+      imageUrl: product.primaryImage?.contentUrl,
+      fallbackText: product.name,
+      size: 56,
+    );
+    final urls = _imageUrls;
+    if (urls.isEmpty) return thumbnail;
+    return Tooltip(
+      message: AppLocalizations.of(context)!.productImageViewFullScreenTooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => showProductImageViewer(
+          context,
+          imageUrls: urls,
+          title: product.name,
+        ),
+        child: thumbnail,
+      ),
+    );
+  }
+}
+
 class _ParentSummaryCard extends StatelessWidget {
   const _ParentSummaryCard({
     required this.product,
@@ -520,11 +585,7 @@ class _ParentSummaryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                ProductImageThumbnail(
-                  imageUrl: product.primaryImage?.contentUrl,
-                  fallbackText: product.name,
-                  size: 56,
-                ),
+                _ProductImageButton(product: product),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

@@ -41,8 +41,12 @@ for tool in zip unzip; do
 done
 [ -f "$full" ] || { echo "ERROR: no such bundle: $full" >&2; exit 1; }
 
+# Every test of $entries reads a here-string, never `printf | head` or
+# `printf | grep -q`: those close the pipe early, and under pipefail the
+# writer's EPIPE fails the pipeline — a bundle that has the entry would be
+# refused, intermittently, depending on who wins the race.
 entries="$(unzip -Z1 "$full")"
-root="$(printf '%s\n' "$entries" | head -1 | cut -d/ -f1)"
+root="$(head -1 <<<"$entries" | cut -d/ -f1)"
 case "$root" in
   pointy-onprem-*) ;;
   *) echo "ERROR: $full is not a release bundle (top-level directory: ${root:-none})" >&2; exit 1 ;;
@@ -58,15 +62,15 @@ while IFS= read -r entry; do
     [ "$entry" = "${root}/${name}" ] && kept=1
   done
   [ "$kept" = 1 ] || drop+=("$entry")
-done < <(printf '%s\n' "$entries" | grep -E "$drop_pattern" || true)
+done < <(grep -E "$drop_pattern" <<<"$entries" || true)
 
 # An update bundle that cannot update anything is worse than none: fail the
 # release build here rather than on a shop.
 for required in VERSION.txt update-agent.sh update-lib.sh docker-compose.yml install.sh; do
-  printf '%s\n' "$entries" | grep -qx "${root}/${required}" \
+  grep -qx "${root}/${required}" <<<"$entries" \
     || { echo "ERROR: $full has no ${required}" >&2; exit 1; }
 done
-printf '%s\n' "$entries" | grep -qE "^${root}/images/pointy-backend[^/]*\\.tar\$" \
+grep -qE "^${root}/images/pointy-backend[^/]*\\.tar\$" <<<"$entries" \
   || { echo "ERROR: $full has no backend image" >&2; exit 1; }
 
 tmp="${out}.tmp"

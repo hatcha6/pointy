@@ -312,7 +312,7 @@ class PosCartPane extends StatelessWidget {
         ? receiptNumber == null || receiptNumber.isEmpty
               ? l10n.saleCheckoutSuccess
               : l10n.saleCheckoutSuccessWithReceipt(receiptNumber)
-        : l10n.saleCheckoutError;
+        : outcome.failureReason ?? l10n.saleCheckoutError;
     if (outcome.isSuccess && payment.shareInvoiceAfterPayment) {
       final order = outcome.order;
       final shareStatus = order == null
@@ -870,9 +870,12 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                               : () => _editLineNote(context, line),
                           // Only lot-tracked lines offer a lot to change, and
                           // only when the shop actually has identified stock.
+                          // A serialised pack's lot is the article's own —
+                          // pinning another would contradict the unit.
                           onPickBatch:
                               widget.isCartLocked ||
                                   !line.variant.trackingMode.tracksLots ||
+                                  line.variant.trackingMode.tracksUnits ||
                                   _viewModel.trackedStockRepository == null
                               ? null
                               : () => _editLineBatch(context, line),

@@ -35,6 +35,15 @@ String errorMessageFor(Object error, AppLocalizations l10n) {
   return l10n.errorUnexpectedMessage;
 }
 
+/// The backend's own sentence for a failed call, only when it is in Arabic.
+///
+/// For a screen that maps errors to its own copy and wants the server's more
+/// specific refusal in front of it — never its English or its codes.
+String? arabicBackendDetailFor(Object error) {
+  final detail = backendDetailFor(error);
+  return detail != null && _isArabic(detail) ? detail : null;
+}
+
 final _arabicLetter = RegExp('[\u0600-\u06FF]');
 
 bool _isArabic(String text) => _arabicLetter.hasMatch(text);

@@ -21,6 +21,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import 'pricing_currency_options.dart';
+import 'tracking_mode_refusal.dart';
 
 class ProductDetailsViewModel extends ChangeNotifier {
   ProductDetailsViewModel(
@@ -159,6 +160,19 @@ class ProductDetailsViewModel extends ChangeNotifier {
   List<VariantCostSummary> get costSummaries =>
       List.unmodifiable(_costSummaries);
   String? get errorMessage => _errorMessage;
+
+  /// Why the server refused a tracking-mode change, in its own Arabic — stock
+  /// it cannot identify (negative, fractional, held, on the road), or a change
+  /// between two tracked modes. Null after any other outcome.
+  String? get trackingModeError => _trackingModeError;
+  String? _trackingModeError;
+
+  /// Set when the last save was held back because tracking was being turned
+  /// on over stock already on the shelf. The sheet answers by asking the user
+  /// and re-saving with [ProductUpdateDraft.identifyingStockLater].
+  TrackingIdentificationRequest? get pendingTrackingIdentification =>
+      _pendingTrackingIdentification;
+  TrackingIdentificationRequest? _pendingTrackingIdentification;
   List<CatalogIdentityConflict> get variantSaveConflicts =>
       List.unmodifiable(_variantSaveConflicts);
 
@@ -258,6 +272,8 @@ class ProductDetailsViewModel extends ChangeNotifier {
 
     _isSavingProduct = true;
     _errorMessage = null;
+    _trackingModeError = null;
+    _pendingTrackingIdentification = null;
     notifyListeners();
 
     final result = await _catalogRepository.updateProduct(
@@ -272,7 +288,14 @@ class ProductDetailsViewModel extends ChangeNotifier {
         notifyListeners();
         return true;
       case Error<Product>():
-        _errorMessage = 'product_update_error';
+        final question = trackingIdentificationFrom(result.exception);
+        _pendingTrackingIdentification = question;
+        // The question is not a failure: the save is waiting for the user to
+        // answer it. A red line under the dialog would read as both.
+        _trackingModeError = question == null
+            ? trackingModeErrorFrom(result.exception)
+            : null;
+        _errorMessage = question == null ? 'product_update_error' : null;
         _isSavingProduct = false;
         notifyListeners();
         return false;
@@ -382,6 +405,12 @@ class ProductDetailsViewModel extends ChangeNotifier {
         isActive: _product.isActive,
         tracksExpiry: _product.tracksExpiry,
         unit: _product.unit,
+        // The draft sends these even when blank, and the server writes what
+        // it is sent: left out, generating sizes would move a dollar-priced
+        // product back to dinars and drop its default units.
+        pricingCurrency: _product.pricingCurrency,
+        defaultSaleUnit: _product.defaultSaleUnit,
+        defaultPurchaseUnit: _product.defaultPurchaseUnit,
         isService: _product.isService,
         isPrepared: _product.isPrepared,
         categoryIds: [for (final category in _product.categories) category.id],

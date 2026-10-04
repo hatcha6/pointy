@@ -4,6 +4,7 @@ import 'modifier_group.dart';
 import 'print_job.dart';
 import 'printer_config.dart';
 import 'query.dart';
+import 'tracking_mode.dart';
 import '../../shared/payments/card_receipt_status.dart';
 
 /// How a sale is recorded at checkout. `standard` is the normal paid-in-full
@@ -1465,13 +1466,23 @@ class SaleExchangeReplacementLineDraft {
   const SaleExchangeReplacementLineDraft({
     required this.variantId,
     required this.quantity,
+    this.stockUnitId,
   });
 
   final int variantId;
   final double quantity;
 
+  /// The handset the customer is leaving with, when the replacement is an
+  /// identified article. Without it the server rings up whichever unit has
+  /// been in stock longest — a receipt naming a phone nobody handed over.
+  final int? stockUnitId;
+
   Map<String, Object?> toJson() {
-    return {'variant': variantId, 'quantity': formatQuantityForApi(quantity)};
+    return {
+      'variant': variantId,
+      'quantity': formatQuantityForApi(quantity),
+      if (stockUnitId != null) 'stock_units': [stockUnitId],
+    };
   }
 }
 
@@ -1482,12 +1493,16 @@ class ExchangeProductOption {
     required this.label,
     required this.unitPrice,
     this.sku = '',
+    this.trackingMode = TrackingMode.quantity,
   });
 
   final int variantId;
   final String label;
   final double unitPrice;
   final String sku;
+
+  /// Whether the dialog counts this product or asks which article it is.
+  final TrackingMode trackingMode;
 }
 
 int _productIdFromJson(Object? value) {

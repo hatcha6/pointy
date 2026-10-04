@@ -565,8 +565,18 @@ extension PosCheckoutActions on PosViewModel {
               ) ??
               Future<void>.value(),
         );
-        return const SaleCheckoutOutcome.failure();
+        return SaleCheckoutOutcome.failure(reason: _arabicReason(exception));
     }
+  }
+
+  /// The server's sentence for a refused checkout, when it is Arabic. Codes and
+  /// developer strings stay out: the cashier then reads the generic message.
+  static String? _arabicReason(Object exception) {
+    final detail = backendDetailFor(exception);
+    if (detail == null || !RegExp('[\u0600-\u06FF]').hasMatch(detail)) {
+      return null;
+    }
+    return detail;
   }
 
   /// Prints the kitchen chits this device is responsible for. The backend
@@ -900,6 +910,7 @@ class SaleCheckoutOutcome {
     this.lossLines = const [],
     this.creditLimit,
     this.recharges = const [],
+    this.failureReason,
   });
 
   const SaleCheckoutOutcome.success(
@@ -915,8 +926,16 @@ class SaleCheckoutOutcome {
          recharges: recharges,
        );
 
-  const SaleCheckoutOutcome.failure()
-    : this._(isSuccess: false, isStockRejected: false, isLossRejected: false);
+  /// [reason] is the server's own sentence when it wrote one in Arabic — "this
+  /// handset has no number yet", "not enough in sellable lots" — which tells
+  /// the cashier what to do where a generic "checkout failed" cannot.
+  const SaleCheckoutOutcome.failure({String? reason})
+    : this._(
+        isSuccess: false,
+        isStockRejected: false,
+        isLossRejected: false,
+        failureReason: reason,
+      );
 
   const SaleCheckoutOutcome.sessionExpired()
     : this._(
@@ -967,6 +986,10 @@ class SaleCheckoutOutcome {
   /// sale sold none — or when the call itself failed, which is not the same
   /// as nothing having been charged.
   final List<IntegrationChargeResult> recharges;
+
+  /// Why a failed checkout failed, in the server's Arabic; null when it did not
+  /// say, and on every outcome that has a dialog of its own.
+  final String? failureReason;
 
   /// Sent, and never answered. Nothing may retry these: somebody has to look
   /// at the card before anything else happens to them.

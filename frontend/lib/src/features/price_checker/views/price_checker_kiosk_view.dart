@@ -912,6 +912,20 @@ class _ProductDetails extends StatelessWidget {
                 label: result.sku,
                 metrics: metrics,
               ),
+            // An identified article: its own number, and the condition facts
+            // the shop chose to show — never what it paid.
+            if (result.unitCode.isNotEmpty)
+              _InfoPill(
+                icon: Icons.tag_rounded,
+                label: result.unitCode,
+                metrics: metrics,
+              ),
+            for (final attribute in result.unitAttributes)
+              _InfoPill(
+                icon: Icons.label_outline_rounded,
+                label: '${attribute.label}: ${attribute.value}',
+                metrics: metrics,
+              ),
           ],
         ),
         SizedBox(height: metrics.gap * 1.2),

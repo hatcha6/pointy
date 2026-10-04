@@ -19,6 +19,10 @@ class MoneyPositionViewModel extends ChangeNotifier {
 
   final TreasuryRepository _repository;
 
+  /// For the sheets that keep state of their own — the settlement sheet and a
+  /// clearing account's history — and reload this screen when they write.
+  TreasuryRepository get repository => _repository;
+
   MoneyPosition? _position;
   bool _isLoading = false;
   bool _hasError = false;
@@ -36,6 +40,14 @@ class MoneyPositionViewModel extends ChangeNotifier {
   bool get hasLoaded => _position != null;
 
   List<MoneyAccountPosition> get accounts => _position?.accounts ?? const [];
+
+  /// The accounts an owner moves money into or out of by hand — transfers,
+  /// funding, counts. Not a clearing account: its money leaves only by a
+  /// settlement that names the sales it paid for.
+  List<MoneyAccountPosition> get movableAccounts => [
+    for (final entry in accounts)
+      if (!entry.account.isClearing) entry,
+  ];
   MoneyPositionTotals get totals =>
       _position?.totals ?? const MoneyPositionTotals();
 
