@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
+import 'package:pointy_frontend/src/data/models/stock_batch.dart';
 import 'package:pointy_frontend/src/data/models/stock_unit.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
@@ -166,6 +167,116 @@ void main() {
       {'line': 2, 'quantity': '1.000'},
     ]);
   });
+
+  testWidgets('a recalled pack and an unscanned handset can go back', (
+    tester,
+  ) async {
+    final repository = await _pumpOrder(
+      tester,
+      mode: 'serial_batch',
+      units: const [
+        StockUnit(
+          id: 201,
+          variantId: 11,
+          code: 'PACK-R',
+          batchId: 5,
+          batchCode: 'LOT-R',
+          batchStatus: 'quarantined',
+          batchIsSellable: false,
+        ),
+        StockUnit(
+          id: 202,
+          variantId: 11,
+          code: '#-PO300L1-3f9a2c1b-1',
+          isIdentified: false,
+        ),
+      ],
+    );
+
+    await _openReturn(tester);
+    await tester.tap(find.byTooltip('إضافة عنصر').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('إضافة عنصر').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle();
+
+    // The recall is marked, and the placeholder reads as what it is rather
+    // than as a generated code nobody printed on a box.
+    expect(find.text('PACK-R'), findsOneWidget);
+    expect(find.text('دفعة LOT-R'), findsOneWidget);
+    expect(find.text('محجورة'), findsOneWidget);
+    expect(find.text('بانتظار المعرّف'), findsOneWidget);
+    expect(find.textContaining('#-PO300'), findsNothing);
+
+    await tester.tap(find.text('PACK-R'));
+    await tester.tap(find.text('بانتظار المعرّف'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'تأكيد'));
+    await tester.pumpAndSettle();
+
+    final sent = repository.returned!.toJson()['lines']! as List<Object?>;
+    expect((sent.single! as Map)['units'], [201, 202]);
+  });
+
+  testWidgets('a lot line can name the recalled lot it sends back', (
+    tester,
+  ) async {
+    final repository = await _pumpOrder(tester, mode: 'batch');
+
+    await _openReturn(tester);
+    expect(find.textContaining('تُحدَّد الدفعات بعد التأكيد'), findsOneWidget);
+    await tester.tap(find.byTooltip('إضافة عنصر').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('حدّد الدفعات المُرجَعة للمورد'), findsOneWidget);
+    expect(repository.requestedLotWarehouses, [7]);
+    // Only lots holding goods where the delivery landed; the recall first.
+    expect(find.text('LOT-EMPTY'), findsNothing);
+    final recalled = tester.getTopLeft(find.text('LOT-R'));
+    final good = tester.getTopLeft(find.text('LOT-G'));
+    expect(recalled.dy, lessThan(good.dy));
+    expect(find.text('محجورة'), findsOneWidget);
+    expect(
+      find.text('تلقائي: الأقرب انتهاءً من الدفعات الصالحة'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('LOT-R'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'تأكيد'));
+    await tester.pumpAndSettle();
+
+    final sent = repository.returned!.toJson()['lines']! as List<Object?>;
+    expect(sent, [
+      {
+        'line': 1,
+        'quantity': '1.000',
+        'batches': [5],
+      },
+    ]);
+  });
+
+  testWidgets('a lot line that names nothing goes back earliest-expiry first', (
+    tester,
+  ) async {
+    final repository = await _pumpOrder(tester, mode: 'batch');
+
+    await _openReturn(tester);
+    await tester.tap(find.byTooltip('إضافة عنصر').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'تأكيد'));
+    await tester.pumpAndSettle();
+
+    final sent = repository.returned!.toJson()['lines']! as List<Object?>;
+    expect(sent, [
+      {'line': 1, 'quantity': '1.000'},
+    ]);
+  });
 }
 
 Future<void> _openReturn(WidgetTester tester) async {
@@ -178,12 +289,16 @@ Future<void> _openReturn(WidgetTester tester) async {
 Future<_FakePurchaseRepository> _pumpOrder(
   WidgetTester tester, {
   String mode = 'serial',
+  List<StockUnit> units = const [
+    StockUnit(id: 101, variantId: 11, code: 'SN-1'),
+    StockUnit(id: 102, variantId: 11, code: 'SN-2'),
+  ],
 }) async {
   await tester.binding.setSurfaceSize(const Size(1100, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   final order = _receivedPhoneOrder(mode: mode);
-  final repository = _FakePurchaseRepository(order);
+  final repository = _FakePurchaseRepository(order, units: units);
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('ar'),
@@ -204,10 +319,13 @@ Future<_FakePurchaseRepository> _pumpOrder(
 }
 
 class _FakePurchaseRepository extends PurchaseRepository {
-  _FakePurchaseRepository(this.order) : super(PosApiService());
+  _FakePurchaseRepository(this.order, {required this.units})
+    : super(PosApiService());
 
   final PurchaseOrder order;
+  final List<StockUnit> units;
   final List<int?> requestedWarehouses = [];
+  final List<int?> requestedLotWarehouses = [];
   PurchaseAdjustmentDraft? returned;
   PurchaseAdjustmentDraft? exchanged;
 
@@ -223,11 +341,29 @@ class _FakePurchaseRepository extends PurchaseRepository {
     String code = '',
   }) async {
     requestedWarehouses.add(warehouseId);
-    return const Ok(
-      StockUnitPage(
-        units: [
-          StockUnit(id: 101, variantId: 11, code: 'SN-1'),
-          StockUnit(id: 102, variantId: 11, code: 'SN-2'),
+    return Ok(StockUnitPage(units: units));
+  }
+
+  /// A good lot, a recalled one (both with goods in warehouse 7), and one
+  /// whose goods are all elsewhere.
+  @override
+  Future<Result<StockBatchPage>> loadReturnableLots({
+    required int variantId,
+    int? warehouseId,
+  }) async {
+    requestedLotWarehouses.add(warehouseId);
+    return Ok(
+      StockBatchPage(
+        batches: [
+          _lot(4, 'LOT-G', DateTime(2027, 3, 1), here: 6),
+          _lot(
+            5,
+            'LOT-R',
+            DateTime(2027, 9, 1),
+            here: 4,
+            status: StockBatchStatus.quarantined,
+          ),
+          _lot(6, 'LOT-EMPTY', DateTime(2027, 1, 1), here: 0),
         ],
       ),
     );
@@ -302,4 +438,34 @@ PurchaseOrder _receivedPhoneOrder({required String mode}) {
     'received_at': '2026-10-02T10:00:00Z',
     'created_at': '2026-10-01T09:00:00Z',
   });
+}
+
+StockBatch _lot(
+  int id,
+  String code,
+  DateTime expiry, {
+  required double here,
+  String status = StockBatchStatus.active,
+}) {
+  final sellable = status == StockBatchStatus.active;
+  return StockBatch(
+    id: id,
+    variantId: 11,
+    code: code,
+    displayCode: code,
+    expiryDate: expiry,
+    status: status,
+    isLocked: !sellable,
+    isSellable: sellable,
+    onHand: here,
+    balances: [
+      StockBatchBalance(
+        id: id * 10,
+        batchId: id,
+        warehouseId: 7,
+        remainingQuantity: here,
+        isSellable: sellable,
+      ),
+    ],
+  );
 }

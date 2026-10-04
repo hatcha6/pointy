@@ -24,6 +24,22 @@ void main() {
     ]);
   });
 
+  test('a lot line names the lots it goes back from', () {
+    const draft = PurchaseAdjustmentDraft(
+      lines: [
+        PurchaseAdjustmentLineDraft(lineId: 3, quantity: 4, batchIds: [5]),
+      ],
+    );
+
+    expect(draft.toJson()['lines'], [
+      {
+        'line': 3,
+        'quantity': '4.000',
+        'batches': [5],
+      },
+    ]);
+  });
+
   test('a replacement carries its scanned serials and lot', () {
     const draft = PurchaseAdjustmentDraft(
       lines: [PurchaseAdjustmentLineDraft(lineId: 1, quantity: 1)],

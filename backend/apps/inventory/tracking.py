@@ -545,6 +545,7 @@ def pick_balances(
     allow_expired=False,
     today=None,
     requested_batch_ids=None,
+    include_unsellable=False,
 ):
     """Which balances satisfy this issue, in the order the product asks for.
 
@@ -556,6 +557,24 @@ def pick_balances(
     Returns ``[(balance, quantity)]`` and never over-draws: a caller that asked
     for more than exists gets back less, and decides for itself whether that is
     a shortage or an oversell.
+
+    ``include_unsellable`` is for **one** caller: goods going back to their
+    supplier (``plan_adjustment(releasing_to_supplier=True)``). A recalled lot
+    is stop-*sale*, not stop-everything — sending it back is the normal end of
+    a recall (§6.8.1) — so quarantined balances are served too, and the order
+    says which kind goes first:
+
+    * **Named lots** — unsellable first. A buyer who names the recalled lot
+      next to a good one, for less than both hold, means the recalled one.
+    * **Nothing named** — sellable first, exactly as before, and unsellable
+      balances only for what the sellable ones cannot cover. An unnamed return
+      guessing its way into a recalled lot would quietly empty the lot the
+      recall report is tracking; but goods that are physically leaving and are
+      held only in a quarantined lot have nowhere else to come from, and
+      refusing them would leave the bin and its lots disagreeing.
+
+    Every other caller — the till, transfers, counts, write-offs, a job's
+    materials — leaves it false and sees sellable balances only.
     """
     quantity = _q(quantity)
     if quantity <= ZERO:
@@ -568,9 +587,10 @@ def pick_balances(
     rows = StockBatchBalance.objects.select_for_update().filter(
         variant=variant,
         warehouse_id=warehouse_id,
-        is_sellable=True,
         remaining_quantity__gt=0,
     )
+    if not include_unsellable:
+        rows = rows.filter(is_sellable=True)
     if requested_batch_ids:
         rows = rows.filter(batch_id__in=requested_batch_ids)
     if not allow_expired and product.prevent_selling_expired:
@@ -584,6 +604,10 @@ def pick_balances(
         # its lots has already filtered to them, and one that named none still
         # has to be given something rather than nothing.
         order = ("expiry_date", "first_received_at", "id")
+    if include_unsellable:
+        # See the docstring. ``False`` sorts before ``True``: named lots drain
+        # the unsellable ones first, an unnamed return keeps to good stock.
+        order = ("is_sellable" if requested_batch_ids else "-is_sellable", *order)
 
     picked = []
     remaining = quantity
@@ -1218,6 +1242,7 @@ def plan_issue(
     batch_ids=None,
     allow_expired=False,
     allow_short=False,
+    releasing_to_supplier=False,
 ):
     """What leaving goods will take with them: which articles, at what cost.
 
@@ -1225,6 +1250,14 @@ def plan_issue(
     product's own strategy (FEFO by default) unless the caller named its lots.
     Returns ``None`` for an untracked variant, which is what keeps every
     existing caller — and every shop selling Coca-Cola — paying nothing.
+
+    ``releasing_to_supplier`` is the supplier return's opt-in, and nobody
+    else's: the goods are going back where they came from, so a lot's
+    quarantine (a *stop-sale*) and a unit still owing its identifier (a
+    *stop-sale until scanned*) do not hold them here. What still refuses is
+    everything that makes the goods not this shelf's to send: a unit not in
+    stock, of another product, in another place, named twice, or the wrong
+    count. See :func:`pick_balances` for which lots go first.
     """
     mode = mode_of(variant)
     if mode == Product.TrackingMode.QUANTITY:
@@ -1250,6 +1283,7 @@ def plan_issue(
             batch_ids=batch_ids,
             allow_expired=allow_expired,
             allow_short=allow_short,
+            releasing_to_supplier=releasing_to_supplier,
         )
     else:
         _plan_lot_issue(
@@ -1260,6 +1294,7 @@ def plan_issue(
             batch_ids=batch_ids,
             allow_expired=allow_expired,
             allow_short=allow_short,
+            releasing_to_supplier=releasing_to_supplier,
         )
     return plan
 
@@ -1275,6 +1310,7 @@ def _plan_unit_issue(
     batch_ids,
     allow_expired,
     allow_short,
+    releasing_to_supplier=False,
 ):
     count = int(quantity)
     if Decimal(count) != quantity:
@@ -1312,7 +1348,12 @@ def _plan_unit_issue(
     if chosen:
         locked = lock_units(chosen)
         units = [locked[unit_id] for unit_id in chosen if unit_id in locked]
-        _refuse_unsellable_units(units, variant=variant, warehouse_id=warehouse_id)
+        _refuse_unsellable_units(
+            units,
+            variant=variant,
+            warehouse_id=warehouse_id,
+            allow_unidentified=releasing_to_supplier,
+        )
         if len(units) != count:
             raise serializers.ValidationError(
                 {
@@ -1368,7 +1409,10 @@ def _plan_unit_issue(
                 }
             )
 
-    _refuse_unsellable_lots(units, allow_expired=allow_expired)
+    if not releasing_to_supplier:
+        # A pack from a recalled lot is exactly what goes back to the
+        # supplier; the lot's stop-sale is the till's business, not theirs.
+        _refuse_unsellable_lots(units, allow_expired=allow_expired)
     for unit in units:
         plan.allocations.append(
             Allocation(
@@ -1404,7 +1448,9 @@ def _refuse_repeated_units(unit_ids):
         seen.add(unit_id)
 
 
-def _refuse_unsellable_units(units, *, variant, warehouse_id):
+def _refuse_unsellable_units(
+    units, *, variant, warehouse_id, allow_unidentified=False
+):
     for unit in units:
         if unit.variant_id != variant.pk:
             raise serializers.ValidationError(
@@ -1425,7 +1471,10 @@ def _refuse_unsellable_units(units, *, variant, warehouse_id):
                     "stock_unit": unit.pk,
                 }
             )
-        if not unit.is_identified:
+        # A placeholder may go back to its supplier unscanned: the supplier
+        # knows the goods by the delivery, and making the buyer invent an
+        # identifier for an article that is leaving is the worse record.
+        if not unit.is_identified and not allow_unidentified:
             raise serializers.ValidationError(
                 {
                     "detail": (
@@ -1474,6 +1523,7 @@ def _plan_lot_issue(
     batch_ids,
     allow_expired,
     allow_short,
+    releasing_to_supplier=False,
 ):
     picked = pick_balances(
         variant=variant,
@@ -1481,6 +1531,7 @@ def _plan_lot_issue(
         quantity=quantity,
         allow_expired=allow_expired,
         requested_batch_ids=batch_ids,
+        include_unsellable=releasing_to_supplier,
     )
     taken = _q(sum((row[1] for row in picked), ZERO))
     if taken < quantity and not allow_short:
@@ -1598,7 +1649,9 @@ def apply_return(plan, *, at=None, warehouse_id=None):
     return plan
 
 
-def plan_lot_drawdown(*, variant, warehouse, quantity, allow_expired=True):
+def plan_lot_drawdown(
+    *, variant, warehouse, quantity, allow_expired=True, include_unsellable=False
+):
     """FEFO allocations for stock leaving by a route that names no articles.
 
     A stock count, a manual adjustment, a job's materials and a purchase return
@@ -1632,6 +1685,7 @@ def plan_lot_drawdown(*, variant, warehouse, quantity, allow_expired=True):
         warehouse=warehouse_id,
         quantity=quantity,
         allow_expired=allow_expired,
+        include_unsellable=include_unsellable,
     ):
         plan.allocations.append(
             Allocation(
@@ -1697,6 +1751,7 @@ def plan_adjustment(
     allow_expired=True,
     what="هذه الحركة",
     supplier=None,
+    releasing_to_supplier=False,
 ):
     """The allocation behind a bin change no document itemised.
 
@@ -1705,6 +1760,12 @@ def plan_adjustment(
     capture rows for an increase) and ``batches`` names lots. ``rate`` is what
     arriving goods are worth; the caller passes the bin's own rate, because
     nothing here may invent a cost.
+
+    ``releasing_to_supplier`` marks a decrease as goods going back to their
+    supplier, and only the purchase return/refund/exchange path passes it: a
+    quarantined lot, a unit in one, and a placeholder unit may then leave (see
+    :func:`plan_issue` and :func:`pick_balances`). Every other caller keeps the
+    stop-sales.
 
     Returns ``None`` for an untracked variant, which is what keeps every
     existing caller paying nothing.
@@ -1770,6 +1831,7 @@ def plan_adjustment(
             unit_ids=named,
             allow_expired=allow_expired,
             allow_short=False,
+            releasing_to_supplier=releasing_to_supplier,
         )
     named_lots = _adjustment_batch_ids(batches)
     if named_lots:
@@ -1782,12 +1844,14 @@ def plan_adjustment(
             batch_ids=named_lots,
             allow_expired=allow_expired,
             allow_short=False,
+            releasing_to_supplier=releasing_to_supplier,
         )
     return plan_lot_drawdown(
         variant=variant,
         warehouse=warehouse_id,
         quantity=quantity,
         allow_expired=allow_expired,
+        include_unsellable=releasing_to_supplier,
     )
 
 

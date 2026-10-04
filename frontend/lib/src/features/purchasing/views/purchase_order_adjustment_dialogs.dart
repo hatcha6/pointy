@@ -38,7 +38,10 @@ List<AdjustmentLineOption> _purchaseAdjustmentOptions(
             ),
             // A handset goes back by name, and the sheet after this asks which.
             if (line.trackingMode.tracksUnits)
-              l10n.purchaseAdjustmentUnitsPickNext,
+              l10n.purchaseAdjustmentUnitsPickNext
+            // A lot may be named — a recalled one is how a recall goes back.
+            else if (line.trackingMode.tracksLots)
+              l10n.purchaseAdjustmentLotsPickNext,
           ].join(' • '),
           maxQuantity: line.adjustableQuantity,
           // Handsets go back whole; everything else may go back by a fraction.
@@ -53,12 +56,81 @@ List<AdjustmentLineOption> _purchaseAdjustmentOptions(
 bool _isPackLine(PurchaseOrderLine line) =>
     line.baseFactor != 1 && line.unitLabel.isNotEmpty;
 
+/// Names what goes back behind every tracked line in [drafts]: the handsets
+/// of a serialised line, then — optionally — the lots of a lot line. Null when
+/// the buyer backs out of either step.
+Future<List<PurchaseAdjustmentLineDraft>?> _pickReturnedStock(
+  BuildContext context,
+  PurchaseOrderDetailsViewModel viewModel,
+  List<PurchaseAdjustmentLineDraft> drafts,
+) async {
+  final withUnits = await _pickReturnedUnits(context, viewModel, drafts);
+  if (withUnits == null || !context.mounted) {
+    return null;
+  }
+  return _pickReturnedLots(context, viewModel, withUnits);
+}
+
+/// Names the lots behind every lot-only line in [drafts], if the buyer wants
+/// to.
+///
+/// Optional, unlike handsets: choosing nothing lets the server take the
+/// earliest-expiring good stock. Naming is how a recalled or expired lot goes
+/// back — the sheet lists those too, marked, since the server accepts them on
+/// a supplier return and nowhere else. A serial-and-lot line names its packs
+/// instead, and each pack already knows its lot.
+Future<List<PurchaseAdjustmentLineDraft>?> _pickReturnedLots(
+  BuildContext context,
+  PurchaseOrderDetailsViewModel viewModel,
+  List<PurchaseAdjustmentLineDraft> drafts,
+) async {
+  final l10n = AppLocalizations.of(context)!;
+  final linesById = {for (final line in viewModel.order.lines) line.id: line};
+  final pickLines = <LotPickLine>[
+    for (final draft in drafts)
+      if (linesById[draft.lineId] case final line?
+          when line.trackingMode.tracksLots && !line.trackingMode.tracksUnits)
+        LotPickLine(
+          key: line.id,
+          title: line.displayName.isEmpty
+              ? l10n.purchaseOrderUnknownProduct
+              : line.displayName,
+          // The lots hold base units: a carton of 24 out is 24 from a lot.
+          quantity: line.toBaseQuantity(draft.quantity),
+          variantId: line.variantId,
+        ),
+  ];
+  if (pickLines.isEmpty) {
+    return drafts;
+  }
+  final picks = await showLotPickSheet(
+    context,
+    title: l10n.purchaseAdjustmentLotsTitle,
+    message: l10n.purchaseAdjustmentLotsBody,
+    confirmLabel: l10n.confirmButton,
+    lines: pickLines,
+    loadLots: viewModel.loadReturnableLots,
+    warehouseId: viewModel.order.warehouseId,
+  );
+  if (picks == null) {
+    return null;
+  }
+  return [
+    for (final draft in drafts)
+      if (picks[draft.lineId] case final batchIds? when batchIds.isNotEmpty)
+        draft.copyWith(batchIds: batchIds)
+      else
+        draft,
+  ];
+}
+
 /// Names the handsets behind every serialised line in [drafts].
 ///
 /// The server refuses a serial line that names none — it will not guess which
 /// IMEI went back — so the buyer picks them here, from what is standing where
-/// the delivery landed. Lot and quantity lines pass through untouched: the
-/// earliest-expiring lot goes first. Null when the buyer backs out.
+/// the delivery landed: recalled packs and handsets still «بانتظار المعرّف»
+/// included, since both may go back to a supplier. Null when the buyer backs
+/// out.
 Future<List<PurchaseAdjustmentLineDraft>?> _pickReturnedUnits(
   BuildContext context,
   PurchaseOrderDetailsViewModel viewModel,

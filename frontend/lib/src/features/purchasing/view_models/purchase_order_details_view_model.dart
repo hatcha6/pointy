@@ -7,6 +7,7 @@ import '../../../data/models/analytics_event.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/models/stock_batch.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
@@ -193,8 +194,9 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     return _changeStatus(_purchaseRepository.cancelOrder(_order.id));
   }
 
-  /// The handsets of [variantId] that could go back on this order: in stock,
-  /// identified, and where its delivery landed. [code] narrows to a scan.
+  /// The handsets of [variantId] that could go back on this order: in stock
+  /// where its delivery landed, recalled packs and unscanned placeholders
+  /// included. [code] narrows to a scan.
   Future<Result<StockUnitPage>> loadReturnableUnits(
     int variantId, {
     String code = '',
@@ -203,6 +205,15 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
       variantId: variantId,
       warehouseId: _order.warehouseId,
       code: code,
+    );
+  }
+
+  /// The lots of [variantId] holding goods where this order's delivery landed,
+  /// recalled and expired ones included.
+  Future<Result<StockBatchPage>> loadReturnableLots(int variantId) {
+    return _purchaseRepository.loadReturnableLots(
+      variantId: variantId,
+      warehouseId: _order.warehouseId,
     );
   }
 

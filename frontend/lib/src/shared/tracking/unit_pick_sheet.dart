@@ -6,6 +6,7 @@ import '../../data/models/stock_unit.dart';
 import '../barcode/barcode_scan_listener.dart';
 import '../components/components.dart';
 import '../responsive/responsive.dart';
+import 'lot_state_badges.dart';
 
 /// One document line whose articles somebody has to name before it can go.
 class UnitPickLine {
@@ -335,11 +336,40 @@ class _UnitPickSheetState extends State<_UnitPickSheet> {
                   (!_isPickedAnywhere(unit.id) && !_isFull(line))
               ? (_) => _toggle(line, unit)
               : null,
-          title: Text(unit.code),
-          subtitle: unit.secondaryCode.isEmpty
-              ? null
-              : Text(unit.secondaryCode),
+          title: Text(
+            unit.isIdentified ? unit.code : l10n.stockUnitsAwaitingIdentifier,
+          ),
+          subtitle: _details(l10n, unit),
         ),
     ];
+  }
+
+  /// What tells two picks apart beyond the code: the second identifier, the
+  /// lot, and — when the caller offers stopped stock, as a supplier return
+  /// does — that the lot is recalled or expired. Null when there is nothing
+  /// to say, so a plain handset keeps a one-line row.
+  static Widget? _details(AppLocalizations l10n, StockUnit unit) {
+    final text = [
+      if (unit.isIdentified && unit.secondaryCode.isNotEmpty)
+        unit.secondaryCode,
+      if (unit.batchCode.isNotEmpty) l10n.unitPickLot(unit.batchCode),
+    ].join(' • ');
+    final lotState = unit.batchId == null
+        ? null
+        : LotStateBadges(
+            isSellable: unit.batchIsSellable,
+            status: unit.batchStatus,
+            expiryDate: unit.batchExpiryDate,
+          );
+    final stopped = lotState?.isStopped ?? false;
+    if (text.isEmpty && !stopped) {
+      return null;
+    }
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [if (text.isNotEmpty) Text(text), if (stopped) lotState!],
+    );
   }
 }

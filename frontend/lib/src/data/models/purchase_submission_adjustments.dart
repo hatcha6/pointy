@@ -322,21 +322,30 @@ class PurchaseAdjustmentLineDraft {
     required this.lineId,
     required this.quantity,
     this.unitIds = const [],
+    this.batchIds = const [],
   });
 
   final int lineId;
   final double quantity;
 
   /// The handsets going back, for a serialised line. The server refuses a
-  /// serial line that names none — it will not guess which IMEI left — and a
-  /// lot line names nothing, because the earliest-expiring lot goes first.
+  /// serial line that names none — it will not guess which IMEI left.
   final List<int> unitIds;
 
-  PurchaseAdjustmentLineDraft copyWith({List<int>? unitIds}) {
+  /// The lots a lot line goes back from. Empty means the server picks the
+  /// earliest-expiring good stock; naming a recalled lot is how a recall goes
+  /// back to its supplier.
+  final List<int> batchIds;
+
+  PurchaseAdjustmentLineDraft copyWith({
+    List<int>? unitIds,
+    List<int>? batchIds,
+  }) {
     return PurchaseAdjustmentLineDraft(
       lineId: lineId,
       quantity: quantity,
       unitIds: unitIds ?? this.unitIds,
+      batchIds: batchIds ?? this.batchIds,
     );
   }
 
@@ -345,6 +354,7 @@ class PurchaseAdjustmentLineDraft {
       'line': lineId,
       'quantity': quantity.toStringAsFixed(3),
       if (unitIds.isNotEmpty) 'units': unitIds,
+      if (batchIds.isNotEmpty) 'batches': batchIds,
     };
   }
 }

@@ -455,6 +455,7 @@ def allocate_adjustment(
     placeholder_key="",
     what="هذه الحركة",
     supplier=None,
+    releasing_to_supplier=False,
 ):
     """Name the identified stock behind a bin change, and move it.
 
@@ -468,6 +469,12 @@ def allocate_adjustment(
     Returns the plan, which the caller **must** hand to its movement as
     ``tracked_plan``; a plan that is applied and not carried leaves the units
     moved and the ledger silent, which is the same corruption by a longer road.
+
+    ``releasing_to_supplier`` is passed by the purchase return, refund and
+    exchange path and by nothing else: goods going back to their supplier may
+    come from a quarantined lot or be placeholder units still owing their
+    identifier (see ``tracking.plan_adjustment``). Every other caller keeps the
+    stop-sales exactly as they were.
     """
     from .valuation_service import valuation_unit_costs
 
@@ -492,5 +499,6 @@ def allocate_adjustment(
         placeholder_key=placeholder_key,
         what=what,
         supplier=supplier,
+        releasing_to_supplier=releasing_to_supplier,
     )
     return tracking.apply_adjustment(plan, status=status, at=at)

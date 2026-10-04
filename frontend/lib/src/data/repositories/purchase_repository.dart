@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../models/purchase_submission.dart';
 import '../models/purchase_suggestion.dart';
+import '../models/stock_batch.dart';
 import '../models/stock_unit.dart';
 import '../services/pos_api_service.dart';
 
@@ -350,8 +351,12 @@ class PurchaseRepository {
     );
   }
 
-  /// The handsets of [variantId] that could go back to the supplier: in stock,
-  /// identified, and standing where the order's delivery landed.
+  /// The handsets of [variantId] that could go back to the supplier: in stock
+  /// and standing where the order's delivery landed.
+  ///
+  /// Deliberately wider than the till's list: a pack in a recalled lot and a
+  /// handset still «بانتظار المعرّف» are exactly what goes back to a supplier,
+  /// and the server accepts both on a supplier return (and nowhere else).
   ///
   /// The same `stock-units` read the transfer pick sheet makes through
   /// `TrackedStockRepository.loadUnits`, offered here so the order screen —
@@ -367,8 +372,23 @@ class PurchaseRepository {
         variantId: variantId,
         warehouseId: warehouseId,
         status: StockUnitStatus.inStock,
-        isIdentified: true,
         code: code,
+      ),
+    );
+  }
+
+  /// The lots of [variantId] holding goods where the order's delivery landed,
+  /// recalled and expired ones included — sending a recalled lot back is the
+  /// normal end of a recall, so the supplier return lists it rather than
+  /// hiding it the way the till does.
+  Future<Result<StockBatchPage>> loadReturnableLots({
+    required int variantId,
+    int? warehouseId,
+  }) {
+    return Result.guard(
+      () => _service.fetchStockBatches(
+        variantId: variantId,
+        warehouseId: warehouseId,
       ),
     );
   }

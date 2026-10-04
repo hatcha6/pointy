@@ -1934,6 +1934,9 @@ def record_purchase_adjustment_stock_movements(
             batches=picks.get("batches"),
             status=StockUnit.Status.RETURNED,
             what="هذه المرتجعات",
+            # Back to the supplier: a recalled lot and a handset still owing
+            # its identifier may leave here, and nowhere else (§6.8.1).
+            releasing_to_supplier=True,
         )
         create_stock_movement(
             variant=line.variant,

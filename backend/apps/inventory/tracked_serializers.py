@@ -236,6 +236,13 @@ class StockUnitSerializer(CostMaskedSerializer):
     batch_expiry_date = serializers.DateField(
         source="batch.expiry_date", read_only=True
     )
+    # The lot's stop-sale, so a list that may offer such a pack — the supplier
+    # return's picker — can say so instead of leaving the buyer to guess. Null
+    # for a unit with no lot.
+    batch_status = serializers.CharField(source="batch.status", read_only=True)
+    batch_is_sellable = serializers.BooleanField(
+        source="batch.is_sellable", read_only=True
+    )
     total_cost = serializers.SerializerMethodField()
 
     class Meta:
@@ -267,6 +274,8 @@ class StockUnitSerializer(CostMaskedSerializer):
             "batch",
             "batch_code",
             "batch_expiry_date",
+            "batch_status",
+            "batch_is_sellable",
             "supplier",
             "acquired_at",
             "in_stock_since",

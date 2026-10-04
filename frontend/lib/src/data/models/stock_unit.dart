@@ -44,6 +44,8 @@ class StockUnit {
     this.batchId,
     this.batchCode = '',
     this.batchExpiryDate,
+    this.batchStatus = '',
+    this.batchIsSellable = true,
     this.inStockSince,
     this.soldAt,
     this.attributes = const {},
@@ -108,6 +110,14 @@ class StockUnit {
   final int? batchId;
   final String batchCode;
   final DateTime? batchExpiryDate;
+
+  /// The lot's own status (`active`, `quarantined`, `expired`); blank for a
+  /// unit with no lot.
+  final String batchStatus;
+
+  /// False when the unit's lot is quarantined or expired by status — a
+  /// stop-sale on the lot, not on the unit. True for a unit with no lot.
+  final bool batchIsSellable;
   final DateTime? inStockSince;
   final DateTime? soldAt;
   final Map<String, Object?> attributes;
@@ -176,6 +186,8 @@ class StockUnit {
       batchId: _intOrNull(json['batch']),
       batchCode: json['batch_code']?.toString() ?? '',
       batchExpiryDate: _dateOrNull(json['batch_expiry_date']),
+      batchStatus: json['batch_status']?.toString() ?? '',
+      batchIsSellable: json['batch_is_sellable'] != false,
       inStockSince: _dateOrNull(json['in_stock_since']),
       soldAt: _dateOrNull(json['sold_at']),
       attributes: json['attributes'] is Map<String, Object?>

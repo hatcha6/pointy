@@ -843,7 +843,7 @@ Future<void> _showPurchaseAdjustmentDialog(
     return;
   }
 
-  final lines = await _pickReturnedUnits(
+  final lines = await _pickReturnedStock(
     context,
     viewModel,
     _purchaseAdjustmentDrafts(result.lines),
@@ -884,7 +884,7 @@ Future<void> _showExchangeDialog(
     return;
   }
 
-  final lines = await _pickReturnedUnits(context, viewModel, result.lines);
+  final lines = await _pickReturnedStock(context, viewModel, result.lines);
   if (lines == null || !context.mounted) {
     return;
   }

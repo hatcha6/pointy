@@ -17131,6 +17131,60 @@ abstract class AppLocalizations {
   /// **'{picked} من {needed}'**
   String unitPickProgress(int picked, int needed);
 
+  /// The lot a unit belongs to, shown under the unit in the shared unit pick sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة {code}'**
+  String unitPickLot(String code);
+
+  /// Title of the sheet that asks which lots go back to the supplier on a purchase return, refund or exchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد الدفعات المُرجَعة للمورد'**
+  String get purchaseAdjustmentLotsTitle;
+
+  /// Explains the lot pick step of a purchase return: recalled lots can be chosen, and choosing nothing returns the earliest-expiring good stock.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدفعة التي تعود فعليًا إلى المورد، ومنها الدفعات المحجورة. إن لم تختر شيئًا تُرجَع الكمية من الدفعات الصالحة الأقرب انتهاءً.'**
+  String get purchaseAdjustmentLotsBody;
+
+  /// Hint on a lot-tracked line in the purchase adjustment dialog: the lots are picked on the next step.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحدَّد الدفعات بعد التأكيد'**
+  String get purchaseAdjustmentLotsPickNext;
+
+  /// Shown under a line in the lot pick sheet while no lot is chosen: the server picks the earliest-expiring sellable lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'تلقائي: الأقرب انتهاءً من الدفعات الصالحة'**
+  String get lotPickAutomatic;
+
+  /// How much a line returns, shown beside the line title in the lot pick sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية المطلوبة {quantity}'**
+  String lotPickNeeded(String quantity);
+
+  /// Shown when the chosen lots of a line hold less than the quantity going back.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات المختارة فيها {available} فقط من {needed} — اختر دفعة أخرى أو ألغِ الاختيار.'**
+  String lotPickShort(String available, String needed);
+
+  /// Shown under a line in the lot pick sheet that has no lots with stock in the warehouse.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد دفعات بها كمية لهذا الصنف في هذا المستودع.'**
+  String get lotPickEmpty;
+
+  /// Shown when the lot pick sheet could not load the lots.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الدفعات.'**
+  String get lotPickLoadFailed;
+
   /// Message shown after a purchase order is submitted from details.
   ///
   /// In ar, this message translates to:

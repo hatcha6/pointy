@@ -9864,6 +9864,41 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String unitPickLot(String code) {
+    return 'دفعة $code';
+  }
+
+  @override
+  String get purchaseAdjustmentLotsTitle => 'حدّد الدفعات المُرجَعة للمورد';
+
+  @override
+  String get purchaseAdjustmentLotsBody =>
+      'اختر الدفعة التي تعود فعليًا إلى المورد، ومنها الدفعات المحجورة. إن لم تختر شيئًا تُرجَع الكمية من الدفعات الصالحة الأقرب انتهاءً.';
+
+  @override
+  String get purchaseAdjustmentLotsPickNext => 'تُحدَّد الدفعات بعد التأكيد';
+
+  @override
+  String get lotPickAutomatic => 'تلقائي: الأقرب انتهاءً من الدفعات الصالحة';
+
+  @override
+  String lotPickNeeded(String quantity) {
+    return 'الكمية المطلوبة $quantity';
+  }
+
+  @override
+  String lotPickShort(String available, String needed) {
+    return 'الدفعات المختارة فيها $available فقط من $needed — اختر دفعة أخرى أو ألغِ الاختيار.';
+  }
+
+  @override
+  String get lotPickEmpty =>
+      'لا توجد دفعات بها كمية لهذا الصنف في هذا المستودع.';
+
+  @override
+  String get lotPickLoadFailed => 'تعذّر تحميل الدفعات.';
+
+  @override
   String purchaseOrderSubmitSuccess(String orderNumber) {
     return 'تم إرسال أمر الشراء رقم $orderNumber.';
   }

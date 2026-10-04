@@ -6185,6 +6185,60 @@
       }
     }
   },
+  "unitPickLot": "دفعة {code}",
+  "@unitPickLot": {
+    "description": "The lot a unit belongs to, shown under the unit in the shared unit pick sheet.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseAdjustmentLotsTitle": "حدّد الدفعات المُرجَعة للمورد",
+  "@purchaseAdjustmentLotsTitle": {
+    "description": "Title of the sheet that asks which lots go back to the supplier on a purchase return, refund or exchange."
+  },
+  "purchaseAdjustmentLotsBody": "اختر الدفعة التي تعود فعليًا إلى المورد، ومنها الدفعات المحجورة. إن لم تختر شيئًا تُرجَع الكمية من الدفعات الصالحة الأقرب انتهاءً.",
+  "@purchaseAdjustmentLotsBody": {
+    "description": "Explains the lot pick step of a purchase return: recalled lots can be chosen, and choosing nothing returns the earliest-expiring good stock."
+  },
+  "purchaseAdjustmentLotsPickNext": "تُحدَّد الدفعات بعد التأكيد",
+  "@purchaseAdjustmentLotsPickNext": {
+    "description": "Hint on a lot-tracked line in the purchase adjustment dialog: the lots are picked on the next step."
+  },
+  "lotPickAutomatic": "تلقائي: الأقرب انتهاءً من الدفعات الصالحة",
+  "@lotPickAutomatic": {
+    "description": "Shown under a line in the lot pick sheet while no lot is chosen: the server picks the earliest-expiring sellable lot."
+  },
+  "lotPickNeeded": "الكمية المطلوبة {quantity}",
+  "@lotPickNeeded": {
+    "description": "How much a line returns, shown beside the line title in the lot pick sheet.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "lotPickShort": "الدفعات المختارة فيها {available} فقط من {needed} — اختر دفعة أخرى أو ألغِ الاختيار.",
+  "@lotPickShort": {
+    "description": "Shown when the chosen lots of a line hold less than the quantity going back.",
+    "placeholders": {
+      "available": {
+        "type": "String"
+      },
+      "needed": {
+        "type": "String"
+      }
+    }
+  },
+  "lotPickEmpty": "لا توجد دفعات بها كمية لهذا الصنف في هذا المستودع.",
+  "@lotPickEmpty": {
+    "description": "Shown under a line in the lot pick sheet that has no lots with stock in the warehouse."
+  },
+  "lotPickLoadFailed": "تعذّر تحميل الدفعات.",
+  "@lotPickLoadFailed": {
+    "description": "Shown when the lot pick sheet could not load the lots."
+  },
   "purchaseOrderSubmitSuccess": "تم إرسال أمر الشراء رقم {orderNumber}.",
   "@purchaseOrderSubmitSuccess": {
     "description": "Message shown after a purchase order is submitted from details.",
