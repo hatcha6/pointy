@@ -14,6 +14,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.search_filters import FOLDING_FILTER_BACKENDS
 from apps.customers.models import Asset, AssetOwnership, AssetType
 from apps.employees.models import Employee
+from apps.inventory.models import StockUnit
 from apps.messaging.serializers import OutboundMessageSerializer
 from apps.messaging.services import NoGatewayConfigured, unavailable_message
 from apps.sales.models import RegisterSession
@@ -581,6 +582,14 @@ class AssetViewSet(viewsets.ModelViewSet):
                         "job__customer",
                         "job__order",
                     ).order_by("-job__created_at"),
+                ),
+                # The sale's cover, for the warranty answer. Only the date is
+                # read, so only the date is fetched.
+                Prefetch(
+                    "stock_units",
+                    queryset=StockUnit.objects.only(
+                        "id", "asset_id", "warranty_expires_on"
+                    ),
                 ),
             )
         return queryset

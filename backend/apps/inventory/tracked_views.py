@@ -17,7 +17,7 @@ import django_filters
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q, Sum
 from django.utils import timezone
-from rest_framework import mixins, serializers, status, viewsets
+from rest_framework import mixins, parsers, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -187,6 +187,14 @@ class StockUnitViewSet(
         "incidents": ("inventory.view_consignment_liability",),
         "unclaimed_payouts": ("inventory.view_consignment_liability",),
         "timeline": ("inventory.view_stockunit",),
+        "edit_attributes": ("inventory.change_stockunit",),
+        "set_warranty": ("inventory.change_stockunit_warranty",),
+        "photos": ("inventory.view_stockunit",),
+        "photo": ("inventory.view_stockunit", "inventory.manage_stockunit_photos"),
+        "photo_cover": (
+            "inventory.view_stockunit",
+            "inventory.manage_stockunit_photos",
+        ),
     }
     filterset_class = StockUnitFilter
     # Keyset-friendly and stable: newest arrival first, id as the tiebreak. The
@@ -195,8 +203,31 @@ class StockUnitViewSet(
     ordering = ("-in_stock_since", "-id")
     search_fields = ("code", "secondary_code", "supplier_code")
 
+    def get_required_permissions(self, request):
+        """The map, plus two answers that depend on the request itself.
+
+        An edit that moves the asking price is a *reprice*, and the shop grants
+        that separately (``reprice_stockunit``) from describing an article
+        (``change_stockunit``) — the detail screen's reprice button follows the
+        first, so the endpoint has to as well. And a photo is read by whoever
+        reads the unit, but added only by whoever may manage its photos.
+        """
+        if self.action in ("update", "partial_update"):
+            fields = set(request.data.keys()) if hasattr(request.data, "keys") else set()
+            required = []
+            if "list_price" in fields:
+                required.append("inventory.reprice_stockunit")
+            if fields - {"list_price"} or not fields:
+                required.append("inventory.change_stockunit")
+            return tuple(required)
+        if self.action == "photos" and request.method == "POST":
+            return ("inventory.view_stockunit", "inventory.manage_stockunit_photos")
+        return self.permission_map.get(self.action)
+
     def get_queryset(self):
-        query = (
+        from .unit_photos import with_cover_photos
+
+        query = with_cover_photos(
             StockUnit.objects.select_related(
                 "variant",
                 "variant__product",
@@ -385,6 +416,141 @@ class StockUnitViewSet(
         )
 
 
+    # -- describing an article (§6.9: every one of these is on its record) ---
+
+    def perform_update(self, serializer):
+        """Save, then write down what changed and who changed it.
+
+        The generic edit carries the asking price, the attributes, the notes
+        and the second identifier; each one that actually moved becomes a row
+        in the unit's history — «who dropped this phone from 1600 to 1450» is a
+        question every used-goods owner asks, and it needs an answer.
+        """
+        from .unit_audit import audit_unit_edit, snapshot
+
+        before = snapshot(serializer.instance)
+        unit = serializer.save()
+        audit_unit_edit(unit, before, actor=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="attributes")
+    @transaction.atomic
+    def edit_attributes(self, request, pk=None):
+        """Replace this article's facts, checked against its kind's definitions.
+
+        The whole set, not a patch: the form shows every field the type
+        defines, so what comes back is the complete answer — and a required
+        field left empty is refused here, per field and in Arabic, rather than
+        quietly saved half-filled.
+        """
+        from .unit_attributes import clean_unit_attributes
+        from .unit_audit import audit_unit_edit, snapshot
+
+        unit = self.get_object()
+        raw = (request.data or {}).get("attributes")
+        if not isinstance(raw, dict):
+            raise serializers.ValidationError(
+                {"attributes": "أرسل الخصائص كقائمة من المفاتيح والقيم."}
+            )
+        before = snapshot(unit)
+        unit.attributes = clean_unit_attributes(
+            raw,
+            asset_type_id=unit.variant.product.asset_type_id,
+            partial=False,
+        )
+        unit.save(update_fields=["attributes", "updated_at"])
+        audit_unit_edit(unit, before, actor=request.user)
+        return Response(StockUnitSerializer(unit, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="warranty")
+    @transaction.atomic
+    def set_warranty(self, request, pk=None):
+        """Give this article its own warranty end date, or take it away (§17.3).
+
+        ``null`` returns it to the product's days from the day of sale. On an
+        article already sold the stamped date moves with it, so the buyer's
+        reprinted receipt, the counter's lookup and their asset all say the
+        same thing as this page.
+        """
+        from .unit_audit import audit_unit_edit, snapshot
+        from .unit_warranty import restamp_sold_warranty
+
+        unit = self.get_object()
+        field = serializers.DateField(allow_null=True)
+        try:
+            value = field.run_validation(
+                (request.data or {}).get("warranty_override_expires_on")
+            )
+        except serializers.ValidationError as exc:
+            raise serializers.ValidationError(
+                {"warranty_override_expires_on": exc.detail}
+            ) from None
+        before = snapshot(unit)
+        unit.warranty_override_expires_on = value
+        fields = ["warranty_override_expires_on", "updated_at"]
+        if restamp_sold_warranty(unit):
+            fields.append("warranty_expires_on")
+        unit.save(update_fields=fields)
+        audit_unit_edit(
+            unit,
+            before,
+            actor=request.user,
+            note=str((request.data or {}).get("note", "") or ""),
+        )
+        return Response(StockUnitSerializer(unit, context={"request": request}).data)
+
+    # -- photos ------------------------------------------------------------
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="photos",
+        parser_classes=[parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser],
+    )
+    def photos(self, request, pk=None):
+        """This article's photos, cover first; POST adds one (multipart
+        ``file``, optional ``is_cover``)."""
+        from .unit_photos import UnitPhotoUploadSerializer, add_photo, photo_payload, photos_of
+
+        unit = self.get_object()
+        if request.method == "POST":
+            upload = UnitPhotoUploadSerializer(data=request.data)
+            upload.is_valid(raise_exception=True)
+            attachment = add_photo(
+                unit,
+                upload.validated_data["file"],
+                actor=request.user,
+                make_cover=upload.validated_data["is_cover"],
+            )
+            return Response(
+                photo_payload(attachment, request=request),
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(
+            [photo_payload(photo, request=request) for photo in photos_of(unit)]
+        )
+
+    @action(detail=True, methods=["delete"], url_path=r"photos/(?P<photo_id>\d+)")
+    def photo(self, request, pk=None, photo_id=None):
+        """Remove one photo. Soft: the bytes stay, the record says who."""
+        from .unit_photos import photo_of, remove_photo
+
+        unit = self.get_object()
+        remove_photo(unit, photo_of(unit, photo_id), actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"photos/(?P<photo_id>\d+)/cover",
+    )
+    def photo_cover(self, request, pk=None, photo_id=None):
+        """Make one photo the face of this article."""
+        from .unit_photos import photo_of, photo_payload, set_cover
+
+        unit = self.get_object()
+        photo = set_cover(unit, photo_of(unit, photo_id))
+        return Response(photo_payload(photo, request=request))
+
     # -- pricing and disposal ------------------------------------------------
 
     @action(detail=False, methods=["post"], url_path="bulk-reprice")
@@ -409,6 +575,7 @@ class StockUnitViewSet(
         price = data.get("price")
         percent = data.get("percent")
         changed = []
+        previous = {unit.pk: unit.list_price for unit in units}
         for unit in units:
             if price is not None:
                 new_price = price
@@ -428,7 +595,15 @@ class StockUnitViewSet(
                 unit.list_price = new_price
                 changed.append(unit)
         if changed:
+            from .unit_audit import record_reprices
+
             StockUnit.objects.bulk_update(changed, ["list_price", "updated_at"])
+            # One history row per article, in one insert: a markdown of a
+            # whole shelf is still a price change on each handset (§6.9).
+            record_reprices(
+                [(unit, previous[unit.pk], unit.list_price) for unit in changed],
+                actor=request.user,
+            )
         return Response({"updated": len(changed), "requested": len(data["ids"])})
 
     @action(detail=True, methods=["post"], url_path="write-off")

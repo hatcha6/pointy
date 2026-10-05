@@ -934,6 +934,13 @@ class _LineIdentifiers extends StatelessWidget {
                   formatExpiry(identifier.expiryDate!),
                 ),
               ),
+            if (identifier.isUnit && identifier.warrantyExpiresOn != null)
+              chip(
+                Icons.verified_user_outlined,
+                l10n.stockUnitWarrantyUntil(
+                  formatDate(identifier.warrantyExpiresOn!),
+                ),
+              ),
             if (identifier.isConsignment)
               chip(Icons.handshake_outlined, l10n.posUnitPickerConsignment),
           ],

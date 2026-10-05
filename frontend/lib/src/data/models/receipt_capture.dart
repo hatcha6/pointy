@@ -14,6 +14,8 @@ class ReceiptUnitCapture {
     this.unitCost,
     this.listPrice,
     this.notes = '',
+    this.attributes = const {},
+    this.warrantyOverrideExpiresOn,
   });
 
   /// Blank means the shop is taking the goods now and owes the number later —
@@ -34,6 +36,17 @@ class ReceiptUnitCapture {
   final double? listPrice;
   final String notes;
 
+  /// The condition checklist filled at intake (§6.2): battery health, grade,
+  /// what came in the box. Coerced by the server against the article's kind.
+  final Map<String, Object?> attributes;
+
+  /// The article's own warranty end date, when it arrives with one that is
+  /// not ours to compute — a car under its maker's warranty (§17.3).
+  final DateTime? warrantyOverrideExpiresOn;
+
+  bool get hasDetails =>
+      attributes.isNotEmpty || warrantyOverrideExpiresOn != null;
+
   bool get isIdentified => code.trim().isNotEmpty;
 
   ReceiptUnitCapture copyWith({
@@ -43,6 +56,8 @@ class ReceiptUnitCapture {
     Object? unitCost = _noChange,
     Object? listPrice = _noChange,
     String? notes,
+    Map<String, Object?>? attributes,
+    Object? warrantyOverrideExpiresOn = _noChange,
   }) {
     return ReceiptUnitCapture(
       code: code ?? this.code,
@@ -55,6 +70,10 @@ class ReceiptUnitCapture {
           ? this.listPrice
           : listPrice as double?,
       notes: notes ?? this.notes,
+      attributes: attributes ?? this.attributes,
+      warrantyOverrideExpiresOn: identical(warrantyOverrideExpiresOn, _noChange)
+          ? this.warrantyOverrideExpiresOn
+          : warrantyOverrideExpiresOn as DateTime?,
     );
   }
 
@@ -67,6 +86,12 @@ class ReceiptUnitCapture {
       if (unitCost != null) 'unit_cost': unitCost!.toStringAsFixed(6),
       if (listPrice != null) 'list_price': listPrice!.toStringAsFixed(2),
       if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+      if (attributes.isNotEmpty) 'attributes': attributes,
+      if (warrantyOverrideExpiresOn case final date?)
+        'warranty_override_expires_on':
+            '${date.year.toString().padLeft(4, '0')}-'
+            '${date.month.toString().padLeft(2, '0')}-'
+            '${date.day.toString().padLeft(2, '0')}',
     };
   }
 }

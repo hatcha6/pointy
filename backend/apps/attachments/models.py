@@ -47,6 +47,7 @@ class Attachment(TimeStampedModel):
         PRODUCT_IMAGE = "product_image", "Product image"
         SUPPLIER_INVOICE_SCAN = "supplier_invoice_scan", "Supplier invoice scan"
         SHOP_LOGO = "shop_logo", "Shop logo"
+        UNIT_PHOTO = "unit_photo", "Unit photo"
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"

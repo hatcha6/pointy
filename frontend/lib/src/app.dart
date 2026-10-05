@@ -32,6 +32,7 @@ import 'shared/design/design.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/product_search/product_search_mode_controller.dart';
 import 'shared/tracking/tracking_features.dart';
+import 'shared/tracking/unit_attribute_catalog.dart';
 import 'shared/shell/shell.dart';
 import 'shared/theme/theme_controller.dart';
 import 'core/analytics_screen_tracker.dart';
@@ -267,7 +268,11 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                                     builder: (context, scoped) =>
                                         TrackingFeaturesScope(
                                           features: _trackingFeatures(),
-                                          child: scoped!,
+                                          child: UnitAttributeCatalogScope(
+                                            catalog: _dependencies
+                                                .unitAttributeCatalog,
+                                            child: scoped!,
+                                          ),
                                         ),
                                     child: railChild ?? const SizedBox.shrink(),
                                   ),

@@ -250,12 +250,23 @@ class StockUnitSerializer(CostMaskedSerializer):
         source="batch.is_sellable", read_only=True
     )
     total_cost = serializers.SerializerMethodField()
+    # Which kind of article this is, so a client can fetch the definitions its
+    # attribute form is drawn from.
+    asset_type = serializers.IntegerField(
+        source="variant.product.asset_type_id", read_only=True, default=None
+    )
+    #: The unit's facts as a person reads them: labels from the definitions,
+    #: a choice's label rather than its code, a number with its unit.
+    attribute_display = serializers.SerializerMethodField()
+    #: The photo the picker and the unit page show first, or null.
+    cover_photo = serializers.SerializerMethodField()
 
     class Meta:
         model = StockUnit
         fields = (
             "id",
             "variant",
+            "asset_type",
             "product_name",
             "variant_name",
             "warehouse",
@@ -291,7 +302,10 @@ class StockUnitSerializer(CostMaskedSerializer):
             "customer",
             "asset",
             "warranty_expires_on",
+            "warranty_override_expires_on",
             "attributes",
+            "attribute_display",
+            "cover_photo",
             "notes",
             "created_at",
             "updated_at",
@@ -310,6 +324,23 @@ class StockUnitSerializer(CostMaskedSerializer):
         if _awaits_payout(unit) and reader_sees_consignment_liability(self.context):
             data.update(_payout_figures(unit))
         return data
+
+    def get_attribute_display(self, unit):
+        from .unit_attributes import attribute_display, definitions_by_type
+
+        asset_type_id = getattr(unit.variant.product, "asset_type_id", None)
+        if asset_type_id is None or not unit.attributes:
+            return []
+        definitions = definitions_by_type(self.context).get(asset_type_id, [])
+        return attribute_display(unit.attributes, definitions)
+
+    def get_cover_photo(self, unit):
+        from .unit_photos import cover_of, photo_payload
+
+        cover = cover_of(unit)
+        if cover is None:
+            return None
+        return photo_payload(cover, request=self.context.get("request"))
 
     def get_total_cost(self, unit):
         """What this article is worth to the shop: landed cost plus refurb.

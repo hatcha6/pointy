@@ -97,6 +97,7 @@ import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/product_search/product_search_mode_controller.dart';
 import 'shared/theme/theme_controller.dart';
 import 'core/authorization.dart';
+import 'shared/tracking/unit_attribute_catalog.dart';
 
 /// Default API base URL for a fresh install.
 ///
@@ -183,6 +184,9 @@ class PointyAppDependencies {
     stockCountRepository = StockCountRepository(service);
     trackedStockRepository = TrackedStockRepository(service);
     trackedStockViewModel = TrackedStockViewModel(trackedStockRepository);
+    unitAttributeCatalog = UnitAttributeCatalog(
+      trackedStockRepository.loadAttributeDefinitions,
+    );
     consignmentRepository = ConsignmentRepository(service);
     consignmentViewModel = ConsignmentViewModel(
       consignmentRepository,
@@ -456,6 +460,10 @@ class PointyAppDependencies {
   late final StockCountRepository stockCountRepository;
   late final TrackedStockRepository trackedStockRepository;
   late final TrackedStockViewModel trackedStockViewModel;
+
+  /// Attribute definitions per kind of article, for every sheet that draws a
+  /// condition checklist — read through [UnitAttributeCatalogScope].
+  late final UnitAttributeCatalog unitAttributeCatalog;
   late final ConsignmentRepository consignmentRepository;
   late final ConsignmentViewModel consignmentViewModel;
   late final SubscriptionRepository subscriptionRepository;

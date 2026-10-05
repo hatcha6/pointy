@@ -1,6 +1,6 @@
 from django.core.handlers.asgi import ASGIRequest
 from django.db.models import Q
-from django.http import FileResponse, Http404, StreamingHttpResponse
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.utils.cache import get_conditional_response
 from django.utils.http import content_disposition_header, http_date, quote_etag
 from rest_framework import parsers, status, viewsets
@@ -51,6 +51,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         "retrieve": ("attachments.view_attachment",),
         "download": ("attachments.view_attachment",),
         "content": ("attachments.view_attachment",),
+        "thumbnail": ("attachments.view_attachment",),
         "create": ("attachments.add_attachment",),
         "update": ("attachments.change_attachment",),
         "partial_update": ("attachments.change_attachment",),
@@ -66,8 +67,14 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     search_fields = ("original_filename", "checksum_sha256", "metadata")
     ordering_fields = ("created_at", "updated_at", "original_size", "stored_size")
 
+    #: The actions a signed content token may open without a session: the
+    #: bytes themselves and their small rendition, both of exactly one file.
+    _TOKEN_ACTIONS = ("content", "thumbnail")
+
     def get_permissions(self):
-        if self.action == "content" and self.request.query_params.get("token"):
+        if self.action in self._TOKEN_ACTIONS and self.request.query_params.get(
+            "token"
+        ):
             return [AllowAny()]
         return super().get_permissions()
 
@@ -104,7 +111,9 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         # is strictly narrower than any owner rule — and its callers are
         # sessionless kiosks and POS image loads, which hold no permissions at
         # all. Leave that path to the token.
-        if self.action == "content" and self.request.query_params.get("token"):
+        if self.action in self._TOKEN_ACTIONS and self.request.query_params.get(
+            "token"
+        ):
             return queryset
 
         user = self.request.user
@@ -144,6 +153,47 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             token=request.query_params.get("token", ""),
         )
 
+    @action(detail=True, methods=["get"], url_path="thumbnail")
+    def thumbnail(self, request, pk=None):
+        """A small JPEG of an image attachment, for lists and strips.
+
+        Same token, same rules and same caching as ``content``; only the bytes
+        differ. Rendered once and kept beside the volume's files (see
+        ``thumbnails``), so a page of handsets with their covers costs the
+        server one file read per tile rather than a decode of each original.
+        """
+        from .thumbnails import THUMBNAIL_CONTENT_TYPE, THUMBNAIL_EDGE, thumbnail_bytes
+
+        attachment = self.get_object()
+        refusal = self._token_refusal(attachment, request.query_params.get("token", ""))
+        if refusal is not None:
+            return refusal
+        etag = quote_etag(f"{attachment.checksum_sha256 or attachment.pk}-t{THUMBNAIL_EDGE}")
+        response = get_conditional_response(self.request, etag=etag)
+        if response is None:
+            data = thumbnail_bytes(attachment)
+            if data is None:
+                raise Http404("Attachment has no thumbnail.")
+            response = HttpResponse(data, content_type=THUMBNAIL_CONTENT_TYPE)
+        response["ETag"] = etag
+        response["Cache-Control"] = "private, max-age=86400"
+        return response
+
+    def _token_refusal(self, attachment, token):
+        if not token:
+            return None
+        token_error = services.attachment_content_token_error(attachment, token)
+        if token_error is None:
+            return None
+        return Response(
+            {
+                "detail": self._TOKEN_ERROR_DETAIL[token_error],
+                "code": token_error,
+                "recoverable": token_error in services.RECOVERABLE_TOKEN_ERRORS,
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     #: Wording per refusal. Separate messages because the reader's next action
     #: differs: two of these are fixed by reloading the page, two are not.
     _TOKEN_ERROR_DETAIL = {
@@ -155,21 +205,12 @@ class AttachmentViewSet(viewsets.ModelViewSet):
 
     def _file_response(self, *, as_attachment, token=""):
         attachment = self.get_object()
-        if token:
-            token_error = services.attachment_content_token_error(attachment, token)
-            if token_error is not None:
-                # A ``code`` alongside the sentence, so the client can tell a
-                # stale URL (reload and it works) from a dead one (it never
-                # will) instead of retrying the same request forever.
-                return Response(
-                    {
-                        "detail": self._TOKEN_ERROR_DETAIL[token_error],
-                        "code": token_error,
-                        "recoverable": token_error
-                        in services.RECOVERABLE_TOKEN_ERRORS,
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        # A ``code`` alongside the sentence, so the client can tell a stale URL
+        # (reload and it works) from a dead one (it never will) instead of
+        # retrying the same request forever.
+        refusal = self._token_refusal(attachment, token)
+        if refusal is not None:
+            return refusal
 
         # Attachment bytes are content-addressed by checksum, so the ETag lets
         # every product-image render after the first be a 304 (or, within

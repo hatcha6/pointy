@@ -241,6 +241,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         // now, scan later. The articles not scanned wait, unsellable, on the
         // missing-identifier list.
         allowCaptureLater: TrackingFeaturesScope.of(context).captureLater,
+        assetTypeId: line.assetTypeId,
       );
       if (captured == null || !mounted) {
         return;

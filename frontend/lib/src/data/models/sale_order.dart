@@ -1191,6 +1191,7 @@ class SaleLineIdentifier {
     this.quantity = 1,
     this.isConsignment = false,
     this.consignorPaid = false,
+    this.warrantyExpiresOn,
   });
 
   /// ``unit`` for an article with its own number, ``batch`` for a cohort.
@@ -1206,6 +1207,11 @@ class SaleLineIdentifier {
   /// gone out and the goods have come back.
   final bool consignorPaid;
 
+  /// The day this article's cover ends, as the sale stamped it — the
+  /// product's days, or the article's own date when it carries one. The
+  /// receipt of a handset is its warranty document, so it prints this.
+  final DateTime? warrantyExpiresOn;
+
   bool get isUnit => kind == 'unit';
   bool get needsConsignmentDecision => isConsignment && consignorPaid;
 
@@ -1218,6 +1224,9 @@ class SaleLineIdentifier {
       quantity: double.tryParse(json['quantity']?.toString() ?? '') ?? 1,
       isConsignment: json['is_consignment'] == true,
       consignorPaid: json['consignor_paid'] == true,
+      warrantyExpiresOn: DateTime.tryParse(
+        json['warranty_expires_on']?.toString() ?? '',
+      ),
     );
   }
 }

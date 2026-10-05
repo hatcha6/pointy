@@ -27,6 +27,7 @@ const purchasingAgentPermissions = <String>{
   'purchasing.view_supplierpayment',
   'inventory.view_stockunit',
   'inventory.add_stockunit',
+  'inventory.manage_stockunit_photos',
   'inventory.view_stockbatch',
   'inventory.manage_batches',
   'inventory.view_stockitem',

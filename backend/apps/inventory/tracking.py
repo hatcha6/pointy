@@ -1036,6 +1036,7 @@ def _plan_unit_receipt(
 
     _refuse_duplicate_codes(unit_rows, variant=variant)
     _refuse_unbalanced_costs(unit_rows, count=count, rate=rate, quantity=quantity)
+    unit_rows = _with_clean_attributes(unit_rows, variant=variant)
 
     # One per arrival, so its unnamed articles cannot collide with another
     # arrival's however the caller built its key — see placeholder_unit_code.
@@ -1074,6 +1075,7 @@ def _plan_unit_receipt(
             incoming_rate=unit_rate,
             list_price=row.get("list_price"),
             attributes=row.get("attributes") or {},
+            warranty_override_expires_on=row.get("warranty_override_expires_on"),
             notes=row.get("notes", "") or "",
             batch=header_batch,
             supplier=supplier,
@@ -1092,6 +1094,42 @@ def _plan_unit_receipt(
                 balance=header_balance,
             )
         )
+
+
+def _with_clean_attributes(unit_rows, *, variant):
+    """The intake checklist, coerced against the article's kind (§6.2).
+
+    Numbers become numbers and a choice must be one of its list, so the units
+    list can filter «battery above 85%» on what a counter typed. Required
+    fields are *not* enforced here: a till on an older build sends no checklist
+    at all, and a delivery refused for a field its screen never showed is a
+    delivery that does not get received. The unit page's own form enforces
+    them when somebody completes the record.
+    """
+    asset_type_id = getattr(variant.product, "asset_type_id", None)
+    if asset_type_id is None or not any(row.get("attributes") for row in unit_rows):
+        return unit_rows
+    from .unit_attributes import definitions_for, validate_attributes
+
+    definitions = definitions_for(asset_type_id)
+    if not definitions:
+        # Nothing to check against: kept as written, as the unit's own edit
+        # keeps them for a kind of article nobody has described yet.
+        return unit_rows
+    cleaned = []
+    for row in unit_rows:
+        if row.get("attributes"):
+            row = {
+                **row,
+                "attributes": validate_attributes(
+                    row["attributes"],
+                    asset_type_id=asset_type_id,
+                    definitions=definitions,
+                    partial=True,
+                ),
+            }
+        cleaned.append(row)
+    return cleaned
 
 
 def _default_kind(variant) -> str:

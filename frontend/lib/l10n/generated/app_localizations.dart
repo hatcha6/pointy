@@ -42417,6 +42417,252 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'المستحق له الآن'**
   String get consignorSummaryOwed;
+
+  /// Unit page: opens the condition & accessories form.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الحالة'**
+  String get unitAttributesEditAction;
+
+  /// Unit page: no attributes recorded yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُسجَّل حالة هذا الجهاز بعد.'**
+  String get unitAttributesEmpty;
+
+  /// Attribute form: the asset type has no attribute definitions.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُعرَّف خصائص لهذا النوع من الأصناف بعد.'**
+  String get unitAttributesNoDefinitions;
+
+  /// Attribute form: heading over the yes/no checklist chips.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملحقات المرفقة'**
+  String get unitAttributesChecklistTitle;
+
+  /// Attribute form: a required field is empty.
+  ///
+  /// In ar, this message translates to:
+  /// **'«{label}» مطلوب.'**
+  String unitAttributeRequired(String label);
+
+  /// Attribute form: a numeric field does not parse.
+  ///
+  /// In ar, this message translates to:
+  /// **'«{label}» يجب أن يكون رقمًا.'**
+  String unitAttributeNotANumber(String label);
+
+  /// Attribute form: empty date field placeholder.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر تاريخًا'**
+  String get unitAttributeChooseDate;
+
+  /// Unit page: saving attributes failed without a field reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الحالة والملحقات.'**
+  String get unitAttributesSaveFailed;
+
+  /// Unit page: attribute definitions failed to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل خصائص هذا النوع.'**
+  String get unitAttributesLoadFailed;
+
+  /// Unit page facts: the warranty row label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الضمان'**
+  String get unitWarrantyRowLabel;
+
+  /// Unit page: opens the per-unit warranty date form.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الضمان'**
+  String get unitWarrantyEditAction;
+
+  /// Per-unit warranty form title.
+  ///
+  /// In ar, this message translates to:
+  /// **'ضمان هذا الجهاز'**
+  String get unitWarrantyEditTitle;
+
+  /// Per-unit warranty end date field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي ضمان هذا الجهاز في'**
+  String get unitWarrantyOverrideLabel;
+
+  /// Help under the per-unit warranty date field.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا ليُحسب الضمان من مدة ضمان المنتج يوم البيع.'**
+  String get unitWarrantyOverrideHelp;
+
+  /// Unit page: no per-unit date; the product's warranty days apply at sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب مدة ضمان المنتج'**
+  String get unitWarrantyFromProduct;
+
+  /// Unit page: a sold unit with no warranty.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون ضمان'**
+  String get unitWarrantyNone;
+
+  /// Unit page: a per-unit warranty end date is set.
+  ///
+  /// In ar, this message translates to:
+  /// **'حتى {date} (تاريخ خاص)'**
+  String unitWarrantyOwnDate(String date);
+
+  /// Unit page: the sold unit's warranty has ended.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهى في {date}'**
+  String unitWarrantyExpiredOn(String date);
+
+  /// Unit page: saving the warranty date failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الضمان.'**
+  String get unitWarrantySaveFailed;
+
+  /// Unit page: photos section title.
+  ///
+  /// In ar, this message translates to:
+  /// **'صور الجهاز'**
+  String get unitPhotosSection;
+
+  /// Unit page: no photos yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد صور بعد. صوّر الجهاز لتوثيق حالته.'**
+  String get unitPhotosEmpty;
+
+  /// Unit page: pick photos from disk/gallery.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة صور'**
+  String get unitPhotosAdd;
+
+  /// Unit page: take a photo with the camera.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصوير'**
+  String get unitPhotosCamera;
+
+  /// Badge on the unit's cover photo.
+  ///
+  /// In ar, this message translates to:
+  /// **'الغلاف'**
+  String get unitPhotoCoverBadge;
+
+  /// Photo menu: make this the cover.
+  ///
+  /// In ar, this message translates to:
+  /// **'اجعلها صورة الغلاف'**
+  String get unitPhotoMakeCover;
+
+  /// Photo menu: delete this photo.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الصورة'**
+  String get unitPhotoDelete;
+
+  /// Confirm dialog title before deleting a unit photo.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف هذه الصورة؟'**
+  String get unitPhotoDeleteConfirmTitle;
+
+  /// Confirm dialog body before deleting a unit photo.
+  ///
+  /// In ar, this message translates to:
+  /// **'تختفي من صفحة الجهاز، ويبقى حذفها مسجّلًا في سجله.'**
+  String get unitPhotoDeleteConfirmBody;
+
+  /// Upload progress for unit photos.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ رفع {done} من {total}'**
+  String unitPhotoUploading(int done, int total);
+
+  /// A unit photo failed to upload.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر رفع «{name}».'**
+  String unitPhotoUploadFailed(String name);
+
+  /// Setting the cover or deleting a photo failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت العملية على الصورة.'**
+  String get unitPhotoActionFailed;
+
+  /// Tooltip of a unit photo's menu button.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات الصورة'**
+  String get unitPhotoOptionsTooltip;
+
+  /// Tooltip of a unit photo tile.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض الصورة'**
+  String get unitPhotoOpenTooltip;
+
+  /// Unit photos failed to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الصور.'**
+  String get unitPhotosLoadFailed;
+
+  /// A picked photo could not be read.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت قراءة الصورة.'**
+  String get unitPhotoPickFailed;
+
+  /// Timeline event: the unit's warranty date changed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الضمان'**
+  String get unitTimelineEventWarrantyChanged;
+
+  /// Timeline event: a photo was added.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة صورة'**
+  String get unitTimelineEventPhotoAdded;
+
+  /// Timeline event: a photo was removed.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف صورة'**
+  String get unitTimelineEventPhotoRemoved;
+
+  /// Timeline event detail: a value changed.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {from} إلى {to}'**
+  String unitTimelineFromTo(String from, String to);
+
+  /// Capture sheet: per-row button opening the condition form.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة والملحقات'**
+  String get unitCaptureDetailsTooltip;
+
+  /// Capture sheet: condition form title for one scanned identifier.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة {code}'**
+  String unitCaptureDetailsTitle(String code);
 }
 
 class _AppLocalizationsDelegate

@@ -19,6 +19,10 @@ class TrackedStockViewModel extends ChangeNotifier {
 
   final TrackedStockRepository _repository;
 
+  /// For the pages opened from these lists, which read and write one article
+  /// or lot through the same repository.
+  TrackedStockRepository get repository => _repository;
+
   List<StockUnit> _units = const [];
   List<StockBatch> _batches = const [];
   StockUnitSummary _summary = const StockUnitSummary();
@@ -332,6 +336,9 @@ class TrackedStockViewModel extends ChangeNotifier {
     final result = await _repository.resendConsignorSms(unitId);
     return result is Ok<bool> && result.value;
   }
+
+  /// A row changed on the page opened from it.
+  void unitChanged(StockUnit unit) => _replaceUnit(unit);
 
   void _replaceUnit(StockUnit unit) {
     _units = [

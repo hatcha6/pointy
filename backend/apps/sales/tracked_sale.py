@@ -20,7 +20,6 @@ message at all.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -29,6 +28,7 @@ from django.utils import timezone
 from apps.core.models import ShopSettings
 from apps.inventory import consignment as consignment_service
 from apps.inventory.models import StockUnit
+from apps.inventory.unit_warranty import sale_warranty_expiry
 
 ZERO = Decimal("0.00")
 
@@ -240,7 +240,6 @@ def finish_sold_units(order, movements, *, settings=None, request=None):
     for movement in tracked:
         variant = getattr(movement, "variant", None)
         product = getattr(variant, "product", None)
-        warranty_days = int(getattr(product, "warranty_days", 0) or 0)
         for allocation in movement.tracked_plan.allocations:
             unit = allocation.unit
             if unit is None:
@@ -252,8 +251,12 @@ def finish_sold_units(order, movements, *, settings=None, request=None):
             unit.sold_order_line = line
             if line is not None:
                 unit.sold_price = net_unit_price(line)
-            if warranty_days:
-                unit.warranty_expires_on = sold_on + timedelta(days=warranty_days)
+            # The article's own date when it carries one, the product's days
+            # from today when it does not (§17.3) — decided in one place, so
+            # the receipt, the SMS and the buyer's asset all read this stamp.
+            unit.warranty_expires_on = sale_warranty_expiry(
+                unit, product=product, sold_on=sold_on
+            )
             updates.append((unit, variant))
             if unit.is_consignment:
                 consigned.append(unit)

@@ -7,6 +7,7 @@ import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/consignment.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/stock_unit.dart';
+import 'package:pointy_frontend/src/data/models/unit_photo.dart';
 import 'package:pointy_frontend/src/data/repositories/tracked_stock_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/inventory/view_models/tracked_stock_view_model.dart';
@@ -166,4 +167,8 @@ class _UnitRepository extends TrackedStockRepository {
   Future<Result<List<ConsignmentIncident>>> loadUnitIncidents(
     int unitId,
   ) async => Ok(const []);
+
+  @override
+  Future<Result<List<UnitPhoto>>> loadUnitPhotos(int unitId) async =>
+      Ok(const []);
 }

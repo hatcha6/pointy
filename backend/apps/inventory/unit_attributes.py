@@ -293,9 +293,149 @@ def validate_attributes(attributes, *, asset_type_id, definitions=None, partial=
     return cleaned
 
 
+def clean_unit_attributes(attributes, *, asset_type_id, partial=True):
+    """What a unit of a product with ``asset_type_id`` may store.
+
+    A product with no asset type has no definitions to answer to, so its
+    attributes are kept as written — the same rule the unit's own serializer
+    has always applied. With one, every value is coerced against the type's
+    definitions and a key nobody defines is dropped (see
+    :func:`validate_attributes`).
+    """
+    if asset_type_id is None:
+        return dict(attributes or {})
+    return validate_attributes(
+        attributes, asset_type_id=asset_type_id, partial=partial
+    )
+
+
+# ---------------------------------------------------------------------------
+# Display
+# ---------------------------------------------------------------------------
+
+#: Serializer-context key holding every definition, grouped by asset type.
+_CONTEXT_KEY = "_unit_attribute_definitions"
+
+
+def definitions_by_type(context=None) -> dict:
+    """``{asset_type_id: [definition, ...]}`` for the whole shop, read once.
+
+    The table is a few dozen rows for the busiest shop, so one unfiltered read
+    per response beats a query per asset type on a page of units — and a list
+    of fifty handsets showing their battery health costs exactly one extra
+    query, not fifty.
+    """
+    if context is not None and _CONTEXT_KEY in context:
+        return context[_CONTEXT_KEY]
+    grouped: dict = {}
+    for definition in UnitAttributeDefinition.objects.order_by(
+        "asset_type_id", "display_order", "id"
+    ):
+        grouped.setdefault(definition.asset_type_id, []).append(definition)
+    if context is not None:
+        context[_CONTEXT_KEY] = grouped
+    return grouped
+
+
+def _format_number(value) -> str:
+    number = float(value)
+    return str(int(number)) if number.is_integer() else f"{number:g}"
+
+
+def display_value(definition, value) -> str:
+    """One stored value as a person reads it: a choice's label rather than its
+    code, نعم/لا for a yes/no, a number with its suffix."""
+    kind = definition.data_type
+    if kind == DataType.CHOICE:
+        for choice in definition.choices or []:
+            if isinstance(choice, dict) and str(choice.get("value")) == str(value):
+                return str(choice.get("label") or value)
+        return str(value)
+    if kind == DataType.BOOL:
+        return "نعم" if value in (True, "true", "1", 1) else "لا"
+    if kind in (DataType.NUMBER, DataType.PERCENT, DataType.MONEY):
+        try:
+            text = _format_number(value)
+        except (TypeError, ValueError):
+            text = str(value)
+        suffix = definition.suffix or ("%" if kind == DataType.PERCENT else "")
+        if not suffix:
+            return text
+        # A percent sign and an inch mark hug the number; a unit word does not.
+        return f"{text}{suffix}" if suffix in ("%", '"') else f"{text} {suffix}"
+    return str(value)
+
+
+def attribute_display(attributes, definitions) -> list[dict]:
+    """A unit's facts in the type's own order, labelled and formatted.
+
+    Only what the definitions still describe: a key the shop has since removed
+    is not shown as a raw code nobody can read.
+    """
+    attributes = attributes or {}
+    rows = []
+    for definition in definitions or []:
+        if definition.key not in attributes:
+            continue
+        value = attributes[definition.key]
+        if value in (None, ""):
+            continue
+        rows.append(
+            {
+                "key": definition.key,
+                "label": definition.label,
+                "value": value,
+                "display": display_value(definition, value),
+                "data_type": definition.data_type,
+                "show_in_picker": definition.show_in_picker,
+            }
+        )
+    return rows
+
+
+def describe_change(before, after, definitions) -> tuple[str, str, str]:
+    """``(from, to, note)`` for the §6.9 event of an attribute edit.
+
+    The note names what changed in Arabic — «صحة البطارية، درجة الحالة» — so
+    the timeline answers *what* without the reader diffing two JSON blobs.
+    """
+    before = before or {}
+    after = after or {}
+    labels = {definition.key: definition for definition in definitions or []}
+    changed = [
+        key
+        for key in sorted(set(before) | set(after))
+        if before.get(key) != after.get(key)
+    ]
+
+    def render(values):
+        parts = []
+        for key in changed:
+            if key not in values:
+                continue
+            definition = labels.get(key)
+            text = (
+                display_value(definition, values[key])
+                if definition is not None
+                else str(values[key])
+            )
+            parts.append(f"{definition.label if definition else key}: {text}")
+        return "، ".join(parts)
+
+    note = "، ".join(
+        labels[key].label if key in labels else key for key in changed
+    )
+    return render(before), render(after), note
+
+
 __all__ = [
     "SEEDED_TEMPLATES",
+    "attribute_display",
+    "clean_unit_attributes",
+    "definitions_by_type",
     "definitions_for",
+    "describe_change",
+    "display_value",
     "seed_definitions",
     "validate_attributes",
 ]

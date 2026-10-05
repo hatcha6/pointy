@@ -82,6 +82,8 @@ import '../models/stock_item.dart';
 import '../models/consignment.dart';
 import '../models/consignor_statement.dart';
 import '../models/stock_unit.dart';
+import '../models/unit_attribute.dart';
+import '../models/unit_photo.dart';
 import '../models/tracked_scan.dart';
 import '../models/stock_movement.dart';
 import '../models/stock_movement_page.dart';
@@ -157,6 +159,7 @@ import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
 import 'consignment_api_client.dart';
 import 'tracked_stock_api_client.dart';
+import 'unit_detail_api_client.dart';
 import 'user_api_client.dart';
 import '../../core/app_version.dart';
 import '../../core/server_state.dart';
@@ -212,6 +215,7 @@ class PosApiService {
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
     _trackedStock = TrackedStockApiClient(_session);
+    _unitDetail = UnitDetailApiClient(_session);
     _consignment = ConsignmentApiClient(_session);
     _ai = AiApiClient(_session);
     _companion = CompanionApiClient(_session);
@@ -302,6 +306,7 @@ class PosApiService {
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
   late final TrackedStockApiClient _trackedStock;
+  late final UnitDetailApiClient _unitDetail;
   late final ConsignmentApiClient _consignment;
   late final AiApiClient _ai;
   late final CompanionApiClient _companion;
@@ -1705,6 +1710,41 @@ class PosApiService {
 
   Future<List<StockUnitTimelineEntry>> fetchStockUnitTimeline(int unitId) =>
       _trackedStock.fetchUnitTimeline(unitId);
+
+  Future<List<UnitAttributeDefinition>> fetchUnitAttributeDefinitions(
+    int assetTypeId,
+  ) => _unitDetail.fetchAttributeDefinitions(assetTypeId);
+
+  Future<StockUnit> saveStockUnitAttributes(
+    int unitId,
+    Map<String, Object?> attributes,
+  ) => _unitDetail.saveAttributes(unitId, attributes);
+
+  Future<StockUnit> setStockUnitWarrantyOverride(
+    int unitId,
+    DateTime? expiresOn,
+  ) => _unitDetail.setWarrantyOverride(unitId, expiresOn);
+
+  Future<List<UnitPhoto>> fetchStockUnitPhotos(int unitId) =>
+      _unitDetail.fetchPhotos(unitId);
+
+  Future<UnitPhoto> uploadStockUnitPhoto(
+    int unitId,
+    UnitPhotoUpload upload, {
+    bool isCover = false,
+    void Function(int sent, int total)? onProgress,
+  }) => _unitDetail.uploadPhoto(
+    unitId,
+    upload,
+    isCover: isCover,
+    onProgress: onProgress,
+  );
+
+  Future<void> deleteStockUnitPhoto(int unitId, int photoId) =>
+      _unitDetail.deletePhoto(unitId, photoId);
+
+  Future<UnitPhoto> setStockUnitCoverPhoto(int unitId, int photoId) =>
+      _unitDetail.setCoverPhoto(unitId, photoId);
 
   Future<List<StockCountLine>> fetchStockCountReconciliation(int countId) {
     return _stockCounts.fetchReconciliation(countId);

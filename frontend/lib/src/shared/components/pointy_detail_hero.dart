@@ -29,10 +29,15 @@ class PointyDetailHero extends StatelessWidget {
     this.description,
     this.pills = const [],
     this.gradientColors,
+    this.leading,
   });
 
   /// Icon shown in the circular badge next to the [title].
   final IconData icon;
+
+  /// Shown in place of the icon badge when set — an entity's own picture,
+  /// such as an article's cover photo. The caller sizes and clips it.
+  final Widget? leading;
 
   /// Primary heading — usually the entity name.
   final String title;
@@ -78,16 +83,17 @@ class PointyDetailHero extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: onPrimary.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: onPrimary),
-              ),
+              leading ??
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: onPrimary.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: onPrimary),
+                  ),
               SizedBox(width: spacing.sm),
               Expanded(
                 child: Text(

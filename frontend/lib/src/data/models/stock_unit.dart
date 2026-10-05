@@ -1,4 +1,6 @@
 import 'tracking_mode.dart';
+import 'unit_attribute.dart';
+import 'unit_photo.dart';
 
 /// One physical, individually identified article of stock.
 ///
@@ -36,6 +38,10 @@ class StockUnit {
     this.consignorAdvance,
     this.netDue,
     this.warrantyExpiresOn,
+    this.warrantyOverrideExpiresOn,
+    this.assetTypeId,
+    this.attributeDisplay = const [],
+    this.coverPhoto,
     this.listPrice,
     this.soldPrice,
     this.incomingRate,
@@ -97,6 +103,28 @@ class StockUnit {
   /// derived so a corrected setting next month cannot silently re-cover a
   /// handset that went out of cover last week.
   final DateTime? warrantyExpiresOn;
+
+  /// This article's own warranty end date, when it carries one that is not
+  /// the product's days from the sale — a car under its maker's warranty, or
+  /// a handset sold with a shorter cover. Wins over the product's days at the
+  /// sale, and is what [warrantyExpiresOn] gets stamped from.
+  final DateTime? warrantyOverrideExpiresOn;
+
+  /// What kind of article this is, for fetching its attribute definitions.
+  final int? assetTypeId;
+
+  /// [attributes] as a person reads them, labelled and formatted by the
+  /// server in the definitions' order.
+  final List<UnitAttributeValue> attributeDisplay;
+
+  /// The photo shown first — on the till's picker row and the unit's page.
+  final UnitPhoto? coverPhoto;
+
+  /// The facts the till's picker shows beside the identifier.
+  List<UnitAttributeValue> get pickerAttributes => [
+    for (final value in attributeDisplay)
+      if (value.showInPicker) value,
+  ];
 
   /// This article's own asking price. Null means the variant's price stands.
   final double? listPrice;
@@ -178,6 +206,22 @@ class StockUnit {
       consignorAdvance: _doubleOrNull(json['consignor_advance']),
       netDue: _doubleOrNull(json['net_due']),
       warrantyExpiresOn: _dateOrNull(json['warranty_expires_on']),
+      warrantyOverrideExpiresOn: _dateOrNull(
+        json['warranty_override_expires_on'],
+      ),
+      assetTypeId: _intOrNull(json['asset_type']),
+      attributeDisplay: switch (json['attribute_display']) {
+        final List<Object?> rows =>
+          rows
+              .whereType<Map<String, Object?>>()
+              .map(UnitAttributeValue.fromJson)
+              .toList(growable: false),
+        _ => const [],
+      },
+      coverPhoto: switch (json['cover_photo']) {
+        final Map<String, Object?> photo => UnitPhoto.fromJson(photo),
+        _ => null,
+      },
       listPrice: _doubleOrNull(json['list_price']),
       soldPrice: _doubleOrNull(json['sold_price']),
       incomingRate: _doubleOrNull(json['incoming_rate']),

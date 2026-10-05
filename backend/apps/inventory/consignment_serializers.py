@@ -143,9 +143,13 @@ class ConsignmentAgreementSerializer(serializers.ModelSerializer):
     def get_units(self, agreement):
         if self.context.get("with_units") is False:
             return []
+        from .unit_photos import with_cover_photos
+
         return StockUnitSerializer(
-            agreement.units.select_related(
-                "variant", "variant__product", "warehouse", "batch"
+            with_cover_photos(
+                agreement.units.select_related(
+                    "variant", "variant__product", "warehouse", "batch"
+                )
             ),
             many=True,
             context=self.context,

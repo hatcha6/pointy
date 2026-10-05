@@ -642,11 +642,15 @@ class PosApiSession {
     }
   }
 
+  /// [onProgress] receives `(sent, total)` bytes of the request body as it
+  /// leaves, so a photo upload can draw a real bar rather than a spinner.
+  /// On the web the browser buffers the body first, so it jumps to the end.
   Future<http.Response> postMultipart(
     String path, {
     Map<String, String> fields = const {},
     List<ApiMultipartFile> files = const [],
     Duration? timeout,
+    void Function(int sent, int total)? onProgress,
   }) async {
     final requestSizeBytes =
         fields.entries.fold<int>(
@@ -677,9 +681,40 @@ class PosApiSession {
             ),
           );
         }
-        return http.Response.fromStream(await client.send(request));
+        if (onProgress == null) {
+          return http.Response.fromStream(await client.send(request));
+        }
+        return http.Response.fromStream(
+          await client.send(_counted(request, onProgress)),
+        );
       },
     );
+  }
+
+  /// [request]'s body re-streamed through a byte counter.
+  static http.BaseRequest _counted(
+    http.MultipartRequest request,
+    void Function(int sent, int total) onProgress,
+  ) {
+    final total = request.contentLength;
+    // finalize() first: it is what puts the boundary on the content type.
+    final body = request.finalize();
+    final counted = http.StreamedRequest(request.method, request.url)
+      ..headers.addAll(request.headers)
+      ..contentLength = total;
+    var sent = 0;
+    onProgress(0, total);
+    body.listen(
+      (chunk) {
+        sent += chunk.length;
+        counted.sink.add(chunk);
+        onProgress(sent, total);
+      },
+      onError: counted.sink.addError,
+      onDone: counted.sink.close,
+      cancelOnError: true,
+    );
+    return counted;
   }
 
   Future<http.Response> patch(String path, {required Object body}) async {

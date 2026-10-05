@@ -134,6 +134,8 @@ PERMISSION_CATALOG = [
             _perm("inventory.change_stockunit", "تعديل بيانات الجهاز", "تعديل الملاحظات والخصائص وحالة الوحدة."),
             _perm("inventory.reprice_stockunit", "تعديل سعر الجهاز", "تحديد سعر بيع خاص بوحدة معيّنة."),
             _perm("inventory.write_off_stockunit", "شطب جهاز (فقد / تلف)", "إخراج وحدة من المخزون لفقدها أو تلفها."),
+            _perm("inventory.manage_stockunit_photos", "صور الجهاز", "إضافة صور حالة الوحدة وحذفها واختيار صورة الغلاف."),
+            _perm("inventory.change_stockunit_warranty", "تعديل ضمان الجهاز", "تحديد تاريخ انتهاء ضمان خاص بوحدة معيّنة بدل مدة ضمان المنتج."),
             # The first field-level cost mask in the codebase, and a real need:
             # a used-goods shop does not show its counter staff what it paid the
             # walk-in seller.

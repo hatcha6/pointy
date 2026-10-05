@@ -208,6 +208,16 @@ class AssetDetailSerializer(AssetSerializer):
             for job in self._jobs(asset)
             if job.warranty_expires_on is not None
         ]
+        # ...and the cover it was *sold* with, when the shop sold it: the date
+        # the sale stamped on the article, which is the unit's own override
+        # when it carries one (a car under the maker's warranty) and the
+        # product's days otherwise. A handset bought here last month is under
+        # warranty whether or not it has ever been repaired.
+        expiries.extend(
+            unit.warranty_expires_on
+            for unit in asset.stock_units.all()
+            if unit.warranty_expires_on is not None
+        )
         return max(expiries).isoformat() if expiries else None
 
     def _jobs(self, asset):

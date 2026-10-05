@@ -20147,5 +20147,215 @@
   "consignorSummaryOwed": "المستحق له الآن",
   "@consignorSummaryOwed": {
     "description": "Customer page consignment row: what the shop owes them now."
+  },
+  "unitAttributesEditAction": "تعديل الحالة",
+  "@unitAttributesEditAction": {
+    "description": "Unit page: opens the condition & accessories form."
+  },
+  "unitAttributesEmpty": "لم تُسجَّل حالة هذا الجهاز بعد.",
+  "@unitAttributesEmpty": {
+    "description": "Unit page: no attributes recorded yet."
+  },
+  "unitAttributesNoDefinitions": "لم تُعرَّف خصائص لهذا النوع من الأصناف بعد.",
+  "@unitAttributesNoDefinitions": {
+    "description": "Attribute form: the asset type has no attribute definitions."
+  },
+  "unitAttributesChecklistTitle": "الملحقات المرفقة",
+  "@unitAttributesChecklistTitle": {
+    "description": "Attribute form: heading over the yes/no checklist chips."
+  },
+  "unitAttributeRequired": "«{label}» مطلوب.",
+  "@unitAttributeRequired": {
+    "description": "Attribute form: a required field is empty.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "unitAttributeNotANumber": "«{label}» يجب أن يكون رقمًا.",
+  "@unitAttributeNotANumber": {
+    "description": "Attribute form: a numeric field does not parse.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "unitAttributeChooseDate": "اختر تاريخًا",
+  "@unitAttributeChooseDate": {
+    "description": "Attribute form: empty date field placeholder."
+  },
+  "unitAttributesSaveFailed": "تعذّر حفظ الحالة والملحقات.",
+  "@unitAttributesSaveFailed": {
+    "description": "Unit page: saving attributes failed without a field reason."
+  },
+  "unitAttributesLoadFailed": "تعذّر تحميل خصائص هذا النوع.",
+  "@unitAttributesLoadFailed": {
+    "description": "Unit page: attribute definitions failed to load."
+  },
+  "unitWarrantyRowLabel": "الضمان",
+  "@unitWarrantyRowLabel": {
+    "description": "Unit page facts: the warranty row label."
+  },
+  "unitWarrantyEditAction": "تعديل الضمان",
+  "@unitWarrantyEditAction": {
+    "description": "Unit page: opens the per-unit warranty date form."
+  },
+  "unitWarrantyEditTitle": "ضمان هذا الجهاز",
+  "@unitWarrantyEditTitle": {
+    "description": "Per-unit warranty form title."
+  },
+  "unitWarrantyOverrideLabel": "ينتهي ضمان هذا الجهاز في",
+  "@unitWarrantyOverrideLabel": {
+    "description": "Per-unit warranty end date field label."
+  },
+  "unitWarrantyOverrideHelp": "اتركه فارغًا ليُحسب الضمان من مدة ضمان المنتج يوم البيع.",
+  "@unitWarrantyOverrideHelp": {
+    "description": "Help under the per-unit warranty date field."
+  },
+  "unitWarrantyFromProduct": "حسب مدة ضمان المنتج",
+  "@unitWarrantyFromProduct": {
+    "description": "Unit page: no per-unit date; the product's warranty days apply at sale."
+  },
+  "unitWarrantyNone": "بدون ضمان",
+  "@unitWarrantyNone": {
+    "description": "Unit page: a sold unit with no warranty."
+  },
+  "unitWarrantyOwnDate": "حتى {date} (تاريخ خاص)",
+  "@unitWarrantyOwnDate": {
+    "description": "Unit page: a per-unit warranty end date is set.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "unitWarrantyExpiredOn": "انتهى في {date}",
+  "@unitWarrantyExpiredOn": {
+    "description": "Unit page: the sold unit's warranty has ended.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "unitWarrantySaveFailed": "تعذّر حفظ الضمان.",
+  "@unitWarrantySaveFailed": {
+    "description": "Unit page: saving the warranty date failed."
+  },
+  "unitPhotosSection": "صور الجهاز",
+  "@unitPhotosSection": {
+    "description": "Unit page: photos section title."
+  },
+  "unitPhotosEmpty": "لا توجد صور بعد. صوّر الجهاز لتوثيق حالته.",
+  "@unitPhotosEmpty": {
+    "description": "Unit page: no photos yet."
+  },
+  "unitPhotosAdd": "إضافة صور",
+  "@unitPhotosAdd": {
+    "description": "Unit page: pick photos from disk/gallery."
+  },
+  "unitPhotosCamera": "تصوير",
+  "@unitPhotosCamera": {
+    "description": "Unit page: take a photo with the camera."
+  },
+  "unitPhotoCoverBadge": "الغلاف",
+  "@unitPhotoCoverBadge": {
+    "description": "Badge on the unit's cover photo."
+  },
+  "unitPhotoMakeCover": "اجعلها صورة الغلاف",
+  "@unitPhotoMakeCover": {
+    "description": "Photo menu: make this the cover."
+  },
+  "unitPhotoDelete": "حذف الصورة",
+  "@unitPhotoDelete": {
+    "description": "Photo menu: delete this photo."
+  },
+  "unitPhotoDeleteConfirmTitle": "حذف هذه الصورة؟",
+  "@unitPhotoDeleteConfirmTitle": {
+    "description": "Confirm dialog title before deleting a unit photo."
+  },
+  "unitPhotoDeleteConfirmBody": "تختفي من صفحة الجهاز، ويبقى حذفها مسجّلًا في سجله.",
+  "@unitPhotoDeleteConfirmBody": {
+    "description": "Confirm dialog body before deleting a unit photo."
+  },
+  "unitPhotoUploading": "جارٍ رفع {done} من {total}",
+  "@unitPhotoUploading": {
+    "description": "Upload progress for unit photos.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "unitPhotoUploadFailed": "تعذّر رفع «{name}».",
+  "@unitPhotoUploadFailed": {
+    "description": "A unit photo failed to upload.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unitPhotoActionFailed": "تعذّرت العملية على الصورة.",
+  "@unitPhotoActionFailed": {
+    "description": "Setting the cover or deleting a photo failed."
+  },
+  "unitPhotoOptionsTooltip": "خيارات الصورة",
+  "@unitPhotoOptionsTooltip": {
+    "description": "Tooltip of a unit photo's menu button."
+  },
+  "unitPhotoOpenTooltip": "عرض الصورة",
+  "@unitPhotoOpenTooltip": {
+    "description": "Tooltip of a unit photo tile."
+  },
+  "unitPhotosLoadFailed": "تعذّر تحميل الصور.",
+  "@unitPhotosLoadFailed": {
+    "description": "Unit photos failed to load."
+  },
+  "unitPhotoPickFailed": "تعذّرت قراءة الصورة.",
+  "@unitPhotoPickFailed": {
+    "description": "A picked photo could not be read."
+  },
+  "unitTimelineEventWarrantyChanged": "تعديل الضمان",
+  "@unitTimelineEventWarrantyChanged": {
+    "description": "Timeline event: the unit's warranty date changed."
+  },
+  "unitTimelineEventPhotoAdded": "إضافة صورة",
+  "@unitTimelineEventPhotoAdded": {
+    "description": "Timeline event: a photo was added."
+  },
+  "unitTimelineEventPhotoRemoved": "حذف صورة",
+  "@unitTimelineEventPhotoRemoved": {
+    "description": "Timeline event: a photo was removed."
+  },
+  "unitTimelineFromTo": "من {from} إلى {to}",
+  "@unitTimelineFromTo": {
+    "description": "Timeline event detail: a value changed.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureDetailsTooltip": "الحالة والملحقات",
+  "@unitCaptureDetailsTooltip": {
+    "description": "Capture sheet: per-row button opening the condition form."
+  },
+  "unitCaptureDetailsTitle": "حالة {code}",
+  "@unitCaptureDetailsTitle": {
+    "description": "Capture sheet: condition form title for one scanned identifier.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
   }
 }

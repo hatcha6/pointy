@@ -241,6 +241,9 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
       // What one article cost, which is what each captured one is stamped with.
       lineUnitCost: (line.unitCost ?? 0) / line.unit.factorToBase,
       initial: line.units,
+      // The walk-in's handset gets its condition written down as it is
+      // bought: battery, grade, what came in the box (§6.2).
+      assetTypeId: line.product.assetTypeId,
     );
     if (captured == null || !mounted) {
       return;

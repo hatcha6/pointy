@@ -152,6 +152,9 @@ CASHIER_PERMISSION_CODES = (
     # easier to grant later than to claw back.
     "inventory.view_stockunit",
     "inventory.view_stockbatch",
+    # The counter that buys a handset is the counter that photographs it: the
+    # condition record is taken at intake or not at all.
+    "inventory.manage_stockunit_photos",
     # The counter is where a consignor turns up to collect, so the cashier can
     # see what is owed and hand it over. It is audited, it prints a voucher both
     # parties sign, and a shop that would rather it were a manager's job revokes
@@ -384,6 +387,13 @@ SUPERVISOR_PERMISSION_CODES = (
     "inventory.view_stockunit",
     "inventory.add_stockunit",
     "inventory.change_stockunit",
+    # The edit the detail screen's reprice button makes has its own grant,
+    # and a supervisor marking a handset down is the ordinary case.
+    "inventory.reprice_stockunit",
+    "inventory.manage_stockunit_photos",
+    # A warranty is a promise made to a customer; changing one is a floor
+    # manager's decision rather than the counter's.
+    "inventory.change_stockunit_warranty",
     "inventory.view_stockbatch",
     "inventory.manage_batches",
     "inventory.adjust_batch_balance",
@@ -454,6 +464,7 @@ INVENTORY_CLERK_PERMISSION_CODES = (
     "inventory.view_stockunit",
     "inventory.add_stockunit",
     "inventory.change_stockunit",
+    "inventory.manage_stockunit_photos",
     "inventory.view_stockbatch",
     "inventory.manage_batches",
     "inventory.adjust_batch_balance",
@@ -495,6 +506,7 @@ PURCHASING_AGENT_PERMISSION_CODES = (
     # so receiving a serialized or lot-tracked delivery is part of the job.
     "inventory.view_stockunit",
     "inventory.add_stockunit",
+    "inventory.manage_stockunit_photos",
     "inventory.view_stockbatch",
     "inventory.manage_batches",
     "inventory.view_stockitem",

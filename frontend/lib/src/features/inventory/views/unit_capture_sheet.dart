@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/receipt_capture.dart';
+import '../../../data/models/unit_attribute.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/tracking/unit_attribute_catalog.dart';
+import '../../../shared/tracking/unit_attribute_summary.dart';
+import '../../../shared/tracking/unit_details_sheet.dart';
 
 /// The scan-and-fill loop: N identifiers for N articles, counted down.
 ///
@@ -31,6 +36,11 @@ Future<List<ReceiptUnitCapture>?> showUnitCaptureSheet(
   /// replacement takes the shelf's own rate — so typing a cost per handset
   /// would be typing a number nothing reads.
   bool allowSplitCosts = true,
+
+  /// The goods' kind. When set, each scanned row offers that kind's condition
+  /// checklist and its own warranty date (§6.2) — optional, so the scan loop
+  /// itself is never slowed by it.
+  int? assetTypeId,
 }) {
   return showModalBottomSheet<List<ReceiptUnitCapture>>(
     context: context,
@@ -45,6 +55,7 @@ Future<List<ReceiptUnitCapture>?> showUnitCaptureSheet(
         initial: initial,
         allowCaptureLater: allowCaptureLater,
         allowSplitCosts: allowSplitCosts,
+        assetTypeId: assetTypeId,
       );
     },
   );
@@ -58,6 +69,7 @@ class _UnitCaptureSheet extends StatefulWidget {
     required this.initial,
     required this.allowCaptureLater,
     required this.allowSplitCosts,
+    this.assetTypeId,
   });
 
   final String productLabel;
@@ -66,6 +78,7 @@ class _UnitCaptureSheet extends StatefulWidget {
   final List<ReceiptUnitCapture> initial;
   final bool allowCaptureLater;
   final bool allowSplitCosts;
+  final int? assetTypeId;
 
   @override
   State<_UnitCaptureSheet> createState() => _UnitCaptureSheetState();
@@ -77,6 +90,48 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
   late List<ReceiptUnitCapture> _captured;
   bool _splitCosts = false;
   String _error = '';
+
+  /// The kind's checklist, once known. Null while there is nothing to offer.
+  List<UnitAttributeDefinition>? _definitions;
+  bool _askedForDefinitions = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_askedForDefinitions || widget.assetTypeId == null) return;
+    _askedForDefinitions = true;
+    final catalog = UnitAttributeCatalogScope.maybeOf(context);
+    if (catalog == null) return;
+    catalog.definitionsFor(widget.assetTypeId).then((definitions) {
+      if (mounted) setState(() => _definitions = definitions);
+    });
+  }
+
+  bool get _offersDetails => _definitions != null;
+
+  Future<void> _editDetails(int index) async {
+    final l10n = AppLocalizations.of(context)!;
+    final row = _captured[index];
+    final draft = await showUnitDetailsSheet(
+      context,
+      title: l10n.unitCaptureDetailsTitle(row.code),
+      definitions: _definitions ?? const [],
+      attributes: row.attributes,
+      editAttributes: (_definitions ?? const []).isNotEmpty,
+      editWarranty: true,
+      warrantyOverride: row.warrantyOverrideExpiresOn,
+    );
+    if (draft == null || !mounted) return;
+    setState(() {
+      _captured = [..._captured];
+      _captured[index] = _captured[index].copyWith(
+        attributes: draft.attributes,
+        warrantyOverrideExpiresOn: draft.warrantyOverride,
+      );
+    });
+    // Straight back to scanning.
+    _inputFocus.requestFocus();
+  }
 
   @override
   void initState() {
@@ -294,6 +349,16 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                           showsCost: _splitCosts,
                           onRemove: () => _removeAt(index),
                           onCostChanged: (cost) => _setCost(index, cost),
+                          details: _offersDetails
+                              ? displayUnitAttributes(
+                                  _definitions!,
+                                  _captured[index].attributes,
+                                  l10n,
+                                )
+                              : const [],
+                          onEditDetails: _offersDetails
+                              ? () => _editDetails(index)
+                              : null,
                         );
                       },
                     ),
@@ -337,6 +402,8 @@ class _CapturedUnitRow extends StatelessWidget {
     required this.showsCost,
     required this.onRemove,
     required this.onCostChanged,
+    this.details = const [],
+    this.onEditDetails,
   });
 
   final int index;
@@ -345,9 +412,22 @@ class _CapturedUnitRow extends StatelessWidget {
   final VoidCallback onRemove;
   final ValueChanged<double?> onCostChanged;
 
+  /// What was recorded about this article so far, formatted for one line.
+  final List<UnitAttributeValue> details;
+
+  /// Null when the goods' kind records nothing.
+  final VoidCallback? onEditDetails;
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final warranty = unit.warrantyOverrideExpiresOn;
+    final summary = [
+      UnitAttributeSummary.describe(details),
+      if (warranty != null) l10n.stockUnitWarrantyUntil(formatDate(warranty)),
+    ].where((part) => part.isNotEmpty).join(' · ');
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
@@ -358,9 +438,30 @@ class _CapturedUnitRow extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodyMedium,
       ),
+      subtitle: summary.isEmpty
+          ? null
+          : Text(
+              summary,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.mutedInk,
+              ),
+            ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (onEditDetails != null)
+            IconButton(
+              key: ValueKey('unit-capture-details-${unit.code}'),
+              tooltip: l10n.unitCaptureDetailsTooltip,
+              icon: Icon(
+                unit.hasDetails ? Icons.fact_check : Icons.fact_check_outlined,
+                size: 20,
+                color: unit.hasDetails ? colors.primaryStrong : null,
+              ),
+              onPressed: onEditDetails,
+            ),
           if (showsCost)
             SizedBox(
               width: 96,

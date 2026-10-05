@@ -9,6 +9,8 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/components/pointy_progress.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/product_image_thumbnail.dart';
+import '../../../shared/tracking/unit_attribute_summary.dart';
 
 /// Which handset is the cashier selling?
 ///
@@ -234,9 +236,21 @@ class _UnitRow extends StatelessWidget {
     final days = unit.daysInStock;
     final price = unit.listPrice;
 
+    final cover = unit.coverPhoto;
+    final facts = unit.pickerAttributes;
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: onTap,
+      // The handset's own photo, when it has one: two phones of one model are
+      // told apart by their scratches faster than by their IMEIs.
+      leading: cover == null
+          ? null
+          : ProductImageThumbnail(
+              imageUrl: cover.previewUrl,
+              fallbackText: unit.code,
+              size: 44,
+            ),
       title: Text(
         unit.code,
         maxLines: 1,
@@ -247,6 +261,9 @@ class _UnitRow extends StatelessWidget {
         spacing: 10,
         runSpacing: 2,
         children: [
+          // Battery, grade, what is in the box — what the customer asks first.
+          if (facts.isNotEmpty)
+            UnitAttributeSummary(values: facts, maxLines: 2),
           if (days != null)
             Text(
               l10n.posUnitPickerDaysInStock(days),

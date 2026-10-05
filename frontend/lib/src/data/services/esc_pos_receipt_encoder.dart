@@ -1824,9 +1824,20 @@ List<String> _lineIdentifiers(Map<String, Object?> line) {
       if (expiry.isNotEmpty) 'ص: ${_expiryMonth(expiry)}',
     ];
     printed.add(parts.join(' — '));
+    // The cover the sale stamped, on its own line: the number above is Latin,
+    // and a line mixing the two scripts reorders on some printers.
+    final warranty = _string(raw['warranty_expires_on'], fallback: '');
+    if (isUnit && warranty.isNotEmpty) {
+      printed.add('ضمان حتى ${_printedDay(warranty)}');
+    }
   }
   return printed;
 }
+
+/// ``2027-08-31`` as ``2027/08/31``.
+String _printedDay(String isoDate) => isoDate.length >= 10
+    ? isoDate.substring(0, 10).replaceAll('-', '/')
+    : isoDate;
 
 /// ``2027-08-31`` as ``08/2027``: a pack expires in a month, and that is what a
 /// pharmacy customer reads off the foil.

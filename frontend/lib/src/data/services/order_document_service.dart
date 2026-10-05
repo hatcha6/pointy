@@ -485,7 +485,9 @@ class OrderDocumentService {
             ],
         ],
         // What each line issued — an IMEI, a lot — one printed line each.
-        rowNotes: [for (final line in order.lines) _saleLineNotes(line)],
+        rowNotes: [
+          for (final line in order.lines) _saleLineNotes(line, labels),
+        ],
         columnFlex: const [2.8, 0.9, 1.1, 1.1],
       ),
       // What a provider did for a line — a card's PIN, a subscriber's new term
@@ -1127,10 +1129,12 @@ class OrderDocumentLabels {
     required this.proofCollectedBy,
     required this.proofPaidBy,
     required this.proofBalanceAfter,
+    required this.warrantyUntil,
   });
 
   const OrderDocumentLabels.arabic()
-    : saleInvoiceTitle = 'فاتورة بيع',
+    : warrantyUntil = 'الضمان حتى',
+      saleInvoiceTitle = 'فاتورة بيع',
       purchaseOrderTitle = 'فاتورة مشتريات',
       testPrintTitle = 'اختبار طباعة الفواتير',
       testPrintReference = 'اختبار',
@@ -1205,6 +1209,9 @@ class OrderDocumentLabels {
       proofBalanceAfter = 'الرصيد بعد الدفع';
 
   final String saleInvoiceTitle;
+
+  /// Beneath a sold handset: the day its warranty ends.
+  final String warrantyUntil;
   final String purchaseOrderTitle;
   final String testPrintTitle;
   final String testPrintReference;
@@ -2506,10 +2513,20 @@ List<String> _nonBlankStrings(Iterable<Object?> values) {
 /// Notes rather than text folded into the name cell. Folded in, they were
 /// flattened onto the name's line by the table's whitespace clean-up — and
 /// clipped altogether on a compact roll.
-List<OrderDocumentNote> _saleLineNotes(SaleOrderLine line) {
+List<OrderDocumentNote> _saleLineNotes(
+  SaleOrderLine line,
+  OrderDocumentLabels labels,
+) {
   return [
     for (final identifier in _saleLineIdentifierLines(line))
       OrderDocumentNote(identifier),
+    // Each handset's cover, on a line of its own rather than beside its
+    // IMEI: one script per line keeps the PDF's bidi from reordering it.
+    for (final identifier in line.identifiers)
+      if (identifier.isUnit && identifier.warrantyExpiresOn != null)
+        OrderDocumentNote(
+          '${labels.warrantyUntil} ${formatDate(identifier.warrantyExpiresOn!)}',
+        ),
   ];
 }
 

@@ -25054,4 +25054,146 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get consignorSummaryOwed => 'المستحق له الآن';
+
+  @override
+  String get unitAttributesEditAction => 'تعديل الحالة';
+
+  @override
+  String get unitAttributesEmpty => 'لم تُسجَّل حالة هذا الجهاز بعد.';
+
+  @override
+  String get unitAttributesNoDefinitions =>
+      'لم تُعرَّف خصائص لهذا النوع من الأصناف بعد.';
+
+  @override
+  String get unitAttributesChecklistTitle => 'الملحقات المرفقة';
+
+  @override
+  String unitAttributeRequired(String label) {
+    return '«$label» مطلوب.';
+  }
+
+  @override
+  String unitAttributeNotANumber(String label) {
+    return '«$label» يجب أن يكون رقمًا.';
+  }
+
+  @override
+  String get unitAttributeChooseDate => 'اختر تاريخًا';
+
+  @override
+  String get unitAttributesSaveFailed => 'تعذّر حفظ الحالة والملحقات.';
+
+  @override
+  String get unitAttributesLoadFailed => 'تعذّر تحميل خصائص هذا النوع.';
+
+  @override
+  String get unitWarrantyRowLabel => 'الضمان';
+
+  @override
+  String get unitWarrantyEditAction => 'تعديل الضمان';
+
+  @override
+  String get unitWarrantyEditTitle => 'ضمان هذا الجهاز';
+
+  @override
+  String get unitWarrantyOverrideLabel => 'ينتهي ضمان هذا الجهاز في';
+
+  @override
+  String get unitWarrantyOverrideHelp =>
+      'اتركه فارغًا ليُحسب الضمان من مدة ضمان المنتج يوم البيع.';
+
+  @override
+  String get unitWarrantyFromProduct => 'حسب مدة ضمان المنتج';
+
+  @override
+  String get unitWarrantyNone => 'بدون ضمان';
+
+  @override
+  String unitWarrantyOwnDate(String date) {
+    return 'حتى $date (تاريخ خاص)';
+  }
+
+  @override
+  String unitWarrantyExpiredOn(String date) {
+    return 'انتهى في $date';
+  }
+
+  @override
+  String get unitWarrantySaveFailed => 'تعذّر حفظ الضمان.';
+
+  @override
+  String get unitPhotosSection => 'صور الجهاز';
+
+  @override
+  String get unitPhotosEmpty => 'لا توجد صور بعد. صوّر الجهاز لتوثيق حالته.';
+
+  @override
+  String get unitPhotosAdd => 'إضافة صور';
+
+  @override
+  String get unitPhotosCamera => 'تصوير';
+
+  @override
+  String get unitPhotoCoverBadge => 'الغلاف';
+
+  @override
+  String get unitPhotoMakeCover => 'اجعلها صورة الغلاف';
+
+  @override
+  String get unitPhotoDelete => 'حذف الصورة';
+
+  @override
+  String get unitPhotoDeleteConfirmTitle => 'حذف هذه الصورة؟';
+
+  @override
+  String get unitPhotoDeleteConfirmBody =>
+      'تختفي من صفحة الجهاز، ويبقى حذفها مسجّلًا في سجله.';
+
+  @override
+  String unitPhotoUploading(int done, int total) {
+    return 'جارٍ رفع $done من $total';
+  }
+
+  @override
+  String unitPhotoUploadFailed(String name) {
+    return 'تعذّر رفع «$name».';
+  }
+
+  @override
+  String get unitPhotoActionFailed => 'تعذّرت العملية على الصورة.';
+
+  @override
+  String get unitPhotoOptionsTooltip => 'خيارات الصورة';
+
+  @override
+  String get unitPhotoOpenTooltip => 'عرض الصورة';
+
+  @override
+  String get unitPhotosLoadFailed => 'تعذّر تحميل الصور.';
+
+  @override
+  String get unitPhotoPickFailed => 'تعذّرت قراءة الصورة.';
+
+  @override
+  String get unitTimelineEventWarrantyChanged => 'تعديل الضمان';
+
+  @override
+  String get unitTimelineEventPhotoAdded => 'إضافة صورة';
+
+  @override
+  String get unitTimelineEventPhotoRemoved => 'حذف صورة';
+
+  @override
+  String unitTimelineFromTo(String from, String to) {
+    return 'من $from إلى $to';
+  }
+
+  @override
+  String get unitCaptureDetailsTooltip => 'الحالة والملحقات';
+
+  @override
+  String unitCaptureDetailsTitle(String code) {
+    return 'حالة $code';
+  }
 }

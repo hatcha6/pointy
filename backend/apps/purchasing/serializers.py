@@ -301,6 +301,11 @@ class ReceiptUnitCaptureSerializer(serializers.Serializer):
         max_digits=10, decimal_places=2, required=False, allow_null=True
     )
     attributes = serializers.DictField(required=False)
+    #: The article's own warranty end date, when it arrives carrying one that
+    #: is not ours to compute — a car under its maker's warranty (§17.3).
+    warranty_override_expires_on = serializers.DateField(
+        required=False, allow_null=True
+    )
     notes = serializers.CharField(required=False, allow_blank=True)
     batch_code = serializers.CharField(
         max_length=120, required=False, allow_blank=True, trim_whitespace=True
@@ -375,6 +380,13 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     tracking_mode = serializers.CharField(
         source="variant.product.tracking_mode",
         read_only=True,
+    )
+    # What kind of article the line's goods are, so the capture sheet can draw
+    # that kind's condition checklist beside each scanned identifier (§6.2).
+    asset_type = serializers.IntegerField(
+        source="variant.product.asset_type_id",
+        read_only=True,
+        default=None,
     )
     # Identifiers captured at the counter, for the one flow where ordering and
     # receiving are the same act: a shop buying a handset off a walk-in seller
@@ -470,6 +482,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "variant_name",
             "tracks_expiry",
             "tracking_mode",
+            "asset_type",
             "quantity",
             "unit",
             "unit_factor",
@@ -512,6 +525,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "variant_sku",
             "tracks_expiry",
             "tracking_mode",
+            "asset_type",
             "unit_factor",
             "unit_label",
             "base_quantity",

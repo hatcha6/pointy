@@ -5,180 +5,262 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/error_messages.dart';
-import '../../../data/models/consignment.dart';
 import '../../../data/models/stock_unit.dart';
+import '../../../data/models/unit_photo.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/product_image_thumbnail.dart';
+import '../../../shared/product_image_viewer.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
-import '../../../shared/tracking/stock_voucher_labels.dart';
+import '../../../shared/tracking/unit_details_sheet.dart';
+import '../view_models/stock_unit_detail_view_model.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'consignment_incident_sheet.dart';
 import 'identify_unit_dialog.dart';
+import 'stock_unit_actions.dart';
+import 'stock_unit_timeline_section.dart';
+import 'unit_attributes_section.dart';
+import 'unit_photo_picker.dart';
+import 'unit_photos_section.dart';
 
 /// One article of stock, and what became of it.
 ///
 /// The page a warranty claim, an insurance claim or a police question is
-/// answered from — which is why the timeline underneath is allocations rather
-/// than a free-text note, and why nothing on it is editable except the three
-/// things a person legitimately changes about an article without moving it: its
-/// asking price, its condition, and what somebody wrote about it.
+/// answered from: what it is, what it looked like (its photos), what condition
+/// it was in (its checklist), until when it is covered, and its whole life —
+/// movements and the edits that moved nothing (§8.1, §6.9).
 class StockUnitDetailScreen extends StatefulWidget {
   const StockUnitDetailScreen({
     super.key,
     required this.viewModel,
     required this.unit,
     required this.capabilities,
+    this.detailViewModel,
   });
 
   final TrackedStockViewModel viewModel;
   final StockUnit unit;
   final AuthorizationCapabilities capabilities;
 
+  /// Injected by previews and tests; built from [viewModel] otherwise.
+  final StockUnitDetailViewModel? detailViewModel;
+
   @override
   State<StockUnitDetailScreen> createState() => _StockUnitDetailScreenState();
 }
 
 class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
-  late StockUnit _unit = widget.unit;
-  List<StockAllocationEntry> _history = const [];
+  late final StockUnitDetailViewModel _detail =
+      widget.detailViewModel ??
+      StockUnitDetailViewModel(
+        repository: widget.viewModel.repository,
+        unit: widget.unit,
+        onUnitChanged: widget.viewModel.unitChanged,
+      );
 
-  /// `allocations ∪ events` (§6.9). Loaded beside the allocations rather than
-  /// instead of them: an older backend answers 404 here and the screen still
-  /// renders the movements, which is the half that matters most.
-  List<StockUnitTimelineEntry> _timelineEntries = const [];
-  List<ConsignmentIncident> _incidents = const [];
-  bool _isLoading = true;
+  AuthorizationCapabilities get _can => widget.capabilities;
+
+  /// Two columns once there is room for both to be read side by side.
+  static const double _twoColumnMinWidth = 1000;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_reload());
+    unawaited(_detail.load());
   }
 
-  Future<void> _reload() async {
-    final history = await widget.viewModel.unitHistory(_unit.id);
-    final fresh = await widget.viewModel.unitById(_unit.id);
-    final timeline = await widget.viewModel.unitTimeline(_unit.id);
-    final incidents = widget.unit.isConsignment
-        ? await widget.viewModel.unitIncidents(_unit.id)
-        : const <ConsignmentIncident>[];
-    if (!mounted) {
-      return;
+  @override
+  void dispose() {
+    if (widget.detailViewModel == null) {
+      _detail.dispose();
     }
-    setState(() {
-      _history = history;
-      _timelineEntries = timeline;
-      _incidents = incidents;
-      _unit = fresh ?? _unit;
-      _isLoading = false;
-    });
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
-    return PointyScaffold(
-      appBar: PointyAppBar(
-        title: Text(
-          _unit.isIdentified ? _unit.code : l10n.stockUnitsAwaitingIdentifier,
-        ),
-        isLoading: _isLoading,
-        actions: [
-          IconButton(
-            tooltip: l10n.refreshShopSettingsTooltip,
-            onPressed: _reload,
-            icon: const Icon(Icons.sync),
+    return ListenableBuilder(
+      listenable: _detail,
+      builder: (context, _) {
+        final unit = _detail.unit;
+        return PointyScaffold(
+          appBar: PointyAppBar(
+            title: Text(
+              unit.isIdentified ? unit.code : l10n.stockUnitsAwaitingIdentifier,
+            ),
+            isLoading: _detail.isLoading || _detail.isUploading,
+            actions: [
+              IconButton(
+                tooltip: l10n.refreshShopSettingsTooltip,
+                onPressed: _detail.load,
+                icon: const Icon(Icons.sync),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: ListView(
-        padding: spacing.pagePadding,
-        children: [
-          _hero(context, l10n),
-          const SizedBox(height: 16),
-          if (_unit.isConsignment) ...[
-            _consignmentPanel(context, l10n),
-            const SizedBox(height: 16),
-          ],
-          _facts(context, l10n),
-          const SizedBox(height: 16),
-          if (_unit.attributes.isNotEmpty) ...[
-            _attributes(context, l10n),
-            const SizedBox(height: 16),
-          ],
-          _actions(context, l10n),
-          const SizedBox(height: 16),
-          _incidentsSection(context, l10n),
-          if (_incidents.isNotEmpty) const SizedBox(height: 16),
-          _timeline(context, l10n),
-        ],
-      ),
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final primary = _primarySections(context, l10n);
+              final secondary = _secondarySections(context, l10n);
+              if (constraints.maxWidth < _twoColumnMinWidth) {
+                return ListView(
+                  padding: spacing.pagePadding,
+                  children: _spaced([...primary, ...secondary]),
+                );
+              }
+              return SingleChildScrollView(
+                padding: spacing.pagePadding,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 6,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: _spaced(primary),
+                      ),
+                    ),
+                    SizedBox(width: spacing.lg),
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: _spaced(secondary),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
+  }
+
+  List<Widget> _spaced(List<Widget> sections) => [
+    for (var index = 0; index < sections.length; index++) ...[
+      if (index > 0) const SizedBox(height: 16),
+      sections[index],
+    ],
+  ];
+
+  List<Widget> _primarySections(BuildContext context, AppLocalizations l10n) {
+    final unit = _detail.unit;
+    return [
+      _hero(context, l10n),
+      if (unit.isConsignment) _consignmentPanel(context, l10n),
+      _facts(context, l10n),
+      UnitAttributesSection(
+        values: unit.attributeDisplay,
+        onEdit: _can.canEditStockUnitAttributes && unit.assetTypeId != null
+            ? _editAttributes
+            : null,
+      ),
+      _photos(context),
+    ];
+  }
+
+  List<Widget> _secondarySections(BuildContext context, AppLocalizations l10n) {
+    return [
+      StockUnitActionBar(
+        unit: _detail.unit,
+        capabilities: _can,
+        onIdentify: _identify,
+        onReprice: _reprice,
+        onWriteOff: _writeOff,
+        onReportIncident: _reportIncident,
+        onEditWarranty: _editWarranty,
+      ),
+      if (_detail.incidents.isNotEmpty) _incidentsSection(context, l10n),
+      StockUnitTimelineSection(
+        history: _detail.history,
+        timeline: _detail.timeline,
+      ),
+    ];
   }
 
   Widget _hero(BuildContext context, AppLocalizations l10n) {
     final colors = context.pointyColors;
+    final unit = _detail.unit;
+    final cover = _detail.cover;
     return PointyDetailHero(
-      icon: _unit.isConsignment
+      icon: unit.isConsignment
           ? Icons.handshake_outlined
           : Icons.qr_code_2_outlined,
-      title: _unit.productName.isNotEmpty
-          ? _unit.productName
-          : _unit.variantName,
-      value: formatMoney(_unit.listPrice ?? _unit.soldPrice ?? 0),
-      valueSubtitle: _unit.listPrice != null
+      leading: cover == null
+          ? null
+          : _HeroCover(cover: cover, onTap: _openCover),
+      title: unit.productName.isNotEmpty ? unit.productName : unit.variantName,
+      value: formatMoney(unit.listPrice ?? unit.soldPrice ?? 0),
+      valueSubtitle: unit.listPrice != null
           ? l10n.stockUnitOwnPrice
           : l10n.stockUnitVariantPrice,
-      description: _unit.isIdentified ? _unit.code : null,
+      description: unit.isIdentified ? unit.code : null,
       pills: [
-        PointyHeroPill(label: _statusLabel(l10n, _unit.status)),
-        if (_unit.isConsignment)
+        PointyHeroPill(label: _statusLabel(l10n, unit.status)),
+        if (unit.isConsignment)
           PointyHeroPill(label: l10n.stockUnitConsignmentBadge),
-        if (_unit.isUnderWarranty && _unit.warrantyExpiresOn != null)
+        if (unit.isUnderWarranty && unit.warrantyExpiresOn != null)
           PointyHeroPill(
+            icon: Icons.verified_user_outlined,
             label: l10n.stockUnitWarrantyUntil(
-              formatDate(_unit.warrantyExpiresOn!),
+              formatDate(unit.warrantyExpiresOn!),
             ),
           ),
-        if (_unit.batchCode.isNotEmpty)
-          PointyHeroPill(label: l10n.posCartLineBatchBadge(_unit.batchCode)),
+        if (unit.batchCode.isNotEmpty)
+          PointyHeroPill(label: l10n.posCartLineBatchBadge(unit.batchCode)),
       ],
-      gradientColors: _unit.isConsignment
+      gradientColors: unit.isConsignment
           ? [colors.accentAmber, colors.primaryDark]
           : null,
     );
   }
 
+  void _openCover() {
+    final photos = _detail.photos;
+    final cover = _detail.cover;
+    if (cover == null) return;
+    final urls = photos.isEmpty
+        ? [cover.contentUrl]
+        : [for (final photo in photos) photo.contentUrl];
+    showProductImageViewer(
+      context,
+      imageUrls: urls,
+      initialIndex: photos
+          .indexWhere((photo) => photo.id == cover.id)
+          .clamp(0, urls.length - 1),
+      title: _detail.unit.productName,
+    );
+  }
+
   Widget _consignmentPanel(BuildContext context, AppLocalizations l10n) {
     final colors = context.pointyColors;
+    final unit = _detail.unit;
     // What is owed comes as its own figures, to whoever may see what the shop
     // owes consignors — never from the unit's cost, which is masked from the
-    // very counter staff who pay the owner out. Absent means "not told", so
-    // the rows are left out rather than showing a debt of nothing.
-    final owed = _unit.awaitsPayout ? _unit.netDue : null;
-    final advance = _unit.consignorAdvance ?? 0;
-    final l10nRows = <PointySummaryRow>[
+    // very counter staff who pay the owner out. Absent means "not told".
+    final owed = unit.awaitsPayout ? unit.netDue : null;
+    final advance = unit.consignorAdvance ?? 0;
+    final rows = <PointySummaryRow>[
       PointySummaryRow(
         label: l10n.stockUnitConsignor,
-        value: _unit.consignorName.isEmpty ? '—' : _unit.consignorName,
+        value: unit.consignorName.isEmpty ? '—' : unit.consignorName,
       ),
-      if (_unit.declaredValue != null)
+      if (unit.declaredValue != null)
         PointySummaryRow(
           label: l10n.stockUnitDeclaredValue,
-          value: formatMoney(_unit.declaredValue!),
+          value: formatMoney(unit.declaredValue!),
         ),
       if (owed != null) ...[
-        // An owner who already took money for this same article is handed
-        // the rest, and the screen says why: a bare 1,600 reads as though
-        // the watch had earned 1,600.
         if (advance > 0) ...[
           PointySummaryRow(
             label: l10n.stockUnitPayoutFromSale,
-            value: formatMoney(_unit.payoutDue ?? 0),
+            value: formatMoney(unit.payoutDue ?? 0),
             dividerAbove: true,
           ),
           PointySummaryRow(
@@ -194,10 +276,10 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
           dividerAbove: true,
         ),
       ],
-      if (_unit.consignorPaidAt != null)
+      if (unit.consignorPaidAt != null)
         PointySummaryRow(
           label: l10n.stockUnitPayoutPaidOn,
-          value: formatDate(_unit.consignorPaidAt!),
+          value: formatDate(unit.consignorPaidAt!),
         ),
     ];
     return PointyDetailSection(
@@ -206,8 +288,8 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PointySummaryList(rows: l10nRows),
-          if (_unit.awaitsPayout)
+          PointySummaryList(rows: rows),
+          if (unit.awaitsPayout)
             Align(
               alignment: AlignmentDirectional.centerStart,
               child: TextButton.icon(
@@ -222,6 +304,7 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
   }
 
   Widget _facts(BuildContext context, AppLocalizations l10n) {
+    final unit = _detail.unit;
     return PointyDetailSection(
       title: l10n.stockUnitFactsSection,
       icon: Icons.info_outline,
@@ -229,132 +312,100 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
         rows: [
           PointySummaryRow(
             label: l10n.stockUnitWarehouse,
-            value: _unit.warehouseName.isEmpty ? '—' : _unit.warehouseName,
+            value: unit.warehouseName.isEmpty ? '—' : unit.warehouseName,
           ),
-          if (_unit.daysInStock != null && _unit.isOnHand)
+          if (unit.daysInStock != null && unit.isOnHand)
             PointySummaryRow(
               label: l10n.stockUnitDaysHeld,
-              value: '${_unit.daysInStock}',
+              value: '${unit.daysInStock}',
             ),
+          PointySummaryRow(
+            label: l10n.unitWarrantyRowLabel,
+            value: _warrantyText(l10n, unit),
+          ),
           // Cost is absent, not null, for a reader without the permission — so
           // the rows simply are not built rather than showing a blank.
-          if (_unit.showsCost)
+          if (unit.showsCost)
             PointySummaryRow(
               label: l10n.stockUnitCost,
-              value: formatMoney(_unit.incomingRate ?? 0),
+              value: formatMoney(unit.incomingRate ?? 0),
             ),
-          if (_unit.showsCost && (_unit.refurbCost ?? 0) > 0)
+          if (unit.showsCost && (unit.refurbCost ?? 0) > 0)
             PointySummaryRow(
               label: l10n.stockUnitRefurbCost,
-              value: formatMoney(_unit.refurbCost!),
+              value: formatMoney(unit.refurbCost!),
             ),
-          if (_unit.showsCost)
+          if (unit.showsCost)
             PointySummaryRow(
               label: l10n.stockUnitTotalCost,
-              value: formatMoney(_unit.totalCost ?? 0),
+              value: formatMoney(unit.totalCost ?? 0),
               emphasized: true,
               dividerAbove: true,
             ),
-          if (_unit.soldAt != null)
+          if (unit.soldAt != null)
             PointySummaryRow(
               label: l10n.stockUnitSoldOn,
-              value: formatDate(_unit.soldAt!),
+              value: formatDate(unit.soldAt!),
             ),
-          if (_unit.soldPrice != null)
+          if (unit.soldPrice != null)
             PointySummaryRow(
               label: l10n.stockUnitSoldFor,
-              value: formatMoney(_unit.soldPrice!),
+              value: formatMoney(unit.soldPrice!),
             ),
         ],
       ),
     );
   }
 
-  Widget _attributes(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    return PointyDetailSection(
-      title: l10n.stockUnitAttributesSection,
-      icon: Icons.tune_outlined,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final entry in _unit.attributes.entries)
-            Chip(
-              label: Text('${entry.key}: ${entry.value}'),
-              labelStyle: theme.textTheme.bodySmall,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actions(BuildContext context, AppLocalizations l10n) {
-    final canReprice = widget.capabilities.canRepriceStockUnit;
-    // §6.8: a consigned article is never written off through this button. Its
-    // own rate is zero, so the action would move no money and record no
-    // claim, and a shop that lost somebody else's camera would have written
-    // off a liability by filling in a reason box. The backend refuses it too;
-    // hiding it here is so nobody is offered the wrong door.
-    final canWriteOff =
-        widget.capabilities.canWriteOffStockUnit && !_unit.isConsignment;
-    final canReportIncident =
-        widget.capabilities.canManageConsignmentIncident && _unit.isConsignment;
-    // A placeholder on the shelf — received before it was scanned, or stock
-    // the product held before it was tracked. The till will not sell it until
-    // it has its number.
-    final canIdentify =
-        widget.capabilities.canIdentifyStockUnits &&
-        !_unit.isIdentified &&
-        _unit.isOnHand;
-    if (!canReprice && !canWriteOff && !canReportIncident && !canIdentify) {
-      return const SizedBox.shrink();
+  /// Sold: the date the sale stamped (which is this article's own date when
+  /// it has one). On the shelf: what the next sale will stamp.
+  static String _warrantyText(AppLocalizations l10n, StockUnit unit) {
+    if (unit.status == StockUnitStatus.sold) {
+      final expires = unit.warrantyExpiresOn;
+      if (expires == null) return l10n.unitWarrantyNone;
+      return unit.isUnderWarranty
+          ? l10n.stockUnitWarrantyUntil(formatDate(expires))
+          : l10n.unitWarrantyExpiredOn(formatDate(expires));
     }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        if (canIdentify)
-          FilledButton.icon(
-            key: const ValueKey('stock_unit_detail_identify'),
-            onPressed: _identify,
-            icon: const Icon(Icons.qr_code_scanner_outlined),
-            label: Text(l10n.stockUnitIdentifyAction),
-          ),
-        if (canReprice && _unit.isOnHand)
-          OutlinedButton.icon(
-            onPressed: _reprice,
-            icon: const Icon(Icons.sell_outlined),
-            label: Text(l10n.stockUnitRepriceAction),
-          ),
-        if (canWriteOff && _unit.isOnHand)
-          OutlinedButton.icon(
-            onPressed: _writeOff,
-            icon: const Icon(Icons.delete_outline),
-            label: Text(l10n.stockUnitWriteOffAction),
-          ),
-        if (canReportIncident)
-          OutlinedButton.icon(
-            onPressed: _reportIncident,
-            icon: const Icon(Icons.report_gmailerrorred_outlined),
-            label: Text(l10n.custodyIncidentReport),
-          ),
-      ],
+    final override = unit.warrantyOverrideExpiresOn;
+    return override == null
+        ? l10n.unitWarrantyFromProduct
+        : l10n.unitWarrantyOwnDate(formatDate(override));
+  }
+
+  Widget _photos(BuildContext context) {
+    if (_detail.isLoading && _detail.photos.isEmpty) {
+      return const _PhotoStripSkeleton();
+    }
+    return UnitPhotosSection(
+      photos: _detail.photos,
+      title: _detail.unit.productName,
+      canManage: _can.canManageStockUnitPhotos,
+      loadFailed: _detail.photosFailed,
+      isUploading: _detail.isUploading,
+      uploadDone: _detail.uploadDone,
+      uploadTotal: _detail.uploadTotal,
+      uploadProgress: _detail.uploadProgress,
+      onAddFiles: () => _addPhotos(pickUnitPhotoFiles),
+      onCapture: unitCameraSupported
+          ? () => _addPhotos(() async {
+              final photo = await captureUnitPhoto();
+              return photo == null ? const <UnitPhotoUpload>[] : [photo];
+            })
+          : null,
+      onMakeCover: (photo) => _photoAction(() => _detail.makeCover(photo)),
+      onDelete: _deletePhoto,
     );
   }
 
-  /// Everything that has ever happened to this article in our care (§6.2.2).
   Widget _incidentsSection(BuildContext context, AppLocalizations l10n) {
-    if (_incidents.isEmpty) {
-      return const SizedBox.shrink();
-    }
     return PointyDetailSection(
       title: l10n.custodyIncidentsTitle,
       icon: Icons.report_gmailerrorred_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final incident in _incidents)
+          for (final incident in _detail.incidents)
             ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -377,220 +428,157 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
     );
   }
 
+  // -- edits ---------------------------------------------------------------
+
+  Future<void> _editAttributes() async {
+    final l10n = AppLocalizations.of(context)!;
+    final ready = await _detail.ensureDefinitions();
+    if (!mounted) return;
+    if (!ready) {
+      _snack(l10n.unitAttributesLoadFailed);
+      return;
+    }
+    final unit = _detail.unit;
+    await showUnitDetailsSheet(
+      context,
+      title: l10n.stockUnitAttributesSection,
+      definitions: _detail.definitions,
+      attributes: unit.attributes,
+      onSave: (draft) async {
+        final outcome = await _detail.saveAttributes(draft.attributes);
+        return outcome.isSaved || outcome.fieldErrors.isNotEmpty
+            ? outcome
+            : UnitDetailsSaveOutcome.refused(
+                message: outcome.message.isEmpty
+                    ? l10n.unitAttributesSaveFailed
+                    : outcome.message,
+              );
+      },
+    );
+  }
+
+  Future<void> _editWarranty() async {
+    final l10n = AppLocalizations.of(context)!;
+    await showUnitDetailsSheet(
+      context,
+      title: l10n.unitWarrantyEditTitle,
+      editAttributes: false,
+      editWarranty: true,
+      warrantyOverride: _detail.unit.warrantyOverrideExpiresOn,
+      onSave: (draft) async {
+        final outcome = await _detail.setWarrantyOverride(
+          draft.warrantyOverride,
+        );
+        return outcome.isSaved || outcome.fieldErrors.isNotEmpty
+            ? outcome
+            : UnitDetailsSaveOutcome.refused(
+                message: outcome.message.isEmpty
+                    ? l10n.unitWarrantySaveFailed
+                    : outcome.message,
+              );
+      },
+    );
+  }
+
+  Future<void> _addPhotos(Future<List<UnitPhotoUpload>> Function() pick) async {
+    final l10n = AppLocalizations.of(context)!;
+    List<UnitPhotoUpload> picked;
+    try {
+      picked = await pick();
+    } on Exception {
+      // No camera on this device or browser, or permission was refused.
+      _snack(l10n.productImageCameraUnavailable);
+      return;
+    }
+    if (picked.isEmpty || !mounted) return;
+    final failed = await _detail.uploadPhotos(picked);
+    if (!mounted || failed.isEmpty) return;
+    _snack(l10n.unitPhotoUploadFailed(failed.join('، ')));
+  }
+
+  Future<void> _deletePhoto(UnitPhoto photo) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => PointyDestructiveConfirmationDialog(
+        title: l10n.unitPhotoDeleteConfirmTitle,
+        message: l10n.unitPhotoDeleteConfirmBody,
+        confirmLabel: l10n.unitPhotoDelete,
+        icon: Icons.hide_image_outlined,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _photoAction(() => _detail.deletePhoto(photo));
+  }
+
+  Future<void> _photoAction(Future<bool> Function() action) async {
+    final l10n = AppLocalizations.of(context)!;
+    final ok = await action();
+    if (!ok && mounted) _snack(l10n.unitPhotoActionFailed);
+  }
+
   Future<void> _reportIncident() async {
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
     final draft = await showConsignmentIncidentSheet(context);
-    if (draft == null || !mounted) {
-      return;
-    }
-    final error = await widget.viewModel.reportIncident(_unit.id, draft);
-    if (!mounted) {
-      return;
-    }
+    if (draft == null || !mounted) return;
+    final error = await widget.viewModel.reportIncident(_detail.unit.id, draft);
+    if (!mounted) return;
     if (error != null) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(errorMessageFor(error, l10n))));
+      _snack(errorMessageFor(error, l10n));
       return;
     }
-    await _reload();
+    await _detail.load();
   }
 
   Future<void> _identify() async {
     final named = await showIdentifyUnitDialog(
       context,
       viewModel: widget.viewModel,
-      unit: _unit,
+      unit: _detail.unit,
     );
-    if (named && mounted) {
-      await _reload();
-    }
-  }
-
-  Widget _timeline(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    return PointyDetailSection(
-      title: l10n.stockUnitTimelineSection,
-      icon: Icons.timeline_outlined,
-      child: _history.isEmpty
-          ? Text(
-              l10n.stockUnitHistoryEmpty,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.hintColor,
-              ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final entry in _history)
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      entry.isIncoming
-                          ? Icons.south_west_outlined
-                          : Icons.north_east_outlined,
-                      size: 18,
-                    ),
-                    title: Text(stockVoucherLabel(l10n, entry.voucherType)),
-                    subtitle: Text(
-                      [
-                        if (entry.postingAt != null)
-                          formatDateTime(entry.postingAt!),
-                        if (entry.warehouseName.isNotEmpty) entry.warehouseName,
-                      ].join(' · '),
-                    ),
-                  ),
-                // The things that happened to it and moved no stock (§6.9):
-                // who dropped its price, who scanned it in a count, which
-                // incident it is part of.
-                for (final entry in _timelineEntries.where(
-                  (row) => !row.isAllocation,
-                ))
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.edit_note_outlined, size: 18),
-                    title: Text(_eventLabel(l10n, entry.kind)),
-                    subtitle: Text(
-                      [
-                        formatDateTime(entry.at),
-                        if (entry.actorName.isNotEmpty) entry.actorName,
-                        if (entry.note.isNotEmpty) entry.note,
-                      ].join(' · '),
-                    ),
-                  ),
-              ],
-            ),
-    );
-  }
-
-  static String _eventLabel(AppLocalizations l10n, String kind) {
-    return switch (kind) {
-      'repriced' => l10n.unitTimelineEventRepriced,
-      'identified' => l10n.unitTimelineEventIdentified,
-      'written_off' => l10n.unitTimelineEventWrittenOff,
-      'incident' => l10n.unitTimelineEventIncident,
-      'counted' => l10n.unitTimelineEventCounted,
-      'relocated' => l10n.unitTimelineEventRelocated,
-      'advance_opened' => l10n.unitTimelineEventAdvanceOpened,
-      'advance_settled' => l10n.unitTimelineEventAdvanceSettled,
-      'identifier_corrected' => l10n.unitTimelineEventIdentifierCorrected,
-      'attributes_edited' => l10n.unitTimelineEventAttributesEdited,
-      'refurb_cost' => l10n.unitTimelineEventRefurbCost,
-      // A kind this client has no word for is still something that happened;
-      // it says so in Arabic rather than in the server's own code.
-      _ => l10n.unitTimelineEventNote,
-    };
+    if (named && mounted) await _detail.load();
   }
 
   Future<void> _reprice() async {
     final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final controller = TextEditingController(
-      text: _unit.listPrice?.toStringAsFixed(2) ?? '',
+    final price = await showUnitRepriceDialog(
+      context,
+      current: _detail.unit.listPrice,
     );
-    final price = await showDialog<double>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.stockUnitRepriceAction),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: l10n.stockUnitOwnPrice),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(
-              context,
-            ).pop(double.tryParse(controller.text.trim())),
-            child: Text(l10n.saveButton),
-          ),
-        ],
-      ),
-    );
-    if (price == null) {
-      return;
-    }
-    final updated = await widget.viewModel.reprice(_unit.id, price);
-    if (!mounted) {
-      return;
-    }
+    if (price == null || !mounted) return;
+    final updated = await widget.viewModel.reprice(_detail.unit.id, price);
+    if (!mounted) return;
     if (updated == null) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.stockUnitRepriceFailed)));
+      _snack(l10n.stockUnitRepriceFailed);
       return;
     }
-    setState(() => _unit = updated);
+    _detail.replaceUnit(updated);
   }
 
   Future<void> _writeOff() async {
     final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final controller = TextEditingController();
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.stockUnitWriteOffAction),
-        // Stock leaves, so the reason is part of the record rather than a
-        // courtesy: "written off" with no sentence beside it is the finding
-        // nobody can explain six months later.
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: l10n.stockUnitWriteOffReason),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: Text(l10n.stockUnitWriteOffAction),
-          ),
-        ],
-      ),
-    );
-    if (reason == null || reason.isEmpty) {
-      return;
-    }
-    final updated = await widget.viewModel.writeOff(_unit.id, reason);
-    if (!mounted) {
-      return;
-    }
+    final reason = await showUnitWriteOffDialog(context);
+    if (reason == null || !mounted) return;
+    final updated = await widget.viewModel.writeOff(_detail.unit.id, reason);
+    if (!mounted) return;
     if (updated == null) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.stockUnitWriteOffFailed)));
+      _snack(l10n.stockUnitWriteOffFailed);
       return;
     }
-    setState(() => _unit = updated);
+    _detail.replaceUnit(updated);
   }
 
   Future<void> _resendSms() async {
     final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final queued = await widget.viewModel.resendConsignorSms(_unit.id);
-    if (!mounted) {
-      return;
-    }
-    messenger
+    final queued = await widget.viewModel.resendConsignorSms(_detail.unit.id);
+    if (!mounted) return;
+    _snack(queued ? l10n.consignmentSmsQueued : l10n.consignmentSmsFailed);
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            queued ? l10n.consignmentSmsQueued : l10n.consignmentSmsFailed,
-          ),
-        ),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _statusLabel(AppLocalizations l10n, String status) {
@@ -602,5 +590,70 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
       StockUnitStatus.writtenOff => l10n.stockUnitStatusWrittenOff,
       _ => status,
     };
+  }
+}
+
+/// The article's face in the hero: its cover photo, framed against the
+/// gradient, opening the photos full screen.
+class _HeroCover extends StatelessWidget {
+  const _HeroCover({required this.cover, required this.onTap});
+
+  final UnitPhoto cover;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Tooltip(
+      message: l10n.unitPhotoOpenTooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        child: DecoratedBox(
+          position: DecorationPosition.foreground,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(PointyRadii.card),
+            border: Border.all(
+              color: PointyColors.surface.withValues(alpha: 0.7),
+              width: 2,
+            ),
+          ),
+          child: ProductImageThumbnail(
+            imageUrl: cover.previewUrl,
+            fallbackText: '',
+            size: 64,
+            borderRadius: PointyRadii.card,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The strip's shape while the photos load, so the page does not jump.
+class _PhotoStripSkeleton extends StatelessWidget {
+  const _PhotoStripSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return PointyDetailSection(
+      title: l10n.unitPhotosSection,
+      icon: Icons.photo_library_outlined,
+      child: PointySkeleton(
+        child: Row(
+          children: [
+            for (var index = 0; index < 3; index++) ...[
+              if (index > 0) const SizedBox(width: 8),
+              const PointySkeletonBox(
+                width: UnitPhotosSection.tileSize,
+                height: UnitPhotosSection.tileSize,
+                borderRadius: PointyRadii.card,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

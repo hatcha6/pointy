@@ -995,6 +995,14 @@ class StockUnit(TimeStampedModel):
         related_name="stock_units",
     )
     warranty_expires_on = models.DateField(null=True, blank=True)
+    #: The day this article's cover ends when that is *not ours to compute*: a
+    #: car or a generator sold with the manufacturer's warranty, or a handset
+    #: the owner decided to sell with thirty days rather than the product's
+    #: year. Null means "the product's ``warranty_days`` from the day of sale",
+    #: which is the ordinary case. When set it wins everywhere the cover is
+    #: stamped — the sale, the receipt, the SMS and the buyer's asset — because
+    #: :attr:`warranty_expires_on` is stamped from it (§17.3).
+    warranty_override_expires_on = models.DateField(null=True, blank=True)
 
     # --- the rest ----------------------------------------------------------
     # The lot this article was born in. Optional under ``serial``, **required**
@@ -1065,6 +1073,14 @@ class StockUnit(TimeStampedModel):
             ("reprice_stockunit", "Can change an identified unit's price"),
             ("write_off_stockunit", "Can write off an identified unit"),
             ("view_stockunit_cost", "Can see what an identified unit cost"),
+            (
+                "manage_stockunit_photos",
+                "Can add, remove and choose the cover of a unit's photos",
+            ),
+            (
+                "change_stockunit_warranty",
+                "Can change the warranty an identified unit is sold with",
+            ),
         ]
 
     @property
@@ -1571,6 +1587,9 @@ class StockUnitEvent(TimeStampedModel):
         INCIDENT = "incident", "حادث عهدة"
         COUNTED = "counted", "جرد"
         RELOCATED = "relocated", "نقل مكان"
+        WARRANTY_CHANGED = "warranty_changed", "تعديل الضمان"
+        PHOTO_ADDED = "photo_added", "إضافة صورة"
+        PHOTO_REMOVED = "photo_removed", "حذف صورة"
 
     unit = models.ForeignKey(
         "inventory.StockUnit",

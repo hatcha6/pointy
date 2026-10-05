@@ -46,6 +46,15 @@ def order_line_identifiers(line) -> list:
                         else ""
                     ),
                     "quantity": "1",
+                    # The day this article's cover ends, as the sale stamped
+                    # it — the product's days or the unit's own date (§17.3).
+                    # A receipt for a handset is the warranty document, so it
+                    # prints the date rather than leaving it to be worked out.
+                    "warranty_expires_on": (
+                        unit.warranty_expires_on.isoformat()
+                        if unit.warranty_expires_on
+                        else ""
+                    ),
                     # So the returns desk can ask the one question it has to ask
                     # before taking a consigned article back: its owner has
                     # already been paid, and somebody has to decide whether the

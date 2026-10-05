@@ -253,6 +253,14 @@ enum AppCapability {
   repriceStockUnit,
   writeOffStockUnit,
 
+  /// Describing an article without moving it: its condition checklist
+  /// (`inventory.change_stockunit`). Its photos are their own grant —
+  /// the counter that buys a handset photographs it — and so is its own
+  /// warranty date, which is a promise to a customer.
+  editStockUnitAttributes,
+  manageStockUnitPhotos,
+  changeStockUnitWarranty,
+
   /// Stop-sale on a lot, and the safety broadcast that follows it. Its own
   /// capability rather than "can edit a lot": quarantining reaches every till
   /// in every branch in one write, and telling a hundred customers to stop
@@ -322,6 +330,9 @@ class AuthorizationCapabilities {
         AppCapability.manageConsignmentIncident,
         AppCapability.repriceStockUnit,
         AppCapability.writeOffStockUnit,
+        AppCapability.editStockUnitAttributes,
+        AppCapability.manageStockUnitPhotos,
+        AppCapability.changeStockUnitWarranty,
       });
     }
     if (!user.batchTrackingEnabled) {
@@ -521,6 +532,24 @@ class AuthorizationCapabilities {
         'inventory.write_off_stockunit',
       ])) {
         capabilities.add(AppCapability.writeOffStockUnit);
+      }
+      if (_hasAny(user, const [
+        'change_stockunit',
+        'inventory.change_stockunit',
+      ])) {
+        capabilities.add(AppCapability.editStockUnitAttributes);
+      }
+      if (_hasAny(user, const [
+        'manage_stockunit_photos',
+        'inventory.manage_stockunit_photos',
+      ])) {
+        capabilities.add(AppCapability.manageStockUnitPhotos);
+      }
+      if (_hasAny(user, const [
+        'change_stockunit_warranty',
+        'inventory.change_stockunit_warranty',
+      ])) {
+        capabilities.add(AppCapability.changeStockUnitWarranty);
       }
       if (_hasAny(user, const [
         'apply_stockcount',
@@ -1562,6 +1591,12 @@ class AuthorizationCapabilities {
       allows(AppCapability.manageConsignmentIncident);
   bool get canRepriceStockUnit => allows(AppCapability.repriceStockUnit);
   bool get canWriteOffStockUnit => allows(AppCapability.writeOffStockUnit);
+  bool get canEditStockUnitAttributes =>
+      allows(AppCapability.editStockUnitAttributes);
+  bool get canManageStockUnitPhotos =>
+      allows(AppCapability.manageStockUnitPhotos);
+  bool get canChangeStockUnitWarranty =>
+      allows(AppCapability.changeStockUnitWarranty);
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
   bool get canCountStock => allows(AppCapability.countStock);
   bool get canApplyStockCount => allows(AppCapability.applyStockCount);

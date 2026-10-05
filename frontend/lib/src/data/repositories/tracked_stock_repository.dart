@@ -3,6 +3,8 @@ import '../models/consignment.dart';
 import '../models/stock_batch.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
+import '../models/unit_attribute.dart';
+import '../models/unit_photo.dart';
 import '../services/pos_api_service.dart';
 
 /// Identified stock, for the screens that read it.
@@ -107,6 +109,58 @@ class TrackedStockRepository {
     return Result.guard(
       () => _service.updateStockUnit(unitId, {'list_price': listPrice}),
     );
+  }
+
+  /// The fields a kind of article records, for its attribute form.
+  Future<Result<List<UnitAttributeDefinition>>> loadAttributeDefinitions(
+    int assetTypeId,
+  ) {
+    return Result.guard(
+      () => _service.fetchUnitAttributeDefinitions(assetTypeId),
+    );
+  }
+
+  /// Replace an article's facts; the server checks them against its kind.
+  Future<Result<StockUnit>> saveUnitAttributes(
+    int unitId,
+    Map<String, Object?> attributes,
+  ) {
+    return Result.guard(
+      () => _service.saveStockUnitAttributes(unitId, attributes),
+    );
+  }
+
+  /// The article's own warranty end date, or null for the product's days.
+  Future<Result<StockUnit>> setUnitWarrantyOverride(
+    int unitId,
+    DateTime? expiresOn,
+  ) {
+    return Result.guard(
+      () => _service.setStockUnitWarrantyOverride(unitId, expiresOn),
+    );
+  }
+
+  Future<Result<List<UnitPhoto>>> loadUnitPhotos(int unitId) {
+    return Result.guard(() => _service.fetchStockUnitPhotos(unitId));
+  }
+
+  Future<Result<UnitPhoto>> uploadUnitPhoto(
+    int unitId,
+    UnitPhotoUpload upload, {
+    void Function(int sent, int total)? onProgress,
+  }) {
+    return Result.guard(
+      () =>
+          _service.uploadStockUnitPhoto(unitId, upload, onProgress: onProgress),
+    );
+  }
+
+  Future<Result<void>> deleteUnitPhoto(int unitId, int photoId) {
+    return Result.guard(() => _service.deleteStockUnitPhoto(unitId, photoId));
+  }
+
+  Future<Result<UnitPhoto>> setUnitCoverPhoto(int unitId, int photoId) {
+    return Result.guard(() => _service.setStockUnitCoverPhoto(unitId, photoId));
   }
 
   Future<Result<StockUnit>> updateUnitNotes(int unitId, String notes) {
