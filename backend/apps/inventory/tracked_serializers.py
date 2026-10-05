@@ -178,6 +178,8 @@ class StockBatchSerializer(serializers.ModelSerializer):
             "status",
             "is_locked",
             "is_sellable",
+            "quarantined_at",
+            "quarantine_reason",
             "supplier",
             "parent_batch",
             "attributes",
@@ -191,6 +193,10 @@ class StockBatchSerializer(serializers.ModelSerializer):
             "id",
             "code_is_generated",
             "is_sellable",
+            # Written by the quarantine action, never by a PATCH: the stamp is
+            # when the stop-sale went on, not when somebody edited the row.
+            "quarantined_at",
+            "quarantine_reason",
             "balances",
             "on_hand",
             "created_at",

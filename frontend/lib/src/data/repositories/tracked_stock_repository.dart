@@ -172,9 +172,14 @@ class TrackedStockRepository {
   Future<Result<StockBatch>> setQuarantine(
     int batchId, {
     required bool locked,
+    String reason = '',
   }) {
     return Result.guard(
-      () => _service.setStockBatchQuarantine(batchId, locked: locked),
+      () => _service.setStockBatchQuarantine(
+        batchId,
+        locked: locked,
+        reason: reason,
+      ),
     );
   }
 

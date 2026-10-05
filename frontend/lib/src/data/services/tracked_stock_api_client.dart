@@ -221,11 +221,15 @@ class TrackedStockApiClient {
   Future<StockBatch> setBatchQuarantine(
     int batchId, {
     required bool locked,
+    String reason = '',
   }) async {
     final path = locked
         ? 'stock-batches/$batchId/quarantine/'
         : 'stock-batches/$batchId/release-quarantine/';
-    final response = await _session.post(path, body: const {});
+    final response = await _session.post(
+      path,
+      body: {if (locked && reason.trim().isNotEmpty) 'reason': reason.trim()},
+    );
     _session.throwApiException(response, 'Lot quarantine failed with status');
     return StockBatch.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,

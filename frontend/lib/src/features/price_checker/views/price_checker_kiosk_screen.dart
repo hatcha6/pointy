@@ -117,14 +117,21 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
     }
     final l10n = AppLocalizations.of(context)!;
     final speech = _speech ??= widget.speechService ?? KioskSpeechService();
-    unawaited(
-      speech.speak(
-        l10n.priceCheckerSpokenResult(
-          result.productName,
-          formatSpokenMoney(result.finalPrice),
-        ),
+    // A stopped pack has no price to say — and the notice is the one thing a
+    // shopper who is not looking at the screen most needs to hear.
+    final phrase = switch (result.availability) {
+      PriceLookupAvailability.recalled => l10n.priceCheckerSpokenRecalled(
+        result.productName,
       ),
-    );
+      PriceLookupAvailability.expired => l10n.priceCheckerSpokenExpired(
+        result.productName,
+      ),
+      PriceLookupAvailability.ok => l10n.priceCheckerSpokenResult(
+        result.productName,
+        formatSpokenMoney(result.finalPrice),
+      ),
+    };
+    unawaited(speech.speak(phrase));
   }
 
   /// The screen owns the camera lifecycle (`autoStart: false`): the preview

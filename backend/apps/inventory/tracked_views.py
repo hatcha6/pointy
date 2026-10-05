@@ -912,9 +912,25 @@ class StockBatchViewSet(
         second branch is still selling.
         """
         batch = self.get_object()
+        reason = str(request.data.get("reason") or "").strip()[:200]
         batch.status = StockBatch.Status.QUARANTINED
         batch.is_locked = True
-        batch.save(update_fields=["status", "is_locked", "updated_at"])
+        # A second press keeps the first moment: "since when has this lot been
+        # stopped" is the question a recall is asked afterwards.
+        batch.quarantined_at = batch.quarantined_at or timezone.now()
+        if reason:
+            batch.quarantine_reason = reason
+        # The save is also what tells every price-checker kiosk: StockBatch is
+        # a catalog-version sender, so a cached «ok» for this lot dies here.
+        batch.save(
+            update_fields=[
+                "status",
+                "is_locked",
+                "quarantined_at",
+                "quarantine_reason",
+                "updated_at",
+            ]
+        )
         return Response(
             StockBatchSerializer(
                 self.get_queryset().get(pk=batch.pk), context={"request": request}
@@ -926,7 +942,17 @@ class StockBatchViewSet(
         batch = self.get_object()
         batch.status = StockBatch.Status.ACTIVE
         batch.is_locked = False
-        batch.save(update_fields=["status", "is_locked", "updated_at"])
+        batch.quarantined_at = None
+        batch.quarantine_reason = ""
+        batch.save(
+            update_fields=[
+                "status",
+                "is_locked",
+                "quarantined_at",
+                "quarantine_reason",
+                "updated_at",
+            ]
+        )
         return Response(
             StockBatchSerializer(
                 self.get_queryset().get(pk=batch.pk), context={"request": request}

@@ -13,15 +13,21 @@ class PriceCheckerApiClient {
   /// Scans a barcode against the LAN-allowed lookup endpoint. Works without a
   /// logged-in user (a kiosk on the private network), and attributes the scan
   /// to [deviceIdentifier] when this device has self-registered.
+  ///
+  /// [staff] asks for the lot's own state (status, since when, why) beside the
+  /// customer answer. Only a signed-in reader holding the lot permission gets
+  /// it; a kiosk never sets it, even on a device a manager is signed in on.
   Future<PriceLookupResult> lookup({
     required String barcode,
     String deviceIdentifier = '',
+    bool staff = false,
   }) async {
     final response = await _session.get(
       'price-checker/lookup/',
       query: {
         'barcode': barcode,
         if (deviceIdentifier.isNotEmpty) 'device': deviceIdentifier,
+        if (staff) 'staff': '1',
       },
     );
     _session.ensureSuccess(response, 'Price lookup failed with status');

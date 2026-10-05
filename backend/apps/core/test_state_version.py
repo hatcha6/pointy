@@ -299,14 +299,18 @@ class CatalogVersionCompositeTests(CommitsMixin, TestCase):
     def test_catalog_senders_are_exactly_defs_plus_stock_plus_scale_rules(self):
         # Plus aliases: no payload carries them, but a new alias changes what a
         # search finds, and tills cache search pages by the catalog version.
+        # Plus lots: a quarantine is the price-checker kiosk's answer for a
+        # recalled pack, and its lookup cache keys on this counter.
         from apps.catalog.models import ProductAlias, ScaleBarcodeRule
         from apps.catalog.signals import _SENDERS
+        from apps.inventory.models import StockBatch
 
         expected = {
             *state_version.resolve_models("catalog_defs"),
             *state_version.resolve_models("stock"),
             ScaleBarcodeRule,
             ProductAlias,
+            StockBatch,
         }
         self.assertEqual(set(_SENDERS), expected)
 

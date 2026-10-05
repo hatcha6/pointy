@@ -10,7 +10,7 @@ discounts are considered.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from django.db.models import Q
@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from apps.attachments.models import Attachment
 from apps.attachments.services import sign_attachment_content_token
-from apps.catalog import scale_rules
+from apps.catalog import gs1, scale_rules
 from apps.catalog.models import ProductUnitBarcode, ProductVariant, normalize_barcode
 from apps.catalog.search_text import code_readings
 from apps.catalog.scale_quantity import resolve_scale_quantity
@@ -31,6 +31,15 @@ from apps.discounts.services import (
 )
 
 ZERO = Decimal("0.00")
+
+#: May this pack be sold at all? Asked only of a scan that named a lot — a
+#: lot barcode, a GS1 DataMatrix, or a serial inside a lot. Every ordinary
+#: product barcode answers ``ok`` without asking anything.
+AVAILABILITY_OK = "ok"
+#: The lot is under a stop-sale: quarantined for a recall, or locked.
+AVAILABILITY_RECALLED = "recalled"
+#: The lot is past its date on a product that refuses to sell expired goods.
+AVAILABILITY_EXPIRED = "expired"
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,10 +82,23 @@ class PriceResult:
     stock_unit_id: int | None = None
     unit_code: str = ""
     unit_attributes: tuple = field(default_factory=tuple)
+    # Set only when the scan named a lot (§6.8.1). ``availability`` is what a
+    # customer may be told: a recalled or expired pack shows a safety notice
+    # instead of a price. ``lot_code`` is the code printed on the pack, never
+    # a code the shop generated; ``batch_id`` is for the staff view, which
+    # reads the lot's own status and reason — the kiosk never does.
+    availability: str = AVAILABILITY_OK
+    batch_id: int | None = None
+    lot_code: str = ""
+    lot_expiry: date | None = None
 
     @property
     def has_discount(self) -> bool:
         return self.discount_total > ZERO
+
+    @property
+    def is_sellable(self) -> bool:
+        return self.availability == AVAILABILITY_OK
 
     @classmethod
     def not_found(cls, barcode: str) -> "PriceResult":
@@ -106,7 +128,7 @@ def _primary_image_attachment(variant: ProductVariant) -> Attachment | None:
     return None
 
 
-def _live_unit(code: str):
+def _live_unit(code: str, *, variant=None):
     """The article this identifier names, if one is on a shelf right now.
 
     Deliberately narrow: only ``in_stock``. A kiosk that answered for a sold
@@ -116,7 +138,7 @@ def _live_unit(code: str):
     from apps.inventory.models import StockUnit
     from apps.inventory.tracking import find_live_unit
 
-    unit = find_live_unit(code)
+    unit = find_live_unit(code, variant=variant)
     if unit is None or unit.status != StockUnit.Status.IN_STOCK:
         return None
     if not unit.is_identified:
@@ -146,6 +168,95 @@ def _display_attributes(unit):
         for key, value in unit.attributes.items()
         if key in labels
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _LotMatch:
+    """What a tracked scan named, beyond the variant: the article and its lot."""
+
+    variant: ProductVariant
+    unit: object = None
+    batch: object = None
+    # The code and date printed on the pack. A GS1 symbol carries both even
+    # when the shop never registered that lot, and a customer holding the box
+    # can read them anyway, so they are safe to say back.
+    printed_lot: str = ""
+    printed_expiry: date | None = None
+
+
+def _quotable(variant) -> bool:
+    """The same gate the barcode query applies, for variants found another way."""
+    if variant is None or not variant.is_active:
+        return False
+    product = variant.product
+    return (
+        product.is_active
+        and product.archived_at is None
+        and not product.is_system
+    )
+
+
+def _gs1_match(code: str) -> _LotMatch | None:
+    """A pharmaceutical pack's DataMatrix, read whole (§6.3).
+
+    GTIN → variant, then lot and serial scoped to that variant. Resolved by the
+    same helpers the till uses, so a pack the till refuses is a pack the kiosk
+    warns about.
+    """
+    from apps.catalog.tracked_resolution import (
+        _find_batch,
+        _find_variant_by_gtin,
+    )
+
+    scan = gs1.parse(code)
+    if not scan.is_usable:
+        return None
+    variant = _find_variant_by_gtin(scan.gtin)
+    if not _quotable(variant):
+        return None
+    batch = _find_batch(variant, scan.lot) if scan.lot else None
+    unit = _live_unit(scan.serial, variant=variant) if scan.serial else None
+    if batch is None and unit is not None:
+        batch = unit.batch
+    return _LotMatch(
+        variant=variant,
+        unit=unit,
+        batch=batch,
+        printed_lot=scan.lot,
+        printed_expiry=scan.expiry_date,
+    )
+
+
+def _lot_barcode_match(code: str) -> _LotMatch | None:
+    """A lot barcode printed on a carton or a shelf edge."""
+    from apps.catalog.tracked_resolution import _find_batch_by_barcode
+
+    batch = _find_batch_by_barcode(code)
+    if batch is None or not _quotable(batch.variant):
+        return None
+    return _LotMatch(variant=batch.variant, batch=batch)
+
+
+def _availability(batch, product, expiry: date | None, *, today: date) -> str:
+    """Whether a customer may be quoted this pack at all.
+
+    The kiosk's version of the till's ``unit_unavailable_reason``: the same two
+    refusals checkout makes, said to the person holding the box before they
+    carry it to a cashier who will have to refuse it.
+    """
+    if batch is not None and not batch.is_sellable:
+        from apps.inventory.models import StockBatch
+
+        if batch.status == StockBatch.Status.EXPIRED:
+            return AVAILABILITY_EXPIRED
+        return AVAILABILITY_RECALLED
+    if (
+        expiry is not None
+        and expiry < today
+        and product.prevent_selling_expired
+    ):
+        return AVAILABILITY_EXPIRED
+    return AVAILABILITY_OK
 
 
 def lookup_price(
@@ -222,15 +333,24 @@ def lookup_price(
             )
     scale_match = None
     unit_row = None
-    if variant is None:
+    lot_match = None
+    if variant is None and gs1.looks_like_gs1(code):
+        # A pharmaceutical pack's DataMatrix: variant, lot, expiry and serial
+        # in one symbol. Recognised in process, after every ordinary path has
+        # missed, so a shop selling Coca-Cola never pays for it.
+        lot_match = _gs1_match(code)
+    elif variant is None:
         # An IMEI or a serial. A used-goods shelf prices every article on its
         # own (§5.7), so «كم سعر هذا الآيفون» has as many answers as there are
         # handsets — and the one the customer is holding is the only one worth
         # giving. Looked for only after the ordinary barcode paths have
         # missed, so a shop selling Coca-Cola never pays for it.
-        unit_row = _live_unit(code)
-        if unit_row is not None:
-            variant = unit_row.variant
+        unit = _live_unit(code)
+        if unit is not None:
+            lot_match = _LotMatch(variant=unit.variant, unit=unit, batch=unit.batch)
+    if lot_match is not None:
+        variant = lot_match.variant
+        unit_row = lot_match.unit
     if variant is None:
         # A weighing scale's own label: an in-store prefix, the item's short
         # code, and the weight (or price) it measured. Only the shop's
@@ -239,8 +359,12 @@ def lookup_price(
         scale_match = scale_rules.parse(code)
         if scale_match is not None:
             variant = scale_rules.resolve_variant(scale_match)
-        if variant is None:
-            return PriceResult.not_found(code)
+    if variant is None:
+        # Last, a lot barcode printed on a carton: after the scale, so a
+        # weighed-goods shop's labels pay nothing for a feature it never uses.
+        lot_match = _lot_barcode_match(code)
+        if lot_match is not None:
+            variant = lot_match.variant
     if variant is None:
         return PriceResult.not_found(code)
 
@@ -307,6 +431,26 @@ def lookup_price(
         label = resolve_scale_quantity(scale_match, variant, unit_price=result.total)
         label_total = (result.total * label.quantity).quantize(Decimal("0.01"))
 
+    availability = AVAILABILITY_OK
+    batch = lot_match.batch if lot_match is not None else None
+    lot_code = ""
+    lot_expiry = None
+    if lot_match is not None:
+        lot_code = (
+            batch.display_code if batch is not None else lot_match.printed_lot
+        )
+        lot_expiry = (
+            batch.expiry_date
+            if batch is not None and batch.expiry_date is not None
+            else lot_match.printed_expiry
+        )
+        availability = _availability(
+            batch,
+            product,
+            lot_expiry,
+            today=timezone.localdate(now) if now else timezone.localdate(),
+        )
+
     unit_label = product.unit
     variant_name = variant.display_name
     if matched_unit is not None:
@@ -335,4 +479,8 @@ def lookup_price(
         stock_unit_id=unit_row.pk if unit_row is not None else None,
         unit_code=unit_row.code if unit_row is not None else "",
         unit_attributes=_display_attributes(unit_row),
+        availability=availability,
+        batch_id=batch.pk if batch is not None else None,
+        lot_code=lot_code,
+        lot_expiry=lot_expiry,
     )

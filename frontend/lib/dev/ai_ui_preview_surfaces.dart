@@ -798,6 +798,72 @@ List<AiUiSurface> catalogBoardSurfaces() {
         ],
         const {'qty': 10},
       );
+    case 'StockUnitCard':
+      return (stockUnitCardExample(), const {});
   }
   return null;
 }
+
+/// The unit card three ways: one handset in full (after `lookup_stock_unit`),
+/// a pack whose lot is quarantined, and the compact rows `stock_unit_ageing`
+/// hands back for a short list. Public so a widget test can render the same.
+List<Map<String, dynamic>> stockUnitCardExample() => [
+  {
+    'id': 'root',
+    'component': 'Column',
+    'children': ['phone', 'pack', 'aged1', 'aged2'],
+  },
+  {
+    'id': 'phone',
+    'component': 'StockUnitCard',
+    'unitId': 41,
+    'code': '358240051111110',
+    'product': 'آيفون 13 · 128GB أزرق',
+    'status': 'in_stock',
+    'price': 1450,
+    'daysOnShelf': 23,
+    'warehouse': 'المحل الرئيسي',
+    'consignment': true,
+    'attributes': [
+      {'label': 'صحة البطارية', 'value': '86%'},
+      {'label': 'الحالة', 'value': 'A'},
+    ],
+  },
+  {
+    'id': 'pack',
+    'component': 'StockUnitCard',
+    'unitId': 77,
+    'code': 'PACK-000981',
+    'product': 'أموكسيسيلين ٥٠٠ ملغ · علبة ٢٠',
+    'status': 'in_stock',
+    'price': 18.5,
+    'warehouse': 'صيدلية الفرع',
+    'lot': 'AMX-2409',
+    'expiryDate': '2027-03-31',
+    'availability': 'recalled',
+  },
+  {
+    'id': 'aged1',
+    'component': 'StockUnitCard',
+    'variant': 'compact',
+    'unitId': 12,
+    'code': '356938035643809',
+    'product': 'سامسونج A54 · 256GB',
+    'status': 'in_stock',
+    'price': 980,
+    'daysOnShelf': 134,
+    'warehouse': 'المحل الرئيسي',
+  },
+  {
+    'id': 'aged2',
+    'component': 'StockUnitCard',
+    'variant': 'compact',
+    'unitId': 13,
+    'code': '352099001761481',
+    'product': 'آيفون 11 · 64GB',
+    'status': 'reserved',
+    'price': 760,
+    'daysOnShelf': 101,
+    'warehouse': 'المحل الرئيسي',
+  },
+];

@@ -16,6 +16,7 @@ numbers and pick: ``catalog_defs`` for "refresh what is on screen now",
 ``stock`` for "mark it dirty", ``catalog`` for cache keying.
 """
 
+from django.apps import apps as django_apps
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
@@ -30,11 +31,17 @@ from .models import Product, ProductAlias, ScaleBarcodeRule
 # alongside — kept explicit rather than folded into a domain it does not
 # belong to. Aliases likewise: no payload carries them, but a new alias
 # changes what a search finds, and tills cache search pages by this version.
+#
+# A lot (``inventory.StockBatch``) is the same kind of exception: no catalog
+# payload carries it, but the price-checker cache keys on this version and a
+# lot's status *is* the kiosk's answer for a recalled pack. Quarantining one
+# must kill a cached «ok» at once, not thirty seconds later on a shelf.
 _SENDERS = (
     *resolve_models("catalog_defs"),
     *resolve_models("stock"),
     ScaleBarcodeRule,
     ProductAlias,
+    django_apps.get_model("inventory", "StockBatch"),
 )
 
 

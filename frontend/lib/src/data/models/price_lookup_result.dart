@@ -47,6 +47,60 @@ class PriceLookupUnitAttribute {
   }
 }
 
+/// Whether a scanned pack may be sold at all (§6.8.1). Only a scan that named a
+/// lot — a lot barcode, a GS1 DataMatrix, a serial inside a lot — can be
+/// anything but [ok]; an ordinary barcode always is.
+enum PriceLookupAvailability {
+  ok,
+
+  /// The lot is quarantined for a recall (or otherwise locked).
+  recalled,
+
+  /// The lot is past its date on a product that refuses expired goods.
+  expired;
+
+  static PriceLookupAvailability fromJson(Object? value) => switch (value) {
+    'recalled' => recalled,
+    'expired' => expired,
+    _ => ok,
+  };
+}
+
+/// What staff may know about the lot a scan named, and a kiosk never does:
+/// its status, since when it has been stopped, and why. Only present when an
+/// authenticated reader holding the lot permission asked for it.
+class PriceLookupLotDetail {
+  const PriceLookupLotDetail({
+    required this.batchId,
+    required this.status,
+    this.quarantinedAt,
+    this.quarantineReason = '',
+    this.expiryDate,
+  });
+
+  final int batchId;
+  final String status;
+  final DateTime? quarantinedAt;
+  final String quarantineReason;
+  final DateTime? expiryDate;
+
+  static PriceLookupLotDetail? fromJson(Object? json) {
+    if (json is! Map) {
+      return null;
+    }
+    final batchId = json['batch_id'];
+    return PriceLookupLotDetail(
+      batchId: batchId is int ? batchId : int.tryParse('$batchId') ?? 0,
+      status: json['status']?.toString() ?? '',
+      quarantinedAt: DateTime.tryParse(
+        json['quarantined_at']?.toString() ?? '',
+      )?.toLocal(),
+      quarantineReason: json['quarantine_reason']?.toString() ?? '',
+      expiryDate: DateTime.tryParse(json['expiry_date']?.toString() ?? ''),
+    );
+  }
+}
+
 /// The display-ready result of scanning a barcode at a price checker.
 ///
 /// The backend already runs the discount engine for a walk-up shopper, so the
@@ -73,6 +127,10 @@ class PriceLookupResult {
     this.discounts = const [],
     this.unitCode = '',
     this.unitAttributes = const [],
+    this.availability = PriceLookupAvailability.ok,
+    this.lotCode = '',
+    this.lotExpiry,
+    this.lotDetail,
   });
 
   final bool found;
@@ -101,7 +159,21 @@ class PriceLookupResult {
   final String unitCode;
   final List<PriceLookupUnitAttribute> unitAttributes;
 
+  /// Whether this pack may be sold. Anything but [PriceLookupAvailability.ok]
+  /// arrives with no price at all, and the kiosk shows a safety notice.
+  final PriceLookupAvailability availability;
+
+  /// The lot code printed on the pack, when the scan named a lot.
+  final String lotCode;
+  final DateTime? lotExpiry;
+
+  /// Staff-only lot state; null for every kiosk.
+  final PriceLookupLotDetail? lotDetail;
+
   bool get hasImage => imageUrl.isNotEmpty;
+
+  /// A recalled or expired pack: show the safety notice, never a price.
+  bool get isStopped => found && availability != PriceLookupAvailability.ok;
 
   /// A variant name worth showing (non-empty and different from the product).
   bool get showsVariant => variantName.isNotEmpty && variantName != productName;
@@ -114,6 +186,8 @@ class PriceLookupResult {
     final unitJson = json['unit'];
     final article = unitJson is Map ? unitJson : const <String, Object?>{};
     final attributesJson = article['attributes'];
+    final lotJson = json['lot'];
+    final lot = lotJson is Map ? lotJson : const <String, Object?>{};
     return PriceLookupResult(
       found: json['found'] == true,
       barcode: json['barcode']?.toString() ?? '',
@@ -150,6 +224,10 @@ class PriceLookupResult {
                 .map(PriceLookupDiscount.fromJson)
                 .toList(growable: false)
           : const [],
+      availability: PriceLookupAvailability.fromJson(json['availability']),
+      lotCode: lot['code']?.toString() ?? '',
+      lotExpiry: DateTime.tryParse(lot['expiry_date']?.toString() ?? ''),
+      lotDetail: PriceLookupLotDetail.fromJson(json['lot_detail']),
     );
   }
 }

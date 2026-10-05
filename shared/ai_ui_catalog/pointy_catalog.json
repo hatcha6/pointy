@@ -727,6 +727,103 @@
         "submitLabel",
         "action"
       ]
+    },
+    "StockUnitCard": {
+      "description": "One identified article — a handset by IMEI, a serial, a pack in a lot. Use after lookup_stock_unit, copying its \"card\" as these properties. For several units use variant \"compact\" inside a Column (up to five); for more, a Table. Tapping it opens the unit.",
+      "properties": {
+        "unitId": {
+          "description": "The stock unit id, from the tool.",
+          "type": "integer"
+        },
+        "code": {
+          "description": "The identifier: IMEI, serial number.",
+          "type": "string"
+        },
+        "product": {
+          "description": "Product and variant name.",
+          "type": "string"
+        },
+        "status": {
+          "description": "Where the article is in its life.",
+          "type": "string",
+          "enum": [
+            "expected",
+            "in_stock",
+            "reserved",
+            "in_transit",
+            "sold",
+            "returned",
+            "damaged",
+            "written_off",
+            "cancelled"
+          ]
+        },
+        "price": {
+          "description": "Its own asking price, in shop money.",
+          "type": "number"
+        },
+        "daysOnShelf": {
+          "description": "Days since it went on sale.",
+          "type": "integer"
+        },
+        "warehouse": {
+          "description": "Where it is now.",
+          "type": "string"
+        },
+        "lot": {
+          "description": "The lot it belongs to, if any.",
+          "type": "string"
+        },
+        "expiryDate": {
+          "description": "The lot expiry, YYYY-MM-DD.",
+          "type": "string"
+        },
+        "availability": {
+          "description": "Whether its lot may be sold: \"recalled\" for a quarantined lot, \"expired\" for a lot past its date. Omit when it may.",
+          "type": "string",
+          "enum": [
+            "ok",
+            "recalled",
+            "expired"
+          ]
+        },
+        "consignment": {
+          "description": "True when the article belongs to a consignor.",
+          "type": "boolean"
+        },
+        "attributes": {
+          "description": "The facts the shop records, e.g. battery or grade.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ]
+          }
+        },
+        "variant": {
+          "description": "\"full\" for one article, \"compact\" for a row in a list.",
+          "type": "string",
+          "enum": [
+            "full",
+            "compact"
+          ]
+        }
+      },
+      "required": [
+        "unitId",
+        "code",
+        "product"
+      ]
     }
   }
 }

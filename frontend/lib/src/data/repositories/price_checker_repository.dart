@@ -42,6 +42,14 @@ class PriceCheckerRepository {
     );
   }
 
+  /// A staff test scan: what the kiosk would show for this code, plus the
+  /// lot's own state when the reader may see it.
+  Future<Result<PriceLookupResult>> staffLookup(String barcode) async {
+    return Result.guard(
+      () => _service.lookupPrice(barcode: barcode, staff: true),
+    );
+  }
+
   /// Best-effort: announce this kiosk to the fleet so scans are attributed.
   Future<Result<void>> selfRegister({
     required String identifier,

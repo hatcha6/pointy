@@ -9,7 +9,7 @@
 //   flutter run -d web-server --web-port 8080 -t lib/dev/price_checker_kiosk_preview.dart
 //
 // States: idle | loading | found | plain | nophoto | outofstock | notfound |
-//         disconnected
+//         disconnected | recalled | expired
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not shipped. Safe to
 // delete.
@@ -75,6 +75,12 @@ class _PreviewApp extends StatelessWidget {
       case 'outofstock':
         status = PriceCheckerKioskStatus.found;
         result = _outOfStock();
+      case 'recalled':
+        status = PriceCheckerKioskStatus.found;
+        result = _stopped(PriceLookupAvailability.recalled);
+      case 'expired':
+        status = PriceCheckerKioskStatus.found;
+        result = _stopped(PriceLookupAvailability.expired);
       case 'notfound':
         status = PriceCheckerKioskStatus.notFound;
         barcode = '6001234599999';
@@ -141,6 +147,22 @@ class _PreviewApp extends StatelessWidget {
       finalPriceDisplay: '35.00 د.ل',
       originalPriceDisplay: '35.00 د.ل',
       imageUrl: image ? _photoUrl : '',
+    );
+  }
+
+  /// A pack from a stopped lot: the server sends no price at all.
+  PriceLookupResult _stopped(PriceLookupAvailability availability) {
+    final expired = availability == PriceLookupAvailability.expired;
+    return PriceLookupResult(
+      found: true,
+      barcode: 'CARTON-AMX-2409',
+      inStock: false,
+      currency: 'د.ل',
+      productName: 'أموكسيسيلين ٥٠٠ ملغ',
+      variantName: 'علبة ٢٠ كبسولة',
+      availability: availability,
+      lotCode: 'AMX-2409',
+      lotExpiry: expired ? DateTime(2026, 9, 30) : DateTime(2027, 3, 31),
     );
   }
 

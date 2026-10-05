@@ -22,7 +22,7 @@ from .formatting import (
     plan_for_support,
 )
 from .models import PriceCheckerDevice
-from .pricing import PriceResult
+from .pricing import AVAILABILITY_EXPIRED, PriceResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,10 +31,33 @@ class Labels:
     was: str
     save: str
     out_of_stock: str
+    # A recalled or expired pack: what a customer reads instead of a price.
+    recalled: str = ""
+    expired: str = ""
+    see_cashier: str = ""
+    lot: str = ""
 
 
-LABELS_EN = Labels("Not found", "Was", "Save", "Out of stock")
-LABELS_AR = Labels("غير موجود", "بدلاً من", "وفّر", "غير متوفر")
+LABELS_EN = Labels(
+    "Not found",
+    "Was",
+    "Save",
+    "Out of stock",
+    recalled="Not for sale",
+    expired="Expired",
+    see_cashier="Please see the cashier",
+    lot="Lot",
+)
+LABELS_AR = Labels(
+    "غير موجود",
+    "بدلاً من",
+    "وفّر",
+    "غير متوفر",
+    recalled="موقوف عن البيع",
+    expired="منتهي الصلاحية",
+    see_cashier="يرجى مراجعة الكاشير",
+    lot="دفعة",
+)
 
 
 class Driver:
@@ -100,6 +123,19 @@ class Driver:
         allow = profile.allow_arabic
         if not result.found:
             return [labels.not_found]
+        if not result.is_sellable:
+            # The shelf unit's whole screen is five lines; a stopped pack gets
+            # all of them, and none of them is a price.
+            notice = (
+                labels.expired
+                if result.availability == AVAILABILITY_EXPIRED
+                else labels.recalled
+            )
+            lines = [notice, result.product_name]
+            if result.lot_code:
+                lines.append(f"{labels.lot} {result.lot_code}")
+            lines.append(labels.see_cashier)
+            return lines
 
         lines = [result.product_name]
         if result.variant_name and result.variant_name != result.product_name:

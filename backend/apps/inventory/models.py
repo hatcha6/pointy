@@ -232,6 +232,15 @@ class StockBatch(TimeStampedModel):
         db_index=True,
     )
     is_locked = models.BooleanField(default=False)
+    # When the stop-sale went on, and what the person who pressed it said.
+    # Staff-facing only: the price-checker kiosk tells a customer the pack is
+    # stopped, never why (§6.8.1). Nullable / ``db_default`` so the previous
+    # release, still serving for a minute during an update, can insert a lot
+    # without naming either column.
+    quarantined_at = models.DateTimeField(null=True, blank=True)
+    quarantine_reason = models.CharField(
+        max_length=200, blank=True, default="", db_default=""
+    )
 
     # --- provenance & genealogy ------------------------------------------
     # Provenance is the ``in`` allocations, which already carry voucher, place,

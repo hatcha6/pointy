@@ -24702,4 +24702,135 @@ class AppLocalizationsAr extends AppLocalizations {
   String walletPlanActiveUntil(String date) {
     return 'مُفعّل حتى $date';
   }
+
+  @override
+  String get priceCheckerRecalledTitle => 'هذا المنتج موقوف عن البيع';
+
+  @override
+  String get priceCheckerExpiredTitle => 'انتهت صلاحية هذه العبوة';
+
+  @override
+  String get priceCheckerStoppedBody => 'يرجى مراجعة الكاشير';
+
+  @override
+  String priceCheckerLotCode(String code) {
+    return 'الدفعة $code';
+  }
+
+  @override
+  String priceCheckerLotExpiry(String date) {
+    return 'تنتهي $date';
+  }
+
+  @override
+  String priceCheckerLotExpired(String date) {
+    return 'انتهت $date';
+  }
+
+  @override
+  String priceCheckerSpokenRecalled(String product) {
+    return '$product. هذا المنتج موقوف عن البيع، يرجى مراجعة الكاشير.';
+  }
+
+  @override
+  String priceCheckerSpokenExpired(String product) {
+    return '$product. انتهت صلاحية هذه العبوة، يرجى مراجعة الكاشير.';
+  }
+
+  @override
+  String get priceCheckerTestScanTooltip => 'تجربة فحص سعر';
+
+  @override
+  String get priceCheckerTestScanTitle => 'تجربة فحص سعر';
+
+  @override
+  String get priceCheckerTestScanHint => 'امسح الباركود أو اكتبه';
+
+  @override
+  String get priceCheckerTestScanSubmit => 'فحص';
+
+  @override
+  String get priceCheckerTestScanPreview => 'ما يراه الزبون';
+
+  @override
+  String get priceCheckerTestScanEmpty =>
+      'امسح عبوة لترى ما سيعرضه كاشف الأسعار للزبون.';
+
+  @override
+  String get priceCheckerTestScanFailed =>
+      'تعذّر الفحص. تحقّق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get priceCheckerStaffLotTitle => 'حالة الدفعة';
+
+  @override
+  String get priceCheckerStaffLotStatus => 'الحالة';
+
+  @override
+  String get priceCheckerStaffLotActive => 'متاحة للبيع';
+
+  @override
+  String get priceCheckerStaffLotSince => 'موقوفة منذ';
+
+  @override
+  String get priceCheckerStaffLotReason => 'السبب';
+
+  @override
+  String get priceCheckerStaffLotNoReason => 'لم يُذكر سبب';
+
+  @override
+  String get priceCheckerStaffLotExpiry => 'تاريخ الانتهاء';
+
+  @override
+  String get priceCheckerStaffLotHidden => 'الزبون لا يرى هذه التفاصيل.';
+
+  @override
+  String get stockBatchQuarantineReasonLabel => 'سبب الإيقاف (اختياري)';
+
+  @override
+  String get stockBatchQuarantineReasonHint => 'مثال: سحب من المصنّع';
+
+  @override
+  String aiUiStockUnitDaysOnShelf(int days) {
+    return '$days يومًا على الرف';
+  }
+
+  @override
+  String get aiUiStockUnitConsignment => 'أمانة';
+
+  @override
+  String get aiUiStockUnitWarehouse => 'المستودع';
+
+  @override
+  String get aiUiStockUnitLot => 'الدفعة';
+
+  @override
+  String get aiUiStockUnitExpiry => 'الصلاحية';
+
+  @override
+  String get aiUiStockUnitPrice => 'سعر البيع';
+
+  @override
+  String get aiUiStockUnitOpen => 'عرض التفاصيل';
+
+  @override
+  String get aiUiStockUnitRecalled => 'الدفعة موقوفة عن البيع';
+
+  @override
+  String get aiUiStockUnitExpired => 'الدفعة منتهية الصلاحية';
+
+  @override
+  String get aiUiStockUnitStopped => 'لا يمكن بيعه حتى تُرفع حالة الدفعة.';
+
+  @override
+  String get aiUiStockUnitStatusInTransit => 'في الطريق';
+
+  @override
+  String get aiUiStockUnitStatusReturned => 'مُرجعة للمورّد';
+
+  @override
+  String get aiUiStockUnitStatusExpected => 'قيد الطلب';
+
+  @override
+  String get aiUiStockUnitStatusCancelled => 'ملغاة';
 }

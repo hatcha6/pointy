@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/result.dart';
 import '../../../data/models/price_check_event.dart';
 import '../../../data/models/price_checker_device.dart';
+import '../../../data/models/price_lookup_result.dart';
 import '../../../data/repositories/price_checker_repository.dart';
 
 /// Drives the price-checker monitoring page: loads the fleet, runs LAN scans,
@@ -86,4 +87,9 @@ class PriceCheckersViewModel extends ChangeNotifier {
       Error<List<PriceCheckEvent>>() => null,
     };
   }
+
+  /// A staff test scan: the kiosk's answer for [barcode] plus, for a reader
+  /// who may see lots, the lot's own state.
+  Future<Result<PriceLookupResult>> testScan(String barcode) =>
+      _repository.staffLookup(barcode);
 }

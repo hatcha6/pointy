@@ -19649,5 +19649,191 @@
         "type": "String"
       }
     }
+  },
+  "priceCheckerRecalledTitle": "هذا المنتج موقوف عن البيع",
+  "@priceCheckerRecalledTitle": {
+    "description": "Kiosk safety notice title for a pack from a quarantined or recalled lot."
+  },
+  "priceCheckerExpiredTitle": "انتهت صلاحية هذه العبوة",
+  "@priceCheckerExpiredTitle": {
+    "description": "Kiosk safety notice title for a pack whose lot has expired."
+  },
+  "priceCheckerStoppedBody": "يرجى مراجعة الكاشير",
+  "@priceCheckerStoppedBody": {
+    "description": "Kiosk safety notice instruction under the title."
+  },
+  "priceCheckerLotCode": "الدفعة {code}",
+  "@priceCheckerLotCode": {
+    "description": "The lot code printed on the scanned pack.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "priceCheckerLotExpiry": "تنتهي {date}",
+  "@priceCheckerLotExpiry": {
+    "description": "The lot's expiry date, still in the future.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "priceCheckerLotExpired": "انتهت {date}",
+  "@priceCheckerLotExpired": {
+    "description": "The lot's expiry date, already passed.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "priceCheckerSpokenRecalled": "{product}. هذا المنتج موقوف عن البيع، يرجى مراجعة الكاشير.",
+  "@priceCheckerSpokenRecalled": {
+    "description": "Spoken by the kiosk for a recalled pack.",
+    "placeholders": {
+      "product": {
+        "type": "String"
+      }
+    }
+  },
+  "priceCheckerSpokenExpired": "{product}. انتهت صلاحية هذه العبوة، يرجى مراجعة الكاشير.",
+  "@priceCheckerSpokenExpired": {
+    "description": "Spoken by the kiosk for an expired pack.",
+    "placeholders": {
+      "product": {
+        "type": "String"
+      }
+    }
+  },
+  "priceCheckerTestScanTooltip": "تجربة فحص سعر",
+  "@priceCheckerTestScanTooltip": {
+    "description": "Fleet page action opening the staff test scan."
+  },
+  "priceCheckerTestScanTitle": "تجربة فحص سعر",
+  "@priceCheckerTestScanTitle": {
+    "description": "Staff test-scan sheet title."
+  },
+  "priceCheckerTestScanHint": "امسح الباركود أو اكتبه",
+  "@priceCheckerTestScanHint": {
+    "description": "Staff test-scan field hint."
+  },
+  "priceCheckerTestScanSubmit": "فحص",
+  "@priceCheckerTestScanSubmit": {
+    "description": "Staff test-scan button."
+  },
+  "priceCheckerTestScanPreview": "ما يراه الزبون",
+  "@priceCheckerTestScanPreview": {
+    "description": "Heading over the kiosk preview in the staff test scan."
+  },
+  "priceCheckerTestScanEmpty": "امسح عبوة لترى ما سيعرضه كاشف الأسعار للزبون.",
+  "@priceCheckerTestScanEmpty": {
+    "description": "Staff test-scan empty state."
+  },
+  "priceCheckerTestScanFailed": "تعذّر الفحص. تحقّق من الاتصال وحاول مرة أخرى.",
+  "@priceCheckerTestScanFailed": {
+    "description": "Staff test-scan error."
+  },
+  "priceCheckerStaffLotTitle": "حالة الدفعة",
+  "@priceCheckerStaffLotTitle": {
+    "description": "Staff-only panel heading with the lot's own state."
+  },
+  "priceCheckerStaffLotStatus": "الحالة",
+  "@priceCheckerStaffLotStatus": {
+    "description": "Staff lot panel: status row label."
+  },
+  "priceCheckerStaffLotActive": "متاحة للبيع",
+  "@priceCheckerStaffLotActive": {
+    "description": "Staff lot panel: a sellable lot."
+  },
+  "priceCheckerStaffLotSince": "موقوفة منذ",
+  "@priceCheckerStaffLotSince": {
+    "description": "Staff lot panel: when the stop-sale started."
+  },
+  "priceCheckerStaffLotReason": "السبب",
+  "@priceCheckerStaffLotReason": {
+    "description": "Staff lot panel: why the lot was stopped."
+  },
+  "priceCheckerStaffLotNoReason": "لم يُذكر سبب",
+  "@priceCheckerStaffLotNoReason": {
+    "description": "Staff lot panel: the quarantine carries no reason."
+  },
+  "priceCheckerStaffLotExpiry": "تاريخ الانتهاء",
+  "@priceCheckerStaffLotExpiry": {
+    "description": "Staff lot panel: expiry row label."
+  },
+  "priceCheckerStaffLotHidden": "الزبون لا يرى هذه التفاصيل.",
+  "@priceCheckerStaffLotHidden": {
+    "description": "Staff lot panel footnote: the kiosk never shows this."
+  },
+  "stockBatchQuarantineReasonLabel": "سبب الإيقاف (اختياري)",
+  "@stockBatchQuarantineReasonLabel": {
+    "description": "Optional reason field in the quarantine confirmation."
+  },
+  "stockBatchQuarantineReasonHint": "مثال: سحب من المصنّع",
+  "@stockBatchQuarantineReasonHint": {
+    "description": "Hint for the quarantine reason field."
+  },
+  "aiUiStockUnitDaysOnShelf": "{days} يومًا على الرف",
+  "@aiUiStockUnitDaysOnShelf": {
+    "description": "AI unit card: how long the article has been in stock.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "aiUiStockUnitConsignment": "أمانة",
+  "@aiUiStockUnitConsignment": {
+    "description": "AI unit card: the article belongs to a consignor."
+  },
+  "aiUiStockUnitWarehouse": "المستودع",
+  "@aiUiStockUnitWarehouse": {
+    "description": "AI unit card: warehouse row label."
+  },
+  "aiUiStockUnitLot": "الدفعة",
+  "@aiUiStockUnitLot": {
+    "description": "AI unit card: lot row label."
+  },
+  "aiUiStockUnitExpiry": "الصلاحية",
+  "@aiUiStockUnitExpiry": {
+    "description": "AI unit card: expiry row label."
+  },
+  "aiUiStockUnitPrice": "سعر البيع",
+  "@aiUiStockUnitPrice": {
+    "description": "AI unit card: the article's asking price label."
+  },
+  "aiUiStockUnitOpen": "عرض التفاصيل",
+  "@aiUiStockUnitOpen": {
+    "description": "AI unit card: open the unit detail."
+  },
+  "aiUiStockUnitRecalled": "الدفعة موقوفة عن البيع",
+  "@aiUiStockUnitRecalled": {
+    "description": "AI unit card: the unit's lot is quarantined."
+  },
+  "aiUiStockUnitExpired": "الدفعة منتهية الصلاحية",
+  "@aiUiStockUnitExpired": {
+    "description": "AI unit card: the unit's lot has expired."
+  },
+  "aiUiStockUnitStopped": "لا يمكن بيعه حتى تُرفع حالة الدفعة.",
+  "@aiUiStockUnitStopped": {
+    "description": "AI unit card: explains a stopped lot."
+  },
+  "aiUiStockUnitStatusInTransit": "في الطريق",
+  "@aiUiStockUnitStatusInTransit": {
+    "description": "AI unit card status: moving between warehouses."
+  },
+  "aiUiStockUnitStatusReturned": "مُرجعة للمورّد",
+  "@aiUiStockUnitStatusReturned": {
+    "description": "AI unit card status: returned to supplier."
+  },
+  "aiUiStockUnitStatusExpected": "قيد الطلب",
+  "@aiUiStockUnitStatusExpected": {
+    "description": "AI unit card status: on order, not yet received."
+  },
+  "aiUiStockUnitStatusCancelled": "ملغاة",
+  "@aiUiStockUnitStatusCancelled": {
+    "description": "AI unit card status: cancelled."
   }
 }

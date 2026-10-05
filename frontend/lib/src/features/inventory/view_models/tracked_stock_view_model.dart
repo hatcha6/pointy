@@ -277,8 +277,16 @@ class TrackedStockViewModel extends ChangeNotifier {
 
   /// Stop-sale, everywhere, in one write — which is why the list can simply
   /// replace the row rather than reloading: nothing else changed.
-  Future<bool> setQuarantine(StockBatch batch, {required bool locked}) async {
-    final result = await _repository.setQuarantine(batch.id, locked: locked);
+  Future<bool> setQuarantine(
+    StockBatch batch, {
+    required bool locked,
+    String reason = '',
+  }) async {
+    final result = await _repository.setQuarantine(
+      batch.id,
+      locked: locked,
+      reason: reason,
+    );
     if (result case Ok<StockBatch>(:final value)) {
       _batches = [
         for (final row in _batches)

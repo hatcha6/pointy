@@ -10,6 +10,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../price_checker/views/price_checker_test_scan_sheet.dart';
 import '../view_models/price_checkers_view_model.dart';
 import 'price_checker_device_details_screen.dart';
 import 'price_checker_labels.dart';
@@ -51,6 +52,14 @@ class _PriceCheckersPageState extends State<PriceCheckersPage> {
             title: Text(l10n.priceCheckersSectionTitle),
             isLoading: viewModel.isBusy,
             actions: [
+              IconButton(
+                tooltip: l10n.priceCheckerTestScanTooltip,
+                onPressed: () => showPriceCheckerTestScanSheet(
+                  context,
+                  lookup: viewModel.testScan,
+                ),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+              ),
               IconButton(
                 tooltip: l10n.priceCheckerScanTooltip,
                 onPressed: viewModel.isScanning ? null : _runScan,

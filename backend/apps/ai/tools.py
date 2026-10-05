@@ -36,6 +36,7 @@ from .ui_catalog import (
     component_names,
     validate_surface,
 )
+from .ui_stock_unit import stock_unit_card, stock_unit_cards
 
 logger = logging.getLogger(__name__)
 
@@ -3342,17 +3343,27 @@ def lookup_stock_unit(*, user, code):
             "sold_at": unit.sold_at.isoformat() if unit.sold_at else None,
             "is_consignment": unit.is_consignment,
             "attributes": unit.attributes or {},
+            "lot": unit.batch.display_code if unit.batch_id else "",
+            "expiry_date": (
+                unit.batch.expiry_date.isoformat()
+                if unit.batch_id and unit.batch.expiry_date
+                else None
+            ),
             "link": f"pointy://stock-unit/{unit.pk}",
         }
 
     live = find_live_unit(code)
     history = historical_units(code)
+    # The StockUnitCard's properties, ready to copy into render_ui: the model
+    # decides nothing about tone or sellability itself (§8.4).
+    shown = live if live is not None else (history[0] if history else None)
     return {
         "ok": True,
         "code": code,
         "unit": _row(live) if live is not None else None,
         "history": [_row(unit) for unit in history],
         "found": live is not None or bool(history),
+        "card": stock_unit_card(shown) if shown is not None else None,
     }
 
 
@@ -3374,7 +3385,7 @@ def stock_unit_ageing(*, user, days=90, warehouse=None):
     cutoff = timezone.now() - timedelta(days=days)
     rows = StockUnit.objects.filter(
         status__in=StockUnit.ON_HAND_STATUSES, in_stock_since__lte=cutoff
-    ).select_related("variant", "variant__product", "warehouse")
+    ).select_related("variant", "variant__product", "warehouse", "batch")
     if warehouse:
         rows = rows.filter(warehouse_id=warehouse)
     total = rows.count()
@@ -3403,6 +3414,9 @@ def stock_unit_ageing(*, user, days=90, warehouse=None):
             }
             for unit in worst
         ],
+        # The five worst as compact StockUnitCard rows, for a Column; beyond
+        # five, a Table of ``units`` reads better than a stack of cards.
+        "cards": list(stock_unit_cards(worst[:5], variant="compact").values()),
     }
 
 

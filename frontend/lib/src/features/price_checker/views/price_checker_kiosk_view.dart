@@ -8,6 +8,8 @@ import '../../../data/models/price_lookup_result.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/network_image_caching.dart';
 import '../../../shared/components/pointy_progress.dart';
+import 'price_checker_kiosk_metrics.dart';
+import 'price_checker_recall_notice.dart';
 
 /// The lifecycle of a single scan, from the customer's point of view.
 enum PriceCheckerKioskStatus { idle, loading, found, notFound, disconnected }
@@ -56,19 +58,26 @@ class PriceCheckerKioskView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
+    final stopped =
+        status == PriceCheckerKioskStatus.found && (result?.isStopped ?? false);
     return Scaffold(
-      body: DecoratedBox(
+      body: AnimatedContainer(
+        duration: const Duration(milliseconds: 280),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [colors.page, colors.surfaceSunken],
+            // A stopped pack washes the whole screen in the danger tone, so
+            // the notice reads as "stop" from across the aisle.
+            colors: stopped
+                ? priceCheckerRecallBackground(context)
+                : [colors.page, colors.surfaceSunken],
           ),
         ),
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final metrics = _KioskMetrics.of(constraints.biggest);
+              final metrics = KioskMetrics.of(constraints.biggest);
               return Stack(
                 children: [
                   Positioned.fill(
@@ -91,7 +100,7 @@ class PriceCheckerKioskView extends StatelessWidget {
     );
   }
 
-  Widget _buildContent(BuildContext context, _KioskMetrics metrics) {
+  Widget _buildContent(BuildContext context, KioskMetrics metrics) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 280),
       switchInCurve: Curves.easeOutCubic,
@@ -107,6 +116,13 @@ class PriceCheckerKioskView extends StatelessWidget {
         ),
       ),
       child: switch (status) {
+        PriceCheckerKioskStatus.found when result!.isStopped =>
+          PriceCheckerRecallNotice(
+            key: ValueKey('stopped-${result?.barcode}'),
+            result: result!,
+            metrics: metrics,
+            header: _MiniBrandBar(shopName: shopName, metrics: metrics),
+          ),
         PriceCheckerKioskStatus.found => _FoundContent(
           key: ValueKey('found-${result?.barcode}-${result?.sku}'),
           result: result!,
@@ -150,39 +166,6 @@ class PriceCheckerKioskView extends StatelessWidget {
       },
     );
   }
-}
-
-/// Derived sizing for the current viewport. Everything the kiosk renders is a
-/// function of the shortest edge so it scales smoothly from ~3" verifiers to
-/// large monitors, with hard clamps that guarantee legibility at the extremes.
-class _KioskMetrics {
-  const _KioskMetrics({
-    required this.size,
-    required this.scale,
-    required this.isWide,
-    required this.gap,
-  });
-
-  final Size size;
-  final double scale;
-  final bool isWide;
-  final double gap;
-
-  factory _KioskMetrics.of(Size size) {
-    final shortest = math.min(size.width, size.height);
-    // 420 ≈ a typical small tablet; clamp keeps tiny + huge screens sane.
-    final scale = (shortest / 420).clamp(0.62, 2.6).toDouble();
-    final isWide = size.width >= 760 && size.width > size.height * 1.15;
-    return _KioskMetrics(
-      size: size,
-      scale: scale,
-      isWide: isWide,
-      gap: (16 * scale).clamp(10, 40).toDouble(),
-    );
-  }
-
-  double font(double base, {double min = 0, double max = double.infinity}) =>
-      (base * scale).clamp(min == 0 ? base * 0.62 : min, max).toDouble();
 }
 
 /// The دفتر logo on a light medallion so it stays crisp on any background.
@@ -232,7 +215,7 @@ class _IdleContent extends StatelessWidget {
     this.cameraPreview,
   });
 
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
   final String shopName;
   final bool isLoading;
   final Widget? cameraPreview;
@@ -392,7 +375,7 @@ class _IdleContent extends StatelessWidget {
 class _CameraBranding extends StatelessWidget {
   const _CameraBranding({required this.metrics, required this.shopName});
 
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
   final String shopName;
 
   @override
@@ -443,7 +426,7 @@ class _CameraViewfinder extends StatefulWidget {
   });
 
   final Widget preview;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
   final bool isLoading;
 
   @override
@@ -733,7 +716,7 @@ class _FoundContent extends StatelessWidget {
 
   final PriceLookupResult result;
   final String shopName;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -795,7 +778,7 @@ class _ProductPhoto extends StatelessWidget {
   const _ProductPhoto({required this.url, required this.metrics});
 
   final String url;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -851,7 +834,7 @@ class _ProductDetails extends StatelessWidget {
   });
 
   final PriceLookupResult result;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
 
   /// Centre every line (name, price, pills, hint). Set when the details fill
   /// the width with no photo beside them; false only in the wide photo|details
@@ -955,7 +938,7 @@ class _PriceBlock extends StatelessWidget {
   });
 
   final PriceLookupResult result;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
   final CrossAxisAlignment align;
 
   @override
@@ -1019,7 +1002,7 @@ class _SaveBadge extends StatelessWidget {
   const _SaveBadge({required this.label, required this.metrics});
 
   final String label;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -1060,7 +1043,7 @@ class _StockPill extends StatelessWidget {
   const _StockPill({required this.inStock, required this.metrics});
 
   final bool inStock;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -1109,7 +1092,7 @@ class _InfoPill extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -1153,7 +1136,7 @@ class _MiniBrandBar extends StatelessWidget {
   const _MiniBrandBar({required this.shopName, required this.metrics});
 
   final String shopName;
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -1197,7 +1180,7 @@ class _MessageContent extends StatelessWidget {
     required this.subtitle,
   });
 
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
   final IconData icon;
   final _MessageTone tone;
   final String title;
@@ -1265,7 +1248,7 @@ class _CornerControls extends StatelessWidget {
     required this.onExitRequested,
   });
 
-  final _KioskMetrics metrics;
+  final KioskMetrics metrics;
   final VoidCallback? onManualEntry;
   final VoidCallback? onExitRequested;
 

@@ -26,6 +26,7 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone
 
 from apps.catalog.cache import catalog_version
 from apps.catalog.models import normalize_barcode
@@ -39,7 +40,14 @@ logger = logging.getLogger(__name__)
 # whenever a field is added or removed: an entry pickled by the previous
 # release would otherwise be unpickled into the new dataclass and read back
 # missing its newest fields.
-_KEY = "pointy:pricecheck:v2:{catalog_v}:{rules_v}:{channel}:{image}:{digest}"
+#
+# The local date is in the key because a lot's *expiry* is a fact that changes
+# with nobody saving anything: at midnight an «ok» for a pack expiring today
+# becomes «expired», and the kiosk must not keep quoting it for a TTL. A
+# quarantine, by contrast, is a save — StockBatch bumps the catalog version.
+_KEY = (
+    "pointy:pricecheck:v3:{catalog_v}:{rules_v}:{day}:{channel}:{image}:{digest}"
+)
 _MISS = "__miss__"
 
 
@@ -62,6 +70,7 @@ def lookup_price_cached(barcode: str, *, with_image: bool = False) -> PriceResul
     key = _KEY.format(
         catalog_v=catalog_v,
         rules_v=rules_version(),
+        day=timezone.localdate().isoformat(),
         channel="sales",
         image=int(with_image),
         # Scanners emit arbitrary bytes; hash so any input is a safe cache key.

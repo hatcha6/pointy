@@ -1605,8 +1605,13 @@ class PosApiService {
   Future<StockBatch> setStockBatchQuarantine(
     int batchId, {
     required bool locked,
+    String reason = '',
   }) {
-    return _trackedStock.setBatchQuarantine(batchId, locked: locked);
+    return _trackedStock.setBatchQuarantine(
+      batchId,
+      locked: locked,
+      reason: reason,
+    );
   }
 
   Future<(StockBatchPage, Map<int, ExpiryMarkdownSuggestion>)>
@@ -3176,10 +3181,12 @@ class PosApiService {
   Future<PriceLookupResult> lookupPrice({
     required String barcode,
     String deviceIdentifier = '',
+    bool staff = false,
   }) {
     return _priceChecker.lookup(
       barcode: barcode,
       deviceIdentifier: deviceIdentifier,
+      staff: staff,
     );
   }
 

@@ -13,6 +13,7 @@ import 'features/settings/views/integration_presentation.dart';
 import 'core/authorization.dart';
 import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
+import 'data/models/stock_unit.dart';
 import 'data/models/analytics_event.dart';
 import 'data/models/business_alert.dart';
 import 'data/models/analytics_export.dart';
@@ -97,6 +98,7 @@ import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/inventory/view_models/transfers_view_model.dart';
 import 'features/inventory/views/consignment_payables_screen.dart';
 import 'features/inventory/views/stock_batches_screen.dart';
+import 'features/inventory/views/stock_unit_detail_screen.dart';
 import 'features/inventory/views/stock_units_screen.dart';
 import 'features/inventory/views/transfers_screen.dart';
 import 'features/settings/view_models/warehouses_view_model.dart';
@@ -2345,6 +2347,20 @@ class _AuthenticatedRoutes implements AppNavigation {
     };
   }
 
+  void _openStockUnit(BuildContext context, StockUnit unit) {
+    push(
+      context,
+      (_) => _screen(
+        'stock_unit_detail',
+        StockUnitDetailScreen(
+          viewModel: dependencies.trackedStockViewModel,
+          unit: unit,
+          capabilities: capabilities,
+        ),
+      ),
+    );
+  }
+
   void _openProduct(BuildContext context, Product product) {
     push(
       context,
@@ -2541,6 +2557,15 @@ class _AuthenticatedRoutes implements AppNavigation {
         }
         _openJobById(context, id);
         return Future.value(true);
+      // An identified article — what the assistant's unit card and
+      // `lookup_stock_unit` link to (§8.4).
+      case 'stock-unit' || 'unit':
+        return _loadThenOpen(
+          context,
+          AppCapability.viewStockUnits,
+          () => dependencies.trackedStockRepository.loadUnit(id),
+          _openStockUnit,
+        );
       case 'user' || 'cashier':
         return openUserProfileById(context, id);
       case 'register-session' || 'session':

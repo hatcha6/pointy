@@ -19,6 +19,7 @@ from .permissions import IsPrivateNetworkOrAuthenticated
 from .serializers import (
     PriceCheckerDeviceSerializer,
     PriceCheckEventSerializer,
+    lot_detail_for_staff,
     price_result_payload,
 )
 from .service import perform_lookup
@@ -176,7 +177,28 @@ def price_lookup_view(request):
             allow_arabic=profile.allow_arabic,
             display_lines=driver.display_lines(result, profile),
             image_url=_image_url(request, result),
+            lot_detail=(
+                lot_detail_for_staff(result) if _wants_staff_detail(request) else None
+            ),
         )
+    )
+
+
+def _wants_staff_detail(request) -> bool:
+    """A staff reader asking what the kiosk cannot say: the lot's own state.
+
+    Three conditions, all required. The flag is explicit because a kiosk can
+    be entered from a device a manager is still signed in on — that kiosk is
+    authenticated, faces customers, and never sends it. The permission is the
+    one that opens the lot screens, which already show status and reason.
+    """
+    if request.query_params.get("staff") not in ("1", "true", "True"):
+        return False
+    user = request.user
+    return bool(
+        user
+        and user.is_authenticated
+        and user.has_perm("inventory.view_stockbatch")
     )
 
 

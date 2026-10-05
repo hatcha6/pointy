@@ -855,12 +855,30 @@ class KioskNeverPublishesCostTests(TestCase):
     def test_the_payload_carries_no_cost_by_any_name(self):
         from apps.price_checker.pricing import lookup_price
         from apps.price_checker.serializers import (
+            KIOSK_FOUND_KEYS,
+            KIOSK_PRICE_KEYS,
             KIOSK_UNIT_KEYS,
             price_result_payload,
         )
 
         payload = price_result_payload(lookup_price("358240051111110"))
 
+        # The whole response, by name — widened deliberately once, for the
+        # recall notice's ``availability`` (test_recall_alert.py has the lot
+        # cases, where a stopped pack carries no price key at all).
+        self.assertEqual(set(payload), KIOSK_FOUND_KEYS | KIOSK_PRICE_KEYS)
+        self.assertEqual(
+            KIOSK_FOUND_KEYS - {"found", "barcode", "in_stock", "currency"},
+            {
+                "display_lines",
+                "product_name",
+                "variant_name",
+                "sku",
+                "unit",
+                "image_url",
+                "availability",
+            },
+        )
         self.assertEqual(set(payload["unit"]), KIOSK_UNIT_KEYS)
         flattened = json.dumps(payload, default=str)
         for forbidden in ("incoming_rate", "refurb_cost", "1200", "cost"):

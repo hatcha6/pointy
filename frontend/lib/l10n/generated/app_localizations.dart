@@ -41853,6 +41853,240 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مُفعّل حتى {date}'**
   String walletPlanActiveUntil(String date);
+
+  /// Kiosk safety notice title for a pack from a quarantined or recalled lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المنتج موقوف عن البيع'**
+  String get priceCheckerRecalledTitle;
+
+  /// Kiosk safety notice title for a pack whose lot has expired.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت صلاحية هذه العبوة'**
+  String get priceCheckerExpiredTitle;
+
+  /// Kiosk safety notice instruction under the title.
+  ///
+  /// In ar, this message translates to:
+  /// **'يرجى مراجعة الكاشير'**
+  String get priceCheckerStoppedBody;
+
+  /// The lot code printed on the scanned pack.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة {code}'**
+  String priceCheckerLotCode(String code);
+
+  /// The lot's expiry date, still in the future.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنتهي {date}'**
+  String priceCheckerLotExpiry(String date);
+
+  /// The lot's expiry date, already passed.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت {date}'**
+  String priceCheckerLotExpired(String date);
+
+  /// Spoken by the kiosk for a recalled pack.
+  ///
+  /// In ar, this message translates to:
+  /// **'{product}. هذا المنتج موقوف عن البيع، يرجى مراجعة الكاشير.'**
+  String priceCheckerSpokenRecalled(String product);
+
+  /// Spoken by the kiosk for an expired pack.
+  ///
+  /// In ar, this message translates to:
+  /// **'{product}. انتهت صلاحية هذه العبوة، يرجى مراجعة الكاشير.'**
+  String priceCheckerSpokenExpired(String product);
+
+  /// Fleet page action opening the staff test scan.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجربة فحص سعر'**
+  String get priceCheckerTestScanTooltip;
+
+  /// Staff test-scan sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجربة فحص سعر'**
+  String get priceCheckerTestScanTitle;
+
+  /// Staff test-scan field hint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الباركود أو اكتبه'**
+  String get priceCheckerTestScanHint;
+
+  /// Staff test-scan button.
+  ///
+  /// In ar, this message translates to:
+  /// **'فحص'**
+  String get priceCheckerTestScanSubmit;
+
+  /// Heading over the kiosk preview in the staff test scan.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما يراه الزبون'**
+  String get priceCheckerTestScanPreview;
+
+  /// Staff test-scan empty state.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح عبوة لترى ما سيعرضه كاشف الأسعار للزبون.'**
+  String get priceCheckerTestScanEmpty;
+
+  /// Staff test-scan error.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الفحص. تحقّق من الاتصال وحاول مرة أخرى.'**
+  String get priceCheckerTestScanFailed;
+
+  /// Staff-only panel heading with the lot's own state.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة الدفعة'**
+  String get priceCheckerStaffLotTitle;
+
+  /// Staff lot panel: status row label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get priceCheckerStaffLotStatus;
+
+  /// Staff lot panel: a sellable lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'متاحة للبيع'**
+  String get priceCheckerStaffLotActive;
+
+  /// Staff lot panel: when the stop-sale started.
+  ///
+  /// In ar, this message translates to:
+  /// **'موقوفة منذ'**
+  String get priceCheckerStaffLotSince;
+
+  /// Staff lot panel: why the lot was stopped.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب'**
+  String get priceCheckerStaffLotReason;
+
+  /// Staff lot panel: the quarantine carries no reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُذكر سبب'**
+  String get priceCheckerStaffLotNoReason;
+
+  /// Staff lot panel: expiry row label.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الانتهاء'**
+  String get priceCheckerStaffLotExpiry;
+
+  /// Staff lot panel footnote: the kiosk never shows this.
+  ///
+  /// In ar, this message translates to:
+  /// **'الزبون لا يرى هذه التفاصيل.'**
+  String get priceCheckerStaffLotHidden;
+
+  /// Optional reason field in the quarantine confirmation.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الإيقاف (اختياري)'**
+  String get stockBatchQuarantineReasonLabel;
+
+  /// Hint for the quarantine reason field.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: سحب من المصنّع'**
+  String get stockBatchQuarantineReasonHint;
+
+  /// AI unit card: how long the article has been in stock.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days} يومًا على الرف'**
+  String aiUiStockUnitDaysOnShelf(int days);
+
+  /// AI unit card: the article belongs to a consignor.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمانة'**
+  String get aiUiStockUnitConsignment;
+
+  /// AI unit card: warehouse row label.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستودع'**
+  String get aiUiStockUnitWarehouse;
+
+  /// AI unit card: lot row label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة'**
+  String get aiUiStockUnitLot;
+
+  /// AI unit card: expiry row label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصلاحية'**
+  String get aiUiStockUnitExpiry;
+
+  /// AI unit card: the article's asking price label.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع'**
+  String get aiUiStockUnitPrice;
+
+  /// AI unit card: open the unit detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض التفاصيل'**
+  String get aiUiStockUnitOpen;
+
+  /// AI unit card: the unit's lot is quarantined.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة موقوفة عن البيع'**
+  String get aiUiStockUnitRecalled;
+
+  /// AI unit card: the unit's lot has expired.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة منتهية الصلاحية'**
+  String get aiUiStockUnitExpired;
+
+  /// AI unit card: explains a stopped lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن بيعه حتى تُرفع حالة الدفعة.'**
+  String get aiUiStockUnitStopped;
+
+  /// AI unit card status: moving between warehouses.
+  ///
+  /// In ar, this message translates to:
+  /// **'في الطريق'**
+  String get aiUiStockUnitStatusInTransit;
+
+  /// AI unit card status: returned to supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُرجعة للمورّد'**
+  String get aiUiStockUnitStatusReturned;
+
+  /// AI unit card status: on order, not yet received.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد الطلب'**
+  String get aiUiStockUnitStatusExpected;
+
+  /// AI unit card status: cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get aiUiStockUnitStatusCancelled;
 }
 
 class _AppLocalizationsDelegate

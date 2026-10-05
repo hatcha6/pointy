@@ -256,7 +256,9 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     final locking = !batch.isQuarantined;
+    var reason = '';
     if (locking) {
+      final reasonController = TextEditingController();
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -264,7 +266,24 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
           // Said plainly, because it is one write that reaches every till in
           // every branch at once — which is the point of it, and also the
           // reason it deserves a confirmation.
-          content: Text(l10n.stockBatchQuarantineBody(batch.label)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(l10n.stockBatchQuarantineBody(batch.label)),
+              const SizedBox(height: 16),
+              // Staff-facing only: the price-checker staff view shows it, the
+              // customer-facing kiosk never does.
+              TextField(
+                controller: reasonController,
+                maxLength: 200,
+                decoration: InputDecoration(
+                  labelText: l10n.stockBatchQuarantineReasonLabel,
+                  hintText: l10n.stockBatchQuarantineReasonHint,
+                ),
+              ),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -277,11 +296,17 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
           ],
         ),
       );
+      reason = reasonController.text.trim();
+      reasonController.dispose();
       if (confirmed != true) {
         return;
       }
     }
-    final ok = await widget.viewModel.setQuarantine(batch, locked: locking);
+    final ok = await widget.viewModel.setQuarantine(
+      batch,
+      locked: locking,
+      reason: reason,
+    );
     if (!ok) {
       messenger
         ..clearSnackBars()
