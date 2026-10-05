@@ -2256,3 +2256,68 @@ class UnitAttributeDefinition(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.asset_type_id}.{self.key}"
+
+
+class ConsignmentPayoutReminder(TimeStampedModel):
+    """One reminder that a consignor's money is still waiting for them.
+
+    §6.2.2: *unclaimed payouts age, and the money is not ours.* A sale SMS goes
+    out, nobody comes, and the payout sits in the drawer belonging to somebody
+    else. What the system does about it is remind — on the
+    ``consignment_unclaimed_payout_reminder_days`` cadence, a bounded number of
+    rounds — and **nothing else**: no row here, and no rule anywhere, ever
+    turns an unclaimed payout into the shop's money (§17.8).
+
+    One row per article, per sale, per round. ``sold_at`` is the sale being
+    chased, so a consignment that is reopened and sells again starts its own
+    rounds rather than inheriting the last sale's. Several articles of one
+    consignor falling due on the same morning share one SMS, so several rows
+    may name the same ``message``.
+    """
+
+    unit = models.ForeignKey(
+        StockUnit,
+        on_delete=models.CASCADE,
+        related_name="payout_reminders",
+    )
+    consignor = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="consignment_payout_reminders",
+    )
+    sold_at = models.DateTimeField()
+    #: 1 at the first reminder period, 2 at the second, … up to the cap.
+    round = models.PositiveSmallIntegerField()
+    days_waiting = models.PositiveIntegerField(default=0)
+    #: What the text said this article was owed — the net, at the time.
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    message = models.ForeignKey(
+        "messaging.OutboundMessage",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    sent_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-sent_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["unit", "sold_at", "round"],
+                name="consign_reminder_once_per_round",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["unit", "-sent_at"], name="consign_reminder_unit_idx"
+            ),
+            models.Index(
+                fields=["consignor", "-sent_at"], name="consign_reminder_party_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.unit_id}@{self.sold_at:%Y%m%d}#{self.round}"

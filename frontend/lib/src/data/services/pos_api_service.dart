@@ -80,6 +80,7 @@ import '../models/stock_count_draft.dart';
 import '../models/stock_count_line.dart';
 import '../models/stock_item.dart';
 import '../models/consignment.dart';
+import '../models/consignor_statement.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
 import '../models/stock_movement.dart';
@@ -1542,6 +1543,24 @@ class PosApiService {
     required List<ConsignmentIntakeItem> items,
   }) {
     return _consignment.submitAgreement(agreementId, items: items);
+  }
+
+  Future<ConsignorStatementPage> fetchConsignorStatement(
+    int consignorId, {
+    DateTime? start,
+    DateTime? end,
+    List<String> states = const [],
+    int page = 1,
+    bool summaryOnly = false,
+  }) {
+    return _consignment.fetchConsignorStatement(
+      consignorId,
+      start: start,
+      end: end,
+      states: states,
+      page: page,
+      summaryOnly: summaryOnly,
+    );
   }
 
   Future<List<StockAllocationEntry>> fetchStockUnitHistory(int unitId) {

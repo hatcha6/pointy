@@ -292,7 +292,7 @@ def consignment_stock_value(warehouse=None) -> Decimal:
     return ZERO
 
 
-def shop_consignment_commission(*, start=None, end=None) -> Decimal:
+def shop_consignment_commission(*, start=None, end=None, consignor=None) -> Decimal:
     """What the shop earned on consignment sales in a window.
 
     ``sold_price − payout``. Note what this is *not*: a new definition of gross
@@ -305,6 +305,8 @@ def shop_consignment_commission(*, start=None, end=None) -> Decimal:
     rows = StockUnit.objects.filter(
         is_consignment=True, status=StockUnit.Status.SOLD, sold_price__isnull=False
     )
+    if consignor is not None:
+        rows = rows.filter(consignor=getattr(consignor, "pk", consignor))
     if start is not None:
         rows = rows.filter(sold_at__gte=start)
     if end is not None:
@@ -318,19 +320,21 @@ def shop_consignment_commission(*, start=None, end=None) -> Decimal:
     return _money(total)
 
 
-def open_incidents(as_of=None):
-    """Custody incidents nobody has settled yet."""
+def open_incidents(as_of=None, *, consignor=None):
+    """Custody incidents nobody has settled yet — one consignor's, if named."""
     from .models import ConsignmentIncident
 
     rows = ConsignmentIncident.objects.filter(
         resolution__in=ConsignmentIncident.OPEN_RESOLUTIONS
     ).exclude(doc_status=DocumentStatus.CANCELLED)
+    if consignor is not None:
+        rows = rows.filter(unit__consignor=getattr(consignor, "pk", consignor))
     if as_of is not None:
         rows = rows.filter(discovered_at__lte=as_of)
     return rows
 
 
-def consignor_claims_open(as_of=None) -> Decimal:
+def consignor_claims_open(as_of=None, *, consignor=None) -> Decimal:
     """Σ assessed value over unresolved custody incidents.
 
     **Assessed** is doing real work here. An incident whose responsibility is
@@ -340,16 +344,18 @@ def consignor_claims_open(as_of=None) -> Decimal:
     honest shape of "something happened and we do not yet know what it costs".
     """
     total = (
-        open_incidents(as_of)
+        open_incidents(as_of, consignor=consignor)
         .filter(is_assessed=True)
         .aggregate(total=Sum("assessed_value"))["total"]
     )
     return _money(total)
 
 
-def consignor_claims_unassessed(as_of=None) -> int:
+def consignor_claims_unassessed(as_of=None, *, consignor=None) -> int:
     """How many incidents are open with nobody having decided yet."""
-    return open_incidents(as_of).filter(is_assessed=False).count()
+    return (
+        open_incidents(as_of, consignor=consignor).filter(is_assessed=False).count()
+    )
 
 
 def _custody_units(as_of=None):
@@ -576,8 +582,45 @@ def payout_sms(unit, payout, *, settings=None):
     )
 
 
+def reminder_sms(consignor, units, *, amount, days_waiting, settings=None):
+    """The approved ``consignment_unclaimed`` message: money still waiting.
+
+    One message for however many of this consignor's articles fall due the
+    same morning — eight texts about eight handbags is a consignor who stops
+    reading them, and a shop paying for every part of every one. A single
+    article is named with its number, so the consignor knows which; several
+    are counted, and the amount is what they come to together.
+    """
+    from apps.core.models import ShopSettings
+    from apps.messaging.shop_values import days_phrase
+    from apps.messaging.sms_templates import sms_template
+
+    settings = settings or ShopSettings.load()
+    shop_name, currency = _shop_and_currency(settings)
+    units = list(units)
+    if len(units) == 1:
+        unit = units[0]
+        name = unit.variant.full_name if unit.variant_id else ""
+        what = f"{name} (رقم {unit.code})" if name else f"الأمانة رقم {unit.code}"
+    else:
+        what = f"{len(units)} من أماناتكم"
+    return sms_template(
+        UNCLAIMED_REMINDER_KIND,
+        getattr(consignor, "full_name", "") or "",
+        shop_name,
+        f"{_money(amount):.2f} {currency}",
+        what,
+        days_phrase(days_waiting),
+    )
+
+
+#: The SMS kind of an unclaimed-payout reminder (``apps.messaging.sms_templates``).
+UNCLAIMED_REMINDER_KIND = "consignment_unclaimed"
+
+
 __all__ = [
     "Terms",
+    "UNCLAIMED_REMINDER_KIND",
     "advisory_floor",
     "clause_for",
     "consignment_position",
@@ -595,6 +638,7 @@ __all__ = [
     "payout_floor",
     "receivable_units",
     "payout_sms",
+    "reminder_sms",
     "sale_sms",
     "shop_consignment_commission",
     "stamp_payout",

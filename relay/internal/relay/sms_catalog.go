@@ -39,6 +39,7 @@ var smsKindCatalog = []smsKind{
 	{Kind: "consignment_sale", ConsentClass: smsConsentTransactional, Variables: 5, Title: "بيع أمانة"},
 	{Kind: "consignment_payout", ConsentClass: smsConsentTransactional, Variables: 4, Title: "تسليم مستحقات أمانة"},
 	{Kind: "consignment_claim", ConsentClass: smsConsentTransactional, Variables: 5, Title: "تسوية حادث أمانة"},
+	{Kind: "consignment_unclaimed", ConsentClass: smsConsentTransactional, Variables: 5, Title: "تذكير بمستحقات أمانة"},
 	{Kind: "batch_recall", ConsentClass: smsConsentTransactional, Variables: 4, Title: "استدعاء دفعة"},
 	{Kind: "month_end_report", ConsentClass: smsConsentTransactional, Variables: 7, Title: "ملخص إقفال الشهر"},
 	{Kind: "direct", ConsentClass: smsConsentTransactional, Variables: 2, Title: "رسالة مباشرة"},

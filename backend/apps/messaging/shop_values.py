@@ -26,3 +26,16 @@ def money(amount, settings=None) -> str:
 
 def sms_date(value) -> str:
     return f"{value:%Y/%m/%d}"
+
+
+def days_phrase(days: int) -> str:
+    """How long something has waited, as Arabic counts days: يوم، يومين، 3 أيام،
+    11 يومًا."""
+    days = max(int(days or 0), 0)
+    if days == 1:
+        return "يوم"
+    if days == 2:
+        return "يومين"
+    if 3 <= days <= 10:
+        return f"{days} أيام"
+    return f"{days} يومًا"

@@ -1,4 +1,5 @@
 import '../../../data/models/consignment.dart';
+import '../../../data/models/consignor_statement.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../shared/formatters.dart';
 
@@ -22,6 +23,9 @@ class ConsignmentDocumentContent {
     this.tableRows = const [],
     this.total,
     this.notes = '',
+    this.tableTitle,
+    this.termsTitle = 'شروط التسوية',
+    this.tableFlex = const [3, 2.4, 2.2, 1.6],
   });
 
   final String badge;
@@ -37,6 +41,18 @@ class ConsignmentDocumentContent {
   final List<List<String>> tableRows;
   final ConsignmentDocumentField? total;
   final String notes;
+
+  /// The heading over the table. Null keeps the two vouchers' own: what was
+  /// taken in, or what the money was for.
+  final String? tableTitle;
+
+  /// The heading over [termFields].
+  final String termsTitle;
+
+  /// Relative column widths, in the same order as [tableColumns]. The table
+  /// reverses widths, alignments and cells together for RTL, so they are
+  /// written here in reading order.
+  final List<double> tableFlex;
 
   /// Every string this document will put on paper, which is what a test asks
   /// about when it wants to know whether something reached the page.
@@ -163,6 +179,88 @@ ConsignmentDocumentContent buildConsignorPayoutContent({
     notes: payout.notes.trim(),
   );
 }
+
+/// *كشف حساب أمانات* — the page handed to a consignor who asks what the shop
+/// holds and owes them.
+///
+/// The shop's commission and the sale prices stay off it: this is the
+/// consignor's copy, and under a fixed payout the sale price is the shop's
+/// margin.
+ConsignmentDocumentContent buildConsignorStatementContent({
+  required ConsignorStatement statement,
+  required List<ConsignorStatementLine> lines,
+  required DateTime printedAt,
+  DateTime? start,
+  DateTime? end,
+}) {
+  final figures = statement.figures;
+  final period = switch ((start, end)) {
+    (final from?, final to?) => '${_date(from)} — ${_date(to)}',
+    (final from?, null) => 'من ${_date(from)}',
+    (null, final to?) => 'حتى ${_date(to)}',
+    _ => '',
+  };
+  return ConsignmentDocumentContent(
+    badge: 'كشف حساب أمانات',
+    number: _date(printedAt),
+    fields: [
+      ConsignmentDocumentField('صاحب الأمانة', statement.consignorName),
+      if (statement.consignorPhone.trim().isNotEmpty)
+        ConsignmentDocumentField('الهاتف', statement.consignorPhone.trim()),
+      if (period.isNotEmpty) ConsignmentDocumentField('الفترة', period),
+      ConsignmentDocumentField('تاريخ الكشف', _dateTime(printedAt)),
+    ],
+    tableTitle: 'الأمانات',
+    tableColumns: const ['الصنف', 'المعرّف', 'الحالة', 'التاريخ', 'المستحق'],
+    tableFlex: const [3, 2.2, 1.7, 1.6, 1.8],
+    tableRows: [
+      for (final line in lines)
+        [
+          line.productName,
+          line.code,
+          _stateLabel(line.state),
+          line.activityAt == null ? '—' : _date(line.activityAt!),
+          switch (line.state) {
+            ConsignorLineState.awaiting => formatMoney(line.netDue),
+            ConsignorLineState.paid => formatMoney(line.payoutDue),
+            _ => '—',
+          },
+        ],
+    ],
+    termsTitle: 'الملخص',
+    termFields: [
+      ConsignmentDocumentField(
+        'في العهدة',
+        '${figures.heldCount} — ${formatMoney(figures.heldDeclaredValue)}',
+      ),
+      ConsignmentDocumentField(
+        'مباعة بانتظار الاستلام',
+        '${figures.awaitingCount}',
+      ),
+      ConsignmentDocumentField(
+        period.isEmpty ? 'إجمالي ما صُرف' : 'ما صُرف خلال الفترة',
+        formatMoney(figures.periodPaidTotal),
+      ),
+      if (figures.receivable > 0)
+        ConsignmentDocumentField(
+          'مبالغ سبق صرفها عن أمانات أُعيدت',
+          formatMoney(figures.receivable),
+        ),
+    ],
+    total: ConsignmentDocumentField(
+      'المستحق لكم حاليًا',
+      formatMoney(figures.payable),
+    ),
+  );
+}
+
+String _stateLabel(String state) => switch (state) {
+  ConsignorLineState.awaiting => 'بانتظار الاستلام',
+  ConsignorLineState.held => 'في العهدة',
+  ConsignorLineState.paid => 'مصروفة',
+  ConsignorLineState.returned => 'أُعيدت',
+  _ => 'تلف أو فقدان',
+};
 
 /// The condition checklist as it was agreed, printed on the page both parties
 /// keep. A dispute three months later is about what the watch looked like on

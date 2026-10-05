@@ -96,7 +96,9 @@ import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/inventory/view_models/transfers_view_model.dart';
+import 'features/inventory/view_models/consignment_document_printer.dart';
 import 'features/inventory/views/consignment_payables_screen.dart';
+import 'features/inventory/views/consignor_statement_launcher.dart';
 import 'features/inventory/views/stock_batches_screen.dart';
 import 'features/inventory/views/stock_unit_detail_screen.dart';
 import 'features/inventory/views/stock_units_screen.dart';
@@ -1290,6 +1292,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         shopSettingsRepository: dependencies.shopSettingsRepository,
         capabilities: capabilities,
         navigation: this,
+        consignorStatements: consignorStatements,
       ),
     );
   }
@@ -1420,6 +1423,23 @@ class _AuthenticatedRoutes implements AppNavigation {
         contacts: dependencies.contactRepository,
         capabilities: capabilities,
         navigation: this,
+        statements: consignorStatements,
+      ),
+    );
+  }
+
+  /// The way into a consignor's statement, for the screens that list them —
+  /// null for a user who may not see what consignors are owed.
+  ConsignorStatementLauncher? get consignorStatements {
+    if (!capabilities.canViewConsignmentPayables) {
+      return null;
+    }
+    return ConsignorStatementLauncher(
+      repository: dependencies.consignmentRepository,
+      capabilities: capabilities,
+      printer: ConsignmentDocumentPrinter(
+        shopSettingsRepository: dependencies.shopSettingsRepository,
+        printingRepository: dependencies.printingRepository,
       ),
     );
   }
@@ -2393,6 +2413,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           printingRepository: dependencies.printingRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
           capabilities: capabilities,
+          consignorStatements: consignorStatements,
         ),
       ),
     );

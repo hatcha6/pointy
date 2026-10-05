@@ -946,6 +946,7 @@ on.
 | `consignment_sale` | transactional | `مرحبًا $1، تم بيع أمانتكم $2 (رقم $3) لدى $4. صافي المستحق لكم $5، نرجو زيارتنا لاستلامه.` | `$1` consignor's name, `$2` item name, `$3` item number, `$4` shop, `$5` net amount owed |
 | `consignment_payout` | transactional | `$1: تم تسليمكم مبلغ $2 بموجب السند رقم $3 مقابل بيع $4. شكرًا لتعاملكم معنا.` | `$1` shop, `$2` amount, `$3` voucher number, `$4` item name |
 | `consignment_claim` | transactional | `$1: تم تسليمكم مبلغ $2 تسويةً عن $3 بموجب المحضر $4، سند الصرف رقم $5.` | `$1` shop, `$2` amount, `$3` item name, `$4` incident report number, `$5` payment voucher number |
+| `consignment_unclaimed` | transactional | `مرحبًا $1، لكم لدى $2 مبلغ $3 من بيع $4 منذ $5، نرجو زيارتنا لاستلامه.` | `$1` consignor's name, `$2` shop, `$3` amount still owed, `$4` the item and its number (e.g. «هاتف سامسونج A54 (رقم U-0042)») or a count (e.g. «3 من أماناتكم»), `$5` how long it has waited (e.g. «30 يومًا») |
 | `batch_recall` | transactional | `تنبيه هام من $1: يرجى التوقف عن استخدام $2 (دفعة رقم $3) ومراجعتنا فورًا لإرجاعه واسترداد قيمته كاملة. للاستفسار: $4` | `$1` shop, `$2` item name, `$3` batch number, `$4` shop phone |
 | `month_end_report` | transactional | `$1 - إقفال $2: المبيعات $3، الربح الإجمالي $4، صافي الربح $5، النقدية $6، ذمم العملاء $7. التقرير الكامل في التطبيق.` | `$1` shop, `$2` month, `$3` sales, `$4` gross profit, `$5` net profit, `$6` cash, `$7` customer receivables |
 | `direct` | transactional | `رسالة من $1: $2` | `$1` shop, `$2` the staff member's free text |

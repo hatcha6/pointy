@@ -4816,7 +4816,7 @@
   "identifiedStockDeclaredValueTitle": "القيمة المقدّرة إلزامية عند الاستلام",
   "identifiedStockDeclaredValueDescription": "عليها تُحسب العهدة وأي مطالبة عند الفقد أو التلف.",
   "identifiedStockReminderDaysLabel": "تذكير بالمستحقات غير المستلمة بعد (يوم)",
-  "identifiedStockReminderDaysHelper": "0 يوقف التذكير.",
+  "identifiedStockReminderDaysHelper": "يصل صاحب الأمانة تذكير برسالة بعد هذه المدة من البيع، ثم كل مثلها حتى 3 مرات، ما دامت رسائل الأمانات مفعّلة. المبلغ يبقى مستحقًا له مهما طال. 0 يوقف التذكير.",
   "identifiedStockClausesHint": "نص كل بند كما يُطبع على سند استلام الأمانة. السندات الموقّعة تبقى بالنص الذي طُبعت به.",
   "identifiedStockClauseLabel": "نص البند: {policy}",
   "@identifiedStockClauseLabel": {
@@ -4907,7 +4907,7 @@
   "productFieldCopiedLabel": "من المنتج الأصلي",
   "similarProductNameUnchangedWarning": "الاسم مطابق للمنتج الأصلي. عدّل الجزء المختلف.",
   "similarProductNameUnchangedConfirm": "الاسم ما زال مطابقًا للمنتج الأصلي. اضغط الحفظ مرة أخرى للمتابعة على أي حال.",
-  "productBarcodeScanAnywhereHelper":"امسح من أي حقل ويصل الرمز إلى هنا",
+  "productBarcodeScanAnywhereHelper": "امسح من أي حقل ويصل الرمز إلى هنا",
   "productFormShortcutsTooltip": "اختصارات لوحة المفاتيح",
   "productFormShortcutsTitle": "اختصارات إضافة المنتجات",
   "productFormShortcutsSectionSave": "التنقل والحفظ",
@@ -19835,5 +19835,317 @@
   "aiUiStockUnitStatusCancelled": "ملغاة",
   "@aiUiStockUnitStatusCancelled": {
     "description": "AI unit card status: cancelled."
+  },
+  "consignorStatementTitle": "كشف حساب الأمانات",
+  "@consignorStatementTitle": {
+    "description": "App bar title of one consignor's statement across all their agreements."
+  },
+  "consignorStatementOpen": "كشف حساب صاحب الأمانة",
+  "@consignorStatementOpen": {
+    "description": "Button/tooltip opening a consignor's statement."
+  },
+  "consignorStatementPrint": "طباعة الكشف",
+  "@consignorStatementPrint": {
+    "description": "Tooltip: print the consignor's statement."
+  },
+  "consignorStatementRefresh": "تحديث الكشف",
+  "@consignorStatementRefresh": {
+    "description": "Tooltip: reload the consignor's statement."
+  },
+  "consignorStatementOwedNow": "المستحق له الآن",
+  "@consignorStatementOwedNow": {
+    "description": "Hero subtitle under the amount the shop owes this consignor now."
+  },
+  "consignorStatementNothingOwed": "لا مستحقات بانتظاره الآن",
+  "@consignorStatementNothingOwed": {
+    "description": "Hero subtitle when the shop owes this consignor nothing."
+  },
+  "consignorStatementPillHeld": "{count} في العهدة",
+  "@consignorStatementPillHeld": {
+    "description": "Hero pill: articles of theirs still on the shelf.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "consignorStatementPillAwaiting": "{count} بانتظار الصرف",
+  "@consignorStatementPillAwaiting": {
+    "description": "Hero pill: sold articles whose money they have not collected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "consignorStatementPillAgreements": "{count, plural, one{سند واحد} two{سندان} few{{count} سندات} other{{count} سندًا}}",
+  "@consignorStatementPillAgreements": {
+    "description": "Hero pill: how many consignment agreements this consignor signed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "consignorStatementOldestWaiting": "أقدم مستحق {waiting}",
+  "@consignorStatementOldestWaiting": {
+    "description": "Hero pill: how long the oldest uncollected payout has waited, e.g. «أقدم مستحق منذ 45 يومًا».",
+    "placeholders": {
+      "waiting": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorStatementDoNotContact": "لا يرغب في الرسائل",
+  "@consignorStatementDoNotContact": {
+    "description": "Hero pill: the consignor asked not to be texted."
+  },
+  "consignorStatementReceivableTitle": "عليه للمحل {amount}",
+  "@consignorStatementReceivableTitle": {
+    "description": "Callout title: money already paid to this consignor for an article that came back unsold.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorStatementReceivableBody": "صُرف له مبلغ عن أمانة أُعيدت إلى الرف، ويُخصم من مستحقها حين تُباع.",
+  "@consignorStatementReceivableBody": {
+    "description": "Callout body explaining the consignor receivable."
+  },
+  "consignorStatementClaimsTitle": "مطالبات عهدة مفتوحة {amount}",
+  "@consignorStatementClaimsTitle": {
+    "description": "Callout title: open custody claims on this consignor's goods.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorStatementRemindersTitle": "التذكير بالمستحقات",
+  "@consignorStatementRemindersTitle": {
+    "description": "Title of the reminder callout on the consignor statement."
+  },
+  "consignorStatementRemindersOn": "يُذكَّر برسالة بعد {days} يومًا من البيع، ثم كل {days} يومًا، حتى {rounds} مرات.",
+  "@consignorStatementRemindersOn": {
+    "description": "Reminder policy sentence when unclaimed-payout reminders are on.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "rounds": {
+        "type": "int"
+      }
+    }
+  },
+  "consignorStatementRemindersOff": "التذكير التلقائي بالمستحقات متوقف من إعدادات الأمانات.",
+  "@consignorStatementRemindersOff": {
+    "description": "Reminder policy sentence when reminders are off."
+  },
+  "consignorStatementLastReminder": "آخر تذكير أُرسل له: {date}",
+  "@consignorStatementLastReminder": {
+    "description": "When the consignor was last reminded of uncollected money.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorStatementNeverReminded": "لم يُرسل له تذكير بعد.",
+  "@consignorStatementNeverReminded": {
+    "description": "The consignor has not been reminded yet."
+  },
+  "consignorStatementMoneyStaysTheirs": "المبلغ يبقى مستحقًا لصاحبه مهما طال، ولا يتحول إلى دخل للمحل.",
+  "@consignorStatementMoneyStaysTheirs": {
+    "description": "Unclaimed payouts never become the shop's money."
+  },
+  "consignorStatementSoldAll": "مباعة",
+  "@consignorStatementSoldAll": {
+    "description": "Metric: articles sold (no period chosen)."
+  },
+  "consignorStatementSoldInPeriod": "مباعة خلال الفترة",
+  "@consignorStatementSoldInPeriod": {
+    "description": "Metric: articles sold within the chosen period."
+  },
+  "consignorStatementPaidAll": "صُرف له",
+  "@consignorStatementPaidAll": {
+    "description": "Metric: total paid out to this consignor (no period chosen)."
+  },
+  "consignorStatementPaidInPeriod": "صُرف له خلال الفترة",
+  "@consignorStatementPaidInPeriod": {
+    "description": "Metric: total paid out within the chosen period."
+  },
+  "consignorStatementPayoutCount": "{count, plural, zero{لا سندات صرف} one{سند صرف واحد} two{سندا صرف} few{{count} سندات صرف} other{{count} سند صرف}}",
+  "@consignorStatementPayoutCount": {
+    "description": "Metric subtitle: number of payout vouchers.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "consignorStatementPeriodAll": "كل الفترات",
+  "@consignorStatementPeriodAll": {
+    "description": "Period button label when no period is chosen."
+  },
+  "consignorStatementPeriodRange": "{start} — {end}",
+  "@consignorStatementPeriodRange": {
+    "description": "Period button label showing the chosen range.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorStatementPeriodClear": "إلغاء الفترة",
+  "@consignorStatementPeriodClear": {
+    "description": "Tooltip: clear the chosen period."
+  },
+  "consignorStatementPeriodHint": "المفتوح يظهر دائمًا، والفترة تحدد المصروف والمُعاد.",
+  "@consignorStatementPeriodHint": {
+    "description": "Helper beside the period picker: open items always show."
+  },
+  "consignorLineFilterAll": "الكل",
+  "@consignorLineFilterAll": {
+    "description": "Statement filter chip: all articles."
+  },
+  "consignorLineFilterAwaiting": "بانتظار الصرف",
+  "@consignorLineFilterAwaiting": {
+    "description": "Statement filter chip and line status: sold, money not collected."
+  },
+  "consignorLineFilterHeld": "في العهدة",
+  "@consignorLineFilterHeld": {
+    "description": "Statement filter chip and line status: on the shelf."
+  },
+  "consignorLineFilterPaid": "صُرفت",
+  "@consignorLineFilterPaid": {
+    "description": "Statement filter chip and line status: sold and paid out."
+  },
+  "consignorLineFilterClosed": "أُعيدت أو تلفت",
+  "@consignorLineFilterClosed": {
+    "description": "Statement filter chip: returned unsold or lost."
+  },
+  "consignorLineStateReturned": "أُعيدت لصاحبها",
+  "@consignorLineStateReturned": {
+    "description": "Statement line status: handed back unsold."
+  },
+  "consignorLineStateLost": "تلف أو فقدان",
+  "@consignorLineStateLost": {
+    "description": "Statement line status: damaged or lost in custody."
+  },
+  "consignorLineSoldOn": "بيعت {date}",
+  "@consignorLineSoldOn": {
+    "description": "Statement line: sale date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorLinePaidOn": "صُرفت {date}",
+  "@consignorLinePaidOn": {
+    "description": "Statement line: payout date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorLineReceivedOn": "استُلمت {date}",
+  "@consignorLineReceivedOn": {
+    "description": "Statement line: intake date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorLineAgreement": "سند {number}",
+  "@consignorLineAgreement": {
+    "description": "Statement line: the agreement it came in on.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorLineEstimate": "متوقع عند البيع",
+  "@consignorLineEstimate": {
+    "description": "Statement line: the payout of an unsold article is an estimate at its asking price."
+  },
+  "consignorLineDeclared": "قيمتها المقدّرة",
+  "@consignorLineDeclared": {
+    "description": "Statement line: the agreed worth of a returned or lost article."
+  },
+  "consignorLineReminded": "ذُكّر {date} ({round}/{rounds})",
+  "@consignorLineReminded": {
+    "description": "Statement line: last unclaimed-payout reminder and which round.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "round": {
+        "type": "int"
+      },
+      "rounds": {
+        "type": "int"
+      }
+    }
+  },
+  "consignorLineReminderFailed": "تعذّر تذكيره {date}",
+  "@consignorLineReminderFailed": {
+    "description": "Statement line: the last reminder never reached the consignor.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "consignorStatementLinesTitle": "الأمانات",
+  "@consignorStatementLinesTitle": {
+    "description": "Heading over the statement's article lines."
+  },
+  "consignorStatementEmptyTitle": "لا أمانات هنا",
+  "@consignorStatementEmptyTitle": {
+    "description": "Empty state title of the statement list."
+  },
+  "consignorStatementEmptyBody": "لا شيء يطابق هذه الفترة أو التصفية.",
+  "@consignorStatementEmptyBody": {
+    "description": "Empty state body when filters exclude everything."
+  },
+  "consignorStatementNoHistory": "لم يترك هذا العميل أمانات لدى المحل بعد.",
+  "@consignorStatementNoHistory": {
+    "description": "Empty state body when the customer never consigned anything."
+  },
+  "consignorStatementLoadFailed": "تعذّر تحميل كشف الأمانات.",
+  "@consignorStatementLoadFailed": {
+    "description": "Error loading the consignor statement."
+  },
+  "consignorStatementPayAll": "صرف كل المستحقات",
+  "@consignorStatementPayAll": {
+    "description": "Button: select every awaiting article and pay out."
+  },
+  "consignorSummaryTitle": "الأمانات",
+  "@consignorSummaryTitle": {
+    "description": "Customer page section title: their consignments."
+  },
+  "consignorSummaryHeld": "في العهدة",
+  "@consignorSummaryHeld": {
+    "description": "Customer page consignment row: articles on the shelf."
+  },
+  "consignorSummaryAwaiting": "بانتظار الصرف",
+  "@consignorSummaryAwaiting": {
+    "description": "Customer page consignment row: sold, uncollected."
+  },
+  "consignorLineSoldOnCredit": "بيعت آجل",
+  "@consignorLineSoldOnCredit": {
+    "description": "Statement line: sold on credit, so the shop owes cash it may not have collected."
+  },
+  "consignorSummaryOwed": "المستحق له الآن",
+  "@consignorSummaryOwed": {
+    "description": "Customer page consignment row: what the shop owes them now."
   }
 }

@@ -13796,7 +13796,7 @@ abstract class AppLocalizations {
   /// No description provided for @identifiedStockReminderDaysHelper.
   ///
   /// In ar, this message translates to:
-  /// **'0 يوقف التذكير.'**
+  /// **'يصل صاحب الأمانة تذكير برسالة بعد هذه المدة من البيع، ثم كل مثلها حتى 3 مرات، ما دامت رسائل الأمانات مفعّلة. المبلغ يبقى مستحقًا له مهما طال. 0 يوقف التذكير.'**
   String get identifiedStockReminderDaysHelper;
 
   /// No description provided for @identifiedStockClausesHint.
@@ -42087,6 +42087,336 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ملغاة'**
   String get aiUiStockUnitStatusCancelled;
+
+  /// App bar title of one consignor's statement across all their agreements.
+  ///
+  /// In ar, this message translates to:
+  /// **'كشف حساب الأمانات'**
+  String get consignorStatementTitle;
+
+  /// Button/tooltip opening a consignor's statement.
+  ///
+  /// In ar, this message translates to:
+  /// **'كشف حساب صاحب الأمانة'**
+  String get consignorStatementOpen;
+
+  /// Tooltip: print the consignor's statement.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الكشف'**
+  String get consignorStatementPrint;
+
+  /// Tooltip: reload the consignor's statement.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الكشف'**
+  String get consignorStatementRefresh;
+
+  /// Hero subtitle under the amount the shop owes this consignor now.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستحق له الآن'**
+  String get consignorStatementOwedNow;
+
+  /// Hero subtitle when the shop owes this consignor nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا مستحقات بانتظاره الآن'**
+  String get consignorStatementNothingOwed;
+
+  /// Hero pill: articles of theirs still on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} في العهدة'**
+  String consignorStatementPillHeld(int count);
+
+  /// Hero pill: sold articles whose money they have not collected.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} بانتظار الصرف'**
+  String consignorStatementPillAwaiting(int count);
+
+  /// Hero pill: how many consignment agreements this consignor signed.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{سند واحد} two{سندان} few{{count} سندات} other{{count} سندًا}}'**
+  String consignorStatementPillAgreements(int count);
+
+  /// Hero pill: how long the oldest uncollected payout has waited, e.g. «أقدم مستحق منذ 45 يومًا».
+  ///
+  /// In ar, this message translates to:
+  /// **'أقدم مستحق {waiting}'**
+  String consignorStatementOldestWaiting(String waiting);
+
+  /// Hero pill: the consignor asked not to be texted.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يرغب في الرسائل'**
+  String get consignorStatementDoNotContact;
+
+  /// Callout title: money already paid to this consignor for an article that came back unsold.
+  ///
+  /// In ar, this message translates to:
+  /// **'عليه للمحل {amount}'**
+  String consignorStatementReceivableTitle(String amount);
+
+  /// Callout body explaining the consignor receivable.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرف له مبلغ عن أمانة أُعيدت إلى الرف، ويُخصم من مستحقها حين تُباع.'**
+  String get consignorStatementReceivableBody;
+
+  /// Callout title: open custody claims on this consignor's goods.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطالبات عهدة مفتوحة {amount}'**
+  String consignorStatementClaimsTitle(String amount);
+
+  /// Title of the reminder callout on the consignor statement.
+  ///
+  /// In ar, this message translates to:
+  /// **'التذكير بالمستحقات'**
+  String get consignorStatementRemindersTitle;
+
+  /// Reminder policy sentence when unclaimed-payout reminders are on.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُذكَّر برسالة بعد {days} يومًا من البيع، ثم كل {days} يومًا، حتى {rounds} مرات.'**
+  String consignorStatementRemindersOn(int days, int rounds);
+
+  /// Reminder policy sentence when reminders are off.
+  ///
+  /// In ar, this message translates to:
+  /// **'التذكير التلقائي بالمستحقات متوقف من إعدادات الأمانات.'**
+  String get consignorStatementRemindersOff;
+
+  /// When the consignor was last reminded of uncollected money.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تذكير أُرسل له: {date}'**
+  String consignorStatementLastReminder(String date);
+
+  /// The consignor has not been reminded yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُرسل له تذكير بعد.'**
+  String get consignorStatementNeverReminded;
+
+  /// Unclaimed payouts never become the shop's money.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ يبقى مستحقًا لصاحبه مهما طال، ولا يتحول إلى دخل للمحل.'**
+  String get consignorStatementMoneyStaysTheirs;
+
+  /// Metric: articles sold (no period chosen).
+  ///
+  /// In ar, this message translates to:
+  /// **'مباعة'**
+  String get consignorStatementSoldAll;
+
+  /// Metric: articles sold within the chosen period.
+  ///
+  /// In ar, this message translates to:
+  /// **'مباعة خلال الفترة'**
+  String get consignorStatementSoldInPeriod;
+
+  /// Metric: total paid out to this consignor (no period chosen).
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرف له'**
+  String get consignorStatementPaidAll;
+
+  /// Metric: total paid out within the chosen period.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرف له خلال الفترة'**
+  String get consignorStatementPaidInPeriod;
+
+  /// Metric subtitle: number of payout vouchers.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, zero{لا سندات صرف} one{سند صرف واحد} two{سندا صرف} few{{count} سندات صرف} other{{count} سند صرف}}'**
+  String consignorStatementPayoutCount(int count);
+
+  /// Period button label when no period is chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الفترات'**
+  String get consignorStatementPeriodAll;
+
+  /// Period button label showing the chosen range.
+  ///
+  /// In ar, this message translates to:
+  /// **'{start} — {end}'**
+  String consignorStatementPeriodRange(String start, String end);
+
+  /// Tooltip: clear the chosen period.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الفترة'**
+  String get consignorStatementPeriodClear;
+
+  /// Helper beside the period picker: open items always show.
+  ///
+  /// In ar, this message translates to:
+  /// **'المفتوح يظهر دائمًا، والفترة تحدد المصروف والمُعاد.'**
+  String get consignorStatementPeriodHint;
+
+  /// Statement filter chip: all articles.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get consignorLineFilterAll;
+
+  /// Statement filter chip and line status: sold, money not collected.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الصرف'**
+  String get consignorLineFilterAwaiting;
+
+  /// Statement filter chip and line status: on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'في العهدة'**
+  String get consignorLineFilterHeld;
+
+  /// Statement filter chip and line status: sold and paid out.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرفت'**
+  String get consignorLineFilterPaid;
+
+  /// Statement filter chip: returned unsold or lost.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُعيدت أو تلفت'**
+  String get consignorLineFilterClosed;
+
+  /// Statement line status: handed back unsold.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُعيدت لصاحبها'**
+  String get consignorLineStateReturned;
+
+  /// Statement line status: damaged or lost in custody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تلف أو فقدان'**
+  String get consignorLineStateLost;
+
+  /// Statement line: sale date.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيعت {date}'**
+  String consignorLineSoldOn(String date);
+
+  /// Statement line: payout date.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُرفت {date}'**
+  String consignorLinePaidOn(String date);
+
+  /// Statement line: intake date.
+  ///
+  /// In ar, this message translates to:
+  /// **'استُلمت {date}'**
+  String consignorLineReceivedOn(String date);
+
+  /// Statement line: the agreement it came in on.
+  ///
+  /// In ar, this message translates to:
+  /// **'سند {number}'**
+  String consignorLineAgreement(String number);
+
+  /// Statement line: the payout of an unsold article is an estimate at its asking price.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقع عند البيع'**
+  String get consignorLineEstimate;
+
+  /// Statement line: the agreed worth of a returned or lost article.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمتها المقدّرة'**
+  String get consignorLineDeclared;
+
+  /// Statement line: last unclaimed-payout reminder and which round.
+  ///
+  /// In ar, this message translates to:
+  /// **'ذُكّر {date} ({round}/{rounds})'**
+  String consignorLineReminded(String date, int round, int rounds);
+
+  /// Statement line: the last reminder never reached the consignor.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تذكيره {date}'**
+  String consignorLineReminderFailed(String date);
+
+  /// Heading over the statement's article lines.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأمانات'**
+  String get consignorStatementLinesTitle;
+
+  /// Empty state title of the statement list.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا أمانات هنا'**
+  String get consignorStatementEmptyTitle;
+
+  /// Empty state body when filters exclude everything.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا شيء يطابق هذه الفترة أو التصفية.'**
+  String get consignorStatementEmptyBody;
+
+  /// Empty state body when the customer never consigned anything.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يترك هذا العميل أمانات لدى المحل بعد.'**
+  String get consignorStatementNoHistory;
+
+  /// Error loading the consignor statement.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل كشف الأمانات.'**
+  String get consignorStatementLoadFailed;
+
+  /// Button: select every awaiting article and pay out.
+  ///
+  /// In ar, this message translates to:
+  /// **'صرف كل المستحقات'**
+  String get consignorStatementPayAll;
+
+  /// Customer page section title: their consignments.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأمانات'**
+  String get consignorSummaryTitle;
+
+  /// Customer page consignment row: articles on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'في العهدة'**
+  String get consignorSummaryHeld;
+
+  /// Customer page consignment row: sold, uncollected.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الصرف'**
+  String get consignorSummaryAwaiting;
+
+  /// Statement line: sold on credit, so the shop owes cash it may not have collected.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيعت آجل'**
+  String get consignorLineSoldOnCredit;
+
+  /// Customer page consignment row: what the shop owes them now.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستحق له الآن'**
+  String get consignorSummaryOwed;
 }
 
 class _AppLocalizationsDelegate

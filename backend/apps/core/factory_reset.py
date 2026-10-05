@@ -179,6 +179,7 @@ WIPED_MODELS = (
     # serial units, consignment. The warehouses themselves are configuration.
     "inventory.consignmentagreement",
     "inventory.consignmentincident",
+    "inventory.consignmentpayoutreminder",
     "inventory.consignorpayout",
     "inventory.stockallocation",
     "inventory.stockbatch",

@@ -7903,7 +7903,8 @@ class AppLocalizationsAr extends AppLocalizations {
       'تذكير بالمستحقات غير المستلمة بعد (يوم)';
 
   @override
-  String get identifiedStockReminderDaysHelper => '0 يوقف التذكير.';
+  String get identifiedStockReminderDaysHelper =>
+      'يصل صاحب الأمانة تذكير برسالة بعد هذه المدة من البيع، ثم كل مثلها حتى 3 مرات، ما دامت رسائل الأمانات مفعّلة. المبلغ يبقى مستحقًا له مهما طال. 0 يوقف التذكير.';
 
   @override
   String get identifiedStockClausesHint =>
@@ -24833,4 +24834,224 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get aiUiStockUnitStatusCancelled => 'ملغاة';
+
+  @override
+  String get consignorStatementTitle => 'كشف حساب الأمانات';
+
+  @override
+  String get consignorStatementOpen => 'كشف حساب صاحب الأمانة';
+
+  @override
+  String get consignorStatementPrint => 'طباعة الكشف';
+
+  @override
+  String get consignorStatementRefresh => 'تحديث الكشف';
+
+  @override
+  String get consignorStatementOwedNow => 'المستحق له الآن';
+
+  @override
+  String get consignorStatementNothingOwed => 'لا مستحقات بانتظاره الآن';
+
+  @override
+  String consignorStatementPillHeld(int count) {
+    return '$count في العهدة';
+  }
+
+  @override
+  String consignorStatementPillAwaiting(int count) {
+    return '$count بانتظار الصرف';
+  }
+
+  @override
+  String consignorStatementPillAgreements(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count سندًا',
+      few: '$count سندات',
+      two: 'سندان',
+      one: 'سند واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String consignorStatementOldestWaiting(String waiting) {
+    return 'أقدم مستحق $waiting';
+  }
+
+  @override
+  String get consignorStatementDoNotContact => 'لا يرغب في الرسائل';
+
+  @override
+  String consignorStatementReceivableTitle(String amount) {
+    return 'عليه للمحل $amount';
+  }
+
+  @override
+  String get consignorStatementReceivableBody =>
+      'صُرف له مبلغ عن أمانة أُعيدت إلى الرف، ويُخصم من مستحقها حين تُباع.';
+
+  @override
+  String consignorStatementClaimsTitle(String amount) {
+    return 'مطالبات عهدة مفتوحة $amount';
+  }
+
+  @override
+  String get consignorStatementRemindersTitle => 'التذكير بالمستحقات';
+
+  @override
+  String consignorStatementRemindersOn(int days, int rounds) {
+    return 'يُذكَّر برسالة بعد $days يومًا من البيع، ثم كل $days يومًا، حتى $rounds مرات.';
+  }
+
+  @override
+  String get consignorStatementRemindersOff =>
+      'التذكير التلقائي بالمستحقات متوقف من إعدادات الأمانات.';
+
+  @override
+  String consignorStatementLastReminder(String date) {
+    return 'آخر تذكير أُرسل له: $date';
+  }
+
+  @override
+  String get consignorStatementNeverReminded => 'لم يُرسل له تذكير بعد.';
+
+  @override
+  String get consignorStatementMoneyStaysTheirs =>
+      'المبلغ يبقى مستحقًا لصاحبه مهما طال، ولا يتحول إلى دخل للمحل.';
+
+  @override
+  String get consignorStatementSoldAll => 'مباعة';
+
+  @override
+  String get consignorStatementSoldInPeriod => 'مباعة خلال الفترة';
+
+  @override
+  String get consignorStatementPaidAll => 'صُرف له';
+
+  @override
+  String get consignorStatementPaidInPeriod => 'صُرف له خلال الفترة';
+
+  @override
+  String consignorStatementPayoutCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count سند صرف',
+      few: '$count سندات صرف',
+      two: 'سندا صرف',
+      one: 'سند صرف واحد',
+      zero: 'لا سندات صرف',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get consignorStatementPeriodAll => 'كل الفترات';
+
+  @override
+  String consignorStatementPeriodRange(String start, String end) {
+    return '$start — $end';
+  }
+
+  @override
+  String get consignorStatementPeriodClear => 'إلغاء الفترة';
+
+  @override
+  String get consignorStatementPeriodHint =>
+      'المفتوح يظهر دائمًا، والفترة تحدد المصروف والمُعاد.';
+
+  @override
+  String get consignorLineFilterAll => 'الكل';
+
+  @override
+  String get consignorLineFilterAwaiting => 'بانتظار الصرف';
+
+  @override
+  String get consignorLineFilterHeld => 'في العهدة';
+
+  @override
+  String get consignorLineFilterPaid => 'صُرفت';
+
+  @override
+  String get consignorLineFilterClosed => 'أُعيدت أو تلفت';
+
+  @override
+  String get consignorLineStateReturned => 'أُعيدت لصاحبها';
+
+  @override
+  String get consignorLineStateLost => 'تلف أو فقدان';
+
+  @override
+  String consignorLineSoldOn(String date) {
+    return 'بيعت $date';
+  }
+
+  @override
+  String consignorLinePaidOn(String date) {
+    return 'صُرفت $date';
+  }
+
+  @override
+  String consignorLineReceivedOn(String date) {
+    return 'استُلمت $date';
+  }
+
+  @override
+  String consignorLineAgreement(String number) {
+    return 'سند $number';
+  }
+
+  @override
+  String get consignorLineEstimate => 'متوقع عند البيع';
+
+  @override
+  String get consignorLineDeclared => 'قيمتها المقدّرة';
+
+  @override
+  String consignorLineReminded(String date, int round, int rounds) {
+    return 'ذُكّر $date ($round/$rounds)';
+  }
+
+  @override
+  String consignorLineReminderFailed(String date) {
+    return 'تعذّر تذكيره $date';
+  }
+
+  @override
+  String get consignorStatementLinesTitle => 'الأمانات';
+
+  @override
+  String get consignorStatementEmptyTitle => 'لا أمانات هنا';
+
+  @override
+  String get consignorStatementEmptyBody =>
+      'لا شيء يطابق هذه الفترة أو التصفية.';
+
+  @override
+  String get consignorStatementNoHistory =>
+      'لم يترك هذا العميل أمانات لدى المحل بعد.';
+
+  @override
+  String get consignorStatementLoadFailed => 'تعذّر تحميل كشف الأمانات.';
+
+  @override
+  String get consignorStatementPayAll => 'صرف كل المستحقات';
+
+  @override
+  String get consignorSummaryTitle => 'الأمانات';
+
+  @override
+  String get consignorSummaryHeld => 'في العهدة';
+
+  @override
+  String get consignorSummaryAwaiting => 'بانتظار الصرف';
+
+  @override
+  String get consignorLineSoldOnCredit => 'بيعت آجل';
+
+  @override
+  String get consignorSummaryOwed => 'المستحق له الآن';
 }

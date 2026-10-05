@@ -20,6 +20,8 @@ import '../../../shared/payment_labels.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../register_sessions/views/sale_order_details_sheet.dart';
+import '../../inventory/views/consignor_statement_launcher.dart';
+import '../../inventory/views/consignor_summary_section.dart';
 import '../view_models/customer_details_view_model.dart';
 import 'balance_entries_section.dart';
 import '../../settings/views/messaging_presentation.dart';
@@ -32,12 +34,17 @@ class CustomerDetailsScreen extends StatefulWidget {
     required this.printingRepository,
     required this.shopSettingsRepository,
     this.capabilities,
+    this.consignorStatements,
   });
 
   final Customer customer;
   final ContactRepository contactRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+
+  /// Opens this customer's consignment statement. Null — no permission, or no
+  /// consignment in this shop — shows no consignment section.
+  final ConsignorStatementLauncher? consignorStatements;
 
   /// What this user may do on the account. Null hides everything that needs
   /// a permission to show — the balance entries, for one.
@@ -84,6 +91,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
             child: CustomerDetailsView(
               viewModel: _viewModel,
               capabilities: widget.capabilities,
+              consignorStatements: widget.consignorStatements,
               onMerged: () => Navigator.of(context).maybePop(),
             ),
           ),
@@ -104,9 +112,13 @@ class CustomerDetailsView extends StatelessWidget {
     this.onMerged,
     this.onClaimed,
     this.onEdited,
+    this.consignorStatements,
   });
 
   final CustomerDetailsViewModel viewModel;
+
+  /// See [CustomerDetailsScreen.consignorStatements].
+  final ConsignorStatementLauncher? consignorStatements;
 
   /// Null hides whatever needs a permission to show.
   final AuthorizationCapabilities? capabilities;
@@ -160,6 +172,13 @@ class CustomerDetailsView extends StatelessWidget {
                 ),
                 SizedBox(height: spacing.md),
               ],
+              if (consignorStatements case final statements?)
+                ConsignorSummarySection(
+                  key: ValueKey('consignor_summary_${customer.id}'),
+                  launcher: statements,
+                  consignorId: customer.id,
+                  consignorName: customer.fullName,
+                ),
               PointyDetailSection(
                 title: l10n.customerProfileTitle,
                 icon: Icons.badge_outlined,

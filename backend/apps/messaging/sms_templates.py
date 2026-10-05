@@ -425,6 +425,24 @@ SMS_TEMPLATE_SPECS: tuple[SmsTemplateSpec, ...] = (
         group="consignment",
     ),
     SmsTemplateSpec(
+        kind="consignment_unclaimed",
+        title="تذكير بمستحقات أمانة",
+        description=(
+            "تذكير لصاحب الأمانة بمبلغ بيع لم يستلمه بعد: بعد المدة المضبوطة في "
+            "إعدادات الأمانات، ثم كل مثلها حتى 3 مرات. المبلغ يبقى مستحقًا له مهما طال."
+        ),
+        text="مرحبًا $1، لكم لدى $2 مبلغ $3 من بيع $4 منذ $5، نرجو زيارتنا لاستلامه.",
+        variables=(
+            "اسم صاحب الأمانة",
+            _SHOP,
+            "المبلغ المستحق",
+            "الصنف ورقمه أو عدد الأمانات",
+            "المدة",
+        ),
+        sample=("أحمد", _SAMPLE_SHOP, "900.00 د.ل", "هاتف سامسونج A54 (رقم U-0042)", "30 يومًا"),
+        group="consignment",
+    ),
+    SmsTemplateSpec(
         kind="batch_recall",
         title="استدعاء دفعة",
         description="تُرسل لكل عميل اشترى من دفعة تم استدعاؤها.",

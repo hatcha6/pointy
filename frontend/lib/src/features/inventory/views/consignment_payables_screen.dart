@@ -18,6 +18,8 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/consignment_view_model.dart';
 import 'consignment_intake_sheet.dart';
+import 'consignment_payout_method_sheet.dart';
+import 'consignor_statement_launcher.dart';
 
 /// مستحقات الأمانات — what the shop owes the owners of goods it has sold.
 ///
@@ -39,9 +41,13 @@ class ConsignmentPayablesScreen extends StatefulWidget {
     required this.contacts,
     required this.capabilities,
     required this.navigation,
+    this.statements,
   });
 
   final ConsignmentViewModel viewModel;
+
+  /// Opens one consignor's whole statement from their row. Null hides it.
+  final ConsignorStatementLauncher? statements;
   final ConsignmentRepository repository;
   final CatalogRepository catalog;
   final ContactRepository contacts;
@@ -187,6 +193,14 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
         onTap: () => viewModel.toggle(row),
         onSelectAll: () => viewModel.selectAllFor(row),
         onResend: () => _resend(context, viewModel, row),
+        onOpenStatement: switch ((widget.statements, row.consignorId)) {
+          (final statements?, final consignorId?) => () => statements.open(
+            context,
+            consignorId: consignorId,
+            consignorName: row.consignorName,
+          ),
+          _ => null,
+        },
       ),
     );
   }
@@ -266,10 +280,9 @@ class _ConsignmentPayablesScreenState extends State<ConsignmentPayablesScreen> {
   ) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final method = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => _PayoutMethodSheet(total: viewModel.selectedTotal),
+    final method = await showConsignmentPayoutMethodSheet(
+      context,
+      total: viewModel.selectedTotal,
     );
     if (method == null) {
       return;
@@ -463,6 +476,7 @@ class _PayableCard extends StatelessWidget {
     required this.onTap,
     required this.onSelectAll,
     required this.onResend,
+    this.onOpenStatement,
   });
 
   final ConsignmentPayable row;
@@ -470,6 +484,7 @@ class _PayableCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onSelectAll;
   final VoidCallback onResend;
+  final VoidCallback? onOpenStatement;
 
   @override
   Widget build(BuildContext context) {
@@ -585,7 +600,14 @@ class _PayableCard extends StatelessWidget {
                       ),
                       tone: colors.danger,
                     ),
-                  const Spacer(),
+                  // No Spacer: this is a Wrap, and a Flexible inside one is a
+                  // ParentDataWidget error on every row.
+                  if (onOpenStatement != null)
+                    IconButton(
+                      tooltip: l10n.consignorStatementOpen,
+                      onPressed: onOpenStatement,
+                      icon: const Icon(Icons.receipt_long_outlined, size: 20),
+                    ),
                   TextButton.icon(
                     onPressed: onResend,
                     icon: const Icon(Icons.sms_outlined, size: 16),
@@ -619,45 +641,6 @@ class _Chip extends StatelessWidget {
         const SizedBox(width: 4),
         Text(label, style: theme.textTheme.bodySmall?.copyWith(color: color)),
       ],
-    );
-  }
-}
-
-class _PayoutMethodSheet extends StatelessWidget {
-  const _PayoutMethodSheet({required this.total});
-
-  final double total;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              l10n.consignmentPayoutMethodTitle(formatMoney(total)),
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: const Icon(Icons.payments_outlined),
-              title: Text(l10n.consignmentPayoutCash),
-              subtitle: Text(l10n.consignmentPayoutCashHint),
-              onTap: () => Navigator.of(context).pop('cash'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_outlined),
-              title: Text(l10n.consignmentPayoutBank),
-              onTap: () => Navigator.of(context).pop('bank'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

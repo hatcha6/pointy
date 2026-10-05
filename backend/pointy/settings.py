@@ -805,6 +805,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "operations.job_pickup_reminders",
         "schedule": crontab(minute=30, hour=10),
     },
+    # Consignors whose goods sold and who have not collected the money: a
+    # reminder after the shop's reminder days, then every as many again, three
+    # times at most. It only ever reminds — the money stays theirs (§17.8).
+    "inventory.consignment-unclaimed-reminders": {
+        "task": "inventory.consignment_unclaimed_reminders",
+        "schedule": crontab(minute=40, hour=10),
+    },
     # Drain sending campaigns into the outbound queue (the gateway limiter paces
     # the actual sends).
     "crm.pump-sending-campaigns": {

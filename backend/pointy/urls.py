@@ -138,6 +138,7 @@ from apps.inventory.consignment_views import (
     ConsignmentIncidentViewSet,
     ConsignmentPositionView,
     ConsignorPayoutViewSet,
+    ConsignorStatementView,
     UnitAttributeDefinitionViewSet,
 )
 from apps.inventory.tracked_views import StockBatchViewSet, StockUnitViewSet
@@ -421,6 +422,13 @@ urlpatterns = [
         "api/inventory/consignment-position/",
         ConsignmentPositionView.as_view(),
         name="consignment-position",
+    ),
+    # One consignor's whole page across every agreement they signed: what is
+    # held for them, what sold and waits for them, what was paid.
+    path(
+        "api/inventory/consignors/<int:consignor_id>/statement/",
+        ConsignorStatementView.as_view(),
+        name="consignor-statement",
     ),
     # The "what changed" counters clients poll while idle. Redis-only, 304 on
     # an unchanged vector — see apps.core.state_views.

@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../../data/models/consignment.dart';
+import '../../../data/models/consignor_statement.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -107,6 +108,55 @@ class ConsignmentDocumentPdfService {
     );
   }
 
+  // -- the consignor's statement ----------------------------------------------
+
+  Future<Uint8List> buildStatementBytes({
+    required ConsignorStatement statement,
+    required List<ConsignorStatementLine> lines,
+    DateTime? start,
+    DateTime? end,
+    DateTime? printedAt,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) {
+    return _build(
+      content: buildConsignorStatementContent(
+        statement: statement,
+        lines: lines,
+        printedAt: printedAt ?? DateTime.now(),
+        start: start,
+        end: end,
+      ),
+      shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
+      signatures: const ('توقيع المحل', 'توقيع صاحب الأمانة'),
+    );
+  }
+
+  Future<bool> printStatement({
+    required ConsignorStatement statement,
+    required List<ConsignorStatementLine> lines,
+    DateTime? start,
+    DateTime? end,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+    PrintingRepository? printingRepository,
+  }) async {
+    final bytes = await buildStatementBytes(
+      statement: statement,
+      lines: lines,
+      start: start,
+      end: end,
+      shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
+    );
+    return _layout(
+      'consignor-statement-${statement.consignorId}.pdf',
+      bytes,
+      printingRepository,
+    );
+  }
+
   // -- rendering ------------------------------------------------------------
 
   Future<Uint8List> _build({
@@ -167,18 +217,20 @@ class ConsignmentDocumentPdfService {
       _fields(content.fields),
       pw.SizedBox(height: 14),
       PointyPdfSectionTitle(
-        content.total == null ? 'البضاعة المستلمة' : 'مقابل بيع',
+        content.tableTitle ??
+            (content.total == null ? 'البضاعة المستلمة' : 'مقابل بيع'),
       ),
       pw.SizedBox(height: 8),
       PointyPdfTable.invoice(
         columns: content.tableColumns,
-        columnFlex: const [3, 2.4, 2.2, 1.6],
+        columnFlex: content.tableFlex,
         emptyValue: 'لا توجد أصناف على هذا السند.',
         rows: content.tableRows,
+        dense: content.tableColumns.length > 4,
       ).build(),
       if (content.termFields.isNotEmpty) ...[
         pw.SizedBox(height: 14),
-        PointyPdfSectionTitle('شروط التسوية'),
+        PointyPdfSectionTitle(content.termsTitle),
         pw.SizedBox(height: 8),
         _fields(content.termFields),
       ],

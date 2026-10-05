@@ -356,6 +356,103 @@ class ConsignmentPositionView(APIView):
         )
 
 
+class ConsignorStatementView(APIView):
+    """كشف حساب صاحب الأمانة — one consignor, across every agreement they signed.
+
+    ``?start=&end=`` (dates) narrow the history and the period figures, never
+    the open items; ``?state=awaiting,held`` narrows the lines;
+    ``?summary=1`` answers the headline alone, for a page that only wants to
+    know whether this customer has consigned anything. Lines are paged like
+    every list here.
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"GET": ("inventory.view_consignment_liability",)}
+
+    def get(self, request, consignor_id):
+        from django.shortcuts import get_object_or_404
+        from rest_framework.pagination import PageNumberPagination
+
+        from apps.core.roles import user_has_full_visibility
+        from apps.customers.models import Customer
+
+        from . import consignor_statement as statement
+        from .consignment_reminders import last_reminders
+        from .consignment_serializers import ConsignorStatementLineSerializer
+
+        consignor = get_object_or_404(Customer, pk=consignor_id)
+        start, end = _period(request)
+        body = {
+            "consignor": {
+                "id": consignor.pk,
+                "full_name": consignor.full_name,
+                "phone": consignor.phone,
+                "do_not_contact": bool(getattr(consignor, "do_not_contact", False)),
+            },
+            "period": {
+                "start": request.query_params.get("start") or None,
+                "end": request.query_params.get("end") or None,
+            },
+            "figures": statement.statement_figures(
+                consignor,
+                start=start,
+                end=end,
+                sees_margins=user_has_full_visibility(request.user),
+            ),
+            "reminders": statement.reminder_summary(consignor),
+        }
+        if request.query_params.get("summary") in ("1", "true"):
+            return Response(body)
+
+        states = [
+            state
+            for state in (request.query_params.get("state") or "").split(",")
+            if state in statement.LineState.ORDER
+        ]
+        rows = statement.statement_lines(
+            consignor, start=start, end=end, states=states or None
+        )
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(rows, request, view=self)
+        lines = ConsignorStatementLineSerializer(
+            page,
+            many=True,
+            context={"request": request, "last_reminders": last_reminders(page)},
+        ).data
+        body.update(
+            {
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": lines,
+            }
+        )
+        return Response(body)
+
+
+def _period(request):
+    """``start``/``end`` as the half-open datetime window the figures read."""
+    from django.utils.dateparse import parse_date
+    from rest_framework.exceptions import ValidationError
+
+    from apps.core.money_dates import day_range_end, day_range_start
+
+    bounds = []
+    for name in ("start", "end"):
+        raw = request.query_params.get(name)
+        if not raw:
+            bounds.append(None)
+            continue
+        try:
+            day = parse_date(raw)
+        except ValueError:
+            day = None
+        if day is None:
+            raise ValidationError({name: "تاريخ غير صالح."})
+        bounds.append(day_range_start(day) if name == "start" else day_range_end(day))
+    return tuple(bounds)
+
+
 class UnitAttributeDefinitionViewSet(viewsets.ModelViewSet):
     """Which typed facts each kind of article records.
 

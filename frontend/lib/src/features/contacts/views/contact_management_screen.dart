@@ -17,6 +17,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/query_controls/debounced_search_field.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../inventory/views/consignor_statement_launcher.dart';
 import '../view_models/contact_management_view_model.dart';
 import '../view_models/customer_details_view_model.dart';
 import '../view_models/supplier_details_view_model.dart';
@@ -32,6 +33,7 @@ class ContactManagementScreen extends StatefulWidget {
     required this.shopSettingsRepository,
     required this.navigation,
     required this.capabilities,
+    this.consignorStatements,
   });
 
   final ContactManagementViewModel viewModel;
@@ -40,6 +42,9 @@ class ContactManagementScreen extends StatefulWidget {
   final ShopSettingsRepository shopSettingsRepository;
   final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
+
+  /// Opens a customer's consignment statement; null hides the section.
+  final ConsignorStatementLauncher? consignorStatements;
 
   @override
   State<ContactManagementScreen> createState() =>
@@ -161,6 +166,7 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
               printingRepository: widget.printingRepository,
               shopSettingsRepository: widget.shopSettingsRepository,
               capabilities: widget.capabilities,
+              consignorStatements: widget.consignorStatements,
             ),
           ),
         );
@@ -178,6 +184,7 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
       key: ValueKey('contact_detail_customer_${customer.id}'),
       viewModel: customerViewModel,
       capabilities: widget.capabilities,
+      consignorStatements: widget.consignorStatements,
       onMerged: () {
         setState(() {
           _selectedCustomer = null;
@@ -222,6 +229,7 @@ class _ContactManagementBody extends StatelessWidget {
     required this.printingRepository,
     required this.shopSettingsRepository,
     required this.capabilities,
+    this.consignorStatements,
   });
 
   final ContactManagementViewModel viewModel;
@@ -236,6 +244,7 @@ class _ContactManagementBody extends StatelessWidget {
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
+  final ConsignorStatementLauncher? consignorStatements;
 
   @override
   Widget build(BuildContext context) {
@@ -283,6 +292,7 @@ class _ContactManagementBody extends StatelessWidget {
                             printingRepository: printingRepository,
                             shopSettingsRepository: shopSettingsRepository,
                             capabilities: capabilities,
+                            consignorStatements: consignorStatements,
                             onSelectCustomer: isDualPane
                                 ? onSelectCustomer
                                 : null,
@@ -544,12 +554,14 @@ class _CustomerList extends StatelessWidget {
     required this.capabilities,
     this.onSelectCustomer,
     this.selectedCustomerId,
+    this.consignorStatements,
   });
 
   final ContactManagementViewModel viewModel;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
+  final ConsignorStatementLauncher? consignorStatements;
   final ValueChanged<Customer>? onSelectCustomer;
   final int? selectedCustomerId;
 
@@ -646,6 +658,7 @@ class _CustomerList extends StatelessWidget {
           printingRepository: printingRepository,
           shopSettingsRepository: shopSettingsRepository,
           capabilities: capabilities,
+          consignorStatements: consignorStatements,
         ),
       ),
     );

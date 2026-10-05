@@ -1,4 +1,5 @@
 import '../models/consignment.dart';
+import '../models/consignor_statement.dart';
 import '../models/stock_unit.dart';
 import 'api_session.dart';
 
@@ -42,6 +43,36 @@ class ConsignmentApiClient {
     );
     _session.ensureSuccess(response, 'Consignment position failed with status');
     return ConsignmentPosition.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// كشف حساب صاحب الأمانة: one consignor across every agreement they signed.
+  ///
+  /// [start]/[end] narrow the history and the period figures, never the open
+  /// items; [states] narrows the lines; [summaryOnly] asks for the headline
+  /// alone, which is what a customer page wants to decide whether to show a
+  /// consignment section at all.
+  Future<ConsignorStatementPage> fetchConsignorStatement(
+    int consignorId, {
+    DateTime? start,
+    DateTime? end,
+    List<String> states = const [],
+    int page = 1,
+    bool summaryOnly = false,
+  }) async {
+    final response = await _session.get(
+      'inventory/consignors/$consignorId/statement/',
+      query: {
+        if (start != null) 'start': _day(start),
+        if (end != null) 'end': _day(end),
+        if (states.isNotEmpty) 'state': states.join(','),
+        if (page > 1) 'page': '$page',
+        if (summaryOnly) 'summary': '1',
+      },
+    );
+    _session.ensureSuccess(response, 'Consignor statement failed with status');
+    return ConsignorStatementPage.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

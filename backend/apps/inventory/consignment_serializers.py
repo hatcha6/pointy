@@ -538,6 +538,113 @@ class SettleIncidentSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
 
 
+class ConsignorStatementLineSerializer(serializers.ModelSerializer):
+    """One article on a consignor's statement, wherever it stands.
+
+    Expects the queryset of ``consignor_statement.statement_lines`` (it reads
+    the ``state`` and ``activity_at`` annotations) and, in the context, the
+    page's ``last_reminders`` map — read in one query for the whole page, not
+    one per article.
+    """
+
+    product_name = serializers.CharField(source="variant.full_name", read_only=True)
+    agreement_number = serializers.SerializerMethodField()
+    state = serializers.CharField(read_only=True)
+    activity_at = serializers.DateTimeField(read_only=True)
+    payout_due = serializers.SerializerMethodField()
+    payout_is_estimate = serializers.SerializerMethodField()
+    advance = serializers.DecimalField(
+        source="consignor_advance", max_digits=10, decimal_places=2, read_only=True
+    )
+    net_due = serializers.SerializerMethodField()
+    paid_at = serializers.DateTimeField(source="consignor_paid_at", read_only=True)
+    payout_number = serializers.SerializerMethodField()
+    invoice_number = serializers.SerializerMethodField()
+    sold_on_credit = serializers.SerializerMethodField()
+    days_waiting = serializers.SerializerMethodField()
+    last_reminder = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StockUnit
+        fields = (
+            "id",
+            "code",
+            "product_name",
+            "agreement",
+            "agreement_number",
+            "status",
+            "state",
+            "activity_at",
+            "acquired_at",
+            "declared_value",
+            "list_price",
+            "sold_at",
+            "sold_price",
+            "payout_due",
+            "payout_is_estimate",
+            "advance",
+            "net_due",
+            "paid_at",
+            "consignor_payout",
+            "payout_number",
+            "invoice_number",
+            "sold_on_credit",
+            "days_waiting",
+            "last_reminder",
+        )
+        read_only_fields = fields
+
+    def get_agreement_number(self, unit):
+        return unit.agreement.number if unit.agreement_id else ""
+
+    def get_payout_due(self, unit):
+        return figures.consignor_payout_due(unit)
+
+    def get_payout_is_estimate(self, unit):
+        """On the shelf, the payout is a projection at the asking price."""
+        return unit.status != StockUnit.Status.SOLD
+
+    def get_net_due(self, unit):
+        return max(figures.net_due(unit), Decimal("0.00"))
+
+    def get_payout_number(self, unit):
+        payout = unit.consignor_payout if unit.consignor_payout_id else None
+        return payout.number if payout is not None else ""
+
+    def _order(self, unit):
+        line = unit.sold_order_line
+        return getattr(line, "order", None) if line is not None else None
+
+    def get_invoice_number(self, unit):
+        order = self._order(unit)
+        return getattr(order, "receipt_number", "") if order is not None else ""
+
+    def get_sold_on_credit(self, unit):
+        from apps.sales.models import Order
+
+        order = self._order(unit)
+        return order is not None and order.sale_type == Order.SaleType.CREDIT
+
+    def get_days_waiting(self, unit):
+        from django.utils import timezone
+
+        if unit.status != StockUnit.Status.SOLD or unit.consignor_paid_at:
+            return None
+        if unit.sold_at is None:
+            return None
+        return (timezone.now() - unit.sold_at).days
+
+    def get_last_reminder(self, unit):
+        row = self.context.get("last_reminders", {}).get(unit.pk)
+        if row is None:
+            return None
+        return {
+            "sent_at": row.sent_at,
+            "round": row.round,
+            "status": row.message.status if row.message_id else None,
+        }
+
+
 class UnitAttributeDefinitionSerializer(serializers.ModelSerializer):
     """One typed fact a kind of article records — the attribute editor's row."""
 

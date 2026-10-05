@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/consignment.dart';
+import '../models/consignor_statement.dart';
 import '../models/stock_unit.dart';
 import '../services/pos_api_service.dart';
 
@@ -48,6 +49,26 @@ class ConsignmentRepository {
         alsoUnitIds: alsoUnitIds,
         method: method,
         reference: reference,
+      ),
+    );
+  }
+
+  Future<Result<ConsignorStatementPage>> loadStatement(
+    int consignorId, {
+    DateTime? start,
+    DateTime? end,
+    List<String> states = const [],
+    int page = 1,
+    bool summaryOnly = false,
+  }) {
+    return Result.guard(
+      () => _service.fetchConsignorStatement(
+        consignorId,
+        start: start,
+        end: end,
+        states: states,
+        page: page,
+        summaryOnly: summaryOnly,
       ),
     );
   }

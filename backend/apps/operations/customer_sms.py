@@ -22,6 +22,7 @@ from apps.messaging.approvals import kind_unapproved
 from apps.messaging.automation import send_automatic
 from apps.messaging.models import OutboundMessage
 from apps.messaging.services import enqueue_message
+from apps.messaging.shop_values import days_phrase as _days_phrase
 from apps.messaging.shop_values import money, shop_name, sms_date
 from apps.messaging.sms_templates import sms_template
 from apps.sales.models import Order
@@ -122,16 +123,6 @@ def notify_job_returned(job) -> None:
     """Closed without a repair: the customer can come for their property."""
     if _texts_customer(job) and job.handed_over_at is None:
         _send(job, "job_returned", job_item_label(job), dedup_key=f"job_returned:{job.pk}")
-
-
-def _days_phrase(days: int) -> str:
-    if days == 1:
-        return "يوم"
-    if days == 2:
-        return "يومين"
-    if 3 <= days <= 10:
-        return f"{days} أيام"
-    return f"{days} يومًا"
 
 
 def send_pickup_reminders(*, now=None) -> int:

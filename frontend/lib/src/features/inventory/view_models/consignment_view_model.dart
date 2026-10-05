@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/consignment.dart';
-import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/consignment_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../pdf/consignment_pdf.dart';
+import 'consignment_document_printer.dart';
 
 /// مستحقات الأمانات, and the position behind it.
 ///
@@ -23,16 +23,16 @@ class ConsignmentViewModel extends ChangeNotifier {
     PrintingRepository? printingRepository,
     ConsignmentDocumentPdfService documents =
         const ConsignmentDocumentPdfService(),
-  }) : _shopSettings = shopSettingsRepository,
-       _printingRepository = printingRepository,
-       _documents = documents;
+  }) : _printer = ConsignmentDocumentPrinter(
+         shopSettingsRepository: shopSettingsRepository,
+         printingRepository: printingRepository,
+         documents: documents,
+       );
 
   final ConsignmentRepository _repository;
-  final ShopSettingsRepository? _shopSettings;
 
   /// Sends the vouchers to this device's documents printer when one is set.
-  final PrintingRepository? _printingRepository;
-  final ConsignmentDocumentPdfService _documents;
+  final ConsignmentDocumentPrinter _printer;
 
   ConsignmentPayablePage _payables = const ConsignmentPayablePage();
   ConsignmentPosition _position = const ConsignmentPosition();
@@ -67,12 +67,13 @@ class ConsignmentViewModel extends ChangeNotifier {
 
   /// What the selected rows come to. One consignor collecting for three of
   /// their articles signs one voucher, so the screen adds them up before the
-  /// drawer opens rather than after.
+  /// drawer opens rather than after. Net of any advance already handed over
+  /// for the same article, because that is what the voucher pays.
   double get selectedTotal {
     var total = 0.0;
     for (final row in _payables.rows) {
       if (_selected.contains(row.unitId)) {
-        total += row.payoutDue;
+        total += row.netDue;
       }
     }
     return total;
@@ -240,51 +241,12 @@ class ConsignmentViewModel extends ChangeNotifier {
   /// verbatim. A shop that rewords its template next year has not reworded this
   /// page, and printing the live template instead would quietly make that
   /// untrue.
-  Future<bool> printVoucher(ConsignmentAgreement agreement) async {
-    final settings = await _loadShopSettings();
-    return _documents.printVoucher(
-      agreement: agreement,
-      units: agreement.units,
-      shopSettings: settings,
-      shopLogoBytes: await _loadShopLogoBytes(settings),
-      printingRepository: _printingRepository,
-    );
-  }
+  Future<bool> printVoucher(ConsignmentAgreement agreement) =>
+      _printer.printVoucher(agreement);
 
   /// Print *سند صرف أمانة* — the receipt for money handed across the counter.
-  Future<bool> printPayout(ConsignorPayout payout) async {
-    final settings = await _loadShopSettings();
-    return _documents.printPayout(
-      payout: payout,
-      shopSettings: settings,
-      shopLogoBytes: await _loadShopLogoBytes(settings),
-      printingRepository: _printingRepository,
-    );
-  }
-
-  Future<ShopSettings?> _loadShopSettings() async {
-    final repository = _shopSettings;
-    if (repository == null) {
-      return null;
-    }
-    final result = await repository.loadSettings();
-    return switch (result) {
-      Ok<ShopSettings>(value: final settings) => settings,
-      Error<ShopSettings>() => null,
-    };
-  }
-
-  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
-    final repository = _shopSettings;
-    if (repository == null) {
-      return null;
-    }
-    final result = await repository.loadLogoBytes(settings);
-    return switch (result) {
-      Ok<Uint8List?>(value: final bytes) => bytes,
-      Error<Uint8List?>() => null,
-    };
-  }
+  Future<bool> printPayout(ConsignorPayout payout) =>
+      _printer.printPayout(payout);
 
   Future<bool> resendSms(ConsignmentPayable row) async {
     final result = await _repository.resendSaleSms(row.unitId);
