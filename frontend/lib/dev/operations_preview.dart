@@ -590,6 +590,47 @@ class _FakeOperationsRepository extends OperationsRepository {
     );
   }
 
+  // The approval step saves the price the customer agreed before moving on.
+  @override
+  Future<Result<OperationsJob>> updateJob(
+    int jobId,
+    Map<String, dynamic> data,
+  ) async {
+    final index = jobs.indexWhere((job) => job.id == jobId);
+    if (index < 0) {
+      return loadJob(jobId);
+    }
+    final job = jobs[index];
+    final updated = _advanced(
+      job,
+      job.currentStage,
+      approvedPrice: double.tryParse('${data['approved_price'] ?? ''}'),
+    );
+    jobs[index] = updated;
+    return Ok(updated);
+  }
+
+  // Moves a board card for real, so a recording can show a job advancing
+  // stage by stage instead of the "could not complete" snackbar.
+  @override
+  Future<Result<OperationsJob>> transitionJob(
+    int jobId, {
+    required int toStage,
+    String note = '',
+    String handedOverTo = '',
+    bool forceRelease = false,
+    String? idempotencyKey,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    final index = jobs.indexWhere((job) => job.id == jobId);
+    if (index < 0) {
+      return loadJob(jobId);
+    }
+    final moved = _advanced(jobs[index], toStage);
+    jobs[index] = moved;
+    return Ok(moved);
+  }
+
   @override
   Future<Result<OperationsJob>> loadJob(int jobId) async {
     return Ok(
@@ -966,6 +1007,61 @@ OperationsJob _job({
     handedOverTo: handedOverTo,
     order: order,
     orderSaleType: orderSaleType,
+  );
+}
+
+/// [job] moved to [toStage], with the hop recorded on its trail. Staying on
+/// the same stage (an edit, e.g. the approved price) records no hop.
+OperationsJob _advanced(
+  OperationsJob job,
+  int toStage, {
+  double? approvedPrice,
+}) {
+  final moved = toStage != job.currentStage;
+  final stageIndex = _repairStages.indexWhere((s) => s.id == toStage);
+  final terminal = _repairStages[stageIndex].isTerminal;
+  return _job(
+    id: job.id,
+    jobNumber: job.jobNumber,
+    currentStage: toStage,
+    nextStage: stageIndex + 1 < _repairStages.length
+        ? _repairStages[stageIndex + 1]
+        : null,
+    status: terminal ? OperationsJobStatus.completed : OperationsJobStatus.open,
+    priority: job.priority,
+    customerName: job.customerName,
+    customerPhone: job.customerPhone,
+    assignedEmployeeName: job.assignedEmployeeName.isEmpty
+        ? 'خالد'
+        : job.assignedEmployeeName,
+    symptoms: job.symptoms,
+    diagnosis: job.diagnosis,
+    quotedPrice: job.quotedPrice,
+    approvedPrice: approvedPrice ?? job.approvedPrice,
+    orderReceiptNumber: job.orderReceiptNumber,
+    dueAt: job.dueAt,
+    assets: job.assets,
+    materials: job.materials,
+    materialsTotal: job.materialsTotal,
+    services: job.services,
+    servicesTotal: job.servicesTotal,
+    settlementState: job.settlementState,
+    holdReason: job.holdReason,
+    createdAt: job.createdAt,
+    stageEvents: [
+      ...job.stageEvents,
+      if (moved)
+        JobStageEvent(
+          id: job.stageEvents.length + 100,
+          toStage: toStage,
+          toStageName: _repairStages[stageIndex].name,
+          fromStage: job.currentStage,
+          fromStageName: job.currentStageDetails?.name ?? '',
+          changedByName: 'خالد',
+          note: '',
+          createdAt: DateTime(2026, 6, 15, 11, 20),
+        ),
+    ],
   );
 }
 

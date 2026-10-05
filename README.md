@@ -196,6 +196,16 @@ Screens are reviewed without a backend through dev-only preview harnesses under
 (`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
 repositories, so there is no server, no login, and no shop data involved.
 
+## Product page
+
+`marketing/website/` is the دفتر product page: static HTML/CSS/JS, no build
+step, Arabic RTL. `make marketing-site` serves it at http://127.0.0.1:8095.
+Every screenshot and clip on it is the real app, recorded from the preview
+harnesses above (plus `make frontend-marketing-preview` for updates,
+attendance, payroll, per-product currency and the IMEI till).
+`make marketing-site-capture` rebuilds the harnesses and re-records and
+re-encodes all of it; see `marketing/website/README.md`.
+
 ## Searched but not found
 
 A product search that finds nothing is counted per word (`/api/search-misses/`),

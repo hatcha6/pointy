@@ -133,7 +133,8 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview \
+	marketing-site marketing-site-capture \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check \
@@ -472,6 +473,15 @@ frontend-learning-preview: frontend-install ## Run the learning (in-app guides) 
 
 frontend-subscription-preview: frontend-install ## Run the subscription / relay status settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/subscription_preview.dart
+
+frontend-marketing-preview: frontend-install ## Run the marketing harness (?screen=updates|attendance|attendance-device|payroll|product-fx|exchange-rates|pos-serial, &theme=dark).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/marketing_preview.dart
+
+marketing-site: ## Serve the دفتر product page (marketing/website) at http://127.0.0.1:8095.
+	cd marketing/website && python3 -m http.server 8095 --bind 127.0.0.1
+
+marketing-site-capture: ## Re-record every screenshot and clip on the product page from the real app harnesses.
+	marketing/website/capture/run.sh
 
 frontend-wallet-preview: frontend-install ## Run the Daftar wallet (balance, Dafa top-up sheet with every method, history) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/wallet_preview.dart

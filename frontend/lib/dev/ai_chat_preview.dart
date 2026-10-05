@@ -97,7 +97,7 @@ class _PreviewHostState extends State<_PreviewHost> {
       pickerMode: widget.screen == 'po',
       linksMode: widget.screen == 'links',
       webMode: widget.screen == 'web',
-      uiMode: widget.screen == 'ui',
+      uiMode: widget.screen == 'ui' || widget.screen == 'ui-live',
     ),
     picker: _FakeAttachmentPicker(),
   );
@@ -145,6 +145,10 @@ class _PreviewHostState extends State<_PreviewHost> {
       case 'web':
         // A web-searched reply with source favicons next to the copy action.
         await _viewModel.sendMessage('كم سعر الذهب اليوم؟');
+      case 'ui-live':
+        // Same scripted reply as `ui`, but nothing is sent on load: a recording
+        // types the question into the real composer first.
+        break;
       case 'ui':
         // Prose plus one generated card, interleaved as they stream.
         await _viewModel.sendMessage('كيف كانت مبيعات الشهر؟');

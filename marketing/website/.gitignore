@@ -1,0 +1,4 @@
+# Screenshots and clips stay out of git for size. `make marketing-site-capture`
+# re-records all of them from the app's preview harnesses.
+assets/img/
+assets/video/

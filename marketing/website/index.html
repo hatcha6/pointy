@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>دفتر — نظام المتجر الذي لا تخطئ أرقامه</title>
+<meta name="description" content="دفتر: المبيعات والمخزون والحسابات والموظفون وورش الصيانة في تطبيق عربي واحد. يعمل على شبكة متجرك، ويصلك به من أي مكان عبر نفق مشفّر، ويتحدّث دون أن يتوقف البيع.">
+<meta name="theme-color" content="#0B111C">
+<meta property="og:title" content="دفتر — أرقام صحيحة، دائماً">
+<meta property="og:description" content="نظام عربي للمبيعات والمخزون والحسابات، يعمل على شبكة متجرك.">
+<meta property="og:image" content="assets/img/pos-2000.webp">
+<link rel="icon" href="assets/img/logo-64.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/plex-arabic-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/plex-arabic-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/img/pos-checkout-poster.webp" as="image" fetchpriority="high">
+<link rel="stylesheet" href="assets/css/site.css">
+<script src="assets/js/site.js" defer></script>
+</head>
+<body>
+
+<nav class="nav" aria-label="القائمة">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/img/logo-64.png" width="30" height="30" alt="">دفتر</a>
+    <ul>
+      <li><a href="#highlights">نظرة سريعة</a></li>
+      <li><a href="#speed">السرعة</a></li>
+      <li><a href="#gpt">GPT</a></li>
+      <li><a href="#workshop">ورش الصيانة</a></li>
+      <li><a href="#privacy">الخصوصية</a></li>
+      <li><a href="#all">جميع المزايا</a></li>
+    </ul>
+    <a class="btn small" href="#contact">اطلب عرضاً</a>
+  </div>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero" id="top">
+  <div class="wrap hero-copy">
+    <p class="eyebrow">دفتر</p>
+    <h1>أرقامك <span class="grad">صحيحة. دائماً.</span></h1>
+    <p class="lead">المبيعات والمخزون والحسابات والموظفون وورشة الصيانة — في تطبيق عربي واحد يعمل على شبكة متجرك، ويرافقك أينما كنت.</p>
+    <div class="hero-cta">
+      <a class="btn" href="#contact">اطلب عرضاً</a>
+      <a class="btn ghost" href="#highlights">شاهد كيف يعمل</a>
+    </div>
+  </div>
+  <div class="hero-stage" data-scrub>
+    <div class="hero-sticky">
+      <div class="hero-glow"></div>
+      <div class="hero-device">
+        <div class="laptop">
+          <div class="screen vid">
+            <video muted playsinline loop preload="none" width="1600" height="1000"
+              poster="assets/img/pos-checkout-poster.webp" data-src="assets/video/pos-checkout.mp4"
+              aria-label="تسجيل حقيقي لشاشة البيع في دفتر: بحث، إضافة أصناف، دفع"></video>
+          </div>
+          <div class="base"></div>
+        </div>
+      </div>
+      <p class="hero-caption">تسجيل حقيقي من شاشة البيع، دون أي مونتاج.</p>
+    </div>
+  </div>
+</header>
+
+<!-- ================= HIGHLIGHTS ================= -->
+<section class="hl" id="highlights" aria-label="أبرز المزايا">
+  <div class="wrap hl-head">
+    <h2 class="h2">أبرز المزايا.</h2>
+  </div>
+  <div class="hl-track" data-carousel>
+    <article class="hl-card">
+      <p class="cap">فاتورة كاملة في ثوانٍ.<span>ابحث أو امسح الباركود، وتُطبَّق الخصومات تلقائياً.</span></p>
+      <div class="media"><div class="laptop"><div class="screen vid"><video muted playsinline preload="none" width="1600" height="1000" poster="assets/img/pos-checkout-poster.webp" data-src="assets/video/pos-checkout.mp4" aria-label="البيع في دفتر"></video></div><div class="base"></div></div></div>
+    </article>
+    <article class="hl-card light">
+      <p class="cap">اسأل GPT عن متجرك.<span>يجيبك من أرقام متجرك، بجدول ورسم بياني واقتراح.</span></p>
+      <div class="media"><div class="laptop"><div class="screen vid"><video muted playsinline preload="none" width="1600" height="1000" poster="assets/img/gpt-answer-poster.webp" data-src="assets/video/gpt-answer.mp4" aria-label="سؤال لـ GPT وإجابته"></video></div><div class="base"></div></div></div>
+    </article>
+    <article class="hl-card">
+      <p class="cap">كل فاتورة، ومعها لقطتها.<span>شاهد ما جرى عند الصندوق لحظة إصدار الفاتورة.</span></p>
+      <div class="media"><div class="phone vid"><video muted playsinline preload="none" width="620" height="1342" poster="assets/img/invoice-camera-poster.webp" data-src="assets/video/invoice-camera.mp4" aria-label="لقطة الكاميرا داخل الفاتورة"></video></div></div>
+    </article>
+    <article class="hl-card teal">
+      <p class="cap">متجرك في جيبك.<span>التطبيق نفسه الذي يعمل عليه الكاشير، على هاتفك.</span></p>
+      <div class="media"><div class="phone vid"><video muted playsinline preload="none" width="620" height="1342" poster="assets/img/phone-dashboard-poster.webp" data-src="assets/video/phone-dashboard.mp4" aria-label="لوحة التحكم على الهاتف"></video></div></div>
+    </article>
+    <article class="hl-card light">
+      <p class="cap">ورشتك على لوحة واحدة.<span>هواتف وسيارات ومولدات — من الاستلام حتى التسليم.</span></p>
+      <div class="media"><div class="laptop"><div class="screen vid"><video muted playsinline preload="none" width="1600" height="1000" poster="assets/img/ops-board-poster.webp" data-src="assets/video/ops-board.mp4" aria-label="نقل مهمة إصلاح بين المراحل على لوحة الورشة"></video></div><div class="base"></div></div></div>
+    </article>
+  </div>
+  <div class="hl-ui">
+    <div class="dots" role="tablist" aria-label="اختر شريحة"></div>
+    <button class="round" type="button" data-hl-toggle aria-label="إيقاف مؤقت"><svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg></button>
+  </div>
+</section>
+
+<!-- ================= STATEMENT ================= -->
+<section class="statement white" data-scrub aria-label="دفتر في جملة واحدة">
+  <div class="sticky">
+    <p data-words>دفتر واحد للمتجر كله. <span class="t">المبيعات والمخزون والحسابات والموظفون والورشة</span> — على شبكة متجرك، بلغتك، وبأرقام <span class="t">متطابقة</span> من الإيصال حتى تقرير نهاية اليوم.</p>
+  </div>
+</section>
+
+<!-- ================= SPEED ================= -->
+<section class="section dark" id="speed">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">السرعة</p>
+      <h2 class="h2">سريع. والدليل من متجر حقيقي.</h2>
+      <p class="lead">لا نقيس في المختبر. هذه أرقام أسبوع كامل من متجر بقالة كبير يعمل بدفتر، مقيسة من جهاز الكاشير نفسه، ذهاباً إلى الخادم وإياباً منه.</p>
+    </div>
+    <div class="stats">
+      <div class="stat" data-reveal>
+        <div class="big"><span class="num" data-count="4140">4,140</span></div>
+        <p><strong>فاتورة في أسبوع واحد</strong> على الخادم نفسه، دون أي توقف.</p>
+      </div>
+      <div class="stat" data-reveal style="--d:.1s">
+        <div class="big"><span class="num" data-count="0.31" data-dec="2">0.31</span><small>ث</small></div>
+        <p><strong>لإتمام البيع.</strong> نصف عمليات الدفع تكتمل في وقت أقل من ذلك، و95٪ منها في أقل من نصف ثانية.</p>
+      </div>
+      <div class="stat" data-reveal style="--d:.2s">
+        <div class="big"><span class="num" data-count="0.013" data-dec="3">0.013</span><small>ث</small></div>
+        <p><strong>لتحديث حالة الشاشة</strong>، ليرى الكاشير أحدث سعر وأحدث رصيد مخزون في كل لحظة.</p>
+      </div>
+    </div>
+    <div class="bars" data-bars data-reveal>
+      <div class="bar"><span class="lbl">تحديث الحالة</span><div class="track"><i class="p95" data-w="46"></i><i class="p50" data-w="13"></i><span class="v">0.013 ث</span></div></div>
+      <div class="bar"><span class="lbl">آخر تكلفة شراء</span><div class="track"><i class="p95" data-w="200"></i><i class="p50" data-w="72"></i><span class="v">0.07 ث</span></div></div>
+      <div class="bar"><span class="lbl">حساب الخصومات</span><div class="track"><i class="p95" data-w="163"></i><i class="p50" data-w="103"></i><span class="v">0.10 ث</span></div></div>
+      <div class="bar"><span class="lbl">مسح الباركود / البحث عن صنف</span><div class="track"><i class="p95" data-w="531"></i><i class="p50" data-w="173"></i><span class="v">0.17 ث</span></div></div>
+      <div class="bar"><span class="lbl">إتمام البيع</span><div class="track"><i class="p95" data-w="486"></i><i class="p50" data-w="310"></i><span class="v">0.31 ث</span></div></div>
+    </div>
+    <div class="legend"><span><i style="background:#2DD4BF"></i>نصف الطلبات أسرع من ذلك</span><span><i style="background:rgba(45,212,191,.25)"></i>95٪ من الطلبات أسرع من ذلك</span></div>
+    <p class="footnote">المصدر: قياسات أداء مجهولة الهوية من أجهزة الكاشير في متجر بقالة يعمل بدفتر، من 22 إلى 28 سبتمبر 2026 — 40,160 طلباً و4,140 فاتورة. يشمل الزمن الشبكة المحلية والخادم معاً.</p>
+  </div>
+</section>
+
+<!-- ================= GPT ================= -->
+<section class="section" id="gpt">
+  <div class="wrap">
+    <div class="head center" data-reveal>
+      <p class="eyebrow">GPT</p>
+      <h2 class="h2">مساعد يعرف متجرك.</h2>
+      <p class="lead">اسأله بلغتك، فيجيبك من بيانات متجرك — بالأرقام والجداول والرسوم البيانية، ويقترح الخطوة التالية. <strong>لا يُحفظ أي شيء قبل أن تراجعه وتوافق عليه.</strong></p>
+      <p class="ask">كيف كانت مبيعات الشهر؟</p>
+    </div>
+    <div class="laptop" data-reveal>
+      <div class="screen vid"><video muted playsinline loop preload="none" width="1600" height="1000" poster="assets/img/gpt-answer-poster.webp" data-src="assets/video/gpt-answer.mp4" aria-label="GPT يجيب عن مبيعات الشهر"></video></div>
+      <div class="base"></div>
+    </div>
+    <div class="trio" style="margin-top:clamp(60px,9vw,120px)">
+      <figure data-reveal>
+        <div class="phone"><img src="assets/img/phone-invoice-ai-390.webp" srcset="assets/img/phone-invoice-ai-390.webp 390w, assets/img/phone-invoice-ai-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="قراءة فاتورة مورد بالذكاء الاصطناعي"></div>
+        <figcaption><strong>صوّر فاتورة المورّد.</strong>يقرأ الأصناف ويطابقها مع منتجاتك، ويُبرز السطر الذي يحتاج إلى مراجعة.</figcaption>
+      </figure>
+      <figure data-reveal style="--d:.1s">
+        <div class="phone"><img src="assets/img/phone-ai-390.webp" srcset="assets/img/phone-ai-390.webp 390w, assets/img/phone-ai-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="إجابة GPT بجدول وتنبيه"></div>
+        <figcaption><strong>ينبّهك قبل أن تخسر.</strong>«السكر يُباع كثيراً بهامش ربح منخفض» — مع الرقم الذي يصحّح ذلك.</figcaption>
+      </figure>
+      <figure data-reveal style="--d:.2s">
+        <div class="phone"><img src="assets/img/phone-dashboard-dark-390.webp" srcset="assets/img/phone-dashboard-dark-390.webp 390w, assets/img/phone-dashboard-dark-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="لوحة التحكم بالوضع الداكن"></div>
+        <figcaption><strong>ملخّص يومي لصاحب المتجر.</strong>ما يستحق انتباهك اليوم، في سطرين.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CAMERAS ================= -->
+<section class="section dark" id="cameras">
+  <div class="wrap split">
+    <div data-reveal>
+      <p class="eyebrow">إعادة عرض الفاتورة</p>
+      <h2 class="h2">كل فاتورة، ومعها لقطتها.</h2>
+      <p class="lead" style="margin-top:22px">اربط جهاز تسجيل الكاميرات بدفتر عبر FTP، وهو يعمل مع معظم الأجهزة. يحتفظ دفتر <strong>بالثواني الخاصة بكل فاتورة ومرتجع</strong> ويتخلّص من الباقي، فتبقى اللقطة محفوظة حتى بعد أن يمسحها جهاز التسجيل.</p>
+      <div class="points">
+        <div><strong>افتح الفاتورة، واضغط تشغيل.</strong><p>الصندوق والباب والمخزن — كل كاميرا في لحظة إصدار الفاتورة.</p></div>
+        <div><strong>مرتجع مثير للشك؟</strong><p>اللقطة مرفقة بالمرتجع نفسه، لا مدفونة في ساعات من التسجيل.</p></div>
+        <div><strong>إعداد في دقيقة واحدة.</strong><p>العنوان والمنفذ واسم المستخدم وكلمة المرور — ثم يعرض لك دفتر أول ملف وصل.</p></div>
+      </div>
+    </div>
+    <div class="duo" data-reveal style="--d:.1s">
+      <figure><div class="phone vid"><video muted playsinline loop preload="none" width="620" height="1342" poster="assets/img/invoice-camera-poster.webp" data-src="assets/video/invoice-camera.mp4" aria-label="تشغيل لقطة الكاميرا من داخل فاتورة"></video></div></figure>
+      <figure><div class="phone"><img src="assets/img/phone-ftp-390.webp" srcset="assets/img/phone-ftp-390.webp 390w, assets/img/phone-ftp-780.webp 780w" sizes="(max-width: 760px) 70vw, 260px" width="390" height="844" loading="lazy" decoding="async" alt="بيانات اتصال FTP لجهاز التسجيل"></div></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= WORKSHOP ================= -->
+<section class="section paper-2" id="workshop">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow amber">محلات الصيانة وورش السيارات</p>
+      <h2 class="h2">ورشتك على لوحة واحدة.</h2>
+      <p class="lead">استلم الجهاز برقم IMEI أو السيارة برقم الهيكل، وتابعه مرحلة بعد مرحلة: التشخيص، فموافقة الزبون، فالإصلاح، فالتسليم. تُسجَّل كل مرحلة باسم الفني ووقتها، وتصدر الفاتورة عند التسليم.</p>
+      <div class="chips"><span class="chip">هواتف · IMEI</span><span class="chip">سيارات · رقم الهيكل واللوحة</span><span class="chip">مولدات كهرباء</span><span class="chip">أجهزة ألعاب</span><span class="chip amber">عمولة الفني</span></div>
+    </div>
+    <div class="laptop" data-reveal>
+      <div class="screen vid"><video muted playsinline loop preload="none" width="1600" height="1000" poster="assets/img/ops-board-poster.webp" data-src="assets/video/ops-board.mp4" aria-label="مهمة إصلاح تنتقل من الاستلام إلى التشخيص ثم موافقة الزبون على السعر ثم الإصلاح"></video></div>
+      <div class="base"></div>
+    </div>
+    <div class="trio" style="margin-top:clamp(60px,9vw,110px)">
+      <figure data-reveal><div class="phone"><img src="assets/img/phone-job-390.webp" srcset="assets/img/phone-job-390.webp 390w, assets/img/phone-job-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="تفاصيل مهمة إصلاح"></div><figcaption><strong>مسار واضح لكل مهمة.</strong>من استلم الجهاز، ومن شخّصه، ومتى وافق الزبون على السعر.</figcaption></figure>
+      <figure data-reveal style="--d:.1s"><div class="phone"><img src="assets/img/phone-asset-390.webp" srcset="assets/img/phone-asset-390.webp 390w, assets/img/phone-asset-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="سجل سيارة تويوتا كورولا"></div><figcaption><strong>سجلّ لكل جهاز وسيارة.</strong>3 زيارات، وفواتير بقيمة 435.00 د.ل، وسجلّ الملكية كاملاً.</figcaption></figure>
+      <figure data-reveal style="--d:.2s"><div class="phone"><img src="assets/img/phone-ops-board-390.webp" srcset="assets/img/phone-ops-board-390.webp 390w, assets/img/phone-ops-board-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="لوحة المهام على الهاتف"></div><figcaption><strong>رسالة «جاهز للاستلام» تصل إلى الزبون تلقائياً.</strong>دون أن تتصل بأحد.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SERIALIZED ================= -->
+<section class="section white" id="serial">
+  <div class="wrap split wide-media">
+    <div data-reveal>
+      <p class="eyebrow">المنتجات المتسلسلة</p>
+      <h2 class="h2">كل قطعة برقمها.</h2>
+      <p class="lead" style="margin-top:22px">للهواتف والإلكترونيات: يُسجَّل كل جهاز برقم IMEI أو الرقم التسلسلي، مع حالته وبطاريته وسعره. يختار الكاشير الجهاز بعينه، <strong>والأقدم على الرف يظهر أولاً</strong>، ويعرف دفتر ربح كل قطعة على حدة.</p>
+      <div class="points">
+        <div><strong>دفعات وتواريخ صلاحية.</strong><p>للأدوية والأغذية: الأقرب انتهاءً يُصرف أولاً، والدفعة المسحوبة يُوقَف بيعها.</p></div>
+        <div><strong>بضاعة الأمانة.</strong><p>جهاز يعرضه زبون لديك؟ يصله إشعار عند بيعه، ويكون حسابه جاهزاً.</p></div>
+        <div><strong>مدة بقاء كل جهاز على الرف.</strong><p>تقرير يبيّن رأس المال المجمّد منذ أكثر من 90 يوماً.</p></div>
+      </div>
+    </div>
+    <div data-reveal style="--d:.1s">
+      <div class="laptop"><div class="screen"><img src="assets/img/pos-serial-1200.webp" srcset="assets/img/pos-serial-1200.webp 1200w, assets/img/pos-serial-2000.webp 2000w" sizes="(max-width: 900px) 92vw, 680px" width="1440" height="900" loading="lazy" decoding="async" alt="اختيار جهاز آيفون بالـ IMEI عند البيع"></div><div class="base"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= REMOTE ================= -->
+<section class="section dark remote" id="remote">
+  <div class="wrap">
+    <div class="head center" data-reveal>
+      <p class="eyebrow">الوصول عن بُعد</p>
+      <h2 class="h2">التطبيق نفسه. من أي مكان.</h2>
+      <p class="lead">التطبيق الذي يعمل عليه الكاشير هو نفسه الذي على هاتفك وحاسوبك. اربط جهازك بخادم المتجر مرة واحدة وأنت داخله، ثم افتحه من المنزل أو أثناء السفر — <strong>كل ما تديره من داخل المتجر، تديره من خارجه</strong>، وفق صلاحيات حسابك.</p>
+    </div>
+    <div class="remote-stage">
+      <div class="laptop" data-reveal><div class="screen"><img src="assets/img/dashboard-1200.webp" srcset="assets/img/dashboard-1200.webp 1200w, assets/img/dashboard-2000.webp 2000w" sizes="(max-width: 900px) 92vw, 820px" width="1440" height="900" loading="lazy" decoding="async" alt="لوحة تحكم صاحب المتجر على الحاسوب"></div><div class="base"></div></div>
+      <div class="phone vid" data-reveal style="--d:.15s"><video muted playsinline loop preload="none" width="620" height="1342" poster="assets/img/phone-dashboard-poster.webp" data-src="assets/video/phone-dashboard.mp4" aria-label="لوحة التحكم نفسها على الهاتف"></video></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PRIVACY ================= -->
+<section class="section dark" id="privacy" style="background:#070b12">
+  <div class="wrap">
+    <div class="head center" data-reveal>
+      <p class="eyebrow">الخصوصية</p>
+      <h2 class="h2">بياناتك في متجرك، لا لدينا.</h2>
+      <p class="lead">خادم دفتر جهاز موجود داخل متجرك وعلى شبكتك. عندما تفتح دفتر من خارج المتجر، ينقل الوسيط طلبك عبر نفق مشفّر إلى خادمك ثم يعيد إليك الرد — <strong>دون أن يخزّن بياناتك أو يتدخّل فيها</strong>.</p>
+    </div>
+    <svg class="flow" viewBox="0 0 1040 330" role="img" aria-label="يتصل هاتفك بالوسيط، فينقل الوسيط الطلب عبر نفق مشفّر إلى خادم المتجر. وتتصل أجهزة الكاشير بالخادم مباشرة عبر شبكة المتجر." data-reveal>
+      <path class="tunnel" d="M190 120 H850"/>
+      <path class="wire" id="w1" d="M190 120 H520"/>
+      <path class="wire" id="w2" d="M520 120 H850"/>
+      <path class="lan" d="M850 160 V250 H640"/><path class="lan" d="M850 250 H1000"/>
+      <g class="node"><rect x="40" y="70" width="150" height="100" rx="18"/><text x="115" y="115" text-anchor="middle">هاتفك</text><text class="sub" x="115" y="140" text-anchor="middle">في أي مكان</text></g>
+      <g class="node"><rect x="445" y="70" width="150" height="100" rx="18"/><text x="520" y="115" text-anchor="middle">الوسيط</text><text class="sub" x="520" y="140" text-anchor="middle">ينقل فقط</text></g>
+      <g class="node shop"><rect x="850" y="60" width="160" height="120" rx="20"/><text x="930" y="110" text-anchor="middle">خادم المتجر</text><text class="sub" x="930" y="135" text-anchor="middle">بياناتك هنا</text></g>
+      <g class="node"><rect x="560" y="225" width="120" height="56" rx="14"/><text x="620" y="259" text-anchor="middle">كاشير 1</text></g>
+      <g class="node"><rect x="900" y="225" width="120" height="56" rx="14"/><text x="960" y="259" text-anchor="middle">كاشير 2</text></g>
+      <text class="sub" x="520" y="54" text-anchor="middle">نفق مشفّر</text>
+      <text class="sub" x="760" y="310" text-anchor="middle" style="fill:#C98A3B">شبكة المتجر — تعمل حتى دون إنترنت</text>
+      <circle class="pkt" r="6"><animateMotion dur="2.6s" repeatCount="indefinite" path="M190 120 H850"/></circle>
+      <circle class="pkt" r="6" opacity=".6"><animateMotion dur="2.6s" begin="1.3s" repeatCount="indefinite" path="M850 120 H190"/></circle>
+    </svg>
+    <div class="priv-points">
+      <div data-reveal><h3>يعمل دون إنترنت.</h3><p>المبيعات والمخزون والحسابات على شبكة المتجر. إن انقطع الاتصال، يواصل الكاشير عمله كالمعتاد.</p></div>
+      <div data-reveal style="--d:.1s"><h3>مفاتيح خاصة بكل متجر.</h3><p>لكل خادم مفتاحه وشهادته، ولا يستطيع أي متجر الوصول إلى متجر آخر.</p></div>
+      <div data-reveal style="--d:.2s"><h3>نوضّح لك الحدود.</h3><p>عندما تسأل GPT، يُرسَل سؤالك وما يلزم للإجابة عنه فقط — وعند السؤال وحده.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= UPDATES ================= -->
+<section class="upd paper-2" id="updates" data-scrub>
+  <div class="sticky">
+    <div class="wrap upd-grid">
+      <div>
+        <p class="eyebrow">التحديثات</p>
+        <h2 class="h2">تحديث دون أن يتوقف البيع.</h2>
+        <p class="lead" style="margin-top:20px">يصل التحديث تلقائياً، ويُجهَّز في الخلفية، ثم يتسلّم الخادم الجديد العمل في لحظة — <strong>دون أن يلاحظ الكاشير شيئاً.</strong></p>
+        <ol class="step-list" data-steps>
+          <li><b>1</b>يُنزَّل الإصدار الجديد ويُجهَّز إلى جانب الإصدار الحالي.</li>
+          <li><b>2</b>يُتحقَّق من جاهزيته قبل أن يتسلّم أي طلب.</li>
+          <li><b>3</b>تُحوَّل الطلبات إليه في لحظة.</li>
+          <li><b>4</b>يتوقف الإصدار القديم، ولم يتوقف البيع.</li>
+        </ol>
+        <div class="bigstat">
+          <div><b class="num">0.95</b><span>ثانية — أطول انتظار للكاشير أثناء التحديث</span></div>
+          <div><b class="num">49</b><span>ثانية لترقية 827 ألف فاتورة</span></div>
+        </div>
+      </div>
+      <div class="lane" data-upd>
+        <h4>خادم المتجر</h4>
+        <div class="srv live" data-srv="old"><span class="dot"></span><b>الإصدار 0.7.9</b><small data-old-state>يخدم الكاشير</small></div>
+        <div class="srv" data-srv="new"><span class="dot"></span><b>الإصدار 0.8.0</b><small data-new-state>ينتظر</small></div>
+        <div class="prog"><i></i></div>
+        <div class="tills">
+          <div class="till"><b data-sales="0">128</b>كاشير 1</div>
+          <div class="till"><b data-sales="1">96</b>كاشير 2</div>
+          <div class="till"><b data-sales="2">41</b>هاتف المالك</div>
+        </div>
+        <div class="phone" style="max-width:220px;margin-top:22px"><img src="assets/img/phone-updates-downloading-390.webp" srcset="assets/img/phone-updates-downloading-390.webp 390w, assets/img/phone-updates-downloading-780.webp 780w" sizes="220px" width="390" height="844" loading="lazy" decoding="async" alt="صفحة التحديثات أثناء التنزيل"></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="wrap"><p class="footnote" style="margin:0;padding:18px 0 0">أُجري أول تحديث مباشر في 8 سبتمبر 2026 على متجر في أثناء ساعات البيع. الرقمان 0.95 و49 مأخوذان من تجربة ترقية على بيانات بحجم حقيقي (827 ألف فاتورة و859 ألف دفعة)، والكاشير يبيع طوال الوقت.</p></div>
+
+<!-- ================= ATTENDANCE ================= -->
+<section class="section" id="attendance">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">الحضور والرواتب</p>
+      <h2 class="h2">من البصمة إلى الراتب.</h2>
+      <p class="lead">اربط جهاز البصمة ZKTeco عبر BioTime، فتُسجَّل كل بصمة دخول وخروج تلقائياً. أيام الغياب ودقائق التأخير والعمل الإضافي والسُلف — كلها تُحتسب في مسير الرواتب، <strong>وأنت تراجع وتعتمد.</strong></p>
+    </div>
+    <div class="trio">
+      <figure data-reveal><div class="phone"><img src="assets/img/phone-attendance-device-390.webp" srcset="assets/img/phone-attendance-device-390.webp 390w, assets/img/phone-attendance-device-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="ربط خادم BioTime"></div><figcaption><strong>اربط مرة واحدة.</strong>عنوان الخادم وساعات الدوام وأيام العمل.</figcaption></figure>
+      <figure data-reveal style="--d:.1s"><div class="phone"><img src="assets/img/phone-attendance-390.webp" srcset="assets/img/phone-attendance-390.webp 390w, assets/img/phone-attendance-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="حضور موظف لشهر سبتمبر"></div><figcaption><strong>25 يوم حضور من أصل 26.</strong>يوم غياب واحد و75 دقيقة تأخير — من البصمات مباشرة.</figcaption></figure>
+      <figure data-reveal style="--d:.2s"><div class="phone"><img src="assets/img/phone-payroll-390.webp" srcset="assets/img/phone-payroll-390.webp 390w, assets/img/phone-payroll-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="مسير رواتب سبتمبر"></div><figcaption><strong>مسير سبتمبر: 5,558.17 د.ل صافياً.</strong>5,900.00 أساسي + 258.17 إضافات − 600.00 خصومات.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FX ================= -->
+<section class="section dark" id="fx">
+  <div class="wrap split">
+    <div data-reveal>
+      <p class="eyebrow">أسعار الصرف</p>
+      <h2 class="h2">سعر الدولار اليوم، داخل دفتر.</h2>
+      <p class="lead" style="margin-top:22px">تتحدّث أسعار السوق الموازي تلقائياً — نقداً، أو عبر المصرف الذي تتعامل معه. سعّر المنتج بالدولار، ويتبع سعره بالدينار حركة السوق.</p>
+      <div class="bigstat">
+        <div><b class="num">12.00 $</b><span>سعر السماعات بالدولار</span></div>
+        <div><b class="num">82.20</b><span>د.ل بسعر صرف اليوم 6.85</span></div>
+      </div>
+      <p class="muted" style="margin-top:22px;font-size:15px">تغيّر سعر الصرف؟ يعرض لك دفتر المنتجات المتأثرة وأسعارها الجديدة قبل أن يطبّق أي تغيير.</p>
+    </div>
+    <div class="duo" data-reveal style="--d:.1s">
+      <figure><div class="phone"><img src="assets/img/phone-product-fx-390.webp" srcset="assets/img/phone-product-fx-390.webp 390w, assets/img/phone-product-fx-780.webp 780w" sizes="(max-width: 760px) 70vw, 260px" width="390" height="844" loading="lazy" decoding="async" alt="منتج مسعّر بالدولار"></div></figure>
+      <figure><div class="phone"><img src="assets/img/phone-exchange-rates-390.webp" srcset="assets/img/phone-exchange-rates-390.webp 390w, assets/img/phone-exchange-rates-780.webp 780w" sizes="(max-width: 760px) 70vw, 260px" width="390" height="844" loading="lazy" decoding="async" alt="أسعار الصرف وتحديث الأسعار"></div></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SMS ================= -->
+<section class="section paper-2" id="sms">
+  <div class="wrap">
+    <div class="head center" data-reveal>
+      <p class="eyebrow">الرسائل النصية</p>
+      <h2 class="h2">رسائل تصل إلى زبائنك تلقائياً.</h2>
+      <p class="lead">«جهازك جاهز للاستلام»، وتذكير بدين آجل، وشكر بعد الشراء — رسائل تلقائية تشغّلها وتوقفها بضغطة واحدة. وحملات عروض موجّهة بحسب فئة الزبون: الأوفياء، والجدد، والمنقطعون.</p>
+    </div>
+    <div class="trio">
+      <figure data-reveal><div class="phone"><img src="assets/img/phone-sms-390.webp" srcset="assets/img/phone-sms-390.webp 390w, assets/img/phone-sms-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="إعدادات الرسائل النصية"></div><figcaption><strong>أوقات هدوء وحدود يومية.</strong>لن تصل رسالة عرض في الثانية فجراً.</figcaption></figure>
+      <figure data-reveal style="--d:.1s"><div class="phone"><img src="assets/img/phone-campaign-390.webp" srcset="assets/img/phone-campaign-390.webp 390w, assets/img/phone-campaign-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="حملة عرض العيد"></div><figcaption><strong>اعرف التكلفة قبل الإرسال.</strong>130 زبوناً، وجزءان لكل رسالة، بنحو 39.00 د.ل.</figcaption></figure>
+      <figure data-reveal style="--d:.2s"><div class="phone"><img src="assets/img/phone-conversation-390.webp" srcset="assets/img/phone-conversation-390.webp 390w, assets/img/phone-conversation-780.webp 780w" sizes="(max-width: 760px) 70vw, 300px" width="390" height="844" loading="lazy" decoding="async" alt="محادثة مع زبون"></div><figcaption><strong>كل رسالة في محادثة الزبون.</strong>تعرف ما أُرسل إليه ومتى.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DESIGN ================= -->
+<section class="section white" id="design">
+  <div class="wrap">
+    <div class="head center" data-reveal>
+      <p class="eyebrow">التصميم</p>
+      <h2 class="h2">مصمَّم للكاشير، لا للعرض.</h2>
+      <p class="lead">عربي في أصله، لا مترجَم. كثيف وواضح، بأرقام غربية وأعمدة منظّمة. وضع فاتح للنهار وداكن لساعات الليل — وكل شاشة تعمل بلوحة المفاتيح.</p>
+    </div>
+    <div class="compare" data-compare data-reveal>
+      <img src="assets/img/dashboard-1200.webp" srcset="assets/img/dashboard-1200.webp 1200w, assets/img/dashboard-2000.webp 2000w" sizes="(max-width: 1240px) 94vw, 1180px" width="1440" height="900" loading="lazy" decoding="async" alt="لوحة التحكم بالوضع الفاتح">
+      <div class="top"><img src="assets/img/dashboard-dark-1200.webp" srcset="assets/img/dashboard-dark-1200.webp 1200w, assets/img/dashboard-dark-2000.webp 2000w" sizes="(max-width: 1240px) 94vw, 1180px" width="1440" height="900" loading="lazy" decoding="async" alt="لوحة التحكم بالوضع الداكن"></div>
+      <span class="tag l">فاتح</span><span class="tag r">داكن</span>
+      <div class="handle"></div>
+      <input type="range" min="0" max="100" value="50" aria-label="قارن الوضع الفاتح والداكن">
+    </div>
+    <div class="duo" style="margin-top:clamp(40px,6vw,80px)">
+      <figure data-reveal><div class="shot"><img src="assets/img/palette-1200.webp" srcset="assets/img/palette-1200.webp 1200w, assets/img/palette-2000.webp 2000w" sizes="(max-width: 760px) 92vw, 580px" width="1440" height="900" loading="lazy" decoding="async" alt="لوحة الأوامر"></div><figcaption><strong>⌘K أو Ctrl+K.</strong>اكتب اسم أي شاشة أو صنف وانتقل إليه مباشرة.</figcaption></figure>
+      <figure data-reveal style="--d:.1s"><div class="shot"><img src="assets/img/pos-dark-1200.webp" srcset="assets/img/pos-dark-1200.webp 1200w, assets/img/pos-dark-2000.webp 2000w" sizes="(max-width: 760px) 92vw, 580px" width="1440" height="900" loading="lazy" decoding="async" alt="شاشة البيع بالوضع الداكن"></div><figcaption><strong>اختصارات للكاشير.</strong>لكل خطوة في البيع مفتاح على لوحة المفاتيح، ويفتح F8 الكاميرا.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EVERYTHING ================= -->
+<section class="section paper-2" id="all">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">وكل ما يحتاج إليه المتجر</p>
+      <h2 class="h2">الأساسيات، بإتقان.</h2>
+    </div>
+    <div class="bento">
+      <div class="tile w4" data-reveal><h3>المشتريات وأوامر الشراء</h3><p>اطلب من المورّد، واستلم جزئياً أو كلياً، وسدّد على دفعات. وتتحدّث تكلفة كل صنف مع كل استلام.</p><div class="pic"><img src="assets/img/purchase-1200.webp" width="1440" height="900" loading="lazy" decoding="async" alt="شاشة المشتريات"></div></div>
+      <div class="tile" data-reveal style="--d:.05s"><h3>الجرد</h3><p>جرد أعمى بالكرتونة أو بالقطعة، وراجع الفروقات قبل اعتمادها.</p><div class="pic ph"><img src="assets/img/phone-recon-390.webp" width="390" height="844" loading="lazy" decoding="async" alt="مراجعة فروقات الجرد"></div></div>
+      <div class="tile" data-reveal><h3>الخزينة والمصارف</h3><p>نقدية الدرج والخزنة والحسابات المصرفية — في مكان واحد.</p><div class="pic ph"><img src="assets/img/phone-treasury-390.webp" width="390" height="844" loading="lazy" decoding="async" alt="الخزينة"></div></div>
+      <div class="tile w4" data-reveal style="--d:.05s"><h3>التقارير والميزانية والزكاة</h3><p>الأرباح والتكاليف، والميزانية العمومية، ووعاء الزكاة، وأعمار الديون — كلها من الأرقام نفسها المدوّنة على الإيصال.</p><div class="pic"><img src="assets/img/report-profit-1000.webp" width="1180" height="820" loading="lazy" decoding="async" alt="تقرير الميزانية والزكاة"></div></div>
+      <div class="tile" data-reveal><h3>جلسات الدرج وتقرير Z</h3><p>كل فاتورة باسم الكاشير ودرجه. افتح الدرج، وبِع، وأغلقه، وطابق.</p><div class="pic ph"><img src="assets/img/phone-zreport-390.webp" width="390" height="844" loading="lazy" decoding="async" alt="تقرير إغلاق الوردية"></div></div>
+      <div class="tile" data-reveal style="--d:.05s"><h3>العملاء والآجل</h3><p>حدود ائتمان، ودفعات تُسدِّد الأقدم أولاً، وكشف حساب جاهز.</p><div class="pic ph"><img src="assets/img/phone-customer-390.webp" width="390" height="844" loading="lazy" decoding="async" alt="حساب عميل"></div></div>
+      <div class="tile" data-reveal style="--d:.1s"><h3>المصروفات والسُلف</h3><p>الإيجار والكهرباء وسُلف الموظفين — كل مصروف يُقيَّد على الصندوق الذي صُرف منه.</p><div class="pic ph"><img src="assets/img/phone-loan-390.webp" width="390" height="844" loading="lazy" decoding="async" alt="سلفة موظف"></div></div>
+      <div class="tile w3" data-reveal><h3>فاحص الأسعار</h3><p>جهاز لوحي قديم يتحوّل إلى شاشة تعرض للزبون سعر الصنف — مع الخصم والصورة.</p><div class="pic"><img src="assets/img/kiosk-1000.webp" width="1180" height="820" loading="lazy" decoding="async" alt="شاشة فاحص الأسعار"></div></div>
+      <div class="tile w3" data-reveal style="--d:.05s"><h3>انقل بياناتك القديمة</h3><p>أصنافك وعملاؤك وأرصدتك من نظامك الحالي — تراجعها قبل إدخالها.</p><div class="pic"><img src="assets/img/migration-1000.webp" width="1180" height="820" loading="lazy" decoding="async" alt="معالج نقل البيانات"></div></div>
+      <div class="tile text w3" data-reveal><h3>ويتكامل مع أجهزتك الحالية.</h3><p>لا نبيع الأجهزة؛ دفتر يعمل مع ما لديك في متجرك.</p><ul class="list"><li>طابعات الإيصالات</li><li>الملصقات والباركود</li><li>الموازين</li><li>قارئ الباركود</li><li>كاميرا الكاشير</li><li>البصمة</li><li>كاميرات المراقبة</li></ul></div>
+      <div class="tile text teal w3" data-reveal style="--d:.05s"><h3>وأكثر.</h3><p>بحسب نوع متجرك — بقالة، أو مطعم، أو صيدلية، أو متجر هواتف، أو ورشة.</p><ul class="list"><li>الخصومات والعروض</li><li>الوحدات والكراتين</li><li>الوصفات والمطبخ</li><li>الصلاحيات والأدوار</li><li>شحن الاشتراكات</li><li>المرتجعات والاستبدال</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CLOSING ================= -->
+<section class="section dark closing" id="contact">
+  <div class="wrap" data-reveal>
+    <img class="mark" src="assets/img/logo-192.webp" width="96" height="96" alt="شعار دفتر" loading="lazy">
+    <h2 class="h2">هل أنت مستعد لتجربة دفتر في متجرك؟</h2>
+    <p class="lead center" style="margin-top:18px">نتولّى تركيبه، ونقل بياناتك، وتدريب فريقك — لترى أرقامك صحيحة منذ اليوم الأول.</p>
+    <div class="hero-cta">
+      <!-- TODO: real WhatsApp number and Facebook page -->
+      <a class="btn" href="#" data-todo="whatsapp">تواصل معنا عبر واتساب</a>
+      <a class="btn ghost" href="#" data-todo="facebook">صفحتنا على فيسبوك</a>
+    </div>
+    <p class="stamp">دُوّن في دفتر</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap"><span>© 2026 دفتر</span><span>جميع الصور ومقاطع الفيديو في هذه الصفحة مأخوذة من التطبيق نفسه.</span></div>
+</footer>
+
+</body>
+</html>

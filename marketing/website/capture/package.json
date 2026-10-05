@@ -1,0 +1,6 @@
+{
+  "name": "daftar-site-capture",
+  "private": true,
+  "description": "Records the real Flutter preview harnesses for marketing/website",
+  "dependencies": { "playwright": "1.58.0" }
+}

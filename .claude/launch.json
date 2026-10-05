@@ -412,6 +412,19 @@
         "frontend-camera-wedge-preview"
       ],
       "port": 8080
+    },
+    {
+      "name": "marketing-site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8095",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "cwd": "marketing/website",
+      "port": 8095
     }
   ]
 }

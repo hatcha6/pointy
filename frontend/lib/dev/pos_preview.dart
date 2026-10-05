@@ -42,6 +42,7 @@ import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
+import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/repositories/register_session_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
@@ -188,6 +189,11 @@ class _PosSurfaceState extends State<_PosSurface> {
       PrintingRepository(PosApiService()),
       // Real chimes so the preview exercises the scan sounds end to end.
       scanFeedback: ScanFeedbackSounds.instance.play,
+    );
+    unawaited(
+      _viewModel.loadCurrentRegisterSession().then(
+        (_) => _viewModel.resumeRegisterSession(),
+      ),
     );
     _viewModel.loadCatalog();
     if (!widget.empty) {
@@ -982,10 +988,60 @@ class _FakeCatalogRepository extends CatalogRepository {
 
 class _FakeRegisterSessionRepository extends RegisterSessionRepository {
   _FakeRegisterSessionRepository() : super(PosApiService());
+
+  // An open drawer, so a checkout in the preview reaches the sale repository.
+  @override
+  Future<Result<RegisterSession?>> loadCurrentSession() async {
+    return Ok(
+      RegisterSession(
+        id: 12,
+        sessionNumber: 'RS-12',
+        status: 'open',
+        ownerName: 'سالم',
+        openingCash: 100,
+        openedAt: DateTime(2026, 10, 5, 8),
+      ),
+    );
+  }
 }
 
 class _FakeSaleRepository extends SaleRepository {
   _FakeSaleRepository() : super(PosApiService());
+
+  // A sale that books, so a recorded checkout ends on the real success path
+  // instead of the "could not record the sale" snackbar.
+  var _receipt = 412;
+
+  @override
+  Future<Result<SaleOrder>> checkout(
+    SaleCheckoutDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 280));
+    final preview = await previewDiscounts(
+      SaleDiscountPreviewDraft(lines: draft.lines),
+    );
+    final totals = switch (preview) {
+      Ok(:final value) => value,
+      _ => const SaleDiscountPreview(subtotal: 0, discountTotal: 0, total: 0),
+    };
+    final paid = draft.payments.fold<double>(0, (sum, p) => sum + p.amount);
+    _receipt++;
+    return Ok(
+      SaleOrder(
+        id: _receipt,
+        status: 'paid',
+        lines: const [],
+        payments: const [],
+        subtotal: totals.subtotal,
+        total: totals.total,
+        discountTotal: totals.discountTotal,
+        amountPaid: paid,
+        receiptNumber: 'R20261005000$_receipt',
+        cashierName: 'سالم',
+      ),
+    );
+  }
 
   // Demo discounts so the cart totals can be previewed with deductions (a rule
   // discount + a coupon), exercising the itemized-breakdown path.
@@ -1014,7 +1070,31 @@ class _FakeSaleRepository extends SaleRepository {
     // The rules take 1.50; whatever the cashier typed comes off on top, so the
     // preview exercises both discount rows at once.
     const ruleDiscount = 1.50;
-    const subtotal = 10.20;
+    // Sum the real cart so every figure on the totals panel reconciles.
+    var subtotal = 0.0;
+    for (final line in draft.lines) {
+      final item = _items.firstWhere(
+        (i) => i.id * 10 == line.variantId,
+        orElse: () => _items.first,
+      );
+      final unitPrice =
+          line.manualUnitPrice ??
+          switch (line.unit) {
+            'carton' => 15.0,
+            'pack' => item.price * 6,
+            _ => item.price,
+          };
+      subtotal += unitPrice * line.quantity;
+    }
+    if (subtotal <= ruleDiscount) {
+      return Ok(
+        SaleDiscountPreview(
+          subtotal: subtotal,
+          discountTotal: 0,
+          total: subtotal,
+        ),
+      );
+    }
     final extra = draft.extraDiscountAmount.clamp(0.0, subtotal - ruleDiscount);
     return Ok(
       SaleDiscountPreview(
