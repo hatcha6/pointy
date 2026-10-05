@@ -11,8 +11,17 @@ operations, and the migration that converts the prospect's catalogue (§15).
 **Closed 2026-10-05:** selling a serialized article without naming it is now
 refused, with open orders keeping their selection until paid (§6.3); recalled
 lots and unscanned units go back to the supplier (§5.5); the counter purchase
-captures lots (§6.2). What is still deliberately out is listed under each
-phase's **DEFERRED, and honestly out** and in §17.
+captures lots (§6.2).
+**Built 2026-10-05, everything the phases had deferred:** the per-consignor
+statement screen and the unclaimed-payout reminder SMS (§6.2.2); unit attribute
+editing, per-unit photos (§17.2 decided: yes) and a per-unit warranty end-date
+override (§17.3 decided: an end date that wins over `warranty_days`), with the
+§6.9 audit events that were never written; recall and expiry on the
+price-checker kiosk; the AI generative-UI stock-unit card (and the
+`pointy://stock-unit/<id>` deep link now actually opens the unit); variant GTIN
+and `expiry_required` in the product API and form; a worklist that gives
+grandfathered `serial_batch` units their lot; and the transfer screen on the
+shared unit picker. See §15's "Built 2026-10-05" note.
 **Phase D's first job was to un-gate the feature**: a
 transfer, a stock count, a manual adjustment and a job's materials all *raised*
 on a tracked product, so no shop could have turned this on. They allocate now.
@@ -3265,6 +3274,8 @@ refurb capitalisation, returns and warranty lookup.
 - **CORRECTED 2026-09-19 — per-unit pricing was per *variant* pricing whenever
   one invoice held two of the same model**, which for this trade is the ordinary
   case. Five consequences, one of them a sale the till refused outright; §15.3.
+- **BUILT 2026-10-05** (everything in the next bullet): see "Built 2026-10-05"
+  at the end of §15.
 - **DEFERRED, and honestly out:** per-unit photos (§17.2 is still open, and the
   answer changes the capture sheet's shape), the per-consignor statement *screen*
   (the endpoint is built and the report carries it), the consignment position
@@ -3430,6 +3441,8 @@ actually judged on — and the statement as a page rather than an endpoint.*
   not a second copy of the implementation. Reverting the fix fails it after
   34 operations: *«the shop says it owes 0.00 and is owed 0.00, the model says
   1,167.17 was handed over»*.
+- **BUILT 2026-10-05** (everything in the next bullet): see "Built 2026-10-05"
+  at the end of §15.
 - **DEFERRED, and honestly out:** the per-consignor statement as a *screen*
   (the endpoint has been built since Phase C and the aging now has one, so what
   is missing is a page over data that exists), the unclaimed-payout **reminder
@@ -3492,6 +3505,60 @@ traceability engine rather than a serial feature: four tracking modes that
 compose, lots whose identity survives every warehouse they pass through,
 consignment carrying a real liability and custody model rather than a zero in a
 cost column, and one GS1 scan that resolves all of it at a till.
+
+
+**Built 2026-10-05 — the deferred lists, end to end.**
+
+- **Consignor statement** — `GET /api/inventory/consignors/<id>/statement/`
+  (one consignor across all agreements; `start`/`end` bound history only, held
+  and awaiting always show; constant 17 queries) and a client screen from the
+  payables rows and the customer page, with pay-all, resend SMS and a printed
+  consignor copy that omits sale price and commission.
+- **Unclaimed-payout reminder** — template kind `consignment_unclaimed`, a daily
+  Celery sweep: rounds at N, 2N, 3N days (`consignment_unclaimed_payout_reminder_days`,
+  0 disables) then silence; one `ConsignmentPayoutReminder` row per article per
+  sale per round (unique), one SMS per consignor per morning; follows
+  `consignment_auto_sms_on_sale`, do-not-contact and the SMS balance; a missing
+  template does not spend a round. Never converts to income (tested to 2000
+  days). **Ops:** register the template with Resala and map its UUID in
+  `POINTY_RELAY_SMS_TEMPLATES` before reminders can go out.
+- **Unit page** — `POST stock-units/{id}/attributes/` validates against the
+  asset type's definitions; one shared attribute form for the unit page and the
+  capture sheet; `attribute_display` carries labels and units. Photos are
+  attachments with role `unit_photo` (`is_primary` = cover, ≤ 12, scaled to
+  1600 px, 320 px thumbnails cached by checksum, covers prefetched on the list).
+  `StockUnit.warranty_override_expires_on` wins over `warranty_days` at sale and
+  re-stamps a sold unit; receipts print «ضمان حتى». §6.9's `StockUnitEvent`s
+  for price, attributes, notes, identifier, warranty and photos are now
+  written, and each bumps the catalog version. A list-price PATCH needs
+  `reprice_stockunit`. New perms: `manage_stockunit_photos`,
+  `change_stockunit_warranty`.
+- **Kiosk** — a scan naming a lot (unit code, lot barcode, GS1) answers
+  `availability: ok | recalled | expired`; a stopped pack omits every price key
+  and shows a full-screen «هذا المنتج موقوف عن البيع — يرجى مراجعة الكاشير».
+  Key sets are named constants asserted by name. `StockBatch.quarantined_at` /
+  `quarantine_reason` are stamped by the quarantine action; `?staff=1` with
+  `view_stockbatch` adds the detail. A lot save bumps the catalog version; the
+  cache key carries the local date so an "ok" turns "expired" at midnight.
+- **AI** — catalog item `StockUnitCard` (meaning-only props, no cost);
+  `lookup_stock_unit` returns a ready card, `stock_unit_ageing` compact cards.
+- **Catalog** — `gtin` read/write on every variant path, normalised to GTIN-14
+  with the GS1 check digit, conflicts reported like SKU/barcode (advisory, no
+  constraint); `expiry_required` on the product. Shown only for lot-tracked
+  products or variants that already carry one. «منتج مشابه» never copies it.
+- **Missing lots** — `stock-units/missing-lot-groups/`, `missing-lots/`,
+  `assign-lot/`: value-neutral (no ledger entry; balances follow the units at
+  their own rates), event `lot_assigned`, and invariant 14 now grandfathers
+  lot-less history before that event rather than judging it by the unit's
+  current lot. Worklist screen with scan-to-select.
+- **Transfers** use `showUnitPickSheet`; `transfer_unit_pick_sheet.dart` is gone.
+
+Migrations: inventory `0039`–`0042`, attachments `0004` — all live-update safe
+(new tables, nullable columns, choices).
+
+Still out, honestly: photos at intake (units do not exist until the receipt
+posts), a "remind now" button, an editor for the attribute *definitions*, and
+routing for `pointy://stock-batch/<id>`.
 
 
 ### 15.1 Shipping this to shops that are already trading
@@ -3990,10 +4057,10 @@ with Phase D's claims work rather than with a bug sweep.
 1. **Does the prospect's export exist, and can we have it?** §12 is the
    difference between a feature and a migration, and it needs their data. Ask
    for it before Phase A starts, not after Phase B ships.
-2. **Do they want per-unit photos?** Attachments make it nearly free and used-goods
+2. **RESOLVED 2026-10-05 — yes, built** (attachments, role `unit_photo`, §15). **Do they want per-unit photos?** Attachments make it nearly free and used-goods
    traders usually want a condition record. Confirm before Phase C; it changes
    the capture sheet's shape and the sync payload's size.
-3. **Warranty: days from sale, or a date typed per unit?** Days-from-sale is
+3. **RESOLVED 2026-10-05 — both:** `warranty_days` on the product, and `warranty_override_expires_on` on the unit, which wins (§15). **Warranty: days from sale, or a date typed per unit?** Days-from-sale is
    simpler and covers phones. Cars and generators sometimes carry a
    manufacturer date that is not ours to compute. Recommendation: `warranty_days`
    on the product with a per-unit override field, decided in Phase C.

@@ -839,8 +839,11 @@ class StockUnitViewSet(
         finds its handset.
         """
         from .lot_assignment import missing_lot_units
+        from .unit_photos import with_cover_photos
 
-        query = (
+        # The same row the units list draws, cover thumbnail included — so the
+        # same prefetch, or every row costs a query for its cover.
+        query = with_cover_photos(
             missing_lot_units(
                 variant=_int_param(request, "variant"),
                 product=_int_param(request, "product"),
