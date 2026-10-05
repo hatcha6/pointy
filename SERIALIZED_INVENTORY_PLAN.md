@@ -3552,6 +3552,15 @@ cost column, and one GS1 scan that resolves all of it at a till.
   lot-less history before that event rather than judging it by the unit's
   current lot. Worklist screen with scan-to-select.
 - **Transfers** use `showUnitPickSheet`; `transfer_unit_pick_sheet.dart` is gone.
+- **Identifier search** — an IMEI, VIN or serial typed or scanned into the
+  products search (or ⌘K) shows that unit above the results — live: where it is
+  and its price; sold: to whom, when, which invoice, warranty and repairs — and
+  Enter or a scan opens it when exactly one answers. One exact, indexed lookup
+  (`stock-units/lookup/`, now also matching the second IMEI in history), only
+  for readers who can see units in a shop with tracking on. The unit page
+  carries `StockUnitDetailSerializer`'s sale fields (`customer_name`,
+  `sold_order`, `sold_receipt_number`, gated by `sales.view_order` /
+  `customers.view_customer`); the list keeps the lean row.
 
 Migrations: inventory `0039`–`0042`, attachments `0004` — all live-update safe
 (new tables, nullable columns, choices).
