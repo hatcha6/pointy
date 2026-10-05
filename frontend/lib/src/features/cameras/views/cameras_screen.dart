@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
@@ -236,7 +237,7 @@ class _Wall extends StatelessWidget {
           // still stops pulling. The rest of the fix is on the server — the
           // producer lingers, and a reattach paints the last frame it held
           // rather than a blank square.
-          cacheExtent: tileHeight + _gap,
+          scrollCacheExtent: ScrollCacheExtent.pixels(tileHeight + _gap),
           physics: const AlwaysScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,

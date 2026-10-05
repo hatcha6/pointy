@@ -319,8 +319,12 @@ void main() {
       expect(repository.handBacks.single.collector, 'أخوه عادل');
       expect(find.text(l10n.jobHandBackBlockedTitle), findsOneWidget);
       // A cashier is offered the fee, never the override they do not hold.
+      // Scoped to the dialog: the footer behind it carries the same label.
       expect(
-        find.widgetWithText(FilledButton, l10n.jobCollectFeeButton),
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, l10n.jobCollectFeeButton),
+        ),
         findsOneWidget,
       );
       expect(find.text(l10n.jobForceReleaseButton), findsNothing);

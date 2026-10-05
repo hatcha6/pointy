@@ -6,7 +6,7 @@ These rules apply to AI agents working anywhere in this repository.
 
 `compat/win8` is a **frozen** Flutter 3.19 / Dart 3.3 build that exists for one
 reason: old Windows 7/8/8.1 cashier machines. Flutter 3.19 is the last release
-whose Windows apps run on them; `main` targets Flutter 3.38 and will not.
+whose Windows apps run on them; `main` targets Flutter 3.47 and will not.
 
 **Every change to that branch is frontend only, and only what a till touches.**
 Those machines talk to a backend built from `main`, so a backend change on
@@ -15,7 +15,7 @@ tree nothing deploys. Some older commits on the branch did touch its backend;
 do not read them as precedent.
 
 - Never merge `compat/win8` into `main`. Its pinned pubspec and stubs would
-  break main's 3.38 build. If the branch ever needs re-syncing, rebase `main`
+  break main's 3.47 build. If the branch ever needs re-syncing, rebase `main`
   *into* it, never the reverse.
 - Port with `git cherry-pick -n <sha>`, then strip everything outside
   `frontend/` and outside the POS path before resolving. Main's commits
@@ -26,7 +26,8 @@ do not read them as precedent.
   touched.
 - Before committing a port, check the added lines for Flutter APIs newer than
   3.19 (`withValues`, `WidgetState*`, `*ThemeData` renames,
-  `surfaceContainerHighest`, `onPopInvokedWithResult`) and for Dart 3.4+ syntax
+  `surfaceContainerHighest`, `onPopInvokedWithResult`, `scrollCacheExtent`,
+  `onReorderItem`, `TickerMode.valuesOf`) and for Dart 3.4+ syntax
   (wildcard `(_, _)`, null-aware elements `[?x]`). `dart analyze` proves the
   language level via the pubspec floor even on a modern SDK. Leave
   `frontend/pubspec.yaml` alone: a dependency bump there can fail to resolve

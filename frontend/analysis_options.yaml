@@ -14,6 +14,13 @@ analyzer:
     # A pub.dev plugin carried with a native fix (see its POINTY_PATCHES.md);
     # its Dart is upstream's, not ours to lint.
     - packages/printing/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   # The lint rules applied to this project can be customized in the

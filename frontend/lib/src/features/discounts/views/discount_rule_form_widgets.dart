@@ -106,14 +106,7 @@ class _FormSection extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return Container(
-      margin: EdgeInsetsDirectional.only(bottom: spacing.md),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.line),
-        borderRadius: BorderRadius.circular(PointyRadii.card),
-        boxShadow: PointyShadows.raised,
-      ),
+    final content = Padding(
       padding: EdgeInsets.all(spacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -160,6 +153,27 @@ class _FormSection extends StatelessWidget {
             children[i],
           ],
         ],
+      ),
+    );
+
+    // The card is its switch tiles' Material, so their ink shows on it (a
+    // painted box between a ListTile and its Material asserts from 3.44).
+    // The shadow stays on an unfilled box behind it.
+    return Padding(
+      padding: EdgeInsetsDirectional.only(bottom: spacing.md),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(PointyRadii.card),
+          boxShadow: PointyShadows.raised,
+        ),
+        child: Material(
+          color: colors.surface,
+          shape: PointyComponentStyles.outlinedShape(
+            PointyRadii.card,
+            colors.line,
+          ),
+          child: content,
+        ),
       ),
     );
   }

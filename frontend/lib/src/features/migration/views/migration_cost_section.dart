@@ -32,12 +32,10 @@ class MigrationCostSection extends StatelessWidget {
     final fromPurchases =
         viewModel.stockSource == MigrationStockSource.reconstruct;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: context.pointyColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.pointyColors.line),
-      ),
+    // The card is the switch tile's Material, so its ink shows on it.
+    return Material(
+      color: context.pointyColors.surface,
+      shape: PointyComponentStyles.outlinedShape(14, context.pointyColors.line),
       child: Padding(
         padding: EdgeInsets.all(spacing.md),
         child: Column(

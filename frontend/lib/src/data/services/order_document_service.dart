@@ -203,7 +203,7 @@ class OrderDocumentService {
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
       );
-      return _deliverPdf(
+      return await _deliverPdf(
         bytes: bytes,
         filename: saleInvoiceFileName(order),
         subject: labels.saleInvoiceTitle,
@@ -226,7 +226,7 @@ class OrderDocumentService {
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
       );
-      return _deliverPdf(
+      return await _deliverPdf(
         bytes: bytes,
         filename: purchaseOrderFileName(order),
         subject: labels.purchaseOrderTitle,

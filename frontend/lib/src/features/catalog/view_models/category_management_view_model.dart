@@ -431,17 +431,16 @@ class CategoryManagementViewModel extends ChangeNotifier {
     }
   }
 
-  Future<bool> reorderQuickAccess(int oldIndex, int newIndex) async {
-    if (oldIndex < 0 || oldIndex >= _quickAccess.length) {
+  /// Moves the chip at [fromIndex] so it ends up at [toIndex] — the list's
+  /// `onReorderItem` contract, where [toIndex] already accounts for the chip
+  /// leaving its old slot.
+  Future<bool> reorderQuickAccess(int fromIndex, int toIndex) async {
+    if (fromIndex < 0 || fromIndex >= _quickAccess.length) {
       return false;
     }
-    var targetIndex = newIndex;
-    if (targetIndex > oldIndex) {
-      targetIndex -= 1;
-    }
     final reordered = [..._quickAccess];
-    final moved = reordered.removeAt(oldIndex);
-    reordered.insert(targetIndex.clamp(0, reordered.length), moved);
+    final moved = reordered.removeAt(fromIndex);
+    reordered.insert(toIndex.clamp(0, reordered.length), moved);
     _quickAccess = reordered;
     notifyListeners();
 

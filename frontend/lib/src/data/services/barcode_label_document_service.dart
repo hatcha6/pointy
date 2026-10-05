@@ -52,7 +52,7 @@ class BarcodeLabelDocumentService {
       if (document.bytes.isEmpty) {
         return const PrintTransportResult.failure('no barcode labels to print');
       }
-      return _printPdf(
+      return await _printPdf(
         document: document,
         endpoint: endpoint,
         jobName: 'barcode-labels',
@@ -96,7 +96,7 @@ class BarcodeLabelDocumentService {
         endpoint: endpoint,
         fonts: await fontLoader.load(),
       ).build(sheet);
-      return _printPdf(
+      return await _printPdf(
         document: document,
         endpoint: endpoint,
         jobName: 'label-calibration',

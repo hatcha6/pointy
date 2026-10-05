@@ -1408,14 +1408,11 @@ class _Card extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
-    return Container(
-      padding: EdgeInsets.all(spacing.md),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.line),
-      ),
-      child: child,
+    // The card is its switch tiles' Material, so their ink shows on it.
+    return Material(
+      color: colors.surface,
+      shape: PointyComponentStyles.outlinedShape(14, colors.line),
+      child: Padding(padding: EdgeInsets.all(spacing.md), child: child),
     );
   }
 }

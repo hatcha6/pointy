@@ -7,7 +7,7 @@
 # FLUTTER_VERSION is pinned to the repo's toolchain and overridden by the release
 # workflow from its single source of truth (the workflow `env`).
 
-ARG FLUTTER_VERSION=3.38.6
+ARG FLUTTER_VERSION=3.47.6
 
 FROM debian:bookworm-slim AS build
 ARG FLUTTER_VERSION

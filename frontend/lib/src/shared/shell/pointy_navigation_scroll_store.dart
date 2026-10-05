@@ -99,7 +99,7 @@ class _PointyNavigationScrollViewState
     // again the moment the route above is popped and this screen is on show
     // once more — the [Overlay] turns tickers off for the routes it keeps
     // alive out of sight.
-    final onShow = TickerMode.of(context);
+    final onShow = TickerMode.valuesOf(context).enabled;
     final cameBackOnShow = onShow && !_onShow;
     _onShow = onShow;
     if (cameBackOnShow) {

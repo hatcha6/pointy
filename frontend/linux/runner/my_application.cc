@@ -73,6 +73,10 @@ static void my_application_activate(GApplication* application) {
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
+  // Flutter 3.47 made Impeller the Linux default. The tills keep the Skia
+  // renderer until Impeller is proven on their graphics; the
+  // --enable-impeller=true engine switch still overrides this for a trial.
+  fl_dart_project_set_enable_impeller(project, FALSE);
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;

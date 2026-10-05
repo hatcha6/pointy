@@ -518,15 +518,14 @@ class _GeneratedVariantTile extends StatelessWidget {
         ? null
         : identityConflictMessage(l10n, barcodeConflict);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        // A rejected row reads as rejected at a glance, not only through the
-        // small red text inside it.
-        border: Border.all(
-          color: conflicts.isEmpty ? colors.line : colors.danger,
-        ),
-        borderRadius: BorderRadius.circular(8),
+    // The row is its switch tile's Material, so the tile's ink shows on it.
+    return Material(
+      color: colors.surface,
+      // A rejected row reads as rejected at a glance, not only through the
+      // small red text inside it.
+      shape: PointyComponentStyles.outlinedShape(
+        PointyRadii.card,
+        conflicts.isEmpty ? colors.line : colors.danger,
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),

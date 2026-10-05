@@ -389,7 +389,7 @@ class PrintingRepository {
     }
     try {
       final bytes = await _receiptEncoder.encodeKitchenTest(config.endpoint);
-      return _transportFor(
+      return await _transportFor(
         config.endpoint,
       ).printBytes(bytes: bytes, endpoint: config.endpoint);
     } on Object catch (error) {
@@ -465,7 +465,7 @@ class PrintingRepository {
     }
 
     try {
-      return _printBarcodeLabelLines(const [
+      return await _printBarcodeLabelLines(const [
         BarcodeLabelPrintLine(
           label: BarcodeLabelDraft(
             displayName: 'ملصق اختبار',
@@ -868,7 +868,7 @@ class PrintingRepository {
     PrintAuditEventDraft draft,
   ) async {
     try {
-      return _service.recordPrintAuditEvent(draft);
+      return await _service.recordPrintAuditEvent(draft);
     } on Exception {
       return null;
     }
@@ -1002,7 +1002,7 @@ class PrintingRepository {
         payload: payload,
         endpoint: config.endpoint,
       );
-      return _transportFor(
+      return await _transportFor(
         config.endpoint,
       ).printBytes(bytes: bytes, endpoint: config.endpoint);
     } on Object catch (error) {

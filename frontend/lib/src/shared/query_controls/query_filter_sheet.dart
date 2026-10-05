@@ -139,28 +139,27 @@ class QueryFilterSection extends StatelessWidget {
             ),
           ),
         ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: BorderRadius.circular(PointyRadii.card),
-            border: Border.all(color: colors.line),
+        // The frame is the options' Material, so their ink shows inside it.
+        Material(
+          color: colors.surface,
+          shape: PointyComponentStyles.outlinedShape(
+            PointyRadii.card,
+            colors.line,
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(PointyRadii.card),
-            child: Column(
-              children: [
-                for (final (index, child) in children.indexed) ...[
-                  if (index > 0)
-                    Divider(
-                      height: 1,
-                      indent: 14,
-                      endIndent: 14,
-                      color: colors.line,
-                    ),
-                  child,
-                ],
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (final (index, child) in children.indexed) ...[
+                if (index > 0)
+                  Divider(
+                    height: 1,
+                    indent: 14,
+                    endIndent: 14,
+                    color: colors.line,
+                  ),
+                child,
               ],
-            ),
+            ],
           ),
         ),
       ],

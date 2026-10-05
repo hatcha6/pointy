@@ -474,7 +474,7 @@ class _QuickAccessContent extends StatelessWidget {
             proxyDecorator: (child, index, animation) =>
                 Material(color: Colors.transparent, child: child),
             itemCount: categories.length,
-            onReorder: onReorder,
+            onReorderItem: onReorder,
             itemBuilder: (context, index) {
               final category = categories[index];
               return ReorderableDragStartListener(

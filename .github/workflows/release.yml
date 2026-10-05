@@ -11,7 +11,7 @@
 # assembly (which needs the installers) waits for them.
 #
 # Toolchain versions are pinned to what the repo is developed against
-# (Flutter 3.38.6 / Dart 3.10.7, JDK 17, Go 1.25 + Python 3.12 via the Docker
+# (Flutter 3.47.6 / Dart 3.13.5, JDK 17, Go 1.25 + Python 3.12 via the Docker
 # images). Trigger it by publishing a release (tag like `v1.2.3`), or run it
 # manually from the Actions tab to produce test artifacts without a release.
 name: Release
@@ -35,7 +35,7 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_VERSION: "3.38.6"
+  FLUTTER_VERSION: "3.47.6"
   # The WSL installer bundled into the on-prem zip, so a Windows shop can be
   # installed with no internet and no Microsoft Store. TAG is the microsoft/WSL
   # release tag; ASSET is the file name on that release (Microsoft appends a

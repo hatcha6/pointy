@@ -6,7 +6,7 @@ void main() {
     'generated_at': '2026-12-24T08:00:00Z',
     'period': {'days': 30},
     'sections': <String, Object?>{},
-    if (todaySpecialDays != null) 'today_special_days': todaySpecialDays,
+    'today_special_days': ?todaySpecialDays,
   };
 
   test('parses today_special_days into localized special days', () {

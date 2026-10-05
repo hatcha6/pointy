@@ -395,7 +395,7 @@ class _RepairTicketTermsDialogState extends State<RepairTicketTermsDialog> {
                       shrinkWrap: true,
                       buildDefaultDragHandles: false,
                       itemCount: _terms.length,
-                      onReorder: _move,
+                      onReorderItem: _move,
                       itemBuilder: (context, index) {
                         final term = _terms[index];
                         return Padding(
@@ -574,8 +574,8 @@ class _RepairTicketTermsDialogState extends State<RepairTicketTermsDialog> {
     setState(() {
       final moved = [..._terms];
       final term = moved.removeAt(from);
-      // The list reports the slot as counted before the item left it.
-      moved.insert(to > from ? to - 1 : to, term);
+      // `onReorderItem` reports the final slot, already net of the removal.
+      moved.insert(to, term);
       _terms = moved;
       _usingDefaults = false;
     });

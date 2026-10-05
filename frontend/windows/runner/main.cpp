@@ -67,6 +67,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
   flutter::DartProject project(L"data");
+  // Flutter 3.47 made Impeller the Windows default, with no fallback when a
+  // GPU can't run it. The tills keep the Skia renderer they have always used
+  // until Impeller is proven on their old integrated graphics. One till can
+  // trial it with FLUTTER_ENGINE_SWITCHES=1 and
+  // FLUTTER_ENGINE_SWITCH_1=--enable-impeller=true, which overrides this.
+  project.set_impeller_switch(flutter::ImpellerSwitch::Disabled);
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();

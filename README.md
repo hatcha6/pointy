@@ -1228,7 +1228,7 @@ attach their output to the release:
 | `build-onprem`  | `pointy-onprem-<ver>.zip`                 | Fully offline server bundle: backend + relay + **web (Flutter web + nginx)** + Postgres + Redis images saved as `docker load` tarballs, the Compose file (`restart: always`), `.env.example`, installers, and a boot/crash **watchdog** that self-heals the stack so the till has no outages. Browser users open `http://<server-ip>/`. It also carries every client installer under `clients/` — including the **Windows 7/8/8.1 build** pulled from the newest `-compat` release — so a site installs both kinds of till from this one zip, with no second download. See [`deploy/onprem/INSTALL.md`](deploy/onprem/INSTALL.md). |
 
 Toolchain versions are pinned in the workflow `env:` to match local development
-(Flutter 3.38.6 / Dart 3.10.7, JDK 17; Go 1.25 + Python 3.12 come from the Docker
+(Flutter 3.47.6 / Dart 3.13.5, JDK 17; Go 1.25 + Python 3.12 come from the Docker
 images). Bump them there when the project upgrades.
 
 ### Android signing

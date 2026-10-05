@@ -747,11 +747,11 @@ class _BackupJobHistoryRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = context.pointyColors;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceSunken.withValues(alpha: 0.32),
-        borderRadius: BorderRadius.circular(8),
-      ),
+    // The tint is the tile's Material: a painted box between a ListTile and
+    // its Material asserts from Flutter 3.44.
+    return Material(
+      color: colors.surfaceSunken.withValues(alpha: 0.32),
+      borderRadius: BorderRadius.circular(8),
       child: ListTile(
         dense: true,
         leading: Icon(icon),

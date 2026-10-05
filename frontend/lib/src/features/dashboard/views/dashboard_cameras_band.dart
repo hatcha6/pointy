@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/camera.dart';
@@ -156,7 +157,7 @@ class _Strip extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             // Same rule as the camera wall: a tile off screen is a camera the
             // recorder should stop being asked for.
-            cacheExtent: 0,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(0),
             itemCount: cameras.length,
             separatorBuilder: (_, _) => const SizedBox(width: _gap),
             itemBuilder: (context, index) => SizedBox(

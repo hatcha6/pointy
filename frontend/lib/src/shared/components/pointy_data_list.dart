@@ -109,15 +109,21 @@ class PointyDataList<T> extends StatelessWidget {
       return child;
     }
     final colors = context.pointyColors;
+    // The frame is the rows' Material, so a ListTile row's ink shows inside
+    // it (a painted box between a ListTile and its Material asserts from
+    // 3.44). The shadow stays on an unfilled box behind it.
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(PointyRadii.card),
         boxShadow: PointyShadows.raised,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(PointyRadii.card),
+      child: Material(
+        color: colors.surface,
+        shape: PointyComponentStyles.outlinedShape(
+          PointyRadii.card,
+          colors.line,
+        ),
+        clipBehavior: Clip.antiAlias,
         child: child,
       ),
     );
