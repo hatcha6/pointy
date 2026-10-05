@@ -16,6 +16,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'identify_unit_dialog.dart';
+import 'missing_lots_screen.dart';
 import 'opening_identification_screen.dart';
 import 'stock_unit_detail_screen.dart';
 
@@ -129,6 +130,23 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
     await widget.viewModel.loadUnits();
   }
 
+  Future<void> _openMissingLots() async {
+    final repository = widget.repository;
+    if (repository == null) {
+      return;
+    }
+    await openMissingLotsScreen(
+      context,
+      repository: repository,
+      // Shop-wide, like the count on the callout that opened it.
+      canAssign: widget.capabilities.canIdentifyStockUnits,
+    );
+    if (!mounted) {
+      return;
+    }
+    await widget.viewModel.loadUnits();
+  }
+
   Widget _body(
     BuildContext context,
     AppLocalizations l10n,
@@ -221,6 +239,22 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
                           onPressed: () => viewModel.setMissingOnly(true),
                           child: Text(l10n.stockUnitsShowMissing),
                         ),
+                ),
+              ],
+              // Units a `serial → serial_batch` switch left without a lot
+              // (§4.2): they sell, but no recall can find them.
+              if (viewModel.summary.missingLots > 0 &&
+                  widget.repository != null) ...[
+                const SizedBox(height: 10),
+                PointyDetailCallout(
+                  key: const ValueKey('stock_units_missing_lots'),
+                  icon: Icons.inventory_2_outlined,
+                  tone: PointyCalloutTone.warning,
+                  title: l10n.missingLotsCount(viewModel.summary.missingLots),
+                  trailing: TextButton(
+                    onPressed: _openMissingLots,
+                    child: Text(l10n.stockUnitsAssignLotsAction),
+                  ),
                 ),
               ],
             ],

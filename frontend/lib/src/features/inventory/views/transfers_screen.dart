@@ -16,7 +16,7 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/transfers_view_model.dart';
 import 'transfer_composer_sheet.dart';
 import 'transfer_receive_sheet.dart';
-import 'transfer_unit_pick_sheet.dart';
+import 'transfer_unit_picks.dart';
 
 /// Stock moving between the shop's own places.
 ///
@@ -245,7 +245,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
       // Which handsets, before the van leaves. The backend refuses a
       // serialized line that named nothing, so asking here is the difference
       // between a sheet and an error.
-      final chosen = await showTransferUnitPickSheet(
+      final chosen = await pickTransferUnits(
         context,
         transfer: transfer,
         repository: tracked,

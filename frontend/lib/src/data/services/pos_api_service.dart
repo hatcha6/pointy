@@ -56,6 +56,7 @@ import '../models/query.dart';
 import '../models/register_cash_movement.dart';
 import '../models/migration.dart';
 import '../models/migration_collapse.dart';
+import '../models/missing_lot.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/companion.dart';
 import '../models/register_session.dart';
@@ -1745,6 +1746,26 @@ class PosApiService {
 
   Future<UnitPhoto> setStockUnitCoverPhoto(int unitId, int photoId) =>
       _unitDetail.setCoverPhoto(unitId, photoId);
+
+  Future<List<MissingLotGroup>> fetchMissingLotGroups({int? productId}) =>
+      _trackedStock.fetchMissingLotGroups(productId: productId);
+
+  Future<StockUnitPage> fetchMissingLotUnits({
+    required int variantId,
+    String code = '',
+    int page = 1,
+  }) => _trackedStock.fetchMissingLotUnits(
+    variantId: variantId,
+    code: code,
+    page: page,
+  );
+
+  Future<LotAssignment> assignLot({
+    required int variantId,
+    required List<int> unitIds,
+    required LotChoice lot,
+  }) =>
+      _trackedStock.assignLot(variantId: variantId, unitIds: unitIds, lot: lot);
 
   Future<List<StockCountLine>> fetchStockCountReconciliation(int countId) {
     return _stockCounts.fetchReconciliation(countId);

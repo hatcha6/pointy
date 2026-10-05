@@ -26902,18 +26902,6 @@ abstract class AppLocalizations {
   /// **'صنف مسلسل: امسح معرّف كل قطعة تُحمَّل فعليًا. تقرير النقص عند الاستلام يعتمد على هذا.'**
   String get transferPickUnitsBody;
 
-  /// How many units the dispatcher has picked out of the line quantity.
-  ///
-  /// In ar, this message translates to:
-  /// **'{picked} من {needed}'**
-  String transferPickUnitsCount(int picked, int needed);
-
-  /// No description provided for @transferPickUnitsIncomplete.
-  ///
-  /// In ar, this message translates to:
-  /// **'أكمل تحديد الوحدات قبل الإرسال.'**
-  String get transferPickUnitsIncomplete;
-
   /// No description provided for @transferReceiveScanTitle.
   ///
   /// In ar, this message translates to:
@@ -42663,6 +42651,258 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حالة {code}'**
   String unitCaptureDetailsTitle(String code);
+
+  /// The GS1 trade item number field on a variant.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم GTIN'**
+  String get variantGtinLabel;
+
+  /// Helper under the GTIN field.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم العالمي للصنف في رمز DataMatrix: 8 أو 12 أو 13 أو 14 رقمًا. امسح العبوة لتعبئته.'**
+  String get variantGtinHelper;
+
+  /// GTIN validation: letters typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم GTIN يتكوّن من أرقام فقط.'**
+  String get gtinErrorNotDigits;
+
+  /// GTIN validation: wrong length.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم GTIN يتكوّن من 8 أو 12 أو 13 أو 14 رقمًا.'**
+  String get gtinErrorLength;
+
+  /// GTIN validation: check digit does not add up.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التحقق (الخانة الأخيرة) غير صحيح — راجع الرقم المطبوع.'**
+  String get gtinErrorCheckDigit;
+
+  /// Inline error when another product already answers to this GTIN.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم GTIN مستخدم في \"{owner}\"'**
+  String gtinTakenError(String owner);
+
+  /// GTIN taken, owner unknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم GTIN مستخدم في منتج آخر'**
+  String get gtinTakenUnknownOwner;
+
+  /// The same GTIN twice in one save.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم GTIN مكرر داخل هذا النموذج'**
+  String get gtinDuplicateInFormError;
+
+  /// Switch: receiving must name each lot's expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الصلاحية إلزامي عند الاستلام'**
+  String get productTrackingExpiryRequiredLabel;
+
+  /// Helper under the expiry-required switch.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تُستلم دفعة من هذا الصنف بلا تاريخ صلاحية. أطفئه لما يُتتبَّع بالدفعة ولا ينتهي.'**
+  String get productTrackingExpiryRequiredHelper;
+
+  /// Tracking card row: whether receiving demands an expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الصلاحية عند الاستلام'**
+  String get productTrackingExpiryCardLabel;
+
+  /// Tracking card value: expiry required.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلزامي'**
+  String get productTrackingExpiryMandatory;
+
+  /// Tracking card value: expiry optional.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري'**
+  String get productTrackingExpiryOptional;
+
+  /// Tracking card action opening the missing-lot worklist for this product.
+  ///
+  /// In ar, this message translates to:
+  /// **'إسناد الدفعات'**
+  String get productTrackingAssignLotsAction;
+
+  /// Title of the missing-lot worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات بانتظار الإسناد'**
+  String get missingLotsTitle;
+
+  /// Explanation at the top of the missing-lot worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات كانت على الرف قبل تفعيل تتبّع الدفعات لصنفها. حدّدها أو امسح معرّفاتها ثم اختر دفعتها — لا يتحرك المخزون ولا تتغير قيمته.'**
+  String get missingLotsBody;
+
+  /// Empty state of the missing-lot worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الوحدات على الرف لها دفعات.'**
+  String get missingLotsEmpty;
+
+  /// How many units still owe a lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{وحدة واحدة بلا دفعة} two{وحدتان بلا دفعة} few{{count} وحدات بلا دفعة} many{{count} وحدة بلا دفعة} other{{count} وحدة بلا دفعة}}'**
+  String missingLotsCount(int count);
+
+  /// Header over the list of products owing lots.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف'**
+  String get missingLotsProductsHeader;
+
+  /// Prompt before a product is chosen on a wide screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر صنفًا لعرض وحداته.'**
+  String get missingLotsPickProduct;
+
+  /// Scan field hint on the missing-lot worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح المعرّف لتحديد الوحدة'**
+  String get missingLotsScanHint;
+
+  /// Scanned code is not a lot-less unit of this product.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد وحدة بلا دفعة بهذا المعرّف في هذا الصنف.'**
+  String get missingLotsScanNotFound;
+
+  /// Scanned unit was already ticked.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة محددة بالفعل.'**
+  String get missingLotsScanAlready;
+
+  /// Select every loaded unit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد الكل'**
+  String get missingLotsSelectAll;
+
+  /// Clear the selection.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء التحديد'**
+  String get missingLotsClearSelection;
+
+  /// How many units are ticked.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} محددة'**
+  String missingLotsSelected(int count);
+
+  /// Footer action opening the lot chooser.
+  ///
+  /// In ar, this message translates to:
+  /// **'إسناد دفعة'**
+  String get missingLotsAssignAction;
+
+  /// Snackbar after units were put into a lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُسندت {count} وحدة إلى الدفعة {code}.'**
+  String missingLotsAssigned(int count, String code);
+
+  /// Units of the selected product failed to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الوحدات.'**
+  String get missingLotsLoadFailed;
+
+  /// Load the next page of units.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المزيد'**
+  String get missingLotsLoadMore;
+
+  /// Title of the lot chooser sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'أي دفعة؟'**
+  String get lotChooserTitle;
+
+  /// Subtitle: how many units of which product go into the lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} وحدة من {product}'**
+  String lotChooserSubtitle(int count, String product);
+
+  /// Section of lots the variant already has.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات هذا الصنف'**
+  String get lotChooserExisting;
+
+  /// The variant has no lots yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد دفعات مسجّلة لهذا الصنف بعد — أدخل رقم الدفعة من العبوة.'**
+  String get lotChooserNoLots;
+
+  /// Option to type a lot code off the box.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة جديدة'**
+  String get lotChooserNew;
+
+  /// A lot's expiry date in the chooser.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصلاحية {date}'**
+  String lotChooserExpires(String date);
+
+  /// A lot without an expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا تاريخ صلاحية'**
+  String get lotChooserNoExpiry;
+
+  /// How much of the lot is on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'على الرف {quantity}'**
+  String lotChooserOnHand(String quantity);
+
+  /// The product's lots must carry an expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الصلاحية مطلوب لهذا الصنف.'**
+  String get lotChooserExpiryNeeded;
+
+  /// Confirm button of the lot chooser.
+  ///
+  /// In ar, this message translates to:
+  /// **'إسناد {count} وحدة'**
+  String lotChooserConfirm(int count);
+
+  /// Callout action opening the missing-lot worklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'إسنادها'**
+  String get stockUnitsAssignLotsAction;
+
+  /// Unit timeline: the unit was given the lot it was missing.
+  ///
+  /// In ar, this message translates to:
+  /// **'إسناد دفعة'**
+  String get unitTimelineEventLotAssigned;
 }
 
 class _AppLocalizationsDelegate

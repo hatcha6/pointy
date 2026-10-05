@@ -15728,14 +15728,6 @@ class AppLocalizationsAr extends AppLocalizations {
       'صنف مسلسل: امسح معرّف كل قطعة تُحمَّل فعليًا. تقرير النقص عند الاستلام يعتمد على هذا.';
 
   @override
-  String transferPickUnitsCount(int picked, int needed) {
-    return '$picked من $needed';
-  }
-
-  @override
-  String get transferPickUnitsIncomplete => 'أكمل تحديد الوحدات قبل الإرسال.';
-
-  @override
   String get transferReceiveScanTitle => 'امسح الوحدات الواصلة';
 
   @override
@@ -25196,4 +25188,162 @@ class AppLocalizationsAr extends AppLocalizations {
   String unitCaptureDetailsTitle(String code) {
     return 'حالة $code';
   }
+
+  @override
+  String get variantGtinLabel => 'رقم GTIN';
+
+  @override
+  String get variantGtinHelper =>
+      'الرقم العالمي للصنف في رمز DataMatrix: 8 أو 12 أو 13 أو 14 رقمًا. امسح العبوة لتعبئته.';
+
+  @override
+  String get gtinErrorNotDigits => 'رقم GTIN يتكوّن من أرقام فقط.';
+
+  @override
+  String get gtinErrorLength => 'رقم GTIN يتكوّن من 8 أو 12 أو 13 أو 14 رقمًا.';
+
+  @override
+  String get gtinErrorCheckDigit =>
+      'رقم التحقق (الخانة الأخيرة) غير صحيح — راجع الرقم المطبوع.';
+
+  @override
+  String gtinTakenError(String owner) {
+    return 'رقم GTIN مستخدم في \"$owner\"';
+  }
+
+  @override
+  String get gtinTakenUnknownOwner => 'رقم GTIN مستخدم في منتج آخر';
+
+  @override
+  String get gtinDuplicateInFormError => 'رقم GTIN مكرر داخل هذا النموذج';
+
+  @override
+  String get productTrackingExpiryRequiredLabel =>
+      'تاريخ الصلاحية إلزامي عند الاستلام';
+
+  @override
+  String get productTrackingExpiryRequiredHelper =>
+      'لا تُستلم دفعة من هذا الصنف بلا تاريخ صلاحية. أطفئه لما يُتتبَّع بالدفعة ولا ينتهي.';
+
+  @override
+  String get productTrackingExpiryCardLabel => 'تاريخ الصلاحية عند الاستلام';
+
+  @override
+  String get productTrackingExpiryMandatory => 'إلزامي';
+
+  @override
+  String get productTrackingExpiryOptional => 'اختياري';
+
+  @override
+  String get productTrackingAssignLotsAction => 'إسناد الدفعات';
+
+  @override
+  String get missingLotsTitle => 'دفعات بانتظار الإسناد';
+
+  @override
+  String get missingLotsBody =>
+      'وحدات كانت على الرف قبل تفعيل تتبّع الدفعات لصنفها. حدّدها أو امسح معرّفاتها ثم اختر دفعتها — لا يتحرك المخزون ولا تتغير قيمته.';
+
+  @override
+  String get missingLotsEmpty => 'كل الوحدات على الرف لها دفعات.';
+
+  @override
+  String missingLotsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count وحدة بلا دفعة',
+      many: '$count وحدة بلا دفعة',
+      few: '$count وحدات بلا دفعة',
+      two: 'وحدتان بلا دفعة',
+      one: 'وحدة واحدة بلا دفعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get missingLotsProductsHeader => 'الأصناف';
+
+  @override
+  String get missingLotsPickProduct => 'اختر صنفًا لعرض وحداته.';
+
+  @override
+  String get missingLotsScanHint => 'امسح المعرّف لتحديد الوحدة';
+
+  @override
+  String get missingLotsScanNotFound =>
+      'لا توجد وحدة بلا دفعة بهذا المعرّف في هذا الصنف.';
+
+  @override
+  String get missingLotsScanAlready => 'الوحدة محددة بالفعل.';
+
+  @override
+  String get missingLotsSelectAll => 'تحديد الكل';
+
+  @override
+  String get missingLotsClearSelection => 'إلغاء التحديد';
+
+  @override
+  String missingLotsSelected(int count) {
+    return '$count محددة';
+  }
+
+  @override
+  String get missingLotsAssignAction => 'إسناد دفعة';
+
+  @override
+  String missingLotsAssigned(int count, String code) {
+    return 'أُسندت $count وحدة إلى الدفعة $code.';
+  }
+
+  @override
+  String get missingLotsLoadFailed => 'تعذّر تحميل الوحدات.';
+
+  @override
+  String get missingLotsLoadMore => 'عرض المزيد';
+
+  @override
+  String get lotChooserTitle => 'أي دفعة؟';
+
+  @override
+  String lotChooserSubtitle(int count, String product) {
+    return '$count وحدة من $product';
+  }
+
+  @override
+  String get lotChooserExisting => 'دفعات هذا الصنف';
+
+  @override
+  String get lotChooserNoLots =>
+      'لا توجد دفعات مسجّلة لهذا الصنف بعد — أدخل رقم الدفعة من العبوة.';
+
+  @override
+  String get lotChooserNew => 'دفعة جديدة';
+
+  @override
+  String lotChooserExpires(String date) {
+    return 'الصلاحية $date';
+  }
+
+  @override
+  String get lotChooserNoExpiry => 'بلا تاريخ صلاحية';
+
+  @override
+  String lotChooserOnHand(String quantity) {
+    return 'على الرف $quantity';
+  }
+
+  @override
+  String get lotChooserExpiryNeeded => 'تاريخ الصلاحية مطلوب لهذا الصنف.';
+
+  @override
+  String lotChooserConfirm(int count) {
+    return 'إسناد $count وحدة';
+  }
+
+  @override
+  String get stockUnitsAssignLotsAction => 'إسنادها';
+
+  @override
+  String get unitTimelineEventLotAssigned => 'إسناد دفعة';
 }

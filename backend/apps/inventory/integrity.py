@@ -32,6 +32,7 @@ from .models import (
     StockItem,
     StockLedgerEntry,
     StockUnit,
+    StockUnitEvent,
     StockValuationBin,
     Warehouse,
 )
@@ -300,7 +301,7 @@ def check_ledger_allocations(tracked=None) -> list:
             )
 
     mode_since = _tracking_mode_since(tracked)
-    shapes = StockAllocation.objects.filter(variant_id__in=tracked).values(
+    shapes = list(StockAllocation.objects.filter(variant_id__in=tracked).values(
         "id",
         "variant_id",
         "unit_id",
@@ -309,7 +310,8 @@ def check_ledger_allocations(tracked=None) -> list:
         "posting_at",
         "unit__batch_id",
         "unit__created_at",
-    )
+    ))
+    lots_named = _lots_assigned_at(shapes)
     for row in shapes:
         mode, label = tracked[row["variant_id"]]
         began = mode_since.get(row["variant_id"])
@@ -342,7 +344,7 @@ def check_ledger_allocations(tracked=None) -> list:
         elif mode == Product.TrackingMode.SERIAL_BATCH:
             if (
                 row["unit_id"] is None or row["batch_id"] is None
-            ) and not _grandfathered(row, began):
+            ) and not _grandfathered(row, began, lots_named):
                 problems.append(
                     f"[14] {label}: allocation {row['id']} must name both a unit "
                     "and its lot — that is what the fourth mode is for."
@@ -370,19 +372,46 @@ def _tracking_mode_since(tracked):
     )
 
 
-def _grandfathered(row, began) -> bool:
+def _lots_assigned_at(rows) -> dict:
+    """``{unit_id: when it was given a lot}`` for the lot-less unit rows.
+
+    Read from the unit's own event history rather than reused from
+    ``lot_assignment``: a check that asked the code it checks would prove only
+    that the code agrees with itself.
+    """
+    unit_ids = {
+        row["unit_id"]
+        for row in rows
+        if row["unit_id"] is not None
+        and row["batch_id"] is None
+        and row["unit__batch_id"] is not None
+    }
+    if not unit_ids:
+        return {}
+    named = {}
+    for unit_id, at in StockUnitEvent.objects.filter(
+        unit_id__in=unit_ids, kind=StockUnitEvent.Kind.LOT_ASSIGNED
+    ).values_list("unit_id", "at"):
+        if unit_id not in named or at < named[unit_id]:
+            named[unit_id] = at
+    return named
+
+
+def _grandfathered(row, began, lots_named) -> bool:
     """A unit ``serial → serial_batch`` kept on the shelf (§4.2), moving now.
 
-    It names no lot because it never had one: it has none, and it was born
-    before its product began requiring lots. A unit born after that moment
-    gets no such pass — that is the defect this check exists for.
+    It names no lot because it never had one: it was born before its product
+    began requiring lots, and either it still has none or this movement was
+    written before the worklist gave it one. A unit born after that moment
+    gets no such pass — that is the defect this check exists for — and neither
+    does a movement after the unit was given its lot.
     """
-    return (
-        began is not None
-        and row["unit_id"] is not None
-        and row["unit__batch_id"] is None
-        and row["unit__created_at"] < began
-    )
+    if began is None or row["unit_id"] is None or row["unit__created_at"] >= began:
+        return False
+    if row["unit__batch_id"] is None:
+        return True
+    named_at = lots_named.get(row["unit_id"])
+    return named_at is not None and row["posting_at"] < named_at
 
 
 # ---------------------------------------------------------------------------

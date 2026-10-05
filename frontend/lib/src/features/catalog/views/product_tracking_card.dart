@@ -6,12 +6,14 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
 import '../../../data/models/customer_asset.dart';
+import '../../../data/models/missing_lot.dart';
 import '../../../data/models/product.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/tracking/tracking_labels.dart';
 import '../../inventory/view_models/tracked_stock_view_model.dart';
+import '../../inventory/views/missing_lots_screen.dart';
 import '../../inventory/views/stock_batches_screen.dart';
 import '../../inventory/views/stock_units_screen.dart';
 
@@ -44,10 +46,14 @@ class ProductTrackingCard extends StatefulWidget {
 class _ProductTrackingCardState extends State<ProductTrackingCard> {
   String _assetTypeName = '';
 
+  /// Units of this product still owed a lot (§4.2), when it tracks them.
+  int _missingLots = 0;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadAssetTypeName());
+    unawaited(_loadMissingLots());
   }
 
   @override
@@ -55,6 +61,47 @@ class _ProductTrackingCardState extends State<ProductTrackingCard> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.product.assetTypeId != widget.product.assetTypeId) {
       unawaited(_loadAssetTypeName());
+    }
+    if (oldWidget.product.trackingMode != widget.product.trackingMode) {
+      unawaited(_loadMissingLots());
+    }
+  }
+
+  /// Asked only of a product that requires lots — the only kind a
+  /// `serial → serial_batch` switch can leave units without one — so the
+  /// card costs nothing extra for every other tracked product.
+  Future<void> _loadMissingLots() async {
+    final repository = widget.trackedStockRepository;
+    if (repository == null ||
+        !widget.product.trackingMode.requiresLot ||
+        !widget.capabilities.canViewStockUnits) {
+      if (_missingLots != 0) {
+        setState(() => _missingLots = 0);
+      }
+      return;
+    }
+    final result = await repository.loadMissingLotGroups(
+      productId: widget.product.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result case Ok<List<MissingLotGroup>>(:final value)) {
+      setState(
+        () => _missingLots = value.fold<int>(0, (sum, row) => sum + row.count),
+      );
+    }
+  }
+
+  Future<void> _openMissingLots(TrackedStockRepository repository) async {
+    await openMissingLotsScreen(
+      context,
+      repository: repository,
+      canAssign: widget.capabilities.canIdentifyStockUnits,
+      productId: widget.product.id,
+    );
+    if (mounted) {
+      await _loadMissingLots();
     }
   }
 
@@ -121,6 +168,12 @@ class _ProductTrackingCardState extends State<ProductTrackingCard> {
                 ),
               if (mode.tracksLots) ...[
                 PointySummaryRow(
+                  label: l10n.productTrackingExpiryCardLabel,
+                  value: product.expiryRequired
+                      ? l10n.productTrackingExpiryMandatory
+                      : l10n.productTrackingExpiryOptional,
+                ),
+                PointySummaryRow(
                   label: l10n.batchPickStrategyLabel,
                   value: batchPickStrategyLabel(l10n, product.autoPickStrategy),
                 ),
@@ -133,6 +186,19 @@ class _ProductTrackingCardState extends State<ProductTrackingCard> {
               ],
             ],
           ),
+          if (_missingLots > 0 && repository != null) ...[
+            const SizedBox(height: 8),
+            PointyDetailCallout(
+              key: const ValueKey('product_tracking_missing_lots'),
+              icon: Icons.inventory_2_outlined,
+              tone: PointyCalloutTone.warning,
+              title: l10n.missingLotsCount(_missingLots),
+              trailing: TextButton(
+                onPressed: () => _openMissingLots(repository),
+                child: Text(l10n.productTrackingAssignLotsAction),
+              ),
+            ),
+          ],
           if (canOpenUnits || canOpenLots) ...[
             const SizedBox(height: 8),
             Wrap(

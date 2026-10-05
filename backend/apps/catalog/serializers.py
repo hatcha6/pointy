@@ -8,10 +8,11 @@ from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.core.serializer_reuse import render as render_reused
 
-from . import scale_barcodes
+from . import gs1, scale_barcodes
 from .tracking_modes import assert_mode_change_allowed, identify_stock_on_hand
 from .identity import (
     BARCODE_FIELD,
+    GTIN_FIELD,
     KIND_PAYLOAD,
     KIND_RACE,
     SKU_FIELD,
@@ -21,6 +22,7 @@ from .identity import (
     IdentityConflict,
     find_barcode_conflict,
     find_conflicts,
+    find_gtin_conflicts,
     find_sku_conflict,
 )
 from .sku_series import allocate_variant_sku
@@ -149,12 +151,49 @@ def raise_identity_conflict_for_integrity_error(error, *, target):
 def _normalized_identity(field, value):
     if field == SKU_FIELD:
         return normalize_sku(value)
+    if field == GTIN_FIELD:
+        # Already normalised by ``validate_gtin``; blank stays blank.
+        return str(value or "")
     return normalize_barcode(value)
 
 
+def validated_gtin(value):
+    """A typed GTIN as the stored GTIN-14, or the field's 400 in Arabic.
+
+    One rule for every door that writes a variant — the product form, the
+    variant editor, the generated-variants grid — so none of them can store a
+    number a DataMatrix will never match.
+    """
+    try:
+        return gs1.normalize_gtin(value)
+    except gs1.GtinError as error:
+        raise serializers.ValidationError(error.message, code=error.code) from None
+
+
+def _gtin_field():
+    # No ``default``: an absent key keeps the variant's GTIN, the same survival
+    # rule the SKU follows, so a client that predates the field cannot wipe it.
+    # Longer than fourteen on the way in because people type the groups printed
+    # under a barcode with spaces between them.
+    return serializers.CharField(
+        max_length=32,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        validators=[],
+    )
+
+
 def variant_identity_conflicts(data, *, exclude_variant_ids=(), target, index=None):
-    """Conflicts for one variant payload's SKU and barcode."""
+    """Conflicts for one variant payload's SKU, barcode and GTIN."""
     conflicts = []
+    if data.get(GTIN_FIELD):
+        conflict = find_gtin_conflicts(
+            [data[GTIN_FIELD]],
+            exclude_variant_ids=exclude_variant_ids,
+        ).get((GTIN_FIELD, data[GTIN_FIELD]))
+        if conflict is not None:
+            conflicts.append(conflict.at(target, index))
     if SKU_FIELD in data:
         conflict = find_sku_conflict(
             data.get(SKU_FIELD) or "",
@@ -616,6 +655,7 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
         trim_whitespace=True,
         default="",
     )
+    gtin = _gtin_field()
     unit_price = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -666,6 +706,9 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
 
     def validate_barcode(self, value):
         return value.strip()
+
+    def validate_gtin(self, value):
+        return validated_gtin(value)
 
 
 class DefaultProductVariantField(serializers.Field):
@@ -764,6 +807,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         allow_blank=True,
         validators=[],
     )
+    # GS1 trade-item number, stored as GTIN-14 (§4.2, §6.3).
+    gtin = _gtin_field()
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_detail = ProductCatalogSummarySerializer(source="product", read_only=True)
     tracks_expiry = serializers.BooleanField(
@@ -826,6 +871,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "full_name",
             "sku",
             "barcode",
+            "gtin",
             # Always the shop's base currency — see ProductVariant.unit_price.
             "unit_price",
             # The foreign price this row is maintained in, and the frozen rate
@@ -877,6 +923,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
     def validate_barcode(self, value):
         return value.strip()
+
+    def validate_gtin(self, value):
+        return validated_gtin(value)
 
     def validate(self, attrs):
         scoped_product = self.context.get("product")
@@ -999,6 +1048,7 @@ class ProductVariantInputSerializer(serializers.Serializer):
         trim_whitespace=True,
         default="",
     )
+    gtin = _gtin_field()
     unit_price = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -1050,6 +1100,9 @@ class ProductVariantInputSerializer(serializers.Serializer):
 
     def validate_barcode(self, value):
         return value.strip()
+
+    def validate_gtin(self, value):
+        return validated_gtin(value)
 
 
 class ProductVariantListField(serializers.Field):
@@ -1160,6 +1213,10 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "warranty_days",
             # Batch & expiry policy, read when the mode tracks lots or the
             # product merely tracks dates.
+            # Must a delivery of this say when it goes off? The half of the old
+            # ``tracks_expiry`` that ``tracking_mode`` does not answer (§18.4):
+            # receiving demands an expiry date on a lot only when it is set.
+            "expiry_required",
             "shelf_life_days",
             "expiry_warning_days",
             "auto_pick_strategy",
@@ -1218,6 +1275,10 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             if wants_expiry in (True, "true", "True", 1, "1"):
                 if current in (None, Product.TrackingMode.QUANTITY):
                     attrs["tracking_mode"] = Product.TrackingMode.BATCH
+                    # "Tracks expiry" meant the date was owed at receiving,
+                    # which is what every such product was migrated to; a
+                    # client that still speaks the old flag means the same.
+                    attrs.setdefault("expiry_required", True)
             elif current == Product.TrackingMode.BATCH:
                 attrs["tracking_mode"] = Product.TrackingMode.QUANTITY
         identify_later = attrs.pop("tracking_mode_identify_later", False)
@@ -1359,16 +1420,17 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
 
         # Every code in the payload paired with where it sits, so the whole
         # request resolves in one batched lookup instead of two queries a row.
+        fields = (SKU_FIELD, BARCODE_FIELD, GTIN_FIELD)
         entries = [
             (TARGET_VARIANTS, index, field, value)
             for index, data in enumerate(variants_data or [])
-            for field in (SKU_FIELD, BARCODE_FIELD)
+            for field in fields
             if (value := _normalized_identity(field, data.get(field)))
         ]
         if default_variant_data is not None:
             entries.extend(
                 (TARGET_DEFAULT_VARIANT, None, field, value)
-                for field in (SKU_FIELD, BARCODE_FIELD)
+                for field in fields
                 if (value := _normalized_identity(field, default_variant_data.get(field)))
             )
 
@@ -1378,6 +1440,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 value for _, _, field, value in entries if field == BARCODE_FIELD
             ],
             exclude_variant_ids=excluded_ids,
+        )
+        taken.update(
+            find_gtin_conflicts(
+                [value for _, _, field, value in entries if field == GTIN_FIELD],
+                exclude_variant_ids=excluded_ids,
+            )
         )
 
         conflicts = []

@@ -36,6 +36,7 @@ class ProductTrackingFields extends StatefulWidget {
     this.doesNotKeepStock = false,
     this.errorText,
     this.enabled = true,
+    this.gtinField,
   });
 
   final ProductTracking value;
@@ -59,6 +60,11 @@ class ProductTrackingFields extends StatefulWidget {
   /// The server's refusal of a mode change, already in Arabic.
   final String? errorText;
   final bool enabled;
+
+  /// The variant's GS1 number, from a form that edits one variant. Shown with
+  /// the lot policy and nowhere else: the GTIN is what a lot-tracked pack's
+  /// DataMatrix names, and a shop selling Coca-Cola never sees the box.
+  final Widget? gtinField;
 
   @override
   State<ProductTrackingFields> createState() => _ProductTrackingFieldsState();
@@ -200,6 +206,7 @@ class _ProductTrackingFieldsState extends State<ProductTrackingFields> {
           ResponsiveFormGrid(
             maxColumns: 2,
             children: [
+              ?widget.gtinField,
               DropdownButtonFormField<BatchPickStrategy>(
                 key: ValueKey(
                   'product_tracking_pick_${value.autoPickStrategy.wire}',
@@ -225,6 +232,20 @@ class _ProductTrackingFieldsState extends State<ProductTrackingFields> {
                     : null,
               ),
             ],
+          ),
+          // Whether receiving demands the date. Not implied by lot tracking:
+          // milk owes one, a run of phone cases tracked for provenance does
+          // not, and asking for a date that does not exist teaches receivers
+          // to type a fake one.
+          SwitchListTile(
+            key: const ValueKey('product_tracking_expiry_required'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.productTrackingExpiryRequiredLabel),
+            subtitle: Text(l10n.productTrackingExpiryRequiredHelper),
+            value: value.expiryRequired,
+            onChanged: enabled
+                ? (required) => _emit(value.copyWith(expiryRequired: required))
+                : null,
           ),
           SwitchListTile(
             key: const ValueKey('product_tracking_prevent_expired'),

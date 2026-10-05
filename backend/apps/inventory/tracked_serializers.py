@@ -470,3 +470,35 @@ class IdentifyUnitSerializer(serializers.Serializer):
             )
         ]
         return attrs
+
+
+class AssignLotInputSerializer(serializers.Serializer):
+    """Which grandfathered units go into which lot (``lot_assignment``).
+
+    Exactly one of ``batch`` (a lot this variant already has) and ``lot_code``
+    (one read off the box — found by its code if the variant knows it, created
+    if not). The units are capped per request because a shelf is worked a scan
+    at a time, and a payload of ten thousand ids is a bug, not a pharmacy.
+    """
+
+    variant = serializers.IntegerField()
+    units = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1,
+        max_length=500,
+    )
+    batch = serializers.IntegerField(required=False, allow_null=True)
+    lot_code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    expiry_date = serializers.DateField(required=False, allow_null=True)
+    manufactured_on = serializers.DateField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        has_batch = attrs.get("batch") is not None
+        has_code = bool(attrs.get("lot_code"))
+        if has_batch == has_code:
+            raise serializers.ValidationError(
+                {"detail": "اختر دفعة موجودة أو أدخل رقم دفعة جديدة."}
+            )
+        return attrs

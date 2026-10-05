@@ -41,7 +41,10 @@ class ProductCarryOverValues {
   }) : tracking =
            tracking ??
            (tracksExpiry
-               ? const ProductTracking(mode: TrackingMode.batch)
+               ? const ProductTracking(
+                   mode: TrackingMode.batch,
+                   expiryRequired: true,
+                 )
                : const ProductTracking());
 
   final String name;

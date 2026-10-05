@@ -121,6 +121,7 @@ class StockUnitTimelineSection extends StatelessWidget {
     'warranty_changed' => Icons.verified_user_outlined,
     'photo_added' => Icons.add_photo_alternate_outlined,
     'photo_removed' => Icons.hide_image_outlined,
+    'lot_assigned' => Icons.inventory_2_outlined,
     'written_off' => Icons.delete_outline,
     _ => Icons.edit_note_outlined,
   };
@@ -143,6 +144,7 @@ class StockUnitTimelineSection extends StatelessWidget {
       'warranty_changed' => l10n.unitTimelineEventWarrantyChanged,
       'photo_added' => l10n.unitTimelineEventPhotoAdded,
       'photo_removed' => l10n.unitTimelineEventPhotoRemoved,
+      'lot_assigned' => l10n.unitTimelineEventLotAssigned,
       _ => l10n.unitTimelineEventNote,
     };
   }

@@ -45,6 +45,7 @@ import 'product_tracking_fields.dart';
 import 'product_units_editor.dart';
 import 'variant_generation_fields.dart';
 import 'variant_identity_watcher.dart';
+import 'variant_gtin_field.dart';
 import 'variant_option_creation_dialogs.dart';
 
 /// The new-product form.
@@ -144,6 +145,11 @@ class _ProductFormState extends State<ProductForm> {
   // not one — carried over, it would code every variant "1042-RED".
   final _skuPrefixController = TextEditingController();
   final _barcodeController = TextEditingController();
+
+  /// The default variant's GS1 number, offered with the lot policy only. A
+  /// code, so like the barcode it is never carried or copied.
+  final _gtinController = TextEditingController();
+  String? _gtinError;
   final _priceController = TextEditingController();
   final _openingQuantityController = TextEditingController();
   final _openingCostController = TextEditingController();
@@ -432,6 +438,7 @@ class _ProductFormState extends State<ProductForm> {
     _skuPrefixController.removeListener(_fillGeneratedSkus);
     _skuPrefixController.dispose();
     _barcodeController.dispose();
+    _gtinController.dispose();
     _priceController.removeListener(_syncGeneratedPricesFromBase);
     _priceController.removeListener(_refreshPricePreview);
     _priceController.removeListener(_onPriceChanged);
@@ -516,6 +523,7 @@ class _ProductFormState extends State<ProductForm> {
             : _skuController.text.trim(),
         _skuPrefixController.text.trim(),
         _barcodeController.text.trim(),
+        _gtinController.text.trim(),
         _priceController.text.trim(),
         _openingQuantityController.text.trim(),
         _openingCostController.text.trim(),
@@ -719,6 +727,9 @@ class _ProductFormState extends State<ProductForm> {
                           mode: value
                               ? TrackingMode.batch
                               : TrackingMode.quantity,
+                          // «يتابع تاريخ الانتهاء» says the date is owed at
+                          // receiving — what the switch always meant.
+                          expiryRequired: value,
                         ),
                       ),
                 onEnter: _advanceFrom,
@@ -767,6 +778,20 @@ class _ProductFormState extends State<ProductForm> {
                     onReloadAssetTypes: _loadAssetTypes,
                     doesNotKeepStock: _isService || _isPrepared,
                     enabled: !isSaving,
+                    // One variant's number: a product generating several
+                    // gives each its own from the variant editor instead.
+                    gtinField: _showsSellingFields
+                        ? VariantGtinField(
+                            controller: _gtinController,
+                            errorText: _gtinError,
+                            enabled: !isSaving,
+                            onChanged: (_) {
+                              if (_gtinError != null) {
+                                setState(() => _gtinError = null);
+                              }
+                            },
+                          )
+                        : null,
                   ),
                 ),
               ],
@@ -1266,6 +1291,11 @@ class _ProductFormState extends State<ProductForm> {
       variantName: _variantNameController.text.trim(),
       variantSku: _skuController.text.trim(),
       variantBarcode: _barcodeController.text.trim(),
+      // Sent only where the field is shown, so a product that is not
+      // lot-tracked never writes one.
+      variantGtin: _showsSellingFields && tracking.mode.tracksLots
+          ? gtinFieldValue(_gtinController.text)
+          : null,
       variantUnitPrice: unitPrice,
       pricingCurrency: _pricingCurrency,
       variantPriceAmount: foreignPrice,
@@ -1360,6 +1390,8 @@ class _ProductFormState extends State<ProductForm> {
     // Codes belong to one product, a picture to one product, and a shelf is
     // counted rather than copied — none of these ever carry.
     _barcodeController.clear();
+    _gtinController.clear();
+    _gtinError = null;
     _skuController.clear();
     _skuPrefixController.clear();
     _variantNameController.clear();
@@ -1595,8 +1627,10 @@ class _ProductFormState extends State<ProductForm> {
       }
     }
 
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _savingAddAnother = false;
+      _gtinError = gtinConflictText(l10n, single);
       _generatedConflicts.clear();
       for (final conflict in generated) {
         final index = conflict.index;
@@ -1937,7 +1971,11 @@ class _ProductFormState extends State<ProductForm> {
     };
 
     for (final combination in combinations) {
-      for (final field in CatalogIdentityField.values) {
+      // The two codes a generated row has; a GTIN is set per variant later.
+      for (final field in const [
+        CatalogIdentityField.sku,
+        CatalogIdentityField.barcode,
+      ]) {
         final raw = controllers[field]![combination.signature]?.text.trim();
         if (raw == null || raw.isEmpty) {
           continue;

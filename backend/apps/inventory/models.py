@@ -1590,6 +1590,10 @@ class StockUnitEvent(TimeStampedModel):
         WARRANTY_CHANGED = "warranty_changed", "تعديل الضمان"
         PHOTO_ADDED = "photo_added", "إضافة صورة"
         PHOTO_REMOVED = "photo_removed", "حذف صورة"
+        # A grandfathered ``serial_batch`` unit given the lot it was never
+        # given (``lot_assignment``). Its time is the line invariant 14 draws:
+        # lot-less movements before it were the truth when they were written.
+        LOT_ASSIGNED = "lot_assigned", "إسناد دفعة"
 
     unit = models.ForeignKey(
         "inventory.StockUnit",

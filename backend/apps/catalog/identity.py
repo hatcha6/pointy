@@ -21,6 +21,11 @@ from .models import ProductUnitBarcode, ProductVariant, normalize_barcode, norma
 
 SKU_FIELD = "sku"
 BARCODE_FIELD = "barcode"
+# The GS1 trade-item number. Not held unique by the database — the plan keeps
+# it advisory so a wrong one stays correctable — but two variants answering to
+# one GTIN make a DataMatrix scan pick whichever the query meets first, so a
+# write that would create that is refused with the same structured conflict.
+GTIN_FIELD = "gtin"
 
 # Where the offending value sat in the request, so a client can walk back to the
 # input the user typed it into.
@@ -76,6 +81,8 @@ class IdentityConflict:
 
     @property
     def label(self) -> str:
+        if self.field == GTIN_FIELD:
+            return "GTIN"
         return "Barcode" if self.field == BARCODE_FIELD else "SKU"
 
     @property
@@ -259,6 +266,59 @@ def find_barcode_conflict(barcode: str, *, exclude_variant_ids: object = ()):
         exclude_variant_ids=exclude_variant_ids,
     )
     return conflicts.get((BARCODE_FIELD, value))
+
+
+def find_gtin_conflicts(
+    gtins: object = (),
+    *,
+    exclude_variant_ids: object = (),
+) -> dict[tuple[str, str], IdentityConflict]:
+    """Variants already answering to these GTIN-14s, keyed like
+    :func:`find_conflicts`.
+
+    Two places count, because ``tracked_resolution`` looks in both: another
+    variant's ``gtin``, and another variant's ordinary barcode holding the same
+    trade item in any of its printed forms (an EAN-13 typed under the symbol).
+    A product's *own* barcode equal to its own GTIN is the normal case and is
+    excluded with the row. Two queries for any payload size.
+    """
+    from .gs1 import gtin_candidates
+
+    values = _unique(gtins)
+    excluded = [pk for pk in exclude_variant_ids if pk]
+    conflicts: dict[tuple[str, str], IdentityConflict] = {}
+    if not values:
+        return conflicts
+
+    queryset = ProductVariant.objects.select_related("product").filter(gtin__in=values)
+    if excluded:
+        queryset = queryset.exclude(pk__in=excluded)
+    for variant in queryset:
+        conflicts.setdefault(
+            (GTIN_FIELD, variant.gtin),
+            _variant_conflict(GTIN_FIELD, variant.gtin, variant),
+        )
+
+    printed = {
+        candidate: value
+        for value in values
+        if (GTIN_FIELD, value) not in conflicts
+        for candidate in gtin_candidates(value)
+    }
+    if not printed:
+        return conflicts
+    queryset = ProductVariant.objects.select_related("product").filter(
+        barcode__in=list(printed)
+    )
+    if excluded:
+        queryset = queryset.exclude(pk__in=excluded)
+    for variant in queryset:
+        value = printed[variant.barcode]
+        conflicts.setdefault(
+            (GTIN_FIELD, value),
+            _variant_conflict(GTIN_FIELD, value, variant),
+        )
+    return conflicts
 
 
 def _unique(values) -> list[str]:

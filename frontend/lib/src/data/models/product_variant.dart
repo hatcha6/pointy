@@ -15,6 +15,7 @@ class ProductVariant {
     this.displayName = '',
     this.fullName = '',
     this.barcode = '',
+    this.gtin = '',
     this.isActive = true,
     this.isDefault = false,
     this.tracksExpiry = false,
@@ -40,6 +41,10 @@ class ProductVariant {
   final String fullName;
   final String sku;
   final String barcode;
+
+  /// The GS1 trade-item number, stored as GTIN-14, that a scanned DataMatrix
+  /// resolves to this variant by (§6.3). Blank for nearly every variant.
+  final String gtin;
   final double unitPrice;
   final bool isActive;
   final bool isDefault;
@@ -185,6 +190,7 @@ class ProductVariant {
       fullName: json['full_name']?.toString() ?? '',
       sku: json['sku']?.toString() ?? '',
       barcode: json['barcode']?.toString() ?? '',
+      gtin: json['gtin']?.toString() ?? '',
       unitPrice: _moneyFromJson(json['unit_price']),
       isActive: _boolFromJson(json['is_active'], fallback: true),
       isDefault: _boolFromJson(json['is_default']),
@@ -273,6 +279,7 @@ class ProductVariant {
       fullName: fullName,
       sku: sku,
       barcode: barcode,
+      gtin: gtin,
       unitPrice: unitPrice ?? this.unitPrice,
       isActive: isActive,
       isDefault: isDefault,

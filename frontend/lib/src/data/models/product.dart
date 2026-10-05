@@ -26,6 +26,7 @@ class Product {
     this.expiryWarningDays = 30,
     this.autoPickStrategy = BatchPickStrategy.fefo,
     this.preventSellingExpired = true,
+    this.expiryRequired = false,
     this.isService = false,
     this.isPrepared = false,
     this.isSystem = false,
@@ -70,6 +71,10 @@ class Product {
   final BatchPickStrategy autoPickStrategy;
   final bool preventSellingExpired;
 
+  /// Must a delivery of this say when it goes off? Read for lot modes only:
+  /// receiving refuses a lot without an expiry date when it is set.
+  final bool expiryRequired;
+
   /// The mode and its facts as one value, the shape the forms edit.
   ProductTracking get tracking => ProductTracking(
     // A server that predates the mode says only `tracks_expiry` — which was
@@ -83,6 +88,7 @@ class Product {
     expiryWarningDays: expiryWarningDays,
     autoPickStrategy: autoPickStrategy,
     preventSellingExpired: preventSellingExpired,
+    expiryRequired: expiryRequired,
   );
   final bool isService;
   final bool isPrepared;
@@ -194,6 +200,7 @@ class Product {
       expiryWarningDays: (json['expiry_warning_days'] as num?)?.toInt() ?? 30,
       autoPickStrategy: BatchPickStrategy.fromWire(json['auto_pick_strategy']),
       preventSellingExpired: (json['prevent_selling_expired'] as bool?) ?? true,
+      expiryRequired: (json['expiry_required'] as bool?) ?? false,
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
       isSystem: (json['is_system'] as bool?) ?? false,
@@ -245,6 +252,7 @@ class Product {
       expiryWarningDays: expiryWarningDays,
       autoPickStrategy: autoPickStrategy,
       preventSellingExpired: preventSellingExpired,
+      expiryRequired: expiryRequired,
       isService: isService,
       isPrepared: isPrepared,
       isSystem: isSystem,
@@ -296,6 +304,7 @@ class Product {
       expiryWarningDays: detail?.expiryWarningDays ?? 30,
       autoPickStrategy: detail?.autoPickStrategy ?? BatchPickStrategy.fefo,
       preventSellingExpired: detail?.preventSellingExpired ?? true,
+      expiryRequired: detail?.expiryRequired ?? false,
       unit: variant.unit,
       pricingCurrency: detail?.pricingCurrency ?? variant.pricingCurrency,
       defaultSaleUnit: detail?.defaultSaleUnit ?? '',
@@ -365,6 +374,7 @@ class Product {
       expiryWarningDays: expiryWarningDays,
       autoPickStrategy: autoPickStrategy,
       preventSellingExpired: preventSellingExpired,
+      expiryRequired: expiryRequired,
       isService: isService,
       isPrepared: isPrepared,
       isSystem: isSystem,

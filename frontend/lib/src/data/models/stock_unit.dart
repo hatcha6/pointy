@@ -383,10 +383,15 @@ class StockUnitSummary {
   const StockUnitSummary({
     this.byStatus = const {},
     this.missingIdentifiers = 0,
+    this.missingLots = 0,
   });
 
   final Map<String, int> byStatus;
   final int missingIdentifiers;
+
+  /// Units on the shelf of a lot-tracked handset still owed their lot — the
+  /// ones `serial → serial_batch` grandfathered (§4.2).
+  final int missingLots;
 
   int get inStock => byStatus[StockUnitStatus.inStock] ?? 0;
 
@@ -397,6 +402,7 @@ class StockUnitSummary {
           ? {for (final entry in raw.entries) entry.key: _intOf(entry.value)}
           : const {},
       missingIdentifiers: _intOf(json['missing_identifiers']),
+      missingLots: _intOf(json['missing_lots']),
     );
   }
 }

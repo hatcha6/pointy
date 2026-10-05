@@ -36,6 +36,7 @@ from .identity import (
 )
 from .models import StockAllocation, StockBatch, StockBatchBalance, StockUnit
 from .tracked_serializers import (
+    AssignLotInputSerializer,
     IdentifyUnitSerializer,
     LotAllocationSerializer,
     StockAllocationSerializer,
@@ -61,6 +62,16 @@ def _variant_option_values():
         "variant__option_values",
         queryset=VariantOptionValue.objects.select_related("option"),
     )
+
+
+def _int_param(request, name):
+    """A positive integer query parameter, or None — never a 500 on junk."""
+    value = request.query_params.get(name, "")
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
 
 
 def _selling_warehouse_id(request):
@@ -184,6 +195,11 @@ class StockUnitViewSet(
         "report_incident": ("inventory.manage_consignmentincident",),
         "opening_worklist": ("inventory.view_stockunit",),
         "identify_opening": ("inventory.add_stockunit",),
+        # Naming the lot a unit sits in is the lot half of identifying it, so
+        # it answers to the same permission the identifier half does.
+        "missing_lots": ("inventory.view_stockunit",),
+        "missing_lot_groups": ("inventory.view_stockunit",),
+        "assign_lot": ("inventory.add_stockunit",),
         "incidents": ("inventory.view_consignment_liability",),
         "unclaimed_payouts": ("inventory.view_consignment_liability",),
         "timeline": ("inventory.view_stockunit",),
@@ -314,12 +330,17 @@ class StockUnitViewSet(
             .values("status")
             .annotate(total=Sum(1))
         )
+        from .lot_assignment import missing_lot_units
+
         return Response(
             {
                 "by_status": {row["status"]: row["total"] for row in rows},
                 "missing_identifiers": self.filter_queryset(self.get_queryset())
                 .filter(is_identified=False, status__in=StockUnit.LIVE_STATUSES)
                 .count(),
+                # Grandfathered ``serial_batch`` units still owing their lot
+                # (§4.2): the lot worklist's count, under the same filters.
+                "missing_lots": self.filter_queryset(missing_lot_units()).count(),
             }
         )
 
@@ -793,6 +814,93 @@ class StockUnitViewSet(
             actor=request.user if request.user.is_authenticated else None,
         )
         return Response(result, status=status.HTTP_201_CREATED)
+
+    # -- the lot worklist (§4.2 grandfathering) -------------------------------
+
+    @action(detail=False, methods=["get"], url_path="missing-lot-groups")
+    def missing_lot_groups(self, request):
+        """Which variants still have units on the shelf with no lot, and how
+        many. One aggregate query — the worklist's list of products."""
+        from .lot_assignment import missing_lot_groups
+
+        return Response(
+            missing_lot_groups(
+                product=_int_param(request, "product"),
+                warehouse=_int_param(request, "warehouse"),
+            )
+        )
+
+    @action(detail=False, methods=["get"], url_path="missing-lots")
+    def missing_lots(self, request):
+        """The units themselves, a page at a time, oldest on the shelf first.
+
+        Filtered by ``variant`` / ``product`` / ``warehouse`` and by ``code``
+        (either identifier, normalised), so a scan past the first page still
+        finds its handset.
+        """
+        from .lot_assignment import missing_lot_units
+
+        query = (
+            missing_lot_units(
+                variant=_int_param(request, "variant"),
+                product=_int_param(request, "product"),
+                warehouse=_int_param(request, "warehouse"),
+            )
+            .select_related("variant", "variant__product", "warehouse", "batch")
+            .prefetch_related(_variant_option_values())
+            .order_by("in_stock_since", "id")
+        )
+        code = request.query_params.get("code", "")
+        if code:
+            query = StockUnitFilter().filter_code(query, "code", code)
+        page = self.paginate_queryset(query)
+        serializer = StockUnitSerializer(
+            page if page is not None else query,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["post"], url_path="assign-lot")
+    def assign_lot(self, request):
+        """Put grandfathered units into a lot. Nothing moves (see
+        ``lot_assignment``): the lot's balance takes them, the bin does not
+        change, and each unit records when it was given its lot."""
+        from apps.catalog.models import ProductVariant
+
+        from .lot_assignment import assign_lot
+
+        serializer = AssignLotInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        variant = (
+            ProductVariant.objects.select_related("product")
+            .filter(pk=data["variant"])
+            .first()
+        )
+        if variant is None:
+            raise serializers.ValidationError({"variant": "صنف غير معروف."})
+        batch, created, units = assign_lot(
+            variant=variant,
+            unit_ids=data["units"],
+            batch=data.get("batch"),
+            lot={
+                "code": data.get("lot_code", ""),
+                "expiry_date": data.get("expiry_date"),
+                "manufactured_on": data.get("manufactured_on"),
+            },
+            actor=request.user,
+        )
+        return Response(
+            {
+                "batch": batch.pk,
+                "batch_code": batch.display_code,
+                "created": created,
+                "assigned": len(units),
+            }
+        )
 
     @action(detail=True, methods=["post"], url_path="report-incident")
     def report_incident(self, request, pk=None):

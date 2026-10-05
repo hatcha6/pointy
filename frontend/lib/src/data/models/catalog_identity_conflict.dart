@@ -1,7 +1,8 @@
 import '../services/api_session.dart';
 
-/// Which catalog field a duplicate landed on.
-enum CatalogIdentityField { sku, barcode }
+/// Which catalog field a duplicate landed on. [gtin] is the GS1 trade-item
+/// number, refused when another variant already answers to it.
+enum CatalogIdentityField { sku, barcode, gtin }
 
 /// What the duplicate collided with.
 enum CatalogIdentityConflictKind {
@@ -151,9 +152,11 @@ CatalogIdentityConflict? _conflictOrNull(Object? value) {
 }
 
 CatalogIdentityField _fieldFrom(Object? value) {
-  return _text(value) == 'sku'
-      ? CatalogIdentityField.sku
-      : CatalogIdentityField.barcode;
+  return switch (_text(value)) {
+    'sku' => CatalogIdentityField.sku,
+    'gtin' => CatalogIdentityField.gtin,
+    _ => CatalogIdentityField.barcode,
+  };
 }
 
 CatalogIdentityConflictKind _kindFrom(Object? value) {

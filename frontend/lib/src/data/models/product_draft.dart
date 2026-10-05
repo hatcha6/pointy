@@ -17,6 +17,7 @@ class ProductDraft {
     this.units = const [],
     this.variantName = '',
     this.variantBarcode = '',
+    this.variantGtin,
     this.description = '',
     this.categoryIds = const [],
     this.variantOptionIds = const [],
@@ -43,6 +44,10 @@ class ProductDraft {
   final String defaultPurchaseUnit;
   final List<ProductUnit> units;
   final String variantBarcode;
+
+  /// The default variant's GS1 number as typed; null when the form did not
+  /// offer it, so nothing is written.
+  final String? variantGtin;
   final String description;
   final List<int> categoryIds;
   final List<int> variantOptionIds;
@@ -95,6 +100,7 @@ class ProductDraft {
           'name': variantName,
           'sku': variantSku,
           'barcode': variantBarcode,
+          if (variantGtin != null) 'gtin': variantGtin,
           'unit_price': variantUnitPrice.toStringAsFixed(2),
           if (variantPriceAmount != null)
             'price_amount': variantPriceAmount!.toStringAsFixed(2),

@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/consignment.dart';
+import '../models/missing_lot.dart';
 import '../models/stock_batch.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
@@ -336,6 +337,44 @@ class TrackedStockRepository {
         batches: batches,
         captureLater: captureLater,
       ),
+    );
+  }
+
+  // -- the lot worklist (§4.2) ---------------------------------------------
+
+  /// Variants whose units on the shelf are still owed a lot, largest first.
+  Future<Result<List<MissingLotGroup>>> loadMissingLotGroups({int? productId}) {
+    return Result.guard(
+      () => _service.fetchMissingLotGroups(productId: productId),
+    );
+  }
+
+  /// One variant's lot-less units, a page at a time; [code] finds a scanned
+  /// one past the first page.
+  Future<Result<StockUnitPage>> loadMissingLotUnits({
+    required int variantId,
+    String code = '',
+    int page = 1,
+  }) {
+    return Result.guard(
+      () => _service.fetchMissingLotUnits(
+        variantId: variantId,
+        code: code,
+        page: page,
+      ),
+    );
+  }
+
+  /// Put [unitIds] into one lot. Nothing moves: the lot's balance takes them
+  /// and the units remember when.
+  Future<Result<LotAssignment>> assignLot({
+    required int variantId,
+    required List<int> unitIds,
+    required LotChoice lot,
+  }) {
+    return Result.guard(
+      () =>
+          _service.assignLot(variantId: variantId, unitIds: unitIds, lot: lot),
     );
   }
 

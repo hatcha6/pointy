@@ -1,4 +1,5 @@
 import '../models/consignment.dart';
+import '../models/missing_lot.dart';
 import '../models/stock_batch.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
@@ -422,6 +423,60 @@ class TrackedStockApiClient {
       return (decoded['identified'] as num?)?.toInt() ?? 0;
     }
     return 0;
+  }
+
+  // -- the lot worklist (§4.2 grandfathering) ------------------------------
+
+  Future<List<MissingLotGroup>> fetchMissingLotGroups({int? productId}) async {
+    final response = await _session.get(
+      'stock-units/missing-lot-groups/',
+      query: {if (productId != null) 'product': '$productId'},
+    );
+    _session.ensureSuccess(response, 'Missing lots request failed with status');
+    final decoded = _session.decodedBody(response);
+    if (decoded is! List) {
+      return const [];
+    }
+    return decoded
+        .whereType<Map<String, Object?>>()
+        .map(MissingLotGroup.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<StockUnitPage> fetchMissingLotUnits({
+    required int variantId,
+    String code = '',
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'stock-units/missing-lots/',
+      query: {
+        'variant': '$variantId',
+        'page': '$page',
+        if (code.isNotEmpty) 'code': code,
+      },
+    );
+    _session.ensureSuccess(response, 'Missing lots request failed with status');
+    return StockUnitPage.fromJson(_session.decodedBody(response));
+  }
+
+  Future<LotAssignment> assignLot({
+    required int variantId,
+    required List<int> unitIds,
+    required LotChoice lot,
+  }) async {
+    final response = await _session.post(
+      'stock-units/assign-lot/',
+      body: <String, Object?>{
+        'variant': variantId,
+        'units': unitIds,
+        ...lot.toJson(),
+      },
+    );
+    _session.throwApiException(response, 'Lot assignment failed with status');
+    return LotAssignment.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<List<StockUnitTimelineEntry>> fetchUnitTimeline(int unitId) async {

@@ -521,7 +521,7 @@ class Product(TimeStampedModel):
         if not variant.is_default:
             variant.is_default = True
             update_fields.append("is_default")
-        for field in ("name", "sku", "barcode", "unit_price", "is_active"):
+        for field in ("name", "sku", "barcode", "gtin", "unit_price", "is_active"):
             if field in variant_data:
                 setattr(variant, field, defaults[field])
                 update_fields.append(field)
@@ -545,6 +545,8 @@ class Product(TimeStampedModel):
             "name": str(data.get("name", "")).strip(),
             "sku": sku,
             "barcode": normalize_barcode(data.get("barcode", "")),
+            # Already GTIN-14 or blank: the serializer normalised it.
+            "gtin": str(data.get("gtin", "") or ""),
             "unit_price": unit_price,
             "is_active": bool(data.get("is_active", self.is_active)),
         }

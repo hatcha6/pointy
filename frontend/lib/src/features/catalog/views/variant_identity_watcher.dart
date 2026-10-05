@@ -128,6 +128,10 @@ class VariantIdentityWatcher extends ChangeNotifier {
 
   /// Records what the server said about a rejected save.
   void applyConflicts(Iterable<CatalogIdentityConflict> conflicts) {
+    // The GTIN is not one of the two codes this watches; its form shows it.
+    conflicts = conflicts.where(
+      (conflict) => conflict.field != CatalogIdentityField.gtin,
+    );
     for (final conflict in conflicts) {
       final state = IdentityFieldState(
         status: IdentityStatus.taken,
@@ -303,6 +307,9 @@ String identityConflictMessage(
   CatalogIdentityConflict conflict,
 ) {
   final isBarcode = conflict.field == CatalogIdentityField.barcode;
+  if (conflict.field == CatalogIdentityField.gtin) {
+    return _gtinConflictMessage(l10n, conflict);
+  }
   switch (conflict.kind) {
     case CatalogIdentityConflictKind.race:
       return l10n.identityCodeClaimedDuringSave;
@@ -330,6 +337,36 @@ String identityConflictMessage(
           ? '$base ${l10n.identityArchivedOwnerSuffix}'
           : base;
   }
+}
+
+String _gtinConflictMessage(
+  AppLocalizations l10n,
+  CatalogIdentityConflict conflict,
+) {
+  if (conflict.kind == CatalogIdentityConflictKind.payload) {
+    return l10n.gtinDuplicateInFormError;
+  }
+  final owner = conflict.ownerLabel;
+  if (owner.isEmpty) {
+    return l10n.gtinTakenUnknownOwner;
+  }
+  final base = l10n.gtinTakenError(owner);
+  return conflict.isArchived
+      ? '$base ${l10n.identityArchivedOwnerSuffix}'
+      : base;
+}
+
+/// The GTIN conflict among a rejected save's, as the GTIN field's error.
+String? gtinConflictText(
+  AppLocalizations l10n,
+  Iterable<CatalogIdentityConflict> conflicts,
+) {
+  for (final conflict in conflicts) {
+    if (conflict.field == CatalogIdentityField.gtin) {
+      return identityConflictMessage(l10n, conflict);
+    }
+  }
+  return null;
 }
 
 /// The inline error a field should show, or null when it has none.

@@ -10300,19 +10300,6 @@
   "stockCountLotRequired": "هذا الصنف مُدار بالدفعات — اختر الدفعة التي تعدّها.",
   "transferPickUnitsTitle": "حدّد الوحدات المُرسَلة",
   "transferPickUnitsBody": "صنف مسلسل: امسح معرّف كل قطعة تُحمَّل فعليًا. تقرير النقص عند الاستلام يعتمد على هذا.",
-  "transferPickUnitsCount": "{picked} من {needed}",
-  "@transferPickUnitsCount": {
-    "description": "How many units the dispatcher has picked out of the line quantity.",
-    "placeholders": {
-      "picked": {
-        "type": "int"
-      },
-      "needed": {
-        "type": "int"
-      }
-    }
-  },
-  "transferPickUnitsIncomplete": "أكمل تحديد الوحدات قبل الإرسال.",
   "transferReceiveScanTitle": "امسح الوحدات الواصلة",
   "transferReceiveShort": "أُرسلت {sent} ووصلت {arrived}. الناقصة ما زالت على الطريق.",
   "@transferReceiveShort": {
@@ -20357,5 +20344,219 @@
         "type": "String"
       }
     }
+  },
+  "variantGtinLabel": "رقم GTIN",
+  "@variantGtinLabel": {
+    "description": "The GS1 trade item number field on a variant."
+  },
+  "variantGtinHelper": "الرقم العالمي للصنف في رمز DataMatrix: 8 أو 12 أو 13 أو 14 رقمًا. امسح العبوة لتعبئته.",
+  "@variantGtinHelper": {
+    "description": "Helper under the GTIN field."
+  },
+  "gtinErrorNotDigits": "رقم GTIN يتكوّن من أرقام فقط.",
+  "@gtinErrorNotDigits": {
+    "description": "GTIN validation: letters typed."
+  },
+  "gtinErrorLength": "رقم GTIN يتكوّن من 8 أو 12 أو 13 أو 14 رقمًا.",
+  "@gtinErrorLength": {
+    "description": "GTIN validation: wrong length."
+  },
+  "gtinErrorCheckDigit": "رقم التحقق (الخانة الأخيرة) غير صحيح — راجع الرقم المطبوع.",
+  "@gtinErrorCheckDigit": {
+    "description": "GTIN validation: check digit does not add up."
+  },
+  "gtinTakenError": "رقم GTIN مستخدم في \"{owner}\"",
+  "@gtinTakenError": {
+    "description": "Inline error when another product already answers to this GTIN.",
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "gtinTakenUnknownOwner": "رقم GTIN مستخدم في منتج آخر",
+  "@gtinTakenUnknownOwner": {
+    "description": "GTIN taken, owner unknown."
+  },
+  "gtinDuplicateInFormError": "رقم GTIN مكرر داخل هذا النموذج",
+  "@gtinDuplicateInFormError": {
+    "description": "The same GTIN twice in one save."
+  },
+  "productTrackingExpiryRequiredLabel": "تاريخ الصلاحية إلزامي عند الاستلام",
+  "@productTrackingExpiryRequiredLabel": {
+    "description": "Switch: receiving must name each lot's expiry date."
+  },
+  "productTrackingExpiryRequiredHelper": "لا تُستلم دفعة من هذا الصنف بلا تاريخ صلاحية. أطفئه لما يُتتبَّع بالدفعة ولا ينتهي.",
+  "@productTrackingExpiryRequiredHelper": {
+    "description": "Helper under the expiry-required switch."
+  },
+  "productTrackingExpiryCardLabel": "تاريخ الصلاحية عند الاستلام",
+  "@productTrackingExpiryCardLabel": {
+    "description": "Tracking card row: whether receiving demands an expiry date."
+  },
+  "productTrackingExpiryMandatory": "إلزامي",
+  "@productTrackingExpiryMandatory": {
+    "description": "Tracking card value: expiry required."
+  },
+  "productTrackingExpiryOptional": "اختياري",
+  "@productTrackingExpiryOptional": {
+    "description": "Tracking card value: expiry optional."
+  },
+  "productTrackingAssignLotsAction": "إسناد الدفعات",
+  "@productTrackingAssignLotsAction": {
+    "description": "Tracking card action opening the missing-lot worklist for this product."
+  },
+  "missingLotsTitle": "دفعات بانتظار الإسناد",
+  "@missingLotsTitle": {
+    "description": "Title of the missing-lot worklist."
+  },
+  "missingLotsBody": "وحدات كانت على الرف قبل تفعيل تتبّع الدفعات لصنفها. حدّدها أو امسح معرّفاتها ثم اختر دفعتها — لا يتحرك المخزون ولا تتغير قيمته.",
+  "@missingLotsBody": {
+    "description": "Explanation at the top of the missing-lot worklist."
+  },
+  "missingLotsEmpty": "كل الوحدات على الرف لها دفعات.",
+  "@missingLotsEmpty": {
+    "description": "Empty state of the missing-lot worklist."
+  },
+  "missingLotsCount": "{count, plural, one{وحدة واحدة بلا دفعة} two{وحدتان بلا دفعة} few{{count} وحدات بلا دفعة} many{{count} وحدة بلا دفعة} other{{count} وحدة بلا دفعة}}",
+  "@missingLotsCount": {
+    "description": "How many units still owe a lot.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "missingLotsProductsHeader": "الأصناف",
+  "@missingLotsProductsHeader": {
+    "description": "Header over the list of products owing lots."
+  },
+  "missingLotsPickProduct": "اختر صنفًا لعرض وحداته.",
+  "@missingLotsPickProduct": {
+    "description": "Prompt before a product is chosen on a wide screen."
+  },
+  "missingLotsScanHint": "امسح المعرّف لتحديد الوحدة",
+  "@missingLotsScanHint": {
+    "description": "Scan field hint on the missing-lot worklist."
+  },
+  "missingLotsScanNotFound": "لا توجد وحدة بلا دفعة بهذا المعرّف في هذا الصنف.",
+  "@missingLotsScanNotFound": {
+    "description": "Scanned code is not a lot-less unit of this product."
+  },
+  "missingLotsScanAlready": "الوحدة محددة بالفعل.",
+  "@missingLotsScanAlready": {
+    "description": "Scanned unit was already ticked."
+  },
+  "missingLotsSelectAll": "تحديد الكل",
+  "@missingLotsSelectAll": {
+    "description": "Select every loaded unit."
+  },
+  "missingLotsClearSelection": "إلغاء التحديد",
+  "@missingLotsClearSelection": {
+    "description": "Clear the selection."
+  },
+  "missingLotsSelected": "{count} محددة",
+  "@missingLotsSelected": {
+    "description": "How many units are ticked.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "missingLotsAssignAction": "إسناد دفعة",
+  "@missingLotsAssignAction": {
+    "description": "Footer action opening the lot chooser."
+  },
+  "missingLotsAssigned": "أُسندت {count} وحدة إلى الدفعة {code}.",
+  "@missingLotsAssigned": {
+    "description": "Snackbar after units were put into a lot.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "missingLotsLoadFailed": "تعذّر تحميل الوحدات.",
+  "@missingLotsLoadFailed": {
+    "description": "Units of the selected product failed to load."
+  },
+  "missingLotsLoadMore": "عرض المزيد",
+  "@missingLotsLoadMore": {
+    "description": "Load the next page of units."
+  },
+  "lotChooserTitle": "أي دفعة؟",
+  "@lotChooserTitle": {
+    "description": "Title of the lot chooser sheet."
+  },
+  "lotChooserSubtitle": "{count} وحدة من {product}",
+  "@lotChooserSubtitle": {
+    "description": "Subtitle: how many units of which product go into the lot.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "product": {
+        "type": "String"
+      }
+    }
+  },
+  "lotChooserExisting": "دفعات هذا الصنف",
+  "@lotChooserExisting": {
+    "description": "Section of lots the variant already has."
+  },
+  "lotChooserNoLots": "لا توجد دفعات مسجّلة لهذا الصنف بعد — أدخل رقم الدفعة من العبوة.",
+  "@lotChooserNoLots": {
+    "description": "The variant has no lots yet."
+  },
+  "lotChooserNew": "دفعة جديدة",
+  "@lotChooserNew": {
+    "description": "Option to type a lot code off the box."
+  },
+  "lotChooserExpires": "الصلاحية {date}",
+  "@lotChooserExpires": {
+    "description": "A lot's expiry date in the chooser.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "lotChooserNoExpiry": "بلا تاريخ صلاحية",
+  "@lotChooserNoExpiry": {
+    "description": "A lot without an expiry date."
+  },
+  "lotChooserOnHand": "على الرف {quantity}",
+  "@lotChooserOnHand": {
+    "description": "How much of the lot is on the shelf.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "lotChooserExpiryNeeded": "تاريخ الصلاحية مطلوب لهذا الصنف.",
+  "@lotChooserExpiryNeeded": {
+    "description": "The product's lots must carry an expiry date."
+  },
+  "lotChooserConfirm": "إسناد {count} وحدة",
+  "@lotChooserConfirm": {
+    "description": "Confirm button of the lot chooser.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stockUnitsAssignLotsAction": "إسنادها",
+  "@stockUnitsAssignLotsAction": {
+    "description": "Callout action opening the missing-lot worklist."
+  },
+  "unitTimelineEventLotAssigned": "إسناد دفعة",
+  "@unitTimelineEventLotAssigned": {
+    "description": "Unit timeline: the unit was given the lot it was missing."
   }
 }

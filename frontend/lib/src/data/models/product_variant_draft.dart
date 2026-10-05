@@ -6,6 +6,7 @@ class ProductVariantDraft {
     this.id,
     this.name = '',
     this.barcode = '',
+    this.gtin,
     this.isActive = true,
     this.isDefault = false,
     this.optionValueIds = const [],
@@ -19,6 +20,10 @@ class ProductVariantDraft {
   final String name;
   final String sku;
   final String barcode;
+
+  /// The GS1 trade-item number as typed. Null leaves the saved one alone —
+  /// the editor only shows the field where it matters — and blank clears it.
+  final String? gtin;
   final double unitPrice;
   final bool isActive;
   final bool isDefault;
@@ -43,6 +48,7 @@ class ProductVariantDraft {
       'name': name,
       'sku': sku,
       'barcode': barcode,
+      if (gtin != null) 'gtin': gtin,
       'unit_price': unitPrice.toStringAsFixed(2),
       if (priceAmount != null) 'price_amount': priceAmount!.toStringAsFixed(2),
       'is_active': isActive,

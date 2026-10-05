@@ -491,6 +491,61 @@ def gtin_candidates(gtin: str) -> list:
     return candidates
 
 
+class GtinError(ValueError):
+    """A typed GTIN that is not one — wrong length, not digits, or a check
+    digit that does not add up. ``code`` says which, so a form can say so."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+#: The lengths a trade item number is printed in: GTIN-8, UPC-A (12), EAN-13
+#: and GTIN-14. Every one is the same number once left-padded to fourteen.
+GTIN_LENGTHS = (8, 12, 13, 14)
+
+
+def gtin_check_digit(body: str) -> int:
+    """The GS1 mod-10 check digit for ``body`` (the number without it).
+
+    Weighted 3, 1, 3, … from the right, which is why left-padding with zeros
+    never changes it — and why an EAN-13 and its GTIN-14 share one digit.
+    """
+    total = sum(
+        int(digit) * (3 if position % 2 == 0 else 1)
+        for position, digit in enumerate(reversed(body))
+    )
+    return (10 - total % 10) % 10
+
+
+def normalize_gtin(value) -> str:
+    """A typed GTIN as the GTIN-14 a DataMatrix's AI ``01`` carries.
+
+    Blank stays blank. Spaces and hyphens are what people type between the
+    groups printed under a barcode, so they go; anything else that is not a
+    digit is refused rather than guessed at. A number of the wrong length, or
+    whose check digit does not add up, is a typo — and a typo stored here is a
+    pack that never scans — so both raise :class:`GtinError`.
+    """
+    text = re.sub(r"[\s\-]", "", str(value or ""))
+    if not text:
+        return ""
+    if not text.isdigit():
+        raise GtinError("gtin_not_digits", "رقم GTIN يتكوّن من أرقام فقط.")
+    if len(text) not in GTIN_LENGTHS:
+        raise GtinError(
+            "gtin_length",
+            "رقم GTIN يتكوّن من 8 أو 12 أو 13 أو 14 رقمًا.",
+        )
+    if int(text[-1]) != gtin_check_digit(text[:-1]):
+        raise GtinError(
+            "gtin_check_digit",
+            "رقم التحقق (الخانة الأخيرة) في GTIN غير صحيح — راجع الرقم المطبوع.",
+        )
+    return text.rjust(14, "0")
+
+
 __all__ = [
     "AI_EXPIRY",
     "AI_GTIN",
@@ -502,7 +557,11 @@ __all__ = [
     "Gs1Error",
     "Gs1Scan",
     "Gs1Warning",
+    "GtinError",
+    "GTIN_LENGTHS",
     "gtin_candidates",
+    "gtin_check_digit",
+    "normalize_gtin",
     "looks_like_gs1",
     "parse",
     "strip_symbology",

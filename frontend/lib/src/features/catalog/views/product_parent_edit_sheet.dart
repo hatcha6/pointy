@@ -268,6 +268,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                                         mode: value
                                             ? TrackingMode.batch
                                             : TrackingMode.quantity,
+                                        // The switch has always meant the
+                                        // date is owed at receiving.
+                                        expiryRequired: value,
                                       ),
                                     ),
                               unit: _unit,

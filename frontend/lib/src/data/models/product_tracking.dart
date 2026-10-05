@@ -16,6 +16,7 @@ class ProductTracking {
     this.expiryWarningDays = 30,
     this.autoPickStrategy = BatchPickStrategy.fefo,
     this.preventSellingExpired = true,
+    this.expiryRequired = false,
   });
 
   final TrackingMode mode;
@@ -42,6 +43,10 @@ class ProductTracking {
   /// this: a product may be stricter than the shop, never laxer.
   final bool preventSellingExpired;
 
+  /// Receiving must name each lot's expiry date. Read for lot modes only: a
+  /// run of phone cases is lot-tracked for provenance and never goes off.
+  final bool expiryRequired;
+
   ProductTracking copyWith({
     TrackingMode? mode,
     Object? assetTypeId = _keep,
@@ -50,6 +55,7 @@ class ProductTracking {
     int? expiryWarningDays,
     BatchPickStrategy? autoPickStrategy,
     bool? preventSellingExpired,
+    bool? expiryRequired,
   }) {
     return ProductTracking(
       mode: mode ?? this.mode,
@@ -62,6 +68,7 @@ class ProductTracking {
       autoPickStrategy: autoPickStrategy ?? this.autoPickStrategy,
       preventSellingExpired:
           preventSellingExpired ?? this.preventSellingExpired,
+      expiryRequired: expiryRequired ?? this.expiryRequired,
     );
   }
 
@@ -77,6 +84,7 @@ class ProductTracking {
       'expiry_warning_days': expiryWarningDays,
       'auto_pick_strategy': autoPickStrategy.wire,
       'prevent_selling_expired': preventSellingExpired,
+      'expiry_required': expiryRequired,
     };
   }
 
@@ -89,7 +97,8 @@ class ProductTracking {
         other.shelfLifeDays == shelfLifeDays &&
         other.expiryWarningDays == expiryWarningDays &&
         other.autoPickStrategy == autoPickStrategy &&
-        other.preventSellingExpired == preventSellingExpired;
+        other.preventSellingExpired == preventSellingExpired &&
+        other.expiryRequired == expiryRequired;
   }
 
   @override
@@ -101,6 +110,7 @@ class ProductTracking {
     expiryWarningDays,
     autoPickStrategy,
     preventSellingExpired,
+    expiryRequired,
   );
 }
 

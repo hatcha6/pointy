@@ -17,6 +17,7 @@ import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
+import 'variant_gtin_field.dart';
 import 'variant_identity_watcher.dart';
 
 class ProductVariantFormSheet extends StatefulWidget {
@@ -44,6 +45,8 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
   late final TextEditingController _skuController;
   late final TextEditingController _barcodeController;
   late final TextEditingController _priceController;
+  late final TextEditingController _gtinController;
+  String? _gtinError;
   late final VariantIdentityWatcher _identity;
   late final AutoSkuFiller _autoSku;
   late Map<int, Set<int>> _selectedValueIdsByOption;
@@ -54,6 +57,13 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
 
   bool get _isEditing => widget.variant != null;
 
+  /// The GS1 number is offered where it means something — a lot-tracked
+  /// product's packs carry one in their DataMatrix — or where one is already
+  /// saved and must stay editable. Everywhere else it would be noise.
+  bool get _showsGtin =>
+      widget.viewModel.product.trackingMode.tracksLots ||
+      (widget.variant?.gtin.isNotEmpty ?? false);
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +71,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     _variantNameController = TextEditingController(text: variant?.name ?? '');
     _skuController = TextEditingController(text: variant?.sku ?? '');
     _barcodeController = TextEditingController(text: variant?.barcode ?? '');
+    _gtinController = TextEditingController(text: variant?.gtin ?? '');
     _priceController = TextEditingController(
       text: variant == null ? '' : variant.unitPrice.toStringAsFixed(2),
     );
@@ -91,6 +102,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     _variantNameController.dispose();
     _skuController.dispose();
     _barcodeController.dispose();
+    _gtinController.dispose();
     _priceController.dispose();
     super.dispose();
   }
@@ -105,12 +117,14 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
           (_skuController.text.trim().isNotEmpty &&
               !_autoSku.holdsFilledValue(_skuController)) ||
           _barcodeController.text.trim().isNotEmpty ||
+          _gtinController.text.trim().isNotEmpty ||
           _priceController.text.trim().isNotEmpty ||
           _selectedOptionValueIds.isNotEmpty;
     }
     return _variantNameController.text.trim() != variant.name.trim() ||
         _skuController.text.trim() != variant.sku.trim() ||
         _barcodeController.text.trim() != variant.barcode.trim() ||
+        _gtinController.text.trim() != variant.gtin ||
         _parseNumber(_priceController.text) != variant.unitPrice ||
         _isActive != variant.isActive ||
         _isDefault != variant.isDefault ||
@@ -176,6 +190,19 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                         skuFieldKey: _skuFieldKey,
                         barcodeFieldKey: _barcodeFieldKey,
                       ),
+                      if (_showsGtin) ...[
+                        const SizedBox(height: 12),
+                        VariantGtinField(
+                          controller: _gtinController,
+                          errorText: _gtinError,
+                          enabled: !widget.viewModel.isSavingVariant,
+                          onChanged: (_) {
+                            if (_gtinError != null) {
+                              setState(() => _gtinError = null);
+                            }
+                          },
+                        ),
+                      ],
                       if (_variantOptions.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         VariantOptionValuesField(
@@ -195,7 +222,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                       // A rejected save with a known field conflict already
                       // marks the offending input; the footer only has to point
                       // at it rather than repeat a generic "could not save".
-                      _identity.hasConflict
+                      _identity.hasConflict || _gtinError != null
                           ? l10n.formFixHighlightedFieldsError
                           : _saveErrorKey == 'variant_update_error'
                           ? l10n.variantUpdateError
@@ -307,6 +334,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       name: _variantNameController.text.trim(),
       sku: _skuController.text.trim(),
       barcode: _barcodeController.text.trim(),
+      gtin: _showsGtin ? gtinFieldValue(_gtinController.text) : null,
       unitPrice: _parseNumber(_priceController.text)!,
       isActive: _isActive,
       isDefault: _isDefault,
@@ -324,6 +352,12 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       // The server re-checks every write: a clash it found (including one that
       // appeared between the live check and the save) lands on its field.
       _identity.applyConflicts(widget.viewModel.variantSaveConflicts);
+      setState(
+        () => _gtinError = gtinConflictText(
+          l10n,
+          widget.viewModel.variantSaveConflicts,
+        ),
+      );
       _scrollToFirstConflict();
       return;
     }
