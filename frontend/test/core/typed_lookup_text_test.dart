@@ -38,4 +38,39 @@ void main() {
       }
     });
   });
+
+  group('one article\'s identifier', () {
+    test('an IMEI, a VIN and a serial read as identifiers', () {
+      for (final typed in [
+        '351234567890116',
+        ' 351234-567890116 ',
+        '٣٥١٢٣٤٥٦٧٨٩٠١١٦',
+        '1HGCM82633A004352',
+        'sn-20391a',
+      ]) {
+        expect(looksLikeUnitIdentifier(typed), isTrue, reason: typed);
+      }
+    });
+
+    test('names, words and short codes stay a product search', () {
+      for (final typed in [
+        '',
+        'حليب',
+        'iPhone 13',
+        'charger',
+        'SAMSUNG',
+        '12345',
+        'شلا123',
+        '351234 567890116',
+      ]) {
+        expect(looksLikeUnitIdentifier(typed), isFalse, reason: typed);
+      }
+    });
+
+    test('normalises the way the server matches', () {
+      expect(normalizeUnitIdentifier(' 351234-567890116 '), '351234567890116');
+      expect(normalizeUnitIdentifier('٣٥١٢٣٤٥٦٧٨٩٠١١٦'), '351234567890116');
+      expect(normalizeUnitIdentifier('sn/20.39_1a'), 'SN20391A');
+    });
+  });
 }

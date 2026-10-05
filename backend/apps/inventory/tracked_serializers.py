@@ -369,6 +369,93 @@ class StockUnitSerializer(CostMaskedSerializer):
         )
 
 
+#: Which invoice an article went out on. Exactly what anybody who reads
+#: invoices already sees on the invoice itself, so it rides on that permission.
+SALE_DOCUMENT_PERMISSION = "sales.view_order"
+#: Who bought it: the name printed on that invoice, or in the contact book.
+CUSTOMER_PERMISSION = "customers.view_customer"
+SALE_DOCUMENT_FIELDS = ("sold_order", "sold_receipt_number")
+BUYER_FIELDS = ("customer_name",)
+
+
+def user_sees_sale_document(user) -> bool:
+    if user is None or not user.is_authenticated:
+        return False
+    return user.has_perm(SALE_DOCUMENT_PERMISSION)
+
+
+def user_sees_buyer(user) -> bool:
+    if user is None or not user.is_authenticated:
+        return False
+    return user.has_perm(SALE_DOCUMENT_PERMISSION) or user.has_perm(
+        CUSTOMER_PERMISSION
+    )
+
+
+class StockUnitDetailSerializer(StockUnitSerializer):
+    """One article as its own page and the search box read it.
+
+    The list row, plus the two answers somebody typing an IMEI is actually
+    after: what it sells for now, and — once it has gone — whose invoice it went
+    out on. *«هل بعنا هذا الجهاز، ولمن؟»* is the question, and a page that
+    answered it with a customer id would send the person off to look it up.
+
+    The sale's fields follow the same rule as cost: **absent** for a reader who
+    may not see them, never blank, because "sold to nobody" and "not yours to
+    know" are different answers. Reads ``sold_order_line__order`` and
+    ``customer`` — the view joins both for every action that uses this.
+    """
+
+    #: The unit's own price, or its variant's when it has none — what the
+    #: counter would ring it up at.
+    asking_price = serializers.SerializerMethodField()
+    sold_order = serializers.SerializerMethodField()
+    sold_receipt_number = serializers.SerializerMethodField()
+    customer_name = serializers.SerializerMethodField()
+
+    class Meta(StockUnitSerializer.Meta):
+        fields = StockUnitSerializer.Meta.fields + (
+            "asking_price",
+            "sold_order",
+            "sold_receipt_number",
+            "customer_name",
+        )
+
+    def to_representation(self, unit):
+        data = super().to_representation(unit)
+        if not _decided_once(
+            self.context, "_reader_sees_sale_document", user_sees_sale_document
+        ):
+            for field in SALE_DOCUMENT_FIELDS:
+                data.pop(field, None)
+        if not _decided_once(self.context, "_reader_sees_buyer", user_sees_buyer):
+            for field in BUYER_FIELDS:
+                data.pop(field, None)
+        return data
+
+    def get_asking_price(self, unit):
+        price = unit.list_price if unit.list_price is not None else (
+            unit.variant.unit_price
+        )
+        return None if price is None else str(price)
+
+    @staticmethod
+    def _order(unit):
+        line = unit.sold_order_line if unit.sold_order_line_id else None
+        return line.order if line is not None else None
+
+    def get_sold_order(self, unit):
+        line = unit.sold_order_line if unit.sold_order_line_id else None
+        return line.order_id if line is not None else None
+
+    def get_sold_receipt_number(self, unit):
+        order = self._order(unit)
+        return (getattr(order, "receipt_number", "") or "") if order else ""
+
+    def get_customer_name(self, unit):
+        return unit.customer.full_name if unit.customer_id else ""
+
+
 class BulkRepriceSerializer(serializers.Serializer):
     """Either a price, or a percentage move — never both and never neither."""
 

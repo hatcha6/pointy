@@ -14,6 +14,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/tracking/tracking_labels.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'identify_unit_dialog.dart';
 import 'missing_lots_screen.dart';
@@ -32,6 +33,7 @@ class StockUnitsScreen extends StatefulWidget {
     required this.capabilities,
     this.navigation,
     this.repository,
+    this.onOpenRecord,
   });
 
   final TrackedStockViewModel viewModel;
@@ -44,6 +46,10 @@ class StockUnitsScreen extends StatefulWidget {
   /// For the opening-identification run behind the app bar. Optional so a
   /// shop with nothing anonymous on the shelf pays nothing for it.
   final TrackedStockRepository? repository;
+
+  /// Handed to each article's page, for its invoice and buyer links.
+  final Future<bool> Function(BuildContext context, String type, int id)?
+  onOpenRecord;
 
   @override
   State<StockUnitsScreen> createState() => _StockUnitsScreenState();
@@ -198,7 +204,7 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
                       Padding(
                         padding: const EdgeInsetsDirectional.only(end: 6),
                         child: ChoiceChip(
-                          label: Text(_statusLabel(l10n, status)),
+                          label: Text(stockUnitStatusLabel(l10n, status)),
                           selected:
                               !viewModel.missingOnly &&
                               viewModel.unitStatus == status,
@@ -338,23 +344,13 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
           viewModel: widget.viewModel,
           unit: unit,
           capabilities: widget.capabilities,
+          onOpenRecord: widget.onOpenRecord,
         ),
       ),
     );
     if (context.mounted) {
       unawaited(widget.viewModel.loadUnits());
     }
-  }
-
-  String _statusLabel(AppLocalizations l10n, String status) {
-    return switch (status) {
-      StockUnitStatus.inStock => l10n.stockUnitStatusInStock,
-      StockUnitStatus.reserved => l10n.stockUnitStatusReserved,
-      StockUnitStatus.sold => l10n.stockUnitStatusSold,
-      StockUnitStatus.damaged => l10n.stockUnitStatusDamaged,
-      StockUnitStatus.writtenOff => l10n.stockUnitStatusWrittenOff,
-      _ => status,
-    };
   }
 }
 

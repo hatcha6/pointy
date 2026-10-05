@@ -50,9 +50,15 @@ class ProductList extends StatelessWidget {
     this.onOpenProduct,
     this.onCreateSimilar,
     this.trackedStockRepository,
+    this.resultsHeaderBuilder,
   });
 
   final CatalogViewModel viewModel;
+
+  /// What sits between the search bar and the results, given the gap the
+  /// list would otherwise leave there — the catalog's identifier match. Null
+  /// keeps the plain gap.
+  final Widget Function(double gap)? resultsHeaderBuilder;
 
   /// For a tracked product's page: its articles and lots.
   final TrackedStockRepository? trackedStockRepository;
@@ -166,7 +172,10 @@ class ProductList extends StatelessWidget {
               ),
             ],
           ],
-          SizedBox(height: spacing.md),
+          if (resultsHeaderBuilder case final header? when !selectionMode)
+            header(spacing.md)
+          else
+            SizedBox(height: spacing.md),
           Expanded(
             child: PointyProductTable(
               products: viewModel.products,

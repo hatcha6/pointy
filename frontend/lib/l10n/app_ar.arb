@@ -20558,5 +20558,95 @@
   "unitTimelineEventLotAssigned": "إسناد دفعة",
   "@unitTimelineEventLotAssigned": {
     "description": "Unit timeline: the unit was given the lot it was missing."
+  },
+  "unitSearchMatchTitle": "جهاز بهذا الرقم",
+  "@unitSearchMatchTitle": {
+    "description": "Eyebrow over the catalog's identifier match card: one article answered the typed IMEI/serial/VIN."
+  },
+  "unitSearchMatchCount": "{count, plural, one{سجل واحد لهذا الرقم} two{سجلان لهذا الرقم} few{{count} سجلات لهذا الرقم} many{{count} سجلًا لهذا الرقم} other{{count} سجل لهذا الرقم}}",
+  "@unitSearchMatchCount": {
+    "description": "Eyebrow over the catalog's identifier match card when several articles (a trade-in sold twice) answered.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitSearchSecondCode": "مطابق للرقم الثاني {code}",
+  "@unitSearchSecondCode": {
+    "description": "The typed identifier matched the article's second IMEI, shown under its first.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "unitSearchSoldTo": "بيع إلى {name}",
+  "@unitSearchSoldTo": {
+    "description": "Who an article found by its identifier was sold to.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unitSearchSoldWalkIn": "بيع لعميل عابر",
+  "@unitSearchSoldWalkIn": {
+    "description": "An article found by its identifier was sold without naming a customer."
+  },
+  "unitSearchSoldOn": "بيع في {date}",
+  "@unitSearchSoldOn": {
+    "description": "When an article found by its identifier was sold (the reader may not see the buyer).",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "unitSearchInvoice": "فاتورة {number}",
+  "@unitSearchInvoice": {
+    "description": "Chip naming the invoice an article went out on; tapping opens it.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "unitSearchRepairs": "{count, plural, one{أُصلح مرة} two{أُصلح مرتين} few{أُصلح {count} مرات} many{أُصلح {count} مرة} other{أُصلح {count} مرة}}",
+  "@unitSearchRepairs": {
+    "description": "How many times the shop repaired an article it sold.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitSearchEarlier": "سجل سابق لهذا الرقم",
+  "@unitSearchEarlier": {
+    "description": "Header over the older articles that answered to the same identifier."
+  },
+  "unitSearchOpenUnit": "فتح الجهاز",
+  "@unitSearchOpenUnit": {
+    "description": "Action on the identifier match card opening the article's page."
+  },
+  "unitSearchEnterHint": "اضغط Enter لفتحه",
+  "@unitSearchEnterHint": {
+    "description": "Hint: pressing Enter in the search opens the single matched article."
+  },
+  "unitSearchLookingUp": "جارٍ البحث عن جهاز بهذا الرقم",
+  "@unitSearchLookingUp": {
+    "description": "Accessible label of the thin progress line while the identifier lookup runs."
+  },
+  "unitSearchOpenCustomerTooltip": "فتح بطاقة العميل",
+  "@unitSearchOpenCustomerTooltip": {
+    "description": "Tooltip on the buyer chip of the identifier match card."
+  },
+  "unitSearchOpenInvoiceTooltip": "فتح الفاتورة",
+  "@unitSearchOpenInvoiceTooltip": {
+    "description": "Tooltip on the invoice chip of the identifier match card."
+  },
+  "commandPaletteStockUnitsSection": "الأجهزة المسلسلة",
+  "@commandPaletteStockUnitsSection": {
+    "description": "Command palette section: articles answering a typed IMEI/serial."
   }
 }

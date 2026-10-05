@@ -7,6 +7,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'app_dependencies.dart';
 import 'core/result.dart';
+import 'core/typed_lookup_text.dart';
 import 'data/models/integration_provider.dart';
 import 'shared/contact_picker_sheet.dart';
 import 'features/settings/views/integration_presentation.dart';
@@ -31,6 +32,7 @@ import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
 import 'features/catalog/views/catalog_screen.dart';
 import 'features/catalog/view_models/search_misses_view_model.dart';
+import 'features/catalog/view_models/unit_search_lookup.dart';
 import 'features/catalog/views/search_misses_screen.dart';
 import 'features/contacts/views/contact_management_screen.dart';
 import 'features/crm/views/campaigns_screen.dart';
@@ -133,7 +135,9 @@ import 'features/contacts/views/customer_details_screen.dart';
 import 'features/contacts/views/supplier_details_screen.dart';
 import 'shared/async_selection/async_multi_select_picker.dart';
 import 'shared/command_palette/command_palette.dart';
+import 'shared/date_formatters.dart';
 import 'shared/formatters.dart';
+import 'shared/tracking/tracking_labels.dart';
 import 'shared/printing/print_paper_mismatch_message.dart';
 import 'shared/navigation/ai_deep_link.dart';
 import 'shared/navigation/app_navigation.dart';
@@ -595,6 +599,12 @@ class _AuthenticatedRoutes implements AppNavigation {
           dependencies.catalogRepository,
           analyticsEngine: dependencies.analyticsEngine,
           fxRepository: dependencies.fxRepository,
+          // An IMEI typed into the products search opens that handset — only
+          // for a shop that tracks articles and a reader who may see them
+          // (the capability carries both), so nobody else pays a request.
+          unitSearch: capabilities.canViewStockUnits
+              ? UnitSearchLookup(dependencies.trackedStockRepository.lookupUnit)
+              : null,
         ),
         inventoryRepository: dependencies.inventoryRepository,
         printingRepository: dependencies.printingRepository,
@@ -606,6 +616,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         analyticsEngine: dependencies.analyticsEngine,
         navigation: this,
+        onOpenStockUnit: _openStockUnit,
+        onOpenRecord: _openEntityDeepLink,
         // Pushed over the catalog rather than replacing it, so back returns
         // to the products the owner was looking at.
         onOpenSearchMisses: capabilities.actionFor(
@@ -1396,6 +1408,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         repository: dependencies.trackedStockRepository,
+        onOpenRecord: _openEntityDeepLink,
       ),
     );
   }
@@ -1935,6 +1948,23 @@ class _AuthenticatedRoutes implements AppNavigation {
         onOpen: _openRecent,
       ),
       NavigationCommandSource(this),
+      // An IMEI or a serial typed into ⌘K is one article, not a product: it
+      // answers first, and only for text that reads as an identifier.
+      if (capabilities.canViewStockUnits)
+        AsyncCommandSource<StockUnit>(
+          labelBuilder: (sectionL10n) =>
+              sectionL10n.commandPaletteStockUnitsSection,
+          fetch: _searchStockUnits,
+          toItem: (unit) => CommandItem(
+            id: 'stock-unit-${unit.id}',
+            icon: Icons.qr_code_2_outlined,
+            title: unit.variantName.isNotEmpty
+                ? unit.variantName
+                : unit.productName,
+            subtitle: _stockUnitSubtitle(l10n, unit),
+            onSelect: (ctx) => _openStockUnit(ctx, unit),
+          ),
+        ),
       if (capabilities.canViewCatalogManagement)
         AsyncCommandSource<Product>(
           labelBuilder: (sectionL10n) =>
@@ -2317,6 +2347,31 @@ class _AuthenticatedRoutes implements AppNavigation {
     }
   }
 
+  Future<List<StockUnit>> _searchStockUnits(String query) async {
+    if (!looksLikeUnitIdentifier(query)) {
+      return const [];
+    }
+    final result = await dependencies.trackedStockRepository.lookupUnit(
+      normalizeUnitIdentifier(query),
+    );
+    return switch (result) {
+      Ok<StockUnitLookup>(:final value) => value.matches,
+      Error<StockUnitLookup>() => const [],
+    };
+  }
+
+  /// `351…116 · مباعة · 2026/03/12 · أحمد علي` — the identifier, what became
+  /// of it, and for a sold one, when and to whom.
+  String _stockUnitSubtitle(AppLocalizations l10n, StockUnit unit) {
+    final name = unit.customerName ?? '';
+    return [
+      '\u2066${unit.code}\u2069',
+      stockUnitStatusLabel(l10n, unit.status),
+      if (unit.soldAt != null) formatDate(unit.soldAt!),
+      if (name.isNotEmpty) name,
+    ].join(' · ');
+  }
+
   Future<List<Product>> _searchProducts(String query) async {
     final result = await dependencies.catalogRepository.loadProducts(
       query: ProductQuery(search: query),
@@ -2376,6 +2431,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           viewModel: dependencies.trackedStockViewModel,
           unit: unit,
           capabilities: capabilities,
+          onOpenRecord: _openEntityDeepLink,
         ),
       ),
     );

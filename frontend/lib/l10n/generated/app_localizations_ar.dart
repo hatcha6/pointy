@@ -25346,4 +25346,79 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get unitTimelineEventLotAssigned => 'إسناد دفعة';
+
+  @override
+  String get unitSearchMatchTitle => 'جهاز بهذا الرقم';
+
+  @override
+  String unitSearchMatchCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count سجل لهذا الرقم',
+      many: '$count سجلًا لهذا الرقم',
+      few: '$count سجلات لهذا الرقم',
+      two: 'سجلان لهذا الرقم',
+      one: 'سجل واحد لهذا الرقم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String unitSearchSecondCode(String code) {
+    return 'مطابق للرقم الثاني $code';
+  }
+
+  @override
+  String unitSearchSoldTo(String name) {
+    return 'بيع إلى $name';
+  }
+
+  @override
+  String get unitSearchSoldWalkIn => 'بيع لعميل عابر';
+
+  @override
+  String unitSearchSoldOn(String date) {
+    return 'بيع في $date';
+  }
+
+  @override
+  String unitSearchInvoice(String number) {
+    return 'فاتورة $number';
+  }
+
+  @override
+  String unitSearchRepairs(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'أُصلح $count مرة',
+      many: 'أُصلح $count مرة',
+      few: 'أُصلح $count مرات',
+      two: 'أُصلح مرتين',
+      one: 'أُصلح مرة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get unitSearchEarlier => 'سجل سابق لهذا الرقم';
+
+  @override
+  String get unitSearchOpenUnit => 'فتح الجهاز';
+
+  @override
+  String get unitSearchEnterHint => 'اضغط Enter لفتحه';
+
+  @override
+  String get unitSearchLookingUp => 'جارٍ البحث عن جهاز بهذا الرقم';
+
+  @override
+  String get unitSearchOpenCustomerTooltip => 'فتح بطاقة العميل';
+
+  @override
+  String get unitSearchOpenInvoiceTooltip => 'فتح الفاتورة';
+
+  @override
+  String get commandPaletteStockUnitsSection => 'الأجهزة المسلسلة';
 }

@@ -14,9 +14,11 @@ import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/exchange_rate.dart';
+import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/fx_repository.dart';
 import 'pricing_currency_options.dart';
+import 'unit_search_lookup.dart';
 
 enum CatalogBarcodeLookupStatus { found, notFound, error }
 
@@ -64,13 +66,32 @@ class CatalogViewModel extends ChangeNotifier {
     this._catalogRepository, {
     AnalyticsEngine? analyticsEngine,
     FxRepository? fxRepository,
+    UnitSearchLookup? unitSearch,
   }) : _analyticsEngine = analyticsEngine,
-       _fxRepository = fxRepository {
+       _fxRepository = fxRepository,
+       _unitSearch = unitSearch {
     loadProducts();
   }
 
   final CatalogRepository _catalogRepository;
   final AnalyticsEngine? _analyticsEngine;
+
+  /// The identifier half of the search — see [UnitSearchLookup]. Null for a
+  /// shop that tracks no articles or a reader who may not see them: then an
+  /// IMEI typed here is an ordinary product search and nothing else is asked.
+  final UnitSearchLookup? _unitSearch;
+
+  UnitSearchLookup? get unitSearch => _unitSearch;
+
+  /// The articles answering to [text], for Enter and for a scan: what the
+  /// search already found or is finding, or a fresh ask. Null without the
+  /// lookup, for text that is not an identifier, and when nothing answered.
+  Future<StockUnitLookup?> resolveUnitMatch(String text) =>
+      _unitSearch?.resolve(text) ?? Future<StockUnitLookup?>.value();
+
+  /// Points the identifier lookup back at what the search box holds, after a
+  /// scan asked it about a code that never reached the box.
+  void settleUnitSearch() => _unitSearch?.search(_query.search);
 
   /// Optional so every existing construction site keeps working. Without it the
   /// product form simply never offers a pricing currency, which is the correct
@@ -343,11 +364,15 @@ class CatalogViewModel extends ChangeNotifier {
       return;
     }
     _query = _query.copyWith(search: search);
+    // Beside the product search, not after it: both are one indexed read and
+    // the answer that lands first is drawn first.
+    _unitSearch?.search(search);
     await loadProducts();
   }
 
   Future<void> applyQuery(ProductQuery query) async {
     _query = query;
+    _unitSearch?.search(query.search);
     await loadProducts();
   }
 
@@ -518,6 +543,7 @@ class CatalogViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _unitSearch?.dispose();
     super.dispose();
   }
 }

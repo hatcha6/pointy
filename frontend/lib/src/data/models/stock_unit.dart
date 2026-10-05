@@ -56,6 +56,11 @@ class StockUnit {
     this.soldAt,
     this.attributes = const {},
     this.notes = '',
+    this.askingPrice,
+    this.customerId,
+    this.customerName,
+    this.soldOrderId,
+    this.soldReceiptNumber,
   });
 
   final int id;
@@ -151,6 +156,23 @@ class StockUnit {
   final Map<String, Object?> attributes;
   final String notes;
 
+  /// What the counter would ring it up at: its own price, or its variant's.
+  /// Only on the detail and lookup payloads; null on a list row.
+  final double? askingPrice;
+
+  /// Who bought it — the id always, the name only for a reader who may see
+  /// invoices or the contact book.
+  final int? customerId;
+
+  /// The buyer's name. **Null** when the reader may not see it (absent from
+  /// the payload); empty for a walk-in sale nobody named.
+  final String? customerName;
+
+  /// The invoice it went out on, for a reader who may open invoices; null
+  /// otherwise and for anything never sold.
+  final int? soldOrderId;
+  final String? soldReceiptNumber;
+
   bool get isOnHand =>
       status == StockUnitStatus.inStock || status == StockUnitStatus.reserved;
 
@@ -238,6 +260,11 @@ class StockUnit {
           ? json['attributes']! as Map<String, Object?>
           : const {},
       notes: json['notes']?.toString() ?? '',
+      askingPrice: _doubleOrNull(json['asking_price']),
+      customerId: _intOrNull(json['customer']),
+      customerName: json['customer_name']?.toString(),
+      soldOrderId: _intOrNull(json['sold_order']),
+      soldReceiptNumber: json['sold_receipt_number']?.toString(),
     );
   }
 }
@@ -303,19 +330,42 @@ class StockUnitPage {
 /// The second list is not an error and must never be rendered as one — it is
 /// the trade-in, and the right thing to say is *«هذا الجهاز بيع من هذا المحل»*.
 class StockUnitLookup {
-  const StockUnitLookup({this.unit, this.history = const []});
+  const StockUnitLookup({this.unit, this.history = const [], this.warranty});
 
   final StockUnit? unit;
+
+  /// Newest first: the latest sale leads.
   final List<StockUnit> history;
+
+  /// The cover of [unit], or of the latest of [history] when nothing is live —
+  /// derived by the server, never stored. Null for an article never sold.
+  final StockUnitWarranty? warranty;
 
   bool get isLive => unit != null;
 
   bool get isReturningArticle => unit == null && history.isNotEmpty;
 
+  /// Every article that answered, the live one first.
+  List<StockUnit> get matches => [?unit, ...history];
+
+  bool get hasMatch => unit != null || history.isNotEmpty;
+
+  /// The one article to open when there is exactly one — what Enter does.
+  /// Null when nothing answered, and when several did: a trade-in sold twice
+  /// is a choice for the person, not for the search box.
+  StockUnit? get single {
+    final all = matches;
+    return all.length == 1 ? all.first : null;
+  }
+
   factory StockUnitLookup.fromJson(Map<String, Object?> json) {
     final unitJson = json['unit'];
     final historyJson = json['history'];
+    final warrantyJson = json['warranty'];
     return StockUnitLookup(
+      warranty: warrantyJson is Map<String, Object?>
+          ? StockUnitWarranty.fromJson(warrantyJson)
+          : null,
       unit: unitJson is Map<String, Object?>
           ? StockUnit.fromJson(unitJson)
           : null,
@@ -325,6 +375,34 @@ class StockUnitLookup {
                 .map(StockUnit.fromJson)
                 .toList(growable: false)
           : const [],
+    );
+  }
+}
+
+/// What a counter needs when somebody puts a handset on the desk: sold when,
+/// covered until when, and how often the shop has repaired it since.
+class StockUnitWarranty {
+  const StockUnitWarranty({
+    this.soldAt,
+    this.expiresOn,
+    this.isCovered = false,
+    this.daysRemaining,
+    this.repairCount = 0,
+  });
+
+  final DateTime? soldAt;
+  final DateTime? expiresOn;
+  final bool isCovered;
+  final int? daysRemaining;
+  final int repairCount;
+
+  factory StockUnitWarranty.fromJson(Map<String, Object?> json) {
+    return StockUnitWarranty(
+      soldAt: _dateOrNull(json['sold_at']),
+      expiresOn: _dateOrNull(json['expires_on']),
+      isCovered: json['is_covered'] == true,
+      daysRemaining: _intOrNull(json['days_remaining']),
+      repairCount: _intOf(json['repair_count']),
     );
   }
 }

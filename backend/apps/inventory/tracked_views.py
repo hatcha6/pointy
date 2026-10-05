@@ -42,6 +42,7 @@ from .tracked_serializers import (
     StockAllocationSerializer,
     StockBatchBalanceSerializer,
     StockBatchSerializer,
+    StockUnitDetailSerializer,
     StockUnitLookupSerializer,
     StockUnitSerializer,
     user_sees_lot_cost,
@@ -240,6 +241,26 @@ class StockUnitViewSet(
             return ("inventory.view_stockunit", "inventory.manage_stockunit_photos")
         return self.permission_map.get(self.action)
 
+    #: The actions that answer with one article as its page reads it — the
+    #: sale it went out on included (:class:`StockUnitDetailSerializer`).
+    #: Lists stay on the lean row: a page of fifty handsets does not need
+    #: fifty invoices joined in.
+    detail_actions = frozenset(
+        {
+            "retrieve",
+            "update",
+            "partial_update",
+            "edit_attributes",
+            "set_warranty",
+            "lookup",
+        }
+    )
+
+    def get_serializer_class(self):
+        if self.action in self.detail_actions:
+            return StockUnitDetailSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         from .unit_photos import with_cover_photos
 
@@ -253,6 +274,8 @@ class StockUnitViewSet(
             .prefetch_related(_variant_option_values())
             .order_by(*self.ordering)
         )
+        if self.action in self.detail_actions:
+            query = query.select_related("sold_order_line__order", "customer")
         if self.request.query_params.get("for_sale") in ("1", "true", "True"):
             # The till's own shelf: in stock, identified, here. Everything the
             # picker must not offer is excluded by the query rather than by the
@@ -301,22 +324,30 @@ class StockUnitViewSet(
         serializer = StockUnitLookupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         code = serializer.validated_data["code"]
-        unit = tracking.find_live_unit(code)
-        history = tracking.historical_units(code)
+        # The catalog's search box asks this for every identifier somebody
+        # types, so the lookup *is* the read: one indexed probe per column,
+        # carrying every join and prefetch the answer is drawn from, rather
+        # than a probe and then a re-read per row.
+        rows = self.get_queryset()
+        unit = tracking.find_live_unit(code, queryset=rows)
+        history = tracking.historical_units(code, queryset=rows)
         # A counter lookup by IMEI is usually a warranty question, so the answer
         # comes with the answer: sold on X to Y, covered until Z, repaired
         # twice. Derived, never stored — ERPNext keeps a ``maintenance_status``
         # column and it is wrong the day after the warranty expires.
         subject = unit or (history[0] if history else None)
+        # One context for both, so the permission answers and the attribute
+        # definitions are decided once per response, not once per serializer.
+        context = self.get_serializer_context()
         return Response(
             {
                 "unit": (
-                    StockUnitSerializer(unit, context={"request": request}).data
+                    StockUnitDetailSerializer(unit, context=context).data
                     if unit is not None
                     else None
                 ),
-                "history": StockUnitSerializer(
-                    history, many=True, context={"request": request}
+                "history": StockUnitDetailSerializer(
+                    history, many=True, context=context
                 ).data,
                 "warranty": _warranty_answer(subject),
             }
@@ -480,7 +511,7 @@ class StockUnitViewSet(
         )
         unit.save(update_fields=["attributes", "updated_at"])
         audit_unit_edit(unit, before, actor=request.user)
-        return Response(StockUnitSerializer(unit, context={"request": request}).data)
+        return Response(self.get_serializer(unit).data)
 
     @action(detail=True, methods=["post"], url_path="warranty")
     @transaction.atomic
@@ -517,7 +548,7 @@ class StockUnitViewSet(
             actor=request.user,
             note=str((request.data or {}).get("note", "") or ""),
         )
-        return Response(StockUnitSerializer(unit, context={"request": request}).data)
+        return Response(self.get_serializer(unit).data)
 
     # -- photos ------------------------------------------------------------
 

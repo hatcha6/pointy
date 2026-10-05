@@ -8,6 +8,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
+import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -37,6 +38,7 @@ import 'product_form.dart';
 import 'product_list.dart';
 import 'scale_rules_screen.dart';
 import 'units_management_screen.dart';
+import 'unit_search_slot.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({
@@ -54,6 +56,8 @@ class CatalogScreen extends StatefulWidget {
     this.analyticsEngine,
     this.onOpenSearchMisses,
     this.trackedStockRepository,
+    this.onOpenStockUnit,
+    this.onOpenRecord,
   });
 
   final CatalogViewModel viewModel;
@@ -78,6 +82,15 @@ class CatalogScreen extends StatefulWidget {
   /// Opens the words searched for and not found. Null hides the button: for
   /// someone who may not change products, or where nothing can open it.
   final VoidCallback? onOpenSearchMisses;
+
+  /// Opens one article's page — where an IMEI typed into the search lands.
+  /// Null (a test, a preview) leaves the search a product search.
+  final void Function(BuildContext context, StockUnit unit)? onOpenStockUnit;
+
+  /// Opens a record by kind and id (`order`, `customer`), through the shell's
+  /// own capability-gated deep links; false when it could not.
+  final Future<bool> Function(BuildContext context, String type, int id)?
+  onOpenRecord;
 
   @override
   State<CatalogScreen> createState() => _CatalogScreenState();
@@ -224,6 +237,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     onCreateSimilar: (product) =>
                         _createSimilar(context, product),
                     trackedStockRepository: widget.trackedStockRepository,
+                    resultsHeaderBuilder: _unitSearchSlot(context),
                   ),
                   placeholder: PointyEmptyState(
                     icon: Icons.inventory_2_outlined,
@@ -255,6 +269,66 @@ class _CatalogScreenState extends State<CatalogScreen> {
         );
       },
     );
+  }
+
+  /// The identifier match above the results, when this shop and this reader
+  /// can look articles up at all.
+  Widget Function(double gap)? _unitSearchSlot(BuildContext context) {
+    final lookup = viewModel.unitSearch;
+    final openUnit = widget.onOpenStockUnit;
+    if (lookup == null || openUnit == null) {
+      return null;
+    }
+    final openRecord = widget.onOpenRecord;
+    return (gap) => UnitSearchSlot(
+      lookup: lookup,
+      gap: gap,
+      onOpenUnit: (unit) => openUnit(context, unit),
+      onOpenInvoice: openRecord != null && capabilities.canViewInvoices
+          ? (id) => _openRecord(context, 'order', id)
+          : null,
+      onOpenCustomer: openRecord != null && capabilities.canManageContacts
+          ? (id) => _openRecord(context, 'customer', id)
+          : null,
+    );
+  }
+
+  Future<void> _openRecord(BuildContext context, String type, int id) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final message = AppLocalizations.of(context)!.aiAssistantLinkUnavailable;
+    final opened = await widget.onOpenRecord!(context, type, id);
+    if (!opened) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  /// An identifier typed (Enter) or scanned: the article it names, when
+  /// exactly one answers. True when one was opened. When several answer (a
+  /// trade-in sold twice) the card lists them and nothing opens blindly; a
+  /// scan, which never lands in the field, puts its code there so the card
+  /// shows. Asked beside the barcode lookup, never after it.
+  Future<bool?> _openUnitForCode(
+    BuildContext context,
+    String code, {
+    required bool fromScan,
+  }) async {
+    final openUnit = widget.onOpenStockUnit;
+    if (openUnit == null) {
+      return null;
+    }
+    final match = await viewModel.resolveUnitMatch(code);
+    if (match == null || !context.mounted) {
+      if (fromScan) viewModel.settleUnitSearch();
+      return null;
+    }
+    final single = match.single;
+    if (single == null) {
+      if (fromScan) unawaited(viewModel.updateSearch(code));
+      return false;
+    }
+    if (fromScan) viewModel.settleUnitSearch();
+    openUnit(context, single);
+    return true;
   }
 
   /// Ctrl+N (⌘N): a new product, from anywhere on the catalogue.
@@ -311,7 +385,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
       return false;
     }
 
-    final outcome = await viewModel.findVariantByBarcode(normalizedBarcode);
+    // Both questions at once: the article is the answer when one answers, the
+    // product otherwise. The unit side is free for text that is no identifier.
+    final outcomeFuture = viewModel.findVariantByBarcode(normalizedBarcode);
+    final unitOpened = await _openUnitForCode(
+      context,
+      normalizedBarcode,
+      fromScan: offerCreate,
+    );
+    if (unitOpened != null) {
+      return unitOpened;
+    }
+    final outcome = await outcomeFuture;
     if (!context.mounted) {
       return false;
     }

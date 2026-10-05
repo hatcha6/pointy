@@ -15,7 +15,9 @@ import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/product_image_viewer.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/tracking/tracking_labels.dart';
 import '../../../shared/tracking/unit_details_sheet.dart';
+import '../../../shared/tracking/unit_sale_band.dart';
 import '../view_models/stock_unit_detail_view_model.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'consignment_incident_sheet.dart';
@@ -39,11 +41,18 @@ class StockUnitDetailScreen extends StatefulWidget {
     required this.unit,
     required this.capabilities,
     this.detailViewModel,
+    this.onOpenRecord,
   });
 
   final TrackedStockViewModel viewModel;
   final StockUnit unit;
   final AuthorizationCapabilities capabilities;
+
+  /// Opens the invoice a sold article went out on, or its buyer, through the
+  /// shell's capability-gated deep links (`order`, `customer`). Null shows
+  /// them as plain text.
+  final Future<bool> Function(BuildContext context, String type, int id)?
+  onOpenRecord;
 
   /// Injected by previews and tests; built from [viewModel] otherwise.
   final StockUnitDetailViewModel? detailViewModel;
@@ -153,6 +162,9 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
     final unit = _detail.unit;
     return [
       _hero(context, l10n),
+      // Who bought it and on which invoice — the question an IMEI typed into
+      // the products search usually came with, answered first.
+      if (unit.status == StockUnitStatus.sold) _saleBand(),
       if (unit.isConsignment) _consignmentPanel(context, l10n),
       _facts(context, l10n),
       UnitAttributesSection(
@@ -188,6 +200,7 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
     final colors = context.pointyColors;
     final unit = _detail.unit;
     final cover = _detail.cover;
+    final sold = unit.status == StockUnitStatus.sold && unit.soldPrice != null;
     return PointyDetailHero(
       icon: unit.isConsignment
           ? Icons.handshake_outlined
@@ -196,13 +209,20 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
           ? null
           : _HeroCover(cover: cover, onTap: _openCover),
       title: unit.productName.isNotEmpty ? unit.productName : unit.variantName,
-      value: formatMoney(unit.listPrice ?? unit.soldPrice ?? 0),
-      valueSubtitle: unit.listPrice != null
+      // Gone: what it went for. On the shelf: what it would go for.
+      value: formatMoney(
+        sold
+            ? (unit.soldPrice ?? 0)
+            : (unit.listPrice ?? unit.askingPrice ?? unit.soldPrice ?? 0),
+      ),
+      valueSubtitle: sold
+          ? l10n.stockUnitSoldFor
+          : unit.listPrice != null
           ? l10n.stockUnitOwnPrice
           : l10n.stockUnitVariantPrice,
       description: unit.isIdentified ? unit.code : null,
       pills: [
-        PointyHeroPill(label: _statusLabel(l10n, unit.status)),
+        PointyHeroPill(label: stockUnitStatusLabel(l10n, unit.status)),
         if (unit.isConsignment)
           PointyHeroPill(label: l10n.stockUnitConsignmentBadge),
         if (unit.isUnderWarranty && unit.warrantyExpiresOn != null)
@@ -219,6 +239,29 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
           ? [colors.accentAmber, colors.primaryDark]
           : null,
     );
+  }
+
+  Widget _saleBand() {
+    final openRecord = widget.onOpenRecord;
+    return UnitSaleBand(
+      unit: _detail.unit,
+      onOpenInvoice: openRecord != null && _can.canViewInvoices
+          ? (id) => _openRecord(openRecord, 'order', id)
+          : null,
+      onOpenCustomer: openRecord != null && _can.canManageContacts
+          ? (id) => _openRecord(openRecord, 'customer', id)
+          : null,
+    );
+  }
+
+  Future<void> _openRecord(
+    Future<bool> Function(BuildContext, String, int) open,
+    String type,
+    int id,
+  ) async {
+    final message = AppLocalizations.of(context)!.aiAssistantLinkUnavailable;
+    final opened = await open(context, type, id);
+    if (!opened && mounted) _snack(message);
   }
 
   void _openCover() {
@@ -579,17 +622,6 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  String _statusLabel(AppLocalizations l10n, String status) {
-    return switch (status) {
-      StockUnitStatus.inStock => l10n.stockUnitStatusInStock,
-      StockUnitStatus.reserved => l10n.stockUnitStatusReserved,
-      StockUnitStatus.sold => l10n.stockUnitStatusSold,
-      StockUnitStatus.damaged => l10n.stockUnitStatusDamaged,
-      StockUnitStatus.writtenOff => l10n.stockUnitStatusWrittenOff,
-      _ => status,
-    };
   }
 }
 

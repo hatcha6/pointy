@@ -627,16 +627,21 @@ def pick_balances(
 # ---------------------------------------------------------------------------
 
 
-def find_live_unit(code, *, variant=None):
+def find_live_unit(code, *, variant=None, queryset=None):
     """The one live unit answering to this code, or ``None``.
 
     Searches the secondary identifier too: a dual-SIM handset is scanned off
     whichever of its two IMEIs the box happens to show.
+
+    ``queryset`` lets a reader that is about to serialise the answer bring its
+    own joins and prefetches, so the lookup is the read rather than a probe
+    followed by a re-read.
     """
     normalized = normalize_identifier(code)
     if not normalized:
         return None
-    query = StockUnit.objects.filter(status__in=StockUnit.LIVE_STATUSES)
+    base = queryset if queryset is not None else StockUnit.objects.all()
+    query = base.filter(status__in=StockUnit.LIVE_STATUSES)
     if variant is not None:
         query = query.filter(variant=variant)
     return (
@@ -645,17 +650,25 @@ def find_live_unit(code, *, variant=None):
     )
 
 
-def historical_units(code, *, limit=5):
+def historical_units(code, *, limit=5, queryset=None):
     """Units that answered to this code and are no longer live.
 
     Not a conflict — it is the trade-in, and the receiving screen should say so
     rather than colour the field red.
+
+    Either identifier, like :func:`find_live_unit`: a dual-SIM handset sold off
+    its first IMEI comes back to the counter read off its second, and "we
+    never had this" would be the wrong answer. Both columns are indexed, so the
+    OR is two index scans, not a table scan. ``queryset`` as there.
     """
     normalized = normalize_identifier(code)
     if not normalized:
         return []
+    base = queryset if queryset is not None else StockUnit.objects.all()
     return list(
-        StockUnit.objects.filter(code_normalized=normalized)
+        base.filter(
+            Q(code_normalized=normalized) | Q(secondary_code_normalized=normalized)
+        )
         .exclude(status__in=StockUnit.LIVE_STATUSES)
         .select_related("variant", "variant__product")
         .order_by("-sold_at", "-id")[:limit]

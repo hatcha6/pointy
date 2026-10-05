@@ -42903,6 +42903,96 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إسناد دفعة'**
   String get unitTimelineEventLotAssigned;
+
+  /// Eyebrow over the catalog's identifier match card: one article answered the typed IMEI/serial/VIN.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز بهذا الرقم'**
+  String get unitSearchMatchTitle;
+
+  /// Eyebrow over the catalog's identifier match card when several articles (a trade-in sold twice) answered.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{سجل واحد لهذا الرقم} two{سجلان لهذا الرقم} few{{count} سجلات لهذا الرقم} many{{count} سجلًا لهذا الرقم} other{{count} سجل لهذا الرقم}}'**
+  String unitSearchMatchCount(int count);
+
+  /// The typed identifier matched the article's second IMEI, shown under its first.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطابق للرقم الثاني {code}'**
+  String unitSearchSecondCode(String code);
+
+  /// Who an article found by its identifier was sold to.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع إلى {name}'**
+  String unitSearchSoldTo(String name);
+
+  /// An article found by its identifier was sold without naming a customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع لعميل عابر'**
+  String get unitSearchSoldWalkIn;
+
+  /// When an article found by its identifier was sold (the reader may not see the buyer).
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع في {date}'**
+  String unitSearchSoldOn(String date);
+
+  /// Chip naming the invoice an article went out on; tapping opens it.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {number}'**
+  String unitSearchInvoice(String number);
+
+  /// How many times the shop repaired an article it sold.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{أُصلح مرة} two{أُصلح مرتين} few{أُصلح {count} مرات} many{أُصلح {count} مرة} other{أُصلح {count} مرة}}'**
+  String unitSearchRepairs(int count);
+
+  /// Header over the older articles that answered to the same identifier.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل سابق لهذا الرقم'**
+  String get unitSearchEarlier;
+
+  /// Action on the identifier match card opening the article's page.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الجهاز'**
+  String get unitSearchOpenUnit;
+
+  /// Hint: pressing Enter in the search opens the single matched article.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط Enter لفتحه'**
+  String get unitSearchEnterHint;
+
+  /// Accessible label of the thin progress line while the identifier lookup runs.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ البحث عن جهاز بهذا الرقم'**
+  String get unitSearchLookingUp;
+
+  /// Tooltip on the buyer chip of the identifier match card.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح بطاقة العميل'**
+  String get unitSearchOpenCustomerTooltip;
+
+  /// Tooltip on the invoice chip of the identifier match card.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الفاتورة'**
+  String get unitSearchOpenInvoiceTooltip;
+
+  /// Command palette section: articles answering a typed IMEI/serial.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة المسلسلة'**
+  String get commandPaletteStockUnitsSection;
 }
 
 class _AppLocalizationsDelegate
