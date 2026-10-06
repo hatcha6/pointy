@@ -29,12 +29,18 @@ class MigrationRepository {
   /// [uploader] is the handle a caller keeps to cancel mid-transfer.
   Future<Result<MigrationSource>> uploadFile(
     PlatformFile file, {
+    required int sizeBytes,
     required MigrationUploader uploader,
     MigrationSource? resuming,
     void Function(MigrationUploadProgress)? onProgress,
   }) {
     return Result.guard(
-      () => uploader.upload(file, resuming: resuming, onProgress: onProgress),
+      () => uploader.upload(
+        file,
+        sizeBytes: sizeBytes,
+        resuming: resuming,
+        onProgress: onProgress,
+      ),
     );
   }
 

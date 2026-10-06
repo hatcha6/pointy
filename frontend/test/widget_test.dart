@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-// ignore: implementation_imports
-import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
@@ -90,18 +88,24 @@ class _FakeSaveFilePicker extends FilePickerPlatform
   String? savedFileName;
 
   @override
-  Future<String?> saveFile({
+  Future<Uri?> saveFile({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
     String? dialogTitle,
-    String? fileName,
     String? initialDirectory,
-    FileType type = FileType.any,
-    List<String>? allowedExtensions,
-    Uint8List? bytes,
-    bool lockParentWindow = false,
+    Function(FilePickerStatus)? onFileSaving,
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
   }) async {
     savedFileName = fileName;
     savedBytes = bytes;
-    return returnedPath;
+    final path = returnedPath;
+    if (path == null) return null;
+    // As the desktop dialogs do: the bytes it is given land at the path.
+    File(path).writeAsBytesSync(bytes);
+    return Uri.file(path);
   }
 }
 
@@ -3548,10 +3552,10 @@ void main() {
     expect(exportUri?.queryParameters['search'], 'checkout');
     expect(exportUri?.queryParameters['platform'], 'flutter-web');
     // Desktop saves by moving the spooled download to the chosen path: the
-    // dialog only picks the destination (no bytes cross it), the file lands
-    // there intact, and the path is surfaced to the user.
+    // dialog is handed no bytes (it leaves an empty file), the download
+    // replaces that file intact, and the path is surfaced to the user.
     expect(savePicker.savedFileName, 'analytics.csv');
-    expect(savePicker.savedBytes, isNull);
+    expect(savePicker.savedBytes, isEmpty);
     final savedFile = File(savePicker.returnedPath!);
     expect(savedFile.existsSync(), isTrue);
     expect(savedFile.readAsStringSync(), 'id,name\n1,frontend.operation\n');

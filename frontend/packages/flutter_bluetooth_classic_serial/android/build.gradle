@@ -1,0 +1,66 @@
+group 'com.example.flutter_bluetooth_classic'
+version '1.0'
+
+buildscript {
+    ext.kotlin_version = '1.7.10'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.3.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// POINTY PATCH: this script no longer applies the Kotlin Gradle plugin. With
+// AGP 9's built-in Kotlin, AGP compiles the Kotlin sources itself and refuses
+// that plugin; with built-in Kotlin off (or AGP 8), Flutter applies it to
+// plugins that leave it out. kotlinOptions belongs to that plugin, so it is
+// set only when built-in Kotlin is off.
+def pointyAgpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
+def pointyBuiltInKotlinFlag = project.findProperty('android.builtInKotlin')
+def pointyBuiltInKotlin = pointyAgpMajor >= 9 &&
+        (pointyBuiltInKotlinFlag == null || pointyBuiltInKotlinFlag.toString().toBoolean())
+
+apply plugin: 'com.android.library'
+
+android {
+    // POINTY PATCH: was 33. Its AndroidX dependencies need 34+, which AGP 9
+    // enforces; compile against the SDK Flutter gives every module.
+    compileSdk flutter.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // POINTY PATCH: see the note above `apply plugin`.
+    if (!pointyBuiltInKotlin) {
+        kotlinOptions {
+            jvmTarget = '1.8'
+        }
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdkVersion 19
+    }
+
+    namespace 'com.example.flutter_bluetooth_classic'
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+}

@@ -11,9 +11,13 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
-    # A pub.dev plugin carried with a native fix (see its POINTY_PATCHES.md);
-    # its Dart is upstream's, not ours to lint.
+    # pub.dev plugins carried with native or build fixes (see each
+    # POINTY_PATCHES.md); their Dart is upstream's, not ours to lint.
     - packages/printing/**
+    - packages/flutter_libserialport/**
+    - packages/usb_serial/**
+    - packages/flutter_tts/**
+    - packages/flutter_bluetooth_classic_serial/**
     - build/**
     - android/**
     - ios/**

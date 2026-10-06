@@ -163,19 +163,16 @@ class _ShopLogoField extends StatelessWidget {
 
   Future<void> _pickLogo(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const ['png', 'jpg', 'jpeg'],
-      withData: true,
-      allowMultiple: false,
     );
-    if (result == null || result.files.isEmpty) {
+    if (file == null) {
       return;
     }
 
-    final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    final bytes = await readPickedBytes(file);
+    if (bytes == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context)
           ..clearSnackBars()

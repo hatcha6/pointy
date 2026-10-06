@@ -1,0 +1,75 @@
+def args = ["-Xlint:deprecation"]
+
+group 'com.eyedeadevelopment.fluttertts'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '2.2.20'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+project.getTasks().withType(JavaCompile).configureEach {
+    options.compilerArgs.addAll(args)
+}
+
+// POINTY PATCH: this script no longer applies the Kotlin Gradle plugin. With
+// AGP 9's built-in Kotlin, AGP compiles the Kotlin sources itself and refuses
+// that plugin; with built-in Kotlin off (or AGP 8), Flutter applies it to
+// plugins that leave it out. kotlinOptions belongs to that plugin, so it is
+// set only when built-in Kotlin is off.
+def pointyAgpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
+def pointyBuiltInKotlinFlag = project.findProperty('android.builtInKotlin')
+def pointyBuiltInKotlin = pointyAgpMajor >= 9 &&
+        (pointyBuiltInKotlinFlag == null || pointyBuiltInKotlinFlag.toString().toBoolean())
+
+apply plugin: 'com.android.library'
+
+android {
+    compileSdk 36
+    if (project.android.hasProperty("namespace")) {
+        namespace 'com.eyedeadevelopment.fluttertts'
+    }
+
+    defaultConfig {
+        minSdkVersion 24
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    lintOptions {
+        disable 'InvalidPackage'
+        disable 'GradleDependency'
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    // POINTY PATCH: see the note above `apply plugin`.
+    if (!pointyBuiltInKotlin) {
+        kotlinOptions {
+            jvmTarget = JavaVersion.VERSION_11
+        }
+    }
+}
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+}
+repositories {
+    mavenCentral()
+}

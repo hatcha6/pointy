@@ -1,0 +1,58 @@
+group 'dev.bessems.usbserial'
+version '1.0'
+
+buildscript {
+    repositories {
+        google()
+        // POINTY PATCH: jcenter() is gone from Gradle 9; JCenter itself closed in 2021.
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:4.1.0'
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        // POINTY PATCH: jcenter() is gone from Gradle 9; JCenter itself closed in 2021.
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+    }
+
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+        }
+    }
+
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    // POINTY PATCH: was 33. Its AndroidX dependencies need 34+, which AGP 9
+    // enforces; compile against the SDK Flutter gives every module.
+    compileSdk flutter.compileSdkVersion
+    
+    namespace 'dev.bessems.usbserial'
+
+    defaultConfig {
+        minSdkVersion 16
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    lintOptions {
+        disable 'InvalidPackage'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+}
+
+dependencies {
+    implementation 'com.github.felHR85:UsbSerial:6.1.0'
+}
+

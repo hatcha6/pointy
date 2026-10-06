@@ -76,11 +76,12 @@ class MigrationUploader {
   /// preparation.
   Future<MigrationSource> upload(
     PlatformFile file, {
+    required int sizeBytes,
     MigrationSource? resuming,
     void Function(MigrationUploadProgress)? onProgress,
   }) async {
     _cancelled = false;
-    final totalBytes = file.size;
+    final totalBytes = sizeBytes;
 
     MigrationSource source;
     int chunkSize;
@@ -170,24 +171,24 @@ class MigrationUploader {
 
 /// Reads byte ranges out of a picked file.
 ///
-/// `file_picker` hands back either a path (desktop and mobile) or the whole
-/// file in memory (web, which has no other option). Where there is a path we
-/// seek, so memory stays flat no matter how big the database is.
+/// `file_picker` hands back a path on desktop and mobile, which we seek, and
+/// on the web a file the browser reads a range of at a time. Either way memory
+/// stays flat no matter how big the database is.
 class _MigrationFileReader {
   _MigrationFileReader(this._file);
 
   final PlatformFile _file;
 
   Future<Uint8List> read(int start, int end) async {
-    final bytes = _file.bytes;
-    if (bytes != null) {
-      return Uint8List.sublistView(bytes, start, math.min(end, bytes.length));
-    }
     final path = _file.path;
-    if (path == null) {
-      throw Exception('The picked file has neither a path nor its contents.');
+    if (path != null) {
+      return readFileRange(path, start, end);
     }
-    return readFileRange(path, start, end);
+    final range = BytesBuilder(copy: false);
+    await for (final chunk in _file.xFile.openRead(start, end)) {
+      range.add(chunk);
+    }
+    return range.takeBytes();
   }
 
   Future<void> close() async {}

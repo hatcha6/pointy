@@ -780,6 +780,7 @@ class _FakeMigrationRepository implements MigrationRepository {
   @override
   Future<Result<MigrationSource>> uploadFile(
     PlatformFile file, {
+    required int sizeBytes,
     required MigrationUploader uploader,
     MigrationSource? resuming,
     void Function(MigrationUploadProgress)? onProgress,

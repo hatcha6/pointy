@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'camera_file_saver.dart';
+import 'file_dialogs.dart';
 
 /// Native platforms: spool the clip to a temp file first, then let the user
 /// choose where it goes.
@@ -58,21 +59,18 @@ Future<CameraSaveResult> saveCameraStillPlatform({
     return const CameraSaveResult.failed();
   }
   try {
-    final savedPath = await FilePicker.saveFile(
+    // A still is small: every platform's dialog writes it.
+    final saved = await FilePicker.saveFile(
       dialogTitle: dialogTitle,
       fileName: filename,
       type: FileType.custom,
       allowedExtensions: const ['jpg'],
       bytes: bytes,
     );
-    if (savedPath == null) {
+    if (saved == null) {
       return const CameraSaveResult.canceled();
     }
-    if (!Platform.isAndroid && !Platform.isIOS) {
-      // Desktop's dialog only picks a destination; it does not write.
-      File(savedPath).writeAsBytesSync(bytes);
-    }
-    return CameraSaveResult.saved(location: savedPath);
+    return CameraSaveResult.saved(location: savedLocationLabel(saved));
   } on Object {
     return const CameraSaveResult.failed();
   }
@@ -85,23 +83,22 @@ Future<CameraSaveResult> _offerToSave(
   String extension,
 ) async {
   if (Platform.isAndroid || Platform.isIOS) {
-    final savedPath = await FilePicker.saveFile(
+    final saved = await FilePicker.saveFile(
       dialogTitle: dialogTitle,
       fileName: filename,
       type: FileType.custom,
       allowedExtensions: [extension],
       bytes: spool.readAsBytesSync(),
     );
-    if (savedPath == null) {
+    if (saved == null) {
       return const CameraSaveResult.canceled();
     }
-    return CameraSaveResult.saved(location: savedPath);
+    return CameraSaveResult.saved(location: savedLocationLabel(saved));
   }
 
-  final savedPath = await FilePicker.saveFile(
+  final savedPath = await pickDesktopSaveDestination(
     dialogTitle: dialogTitle,
     fileName: filename,
-    type: FileType.custom,
     allowedExtensions: [extension],
   );
   if (savedPath == null) {

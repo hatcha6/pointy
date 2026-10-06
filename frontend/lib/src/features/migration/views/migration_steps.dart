@@ -57,6 +57,7 @@ class _ChooseFileStep extends StatelessWidget {
         SizedBox(height: spacing.md),
         _DropZone(
           file: file,
+          fileSize: viewModel.pickedFileSize,
           formats: config.acceptedExtensions.join('  ·  '),
           maxSizeLabel: formatBytes(config.maxBytes),
           onPick: () => unawaited(viewModel.pickFile()),
@@ -89,12 +90,14 @@ class _ChooseFileStep extends StatelessWidget {
 class _DropZone extends StatelessWidget {
   const _DropZone({
     required this.file,
+    required this.fileSize,
     required this.formats,
     required this.maxSizeLabel,
     required this.onPick,
   });
 
   final PickedFileInfo? file;
+  final int fileSize;
   final String formats;
   final String maxSizeLabel;
   final VoidCallback onPick;
@@ -145,7 +148,7 @@ class _DropZone extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  formatBytes(file!.size),
+                  formatBytes(fileSize),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colors.mutedInk,
                   ),

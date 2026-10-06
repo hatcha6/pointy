@@ -1,0 +1,74 @@
+group 'org.sigrok.flutter_libserialport'
+version '0.5.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '2.0.0'
+    repositories {
+        google()
+        // POINTY PATCH: jcenter() is gone from Gradle 9; JCenter itself closed in 2021.
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        // POINTY PATCH: jcenter() is gone from Gradle 9; JCenter itself closed in 2021.
+        mavenCentral()
+    }
+}
+
+// POINTY PATCH: this script no longer applies the Kotlin Gradle plugin. With
+// AGP 9's built-in Kotlin, AGP compiles the Kotlin sources itself and refuses
+// that plugin; with built-in Kotlin off (or AGP 8), Flutter applies it to
+// plugins that leave it out. kotlinOptions belongs to that plugin, so it is
+// set only when built-in Kotlin is off.
+def pointyAgpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
+def pointyBuiltInKotlinFlag = project.findProperty('android.builtInKotlin')
+def pointyBuiltInKotlin = pointyAgpMajor >= 9 &&
+        (pointyBuiltInKotlinFlag == null || pointyBuiltInKotlinFlag.toString().toBoolean())
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'org.sigrok.flutter_libserialport'
+    compileSdk 34
+    // POINTY PATCH: build the C library with Flutter's NDK, not AGP's default,
+    // so the build needs one NDK installed instead of two.
+    ndkVersion flutter.ndkVersion
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+    defaultConfig {
+        minSdkVersion 21
+        namespace 'org.sigrok.flutter_libserialport'
+    }
+    lintOptions {
+        disable 'InvalidPackage'
+    }
+    externalNativeBuild {
+        cmake {
+            path "libserialport/CMakeLists.txt"
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    // POINTY PATCH: see the note above `apply plugin`.
+    if (!pointyBuiltInKotlin) {
+        kotlinOptions {
+            jvmTarget = '17'
+        }
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+}

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 
 import '../models/analytics_export.dart';
+import 'file_dialogs.dart';
 
 /// Native platforms (desktop + mobile): open a "Save as…" dialog so the user
 /// chooses where the exported tracking file goes.
@@ -31,25 +32,26 @@ Future<AnalyticsExportSaveResult> downloadAnalyticsExportFilePlatform(
   try {
     if (Platform.isAndroid || Platform.isIOS) {
       // Mobile: the platform's save flow writes the bytes itself.
-      final savedPath = await FilePicker.saveFile(
+      final saved = await FilePicker.saveFile(
         dialogTitle: dialogTitle,
         fileName: file.filename,
         type: extension == null ? FileType.any : FileType.custom,
         allowedExtensions: extension == null ? null : [extension],
         bytes: tempFile.readAsBytesSync(),
       );
-      if (savedPath == null) {
+      if (saved == null) {
         return const AnalyticsExportSaveResult.canceled();
       }
-      return AnalyticsExportSaveResult.saved(location: savedPath);
+      return AnalyticsExportSaveResult.saved(
+        location: savedLocationLabel(saved),
+      );
     }
 
     // Desktop: the dialog only picks the destination; move the spooled file
     // there without ever reading it into memory.
-    final savedPath = await FilePicker.saveFile(
+    final savedPath = await pickDesktopSaveDestination(
       dialogTitle: dialogTitle,
       fileName: file.filename,
-      type: extension == null ? FileType.any : FileType.custom,
       allowedExtensions: extension == null ? null : [extension],
     );
     if (savedPath == null) {

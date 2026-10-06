@@ -5,15 +5,16 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
-import '../../../data/services/api_error_detail.dart';
 import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/product_image_search_result.dart';
 import '../../../data/models/product_image_upload.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/services/api_error_detail.dart';
+import '../../../data/services/file_dialogs.dart';
+import '../../../shared/components/pointy_progress.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_image_thumbnail.dart';
-import '../../../shared/components/pointy_progress.dart';
 import '../../companion/views/companion_capture_sheet.dart';
 
 const _productImageSearchPageSize = 30;
@@ -208,17 +209,12 @@ class ProductImageField extends StatelessWidget {
 
   Future<void> _pickLocalImage(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final result = await FilePicker.pickFiles(
-      type: FileType.image,
-      withData: true,
-      allowMultiple: false,
-    );
-    if (result == null || result.files.isEmpty) {
+    final file = await FilePicker.pickFile(type: FileType.image);
+    if (file == null) {
       return;
     }
-    final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    final bytes = await readPickedBytes(file);
+    if (bytes == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
@@ -505,7 +501,9 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
           // from a relay outage, and only one of them is worth retrying. The
           // one case we can name gets an Arabic sentence; anything else falls
           // back to what the server said rather than to nothing.
-          _errorKey = apiStatusCode(exception) == 403 ? 'unsubscribed' : 'failed';
+          _errorKey = apiStatusCode(exception) == 403
+              ? 'unsubscribed'
+              : 'failed';
           _errorDetail = apiErrorDetail(exception);
           _hasMoreResults = false;
           _isLoadingInitial = false;
@@ -521,7 +519,9 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
     if (_errorKey == 'unsubscribed') {
       return l10n.productImageSearchNotSubscribed;
     }
-    return _errorDetail.isNotEmpty ? _errorDetail : l10n.productImageSearchError;
+    return _errorDetail.isNotEmpty
+        ? _errorDetail
+        : l10n.productImageSearchError;
   }
 }
 

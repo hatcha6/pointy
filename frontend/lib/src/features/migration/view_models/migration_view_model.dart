@@ -98,6 +98,7 @@ class MigrationViewModel extends ChangeNotifier {
   CollapseViewModel? _collapse;
 
   PlatformFile? _pickedFile;
+  int _pickedFileSize = 0;
   MigrationUploader? _uploader;
   MigrationUploadProgress? _uploadProgress;
   bool _isUploading = false;
@@ -118,6 +119,9 @@ class MigrationViewModel extends ChangeNotifier {
       _catalog?.upload ?? MigrationUploadConfig.fallback;
   MigrationSource? get source => _source;
   PlatformFile? get pickedFile => _pickedFile;
+
+  /// The picked file's size, read once when it was picked.
+  int get pickedFileSize => _pickedFileSize;
   MigrationUploadProgress? get uploadProgress => _uploadProgress;
   Set<String> get selectedEntities => _selectedEntities;
   MigrationStockSource get stockSource => _stockSource;
@@ -397,23 +401,26 @@ class MigrationViewModel extends ChangeNotifier {
   // --- choosing + uploading -------------------------------------------
   /// Opens the file picker, restricted to what the server says it can read.
   Future<PlatformFile?> pickFile() async {
-    final result = await FilePicker.pickFiles(
+    // Never read into memory here: these files are gigabytes, and the uploader
+    // reads them a chunk at a time.
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: uploadConfig.pickerExtensions,
-      allowMultiple: false,
-      // Never `withData` on desktop: these files are gigabytes and the uploader
-      // seeks through them on disk. The web build has no choice, and the picker
-      // supplies bytes there regardless.
-      withData: kIsWeb,
     );
-    final file = result?.files.singleOrNull;
     if (file == null) return null;
-    if (file.size > uploadConfig.maxBytes) {
+    final size = file.lengthSync() ?? await file.length();
+    if (size == null) {
+      _errorMessage = 'unreadable';
+      notifyListeners();
+      return null;
+    }
+    if (size > uploadConfig.maxBytes) {
       _errorMessage = 'tooLarge';
       notifyListeners();
       return null;
     }
     _pickedFile = file;
+    _pickedFileSize = size;
     _errorMessage = null;
     notifyListeners();
     return file;
@@ -428,7 +435,7 @@ class MigrationViewModel extends ChangeNotifier {
     _errorMessage = null;
     _uploadProgress = MigrationUploadProgress(
       sentBytes: 0,
-      totalBytes: file.size,
+      totalBytes: _pickedFileSize,
       bytesPerSecond: 0,
     );
     final uploader = _repository.newUploader();
@@ -437,6 +444,7 @@ class MigrationViewModel extends ChangeNotifier {
 
     final result = await _repository.uploadFile(
       file,
+      sizeBytes: _pickedFileSize,
       uploader: uploader,
       resuming: _source?.isUploading ?? false ? _source : null,
       onProgress: (progress) {

@@ -119,9 +119,10 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
   };
 
   String _errorText(AppLocalizations l10n, String raw) {
-    // The view model raises a token for the one error it detects itself; every
+    // The view model raises a token for the errors it detects itself; every
     // other message comes from the server already phrased for a person.
     if (raw == 'tooLarge') return l10n.migrationFileTooLarge;
+    if (raw == 'unreadable') return l10n.migrationFileUnreadable;
     return raw;
   }
 }

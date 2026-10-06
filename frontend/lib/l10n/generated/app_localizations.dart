@@ -32530,6 +32530,12 @@ abstract class AppLocalizations {
   /// **'هذا الملف أكبر من الحد المسموح به.'**
   String get migrationFileTooLarge;
 
+  /// Shown when the picked file's size cannot be read, so it cannot be uploaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت قراءة هذا الملف. اختره مرة أخرى.'**
+  String get migrationFileUnreadable;
+
   /// Header of the help section on the choose step.
   ///
   /// In ar, this message translates to:

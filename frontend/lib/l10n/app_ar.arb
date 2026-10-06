@@ -13009,6 +13009,10 @@
   "@migrationFileTooLarge": {
     "description": "Shown when the picked file exceeds the server's ceiling."
   },
+  "migrationFileUnreadable": "تعذّرت قراءة هذا الملف. اختره مرة أخرى.",
+  "@migrationFileUnreadable": {
+    "description": "Shown when the picked file's size cannot be read, so it cannot be uploaded."
+  },
   "migrationWhereIsMyFileTitle": "أين أجد هذا الملف؟",
   "@migrationWhereIsMyFileTitle": {
     "description": "Header of the help section on the choose step."

@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/ai_chat.dart';
+import '../../data/services/file_dialogs.dart';
 
 /// Picks images (gallery/camera) and files, downscales + re-encodes images off
 /// the UI isolate, and returns [AiAttachment]s carrying a base64 data URI ready
@@ -41,18 +42,15 @@ class AiAttachmentPicker {
   }
 
   Future<List<AiAttachment>> pickFiles() async {
-    final FilePickerResult? result;
+    final List<PlatformFile> files;
     try {
-      result = await FilePicker.pickFiles(allowMultiple: true, withData: true);
+      files = await FilePicker.pickFiles();
     } on Exception {
       return const [];
     }
-    if (result == null) {
-      return const [];
-    }
     final attachments = <AiAttachment>[];
-    for (final file in result.files) {
-      final bytes = file.bytes;
+    for (final file in files) {
+      final bytes = await readPickedBytes(file);
       if (bytes == null) {
         continue;
       }

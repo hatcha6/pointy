@@ -45,10 +45,16 @@ dependencies:
   intl: any
   archive: ^4.0.9
   fl_chart: ^1.2.0
-  flutter_libserialport: ^0.6.0
+  # flutter_libserialport 0.6.0 (its latest) with its Android build fixed for
+  # Gradle 9 (no jcenter) and AGP 9 (built-in Kotlin). See its POINTY_PATCHES.md.
+  flutter_libserialport:
+    path: packages/flutter_libserialport
   esc_pos_utils_plus: ^2.0.4
   image: ^4.3.0
-  flutter_bluetooth_classic_serial: ^1.3.2
+  # flutter_bluetooth_classic_serial 1.3.2 (its latest), same AGP 9 fix. See
+  # its POINTY_PATCHES.md.
+  flutter_bluetooth_classic_serial:
+    path: packages/flutter_bluetooth_classic_serial
   multicast_dns: ^0.3.3
   # Local key/value persistence. `shared_preferences` is kept as the WEB backend
   # (browser storage has no torn-write problem) and as the one-time migration
@@ -83,23 +89,28 @@ dependencies:
   printing:
     path: packages/printing
   qr: ^3.0.2
-  file_picker: ^11.0.2
+  file_picker: ^13.1.0
   http_parser: ^4.1.2
   web: ^1.1.1
-  usb_serial: ^0.5.2
+  # usb_serial 0.5.2 (its latest), same Gradle 9 fix. See its POINTY_PATCHES.md.
+  usb_serial:
+    path: packages/usb_serial
   image_picker: ^1.2.2
   gpt_markdown: ^1.1.7
   # Open web-search source citations (http/https links in AI replies) externally.
   url_launcher: ^6.3.1
-  record: ^6.2.1
+  record: ^7.1.1
   # Client self-update: read the running app version + a temp dir for the download.
-  package_info_plus: ^8.0.0
+  package_info_plus: ^10.2.2
   # `calloc` for the one kernel32 call that reads the machine's RAM
   # (lib/src/core/analytics_host_facts_io.dart). Pure Dart; no native build.
   ffi: ^2.1.0
   path_provider: ^2.1.4
-  wakelock_plus: ^1.3.3
-  flutter_tts: ^4.2.5
+  wakelock_plus: ^1.8.1
+  # flutter_tts 4.2.5 (its latest) with its Android build made to compile
+  # under AGP 9's built-in Kotlin. See its POINTY_PATCHES.md.
+  flutter_tts:
+    path: packages/flutter_tts
   # Generative UI engine for the AI assistant. Pinned: the package is alpha
   # and its API changes between minors. Only lib/src/features/ai/ui touches it.
   a2ui_core: ^0.1.1

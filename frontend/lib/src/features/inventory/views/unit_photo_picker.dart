@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../data/models/unit_photo.dart';
+import '../../../data/services/file_dialogs.dart';
 
 /// Where a unit's photos come from: files on a desktop till, the gallery or
 /// the camera on a phone. The same two plugins the product image field uses,
@@ -20,15 +21,10 @@ bool get unitCameraSupported =>
 /// screen and the box, and picking them one at a time is how it does not get
 /// done.
 Future<List<UnitPhotoUpload>> pickUnitPhotoFiles() async {
-  final result = await FilePicker.pickFiles(
-    type: FileType.image,
-    withData: true,
-    allowMultiple: true,
-  );
-  if (result == null) return const [];
+  final files = await FilePicker.pickFiles(type: FileType.image);
   return [
-    for (final file in result.files)
-      if (file.bytes case final bytes? when bytes.isNotEmpty)
+    for (final file in files)
+      if (await readPickedBytes(file) case final bytes?)
         UnitPhotoUpload(
           filename: file.name,
           bytes: bytes,

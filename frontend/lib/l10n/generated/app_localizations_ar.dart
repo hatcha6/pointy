@@ -19032,6 +19032,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationFileTooLarge => 'هذا الملف أكبر من الحد المسموح به.';
 
   @override
+  String get migrationFileUnreadable =>
+      'تعذّرت قراءة هذا الملف. اختره مرة أخرى.';
+
+  @override
   String get migrationWhereIsMyFileTitle => 'أين أجد هذا الملف؟';
 
   @override

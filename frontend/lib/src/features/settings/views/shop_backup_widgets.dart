@@ -311,21 +311,18 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
   Future<void> _pickRestoreArchive(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const ['zip'],
-      withData: true,
-      allowMultiple: false,
     );
+    if (file == null) {
+      return;
+    }
+    final bytes = await readPickedBytes(file);
     if (!context.mounted) {
       return;
     }
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-    final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    if (bytes == null) {
       messenger
         ..clearSnackBars()
         ..showSnackBar(SnackBar(content: Text(l10n.restorePickErrorMessage)));
