@@ -321,6 +321,12 @@ farm_path() {
 pu_test_setup() {
   PU_TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pu-test-XXXXXX")"
   export PU_TEST_DIR
+  # Every mktemp the code under test makes (an extracted bundle above all)
+  # lands inside this test's own directory, and goes with it at teardown.
+  # Suites run concurrently: in the shared temp directory, one test's staged
+  # pointy-onprem-1.1.0 is indistinguishable from another's leftover.
+  export TMPDIR="${PU_TEST_DIR}/tmp"
+  mkdir -p "$TMPDIR"
   export PU_STUB_DIR="${PU_TEST_DIR}/stubs"
   export PU_STUB_CALLS="${PU_TEST_DIR}/calls.log"
   export PU_STUB_DEFAULT_EXIT=0
@@ -332,6 +338,21 @@ pu_test_setup() {
   # stubbed so retry loops cost nothing; `date` deliberately is NOT, because the
   # lock's staleness maths depends on real timestamps.
   stub_cmd docker curl sleep systemctl
+
+  # Not a stub: BSD mktemp (macOS) ignores TMPDIR when it is given no template,
+  # where GNU's honours it. This gives the code under test GNU's behaviour on a
+  # developer's Mac too, so what it makes lands in the TMPDIR above there as
+  # well as in CI.
+  local real_mktemp real_bash
+  real_mktemp="$(command -v mktemp)"; real_bash="$(command -v bash)"
+  cat >"${PU_STUB_DIR}/mktemp" <<EOF
+#!${real_bash}
+for arg in "\$@"; do
+  case "\$arg" in -*) ;; *) exec "${real_mktemp}" "\$@" ;; esac
+done
+exec "${real_mktemp}" "\$@" "\${TMPDIR:-/tmp}/tmp.XXXXXXXXXX"
+EOF
+  chmod +x "${PU_STUB_DIR}/mktemp"
   export PATH="${PU_STUB_DIR}:${PATH}"
 
   cd "${PU_TEST_DIR}/deploy" || exit 1

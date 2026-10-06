@@ -222,8 +222,12 @@ test_a_zip_is_left_untouched_but_its_extracted_copy_is_cleaned_up() {
   local zip; zip="$(_zip_bundle 1.1.0)"
   _run "$zip" >/dev/null 2>&1
   assert_file "$zip"
-  # Nothing extracted should survive: it holds the same image archives.
-  local leftovers; leftovers="$(find "${TMPDIR:-/tmp}" -maxdepth 2 -name 'pointy-onprem-1.1.0' -newer "$zip" 2>/dev/null)"
+  # Nothing extracted should survive: it holds the same image archives. The
+  # harness gives each test its own TMPDIR, so anything left in it is this
+  # run's. (No "-newer than the zip" filter: unzip restores the extracted
+  # directory's older timestamp, so that filter hid exactly this leftover and
+  # only ever matched other suites' concurrent extractions.)
+  local leftovers; leftovers="$(find "$TMPDIR" -mindepth 1 2>/dev/null)"
   assert_eq '' "$leftovers"
 }
 
