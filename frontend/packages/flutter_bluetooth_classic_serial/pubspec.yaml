@@ -28,8 +28,9 @@ flutter:
         pluginClass: FlutterBluetoothClassicPlugin
       ios:
         pluginClass: SwiftFlutterBluetoothClassicPlugin
-      linux:
-        pluginClass: FlutterBluetoothClassicPlugin
+      # POINTY PATCH: no `linux:` platform. Upstream declares one, but its
+      # linux/ directory is an example app with no plugin target, which breaks
+      # `flutter build linux` at CMake configure. See POINTY_PATCHES.md.
       windows:
         pluginClass: FlutterBluetoothClassicPlugin
         fileName: flutter_bluetooth_classic_plugin_c_api.cpp

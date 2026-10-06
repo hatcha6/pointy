@@ -5,7 +5,6 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_linux
   file_selector_linux
-  flutter_bluetooth_classic_serial
   flutter_libserialport
   printing
   record_linux

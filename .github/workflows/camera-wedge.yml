@@ -177,26 +177,6 @@ jobs:
           flutter config --enable-linux-desktop
           flutter pub get
 
-      # The same workaround as release.yml's build-linux (see the comment
-      # there): flutter_bluetooth_classic_serial ships no Linux plugin target.
-      - name: Work around broken Bluetooth plugin Linux support
-        shell: bash
-        run: |
-          set -euo pipefail
-          for pubspec in "$HOME"/.pub-cache/hosted/pub.dev/flutter_bluetooth_classic_serial-*/pubspec.yaml; do
-            [ -f "$pubspec" ] || continue
-            python3 - "$pubspec" <<'EOF'
-          import re, sys
-          path = sys.argv[1]
-          src = open(path).read()
-          out, n = re.subn(r'(?m)^[ \t]+linux:\n[ \t]+pluginClass:[^\n]*\n', '', src)
-          if n:
-              open(path, 'w').write(out)
-          if re.search(r'(?m)^[ \t]+linux:[ \t]*\n', out):
-              sys.exit(f"linux platform block still present in {path}")
-          EOF
-          done
-
       - name: Build
         working-directory: frontend
         run: |
