@@ -46,13 +46,13 @@ class _PrinterLabelSettingsState extends State<PrinterLabelSettings> {
     _gapController = TextEditingController(text: '${endpoint.labelGapMm}');
     _dpiController = TextEditingController(text: '${endpoint.labelDpi}');
     _offsetXController = TextEditingController(
-      text: '${endpoint.labelPdfOffsetXMm}',
+      text: _millimetresText(endpoint.labelPdfOffsetXMm),
     );
     _offsetYController = TextEditingController(
       text: '${endpoint.labelPdfOffsetYMm}',
     );
     _pitchController = TextEditingController(
-      text: _pitchText(endpoint.labelPdfPitchMm),
+      text: _millimetresText(endpoint.labelPdfPitchMm),
     );
   }
 
@@ -69,7 +69,7 @@ class _PrinterLabelSettingsState extends State<PrinterLabelSettings> {
   }
 
   /// Whole millimetres show without a decimal tail; fractions keep theirs.
-  static String _pitchText(double value) =>
+  static String _millimetresText(double value) =>
       value == value.roundToDouble() ? '${value.round()}' : '$value';
 
   @override
@@ -174,12 +174,17 @@ class _PrinterLabelSettingsState extends State<PrinterLabelSettings> {
               icon: Icons.vertical_align_top_outlined,
               onChanged: _editor.updateLabelPdfOffsetY,
             ),
+            // Signed: a head narrower than the label starts printing inside
+            // the sticker, and only a negative offset can move the artwork
+            // back onto its centre.
             _numberField(
               controller: _offsetXController,
               label: l10n.printerBarcodeLabelOffsetXLabel,
               helper: l10n.printerBarcodeLabelOffsetXHelper,
               icon: Icons.format_indent_increase_outlined,
               onChanged: _editor.updateLabelPdfOffsetX,
+              decimal: true,
+              signed: true,
             ),
           ],
         ),
@@ -354,23 +359,24 @@ class _PrinterLabelSettingsState extends State<PrinterLabelSettings> {
     required ValueChanged<String> onChanged,
     String? helper,
     bool decimal = false,
+    bool signed = false,
   }) {
     return TextFormField(
       controller: controller,
       enabled: !_editor.isBusy,
-      keyboardType: decimal
-          ? const TextInputType.numberWithOptions(decimal: true)
+      keyboardType: decimal || signed
+          ? TextInputType.numberWithOptions(decimal: decimal, signed: signed)
           : TextInputType.number,
       inputFormatters: [
-        decimal
-            ? FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
-            : FilteringTextInputFormatter.digitsOnly,
+        FilteringTextInputFormatter.allow(
+          RegExp('[0-9${decimal ? '.' : ''}${signed ? '-' : ''}]'),
+        ),
       ],
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         helperText: helper,
-        helperMaxLines: helper == null ? null : 4,
+        helperMaxLines: helper == null ? null : 5,
         prefixIcon: Icon(icon),
       ),
     );

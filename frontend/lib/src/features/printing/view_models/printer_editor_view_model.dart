@@ -276,9 +276,13 @@ class PrinterEditorViewModel extends ChangeNotifier {
   void updateLabelPdfSize(BarcodeLabelPdfSize size) =>
       _updateEndpoint(endpoint.copyWith(labelPdfSize: size));
 
+  /// Signed and fractional: negative when the head starts inside the sticker
+  /// (see [PrinterEndpoint.labelPdfOffsetXMm]). A lone `-` or `.` mid-typing
+  /// keeps the last value.
   void updateLabelPdfOffsetX(String value) => _updateEndpoint(
     endpoint.copyWith(
-      labelPdfOffsetXMm: int.tryParse(value) ?? endpoint.labelPdfOffsetXMm,
+      labelPdfOffsetXMm:
+          double.tryParse(value.trim()) ?? endpoint.labelPdfOffsetXMm,
     ),
   );
 

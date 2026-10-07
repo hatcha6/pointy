@@ -31,7 +31,7 @@ void main() {
     int rotation = 0,
     int widthMm = 40,
     int heightMm = 25,
-    int offsetXMm = 0,
+    double offsetXMm = 0,
     int offsetYMm = 0,
     double pitchMm = 0,
   }) {
@@ -105,6 +105,75 @@ void main() {
     expect(_mediaBox(document.bytes), _isSize(170.08, 85.04));
     expect(document.mediaWidthMm, 60);
     expect(document.mediaHeightMm, 30);
+  });
+
+  group('a head that starts inside the sticker', () {
+    // A 2-inch head (384 dots, 48 mm) over a 50 mm sticker starts printing a
+    // millimetre or so in from the label's left edge. Laid out from the page
+    // origin, the card came out shifted right — blank label on the left —
+    // and the shop bar ran past the head's last dot, which some printers
+    // fold back in as a hairline down the left edge.
+    const shop = 'لمسة للهاتف المحمول';
+
+    test('keeps the page on the sticker, not narrower', () async {
+      // The media is what a CUPS preset or a driver's paper list has to
+      // match; a 48.5 mm page would match none and bring back the queue's
+      // own default paper.
+      final document = await service.buildLabelsDocument(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+          offsetXMm: -1.5,
+        ),
+        shopName: shop,
+      );
+      expect(_mediaBox(document.bytes), _isSize(141.73, 85.04));
+      expect(document.mediaWidthMm, 50);
+      expect(document.mediaHeightMm, 30);
+    });
+
+    test('moves the card left by the inset, onto the head', () async {
+      Future<_InkSpan> inkOf(double offsetXMm) async {
+        final bytes = await service.buildLabelsPdf(
+          lines: [line],
+          endpoint: endpoint(
+            BarcodeLabelPdfSize.sticker,
+            widthMm: 50,
+            heightMm: 30,
+            offsetXMm: offsetXMm,
+          ),
+          shopName: shop,
+        );
+        return _inkSpan(bytes);
+      }
+
+      final flush = await inkOf(0);
+      final inset = await inkOf(-1.5);
+      // The whole card moves, rather than shrinking into the head.
+      expect(inset.left, closeTo(flush.left - 1.5, 0.05));
+      expect(inset.right, closeTo(flush.right - 1.5, 0.05));
+      // Centred on the sticker, the card now ends inside a 48 mm head that
+      // starts 1.5 mm in: nothing runs past the last dot.
+      expect(inset.right, lessThan(48));
+      expect(inset.left, greaterThanOrEqualTo(0));
+    });
+
+    test('is clamped to what a printer can mean by it', () async {
+      final document = await service.buildLabelsDocument(
+        lines: [line],
+        endpoint: endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+          offsetXMm: -40,
+        ),
+      );
+      // Still the sticker's page, and still a card on it.
+      expect(document.mediaWidthMm, 50);
+      expect(_inkSpan(document.bytes).right, greaterThan(30));
+    });
   });
 
   test('a pitch lays the run out as one strip, not a page each', () async {
@@ -590,6 +659,14 @@ void main() {
           widthMm: 50,
           heightMm: 30,
         ),
+        // A 2-inch head (48 mm) that starts 1.5 mm inside a 50 mm sticker:
+        // the card has to end before the head's last dot (384 at 203 dpi).
+        'sticker50x30-inset': endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 50,
+          heightMm: 30,
+          offsetXMm: -1.5,
+        ),
         // The HPRT LPQ80 exactly as calibrated in the field: the smallest roll
         // in use, and the geometry that shows whether the layout still holds
         // when it is tight. Printable as-is with
@@ -691,6 +768,62 @@ List<double> _fontSizes(Uint8List bytes) {
     }
   }
   return sizes;
+}
+
+/// How far across the page the card's ink reaches, in millimetres from the
+/// page's left edge: the leftmost and rightmost x of every filled rectangle
+/// (`re`) the page content draws — the shop bar and the bars of the code.
+class _InkSpan {
+  const _InkSpan(this.left, this.right);
+
+  final double left;
+  final double right;
+}
+
+_InkSpan _inkSpan(Uint8List bytes) {
+  final contents = _contents(bytes);
+  // The card is drawn through a stack of translations; follow them with the
+  // current transformation matrix so each rectangle lands where it prints.
+  var left = double.infinity;
+  var right = double.negativeInfinity;
+  final ops = RegExp(
+    r'([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) cm'
+    // A rectangle followed by `W` is a clip (the page's own frame), not ink.
+    r'|([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) re(?!\s*W)'
+    r'|\bq\b|\bQ\b',
+  );
+  var ctm = <double>[1, 0, 0, 1, 0, 0];
+  final saved = <List<double>>[];
+  for (final match in ops.allMatches(contents)) {
+    final op = match.group(0)!;
+    if (op == 'q') {
+      saved.add(List.of(ctm));
+    } else if (op == 'Q') {
+      ctm = saved.isEmpty ? ctm : saved.removeLast();
+    } else if (match.group(1) != null) {
+      final m = [for (var g = 1; g <= 6; g++) double.parse(match.group(g)!)];
+      ctm = [
+        m[0] * ctm[0] + m[1] * ctm[2],
+        m[0] * ctm[1] + m[1] * ctm[3],
+        m[2] * ctm[0] + m[3] * ctm[2],
+        m[2] * ctm[1] + m[3] * ctm[3],
+        m[4] * ctm[0] + m[5] * ctm[2] + ctm[4],
+        m[4] * ctm[1] + m[5] * ctm[3] + ctm[5],
+      ];
+    } else {
+      final x = double.parse(match.group(7)!);
+      final y = double.parse(match.group(8)!);
+      final w = double.parse(match.group(9)!);
+      final h = double.parse(match.group(10)!);
+      for (final (px, py) in [(x, y), (x + w, y + h)]) {
+        final printedX = px * ctm[0] + py * ctm[2] + ctm[4];
+        left = math.min(left, printedX);
+        right = math.max(right, printedX);
+      }
+    }
+  }
+  const mmPerPt = 25.4 / 72;
+  return _InkSpan(left * mmPerPt, right * mmPerPt);
 }
 
 /// Page size in points, read off the PDF's own `/MediaBox`.

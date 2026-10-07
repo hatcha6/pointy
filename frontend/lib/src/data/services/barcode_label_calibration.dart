@@ -52,7 +52,7 @@ class BarcodeLabelCalibrationDocument {
 
   double get _widthMm => endpoint.labelWidthMm.toDouble();
   double get _heightMm => endpoint.labelHeightMm.toDouble();
-  double get _offsetXMm => endpoint.labelPdfOffsetXMm.toDouble();
+  double get _offsetXMm => barcodeLabelOffsetXMm(endpoint);
   double get _offsetYMm => endpoint.labelPdfOffsetYMm.toDouble();
 
   /// Every sheet is as wide as a label's page; see [barcodeLabelPageWidthMm].
@@ -155,6 +155,11 @@ class BarcodeLabelCalibrationDocument {
     );
   }
 
+  /// Where the feed ruler's ticks start: a millimetre onto the sticker, or a
+  /// millimetre onto the page when the head starts inside the sticker (a
+  /// negative offset), so no tick begins where no dot can reach.
+  double get _feedRulerLeftMm => (_offsetXMm < 0 ? 0 : _offsetXMm) + 1;
+
   /// Scale down the feed, restarting at every label so each sticker carries the
   /// same numbers — which also shows at a glance whether the pitch is holding.
   Future<BarcodeLabelDocument> _feedRuler() async {
@@ -170,7 +175,7 @@ class BarcodeLabelCalibrationDocument {
             for (var label = 0; label < _rulerLabels; label++)
               for (var d = 0; d <= _pitchMm.floor(); d += 1) ...[
                 _tick(
-                  leftMm: _offsetXMm + 1,
+                  leftMm: _feedRulerLeftMm,
                   topMm: label * _pitchMm + d,
                   widthMm: d % 5 == 0 ? 8 : 4,
                   heightMm: 0.25,
@@ -178,7 +183,7 @@ class BarcodeLabelCalibrationDocument {
                 if (d % 5 == 0)
                   _number(
                     '$d',
-                    _offsetXMm + 10,
+                    _feedRulerLeftMm + 9,
                     label * _pitchMm + d - 1.4,
                     size: 7,
                   ),

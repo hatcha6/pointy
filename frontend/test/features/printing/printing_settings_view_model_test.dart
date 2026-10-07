@@ -388,6 +388,32 @@ void main() {
       expect(editor.draft.holds(PrinterRole.documents), isFalse);
     });
 
+    test(
+      'the left offset takes a head that starts inside the sticker',
+      () async {
+        // A 48 mm head over a 50 mm sticker starts printing 1.5 mm in; only a
+        // negative, fractional offset can centre the artwork on it.
+        final viewModel = await loadedViewModel(printers: const [_counter]);
+        final editor = PrinterEditorViewModel(
+          viewModel,
+          printer: viewModel.printers.byId('counter'),
+        );
+        addTearDown(editor.dispose);
+
+        editor.updateLabelPdfOffsetX('-1.5');
+        expect(editor.endpoint.labelPdfOffsetXMm, -1.5);
+
+        // Half-typed entries keep the last value instead of snapping to 0.
+        editor.updateLabelPdfOffsetX('-');
+        expect(editor.endpoint.labelPdfOffsetXMm, -1.5);
+
+        editor.updateLabelPdfOffsetX('20');
+        expect(editor.endpoint.labelPdfOffsetXMm, 20);
+        // Whole millimetres are stored as an int, which older builds read.
+        expect(editor.endpoint.toJson()['label_pdf_offset_x_mm'], isA<int>());
+      },
+    );
+
     test('warns when the device is already another printer', () async {
       final viewModel = await loadedViewModel(printers: const [_counter]);
       final editor = PrinterEditorViewModel(viewModel);

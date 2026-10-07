@@ -1,19 +1,17 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../../shared/branding.dart';
 import '../../shared/pdf/pdf.dart';
 
 /// The black bar along the top of a barcode sticker: the shop's name in
-/// white, as if cut out of the bar, and دفتر's mark and name at its far end.
+/// white, as if cut out of the bar, and دفتر's mark at its far end.
 ///
 /// Everything in it is sized from the bar's own height, so one bar reads the
 /// same on a 25 mm sticker as on a 50 mm one. The shop's name is set as large
 /// as the bar allows and only ever shrinks — whole, never clipped — when it is
-/// too long for the width. The brand sits at the far end of the line in its
-/// own lockup proportions: a signature, never more than half the bar, while
-/// the shop's name starts the line. On a bar too narrow to spare it the room,
-/// the brand's name gives way and the mark stays.
+/// too long for the width. The brand is the mark alone, a signature at the far
+/// end of the line: the word «دفتر» that stood beside it (until 2026-10-06)
+/// took a quarter of the bar from the shop's own name.
 class BarcodeLabelShopBar extends pw.StatelessWidget {
   BarcodeLabelShopBar({
     required this.shopName,
@@ -33,23 +31,8 @@ class BarcodeLabelShopBar extends pw.StatelessWidget {
   @override
   pw.Widget build(pw.Context context) {
     final padding = height * 0.3;
-    final innerWidth = width - 2 * padding;
     final markHeight = height * 0.74;
     final markWidth = markHeight * pointyPdfBrandMarkOnBlackAspect;
-
-    // The lockup's own proportions (marketing/promo/src/posters/kit.tsx):
-    // the name at 0.72 of the mark, 0.34 of the mark between the two.
-    final brandFontSize = markHeight * 0.72;
-    final brandGap = markHeight * 0.34;
-    final brandNameWidth =
-        fonts.bold
-            .getFont(context)
-            .stringMetrics(pointyPrintBrandName)
-            .advanceWidth *
-        brandFontSize;
-    final lockupWidth = markWidth + brandGap + brandNameWidth;
-    // The shop's name keeps at least half the bar, or the brand's name goes.
-    final showBrandName = innerWidth - lockupWidth >= innerWidth / 2;
 
     return pw.Container(
       width: width,
@@ -69,19 +52,6 @@ class BarcodeLabelShopBar extends pw.StatelessWidget {
             width: markWidth,
             height: markHeight,
           ),
-          if (showBrandName) ...[
-            pw.SizedBox(width: brandGap),
-            pw.Text(
-              pointyPrintBrandName,
-              tightBounds: true,
-              maxLines: 1,
-              style: pw.TextStyle(
-                font: fonts.bold,
-                fontSize: brandFontSize,
-                color: _paper,
-              ),
-            ),
-          ],
         ],
       ),
     );

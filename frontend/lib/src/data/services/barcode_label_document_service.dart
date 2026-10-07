@@ -139,7 +139,7 @@ class BarcodeLabelDocumentService {
       size: endpoint.labelPdfSize,
       stickerWidthMm: endpoint.labelWidthMm.toDouble(),
       stickerHeightMm: endpoint.labelHeightMm.toDouble(),
-      stickerOffsetXMm: endpoint.labelPdfOffsetXMm.toDouble(),
+      stickerOffsetXMm: endpoint.labelPdfOffsetXMm,
       stickerOffsetYMm: endpoint.labelPdfOffsetYMm.toDouble(),
       stickerPitchMm: endpoint.labelPdfPitchMm,
       dpi: endpoint.labelDpi,
@@ -319,9 +319,23 @@ class BarcodeLabelDocumentService {
 /// printed across the whole head (as the sheet used to be) read numbers that
 /// did not hold for a label — and the offset taken off it moved the label by
 /// something else entirely.
+///
+/// A negative offset never narrows the page below the sticker: the media the
+/// spooler is asked for stays the label itself (which is what a CUPS preset
+/// or a driver's paper list can match), and only the artwork moves.
 double barcodeLabelPageWidthMm(PrinterEndpoint endpoint) =>
     endpoint.labelWidthMm.toDouble().clamp(10.0, 210.0) +
-    endpoint.labelPdfOffsetXMm.toDouble().clamp(0.0, 210.0);
+    barcodeLabelOffsetXMm(endpoint).clamp(0.0, 210.0);
+
+/// [PrinterEndpoint.labelPdfOffsetXMm] within what a printer can mean by it:
+/// as far as 10 mm *inside* the sticker (a head narrower than the label), or
+/// any run-up up to the widest page.
+double barcodeLabelOffsetXMm(PrinterEndpoint endpoint) =>
+    endpoint.labelPdfOffsetXMm.clamp(-_maxInsetXMm, 210.0);
+
+/// The furthest inside the sticker a printer can start printing: a 2-inch
+/// head (48 mm) over a 58 mm label is 5 mm in on each side.
+const _maxInsetXMm = 10.0;
 
 /// A rendered label sheet plus the media its pages were laid out for.
 /// [mediaWidthMm]/[mediaHeightMm] are null only for the A4 grid, whose media is
@@ -492,7 +506,9 @@ class _BarcodeLabelSheet {
   Future<BarcodeLabelDocument> _buildStickerPages() async {
     final widthMm = stickerWidthMm.clamp(_minStickerMm, _maxStickerMm);
     final heightMm = stickerHeightMm.clamp(_minStickerMm, _maxStickerMm);
-    final offsetXMm = stickerOffsetXMm.clamp(0.0, _maxStickerMm);
+    // Negative when the head starts inside the sticker; see
+    // [PrinterEndpoint.labelPdfOffsetXMm].
+    final offsetXMm = stickerOffsetXMm.clamp(-_maxInsetXMm, _maxStickerMm);
     final offsetYMm = stickerOffsetYMm.clamp(0.0, _maxStickerMm);
     // Quiet zone. Across the head registration is exact, so 1.2 mm is plenty —
     // the old 1.5 mm was label the shop paid for and could not use. Down the
@@ -521,7 +537,7 @@ class _BarcodeLabelSheet {
 
     // The same width as [barcodeLabelPageWidthMm], which the calibration
     // sheets print on: what is measured on them is where a label lands.
-    final pageWidthMm = widthMm + offsetXMm;
+    final pageWidthMm = widthMm + math.max(0.0, offsetXMm);
     // CUPS custom media tops out at 8500 pt (~3 m), so a long run spills onto
     // further strips — each costing one re-registration, once every hundred-odd
     // labels rather than every label. Every page in a job must be the same size
@@ -567,8 +583,11 @@ class _BarcodeLabelSheet {
                 pw.Positioned(
                   // Everything left of and above a sticker is run-up over the
                   // liner (or thin air); the gap after it is the pitch's tail.
+                  // A head that starts inside the sticker puts its left edge
+                  // off the page: that strip is label no dot can reach, and
+                  // only the card's margin falls in it.
                   top: (offsetYMm + i * pitchMm) * _mm,
-                  right: 0,
+                  left: offsetXMm * _mm,
                   child: pw.SizedBox(
                     width: widthMm * _mm,
                     height: heightMm * _mm,

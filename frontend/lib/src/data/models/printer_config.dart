@@ -174,8 +174,15 @@ class PrinterEndpoint {
   /// than the head — or simply loaded off-centre — sits some way in from that
   /// origin, and a page that starts at the origin lands to the left of the
   /// sticker, half of it printing off the label. The PDF page is widened by
-  /// this much so the artwork reaches the label. PDF/document path only.
-  final int labelPdfOffsetXMm;
+  /// this much so the artwork reaches the label.
+  ///
+  /// Negative when the printer starts printing *inside* the sticker: a head
+  /// narrower than the label (a 48 mm head over a 50 mm sticker starts a
+  /// millimetre or so in). The page stays the sticker's width and the artwork
+  /// moves left by this much, so it is centred on the sticker and its right
+  /// end no longer runs past the head. Fractions are allowed: a millimetre
+  /// either way is visible on a sticker. PDF/document path only.
+  final double labelPdfOffsetXMm;
 
   /// Distance in millimetres from where the printer starts printing down the
   /// feed to the sticker's leading edge. A label printer that seeks the gap
@@ -282,7 +289,7 @@ class PrinterEndpoint {
       labelPdfSize: barcodeLabelPdfSizeFromJson(
         json['label_pdf_size'] ?? json['barcode_label_pdf_size'],
       ),
-      labelPdfOffsetXMm: _intFromJson(
+      labelPdfOffsetXMm: _doubleFromJson(
         json['label_pdf_offset_x_mm'] ?? json['barcode_label_offset_x_mm'],
         fallback: 0,
       ),
@@ -327,7 +334,9 @@ class PrinterEndpoint {
       'label_gap_mm': labelGapMm,
       'label_dpi': labelDpi,
       'label_pdf_size': barcodeLabelPdfSizeToJson(labelPdfSize),
-      'label_pdf_offset_x_mm': labelPdfOffsetXMm,
+      // Whole millimetres stay an int: older builds read this key as one, and
+      // `20.0` would come back to them as 0.
+      'label_pdf_offset_x_mm': _wholeAsInt(labelPdfOffsetXMm),
       'label_pdf_offset_y_mm': labelPdfOffsetYMm,
       'label_pdf_pitch_mm': labelPdfPitchMm,
       'label_rotation_quarter_turns': labelRotationQuarterTurns,
@@ -356,7 +365,7 @@ class PrinterEndpoint {
     int? labelGapMm,
     int? labelDpi,
     BarcodeLabelPdfSize? labelPdfSize,
-    int? labelPdfOffsetXMm,
+    double? labelPdfOffsetXMm,
     int? labelPdfOffsetYMm,
     double? labelPdfPitchMm,
     int? labelRotationQuarterTurns,
@@ -538,3 +547,6 @@ int _intFromJson(Object? value, {required int fallback}) {
   }
   return int.tryParse(value?.toString() ?? '') ?? fallback;
 }
+
+num _wholeAsInt(double value) =>
+    value == value.roundToDouble() ? value.round() : value;
