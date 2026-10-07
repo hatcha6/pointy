@@ -34,6 +34,7 @@ import 'data/repositories/modifier_group_repository.dart';
 import 'data/repositories/payments_repository.dart';
 import 'data/repositories/treasury_repository.dart';
 import 'features/treasury/view_models/bank_routing.dart';
+import 'features/app_updates/view_models/app_update_prompter.dart';
 import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/scales_repository.dart';
 import 'data/repositories/search_miss_repository.dart';
@@ -223,6 +224,10 @@ class PointyAppDependencies {
     clientUpdateService = ClientUpdateService(
       apiBaseUrl: () => service.baseUrl,
     );
+    appUpdatePrompter = AppUpdatePrompter(
+      check: clientUpdateService.check,
+      serverVersion: service.serverVersion,
+    );
     authViewModel = AuthViewModel(
       authRepository,
       analyticsEngine: analyticsEngine,
@@ -379,6 +384,10 @@ class PointyAppDependencies {
   /// Keeps an idle till hearing about changes it would otherwise miss.
   late final ServerStateWatcher serverStateWatcher;
   late final ClientUpdateService clientUpdateService;
+
+  /// Offers this machine the app build its backend serves, right after a
+  /// remote update — see [AppUpdatePrompter].
+  late final AppUpdatePrompter appUpdatePrompter;
   final bool _enableAutomaticConnection;
   late final AnalyticsRepository analyticsRepository;
   late final AnalyticsEngine analyticsEngine;
@@ -741,6 +750,8 @@ class PointyAppDependencies {
       unawaited(notificationCenterViewModel.loadAlerts());
       if (_enableAutomaticConnection) {
         unawaited(connectionCoordinator.pairAuthenticatedDevice());
+        // Not in tests or preview harnesses: there is no LAN manifest to ask.
+        appUpdatePrompter.start();
       }
       // Feature view models that survived the last session still need a
       // refresh (a different user's permissions can reshape their lists),
@@ -882,6 +893,7 @@ class PointyAppDependencies {
 
   void dispose() {
     serverStateWatcher.dispose();
+    appUpdatePrompter.dispose();
     revalidator.dispose();
     connectionStatus.removeListener(_handleConnectionStatusChanged);
     _connectionRouteReporter?.dispose();

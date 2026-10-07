@@ -16,6 +16,7 @@ class DeviceSettingsStorageService {
   static const _cameraWedgeEnabledKey = 'camera_wedge_enabled';
   static const _cameraWedgeDeviceIdKey = 'camera_wedge_device_id';
   static const _productSearchModePickerKey = 'product_search_mode_picker';
+  static const _postponedAppUpdateKey = 'postponed_app_update_version';
 
   Future<DeviceUsageMode?> loadDeviceUsageMode() async {
     final store = await AppKeyValueStore.instance();
@@ -95,6 +96,21 @@ class DeviceSettingsStorageService {
       _productSearchModePickerKey,
       enabled ? 'true' : 'false',
     );
+  }
+
+  /// The app build this machine was offered and answered "later" to.
+  ///
+  /// Per device, because the update replaces the app on this machine only.
+  /// The offer is not repeated for that build; the next one asks again.
+  Future<String?> loadPostponedAppUpdate() async {
+    final store = await AppKeyValueStore.instance();
+    final value = await store.getString(_postponedAppUpdateKey);
+    return (value == null || value.isEmpty) ? null : value;
+  }
+
+  Future<void> savePostponedAppUpdate(String version) async {
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_postponedAppUpdateKey, version);
   }
 
   /// The light/dark/system preference for this device. `null` when the user has

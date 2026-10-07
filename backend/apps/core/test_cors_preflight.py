@@ -41,6 +41,7 @@ CLIENT_RESPONSE_HEADERS = [
     "Idempotency-Replayed",
     "X-Pointy-Catalog-Version",
     "X-Pointy-Discounts-Version",
+    "X-Pointy-Server-Version",
     "X-Pointy-State",
 ]
 

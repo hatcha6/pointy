@@ -133,7 +133,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
 	marketing-site marketing-site-capture \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
@@ -470,6 +470,9 @@ frontend-register-session-preview: frontend-install ## Run the register-session 
 
 frontend-learning-preview: frontend-install ## Run the learning (in-app guides) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/learning_preview.dart
+
+frontend-app-update-preview: frontend-install ## Run the "update ready" dialog preview harness (?screen=board|live, &theme=dark).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/app_update_preview.dart
 
 frontend-subscription-preview: frontend-install ## Run the subscription / relay status settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/subscription_preview.dart

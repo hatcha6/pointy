@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../core/app_version.dart';
@@ -241,6 +242,12 @@ class PosApiSession {
   /// Empty until the first response (or on a backend that publishes nothing),
   /// in which case every consumer falls back to the TTLs it already had.
   final ServerStateNotifier serverState = ServerStateNotifier();
+
+  /// The backend's release, from `X-Pointy-Server-Version` on every API
+  /// response. Null until a response carries it (an older backend never
+  /// does). It moving is how a till learns the server was just updated, and
+  /// that it should ask whether a matching app build is waiting.
+  final ValueNotifier<String?> serverVersion = ValueNotifier<String?>(null);
 
   /// The composite catalog stamp. Kept as a named getter because it is what
   /// the POS scan/search caches key on; it is just one entry in [serverState].
@@ -869,6 +876,10 @@ class PosApiSession {
 
   void captureResponseState(http.Response response) {
     serverState.apply(_readStateVector(response.headers));
+    final release = response.headers['x-pointy-server-version']?.trim() ?? '';
+    if (release.isNotEmpty) {
+      serverVersion.value = release;
+    }
 
     final setCookie = response.headers['set-cookie'];
     if (setCookie == null || setCookie.isEmpty) {

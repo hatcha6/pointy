@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/services/client_update_service.dart';
+import '../../app_updates/views/app_update_progress.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 
@@ -57,7 +58,10 @@ class _AppUpdatesPageState extends State<AppUpdatesPage> {
       await widget.service.downloadAndInstall(
         release,
         onProgress: (value) {
-          if (mounted) setState(() => _progress = value);
+          // Per whole percent: that is all the panel shows.
+          if (mounted && (value * 100).floor() != (_progress * 100).floor()) {
+            setState(() => _progress = value);
+          }
         },
       );
     } catch (_) {
@@ -138,11 +142,15 @@ class _AppUpdatesPageState extends State<AppUpdatesPage> {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 24),
-        if (_installing) ...[
-          PointyProgressBar(value: _progress > 0 ? _progress : null),
-          const SizedBox(height: 12),
-          Text(l10n.appUpdatesDownloading, textAlign: TextAlign.center),
-        ] else
+        if (_installing)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: AppUpdateProgress(
+              progress: _progress,
+              totalBytes: status.available!.size,
+            ),
+          )
+        else
           FilledButton.icon(
             onPressed: _install,
             icon: const Icon(Icons.download_outlined),

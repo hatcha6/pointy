@@ -140,6 +140,84 @@ func TestHTTPRelayForwardsRequestThroughConnector(t *testing.T) {
 	}
 }
 
+// A till on the relay learns what changed, and that its backend was just
+// updated, from response headers alone. The idle poll is usually answered 304,
+// so a header lost on that path is lost exactly when the till is waiting for it.
+func TestHTTPRelayPassesThePointyStateHeadersBack(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	backendURL, err := url.Parse("http://127.0.0.1:8000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			status, body := http.StatusOK, `{"versions":{}}`
+			if r.Header.Get("If-None-Match") != "" {
+				status, body = http.StatusNotModified, ""
+			}
+			return &http.Response{
+				StatusCode:    status,
+				Status:        http.StatusText(status),
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          io.NopCloser(strings.NewReader(body)),
+				ContentLength: int64(len(body)),
+				Header: http.Header{
+					"Etag":                    []string{`W/"v1"`},
+					"X-Pointy-State":          []string{"catalog=812,settings=37"},
+					"X-Pointy-Server-Version": []string{"0.8.0"},
+				},
+				Request: r,
+			}, nil
+		}),
+	}
+	store, provisioned := provisionRelayInstallation(t)
+	hub := NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	startInMemoryConnector(t, ctx, hub, provisioned.Installation.ID, connector.Client{
+		BackendURL: backendURL,
+		Logger:     logger,
+		HTTPClient: backendClient,
+	})
+	waitUntil(t, time.Second, func() bool {
+		return hub.IsOnline(provisioned.Installation.ID)
+	})
+	relayHTTP := HTTPServer{Store: store, Hub: hub, Logger: logger}
+
+	for _, ifNoneMatch := range []string{"", `W/"v1"`} {
+		request, err := http.NewRequest(http.MethodGet, "http://relay.test/api/state/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+		if ifNoneMatch != "" {
+			request.Header.Set("If-None-Match", ifNoneMatch)
+		}
+		recorder := httptest.NewRecorder()
+		relayHTTP.ServeHTTP(recorder, request)
+		response := recorder.Result()
+		_, _ = io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+
+		want := http.StatusOK
+		if ifNoneMatch != "" {
+			want = http.StatusNotModified
+		}
+		if response.StatusCode != want {
+			t.Fatalf("expected %d, got %d", want, response.StatusCode)
+		}
+		if got := response.Header.Get("X-Pointy-Server-Version"); got != "0.8.0" {
+			t.Errorf("status %d: X-Pointy-Server-Version = %q, want 0.8.0", want, got)
+		}
+		if got := response.Header.Get("X-Pointy-State"); got != "catalog=812,settings=37" {
+			t.Errorf("status %d: X-Pointy-State = %q", want, got)
+		}
+	}
+}
+
 func TestHTTPRelayRejectsAccessTokenInURLPath(t *testing.T) {
 	store, provisioned := provisionRelayInstallation(t)
 	metrics := observability.NewMetrics()

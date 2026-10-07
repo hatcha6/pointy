@@ -425,6 +425,15 @@
       ],
       "cwd": "marketing/website",
       "port": 8095
+    },
+    {
+      "name": "app-update-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-app-update-preview",
+        "WEB_PORT=8093"
+      ],
+      "port": 8093
     }
   ]
 }

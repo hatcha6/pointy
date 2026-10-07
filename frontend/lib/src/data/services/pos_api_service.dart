@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:http/http.dart' as http;
 
 import '../models/attachment_summary.dart';
@@ -235,6 +236,10 @@ class PosApiService {
   /// The server's "what changed" counters, updated by every response that
   /// passes through this service. Caches key on it; screens listen to it.
   ServerStateNotifier get serverState => _session.serverState;
+
+  /// The backend's release, as its responses name it — see
+  /// [PosApiSession.serverVersion].
+  ValueListenable<String?> get serverVersion => _session.serverVersion;
 
   /// One poll of the state endpoint, for [ServerStateWatcher].
   Future<ServerStateSnapshot> fetchServerState() => _serverState.fetchState();

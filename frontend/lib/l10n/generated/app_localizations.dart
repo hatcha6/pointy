@@ -30442,6 +30442,90 @@ abstract class AppLocalizations {
   /// **'تم نسخ الرابط'**
   String get getAppsLinkCopied;
 
+  /// Title of the dialog that offers the app update the shop's backend now serves, shown right after the backend is updated.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث جديد جاهز'**
+  String get appUpdatePromptTitle;
+
+  /// No description provided for @appUpdatePromptMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث النظام في المتجر، وإصدار أحدث من التطبيق جاهز لهذا الجهاز.'**
+  String get appUpdatePromptMessage;
+
+  /// No description provided for @appUpdatePromptNewVersionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإصدار الجديد'**
+  String get appUpdatePromptNewVersionLabel;
+
+  /// No description provided for @appUpdatePromptDownloadSize.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجم التنزيل: {megabytes} ميجابايت'**
+  String appUpdatePromptDownloadSize(String megabytes);
+
+  /// No description provided for @appUpdatePromptLater.
+  ///
+  /// In ar, this message translates to:
+  /// **'لاحقاً'**
+  String get appUpdatePromptLater;
+
+  /// No description provided for @appUpdateProgressPercent.
+  ///
+  /// In ar, this message translates to:
+  /// **'{percent}٪'**
+  String appUpdateProgressPercent(int percent);
+
+  /// No description provided for @appUpdateProgressMegabytes.
+  ///
+  /// In ar, this message translates to:
+  /// **'{done} من {total} ميجابايت'**
+  String appUpdateProgressMegabytes(String done, String total);
+
+  /// No description provided for @appUpdateProgressStarting.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ بدء التنزيل…'**
+  String get appUpdateProgressStarting;
+
+  /// No description provided for @appUpdateProgressDownloading.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تنزيل التحديث…'**
+  String get appUpdateProgressDownloading;
+
+  /// No description provided for @appUpdateProgressInstalling.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل التنزيل، جارٍ فتح المثبّت…'**
+  String get appUpdateProgressInstalling;
+
+  /// No description provided for @appUpdatePromptInstallHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تغلق التطبيق. بعد التنزيل يبدأ التثبيت، وقد يطلب منك الجهاز تأكيده.'**
+  String get appUpdatePromptInstallHint;
+
+  /// No description provided for @appUpdateReminderTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تنسَ التحديث'**
+  String get appUpdateReminderTitle;
+
+  /// No description provided for @appUpdateReminderMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك تثبيت الإصدار {version} في أي وقت من:'**
+  String appUpdateReminderMessage(String version);
+
+  /// No description provided for @appUpdateReminderDismiss.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسناً'**
+  String get appUpdateReminderDismiss;
+
   /// Small eyebrow label above the dashboard's AI daily-brief headline.
   ///
   /// In ar, this message translates to:

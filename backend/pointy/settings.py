@@ -199,6 +199,9 @@ MIDDLEWARE = [
     # (apps.core.state_version). Also stamps the two legacy single-value
     # headers older clients know, from the same read.
     "apps.core.state_middleware.StateVersionHeaderMiddleware",
+    # Names the backend's release on every API response, so a till notices a
+    # remote update and offers the matching app build (apps.core.version_header).
+    "apps.core.version_header.ServerVersionHeaderMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -876,6 +879,7 @@ CORS_EXPOSE_HEADERS = [
     "X-Pointy-State",
     "X-Pointy-Catalog-Version",
     "X-Pointy-Discounts-Version",
+    "X-Pointy-Server-Version",
 ]
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED = env("POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED")

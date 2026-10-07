@@ -17810,6 +17810,58 @@ class AppLocalizationsAr extends AppLocalizations {
   String get getAppsLinkCopied => 'تم نسخ الرابط';
 
   @override
+  String get appUpdatePromptTitle => 'تحديث جديد جاهز';
+
+  @override
+  String get appUpdatePromptMessage =>
+      'تم تحديث النظام في المتجر، وإصدار أحدث من التطبيق جاهز لهذا الجهاز.';
+
+  @override
+  String get appUpdatePromptNewVersionLabel => 'الإصدار الجديد';
+
+  @override
+  String appUpdatePromptDownloadSize(String megabytes) {
+    return 'حجم التنزيل: $megabytes ميجابايت';
+  }
+
+  @override
+  String get appUpdatePromptLater => 'لاحقاً';
+
+  @override
+  String appUpdateProgressPercent(int percent) {
+    return '$percent٪';
+  }
+
+  @override
+  String appUpdateProgressMegabytes(String done, String total) {
+    return '$done من $total ميجابايت';
+  }
+
+  @override
+  String get appUpdateProgressStarting => 'جارٍ بدء التنزيل…';
+
+  @override
+  String get appUpdateProgressDownloading => 'جارٍ تنزيل التحديث…';
+
+  @override
+  String get appUpdateProgressInstalling => 'اكتمل التنزيل، جارٍ فتح المثبّت…';
+
+  @override
+  String get appUpdatePromptInstallHint =>
+      'لا تغلق التطبيق. بعد التنزيل يبدأ التثبيت، وقد يطلب منك الجهاز تأكيده.';
+
+  @override
+  String get appUpdateReminderTitle => 'لا تنسَ التحديث';
+
+  @override
+  String appUpdateReminderMessage(String version) {
+    return 'يمكنك تثبيت الإصدار $version في أي وقت من:';
+  }
+
+  @override
+  String get appUpdateReminderDismiss => 'حسناً';
+
+  @override
   String get aiDailyBriefLabel => 'ملخص اليوم من GPT';
 
   @override

@@ -11854,6 +11854,54 @@
   "getAppsInstructions": "امسح الرمز أو افتح الرابط على الجهاز الجديد (على نفس الشبكة) للتنزيل.",
   "getAppsCopyLink": "نسخ الرابط",
   "getAppsLinkCopied": "تم نسخ الرابط",
+  "appUpdatePromptTitle": "تحديث جديد جاهز",
+  "@appUpdatePromptTitle": {
+    "description": "Title of the dialog that offers the app update the shop's backend now serves, shown right after the backend is updated."
+  },
+  "appUpdatePromptMessage": "تم تحديث النظام في المتجر، وإصدار أحدث من التطبيق جاهز لهذا الجهاز.",
+  "appUpdatePromptNewVersionLabel": "الإصدار الجديد",
+  "appUpdatePromptDownloadSize": "حجم التنزيل: {megabytes} ميجابايت",
+  "@appUpdatePromptDownloadSize": {
+    "placeholders": {
+      "megabytes": {
+        "type": "String"
+      }
+    }
+  },
+  "appUpdatePromptLater": "لاحقاً",
+  "appUpdateProgressPercent": "{percent}٪",
+  "@appUpdateProgressPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "appUpdateProgressMegabytes": "{done} من {total} ميجابايت",
+  "@appUpdateProgressMegabytes": {
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "appUpdateProgressStarting": "جارٍ بدء التنزيل…",
+  "appUpdateProgressDownloading": "جارٍ تنزيل التحديث…",
+  "appUpdateProgressInstalling": "اكتمل التنزيل، جارٍ فتح المثبّت…",
+  "appUpdatePromptInstallHint": "لا تغلق التطبيق. بعد التنزيل يبدأ التثبيت، وقد يطلب منك الجهاز تأكيده.",
+  "appUpdateReminderTitle": "لا تنسَ التحديث",
+  "appUpdateReminderMessage": "يمكنك تثبيت الإصدار {version} في أي وقت من:",
+  "@appUpdateReminderMessage": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "appUpdateReminderDismiss": "حسناً",
   "aiDailyBriefLabel": "ملخص اليوم من GPT",
   "@aiDailyBriefLabel": {
     "description": "Small eyebrow label above the dashboard's AI daily-brief headline."

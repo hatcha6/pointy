@@ -196,6 +196,27 @@ Screens are reviewed without a backend through dev-only preview harnesses under
 (`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
 repositories, so there is no server, no login, and no shop data involved.
 
+## App updates after a backend update
+
+Every API response names the backend's release in `X-Pointy-Server-Version`. When
+a till sees that value change, which happens on the idle `/api/state/` poll within
+seconds of a remote update, or when someone signs in, it asks the LAN manifest
+(`/clients/manifest.json`) whether a newer build exists for its platform. If
+one does, a small dialog («تحديث جديد جاهز») opens over whichever screen is
+showing, with the running version and the new one. It waits while a sale is
+under way at the till.
+
+- «تحديث الآن» downloads the build with a live progress panel, then hands it to
+  the system installer.
+- «لاحقاً» turns the dialog into a reminder that the update lives in إعدادات
+  الجهاز ← تحديثات التطبيق. That build is not offered again on this device, but
+  the next build is.
+
+`install.sh` publishes the new installers a little after the new backend starts.
+For that reason, an empty answer is retried for about 15 minutes while the
+backend names a newer release than the app. Preview with
+`make frontend-app-update-preview` (`?screen=board|live`, `&theme=dark`).
+
 ## Product page
 
 `marketing/website/` is the دفتر product page: static HTML/CSS/JS, no build

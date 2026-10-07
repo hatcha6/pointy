@@ -11,6 +11,7 @@ import 'authenticated_home.dart';
 import 'core/analytics_interaction_tracker.dart';
 import 'data/models/analytics_event.dart';
 import 'data/services/pos_api_service.dart';
+import 'features/app_updates/views/app_update_prompt_host.dart';
 import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
 import 'features/treasury/view_models/bank_routing.dart';
@@ -281,7 +282,21 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                             ),
                           ),
                         ),
-                        child: child ?? const SizedBox.shrink(),
+                        // Directly around the Navigator, so the update offer
+                        // can open over whichever route is showing.
+                        child: AppUpdatePromptHost(
+                          prompter: _dependencies.appUpdatePrompter,
+                          navigatorKey: _navigatorKey,
+                          canPrompt: _canOfferAppUpdate,
+                          promptConditions: _appUpdatePromptConditions,
+                          install: (release, onProgress) => _dependencies
+                              .clientUpdateService
+                              .downloadAndInstall(
+                                release,
+                                onProgress: onProgress,
+                              ),
+                          child: child ?? const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   ),
@@ -307,6 +322,22 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
               ),
             ),
     );
+  }
+
+  /// What the update offer waits on: a signed-in person to answer it, not a
+  /// price-checker kiosk nobody stands at, and no sale under way at the till.
+  late final Listenable _appUpdatePromptConditions = Listenable.merge([
+    _dependencies.authViewModel,
+    _dependencies.priceCheckerModeController,
+    _dependencies.posViewModel,
+  ]);
+
+  bool _canOfferAppUpdate() {
+    final pos = _dependencies.posViewModel;
+    return _dependencies.authViewModel.status == AuthStatus.authenticated &&
+        !_dependencies.priceCheckerModeController.enabled &&
+        pos.cart.isEmpty &&
+        !pos.isCheckingOut;
   }
 
   TrackingFeatures _trackingFeatures() {
