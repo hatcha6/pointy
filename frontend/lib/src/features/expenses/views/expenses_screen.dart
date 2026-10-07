@@ -20,7 +20,6 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payments/bank_account_picker.dart';
-import '../../../shared/payments/bank_account_row.dart';
 import '../../../shared/query_controls/query_empty_state.dart';
 import '../../treasury/view_models/bank_routing.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -28,6 +27,7 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/expense_categories_view_model.dart';
 import '../view_models/expenses_view_model.dart';
 import 'expense_categories_page.dart';
+import 'expense_ledger_tile.dart';
 
 /// The unified expenses screen: a month-bounded ledger of every kind of money
 /// leaving the shop, with source filters and inline recording/editing of
@@ -41,6 +41,10 @@ class ExpensesScreen extends StatefulWidget {
     required this.navigation,
     required this.integrationsViewModel,
     this.integrationProviders = const [],
+    this.onOpenRegisterSession,
+    this.onOpenPurchaseOrder,
+    this.onOpenPayrollRun,
+    this.onOpenRecorder,
   });
 
   final ExpensesViewModel viewModel;
@@ -56,6 +60,15 @@ class ExpensesScreen extends StatefulWidget {
 
   /// Connected providers, by backend key. Empty draws no action.
   final List<String> integrationProviders;
+
+  /// Where a line's own records open: the drawer session the cash left, the
+  /// purchase order, the payroll run, the person who recorded it. Null for a
+  /// user who may not open that screen — the line then names it as plain text.
+  /// Each answers whether it opened; one that could not says so here.
+  final Future<bool> Function(int sessionId)? onOpenRegisterSession;
+  final Future<bool> Function(int orderId)? onOpenPurchaseOrder;
+  final Future<bool> Function(int runId)? onOpenPayrollRun;
+  final Future<bool> Function(int userId, String name)? onOpenRecorder;
 
   @override
   State<ExpensesScreen> createState() => _ExpensesScreenState();
@@ -254,17 +267,46 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           final entry = entries[index];
           return AdaptiveMaxWidth(
             width: AppContentWidth.list,
-            child: _LedgerEntryTile(
+            child: ExpenseLedgerTile(
               entry: entry,
               canManage: widget.capabilities.canManageExpenses,
               isBusy: viewModel.isMutating,
               onEdit: () => _editEntry(context, entry),
               onDelete: () => _confirmDelete(context, entry),
+              onOpenRegisterSession: _reporting(widget.onOpenRegisterSession),
+              onOpenPurchaseOrder: _reporting(widget.onOpenPurchaseOrder),
+              onOpenPayrollRun: _reporting(widget.onOpenPayrollRun),
+              onOpenRecorder: switch (widget.onOpenRecorder) {
+                final open? => (userId, name) => _reportIfUnopened(
+                  open(userId, name),
+                ),
+                null => null,
+              },
             ),
           );
         },
       ),
     );
+  }
+
+  ValueChanged<int>? _reporting(Future<bool> Function(int id)? open) {
+    if (open == null) {
+      return null;
+    }
+    return (id) => _reportIfUnopened(open(id));
+  }
+
+  /// A record that would not open — gone, or out of this user's reach after
+  /// all — is said so, rather than the tap doing nothing.
+  Future<void> _reportIfUnopened(Future<bool> opening) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final message = AppLocalizations.of(context)!.expenseOpenSourceError;
+    if (await opening) {
+      return;
+    }
+    messenger
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _editEntry(
@@ -469,167 +511,6 @@ class _SourceFilters extends StatelessWidget {
       ],
     );
   }
-}
-
-class _LedgerEntryTile extends StatelessWidget {
-  const _LedgerEntryTile({
-    required this.entry,
-    required this.canManage,
-    required this.isBusy,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final ExpenseLedgerEntry entry;
-  final bool canManage;
-  final bool isBusy;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final color = expenseSourceColor(context.pointyColors, entry.source);
-    final subtitleParts = <String>[
-      formatDate(entry.date),
-      if (entry.category != null && entry.category!.isNotEmpty) entry.category!,
-      if (entry.source == ExpenseLedgerSource.expense &&
-          entry.paymentMethod.isNotEmpty)
-        expensePaymentMethodLabel(l10n, entry.paymentMethod),
-    ];
-    final editable = canManage && entry.isEditable;
-
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 18,
-        backgroundColor: color.withValues(alpha: 0.16),
-        child: Icon(expenseSourceIcon(entry.source), size: 18, color: color),
-      ),
-      title: Text(
-        entry.description.isEmpty
-            ? expenseSourceLabel(l10n, entry.source)
-            : entry.description,
-      ),
-      subtitle: entry.bankAccount == null
-          ? Text(subtitleParts.join(' · '))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(subtitleParts.join(' · ')),
-                const SizedBox(height: 2),
-                // Which bank it left, with that bank's own mark. Only ever
-                // drawn when the row names one, so a shop with a single
-                // account sees the list it always saw.
-                BankAccountRow(
-                  account: entry.bankAccount!,
-                  compact: true,
-                  markSize: 16,
-                ),
-              ],
-            ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(formatMoney(entry.amount), style: theme.textTheme.titleMedium),
-          if (editable) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              tooltip: l10n.editButton,
-              onPressed: isBusy ? null : onEdit,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              tooltip: l10n.deleteButton,
-              onPressed: isBusy ? null : onDelete,
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ] else
-            _SourceBadge(
-              label: expenseSourceLabel(l10n, entry.source),
-              color: color,
-            ),
-        ],
-      ),
-      onTap: editable && !isBusy ? onEdit : null,
-    );
-  }
-}
-
-class _SourceBadge extends StatelessWidget {
-  const _SourceBadge({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(start: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(color: color),
-        ),
-      ),
-    );
-  }
-}
-
-// --- source presentation helpers --------------------------------------------
-
-String expenseSourceLabel(AppLocalizations l10n, ExpenseLedgerSource source) {
-  return switch (source) {
-    ExpenseLedgerSource.expense => l10n.expenseSourceAdHoc,
-    ExpenseLedgerSource.registerPayout => l10n.expenseSourceRegisterPayout,
-    ExpenseLedgerSource.purchase => l10n.expenseSourcePurchase,
-    ExpenseLedgerSource.payroll => l10n.expenseSourcePayroll,
-    ExpenseLedgerSource.commission => l10n.expenseSourceCommission,
-    ExpenseLedgerSource.unknown => l10n.expenseSourceOther,
-  };
-}
-
-IconData expenseSourceIcon(ExpenseLedgerSource source) {
-  return switch (source) {
-    ExpenseLedgerSource.expense => Icons.receipt_outlined,
-    ExpenseLedgerSource.registerPayout => Icons.point_of_sale_outlined,
-    ExpenseLedgerSource.purchase => Icons.local_shipping_outlined,
-    ExpenseLedgerSource.payroll => Icons.badge_outlined,
-    ExpenseLedgerSource.commission => Icons.credit_card_outlined,
-    ExpenseLedgerSource.unknown => Icons.payments_outlined,
-  };
-}
-
-Color expenseSourceColor(
-  PointySemanticColors colors,
-  ExpenseLedgerSource source,
-) {
-  // Distinct, palette-driven hues per ledger source so the badges read
-  // correctly in both light and dark mode (raw Material colors did not adapt).
-  return switch (source) {
-    ExpenseLedgerSource.expense => colors.primary,
-    ExpenseLedgerSource.registerPayout => colors.warning,
-    ExpenseLedgerSource.purchase => colors.accentAmber,
-    ExpenseLedgerSource.payroll => colors.success,
-    ExpenseLedgerSource.commission => colors.danger,
-    ExpenseLedgerSource.unknown => colors.mutedInk,
-  };
-}
-
-String expensePaymentMethodLabel(AppLocalizations l10n, String method) {
-  return switch (method) {
-    'cash' => l10n.expensePaymentCash,
-    'card' => l10n.expensePaymentCard,
-    'transfer' => l10n.expensePaymentTransfer,
-    _ => method,
-  };
 }
 
 class _ExpenseEditorDialog extends StatefulWidget {

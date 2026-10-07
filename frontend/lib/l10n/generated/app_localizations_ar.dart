@@ -15139,6 +15139,35 @@ class AppLocalizationsAr extends AppLocalizations {
   String get expensePaymentMethodLabel => 'طريقة الدفع';
 
   @override
+  String expenseRecordedByLine(String name, String when) {
+    return 'بواسطة $name — $when';
+  }
+
+  @override
+  String expenseRecordedByName(String name) {
+    return 'بواسطة $name';
+  }
+
+  @override
+  String expenseRecordedAtLine(String when) {
+    return 'سُجّل $when';
+  }
+
+  @override
+  String expenseLinkRegisterSession(String number) {
+    return 'جلسة الدرج $number';
+  }
+
+  @override
+  String get expenseOpenSourceError =>
+      'تعذر فتح السجل الذي جاء منه هذا المصروف.';
+
+  @override
+  String expenseLinkPayrollRun(String number) {
+    return 'مسير الرواتب $number';
+  }
+
+  @override
   String get expenseDateLabel => 'التاريخ';
 
   @override

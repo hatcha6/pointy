@@ -9782,6 +9782,29 @@
   "expenseDescriptionLabel": "الوصف",
   "expenseAmountLabel": "المبلغ",
   "expensePaymentMethodLabel": "طريقة الدفع",
+  "expenseRecordedByLine": "بواسطة {name} — {when}",
+  "@expenseRecordedByLine": {
+    "description": "Expenses ledger row: who recorded the money out and when (a time, or a date and time).",
+    "placeholders": {"name": {"type": "String"}, "when": {"type": "String"}}
+  },
+  "expenseRecordedByName": "بواسطة {name}",
+  "@expenseRecordedByName": {
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "expenseRecordedAtLine": "سُجّل {when}",
+  "@expenseRecordedAtLine": {
+    "placeholders": {"when": {"type": "String"}}
+  },
+  "expenseLinkRegisterSession": "جلسة الدرج {number}",
+  "@expenseLinkRegisterSession": {
+    "description": "Expenses ledger link to the drawer session the cash left, e.g. RS-12.",
+    "placeholders": {"number": {"type": "String"}}
+  },
+  "expenseOpenSourceError": "تعذر فتح السجل الذي جاء منه هذا المصروف.",
+  "expenseLinkPayrollRun": "مسير الرواتب {number}",
+  "@expenseLinkPayrollRun": {
+    "placeholders": {"number": {"type": "String"}}
+  },
   "expenseDateLabel": "التاريخ",
   "expenseReferenceLabel": "مرجع (اختياري)",
   "expenseNotesLabel": "ملاحظات (اختياري)",

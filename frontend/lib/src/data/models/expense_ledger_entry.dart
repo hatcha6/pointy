@@ -43,6 +43,12 @@ class ExpenseLedgerEntry {
     required this.reference,
     required this.relatedId,
     this.bankAccount,
+    this.recordedById,
+    this.recordedByName = '',
+    this.recordedAt,
+    this.registerSessionId,
+    this.registerSessionNumber = '',
+    this.documentNumber = '',
   });
 
   final ExpenseLedgerSource source;
@@ -59,8 +65,34 @@ class ExpenseLedgerEntry {
   /// of its own.
   final BankAccountRef? bankAccount;
 
+  /// Who put the money out: whoever recorded the expense or the pay-out,
+  /// opened the purchase order, or marked the payroll paid. Blank when the
+  /// source has nobody (the commission total) or the account is gone.
+  final int? recordedById;
+  final String recordedByName;
+
+  /// When it was recorded — the moment, not just the day. An expense dated
+  /// back to the day it was spent still shows when it was entered.
+  final DateTime? recordedAt;
+
+  /// The drawer shift the cash left, when it left one: a till pay-out, an
+  /// expense paid from the drawer, a cash purchase rung up at the counter.
+  final int? registerSessionId;
+  final String registerSessionNumber;
+
+  /// The source document's own number (a purchase order's, a payroll run's).
+  final String documentNumber;
+
   /// Only ad-hoc expense rows can be edited/deleted from the ledger.
   bool get isEditable => source == ExpenseLedgerSource.expense;
+
+  /// The purchase order this row is, when it is one.
+  int? get purchaseOrderId =>
+      source == ExpenseLedgerSource.purchase ? relatedId : null;
+
+  /// The payroll run this row is, when it is one.
+  int? get payrollRunId =>
+      source == ExpenseLedgerSource.payroll ? relatedId : null;
 
   factory ExpenseLedgerEntry.fromJson(Map<String, Object?> json) {
     return ExpenseLedgerEntry(
@@ -73,6 +105,14 @@ class ExpenseLedgerEntry {
       reference: json['reference']?.toString() ?? '',
       relatedId: (json['related_id'] as num?)?.toInt(),
       bankAccount: BankAccountRef.fromPaymentJson(json),
+      recordedById: (json['recorded_by'] as num?)?.toInt(),
+      recordedByName: json['recorded_by_name']?.toString().trim() ?? '',
+      recordedAt: DateTime.tryParse(
+        json['recorded_at']?.toString() ?? '',
+      )?.toLocal(),
+      registerSessionId: (json['register_session'] as num?)?.toInt(),
+      registerSessionNumber: json['register_session_number']?.toString() ?? '',
+      documentNumber: json['document_number']?.toString() ?? '',
     );
   }
 }

@@ -42,6 +42,7 @@ import 'data/repositories/surveillance_repository.dart';
 import 'features/cameras/view_models/camera_settings_view_model.dart';
 import 'features/cameras/view_models/camera_wall_view_model.dart';
 import 'data/models/camera.dart';
+import 'data/models/employee.dart' show PayrollRun;
 import 'features/cameras/view_models/camera_player_view_model.dart';
 import 'features/cameras/views/camera_player_screen.dart';
 import 'features/cameras/views/cameras_screen.dart';
@@ -50,6 +51,7 @@ import 'features/fraud/views/integrity_monitor_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/discounts/views/discount_management_screen.dart';
 import 'features/employees/views/employee_payroll_screen.dart';
+import 'features/employees/views/payroll_run_details_screen.dart';
 import 'features/expenses/view_models/expense_categories_view_model.dart';
 import 'features/expenses/view_models/expenses_view_model.dart';
 import 'features/expenses/views/expenses_screen.dart';
@@ -1067,6 +1069,24 @@ class _AuthenticatedRoutes implements AppNavigation {
         ),
         integrationProviders: dependencies.posViewModel.connectedIntegrations,
         navigation: this,
+        // A line opens the record it came from — for a user who may open it;
+        // for anyone else the line names it as plain text.
+        onOpenRegisterSession:
+            capabilities.allows(AppCapability.viewRegisterSessions)
+            ? (sessionId) async =>
+                  openRegisterSessionById(routeContext, sessionId)
+            : null,
+        onOpenPurchaseOrder: capabilities.allows(AppCapability.accessPurchasing)
+            ? (orderId) =>
+                  _openEntityDeepLink(routeContext, 'purchase-order', orderId)
+            : null,
+        onOpenPayrollRun: capabilities.allows(AppCapability.viewPayroll)
+            ? (runId) => _openEntityDeepLink(routeContext, 'payroll-run', runId)
+            : null,
+        onOpenRecorder: capabilities.allows(AppCapability.manageUsers)
+            ? (userId, name) =>
+                  openUserProfileById(routeContext, userId, displayName: name)
+            : null,
       ),
     );
   }
@@ -2532,6 +2552,23 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
+  /// A payroll run by itself — what an expenses line for a paid payroll opens.
+  /// The screen re-fetches the run's lines on open.
+  void _openPayrollRun(BuildContext context, PayrollRun run) {
+    push(
+      context,
+      (_) => _screen(
+        'payroll_run_details',
+        PayrollRunDetailsScreen(
+          viewModel: dependencies.employeePayrollViewModel,
+          attendanceViewModel: dependencies.attendanceViewModel,
+          capabilities: capabilities,
+          initialRun: run,
+        ),
+      ),
+    );
+  }
+
   void _openJobById(BuildContext context, int jobId) {
     push(
       context,
@@ -2627,6 +2664,13 @@ class _AuthenticatedRoutes implements AppNavigation {
           AppCapability.accessPurchasing,
           () => dependencies.purchaseRepository.loadPurchaseOrder(id),
           _openPurchaseOrder,
+        );
+      case 'payroll-run' || 'payroll':
+        return _loadThenOpen(
+          context,
+          AppCapability.viewPayroll,
+          () => dependencies.employeeRepository.loadPayrollRun(id),
+          _openPayrollRun,
         );
       case 'job':
         if (!capabilities.allows(AppCapability.viewOperations)) {

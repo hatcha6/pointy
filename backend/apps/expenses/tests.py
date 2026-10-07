@@ -2,9 +2,12 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -16,7 +19,12 @@ from apps.core.roles import (
 )
 from apps.employees.models import PayrollRun
 from apps.payments.models import Payment
-from apps.purchasing.models import PurchaseOrder, Supplier
+from apps.purchasing.models import (
+    PurchaseOrder,
+    PurchaseOrderAuditEvent,
+    Supplier,
+    SupplierPayment,
+)
 from apps.reports.models import ReportRun
 from apps.reports.services import generate_report_payload
 from apps.sales.models import Order, RegisterCashMovement, RegisterSession
@@ -242,6 +250,197 @@ class ExpenseLedgerTests(ExpensesTestMixin, TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         sources = {row["source"] for row in response.data["rows"]}
         self.assertEqual(sources, {"payroll"})
+
+
+class ExpenseLedgerAttributionTests(ExpensesTestMixin, TestCase):
+    """Every row says who put the money out, when, and what it came from — the
+    shift a drawer pay-out left, the order a purchase is — so the expenses
+    screen can name them and open them."""
+
+    def _rows(self):
+        response = self.manager_client.get(reverse("expense-ledger"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data["rows"]
+
+    def _only(self, source):
+        rows = [row for row in self._rows() if row["source"] == source]
+        self.assertEqual(len(rows), 1, rows)
+        return rows[0]
+
+    def test_a_drawer_paid_expense_names_its_recorder_time_and_shift(self):
+        self.manager.first_name = "سالم"
+        self.manager.last_name = "الورفلي"
+        self.manager.save()
+        session = self.open_session(self.manager)
+        expense = create_expense(
+            user=self.manager,
+            pay_from_register=True,
+            category=self.category,
+            description="كهرباء",
+            amount=Decimal("30.00"),
+            payment_method=Expense.PaymentMethod.CASH,
+        )
+
+        row = self._only("expense")
+
+        self.assertEqual(row["recorded_by"], self.manager.pk)
+        self.assertEqual(row["recorded_by_name"], "سالم الورفلي")
+        self.assertEqual(parse_datetime(row["recorded_at"]), expense.created_at)
+        self.assertEqual(row["register_session"], session.pk)
+        self.assertEqual(row["register_session_number"], session.session_number)
+
+    def test_an_expense_paid_by_bank_names_no_shift(self):
+        create_expense(
+            user=self.manager,
+            category=self.category,
+            description="إيجار",
+            amount=Decimal("900.00"),
+            payment_method=Expense.PaymentMethod.TRANSFER,
+        )
+
+        row = self._only("expense")
+
+        self.assertIsNone(row["register_session"])
+        self.assertEqual(row["register_session_number"], "")
+        self.assertEqual(row["recorded_by"], self.manager.pk)
+
+    def test_a_till_pay_out_names_the_cashier_and_the_shift(self):
+        session = self.open_session(self.cashier)
+        movement = RegisterCashMovement.objects.create(
+            register_session=session,
+            movement_type=RegisterCashMovement.MovementType.PAY_OUT,
+            amount=Decimal("15.00"),
+            reason="أكياس",
+            created_by=self.cashier,
+        )
+
+        row = self._only("register_payout")
+
+        # No full name on the account: the username stands in for it.
+        self.assertEqual(row["recorded_by_name"], "exp-cashier")
+        self.assertEqual(row["recorded_by"], self.cashier.pk)
+        self.assertEqual(parse_datetime(row["recorded_at"]), movement.created_at)
+        self.assertEqual(row["register_session"], session.pk)
+        # The movement stays the row's own id; the shift is beside it.
+        self.assertEqual(row["related_id"], movement.pk)
+
+    def test_a_purchase_names_who_opened_it_and_the_drawer_that_paid(self):
+        supplier = Supplier.objects.create(name="المورد")
+        order = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+            total=Decimal("200.00"),
+        )
+        PurchaseOrderAuditEvent.objects.create(
+            purchase_order=order,
+            order_number=order.order_number,
+            action=PurchaseOrderAuditEvent.Action.CREATED,
+            created_by=self.cashier,
+        )
+        session = self.open_session(self.cashier)
+        SupplierPayment.objects.create(
+            supplier=supplier,
+            purchase_order=order,
+            amount=Decimal("200.00"),
+            method=SupplierPayment.Method.CASH,
+            register_session=session,
+            created_by=self.cashier,
+        )
+
+        row = self._only("purchase")
+
+        self.assertEqual(row["related_id"], order.pk)
+        self.assertEqual(row["document_number"], order.order_number)
+        self.assertEqual(row["recorded_by"], self.cashier.pk)
+        self.assertEqual(row["register_session"], session.pk)
+
+    def test_a_purchase_without_an_audit_trail_falls_back_to_its_submitter(self):
+        supplier = Supplier.objects.create(name="المورد")
+        PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+            total=Decimal("80.00"),
+            submitted_by=self.manager,
+        )
+
+        row = self._only("purchase")
+
+        self.assertEqual(row["recorded_by"], self.manager.pk)
+        self.assertIsNone(row["register_session"])
+
+    def test_payroll_names_who_paid_it(self):
+        today = timezone.localdate()
+        paid_at = timezone.now()
+        run = PayrollRun.objects.create(
+            period_start=today.replace(day=1),
+            period_end=today,
+            status=PayrollRun.Status.PAID,
+            payment_date=today,
+            net_total=Decimal("500.00"),
+            paid_by=self.manager,
+            paid_at=paid_at,
+        )
+
+        row = self._only("payroll")
+
+        self.assertEqual(row["related_id"], run.pk)
+        self.assertEqual(row["recorded_by"], self.manager.pk)
+        self.assertEqual(parse_datetime(row["recorded_at"]), paid_at)
+        self.assertEqual(row["document_number"], run.run_number)
+
+    def test_naming_recorders_costs_no_query_per_row(self):
+        # A different recorder on every row: a page by one person hides an N+1.
+        User = get_user_model()
+        supplier = Supplier.objects.create(name="المورد")
+
+        def seed(count):
+            for _ in range(count):
+                person = User.objects.create_user(
+                    username=f"exp-person-{User.objects.count()}", password="pass"
+                )
+                session = self.open_session(person)
+                Expense.objects.create(
+                    category=self.category,
+                    description="قرطاسية",
+                    amount=Decimal("5.00"),
+                    created_by=person,
+                    register_session=session,
+                )
+                RegisterCashMovement.objects.create(
+                    register_session=session,
+                    movement_type=RegisterCashMovement.MovementType.PAY_OUT,
+                    amount=Decimal("2.00"),
+                    reason="نثرية",
+                    created_by=person,
+                )
+                order = PurchaseOrder.objects.create(
+                    supplier=supplier,
+                    status=PurchaseOrder.Status.SUBMITTED,
+                    total=Decimal("10.00"),
+                )
+                PurchaseOrderAuditEvent.objects.create(
+                    purchase_order=order,
+                    order_number=order.order_number,
+                    action=PurchaseOrderAuditEvent.Action.CREATED,
+                    created_by=person,
+                )
+                session.status = RegisterSession.Status.CLOSED
+                session.save(update_fields=["status"])
+
+        def queries():
+            with CaptureQueriesContext(connection) as captured:
+                self._rows()
+            return len(captured)
+
+        seed(1)
+        # The first request also loads the caller's permissions; only later
+        # requests compare like with like.
+        queries()
+        few = queries()
+        seed(4)
+        many = queries()
+
+        self.assertEqual(many, few)
 
 
 class ExpenseReportingTests(ExpensesTestMixin, TestCase):

@@ -25930,6 +25930,42 @@ abstract class AppLocalizations {
   /// **'طريقة الدفع'**
   String get expensePaymentMethodLabel;
 
+  /// Expenses ledger row: who recorded the money out and when (a time, or a date and time).
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name} — {when}'**
+  String expenseRecordedByLine(String name, String when);
+
+  /// No description provided for @expenseRecordedByName.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name}'**
+  String expenseRecordedByName(String name);
+
+  /// No description provided for @expenseRecordedAtLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّل {when}'**
+  String expenseRecordedAtLine(String when);
+
+  /// Expenses ledger link to the drawer session the cash left, e.g. RS-12.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة الدرج {number}'**
+  String expenseLinkRegisterSession(String number);
+
+  /// No description provided for @expenseOpenSourceError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر فتح السجل الذي جاء منه هذا المصروف.'**
+  String get expenseOpenSourceError;
+
+  /// No description provided for @expenseLinkPayrollRun.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسير الرواتب {number}'**
+  String expenseLinkPayrollRun(String number);
+
   /// No description provided for @expenseDateLabel.
   ///
   /// In ar, this message translates to:

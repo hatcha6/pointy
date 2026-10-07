@@ -11,7 +11,7 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import DecimalField, Sum, Value
+from django.db.models import DecimalField, Prefetch, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -264,7 +264,7 @@ def _expense_rows(start, end):
     queryset = (
         Expense.objects.live()
         .filter(spent_at__gte=start, spent_at__lte=end)
-        .select_related("category", "money_account")
+        .select_related("category", "money_account", "created_by")
     )
     return [
         _row(
@@ -277,6 +277,10 @@ def _expense_rows(start, end):
             reference=expense.reference,
             related_id=expense.pk,
             money_account=expense.money_account,
+            recorded_by=expense.created_by,
+            recorded_at=expense.created_at,
+            # Set when it was paid out of a drawer: the shift it left.
+            register_session_id=expense.register_session_id,
         )
         for expense in queryset
     ]
@@ -305,7 +309,7 @@ def _register_payout_rows(start_dt, end_dt):
         # it.
         employee_balance_entry__isnull=True,
         employee_loan__isnull=True,
-    )
+    ).select_related("created_by")
     return [
         _row(
             source=SOURCE_REGISTER_PAYOUT,
@@ -314,18 +318,45 @@ def _register_payout_rows(start_dt, end_dt):
             description=movement.reason,
             payment_method=Expense.PaymentMethod.CASH,
             related_id=movement.pk,
+            recorded_by=movement.created_by,
+            recorded_at=movement.created_at,
+            register_session_id=movement.register_session_id,
         )
         for movement in queryset
     ]
 
 
 def _purchase_rows(start_dt, end_dt):
-    from apps.purchasing.models import PurchaseOrder
+    from apps.purchasing.models import (
+        PurchaseOrder,
+        PurchaseOrderAuditEvent,
+        SupplierPayment,
+    )
 
     queryset = (
         PurchaseOrder.objects.exclude(status=PurchaseOrder.Status.CANCELLED)
         .filter(created_at__gte=start_dt, created_at__lt=end_dt)
-        .select_related("supplier")
+        .select_related("supplier", "submitted_by")
+        .prefetch_related(
+            # An order has no creator column; its "created" audit event names
+            # who opened it. One query for the whole period, not one per row.
+            Prefetch(
+                "audit_events",
+                queryset=PurchaseOrderAuditEvent.objects.filter(
+                    action=PurchaseOrderAuditEvent.Action.CREATED
+                ).select_related("created_by"),
+                to_attr="created_events",
+            ),
+            # A cash purchase rung up at the till was paid out of a drawer;
+            # its payment names the shift.
+            Prefetch(
+                "supplier_payments",
+                queryset=SupplierPayment.objects.filter(register_session__isnull=False).only(
+                    "id", "purchase_order_id", "register_session_id"
+                ),
+                to_attr="drawer_payments",
+            ),
+        )
     )
     return [
         _row(
@@ -335,9 +366,24 @@ def _purchase_rows(start_dt, end_dt):
             description=f"{order.supplier.name} · {order.order_number}",
             reference=order.supplier_invoice_number,
             related_id=order.pk,
+            recorded_by=_purchase_recorder(order),
+            recorded_at=order.created_at,
+            register_session_id=(
+                order.drawer_payments[0].register_session_id if order.drawer_payments else None
+            ),
+            document_number=order.order_number,
         )
         for order in queryset
     ]
+
+
+def _purchase_recorder(order):
+    """Who opened a purchase order: its "created" audit event, else whoever
+    submitted it (orders written before the audit trail kept no creator)."""
+    for event in order.created_events:
+        if event.created_by is not None:
+            return event.created_by
+    return order.submitted_by
 
 
 def _payroll_rows(start, end):
@@ -347,7 +393,7 @@ def _payroll_rows(start, end):
         status=PayrollRun.Status.PAID,
         payment_date__gte=start,
         payment_date__lte=end,
-    )
+    ).select_related("paid_by")
     return [
         _row(
             source=SOURCE_PAYROLL,
@@ -355,6 +401,10 @@ def _payroll_rows(start, end):
             amount=run.net_total,
             description=f"{run.period_start} → {run.period_end}",
             related_id=run.pk,
+            # The money left when the run was marked paid, by whoever did it.
+            recorded_by=run.paid_by,
+            recorded_at=run.paid_at,
+            document_number=run.run_number,
         )
         for run in queryset
     ]
@@ -412,6 +462,10 @@ def _row(
     reference="",
     related_id=None,
     money_account=None,
+    recorded_by=None,
+    recorded_at=None,
+    register_session_id=None,
+    document_number="",
 ):
     amount_value = _decimal_from(amount)
     return {
@@ -427,11 +481,22 @@ def _row(
         # rest rather than absent, so one row shape serves every source and the
         # client never has to ask which keys this row happens to carry.
         "money_account": money_account,
+        # Who put the money out and when, and the shift and document it came
+        # from — what an owner asks of a line they do not recognise, and what
+        # the screen opens when the line is tapped. Blank where a source has
+        # no such thing (the commission aggregate), on the same principle.
+        "recorded_by": recorded_by,
+        "recorded_at": recorded_at,
+        "register_session_id": register_session_id,
+        "document_number": document_number or "",
     }
 
 
 def _public_row(row):
     account = row.get("money_account")
+    recorder = row.get("recorded_by")
+    recorded_at = row.get("recorded_at")
+    session_id = row.get("register_session_id")
     return {
         "source": row["source"],
         "date": row["date"].isoformat(),
@@ -445,7 +510,23 @@ def _public_row(row):
         "money_account_name": account.name if account is not None else "",
         "money_account_bank_slug": account.bank_slug if account is not None else "",
         "money_account_bank_name": account.bank_name if account is not None else "",
+        "recorded_by": recorder.pk if recorder is not None else None,
+        "recorded_by_name": _person_name(recorder),
+        "recorded_at": recorded_at.isoformat() if recorded_at is not None else None,
+        "register_session": session_id,
+        # The number a shift goes by everywhere (``RegisterSession.session_number``),
+        # without loading the session for it.
+        "register_session_number": f"RS-{session_id}" if session_id is not None else "",
+        "document_number": row.get("document_number") or "",
     }
+
+
+def _person_name(user):
+    """A user as the shop knows them: full name, else username; blank for an
+    account since deleted (the row keeps its money, it loses the name)."""
+    if user is None:
+        return ""
+    return (user.get_full_name() or "").strip() or user.get_username()
 
 
 def _selected_sources(sources):
