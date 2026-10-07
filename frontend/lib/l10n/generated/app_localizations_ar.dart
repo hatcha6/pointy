@@ -15460,6 +15460,146 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get purchaseReceiveCaptureUnitsEdit => 'تعديل المعرّفات';
+
+  @override
+  String get purchaseReceiveCaptureLotsEdit => 'تعديل الدفعات';
+
+  @override
+  String purchaseReceiveDetailsCaptured(int described, int total) {
+    return 'الحالة: $described من $total';
+  }
+
+  @override
+  String purchaseReceiveEarliestExpiry(String date) {
+    return 'أقرب صلاحية $date';
+  }
+
+  @override
+  String get purchaseReceiveExpiryOnLots =>
+      'تُسجَّل الصلاحية لكل دفعة عند إدخال الدفعات.';
+
+  @override
+  String get purchaseLineLotsNoExpiryAtReceipt =>
+      'تُسجَّل أرقام الدفعات عند الاستلام.';
+
+  @override
+  String get purchaseLineSerialLotAtReceipt =>
+      'تُسجَّل الدفعة وتُمسح الأرقام التسلسلية عند الاستلام.';
+
+  @override
+  String get purchaseLineSerialLotExpiryAtReceipt =>
+      'تُسجَّل الدفعة وصلاحيتها وتُمسح الأرقام التسلسلية عند الاستلام.';
+
+  @override
+  String get productTileTrackingLots => 'دفعات';
+
+  @override
+  String unitCaptureLotBanner(String code) {
+    return 'الدفعة $code';
+  }
+
+  @override
+  String unitCaptureLotBannerExpiry(String code, String date) {
+    return 'الدفعة $code · تنتهي $date';
+  }
+
+  @override
+  String unitCaptureImeiChecksum(String code) {
+    return 'خانة التحقق في رقم IMEI $code غير صحيحة — غالبًا خطأ في المسح أو الكتابة. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.';
+  }
+
+  @override
+  String unitCaptureImeiLength(String code) {
+    return 'رقم IMEI $code يجب أن يكون 15 خانة. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.';
+  }
+
+  @override
+  String unitCaptureImeiNotNumeric(String code) {
+    return 'رقم IMEI $code يتكوّن من أرقام فقط. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.';
+  }
+
+  @override
+  String get unitCaptureDetailsButton => 'الحالة';
+
+  @override
+  String get unitCaptureDetailsAndPriceButton => 'الحالة والسعر';
+
+  @override
+  String get unitCapturePriceButton => 'السعر';
+
+  @override
+  String unitCaptureDeviceDetailsTitle(String code) {
+    return 'تفاصيل $code';
+  }
+
+  @override
+  String unitCaptureDetailsProgress(int described, int total) {
+    return 'الحالة مسجّلة لـ $described من $total';
+  }
+
+  @override
+  String get unitCaptureNotDescribed => 'لم تُسجَّل الحالة';
+
+  @override
+  String get unitCaptureMissingRequired => 'حقول إلزامية ناقصة';
+
+  @override
+  String unitCaptureRowPrice(String amount) {
+    return 'سعر البيع $amount';
+  }
+
+  @override
+  String get unitCaptureRemoveTooltip => 'إزالة';
+
+  @override
+  String get unitCaptureCostFieldLabel => 'التكلفة';
+
+  @override
+  String unitCaptureBlockedScanMore(int count) {
+    return 'متبقٍ $count للمسح قبل التأكيد.';
+  }
+
+  @override
+  String unitCaptureBlockedCostResidual(String amount) {
+    return 'وزّع المتبقي ($amount) على الأجهزة حتى يساوي مجموعها إجمالي السطر.';
+  }
+
+  @override
+  String unitCaptureBlockedRequired(int count) {
+    return 'أكمل الحقول الإلزامية في $count من الأجهزة.';
+  }
+
+  @override
+  String get unitDetailsPriceLabel => 'سعر البيع لهذا الجهاز';
+
+  @override
+  String unitDetailsPriceHelp(String price) {
+    return 'اتركه فارغًا ليُباع بسعر المنتج ($price).';
+  }
+
+  @override
+  String get unitDetailsPriceHelpNoProductPrice =>
+      'اتركه فارغًا ليُباع بسعر المنتج.';
+
+  @override
+  String get unitDetailsPriceInvalid => 'أدخل سعرًا صحيحًا لا يقل عن صفر.';
+
+  @override
+  String get batchCaptureExpiryRequired => 'تاريخ الصلاحية مطلوب';
+
+  @override
+  String get batchCaptureBlockedExpiry => 'أدخل تاريخ صلاحية كل دفعة.';
+
+  @override
+  String get batchCaptureBlockedCode => 'أدخل رقم كل دفعة.';
+
+  @override
+  String batchCaptureBlockedResidual(String captured, String expected) {
+    return 'مجموع كميات الدفعات $captured ويجب أن يساوي $expected.';
+  }
+
+  @override
   String get stockUnitsTitle => 'الأجهزة المسلسلة';
 
   @override
@@ -25230,6 +25370,207 @@ class AppLocalizationsAr extends AppLocalizations {
   String unitCaptureDetailsTitle(String code) {
     return 'حالة $code';
   }
+
+  @override
+  String get unitChecklistsTitle => 'قوائم فحص الأجهزة';
+
+  @override
+  String get unitChecklistsEntrySubtitle =>
+      'الحقول التي تُسجَّل لكل جهاز عند الاستلام: البطارية، الحالة، الملحقات…';
+
+  @override
+  String get unitChecklistsHint =>
+      'اختر نوع الجهاز لتعديل ما يُسأل عنه عند استلام كل قطعة منه.';
+
+  @override
+  String get unitChecklistsLoadError => 'تعذّر تحميل قوائم الفحص';
+
+  @override
+  String get unitChecklistsEmptyTitle => 'لا توجد أنواع أجهزة مفعّلة';
+
+  @override
+  String get unitChecklistsEmptyBody =>
+      'أضف أنواع الأجهزة أو فعّلها من إعدادات العمليات والمهام، ثم عُد لتحديد ما يُفحص في كل نوع.';
+
+  @override
+  String unitChecklistFieldCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حقل',
+      many: '$count حقلًا',
+      few: '$count حقول',
+      two: 'حقلان',
+      one: 'حقل واحد',
+      zero: 'لا حقول بعد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String unitChecklistRequiredCount(int count) {
+    return '$count إلزامي';
+  }
+
+  @override
+  String unitChecklistScreenTitle(String kind) {
+    return 'قائمة فحص: $kind';
+  }
+
+  @override
+  String unitChecklistScreenHint(String kind) {
+    return 'تُسأل هذه الحقول بهذا الترتيب عند استلام جهاز من نوع «$kind». اسحب المقبض أو استخدم قائمة الحقل لتغيير الترتيب.';
+  }
+
+  @override
+  String get unitChecklistAddField => 'إضافة حقل';
+
+  @override
+  String get unitChecklistLoadError => 'تعذّر تحميل حقول الفحص';
+
+  @override
+  String get unitChecklistEmptyTitle => 'لا توجد حقول فحص لهذا النوع';
+
+  @override
+  String get unitChecklistEmptyBody =>
+      'أضف ما تريد تسجيله عن كل جهاز عند استلامه، مثل صحة البطارية أو اللون أو الملحقات.';
+
+  @override
+  String get unitChecklistSaved => 'تم حفظ الحقل';
+
+  @override
+  String get unitChecklistDeleted => 'تم حذف الحقل';
+
+  @override
+  String get unitChecklistReorderFailed =>
+      'تعذّر حفظ الترتيب الجديد، فأُعيد الترتيب السابق.';
+
+  @override
+  String unitChecklistDeleteTitle(String label) {
+    return 'حذف «$label»؟';
+  }
+
+  @override
+  String get unitChecklistDeleteBody =>
+      'لن يُسأل عن هذا الحقل عند استلام الأجهزة بعد الآن. القيم المسجّلة على الأجهزة الحالية تبقى محفوظة، لكنها لن تظهر.';
+
+  @override
+  String get unitChecklistReorderTooltip => 'اسحب لتغيير الترتيب';
+
+  @override
+  String get unitChecklistFieldActionsTooltip => 'خيارات الحقل';
+
+  @override
+  String get unitChecklistMoveUp => 'تحريك لأعلى';
+
+  @override
+  String get unitChecklistMoveDown => 'تحريك لأسفل';
+
+  @override
+  String get unitChecklistRequiredBadge => 'إلزامي';
+
+  @override
+  String unitChecklistMoreChoices(int count) {
+    return 'و$count أخرى';
+  }
+
+  @override
+  String unitChecklistAddFieldTitle(String kind) {
+    return 'حقل جديد — $kind';
+  }
+
+  @override
+  String unitChecklistEditFieldTitle(String label) {
+    return 'تعديل «$label»';
+  }
+
+  @override
+  String get unitChecklistLabelLabel => 'اسم الحقل';
+
+  @override
+  String get unitChecklistLabelHint => 'مثال: Face ID يعمل';
+
+  @override
+  String get unitChecklistLabelRequired => 'اكتب اسم الحقل.';
+
+  @override
+  String get unitChecklistTypeLabel => 'نوع الإجابة';
+
+  @override
+  String get unitChecklistTypeLocked =>
+      'لا يتغيّر النوع بعد الحفظ، لأن القيم المسجّلة على الأجهزة تحققت منه.';
+
+  @override
+  String get unitChecklistTypeText => 'نص';
+
+  @override
+  String get unitChecklistTypeNumber => 'رقم';
+
+  @override
+  String get unitChecklistTypePercent => 'نسبة مئوية';
+
+  @override
+  String get unitChecklistTypeMoney => 'مبلغ';
+
+  @override
+  String get unitChecklistTypeDate => 'تاريخ';
+
+  @override
+  String get unitChecklistTypeChoice => 'اختيار من قائمة';
+
+  @override
+  String get unitChecklistTypeBool => 'نعم/لا';
+
+  @override
+  String get unitChecklistSuffixLabel => 'الوحدة (اختياري)';
+
+  @override
+  String get unitChecklistSuffixHint => 'مثال: GB أو كم';
+
+  @override
+  String get unitChecklistChoicesLabel => 'الخيارات';
+
+  @override
+  String unitChecklistChoiceHint(int number) {
+    return 'الخيار $number';
+  }
+
+  @override
+  String get unitChecklistAddChoice => 'إضافة خيار';
+
+  @override
+  String get unitChecklistRemoveChoice => 'حذف الخيار';
+
+  @override
+  String unitChecklistChoicesLimit(int count) {
+    return 'الحد الأقصى $count خيارًا';
+  }
+
+  @override
+  String get unitChecklistChoicesRequired => 'أضف خيارًا واحدًا على الأقل.';
+
+  @override
+  String unitChecklistChoiceDuplicate(String label) {
+    return 'الخيار «$label» مكرر.';
+  }
+
+  @override
+  String get unitChecklistChoicesHelp =>
+      'تغيير اسم خيار لا يغيّر ما سُجّل به، وحذف خيار يُبقي قيمته على الأجهزة القديمة.';
+
+  @override
+  String get unitChecklistRequiredTitle => 'إلزامي عند الاستلام';
+
+  @override
+  String get unitChecklistRequiredSubtitle =>
+      'يُطلب إدخاله عند وصف كل جهاز في الاستلام وعند تعديل حالته.';
+
+  @override
+  String get unitChecklistPickerTitle => 'يظهر عند اختيار الجهاز في البيع';
+
+  @override
+  String get unitChecklistPickerSubtitle =>
+      'يساعد الكاشير على التمييز بين الأجهزة المتشابهة.';
 
   @override
   String get variantGtinLabel => 'رقم GTIN';

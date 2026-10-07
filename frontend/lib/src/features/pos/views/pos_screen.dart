@@ -15,6 +15,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../shared/tracking/unit_intake_permissions.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
@@ -240,6 +241,7 @@ class PosScreen extends StatelessWidget {
       catalogRepository: catalogRepository,
       purchaseRepository: purchaseRepository,
       shopSettingsRepository: shopSettingsRepository,
+      permissions: UnitIntakePermissions.of(capabilities),
     );
     if (submission == null) {
       return;

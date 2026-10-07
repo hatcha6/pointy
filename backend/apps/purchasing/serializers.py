@@ -294,11 +294,21 @@ class ReceiptUnitCaptureSerializer(serializers.Serializer):
         choices=[kind for kind, _label in IdentifierKind.CHOICES],
         required=False,
     )
+    # Neither may go below zero: a negative cost on one handset paid for an
+    # inflated one beside it while the line total still balanced.
     unit_cost = serializers.DecimalField(
-        max_digits=18, decimal_places=6, required=False, allow_null=True
+        max_digits=18,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        min_value=Decimal("0"),
     )
     list_price = serializers.DecimalField(
-        max_digits=10, decimal_places=2, required=False, allow_null=True
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal("0"),
     )
     attributes = serializers.DictField(required=False)
     #: The article's own warranty end date, when it arrives carrying one that
@@ -352,7 +362,11 @@ class ReceiptBatchCaptureSerializer(serializers.Serializer):
         max_length=120, required=False, allow_blank=True, trim_whitespace=True
     )
     unit_cost = serializers.DecimalField(
-        max_digits=18, decimal_places=6, required=False, allow_null=True
+        max_digits=18,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        min_value=Decimal("0"),
     )
 
 
@@ -381,6 +395,11 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         source="variant.product.tracking_mode",
         read_only=True,
     )
+    # What sort of number the line's articles answer to — ``imei``, ``vin``,
+    # ``serial`` … — so the scan loop can check an IMEI's Luhn digit while the
+    # box is still open, instead of the warranty claim finding the typo. Blank
+    # for goods that are not identified one by one.
+    identifier_kind = serializers.SerializerMethodField()
     # What kind of article the line's goods are, so the capture sheet can draw
     # that kind's condition checklist beside each scanned identifier (§6.2).
     asset_type = serializers.IntegerField(
@@ -482,6 +501,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "variant_name",
             "tracks_expiry",
             "tracking_mode",
+            "identifier_kind",
             "asset_type",
             "quantity",
             "unit",
@@ -552,6 +572,11 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "over_received_quantity",
             "line_total",
         )
+
+    def get_identifier_kind(self, line):
+        if not tracking.tracks_units(tracking.mode_of(line.variant)):
+            return ""
+        return tracking.identifier_kind_for(line.variant)
 
     def get_previous_unit_cost(self, line):
         previous_cost = self._previous_unit_cost(line)
@@ -720,22 +745,11 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
                     )
                 }
             )
-        expiry_date = attrs.get(
-            "expiry_date",
-            getattr(self.instance, "expiry_date", None),
-        )
-        # ``expiry_required``, not ``tracks_expiry``: since §18.4 folded the
-        # latter into ``tracking_mode`` it means "this has lots", and a lot is
-        # not a promise that the goods go off. A paint batch and a run of phone
-        # cases are lot-tracked for provenance and have no expiry to type.
-        if variant.product.expiry_required and expiry_date is None:
-            raise serializers.ValidationError(
-                {
-                    "expiry_date": (
-                        "Expiry date is required for products that track expiry."
-                    )
-                }
-            )
+        # No expiry date is asked of an order line. Dates belong to lots, and a
+        # lot is only known when the boxes arrive: a delivery of two lots has
+        # two dates, which no single date typed at ordering can be. Receiving
+        # demands one per lot where the product's ``expiry_required`` says so
+        # (see ``receipt_line_expiry``); the line's own date stays optional.
         attrs["variant"] = variant
         # Resolve the purchase unit + snapshot its base-conversion factor. The
         # factor only converts to base units when stock is touched at
@@ -2382,7 +2396,6 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
             accepted_quantity = line_data.get("accepted_quantity", 0)
             damaged_quantity = line_data.get("damaged_quantity", 0)
             cancelled_quantity = line_data.get("cancelled_quantity", 0)
-            expiry_date = line_data.get("expiry_date", line.expiry_date)
             if accepted_quantity + damaged_quantity + cancelled_quantity <= 0:
                 raise serializers.ValidationError(
                     {
@@ -2404,19 +2417,9 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                         )
                     }
                 )
-            if (
-                accepted_quantity > 0
-                and line.variant.product.expiry_required
-                and expiry_date is None
-            ):
-                raise serializers.ValidationError(
-                    {
-                        "expiry_date": (
-                            "Expiry date is required for received products that "
-                            "track expiry."
-                        )
-                    }
-                )
+            # Whether an expiry date is owed is decided per lot, inside the
+            # receipt (``services.receipt_line_expiry``): only there are the
+            # lots the delivery brought known.
             validated_lines.append(
                 {
                     "line": line,
@@ -2429,7 +2432,9 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                         - line.outstanding_quantity,
                         0,
                     ),
-                    "expiry_date": expiry_date,
+                    # Only what the client sent: the order's own date is a
+                    # fallback the receipt weighs below the lots' real ones.
+                    "expiry_date": line_data.get("expiry_date"),
                     "notes": line_data.get("notes", ""),
                     # The identifiers the receiver scanned. Validated above by
                     # the line serializer and then left behind here, so the

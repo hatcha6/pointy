@@ -19,6 +19,7 @@ class PointyProductCard extends StatelessWidget {
     required this.fallbackText,
     this.sku,
     this.status,
+    this.marker,
     this.stockLabel,
     this.onTap,
     this.enabled = true,
@@ -31,6 +32,11 @@ class PointyProductCard extends StatelessWidget {
   final String fallbackText;
   final String? sku;
   final Widget? status;
+
+  /// A fact about how the product is handled — "scanned one by one", "kept
+  /// in lots" — drawn on the image's lower corner, where it never competes
+  /// with the status flag or the cart badge above.
+  final Widget? marker;
 
   /// Secondary information shown in place of the price when [priceLabel] is
   /// empty (used by purchasing to surface stock instead of a sale price).
@@ -131,6 +137,16 @@ class PointyProductCard extends StatelessWidget {
                                 end: 8,
                                 child: PointyCartQuantityBadge(
                                   quantity: cartQuantity,
+                                ),
+                              ),
+                            if (marker != null)
+                              PositionedDirectional(
+                                bottom: 6,
+                                start: 6,
+                                end: 6,
+                                child: Align(
+                                  alignment: AlignmentDirectional.bottomStart,
+                                  child: _ProductCardBadge(child: marker!),
                                 ),
                               ),
                           ],

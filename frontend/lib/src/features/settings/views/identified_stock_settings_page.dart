@@ -6,10 +6,12 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/consignment.dart' show ConsignmentLiability;
 import '../../../data/models/identified_stock_settings.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/shop_settings_view_model.dart';
+import 'unit_checklists_screen.dart';
 
 /// Serials, lots and consignment, switched on and tuned in one place.
 ///
@@ -22,9 +24,17 @@ import '../view_models/shop_settings_view_model.dart';
 /// a page where half the controls save on touch and half on a button is a page
 /// where somebody leaves thinking a clause was saved.
 class IdentifiedStockSettingsPage extends StatefulWidget {
-  const IdentifiedStockSettingsPage({super.key, required this.viewModel});
+  const IdentifiedStockSettingsPage({
+    super.key,
+    required this.viewModel,
+    this.checklistRepository,
+  });
 
   final ShopSettingsViewModel viewModel;
+
+  /// Opens «قوائم فحص الأجهزة» from the serial section. Passed only to a user
+  /// who may edit the checklists; null hides the entry.
+  final TrackedStockRepository? checklistRepository;
 
   @override
   State<IdentifiedStockSettingsPage> createState() =>
@@ -112,6 +122,21 @@ class _IdentifiedStockSettingsPageState
   }
 
   bool get _isDirty => _current != _stored;
+
+  /// Shown once serials are switched on *and saved*: the checklists belong to
+  /// the receiving sheet, which an unsaved switch has not turned on yet.
+  bool get _showsChecklists =>
+      widget.checklistRepository != null &&
+      (_stored?.enableSerializedInventory ?? false);
+
+  Future<void> _openChecklists() {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            UnitChecklistsScreen(repository: widget.checklistRepository!),
+      ),
+    );
+  }
 
   void _edit(IdentifiedStockSettings Function(IdentifiedStockSettings) change) {
     final draft = _draft;
@@ -302,6 +327,14 @@ class _IdentifiedStockSettingsPageState
                     )
                   : null,
             ),
+            if (_showsChecklists)
+              PointySettingsTile(
+                key: const ValueKey('identified_stock_checklists_tile'),
+                icon: Icons.fact_check_outlined,
+                title: l10n.unitChecklistsTitle,
+                subtitle: l10n.unitChecklistsEntrySubtitle,
+                onTap: enabled ? _openChecklists : null,
+              ),
           ],
         ),
       ],

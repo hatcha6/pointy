@@ -261,6 +261,12 @@ enum AppCapability {
   manageStockUnitPhotos,
   changeStockUnitWarranty,
 
+  /// Designing the checklist itself — «قوائم فحص الأجهزة»: which facts each
+  /// kind of device records at intake
+  /// (`inventory.manage_unitattributedefinition`). The owner's, not the
+  /// counter's: a field added here is asked of every handset received after.
+  manageUnitAttributes,
+
   /// Stop-sale on a lot, and the safety broadcast that follows it. Its own
   /// capability rather than "can edit a lot": quarantining reaches every till
   /// in every branch in one write, and telling a hundred customers to stop
@@ -333,6 +339,7 @@ class AuthorizationCapabilities {
         AppCapability.editStockUnitAttributes,
         AppCapability.manageStockUnitPhotos,
         AppCapability.changeStockUnitWarranty,
+        AppCapability.manageUnitAttributes,
       });
     }
     if (!user.batchTrackingEnabled) {
@@ -550,6 +557,12 @@ class AuthorizationCapabilities {
         'inventory.change_stockunit_warranty',
       ])) {
         capabilities.add(AppCapability.changeStockUnitWarranty);
+      }
+      if (_hasAny(user, const [
+        'manage_unitattributedefinition',
+        'inventory.manage_unitattributedefinition',
+      ])) {
+        capabilities.add(AppCapability.manageUnitAttributes);
       }
       if (_hasAny(user, const [
         'apply_stockcount',
@@ -1597,6 +1610,8 @@ class AuthorizationCapabilities {
       allows(AppCapability.manageStockUnitPhotos);
   bool get canChangeStockUnitWarranty =>
       allows(AppCapability.changeStockUnitWarranty);
+  bool get canManageUnitAttributes =>
+      allows(AppCapability.manageUnitAttributes);
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
   bool get canCountStock => allows(AppCapability.countStock);
   bool get canApplyStockCount => allows(AppCapability.applyStockCount);

@@ -4,12 +4,16 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/receipt_capture.dart';
 import '../../../data/models/unit_attribute.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
-import '../../../shared/design/design.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/tracking/identifier_check.dart';
 import '../../../shared/tracking/unit_attribute_catalog.dart';
+import '../../../shared/tracking/unit_attribute_form.dart';
 import '../../../shared/tracking/unit_attribute_summary.dart';
 import '../../../shared/tracking/unit_details_sheet.dart';
+import 'unit_capture_parts.dart';
 
 /// The scan-and-fill loop: N identifiers for N articles, counted down.
 ///
@@ -38,9 +42,25 @@ Future<List<ReceiptUnitCapture>?> showUnitCaptureSheet(
   bool allowSplitCosts = true,
 
   /// The goods' kind. When set, each scanned row offers that kind's condition
-  /// checklist and its own warranty date (§6.2) — optional, so the scan loop
-  /// itself is never slowed by it.
+  /// checklist (§6.2), and any field the shop marked required must be filled
+  /// before the sheet confirms.
   int? assetTypeId,
+
+  /// What sort of number the articles carry (`imei`, …). An IMEI that fails
+  /// its check digit is questioned before it is added.
+  String identifierKind = '',
+
+  /// The lot every article joins (`serial_batch`), named above the scan field.
+  ReceiptBatchCapture? lot,
+
+  /// Whether this person may give each article its own selling price and its
+  /// own warranty date — the unit page's reprice and warranty permissions,
+  /// which the server asks again when the receipt posts.
+  bool canSetPrice = false,
+  bool canSetWarranty = false,
+
+  /// The product's own price, named under each article's price field.
+  double? productPrice,
 }) {
   return showModalBottomSheet<List<ReceiptUnitCapture>>(
     context: context,
@@ -56,6 +76,11 @@ Future<List<ReceiptUnitCapture>?> showUnitCaptureSheet(
         allowCaptureLater: allowCaptureLater,
         allowSplitCosts: allowSplitCosts,
         assetTypeId: assetTypeId,
+        identifierKind: identifierKind,
+        lot: lot,
+        canSetPrice: canSetPrice,
+        canSetWarranty: canSetWarranty,
+        productPrice: productPrice,
       );
     },
   );
@@ -69,7 +94,12 @@ class _UnitCaptureSheet extends StatefulWidget {
     required this.initial,
     required this.allowCaptureLater,
     required this.allowSplitCosts,
+    required this.identifierKind,
+    required this.canSetPrice,
+    required this.canSetWarranty,
     this.assetTypeId,
+    this.lot,
+    this.productPrice,
   });
 
   final String productLabel;
@@ -79,6 +109,11 @@ class _UnitCaptureSheet extends StatefulWidget {
   final bool allowCaptureLater;
   final bool allowSplitCosts;
   final int? assetTypeId;
+  final String identifierKind;
+  final ReceiptBatchCapture? lot;
+  final bool canSetPrice;
+  final bool canSetWarranty;
+  final double? productPrice;
 
   @override
   State<_UnitCaptureSheet> createState() => _UnitCaptureSheetState();
@@ -91,9 +126,23 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
   bool _splitCosts = false;
   String _error = '';
 
+  /// A doubtful number the receiver was warned about. The same number entered
+  /// again is taken as it is — the box in their hand may well say exactly that.
+  String _warning = '';
+  String? _warnedCode;
+
   /// The kind's checklist, once known. Null while there is nothing to offer.
   List<UnitAttributeDefinition>? _definitions;
   bool _askedForDefinitions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _captured = List<ReceiptUnitCapture>.from(widget.initial);
+    _splitCosts =
+        widget.allowSplitCosts &&
+        _captured.any((unit) => unit.unitCost != null);
+  }
 
   @override
   void didChangeDependencies() {
@@ -107,41 +156,6 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
     });
   }
 
-  bool get _offersDetails => _definitions != null;
-
-  Future<void> _editDetails(int index) async {
-    final l10n = AppLocalizations.of(context)!;
-    final row = _captured[index];
-    final draft = await showUnitDetailsSheet(
-      context,
-      title: l10n.unitCaptureDetailsTitle(row.code),
-      definitions: _definitions ?? const [],
-      attributes: row.attributes,
-      editAttributes: (_definitions ?? const []).isNotEmpty,
-      editWarranty: true,
-      warrantyOverride: row.warrantyOverrideExpiresOn,
-    );
-    if (draft == null || !mounted) return;
-    setState(() {
-      _captured = [..._captured];
-      _captured[index] = _captured[index].copyWith(
-        attributes: draft.attributes,
-        warrantyOverrideExpiresOn: draft.warrantyOverride,
-      );
-    });
-    // Straight back to scanning.
-    _inputFocus.requestFocus();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _captured = List<ReceiptUnitCapture>.from(widget.initial);
-    _splitCosts =
-        widget.allowSplitCosts &&
-        _captured.any((unit) => unit.unitCost != null);
-  }
-
   @override
   void dispose() {
     _input.dispose();
@@ -149,20 +163,46 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
     super.dispose();
   }
 
+  List<UnitAttributeDefinition> get _checklist => _definitions ?? const [];
+
+  bool get _offersChecklist => _checklist.isNotEmpty;
+
+  /// Something to record per article: its condition, or its own price.
+  bool get _offersDetails => _offersChecklist || widget.canSetPrice;
+
   int get _remaining => widget.expectedCount - _captured.length;
 
-  /// What is left to account for when the receiver is splitting the line's cost
-  /// across individual articles. Shown live, and it has to reach zero — used
-  /// goods have individual costs and a purchase line has one total, and letting
-  /// the two disagree is how a cost figure becomes a fiction.
+  /// What is left to account for when the receiver is splitting the line's
+  /// cost across individual articles. Every article not yet scanned — the ones
+  /// a capture-later receipt leaves owed — is booked at the line rate, exactly
+  /// as the server books it, so the residual has to reach zero either way.
   double get _costResidual {
-    final total = widget.lineUnitCost * widget.expectedCount;
-    final assigned = _captured.fold<double>(
+    return _captured.fold<double>(
       0,
-      (sum, unit) => sum + (unit.unitCost ?? 0),
+      (sum, unit) => sum + widget.lineUnitCost - (unit.unitCost ?? 0),
     );
-    return total - assigned;
   }
+
+  bool _missingRequired(ReceiptUnitCapture unit) {
+    if (!_checklist.any((definition) => definition.isRequired)) {
+      return false;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    return validateUnitAttributes(_checklist, unit.attributes, l10n).isNotEmpty;
+  }
+
+  UnitDetailsState _detailsState(ReceiptUnitCapture unit) {
+    if (!_offersChecklist) return UnitDetailsState.notOffered;
+    if (_missingRequired(unit)) return UnitDetailsState.missingRequired;
+    return unit.attributes.isEmpty
+        ? UnitDetailsState.missing
+        : UnitDetailsState.described;
+  }
+
+  int get _describedCount =>
+      _captured.where((unit) => unit.attributes.isNotEmpty).length;
+
+  int get _incompleteCount => _captured.where(_missingRequired).length;
 
   void _add() {
     final code = _input.text.trim();
@@ -172,13 +212,40 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
     }
     final normalized = _normalize(code);
     if (_captured.any((unit) => _normalize(unit.code) == normalized)) {
-      setState(() => _error = l10n.unitCaptureDuplicate(code));
+      setState(() {
+        _error = l10n.unitCaptureDuplicate(code);
+        _warning = '';
+      });
       _input.clear();
       return;
     }
     if (_remaining <= 0) {
-      setState(() => _error = l10n.unitCaptureTooMany(widget.expectedCount));
+      setState(() {
+        _error = l10n.unitCaptureTooMany(widget.expectedCount);
+        _warning = '';
+      });
       _input.clear();
+      return;
+    }
+    final problem = checkIdentifier(code, kind: widget.identifierKind);
+    if (problem != null && _warnedCode != normalized) {
+      // Kept in the field: re-scanning replaces it, Enter again accepts it.
+      setState(() {
+        _error = '';
+        _warnedCode = normalized;
+        _warning = switch (problem) {
+          IdentifierProblem.imeiChecksum => l10n.unitCaptureImeiChecksum(code),
+          IdentifierProblem.imeiLength => l10n.unitCaptureImeiLength(code),
+          IdentifierProblem.imeiNotNumeric => l10n.unitCaptureImeiNotNumeric(
+            code,
+          ),
+        };
+      });
+      _input.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _input.text.length,
+      );
+      _inputFocus.requestFocus();
       return;
     }
     setState(() {
@@ -186,10 +253,13 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
         ..._captured,
         ReceiptUnitCapture(
           code: code,
+          identifierKind: widget.identifierKind,
           unitCost: _splitCosts ? widget.lineUnitCost : null,
         ),
       ];
       _error = '';
+      _warning = '';
+      _warnedCode = null;
     });
     _input.clear();
     // Straight back to the field: the receiver's next action is always another
@@ -227,14 +297,72 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
     });
   }
 
-  bool get _canConfirm {
-    if (_captured.length != widget.expectedCount) {
-      return widget.allowCaptureLater;
+  Future<void> _editDetails(int index) async {
+    final l10n = AppLocalizations.of(context)!;
+    final row = _captured[index];
+    final draft = await showUnitDetailsSheet(
+      context,
+      title: l10n.unitCaptureDeviceDetailsTitle(row.code),
+      definitions: _checklist,
+      attributes: row.attributes,
+      editAttributes: _offersChecklist,
+      editWarranty: widget.canSetWarranty,
+      warrantyOverride: row.warrantyOverrideExpiresOn,
+      editListPrice: widget.canSetPrice,
+      listPrice: row.listPrice,
+      productPrice: widget.productPrice,
+    );
+    if (draft == null || !mounted) return;
+    setState(() {
+      _captured = [..._captured];
+      _captured[index] = _captured[index].copyWith(
+        attributes: draft.attributes,
+        warrantyOverrideExpiresOn: draft.warrantyOverride,
+        listPrice: widget.canSetPrice ? draft.listPrice : row.listPrice,
+      );
+    });
+    // Straight back to scanning.
+    _inputFocus.requestFocus();
+  }
+
+  /// Why confirming is not possible yet, in the receiver's terms — or empty.
+  String _blockedReason(AppLocalizations l10n) {
+    if (_remaining > 0 && !widget.allowCaptureLater) {
+      return l10n.unitCaptureBlockedScanMore(_remaining);
     }
-    if (!_splitCosts) {
-      return true;
+    if (_splitCosts && _costResidual.abs() >= 0.005) {
+      return l10n.unitCaptureBlockedCostResidual(formatMoney(_costResidual));
     }
-    return _costResidual.abs() < 0.005;
+    final incomplete = _incompleteCount;
+    if (incomplete > 0) {
+      return l10n.unitCaptureBlockedRequired(incomplete);
+    }
+    return '';
+  }
+
+  String _detailsLabel(AppLocalizations l10n) {
+    if (_offersChecklist && widget.canSetPrice) {
+      return l10n.unitCaptureDetailsAndPriceButton;
+    }
+    return _offersChecklist
+        ? l10n.unitCaptureDetailsButton
+        : l10n.unitCapturePriceButton;
+  }
+
+  String _rowSummary(ReceiptUnitCapture unit, AppLocalizations l10n) {
+    final warranty = unit.warrantyOverrideExpiresOn;
+    final price = unit.listPrice;
+    return [
+      // The price first — it is what a used handset is bought and sold on —
+      // and held together, so «د.ل» never wraps away from its amount.
+      if (price != null)
+        l10n.unitCaptureRowPrice(formatMoney(price).replaceAll(' ', '\u00A0')),
+      if (_offersChecklist)
+        UnitAttributeSummary.describe(
+          displayUnitAttributes(_checklist, unit.attributes, l10n),
+        ),
+      if (warranty != null) l10n.stockUnitWarrantyUntil(formatDate(warranty)),
+    ].where((part) => part.isNotEmpty).join(' · ');
   }
 
   @override
@@ -242,6 +370,9 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final blocked = _blockedReason(l10n);
+    final complete = _remaining == 0;
+    final lot = widget.lot;
 
     return SafeArea(
       child: Padding(
@@ -273,16 +404,30 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                     widget.expectedCount,
                   ),
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: _remaining == 0
-                        ? colors.primaryStrong
-                        : theme.hintColor,
+                    color: complete ? colors.primaryStrong : theme.hintColor,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            PointyProgressBar(
+              value: widget.expectedCount == 0
+                  ? 1
+                  : _captured.length / widget.expectedCount,
+              minHeight: 4,
+              color: colors.primaryStrong,
+              backgroundColor: colors.line,
+              borderRadius: BorderRadius.circular(4),
+            ),
             const SizedBox(height: 10),
+            if (lot != null && lot.code.trim().isNotEmpty) ...[
+              UnitCaptureLotBanner(lot: lot),
+              const SizedBox(height: 10),
+            ],
             ScanWedgeTarget(
               child: TextField(
+                key: const ValueKey('unit-capture-input'),
                 controller: _input,
                 focusNode: _inputFocus,
                 autofocus: true,
@@ -291,7 +436,21 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                   prefixIcon: const Icon(Icons.qr_code_2_outlined),
                   hintText: l10n.unitCaptureHint,
                   errorText: _error.isEmpty ? null : _error,
+                  helperText: _warning.isEmpty ? null : _warning,
+                  helperMaxLines: 3,
+                  helperStyle: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.warning,
+                  ),
                 ),
+                onChanged: (_) {
+                  if (_warning.isNotEmpty || _error.isNotEmpty) {
+                    setState(() {
+                      _warning = '';
+                      _error = '';
+                      _warnedCode = null;
+                    });
+                  }
+                },
                 onSubmitted: (_) => _add(),
               ),
             ),
@@ -319,6 +478,21 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                       )
                     : null,
               ),
+            if (_offersChecklist && _captured.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  l10n.unitCaptureDetailsProgress(
+                    _describedCount,
+                    _captured.length,
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _describedCount == _captured.length
+                        ? colors.primaryStrong
+                        : colors.mutedInk,
+                  ),
+                ),
+              ),
             const Divider(height: 12),
             Flexible(
               child: _captured.isEmpty
@@ -337,25 +511,23 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                       itemCount: _captured.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
-                        return _CapturedUnitRow(
+                        final unit = _captured[index];
+                        return CapturedUnitRow(
                           // Keyed by the identifier, not the row number. The
                           // cost box is an uncontrolled TextFormField seeded
                           // from initialValue, so with a positional key (or
                           // none) removing a row left the deleted unit's cost
                           // sitting over the one that shifted up.
-                          key: ValueKey(_captured[index].code),
+                          key: ValueKey(unit.code),
                           index: index,
-                          unit: _captured[index],
+                          unit: unit,
+                          summary: _rowSummary(unit, l10n),
+                          detailsState: _detailsState(unit),
                           showsCost: _splitCosts,
                           onRemove: () => _removeAt(index),
                           onCostChanged: (cost) => _setCost(index, cost),
-                          details: _offersDetails
-                              ? displayUnitAttributes(
-                                  _definitions!,
-                                  _captured[index].attributes,
-                                  l10n,
-                                )
-                              : const [],
+                          detailsLabel: _detailsLabel(l10n),
+                          detailsIsPriceOnly: !_offersChecklist,
                           onEditDetails: _offersDetails
                               ? () => _editDetails(index)
                               : null,
@@ -364,6 +536,25 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                     ),
             ),
             const SizedBox(height: 8),
+            if (blocked.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: colors.warning),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        blocked,
+                        key: const ValueKey('unit-capture-blocked'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.warning,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Row(
               children: [
                 Expanded(
@@ -375,7 +566,8 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: _canConfirm
+                    key: const ValueKey('unit-capture-confirm'),
+                    onPressed: blocked.isEmpty
                         ? () => Navigator.of(context).pop(_captured)
                         : null,
                     child: Text(
@@ -389,98 +581,6 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _CapturedUnitRow extends StatelessWidget {
-  const _CapturedUnitRow({
-    super.key,
-    required this.index,
-    required this.unit,
-    required this.showsCost,
-    required this.onRemove,
-    required this.onCostChanged,
-    this.details = const [],
-    this.onEditDetails,
-  });
-
-  final int index;
-  final ReceiptUnitCapture unit;
-  final bool showsCost;
-  final VoidCallback onRemove;
-  final ValueChanged<double?> onCostChanged;
-
-  /// What was recorded about this article so far, formatted for one line.
-  final List<UnitAttributeValue> details;
-
-  /// Null when the goods' kind records nothing.
-  final VoidCallback? onEditDetails;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colors = context.pointyColors;
-    final warranty = unit.warrantyOverrideExpiresOn;
-    final summary = [
-      UnitAttributeSummary.describe(details),
-      if (warranty != null) l10n.stockUnitWarrantyUntil(formatDate(warranty)),
-    ].where((part) => part.isNotEmpty).join(' · ');
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: const Icon(Icons.check_circle_outline, size: 18),
-      title: Text(
-        unit.code,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium,
-      ),
-      subtitle: summary.isEmpty
-          ? null
-          : Text(
-              summary,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.mutedInk,
-              ),
-            ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (onEditDetails != null)
-            IconButton(
-              key: ValueKey('unit-capture-details-${unit.code}'),
-              tooltip: l10n.unitCaptureDetailsTooltip,
-              icon: Icon(
-                unit.hasDetails ? Icons.fact_check : Icons.fact_check_outlined,
-                size: 20,
-                color: unit.hasDetails ? colors.primaryStrong : null,
-              ),
-              onPressed: onEditDetails,
-            ),
-          if (showsCost)
-            SizedBox(
-              width: 96,
-              child: TextFormField(
-                initialValue: unit.unitCost?.toStringAsFixed(2) ?? '',
-                textAlign: TextAlign.center,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(isDense: true),
-                onChanged: (value) =>
-                    onCostChanged(double.tryParse(value.trim())),
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: onRemove,
-          ),
-        ],
       ),
     );
   }

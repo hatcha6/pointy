@@ -1166,6 +1166,11 @@ def _default_kind(variant) -> str:
     return IdentifierKind.CUSTOM
 
 
+def identifier_kind_for(variant) -> str:
+    """The kind of number this variant's articles carry, for a client to check."""
+    return _default_kind(variant)
+
+
 def _refuse_duplicate_codes(unit_rows, *, variant=None):
     """A live duplicate is a structured conflict; a historical one is not.
 
@@ -1226,12 +1231,21 @@ def _refuse_unbalanced_lot_costs(batch_rows, *, rate, quantity):
     order.
     """
     declared = [row for row in batch_rows if row.get("unit_cost") is not None]
-    if not declared or len(declared) != len(batch_rows):
+    if not declared:
         return
+    # A lot that names no cost is booked at the line rate (``_plan_lot_receipt``
+    # does exactly that), so it counts at that rate here. Skipping the check
+    # whenever one row was left blank let a single declared lot carry any sum
+    # at all.
     total = sum(
         (
-            Decimal(row["unit_cost"]) * _q(row.get("quantity", quantity) or ZERO)
-            for row in declared
+            (
+                Decimal(row["unit_cost"])
+                if row.get("unit_cost") is not None
+                else Decimal(rate)
+            )
+            * _q(row.get("quantity", quantity) or ZERO)
+            for row in batch_rows
         ),
         ZERO,
     )
@@ -1257,9 +1271,17 @@ def _refuse_unbalanced_costs(unit_rows, *, count, rate, quantity):
     the line rate, so a shop that does not split pays nothing for this rule.
     """
     declared = [row for row in unit_rows if row.get("unit_cost") is not None]
-    if not declared or len(declared) != len(unit_rows) or len(unit_rows) != count:
+    if not declared:
         return
-    total = sum((Decimal(row["unit_cost"]) for row in declared), ZERO)
+    # Every article without a cost of its own — a row left blank, or one of the
+    # placeholders a capture-later receipt creates for the handsets nobody has
+    # scanned yet — is booked at the line rate, so it is counted at that rate.
+    # The check used to stand aside unless *every* row named a cost, which let
+    # one row carry ten times the line while the rest kept the line's rate.
+    undeclared = max(count - len(declared), 0)
+    total = sum((Decimal(row["unit_cost"]) for row in declared), ZERO) + (
+        Decimal(rate) * undeclared
+    )
     # Compared as money, not as a six-place rate. The receiver types dinars,
     # and the line's own total is dinars; a carton of twelve at 100.00 has a
     # base-unit rate of 8.333333, and 8.333333 × 12 is 99.999996 — so an honest

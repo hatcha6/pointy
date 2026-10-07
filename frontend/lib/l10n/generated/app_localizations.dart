@@ -26422,6 +26422,216 @@ abstract class AppLocalizations {
   /// **'الدفعات: {captured} من {expected}'**
   String purchaseReceiveLotsCaptured(String captured, String expected);
 
+  /// Button on a receiving line whose identifiers are already captured.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل المعرّفات'**
+  String get purchaseReceiveCaptureUnitsEdit;
+
+  /// Button on a receiving line whose lots are already captured.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الدفعات'**
+  String get purchaseReceiveCaptureLotsEdit;
+
+  /// How many captured articles on a receiving line have their condition recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة: {described} من {total}'**
+  String purchaseReceiveDetailsCaptured(int described, int total);
+
+  /// The first expiry date among a receiving line's captured lots.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقرب صلاحية {date}'**
+  String purchaseReceiveEarliestExpiry(String date);
+
+  /// Hint on a lot line: expiry dates are entered per lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل الصلاحية لكل دفعة عند إدخال الدفعات.'**
+  String get purchaseReceiveExpiryOnLots;
+
+  /// Hint on a lot-tracked purchase line whose lots do not expire.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل أرقام الدفعات عند الاستلام.'**
+  String get purchaseLineLotsNoExpiryAtReceipt;
+
+  /// Hint on a serial-in-lot purchase line.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل الدفعة وتُمسح الأرقام التسلسلية عند الاستلام.'**
+  String get purchaseLineSerialLotAtReceipt;
+
+  /// Hint on a serial-in-lot purchase line whose lot must carry an expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسجَّل الدفعة وصلاحيتها وتُمسح الأرقام التسلسلية عند الاستلام.'**
+  String get purchaseLineSerialLotExpiryAtReceipt;
+
+  /// Badge on a catalog tile for a lot-tracked product whose lots do not expire.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات'**
+  String get productTileTrackingLots;
+
+  /// Header of the scan loop naming the lot every scanned article joins.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة {code}'**
+  String unitCaptureLotBanner(String code);
+
+  /// Header of the scan loop naming the lot and its expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة {code} · تنتهي {date}'**
+  String unitCaptureLotBannerExpiry(String code, String date);
+
+  /// Warning: a 15-digit IMEI fails its Luhn check digit.
+  ///
+  /// In ar, this message translates to:
+  /// **'خانة التحقق في رقم IMEI {code} غير صحيحة — غالبًا خطأ في المسح أو الكتابة. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.'**
+  String unitCaptureImeiChecksum(String code);
+
+  /// Warning: an IMEI of the wrong length.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم IMEI {code} يجب أن يكون 15 خانة. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.'**
+  String unitCaptureImeiLength(String code);
+
+  /// Warning: an IMEI containing letters.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم IMEI {code} يتكوّن من أرقام فقط. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.'**
+  String unitCaptureImeiNotNumeric(String code);
+
+  /// Row button opening one article's condition checklist.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get unitCaptureDetailsButton;
+
+  /// Row button opening one article's condition checklist and selling price.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة والسعر'**
+  String get unitCaptureDetailsAndPriceButton;
+
+  /// Row button opening one article's selling price.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر'**
+  String get unitCapturePriceButton;
+
+  /// Title of one article's details form at intake.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل {code}'**
+  String unitCaptureDeviceDetailsTitle(String code);
+
+  /// How many scanned articles have their condition recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة مسجّلة لـ {described} من {total}'**
+  String unitCaptureDetailsProgress(int described, int total);
+
+  /// A scanned article whose condition is not recorded yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُسجَّل الحالة'**
+  String get unitCaptureNotDescribed;
+
+  /// A scanned article missing a required checklist field.
+  ///
+  /// In ar, this message translates to:
+  /// **'حقول إلزامية ناقصة'**
+  String get unitCaptureMissingRequired;
+
+  /// A scanned article's own selling price.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع {amount}'**
+  String unitCaptureRowPrice(String amount);
+
+  /// Tooltip of the button removing one scanned article.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة'**
+  String get unitCaptureRemoveTooltip;
+
+  /// Label of one article's cost when the line cost is split.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة'**
+  String get unitCaptureCostFieldLabel;
+
+  /// Why confirm is disabled: articles still to scan.
+  ///
+  /// In ar, this message translates to:
+  /// **'متبقٍ {count} للمسح قبل التأكيد.'**
+  String unitCaptureBlockedScanMore(int count);
+
+  /// Why confirm is disabled: split costs do not add up.
+  ///
+  /// In ar, this message translates to:
+  /// **'وزّع المتبقي ({amount}) على الأجهزة حتى يساوي مجموعها إجمالي السطر.'**
+  String unitCaptureBlockedCostResidual(String amount);
+
+  /// Why confirm is disabled: required checklist fields missing.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل الحقول الإلزامية في {count} من الأجهزة.'**
+  String unitCaptureBlockedRequired(int count);
+
+  /// Label of one article's own selling price.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع لهذا الجهاز'**
+  String get unitDetailsPriceLabel;
+
+  /// Helper under one article's selling price, naming the product price.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا ليُباع بسعر المنتج ({price}).'**
+  String unitDetailsPriceHelp(String price);
+
+  /// Helper under one article's selling price when the product price is unknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا ليُباع بسعر المنتج.'**
+  String get unitDetailsPriceHelpNoProductPrice;
+
+  /// Error: an article's selling price is not a valid amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل سعرًا صحيحًا لا يقل عن صفر.'**
+  String get unitDetailsPriceInvalid;
+
+  /// Error under a lot's expiry date when the product's lots must carry one.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الصلاحية مطلوب'**
+  String get batchCaptureExpiryRequired;
+
+  /// Why confirm is disabled: a lot is missing its expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل تاريخ صلاحية كل دفعة.'**
+  String get batchCaptureBlockedExpiry;
+
+  /// Why confirm is disabled: a lot is missing its code.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم كل دفعة.'**
+  String get batchCaptureBlockedCode;
+
+  /// Why confirm is disabled: lot quantities do not add up.
+  ///
+  /// In ar, this message translates to:
+  /// **'مجموع كميات الدفعات {captured} ويجب أن يساوي {expected}.'**
+  String batchCaptureBlockedResidual(String captured, String expected);
+
   /// Title of the identified-articles list.
   ///
   /// In ar, this message translates to:
@@ -42711,6 +42921,324 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حالة {code}'**
   String unitCaptureDetailsTitle(String code);
+
+  /// Settings: title of the per-device-kind condition checklist editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'قوائم فحص الأجهزة'**
+  String get unitChecklistsTitle;
+
+  /// Identified stock settings: subtitle of the tile opening the checklist editor.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحقول التي تُسجَّل لكل جهاز عند الاستلام: البطارية، الحالة، الملحقات…'**
+  String get unitChecklistsEntrySubtitle;
+
+  /// Checklist kinds screen: one-line explanation above the list of device kinds.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر نوع الجهاز لتعديل ما يُسأل عنه عند استلام كل قطعة منه.'**
+  String get unitChecklistsHint;
+
+  /// Checklist kinds screen: load failure title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل قوائم الفحص'**
+  String get unitChecklistsLoadError;
+
+  /// Checklist kinds screen: empty state title.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أنواع أجهزة مفعّلة'**
+  String get unitChecklistsEmptyTitle;
+
+  /// Checklist kinds screen: empty state explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف أنواع الأجهزة أو فعّلها من إعدادات العمليات والمهام، ثم عُد لتحديد ما يُفحص في كل نوع.'**
+  String get unitChecklistsEmptyBody;
+
+  /// Checklist kinds screen: how many fields a device kind's checklist has.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا حقول بعد} =1{حقل واحد} =2{حقلان} few{{count} حقول} many{{count} حقلًا} other{{count} حقل}}'**
+  String unitChecklistFieldCount(int count);
+
+  /// Checklist kinds screen: how many of a kind's fields are required at intake.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} إلزامي'**
+  String unitChecklistRequiredCount(int count);
+
+  /// Checklist screen: app bar title for one device kind.
+  ///
+  /// In ar, this message translates to:
+  /// **'قائمة فحص: {kind}'**
+  String unitChecklistScreenTitle(String kind);
+
+  /// Checklist screen: explanation above the ordered field list.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسأل هذه الحقول بهذا الترتيب عند استلام جهاز من نوع «{kind}». اسحب المقبض أو استخدم قائمة الحقل لتغيير الترتيب.'**
+  String unitChecklistScreenHint(String kind);
+
+  /// Checklist screen: primary button adding a field.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة حقل'**
+  String get unitChecklistAddField;
+
+  /// Checklist screen: load failure title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل حقول الفحص'**
+  String get unitChecklistLoadError;
+
+  /// Checklist screen: empty state title.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حقول فحص لهذا النوع'**
+  String get unitChecklistEmptyTitle;
+
+  /// Checklist screen: empty state explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف ما تريد تسجيله عن كل جهاز عند استلامه، مثل صحة البطارية أو اللون أو الملحقات.'**
+  String get unitChecklistEmptyBody;
+
+  /// Checklist screen: snackbar after a field is saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الحقل'**
+  String get unitChecklistSaved;
+
+  /// Checklist screen: snackbar after a field is deleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حذف الحقل'**
+  String get unitChecklistDeleted;
+
+  /// Checklist screen: snackbar when a reorder is refused and undone.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الترتيب الجديد، فأُعيد الترتيب السابق.'**
+  String get unitChecklistReorderFailed;
+
+  /// Checklist screen: delete confirmation title.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف «{label}»؟'**
+  String unitChecklistDeleteTitle(String label);
+
+  /// Checklist screen: delete confirmation explanation — recorded values are kept but hidden.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يُسأل عن هذا الحقل عند استلام الأجهزة بعد الآن. القيم المسجّلة على الأجهزة الحالية تبقى محفوظة، لكنها لن تظهر.'**
+  String get unitChecklistDeleteBody;
+
+  /// Checklist field row: drag handle tooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسحب لتغيير الترتيب'**
+  String get unitChecklistReorderTooltip;
+
+  /// Checklist field row: overflow menu tooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات الحقل'**
+  String get unitChecklistFieldActionsTooltip;
+
+  /// Checklist field row menu: move the field one place up.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحريك لأعلى'**
+  String get unitChecklistMoveUp;
+
+  /// Checklist field row menu: move the field one place down.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحريك لأسفل'**
+  String get unitChecklistMoveDown;
+
+  /// Checklist field row: badge on a field required at intake.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلزامي'**
+  String get unitChecklistRequiredBadge;
+
+  /// Checklist field row: how many more choices than the ones previewed.
+  ///
+  /// In ar, this message translates to:
+  /// **'و{count} أخرى'**
+  String unitChecklistMoreChoices(int count);
+
+  /// Checklist field editor: title when adding a field to a device kind.
+  ///
+  /// In ar, this message translates to:
+  /// **'حقل جديد — {kind}'**
+  String unitChecklistAddFieldTitle(String kind);
+
+  /// Checklist field editor: title when editing a field.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل «{label}»'**
+  String unitChecklistEditFieldTitle(String label);
+
+  /// Checklist field editor: field name input label.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الحقل'**
+  String get unitChecklistLabelLabel;
+
+  /// Checklist field editor: field name input hint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: Face ID يعمل'**
+  String get unitChecklistLabelHint;
+
+  /// Checklist field editor: error when the name is empty.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب اسم الحقل.'**
+  String get unitChecklistLabelRequired;
+
+  /// Checklist field editor: answer type dropdown label.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الإجابة'**
+  String get unitChecklistTypeLabel;
+
+  /// Checklist field editor: why the answer type cannot be changed when editing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يتغيّر النوع بعد الحفظ، لأن القيم المسجّلة على الأجهزة تحققت منه.'**
+  String get unitChecklistTypeLocked;
+
+  /// Checklist answer type: free text.
+  ///
+  /// In ar, this message translates to:
+  /// **'نص'**
+  String get unitChecklistTypeText;
+
+  /// Checklist answer type: number.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم'**
+  String get unitChecklistTypeNumber;
+
+  /// Checklist answer type: percentage.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة مئوية'**
+  String get unitChecklistTypePercent;
+
+  /// Checklist answer type: money amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ'**
+  String get unitChecklistTypeMoney;
+
+  /// Checklist answer type: date.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ'**
+  String get unitChecklistTypeDate;
+
+  /// Checklist answer type: pick one of a list.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار من قائمة'**
+  String get unitChecklistTypeChoice;
+
+  /// Checklist answer type: yes or no.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم/لا'**
+  String get unitChecklistTypeBool;
+
+  /// Checklist field editor: unit shown after a number, such as GB.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة (اختياري)'**
+  String get unitChecklistSuffixLabel;
+
+  /// Checklist field editor: unit input hint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: GB أو كم'**
+  String get unitChecklistSuffixHint;
+
+  /// Checklist field editor: heading of the choices list.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيارات'**
+  String get unitChecklistChoicesLabel;
+
+  /// Checklist field editor: placeholder of one choice row.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيار {number}'**
+  String unitChecklistChoiceHint(int number);
+
+  /// Checklist field editor: adds a choice row.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خيار'**
+  String get unitChecklistAddChoice;
+
+  /// Checklist field editor: removes a choice row.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الخيار'**
+  String get unitChecklistRemoveChoice;
+
+  /// Checklist field editor: shown instead of the add button at the choice limit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأقصى {count} خيارًا'**
+  String unitChecklistChoicesLimit(int count);
+
+  /// Checklist field editor: error when a choice field has no choices.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف خيارًا واحدًا على الأقل.'**
+  String get unitChecklistChoicesRequired;
+
+  /// Checklist field editor: error when two choices share a name.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيار «{label}» مكرر.'**
+  String unitChecklistChoiceDuplicate(String label);
+
+  /// Checklist field editor: what renaming or removing a choice does to recorded devices.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير اسم خيار لا يغيّر ما سُجّل به، وحذف خيار يُبقي قيمته على الأجهزة القديمة.'**
+  String get unitChecklistChoicesHelp;
+
+  /// Checklist field editor: required-at-intake switch.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلزامي عند الاستلام'**
+  String get unitChecklistRequiredTitle;
+
+  /// Checklist field editor: what the required switch does.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُطلب إدخاله عند وصف كل جهاز في الاستلام وعند تعديل حالته.'**
+  String get unitChecklistRequiredSubtitle;
+
+  /// Checklist field editor: show-in-sale-picker switch.
+  ///
+  /// In ar, this message translates to:
+  /// **'يظهر عند اختيار الجهاز في البيع'**
+  String get unitChecklistPickerTitle;
+
+  /// Checklist field editor: why the picker switch is useful.
+  ///
+  /// In ar, this message translates to:
+  /// **'يساعد الكاشير على التمييز بين الأجهزة المتشابهة.'**
+  String get unitChecklistPickerSubtitle;
 
   /// The GS1 trade item number field on a variant.
   ///

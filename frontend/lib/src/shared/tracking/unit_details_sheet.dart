@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../data/models/unit_attribute.dart';
 import '../components/components.dart';
 import '../design/design.dart';
+import '../formatters.dart';
 import '../responsive/responsive.dart';
 import 'unit_attribute_form.dart';
 
-/// What the details sheet hands back: the article's facts and, when it was
-/// asked for, its own warranty end date (null = the product's days).
+/// What the details sheet hands back: the article's facts and, when they were
+/// asked for, its own warranty end date and its own selling price (null = the
+/// product's warranty days / the product's price).
 class UnitDetailsDraft {
-  const UnitDetailsDraft({this.attributes = const {}, this.warrantyOverride});
+  const UnitDetailsDraft({
+    this.attributes = const {},
+    this.warrantyOverride,
+    this.listPrice,
+  });
 
   final Map<String, Object?> attributes;
   final DateTime? warrantyOverride;
+  final double? listPrice;
 }
 
 /// How a save went: nothing to say, or the server's refusal — per field where
@@ -39,9 +47,11 @@ typedef UnitDetailsSaver =
 /// Shared by the unit page (where [onSave] writes to the server and the sheet
 /// stays open on a refusal, showing it beside the field) and the capture sheet
 /// at intake (no [onSave]: the draft rides back to be sent with the receipt).
-/// The two halves are separately switchable because they are separately
+/// The halves are separately switchable because they are separately
 /// permitted — describing a handset is counter work, promising a customer a
-/// longer cover is not.
+/// longer cover is not, and neither is pricing it ([editListPrice] follows the
+/// unit page's reprice permission). Intake is the one caller that asks for the
+/// price: a used handset is priced as it is described, one at a time.
 Future<UnitDetailsDraft?> showUnitDetailsSheet(
   BuildContext context, {
   required String title,
@@ -50,6 +60,12 @@ Future<UnitDetailsDraft?> showUnitDetailsSheet(
   bool editAttributes = true,
   bool editWarranty = false,
   DateTime? warrantyOverride,
+  bool editListPrice = false,
+  double? listPrice,
+
+  /// The product's own price, named in the price field's hint so a blank
+  /// field reads as a decision rather than a gap.
+  double? productPrice,
   UnitDetailsSaver? onSave,
 }) {
   return showAdaptiveFormSurface<UnitDetailsDraft>(
@@ -61,6 +77,9 @@ Future<UnitDetailsDraft?> showUnitDetailsSheet(
       editAttributes: editAttributes,
       editWarranty: editWarranty,
       warrantyOverride: warrantyOverride,
+      editListPrice: editListPrice,
+      listPrice: listPrice,
+      productPrice: productPrice,
       onSave: onSave,
     ),
   );
@@ -74,6 +93,9 @@ class UnitDetailsForm extends StatefulWidget {
     required this.editAttributes,
     required this.editWarranty,
     this.warrantyOverride,
+    this.editListPrice = false,
+    this.listPrice,
+    this.productPrice,
     this.onSave,
   });
 
@@ -82,6 +104,9 @@ class UnitDetailsForm extends StatefulWidget {
   final bool editAttributes;
   final bool editWarranty;
   final DateTime? warrantyOverride;
+  final bool editListPrice;
+  final double? listPrice;
+  final double? productPrice;
   final UnitDetailsSaver? onSave;
 
   @override
@@ -93,15 +118,32 @@ class _UnitDetailsFormState extends State<UnitDetailsForm> {
     widget.attributes,
   );
   late DateTime? _warranty = widget.warrantyOverride;
+  late final TextEditingController _price = TextEditingController(
+    text: widget.listPrice?.toStringAsFixed(2) ?? '',
+  );
   Map<String, String> _errors = const {};
   String _message = '';
   bool _saving = false;
 
+  @override
+  void dispose() {
+    _price.dispose();
+    super.dispose();
+  }
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context)!;
-    final errors = widget.editAttributes
-        ? validateUnitAttributes(widget.definitions, _values, l10n)
-        : const <String, String>{};
+    final errors = <String, String>{
+      if (widget.editAttributes)
+        ...validateUnitAttributes(widget.definitions, _values, l10n),
+    };
+    final priceText = _price.text.trim();
+    final price = priceText.isEmpty ? null : double.tryParse(priceText);
+    if (widget.editListPrice &&
+        priceText.isNotEmpty &&
+        (price == null || price < 0)) {
+      errors['list_price'] = l10n.unitDetailsPriceInvalid;
+    }
     if (errors.isNotEmpty) {
       setState(() {
         _errors = errors;
@@ -112,6 +154,7 @@ class _UnitDetailsFormState extends State<UnitDetailsForm> {
     final draft = UnitDetailsDraft(
       attributes: _values,
       warrantyOverride: _warranty,
+      listPrice: widget.editListPrice ? price : widget.listPrice,
     );
     final save = widget.onSave;
     if (save == null) {
@@ -164,6 +207,19 @@ class _UnitDetailsFormState extends State<UnitDetailsForm> {
                   if (_message.isNotEmpty) ...[
                     PointyInlineMessage.error(message: _message, compact: true),
                     SizedBox(height: spacing.sm),
+                  ],
+                  if (widget.editListPrice) ...[
+                    _ListPriceField(
+                      controller: _price,
+                      productPrice: widget.productPrice,
+                      error: _errors['list_price'],
+                      enabled: !_saving,
+                    ),
+                    if (widget.editAttributes || widget.editWarranty) ...[
+                      SizedBox(height: spacing.md),
+                      const Divider(height: 1),
+                      SizedBox(height: spacing.md),
+                    ],
                   ],
                   if (widget.editAttributes)
                     if (widget.definitions.isEmpty)
@@ -228,6 +284,45 @@ class _UnitDetailsFormState extends State<UnitDetailsForm> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// This one article's selling price, typed as it is described. Blank sells it
+/// at the product's price, which the hint names.
+class _ListPriceField extends StatelessWidget {
+  const _ListPriceField({
+    required this.controller,
+    required this.productPrice,
+    required this.error,
+    required this.enabled,
+  });
+
+  final TextEditingController controller;
+  final double? productPrice;
+  final String? error;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final price = productPrice;
+    return TextField(
+      key: const ValueKey('unit-details-list-price'),
+      controller: controller,
+      enabled: enabled,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textDirection: TextDirection.ltr,
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+      decoration: InputDecoration(
+        labelText: l10n.unitDetailsPriceLabel,
+        prefixIcon: const Icon(Icons.sell_outlined),
+        helperText: price == null
+            ? l10n.unitDetailsPriceHelpNoProductPrice
+            : l10n.unitDetailsPriceHelp(formatMoney(price)),
+        helperMaxLines: 2,
+        errorText: error,
       ),
     );
   }

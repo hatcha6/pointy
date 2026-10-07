@@ -401,19 +401,15 @@ class PurchaseViewModel extends ChangeNotifier {
   double get landedCostTotal =>
       _landedCostEntries.fold(0, (sum, entry) => sum + entry.cost);
   double get total => _discountPreview?.total ?? subtotal + landedCostTotal;
-  bool get hasMissingExpiryDates => _draft.any(
-    (line) => line.variant.tracksExpiry && line.expiryDate == null,
-  );
   bool get canSubmitDraft =>
       _draft.isNotEmpty &&
       _selectedSupplier != null &&
       !hasInvalidSupplierInvoiceDate &&
-      !hasMissingExpiryDates &&
       !_isSubmitting;
 
-  /// Whether the edited draft can be saved. Unlike submitting, saving a draft
-  /// does not require expiry dates — those only become mandatory at submit time
-  /// (mirroring the backend, which only enforces them on submit).
+  /// Whether the edited draft can be saved. Expiry dates are asked of each
+  /// lot at receipt, never of an order line, so neither this nor submitting
+  /// waits on one.
   bool get canSaveDraft =>
       isEditing &&
       _draft.isNotEmpty &&
@@ -1138,22 +1134,6 @@ class PurchaseViewModel extends ChangeNotifier {
     return null;
   }
 
-  void updateLineExpiryDate(ProductVariant variant, DateTime? expiryDate) {
-    if (_isSubmitting) {
-      return;
-    }
-    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
-    if (index == -1) {
-      return;
-    }
-    _draft[index] = _draft[index].copyWith(
-      expiryDate: expiryDate,
-      clearExpiryDate: expiryDate == null,
-    );
-    _touchSubmissionIntent();
-    notifyListeners();
-  }
-
   void clearDraft({
     bool trackLineDeletes = true,
     String source = 'purchase_draft_clear_button',
@@ -1360,10 +1340,7 @@ class PurchaseViewModel extends ChangeNotifier {
     bool acknowledgeCostWarnings = false,
   }) async {
     final supplier = _selectedSupplier;
-    if (_draft.isEmpty ||
-        supplier == null ||
-        hasMissingExpiryDates ||
-        _isSubmitting) {
+    if (_draft.isEmpty || supplier == null || _isSubmitting) {
       return Error(Exception('purchase draft is not ready'));
     }
 

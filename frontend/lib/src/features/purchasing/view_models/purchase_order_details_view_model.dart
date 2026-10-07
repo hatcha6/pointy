@@ -42,6 +42,10 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   final PrintingRepository _printingRepository;
   final ShopSettingsRepository _shopSettingsRepository;
   final AuthorizationCapabilities _capabilities;
+
+  /// Who is reading the order — the receiving dialog asks it whether each
+  /// scanned article may be priced or given its own warranty here.
+  AuthorizationCapabilities get capabilities => _capabilities;
   late final PaymentProofPrinter _paymentProofPrinter = PaymentProofPrinter(
     printingRepository: _printingRepository,
     shopSettingsRepository: _shopSettingsRepository,

@@ -370,6 +370,7 @@ class PurchaseOrderLine {
     this.variantSku,
     this.tracksExpiry = false,
     this.trackingMode = TrackingMode.quantity,
+    this.identifierKind = '',
     this.assetTypeId,
     this.expiryDate,
     this.previousUnitCost,
@@ -393,6 +394,11 @@ class PurchaseOrderLine {
   /// How closely these goods are identified, so the receiving sheet knows
   /// whether to ask for serials, lots, both, or neither.
   final TrackingMode trackingMode;
+
+  /// What sort of number each article answers to — `imei`, `vin`, `serial` —
+  /// so the scan loop can check an IMEI's Luhn digit. Blank for goods that
+  /// are not identified one by one.
+  final String identifierKind;
 
   /// What kind of article the goods are, so the capture sheet can offer that
   /// kind's condition checklist beside each scanned identifier.
@@ -509,6 +515,7 @@ class PurchaseOrderLine {
       variantSku: json['variant_sku']?.toString(),
       tracksExpiry: _boolFromJson(json['tracks_expiry']),
       trackingMode: TrackingMode.fromWire(json['tracking_mode']),
+      identifierKind: json['identifier_kind']?.toString() ?? '',
       assetTypeId: switch (json['asset_type']) {
         final num id => id.toInt(),
         _ => null,
@@ -585,6 +592,7 @@ class PurchaseOrderLine {
       variantSku: variantSku,
       tracksExpiry: tracksExpiry,
       trackingMode: trackingMode,
+      identifierKind: identifierKind,
       assetTypeId: assetTypeId,
       expiryDate: expiryDate,
       quantity: quantity,

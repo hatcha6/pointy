@@ -8,9 +8,17 @@ ledger disagrees with.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
+from itertools import count
 
+from django.db import IntegrityError, transaction
+from django.db.models import Max
+from django.db.models.fields.json import KeyTextTransform
+from django.utils.text import slugify
 from rest_framework import serializers
+
+from apps.customers.models import AssetType
 
 from . import consignment as figures
 from .models import (
@@ -649,8 +657,159 @@ class ConsignorStatementLineSerializer(serializers.ModelSerializer):
         }
 
 
+#: How many facts one kind of article may record. An intake sheet longer than
+#: this is a form nobody fills in at a counter — and it keeps one kind's whole
+#: checklist inside a single page of the list endpoint.
+MAX_DEFINITIONS_PER_TYPE = 40
+MAX_CHOICES = 30
+MAX_CHOICE_LABEL = 60
+#: Keys and choice values are written into ``StockUnit.attributes`` and read
+#: back by Postgres key operators, so they stay plain ASCII identifiers.
+_IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9_]{0,47}$")
+_DataType = UnitAttributeDefinition.DataType
+_NUMERIC_TYPES = {_DataType.NUMBER, _DataType.PERCENT, _DataType.MONEY}
+
+_KEY_TAKEN = "يوجد حقل بهذا المفتاح لهذا النوع من الأجهزة."
+_IDENTIFIER_FORMAT = "يقبل حروفًا إنجليزية صغيرة وأرقامًا و _ فقط."
+_FIXED_ON_UPDATE = {
+    "asset_type": "لا يمكن نقل الحقل إلى نوع جهاز آخر.",
+    "key": "لا يمكن تغيير مفتاح الحقل بعد إنشائه؛ القيم المسجلة محفوظة به.",
+    "data_type": (
+        "لا يمكن تغيير نوع الحقل بعد إنشائه؛ القيم المسجلة على الأجهزة "
+        "تحققت منه. احذف الحقل وأنشئ غيره."
+    ),
+}
+
+
+def _free_identifier(label, *, prefix, is_taken, start=1):
+    """An ASCII identifier for ``label`` that ``is_taken`` does not refuse.
+
+    An English label reads as itself (``Face ID`` → ``face_id``); an Arabic
+    one slugifies to nothing and falls back to ``<prefix>_<n>``.
+    """
+    base = slugify(label or "").replace("-", "_").strip("_")[:40]
+    if base:
+        candidates = (base, *(f"{base}_{n}" for n in range(2, 1000)))
+    else:
+        candidates = (f"{prefix}_{n}" for n in count(start))
+    for candidate in candidates:
+        if not is_taken(candidate):
+            return candidate
+    raise serializers.ValidationError({"key": [_KEY_TAKEN]})
+
+
+def _units_of_type(asset_type_id):
+    return StockUnit.objects.filter(variant__product__asset_type_id=asset_type_id)
+
+
+def _recorded_values(definition) -> set[str]:
+    """Every value a unit has recorded under ``definition``'s key."""
+    if definition is None:
+        return set()
+    rows = (
+        _units_of_type(definition.asset_type_id)
+        .filter(attributes__has_key=definition.key)
+        .annotate(recorded=KeyTextTransform(definition.key, "attributes"))
+        .values_list("recorded", flat=True)
+        .distinct()
+    )
+    return {str(value) for value in rows if value not in (None, "")}
+
+
+def _clean_choices(raw, *, existing=(), recorded=frozenset()):
+    """``[{"value", "label"}]`` checked, trimmed, and every value filled in.
+
+    A value the definition already had is kept as written — units recorded it,
+    and only the label is free to change. A new choice without one gets an
+    identifier no current choice, removed choice or recorded unit uses, so a
+    new option can never inherit an old one's answers.
+    """
+
+    def refuse(message):
+        raise serializers.ValidationError({"choices": [message]})
+
+    if raw is None or raw == []:
+        refuse("أضف خيارًا واحدًا على الأقل لحقل الاختيار من قائمة.")
+    if not isinstance(raw, list):
+        refuse("الخيارات قائمة من عناصر {value, label}.")
+    if len(raw) > MAX_CHOICES:
+        refuse(f"لا يزيد عدد الخيارات على {MAX_CHOICES}.")
+    existing_values = {
+        str(choice.get("value"))
+        for choice in existing or []
+        if isinstance(choice, dict) and choice.get("value") not in (None, "")
+    }
+    cleaned, labels, values = [], set(), set()
+    for index, item in enumerate(raw, start=1):
+        if not isinstance(item, dict):
+            refuse(f"الخيار {index}: صيغة غير صالحة.")
+        unknown = set(item) - {"value", "label"}
+        if unknown:
+            refuse(f"الخيار {index}: مفاتيح غير معروفة ({', '.join(sorted(unknown))}).")
+        label, value = item.get("label"), item.get("value")
+        if not isinstance(label, str) or not isinstance(value, (str, type(None))):
+            refuse(f"الخيار {index}: الاسم والقيمة نص.")
+        label, value = label.strip(), (value or "").strip()
+        if not label:
+            refuse(f"الخيار {index}: الاسم مطلوب.")
+        if len(label) > MAX_CHOICE_LABEL:
+            refuse(f"الخيار {index}: الاسم لا يتجاوز {MAX_CHOICE_LABEL} حرفًا.")
+        if label in labels:
+            refuse(f"الخيار «{label}» مكرر.")
+        labels.add(label)
+        if value:
+            if value not in existing_values and not _IDENTIFIER.match(value):
+                refuse(f"الخيار {index}: القيمة {_IDENTIFIER_FORMAT}")
+            if value in values:
+                refuse(f"الخيار {index}: القيمة مكررة.")
+            values.add(value)
+        cleaned.append({"value": value, "label": label})
+    taken = values | existing_values | set(recorded)
+    for choice in cleaned:
+        if not choice["value"]:
+            choice["value"] = _free_identifier(
+                choice["label"], prefix="opt", is_taken=taken.__contains__
+            )
+            taken.add(choice["value"])
+    return cleaned
+
+
 class UnitAttributeDefinitionSerializer(serializers.ModelSerializer):
-    """One typed fact a kind of article records — the attribute editor's row."""
+    """One typed fact a kind of article records — the checklist editor's row.
+
+    Three things are fixed once written, each because recorded values depend on
+    it: the ``key`` (``StockUnit.attributes`` is keyed by it), the
+    ``asset_type`` (whose units carry that key) and the ``data_type`` (every
+    recorded value was coerced against it). A choice keeps its ``value`` across
+    renames for the same reason; only its label is free.
+
+    Deleting a definition is allowed and loses nothing: the values stay in the
+    units' JSON and simply stop being shown (``attribute_display`` only renders
+    what a definition still describes). A generated key never reuses one a unit
+    still carries, so a new field cannot inherit a deleted one's answers.
+    """
+
+    key = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=48,
+        error_messages={"max_length": "المفتاح لا يتجاوز 48 حرفًا."},
+    )
+    label = serializers.CharField(
+        max_length=80,
+        error_messages={
+            "required": "اسم الحقل مطلوب.",
+            "blank": "اسم الحقل مطلوب.",
+            "max_length": "اسم الحقل لا يتجاوز 80 حرفًا.",
+        },
+    )
+    choices = serializers.JSONField(required=False)
+    suffix = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=16,
+        error_messages={"max_length": "الوحدة لا تتجاوز 16 حرفًا."},
+    )
 
     class Meta:
         model = UnitAttributeDefinition
@@ -669,3 +828,182 @@ class UnitAttributeDefinitionSerializer(serializers.ModelSerializer):
             "is_filterable",
             "display_order",
         )
+        # ``(asset_type, key)`` is checked in ``validate`` with an Arabic answer
+        # under ``key``, rather than DRF's English one under non_field_errors.
+        validators = []
+        extra_kwargs = {
+            "asset_type": {
+                "error_messages": {
+                    "required": "نوع الجهاز مطلوب.",
+                    "null": "نوع الجهاز مطلوب.",
+                    "does_not_exist": "نوع الجهاز غير موجود.",
+                    "incorrect_type": "نوع الجهاز غير موجود.",
+                }
+            },
+            "data_type": {
+                "error_messages": {"invalid_choice": "نوع الحقل غير معروف."}
+            },
+        }
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance is not None:
+            self._refuse_fixed_changes(instance, attrs)
+        asset_type = attrs.get("asset_type") or instance.asset_type
+        data_type = attrs.get(
+            "data_type", instance.data_type if instance else _DataType.TEXT
+        )
+        if instance is None:
+            self._check_room(asset_type)
+            attrs["key"] = self._new_key(asset_type, attrs)
+
+        if data_type == _DataType.CHOICE:
+            if instance is None or "choices" in attrs:
+                attrs["choices"] = _clean_choices(
+                    attrs.get("choices"),
+                    existing=instance.choices if instance else (),
+                    recorded=_recorded_values(instance),
+                )
+        else:
+            # Only a choice has choices; anything sent for another kind is
+            # dropped rather than stored where nothing would ever read it.
+            attrs["choices"] = []
+        if data_type not in _NUMERIC_TYPES:
+            # Only a number is ever shown with its unit.
+            attrs["suffix"] = ""
+        elif "suffix" in attrs:
+            attrs["suffix"] = attrs["suffix"].strip()
+        return attrs
+
+    def validate_label(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("اسم الحقل مطلوب.")
+        return value
+
+    @staticmethod
+    def _refuse_fixed_changes(instance, attrs):
+        errors = {}
+        if "asset_type" in attrs and attrs["asset_type"].pk != instance.asset_type_id:
+            errors["asset_type"] = [_FIXED_ON_UPDATE["asset_type"]]
+        key = (attrs.pop("key", "") or "").strip()
+        if key and key != instance.key:
+            errors["key"] = [_FIXED_ON_UPDATE["key"]]
+        if "data_type" in attrs and attrs["data_type"] != instance.data_type:
+            errors["data_type"] = [_FIXED_ON_UPDATE["data_type"]]
+        if errors:
+            raise serializers.ValidationError(errors)
+
+    @staticmethod
+    def _check_room(asset_type):
+        existing = UnitAttributeDefinition.objects.filter(asset_type=asset_type)
+        if existing.count() >= MAX_DEFINITIONS_PER_TYPE:
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        f"لا يزيد عدد حقول نوع الجهاز الواحد على "
+                        f"{MAX_DEFINITIONS_PER_TYPE} حقلًا."
+                    ]
+                }
+            )
+
+    @staticmethod
+    def _new_key(asset_type, attrs):
+        defined = set(
+            UnitAttributeDefinition.objects.filter(asset_type=asset_type).values_list(
+                "key", flat=True
+            )
+        )
+        key = (attrs.get("key") or "").strip()
+        if key:
+            if not _IDENTIFIER.match(key):
+                raise serializers.ValidationError(
+                    {"key": [f"المفتاح {_IDENTIFIER_FORMAT}"]}
+                )
+            if key in defined:
+                raise serializers.ValidationError({"key": [_KEY_TAKEN]})
+            return key
+        units = _units_of_type(asset_type.pk)
+        return _free_identifier(
+            attrs.get("label", ""),
+            prefix="field",
+            start=len(defined) + 1,
+            is_taken=lambda candidate: candidate in defined
+            or units.filter(attributes__has_key=candidate).exists(),
+        )
+
+    def create(self, validated_data):
+        if "display_order" not in validated_data:
+            last = UnitAttributeDefinition.objects.filter(
+                asset_type=validated_data["asset_type"]
+            ).aggregate(last=Max("display_order"))["last"]
+            validated_data["display_order"] = 0 if last is None else last + 1
+        try:
+            # A savepoint, so a lost race on the key is a 400 rather than a
+            # request transaction nobody can use any more.
+            with transaction.atomic():
+                return super().create(validated_data)
+        except IntegrityError:
+            raise serializers.ValidationError({"key": [_KEY_TAKEN]}) from None
+
+
+class UnitAttributeReorderSerializer(serializers.Serializer):
+    """One kind's checklist, in the order its intake sheet should read.
+
+    ``ids`` lists that kind's definitions top to bottom. One the editor did not
+    know about — added from another screen meanwhile — keeps its relative place
+    after the listed ones rather than failing the whole move.
+    """
+
+    asset_type = serializers.PrimaryKeyRelatedField(
+        queryset=AssetType.objects.all(),
+        error_messages={
+            "required": "نوع الجهاز مطلوب.",
+            "does_not_exist": "نوع الجهاز غير موجود.",
+            "incorrect_type": "نوع الجهاز غير موجود.",
+        },
+    )
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=200,
+        error_messages={"empty": "لا توجد حقول لترتيبها."},
+    )
+
+    def validate(self, attrs):
+        ids = attrs["ids"]
+        if len(set(ids)) != len(ids):
+            raise serializers.ValidationError({"ids": ["حقل مكرر في الترتيب."]})
+        owners = dict(
+            UnitAttributeDefinition.objects.filter(pk__in=ids).values_list(
+                "pk", "asset_type_id"
+            )
+        )
+        if len(owners) != len(ids):
+            raise serializers.ValidationError(
+                {"ids": ["بعض الحقول لم تعد موجودة. حدّث القائمة وأعد المحاولة."]}
+            )
+        if any(owner != attrs["asset_type"].pk for owner in owners.values()):
+            raise serializers.ValidationError(
+                {"ids": ["لا يمكن ترتيب حقول نوع جهاز آخر في هذه القائمة."]}
+            )
+        return attrs
+
+    def save(self):
+        asset_type = self.validated_data["asset_type"]
+        position = {pk: index for index, pk in enumerate(self.validated_data["ids"])}
+        with transaction.atomic():
+            rows = list(
+                UnitAttributeDefinition.objects.select_for_update()
+                .filter(asset_type=asset_type)
+                .order_by("display_order", "id")
+            )
+            # Stable: the unlisted all share one key and keep their order.
+            rows.sort(key=lambda row: position.get(row.pk, len(position)))
+            changed = []
+            for order, row in enumerate(rows):
+                if row.display_order != order:
+                    row.display_order = order
+                    changed.append(row)
+            UnitAttributeDefinition.objects.bulk_update(changed, ["display_order"])
+        return rows

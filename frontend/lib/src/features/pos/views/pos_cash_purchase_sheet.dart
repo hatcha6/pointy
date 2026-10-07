@@ -20,6 +20,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/api_session.dart';
+import '../../../shared/tracking/unit_intake_permissions.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -43,6 +44,7 @@ Future<PurchaseSubmission?> showPosCashPurchaseSheet(
   required CatalogRepository catalogRepository,
   required PurchaseRepository purchaseRepository,
   required ShopSettingsRepository shopSettingsRepository,
+  UnitIntakePermissions permissions = UnitIntakePermissions.none,
 }) {
   return showAdaptiveModalBottomSheet<PurchaseSubmission>(
     context: context,
@@ -53,6 +55,7 @@ Future<PurchaseSubmission?> showPosCashPurchaseSheet(
         catalogRepository: catalogRepository,
         purchaseRepository: purchaseRepository,
         shopSettingsRepository: shopSettingsRepository,
+        permissions: permissions,
       );
     },
   );
@@ -65,12 +68,17 @@ class PosCashPurchaseSheet extends StatefulWidget {
     required this.catalogRepository,
     required this.purchaseRepository,
     required this.shopSettingsRepository,
+    this.permissions = UnitIntakePermissions.none,
   });
 
   final ContactRepository contactRepository;
   final CatalogRepository catalogRepository;
   final PurchaseRepository purchaseRepository;
   final ShopSettingsRepository shopSettingsRepository;
+
+  /// Whether the cashier may price a bought handset or give it its own
+  /// warranty while scanning it — asked again by the server.
+  final UnitIntakePermissions permissions;
 
   @override
   State<PosCashPurchaseSheet> createState() => _PosCashPurchaseSheetState();
@@ -244,6 +252,8 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
       // The walk-in's handset gets its condition written down as it is
       // bought: battery, grade, what came in the box (§6.2).
       assetTypeId: line.product.assetTypeId,
+      canSetPrice: widget.permissions.canSetPrice,
+      canSetWarranty: widget.permissions.canSetWarranty,
     );
     if (captured == null || !mounted) {
       return;
@@ -262,6 +272,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
       initial: line.batches,
       suggestedExpiry: line.expiryDate,
       singleLot: line.needsIdentifiers,
+      expiryRequired: line.product.expiryRequired,
     );
     if (captured == null || !mounted) {
       return;

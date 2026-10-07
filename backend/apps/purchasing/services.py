@@ -5,6 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import connection, models, transaction
 from django.db.models import Prefetch, prefetch_related_objects
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
@@ -903,14 +904,6 @@ def _write_purchase_order_with_lines(
     if rebuild_expected:
         # The order is already submitted, so the new lines take effect as
         # expected stock immediately — hold them to the same bar submit does.
-        missing_expiry = purchase_order.lines.filter(
-            variant__product__expiry_required=True,
-            expiry_date__isnull=True,
-        ).exists()
-        if missing_expiry:
-            raise serializers.ValidationError(
-                {"lines": "Expiry date is required for products that track expiry."}
-            )
         if not purchase_order.lines.exists():
             raise serializers.ValidationError(
                 {"detail": "Purchase order must include at least one line."}
@@ -1114,18 +1107,6 @@ def submit_purchase_order(purchase_order, *, request=None):
         raise serializers.ValidationError(
             {"detail": "Purchase order must include at least one line."}
         )
-    missing_expiry = locked_order.lines.filter(
-        variant__product__expiry_required=True,
-        expiry_date__isnull=True,
-    ).exists()
-    if missing_expiry:
-        raise serializers.ValidationError(
-            {
-                "lines": (
-                    "Expiry date is required for products that track expiry."
-                )
-            }
-        )
 
     created_by = purchase_created_by(request)
     for line in locked_order.lines.select_related(
@@ -1322,21 +1303,65 @@ def validate_receipt_line_quantities(
             )
 
 
-def validate_receipt_line_expiry(line, accepted_quantity, expiry_date):
+def _as_date(value):
+    """A lot row's date as a date — rows arrive validated, or as JSON text."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, date):
+        return value
+    return parse_date(str(value).strip()[:10])
+
+
+def receipt_line_expiry(line, line_data, accepted_quantity):
+    """The expiry date a receipt line records, refusing a lot that owes one.
+
+    Dates belong to lots since §18.4: a delivery of Lot A and Lot B has two
+    dates, and no single date typed when the order was placed can be either.
+    So the rule is asked of each lot the delivery brought — every one of them
+    must say when it goes off where the product's ``expiry_required`` says so
+    (a paint batch is lot-tracked for provenance and never does) — and the
+    line records the first of them to expire, which is what the legacy FEFO
+    row and the expiry alerts read. A date the client sent for the line itself
+    still wins, and is still what an undated lot falls back to.
+
+    A product that keeps no lots keeps no expiry either, so nothing is asked
+    of it — ``expiry_required`` left over from a product that once tracked
+    lots demanded a date no screen would ever show.
+    """
+    mode = tracking.mode_of(line.variant)
+    if not tracking.tracks_lots(mode):
+        return line_data.get("expiry_date") or line.expiry_date
+    fallback = _as_date(line_data.get("expiry_date") or line.expiry_date)
+    rows = [row for row in (line_data.get("batches") or []) if row]
+    if tracking.tracks_units(mode):
+        # ``serial_batch`` receives every article into the first row's lot and
+        # ignores the rest, so only that row's date is ever recorded.
+        rows = rows[:1]
+    else:
+        rows = [
+            row
+            for row in rows
+            if row.get("quantity") is None or Decimal(row["quantity"]) > 0
+        ]
+    dates = [_as_date(row.get("expiry_date")) or fallback for row in rows] or [
+        fallback
+    ]
     if (
         accepted_quantity > 0
-        # ``expiry_required``: see the note in purchasing/serializers.py —
-        # tracking lots is not a promise that the goods go off.
         and line.variant.product.expiry_required
-        and expiry_date is None
+        and any(day is None for day in dates)
     ):
         raise serializers.ValidationError(
             {
-                "expiry_date": (
-                    "Expiry date is required for received products that track expiry."
+                "batches" if rows else "expiry_date": (
+                    "تاريخ الصلاحية مطلوب لكل دفعة من هذا الصنف."
                 )
             }
         )
+    if line_data.get("expiry_date") is not None:
+        return line_data["expiry_date"]
+    known = [day for day in dates if day is not None]
+    return min(known) if known else line.expiry_date
 
 
 def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
@@ -1375,8 +1400,6 @@ def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
             cancelled_quantity,
             allowed_over_receipt_quantity=allowed_over_receipt_quantity,
         )
-        expiry_date = line_data.get("expiry_date", line.expiry_date)
-        validate_receipt_line_expiry(line, accepted_quantity, expiry_date)
         fresh_lines.append(
             {
                 "line": line,
@@ -1384,7 +1407,9 @@ def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
                 "damaged_quantity": damaged_quantity,
                 "cancelled_quantity": cancelled_quantity,
                 "allowed_over_receipt_quantity": allowed_over_receipt_quantity,
-                "expiry_date": expiry_date,
+                # What the client said for the line, untouched: the lots' own
+                # dates are weighed against it in ``receipt_line_expiry``.
+                "expiry_date": line_data.get("expiry_date"),
                 "notes": line_data.get("notes", ""),
                 # Captured identifiers travel with the line, not beside it: this
                 # function re-reads every quantity off the locked row, and a
@@ -1641,8 +1666,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
                 0,
             ),
         )
-        expiry_date = line_data.get("expiry_date", line.expiry_date)
-        validate_receipt_line_expiry(line, accepted_quantity, expiry_date)
+        expiry_date = receipt_line_expiry(line, line_data, accepted_quantity)
         expected_quantities = receipt_line_expected_quantities(
             line,
             accepted_quantity,

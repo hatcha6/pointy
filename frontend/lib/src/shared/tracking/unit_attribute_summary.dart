@@ -4,13 +4,17 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../data/models/unit_attribute.dart';
 import '../design/design.dart';
 
-/// An article's facts on one line — «صحة البطارية 92% · ممتاز + · الشاحن مرفق»
-/// — for rows where there is room for a sentence, not a table: the till's
-/// picker and the capture sheet.
+/// An article's facts on one line — «92% · ممتاز + · مفتوح · الشاحن مرفق» —
+/// for rows where there is room for a phrase, not a table: the till's picker
+/// and the capture sheet.
 ///
-/// A ticked yes/no fact reads as its own label (the charger *is* included); an
-/// unticked one says nothing, because "no charger" is the absence of a line,
-/// not a line.
+/// Values, not «label value» pairs: a grade, a lock state or a percentage
+/// reads on its own, and spelling every label out («صحة البطارية … درجة الحالة
+/// … قفل الشبكة / الحساب …») filled a phone-width row before the third fact.
+/// A date is the exception — «2027/03/01» alone says nothing — and keeps its
+/// label. A ticked yes/no fact reads as its own label (the charger *is*
+/// included); an unticked one says nothing, because "no charger" is the
+/// absence of a line, not a line.
 class UnitAttributeSummary extends StatelessWidget {
   const UnitAttributeSummary({
     super.key,
@@ -26,11 +30,13 @@ class UnitAttributeSummary extends StatelessWidget {
   static String describe(List<UnitAttributeValue> values) {
     return [
       for (final value in values)
-        if (!value.isBoolean)
+        if (value.isBoolean)
+          if (value.value == true) value.label else ''
+        else if (value.dataType == UnitAttributeType.date)
           '${value.label} ${value.display}'
-        else if (value.value == true)
-          value.label,
-    ].join(' · ');
+        else
+          value.display,
+    ].where((part) => part.isNotEmpty).join(' · ');
   }
 
   @override

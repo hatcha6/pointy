@@ -411,7 +411,8 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(conflict_response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(PurchaseOrder.objects.count(), 1)
 
-    def test_expiry_tracked_product_requires_purchase_line_expiry_date(self):
+    def test_expiring_lots_are_dated_at_receipt_not_on_the_order_line(self):
+        """Dates belong to lots (§18.4); an order line may still carry one."""
         self.product.tracking_mode = Product.TrackingMode.BATCH
         self.product.expiry_required = True
         self.product.save(
@@ -428,8 +429,10 @@ class PurchaseOrderApiTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("expiry_date", response.data["lines"][0])
+        # No date at ordering: a delivery of two lots has two, and receiving
+        # asks each of them (see test_tracked_receipt_rules).
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertIsNone(response.data["lines"][0]["expiry_date"])
 
         expiry_date = timezone.localdate() + timedelta(days=45)
         response = self.client.post(

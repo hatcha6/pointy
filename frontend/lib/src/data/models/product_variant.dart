@@ -19,6 +19,7 @@ class ProductVariant {
     this.isActive = true,
     this.isDefault = false,
     this.tracksExpiry = false,
+    this.expiryRequired = false,
     this.trackingMode = TrackingMode.quantity,
     this.isService = false,
     this.isPrepared = false,
@@ -49,6 +50,10 @@ class ProductVariant {
   final bool isActive;
   final bool isDefault;
   final bool tracksExpiry;
+
+  /// Whether this product's lots must say when they go off. [tracksExpiry]
+  /// only says it *has* lots (§18.4): a paint batch does and never expires.
+  final bool expiryRequired;
 
   /// Denormalised from the product, because every stock path asks it and the
   /// till already holds the variant. Reading it from here is what makes §11's
@@ -198,6 +203,10 @@ class ProductVariant {
         json['tracks_expiry'],
         fallback: productDetail?.tracksExpiry ?? false,
       ),
+      expiryRequired: _boolFromJson(
+        json['expiry_required'],
+        fallback: productDetail?.expiryRequired ?? false,
+      ),
       trackingMode: json.containsKey('tracking_mode')
           ? TrackingMode.fromWire(json['tracking_mode'])
           : productDetail?.trackingMode ?? TrackingMode.quantity,
@@ -254,6 +263,7 @@ class ProductVariant {
       'is_active': isActive,
       'is_default': isDefault,
       'tracks_expiry': tracksExpiry,
+      'expiry_required': expiryRequired,
       'tracking_mode': trackingMode.wire,
       'is_service': isService,
       'is_prepared': isPrepared,
@@ -284,6 +294,7 @@ class ProductVariant {
       isActive: isActive,
       isDefault: isDefault,
       tracksExpiry: tracksExpiry,
+      expiryRequired: productDetail?.expiryRequired ?? expiryRequired,
       // The mode is the product's, and a variant from a catalog list arrives
       // without one of its own: re-attached to its product, it takes the
       // product's. Without this every serialized product in the till's grid

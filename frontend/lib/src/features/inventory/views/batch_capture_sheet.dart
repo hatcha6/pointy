@@ -27,6 +27,11 @@ Future<List<ReceiptBatchCapture>?> showBatchCaptureSheet(
   /// article on the line the first lot it is sent — a second row would be a
   /// lot that silently names nothing.
   bool singleLot = false,
+
+  /// Every lot must say when it goes off — the product's `expiry_required`.
+  /// The server refuses a receipt with an undated lot of such goods, so the
+  /// sheet asks while the foil is still in the receiver's hand.
+  bool expiryRequired = false,
 }) {
   return showModalBottomSheet<List<ReceiptBatchCapture>>(
     context: context,
@@ -40,6 +45,7 @@ Future<List<ReceiptBatchCapture>?> showBatchCaptureSheet(
         initial: initial,
         suggestedExpiry: suggestedExpiry,
         singleLot: singleLot,
+        expiryRequired: expiryRequired,
       );
     },
   );
@@ -52,6 +58,7 @@ class _BatchCaptureSheet extends StatefulWidget {
     required this.initial,
     this.suggestedExpiry,
     this.singleLot = false,
+    this.expiryRequired = false,
   });
 
   final String productLabel;
@@ -59,6 +66,7 @@ class _BatchCaptureSheet extends StatefulWidget {
   final List<ReceiptBatchCapture> initial;
   final DateTime? suggestedExpiry;
   final bool singleLot;
+  final bool expiryRequired;
 
   @override
   State<_BatchCaptureSheet> createState() => _BatchCaptureSheetState();
@@ -101,9 +109,24 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
 
   double get _residual => widget.expectedQuantity - _captured;
 
-  bool get _canConfirm =>
-      _residual.abs() < 0.0005 &&
-      _rows.every((row) => row.code.trim().isNotEmpty && row.quantity > 0);
+  bool get _canConfirm => _blockedReason(AppLocalizations.of(context)!).isEmpty;
+
+  /// Why confirming is not possible yet, in the receiver's terms — or empty.
+  String _blockedReason(AppLocalizations l10n) {
+    if (_rows.any((row) => row.code.trim().isEmpty)) {
+      return l10n.batchCaptureBlockedCode;
+    }
+    if (widget.expiryRequired && _rows.any((row) => row.expiryDate == null)) {
+      return l10n.batchCaptureBlockedExpiry;
+    }
+    if (_residual.abs() >= 0.0005 || _rows.any((row) => row.quantity <= 0)) {
+      return l10n.batchCaptureBlockedResidual(
+        formatQuantity(_captured),
+        formatQuantity(widget.expectedQuantity),
+      );
+    }
+    return '';
+  }
 
   void _addRow() {
     setState(() {
@@ -187,6 +210,7 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
                   return _BatchRowEditor(
                     key: ValueKey('batch-row-${_rowIds[index]}'),
                     row: _rows[index],
+                    expiryRequired: widget.expiryRequired,
                     canRemove: _rows.length > 1,
                     onChanged: (row) => _update(index, row),
                     onRemove: () => _removeAt(index),
@@ -205,6 +229,25 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
                 ),
               ),
             const SizedBox(height: 4),
+            if (!_canConfirm)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: colors.warning),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _blockedReason(l10n),
+                        key: const ValueKey('batch-capture-blocked'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.warning,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Row(
               children: [
                 Expanded(
@@ -216,6 +259,7 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
+                    key: const ValueKey('batch-capture-confirm'),
                     onPressed: _canConfirm
                         ? () => Navigator.of(context).pop(_rows)
                         : null,
@@ -238,9 +282,11 @@ class _BatchRowEditor extends StatelessWidget {
     required this.canRemove,
     required this.onChanged,
     required this.onRemove,
+    this.expiryRequired = false,
   });
 
   final ReceiptBatchCapture row;
+  final bool expiryRequired;
   final bool canRemove;
   final ValueChanged<ReceiptBatchCapture> onChanged;
   final VoidCallback onRemove;
@@ -299,7 +345,12 @@ class _BatchRowEditor extends StatelessWidget {
           children: [
             Expanded(
               child: _ExpiryField(
-                label: l10n.batchCaptureExpiry,
+                label: expiryRequired
+                    ? '${l10n.batchCaptureExpiry} *'
+                    : l10n.batchCaptureExpiry,
+                error: expiryRequired && row.expiryDate == null
+                    ? l10n.batchCaptureExpiryRequired
+                    : null,
                 value: row.expiryDate,
                 onChanged: (value) =>
                     onChanged(row.copyWith(expiryDate: value)),
@@ -344,9 +395,11 @@ class _ExpiryField extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.error,
   });
 
   final String label;
+  final String? error;
   final DateTime? value;
   final ValueChanged<DateTime?> onChanged;
 
@@ -367,7 +420,11 @@ class _ExpiryField extends StatelessWidget {
         }
       },
       child: InputDecorator(
-        decoration: InputDecoration(isDense: true, labelText: label),
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: label,
+          errorText: error,
+        ),
         child: Text(
           value == null ? '—' : formatDate(value!),
           style: theme.textTheme.bodyMedium,

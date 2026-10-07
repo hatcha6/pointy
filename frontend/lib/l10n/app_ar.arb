@@ -10079,6 +10079,233 @@
       }
     }
   },
+  "purchaseReceiveCaptureUnitsEdit": "تعديل المعرّفات",
+  "@purchaseReceiveCaptureUnitsEdit": {
+    "description": "Button on a receiving line whose identifiers are already captured."
+  },
+  "purchaseReceiveCaptureLotsEdit": "تعديل الدفعات",
+  "@purchaseReceiveCaptureLotsEdit": {
+    "description": "Button on a receiving line whose lots are already captured."
+  },
+  "purchaseReceiveDetailsCaptured": "الحالة: {described} من {total}",
+  "@purchaseReceiveDetailsCaptured": {
+    "description": "How many captured articles on a receiving line have their condition recorded.",
+    "placeholders": {
+      "described": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseReceiveEarliestExpiry": "أقرب صلاحية {date}",
+  "@purchaseReceiveEarliestExpiry": {
+    "description": "The first expiry date among a receiving line's captured lots.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseReceiveExpiryOnLots": "تُسجَّل الصلاحية لكل دفعة عند إدخال الدفعات.",
+  "@purchaseReceiveExpiryOnLots": {
+    "description": "Hint on a lot line: expiry dates are entered per lot."
+  },
+  "purchaseLineLotsNoExpiryAtReceipt": "تُسجَّل أرقام الدفعات عند الاستلام.",
+  "@purchaseLineLotsNoExpiryAtReceipt": {
+    "description": "Hint on a lot-tracked purchase line whose lots do not expire."
+  },
+  "purchaseLineSerialLotAtReceipt": "تُسجَّل الدفعة وتُمسح الأرقام التسلسلية عند الاستلام.",
+  "@purchaseLineSerialLotAtReceipt": {
+    "description": "Hint on a serial-in-lot purchase line."
+  },
+  "purchaseLineSerialLotExpiryAtReceipt": "تُسجَّل الدفعة وصلاحيتها وتُمسح الأرقام التسلسلية عند الاستلام.",
+  "@purchaseLineSerialLotExpiryAtReceipt": {
+    "description": "Hint on a serial-in-lot purchase line whose lot must carry an expiry date."
+  },
+  "productTileTrackingLots": "دفعات",
+  "@productTileTrackingLots": {
+    "description": "Badge on a catalog tile for a lot-tracked product whose lots do not expire."
+  },
+  "unitCaptureLotBanner": "الدفعة {code}",
+  "@unitCaptureLotBanner": {
+    "description": "Header of the scan loop naming the lot every scanned article joins.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureLotBannerExpiry": "الدفعة {code} · تنتهي {date}",
+  "@unitCaptureLotBannerExpiry": {
+    "description": "Header of the scan loop naming the lot and its expiry date.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureImeiChecksum": "خانة التحقق في رقم IMEI {code} غير صحيحة — غالبًا خطأ في المسح أو الكتابة. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.",
+  "@unitCaptureImeiChecksum": {
+    "description": "Warning: a 15-digit IMEI fails its Luhn check digit.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureImeiLength": "رقم IMEI {code} يجب أن يكون 15 خانة. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.",
+  "@unitCaptureImeiLength": {
+    "description": "Warning: an IMEI of the wrong length.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureImeiNotNumeric": "رقم IMEI {code} يتكوّن من أرقام فقط. أعد المسح، أو اضغط Enter مرة أخرى لإضافته كما هو.",
+  "@unitCaptureImeiNotNumeric": {
+    "description": "Warning: an IMEI containing letters.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureDetailsButton": "الحالة",
+  "@unitCaptureDetailsButton": {
+    "description": "Row button opening one article's condition checklist."
+  },
+  "unitCaptureDetailsAndPriceButton": "الحالة والسعر",
+  "@unitCaptureDetailsAndPriceButton": {
+    "description": "Row button opening one article's condition checklist and selling price."
+  },
+  "unitCapturePriceButton": "السعر",
+  "@unitCapturePriceButton": {
+    "description": "Row button opening one article's selling price."
+  },
+  "unitCaptureDeviceDetailsTitle": "تفاصيل {code}",
+  "@unitCaptureDeviceDetailsTitle": {
+    "description": "Title of one article's details form at intake.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureDetailsProgress": "الحالة مسجّلة لـ {described} من {total}",
+  "@unitCaptureDetailsProgress": {
+    "description": "How many scanned articles have their condition recorded.",
+    "placeholders": {
+      "described": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "unitCaptureNotDescribed": "لم تُسجَّل الحالة",
+  "@unitCaptureNotDescribed": {
+    "description": "A scanned article whose condition is not recorded yet."
+  },
+  "unitCaptureMissingRequired": "حقول إلزامية ناقصة",
+  "@unitCaptureMissingRequired": {
+    "description": "A scanned article missing a required checklist field."
+  },
+  "unitCaptureRowPrice": "سعر البيع {amount}",
+  "@unitCaptureRowPrice": {
+    "description": "A scanned article's own selling price.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureRemoveTooltip": "إزالة",
+  "@unitCaptureRemoveTooltip": {
+    "description": "Tooltip of the button removing one scanned article."
+  },
+  "unitCaptureCostFieldLabel": "التكلفة",
+  "@unitCaptureCostFieldLabel": {
+    "description": "Label of one article's cost when the line cost is split."
+  },
+  "unitCaptureBlockedScanMore": "متبقٍ {count} للمسح قبل التأكيد.",
+  "@unitCaptureBlockedScanMore": {
+    "description": "Why confirm is disabled: articles still to scan.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitCaptureBlockedCostResidual": "وزّع المتبقي ({amount}) على الأجهزة حتى يساوي مجموعها إجمالي السطر.",
+  "@unitCaptureBlockedCostResidual": {
+    "description": "Why confirm is disabled: split costs do not add up.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "unitCaptureBlockedRequired": "أكمل الحقول الإلزامية في {count} من الأجهزة.",
+  "@unitCaptureBlockedRequired": {
+    "description": "Why confirm is disabled: required checklist fields missing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitDetailsPriceLabel": "سعر البيع لهذا الجهاز",
+  "@unitDetailsPriceLabel": {
+    "description": "Label of one article's own selling price."
+  },
+  "unitDetailsPriceHelp": "اتركه فارغًا ليُباع بسعر المنتج ({price}).",
+  "@unitDetailsPriceHelp": {
+    "description": "Helper under one article's selling price, naming the product price.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "unitDetailsPriceHelpNoProductPrice": "اتركه فارغًا ليُباع بسعر المنتج.",
+  "@unitDetailsPriceHelpNoProductPrice": {
+    "description": "Helper under one article's selling price when the product price is unknown."
+  },
+  "unitDetailsPriceInvalid": "أدخل سعرًا صحيحًا لا يقل عن صفر.",
+  "@unitDetailsPriceInvalid": {
+    "description": "Error: an article's selling price is not a valid amount."
+  },
+  "batchCaptureExpiryRequired": "تاريخ الصلاحية مطلوب",
+  "@batchCaptureExpiryRequired": {
+    "description": "Error under a lot's expiry date when the product's lots must carry one."
+  },
+  "batchCaptureBlockedExpiry": "أدخل تاريخ صلاحية كل دفعة.",
+  "@batchCaptureBlockedExpiry": {
+    "description": "Why confirm is disabled: a lot is missing its expiry date."
+  },
+  "batchCaptureBlockedCode": "أدخل رقم كل دفعة.",
+  "@batchCaptureBlockedCode": {
+    "description": "Why confirm is disabled: a lot is missing its code."
+  },
+  "batchCaptureBlockedResidual": "مجموع كميات الدفعات {captured} ويجب أن يساوي {expected}.",
+  "@batchCaptureBlockedResidual": {
+    "description": "Why confirm is disabled: lot quantities do not add up.",
+    "placeholders": {
+      "captured": {
+        "type": "String"
+      },
+      "expected": {
+        "type": "String"
+      }
+    }
+  },
   "stockUnitsTitle": "الأجهزة المسلسلة",
   "@stockUnitsTitle": {
     "description": "Title of the identified-articles list."
@@ -20383,6 +20610,273 @@
         "type": "String"
       }
     }
+  },
+  "unitChecklistsTitle": "قوائم فحص الأجهزة",
+  "@unitChecklistsTitle": {
+    "description": "Settings: title of the per-device-kind condition checklist editor."
+  },
+  "unitChecklistsEntrySubtitle": "الحقول التي تُسجَّل لكل جهاز عند الاستلام: البطارية، الحالة، الملحقات…",
+  "@unitChecklistsEntrySubtitle": {
+    "description": "Identified stock settings: subtitle of the tile opening the checklist editor."
+  },
+  "unitChecklistsHint": "اختر نوع الجهاز لتعديل ما يُسأل عنه عند استلام كل قطعة منه.",
+  "@unitChecklistsHint": {
+    "description": "Checklist kinds screen: one-line explanation above the list of device kinds."
+  },
+  "unitChecklistsLoadError": "تعذّر تحميل قوائم الفحص",
+  "@unitChecklistsLoadError": {
+    "description": "Checklist kinds screen: load failure title."
+  },
+  "unitChecklistsEmptyTitle": "لا توجد أنواع أجهزة مفعّلة",
+  "@unitChecklistsEmptyTitle": {
+    "description": "Checklist kinds screen: empty state title."
+  },
+  "unitChecklistsEmptyBody": "أضف أنواع الأجهزة أو فعّلها من إعدادات العمليات والمهام، ثم عُد لتحديد ما يُفحص في كل نوع.",
+  "@unitChecklistsEmptyBody": {
+    "description": "Checklist kinds screen: empty state explanation."
+  },
+  "unitChecklistFieldCount": "{count, plural, =0{لا حقول بعد} =1{حقل واحد} =2{حقلان} few{{count} حقول} many{{count} حقلًا} other{{count} حقل}}",
+  "@unitChecklistFieldCount": {
+    "description": "Checklist kinds screen: how many fields a device kind's checklist has.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitChecklistRequiredCount": "{count} إلزامي",
+  "@unitChecklistRequiredCount": {
+    "description": "Checklist kinds screen: how many of a kind's fields are required at intake.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitChecklistScreenTitle": "قائمة فحص: {kind}",
+  "@unitChecklistScreenTitle": {
+    "description": "Checklist screen: app bar title for one device kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "unitChecklistScreenHint": "تُسأل هذه الحقول بهذا الترتيب عند استلام جهاز من نوع «{kind}». اسحب المقبض أو استخدم قائمة الحقل لتغيير الترتيب.",
+  "@unitChecklistScreenHint": {
+    "description": "Checklist screen: explanation above the ordered field list.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "unitChecklistAddField": "إضافة حقل",
+  "@unitChecklistAddField": {
+    "description": "Checklist screen: primary button adding a field."
+  },
+  "unitChecklistLoadError": "تعذّر تحميل حقول الفحص",
+  "@unitChecklistLoadError": {
+    "description": "Checklist screen: load failure title."
+  },
+  "unitChecklistEmptyTitle": "لا توجد حقول فحص لهذا النوع",
+  "@unitChecklistEmptyTitle": {
+    "description": "Checklist screen: empty state title."
+  },
+  "unitChecklistEmptyBody": "أضف ما تريد تسجيله عن كل جهاز عند استلامه، مثل صحة البطارية أو اللون أو الملحقات.",
+  "@unitChecklistEmptyBody": {
+    "description": "Checklist screen: empty state explanation."
+  },
+  "unitChecklistSaved": "تم حفظ الحقل",
+  "@unitChecklistSaved": {
+    "description": "Checklist screen: snackbar after a field is saved."
+  },
+  "unitChecklistDeleted": "تم حذف الحقل",
+  "@unitChecklistDeleted": {
+    "description": "Checklist screen: snackbar after a field is deleted."
+  },
+  "unitChecklistReorderFailed": "تعذّر حفظ الترتيب الجديد، فأُعيد الترتيب السابق.",
+  "@unitChecklistReorderFailed": {
+    "description": "Checklist screen: snackbar when a reorder is refused and undone."
+  },
+  "unitChecklistDeleteTitle": "حذف «{label}»؟",
+  "@unitChecklistDeleteTitle": {
+    "description": "Checklist screen: delete confirmation title.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "unitChecklistDeleteBody": "لن يُسأل عن هذا الحقل عند استلام الأجهزة بعد الآن. القيم المسجّلة على الأجهزة الحالية تبقى محفوظة، لكنها لن تظهر.",
+  "@unitChecklistDeleteBody": {
+    "description": "Checklist screen: delete confirmation explanation — recorded values are kept but hidden."
+  },
+  "unitChecklistReorderTooltip": "اسحب لتغيير الترتيب",
+  "@unitChecklistReorderTooltip": {
+    "description": "Checklist field row: drag handle tooltip."
+  },
+  "unitChecklistFieldActionsTooltip": "خيارات الحقل",
+  "@unitChecklistFieldActionsTooltip": {
+    "description": "Checklist field row: overflow menu tooltip."
+  },
+  "unitChecklistMoveUp": "تحريك لأعلى",
+  "@unitChecklistMoveUp": {
+    "description": "Checklist field row menu: move the field one place up."
+  },
+  "unitChecklistMoveDown": "تحريك لأسفل",
+  "@unitChecklistMoveDown": {
+    "description": "Checklist field row menu: move the field one place down."
+  },
+  "unitChecklistRequiredBadge": "إلزامي",
+  "@unitChecklistRequiredBadge": {
+    "description": "Checklist field row: badge on a field required at intake."
+  },
+  "unitChecklistMoreChoices": "و{count} أخرى",
+  "@unitChecklistMoreChoices": {
+    "description": "Checklist field row: how many more choices than the ones previewed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitChecklistAddFieldTitle": "حقل جديد — {kind}",
+  "@unitChecklistAddFieldTitle": {
+    "description": "Checklist field editor: title when adding a field to a device kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "unitChecklistEditFieldTitle": "تعديل «{label}»",
+  "@unitChecklistEditFieldTitle": {
+    "description": "Checklist field editor: title when editing a field.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "unitChecklistLabelLabel": "اسم الحقل",
+  "@unitChecklistLabelLabel": {
+    "description": "Checklist field editor: field name input label."
+  },
+  "unitChecklistLabelHint": "مثال: Face ID يعمل",
+  "@unitChecklistLabelHint": {
+    "description": "Checklist field editor: field name input hint."
+  },
+  "unitChecklistLabelRequired": "اكتب اسم الحقل.",
+  "@unitChecklistLabelRequired": {
+    "description": "Checklist field editor: error when the name is empty."
+  },
+  "unitChecklistTypeLabel": "نوع الإجابة",
+  "@unitChecklistTypeLabel": {
+    "description": "Checklist field editor: answer type dropdown label."
+  },
+  "unitChecklistTypeLocked": "لا يتغيّر النوع بعد الحفظ، لأن القيم المسجّلة على الأجهزة تحققت منه.",
+  "@unitChecklistTypeLocked": {
+    "description": "Checklist field editor: why the answer type cannot be changed when editing."
+  },
+  "unitChecklistTypeText": "نص",
+  "@unitChecklistTypeText": {
+    "description": "Checklist answer type: free text."
+  },
+  "unitChecklistTypeNumber": "رقم",
+  "@unitChecklistTypeNumber": {
+    "description": "Checklist answer type: number."
+  },
+  "unitChecklistTypePercent": "نسبة مئوية",
+  "@unitChecklistTypePercent": {
+    "description": "Checklist answer type: percentage."
+  },
+  "unitChecklistTypeMoney": "مبلغ",
+  "@unitChecklistTypeMoney": {
+    "description": "Checklist answer type: money amount."
+  },
+  "unitChecklistTypeDate": "تاريخ",
+  "@unitChecklistTypeDate": {
+    "description": "Checklist answer type: date."
+  },
+  "unitChecklistTypeChoice": "اختيار من قائمة",
+  "@unitChecklistTypeChoice": {
+    "description": "Checklist answer type: pick one of a list."
+  },
+  "unitChecklistTypeBool": "نعم/لا",
+  "@unitChecklistTypeBool": {
+    "description": "Checklist answer type: yes or no."
+  },
+  "unitChecklistSuffixLabel": "الوحدة (اختياري)",
+  "@unitChecklistSuffixLabel": {
+    "description": "Checklist field editor: unit shown after a number, such as GB."
+  },
+  "unitChecklistSuffixHint": "مثال: GB أو كم",
+  "@unitChecklistSuffixHint": {
+    "description": "Checklist field editor: unit input hint."
+  },
+  "unitChecklistChoicesLabel": "الخيارات",
+  "@unitChecklistChoicesLabel": {
+    "description": "Checklist field editor: heading of the choices list."
+  },
+  "unitChecklistChoiceHint": "الخيار {number}",
+  "@unitChecklistChoiceHint": {
+    "description": "Checklist field editor: placeholder of one choice row.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "unitChecklistAddChoice": "إضافة خيار",
+  "@unitChecklistAddChoice": {
+    "description": "Checklist field editor: adds a choice row."
+  },
+  "unitChecklistRemoveChoice": "حذف الخيار",
+  "@unitChecklistRemoveChoice": {
+    "description": "Checklist field editor: removes a choice row."
+  },
+  "unitChecklistChoicesLimit": "الحد الأقصى {count} خيارًا",
+  "@unitChecklistChoicesLimit": {
+    "description": "Checklist field editor: shown instead of the add button at the choice limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitChecklistChoicesRequired": "أضف خيارًا واحدًا على الأقل.",
+  "@unitChecklistChoicesRequired": {
+    "description": "Checklist field editor: error when a choice field has no choices."
+  },
+  "unitChecklistChoiceDuplicate": "الخيار «{label}» مكرر.",
+  "@unitChecklistChoiceDuplicate": {
+    "description": "Checklist field editor: error when two choices share a name.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "unitChecklistChoicesHelp": "تغيير اسم خيار لا يغيّر ما سُجّل به، وحذف خيار يُبقي قيمته على الأجهزة القديمة.",
+  "@unitChecklistChoicesHelp": {
+    "description": "Checklist field editor: what renaming or removing a choice does to recorded devices."
+  },
+  "unitChecklistRequiredTitle": "إلزامي عند الاستلام",
+  "@unitChecklistRequiredTitle": {
+    "description": "Checklist field editor: required-at-intake switch."
+  },
+  "unitChecklistRequiredSubtitle": "يُطلب إدخاله عند وصف كل جهاز في الاستلام وعند تعديل حالته.",
+  "@unitChecklistRequiredSubtitle": {
+    "description": "Checklist field editor: what the required switch does."
+  },
+  "unitChecklistPickerTitle": "يظهر عند اختيار الجهاز في البيع",
+  "@unitChecklistPickerTitle": {
+    "description": "Checklist field editor: show-in-sale-picker switch."
+  },
+  "unitChecklistPickerSubtitle": "يساعد الكاشير على التمييز بين الأجهزة المتشابهة.",
+  "@unitChecklistPickerSubtitle": {
+    "description": "Checklist field editor: why the picker switch is useful."
   },
   "variantGtinLabel": "رقم GTIN",
   "@variantGtinLabel": {

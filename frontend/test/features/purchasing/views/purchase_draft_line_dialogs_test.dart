@@ -40,7 +40,6 @@ void main() {
             onAdd: () async {},
             onRemove: () {},
             onCostChanged: (_) {},
-            onExpiryDateChanged: (_) {},
             onLineTotalEntry: onLineTotalEntry,
             onQuantityChanged: onQuantityChanged,
             onChangePrices: onChangePrices,
@@ -69,10 +68,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(l10n.purchaseLineTotalEntryTitle), findsOneWidget);
 
-      await tester.enterText(
-        find.widgetWithText(TextField, '40.00'),
-        '50',
-      );
+      await tester.enterText(find.widgetWithText(TextField, '40.00'), '50');
       await tester.tap(find.text(l10n.confirmButton));
       await tester.pumpAndSettle();
 
@@ -170,9 +166,7 @@ void main() {
 
       // The selling-price line itself is the target — the whole summary is
       // tappable so the answer and the fix are one gesture.
-      await tester.tap(
-        find.text(l10n.purchaseLineSellingPrice('10.00 د.ل')),
-      );
+      await tester.tap(find.text(l10n.purchaseLineSellingPrice('10.00 د.ل')));
       await tester.pumpAndSettle();
 
       expect(opened, 1);

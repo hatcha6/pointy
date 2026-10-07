@@ -815,6 +815,14 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         source="product.tracks_expiry",
         read_only=True,
     )
+    # ``tracks_expiry`` says "this has lots" since §18.4; whether those lots
+    # must carry a date is this. A paint batch has lots and no expiry, and a
+    # client reading the first as the second asked the buyer for a date the
+    # goods do not have.
+    expiry_required = serializers.BooleanField(
+        source="product.expiry_required",
+        read_only=True,
+    )
     # Denormalised from the product like the flags beside it: the catalog
     # list drops ``product_detail`` from each variant, and a variant found by
     # barcode is sold, counted and moved on this alone.
@@ -884,6 +892,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "price_rate_at",
             "is_active",
             "tracks_expiry",
+            "expiry_required",
             "tracking_mode",
             "is_service",
             "is_prepared",

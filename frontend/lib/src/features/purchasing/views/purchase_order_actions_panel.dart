@@ -776,7 +776,10 @@ Future<void> _showReceivingDialog(
   final messenger = ScaffoldMessenger.of(context);
   final result = await showDialog<_PurchaseReceiveDialogResult>(
     context: context,
-    builder: (context) => _PurchaseReceiveDialog(order: viewModel.order),
+    builder: (context) => _PurchaseReceiveDialog(
+      order: viewModel.order,
+      permissions: UnitIntakePermissions.of(viewModel.capabilities),
+    ),
   );
   if (result == null) {
     return;

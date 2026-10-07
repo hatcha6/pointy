@@ -9,7 +9,7 @@ arithmetic would be a fifth definition of a number that has exactly one.
 from __future__ import annotations
 
 import django_filters
-from django.db.models import Count
+from django.db.models import Count, Q
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import HasPointyPermission
+from apps.customers.models import AssetType
 
 from . import consignment as figures
 from . import consignment_service
@@ -29,6 +30,7 @@ from .consignment_serializers import (
     ConsignorPayoutSerializer,
     SettleIncidentSerializer,
     UnitAttributeDefinitionSerializer,
+    UnitAttributeReorderSerializer,
 )
 from .models import (
     ConsignmentAgreement,
@@ -454,11 +456,16 @@ def _period(request):
 
 
 class UnitAttributeDefinitionViewSet(viewsets.ModelViewSet):
-    """Which typed facts each kind of article records.
+    """Which typed facts each kind of article records — «قوائم فحص الأجهزة».
 
     A deliberately narrow slice of custom fields — a used-goods trade cannot
     work without "battery health is a percentage and it sorts" — and explicitly
     not the beginning of a metadata engine.
+
+    Reading is anyone who sees identified stock (the capture sheet draws its
+    form from it); writing is the owner's ``manage_unitattributedefinition``.
+    Deleting a definition is allowed: the values it described stay on the
+    units, they are just no longer shown — see the serializer.
     """
 
     serializer_class = UnitAttributeDefinitionSerializer
@@ -466,10 +473,12 @@ class UnitAttributeDefinitionViewSet(viewsets.ModelViewSet):
     permission_map = {
         "list": ("inventory.view_stockunit",),
         "retrieve": ("inventory.view_stockunit",),
+        "summary": ("inventory.view_stockunit",),
         "create": ("inventory.manage_unitattributedefinition",),
         "update": ("inventory.manage_unitattributedefinition",),
         "partial_update": ("inventory.manage_unitattributedefinition",),
         "destroy": ("inventory.manage_unitattributedefinition",),
+        "reorder": ("inventory.manage_unitattributedefinition",),
     }
     filterset_fields = ("asset_type", "data_type", "is_filterable")
     ordering = ("asset_type", "display_order", "id")
@@ -478,3 +487,39 @@ class UnitAttributeDefinitionViewSet(viewsets.ModelViewSet):
         return UnitAttributeDefinition.objects.select_related("asset_type").order_by(
             *self.ordering
         )
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """Every active kind of article, with how long its checklist is.
+
+        One read for the editor's first screen, instead of a list call per
+        kind just to count rows.
+        """
+        kinds = AssetType.objects.filter(is_active=True).annotate(
+            field_count=Count("unit_attributes"),
+            required_count=Count(
+                "unit_attributes", filter=Q(unit_attributes__is_required=True)
+            ),
+        )
+        return Response(
+            [
+                {
+                    "asset_type": kind.pk,
+                    "name": kind.name,
+                    "slug": kind.slug,
+                    "icon_key": kind.icon_key,
+                    "field_count": kind.field_count,
+                    "required_count": kind.required_count,
+                }
+                for kind in kinds.order_by("display_order", "name")
+            ]
+        )
+
+    @action(detail=False, methods=["post"])
+    def reorder(self, request):
+        """``{"asset_type": id, "ids": [...]}`` → that kind's checklist, in its
+        new order. Refuses an id belonging to another kind."""
+        serializer = UnitAttributeReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        rows = serializer.save()
+        return Response(UnitAttributeDefinitionSerializer(rows, many=True).data)

@@ -31,6 +31,7 @@ from apps.core.idempotency import run_idempotent_request
 from apps.core.pagination import UncountedPageNumberPagination
 from apps.core.permissions import HasPointyPermission
 from apps.core.search_filters import FOLDING_FILTER_BACKENDS
+from apps.inventory.capture_permissions import refuse_unpermitted_unit_fields
 from apps.inventory.models import StockLedgerEntry
 from apps.inventory.opening_balance import opening_cost_entries
 from .models import (
@@ -325,7 +326,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             Prefetch("lines", queryset=PurchaseLine.objects.annotate(
                 **previous_purchase_line_annotations()
             )),
-            "lines__variant__product",
+            # With its asset type JOINed: a serialized line names the kind of
+            # number its articles carry (``identifier_kind``), read off it.
+            Prefetch(
+                "lines__variant__product",
+                queryset=Product.objects.select_related("asset_type"),
+            ),
             "lines__receipt_lines",
             # PurchaseLine.adjusted_quantity/adjustable_quantity sum this relation;
             # unprefetched they cost 2 aggregate queries per line on every detail
@@ -1092,6 +1098,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         )
 
     def _pos_cash_purchase(self, request):
+        refuse_unpermitted_unit_fields(request.user, request.data)
         # Tells the serializer which cost rules apply: this path blocks an
         # implausible cost outright instead of offering a confirmation the
         # cashier could not act on anyway.
@@ -1133,6 +1140,9 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         # partial receipt used to call it twice.
         purchase_order = self.get_object()
         if request.data:
+            # A price or a warranty date set while scanning answers to the
+            # permission the unit's own page asks for it, not to receiving.
+            refuse_unpermitted_unit_fields(request.user, request.data)
             serializer = PurchaseReceiptInputSerializer(
                 data=request.data,
                 context={"purchase_order": purchase_order},
@@ -1179,6 +1189,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     def _adjust_items_once(self, request, serializer_class):
         purchase_order = self.get_object()
+        refuse_unpermitted_unit_fields(request.user, request.data)
         serializer = serializer_class(
             data=request.data,
             context={"purchase_order": purchase_order, "request": request},

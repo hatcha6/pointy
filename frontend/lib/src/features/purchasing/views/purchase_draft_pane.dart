@@ -7,12 +7,15 @@ import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/barcode/scan_burst_guard.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../core/error_messages.dart';
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/services/api_error_detail.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_unit.dart';
+import '../../../data/models/product_variant.dart';
+import '../../../data/models/tracking_mode.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/catalog/catalog.dart';
@@ -24,6 +27,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
+import '../../../shared/tracking/unit_intake_permissions.dart';
 import '../../../shared/units.dart';
 import '../../../data/models/warehouse.dart';
 import '../../../shared/tutor/anchors.dart';
@@ -58,6 +62,7 @@ class PurchaseDraftPane extends StatefulWidget {
     required this.contactRepository,
     this.submitController,
     this.onSubmitSuccess,
+    this.capabilities,
   });
 
   final PurchaseViewModel viewModel;
@@ -65,6 +70,10 @@ class PurchaseDraftPane extends StatefulWidget {
 
   /// Publishes this pane's footer actions for the global keyboard handler.
   final PurchaseSubmitController? submitController;
+
+  /// Who is buying. The receiving dialog a submit can open asks it whether a
+  /// scanned article may be priced or given its own warranty there.
+  final AuthorizationCapabilities? capabilities;
   final VoidCallback? onSubmitSuccess;
 
   @override
@@ -194,18 +203,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 compact: true,
               ),
             ],
-            // Expiry dates only become mandatory at submit time, so the reminder
-            // belongs to the build/submit flow — saving a draft never needs it.
-            // Editing an already-submitted order is submit time all over again:
-            // the save rebuilds its expected stock, so the dates are due now.
-            if ((!isEditing || viewModel.isEditingCommittedOrder) &&
-                viewModel.hasMissingExpiryDates) ...[
-              SizedBox(height: gap),
-              PointyInlineMessage.warning(
-                message: l10n.purchaseExpiryDatesRequired,
-                compact: true,
-              ),
-            ],
             SizedBox(height: gap),
             PointyStickyActionFooter(
               padding: EdgeInsetsDirectional.fromSTEB(
@@ -296,14 +293,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   Future<void> _submitDraft(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    if (viewModel.hasMissingExpiryDates) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(content: Text(l10n.purchaseExpiryDatesRequired)),
-        );
-      return;
-    }
     await viewModel.refreshDiscountPreview();
     if (!context.mounted) {
       return;
@@ -450,6 +439,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     final draft = await showPurchaseReceiveCaptureDialog(
       context,
       order: loaded.value,
+      permissions: UnitIntakePermissions.of(widget.capabilities),
     );
     if (!context.mounted) {
       return;
@@ -939,12 +929,6 @@ class _PurchaseDraftScrollContentState
                         viewModel.updateLineCost(
                           visibleDraft[index].variant,
                           unitCost,
-                        );
-                      },
-                      onExpiryDateChanged: (expiryDate) {
-                        viewModel.updateLineExpiryDate(
-                          visibleDraft[index].variant,
-                          expiryDate,
                         );
                       },
                       onUnitChanged: (code, label, factor, allowsFractional) {
@@ -2007,7 +1991,6 @@ class PurchaseDraftLineTile extends StatefulWidget {
     required this.onAdd,
     required this.onRemove,
     required this.onCostChanged,
-    required this.onExpiryDateChanged,
     this.onUnitChanged,
     this.onQuantityChanged,
     this.selected = false,
@@ -2033,7 +2016,6 @@ class PurchaseDraftLineTile extends StatefulWidget {
   final Future<void> Function() onAdd;
   final VoidCallback onRemove;
   final ValueChanged<double> onCostChanged;
-  final ValueChanged<DateTime?> onExpiryDateChanged;
 
   /// Selected purchase unit changed: (code, label, factorToBase). Base unit is
   /// reported with an empty code.
@@ -2072,12 +2054,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
   late final TextEditingController _costController = TextEditingController(
     text: widget.line.unitCost.toStringAsFixed(2),
   );
-  late final TextEditingController _expiryController = TextEditingController(
-    text: _formatNullableDate(widget.line.expiryDate),
-  );
   final FocusNode _costFocusNode = FocusNode();
-  final FocusNode _expiryFocusNode = FocusNode();
-  bool _expiryInputInvalid = false;
 
   @override
   void didUpdateWidget(covariant PurchaseDraftLineTile oldWidget) {
@@ -2086,20 +2063,12 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     if (!_costFocusNode.hasFocus && _costController.text != nextText) {
       _costController.text = nextText;
     }
-    final nextExpiryText = _formatNullableDate(widget.line.expiryDate);
-    if (!_expiryFocusNode.hasFocus &&
-        _expiryController.text != nextExpiryText) {
-      _expiryController.text = nextExpiryText;
-      _expiryInputInvalid = false;
-    }
   }
 
   @override
   void dispose() {
     _costFocusNode.dispose();
     _costController.dispose();
-    _expiryFocusNode.dispose();
-    _expiryController.dispose();
     super.dispose();
   }
 
@@ -2306,36 +2275,6 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
       },
     );
 
-    final expiryField = line.variant.tracksExpiry
-        ? Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 260),
-              child: TextField(
-                key: ValueKey('purchase_line_expiry_${line.variant.id}_field'),
-                controller: _expiryController,
-                focusNode: _expiryFocusNode,
-                enabled: widget.enabled,
-                keyboardType: TextInputType.datetime,
-                inputFormatters: const [_DateDashInputFormatter()],
-                decoration: InputDecoration(
-                  labelText: l10n.purchaseLineExpiryDateLabel,
-                  hintText: l10n.purchaseLineExpiryDateHint,
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.event_busy_outlined),
-                  suffixIcon: IconButton(
-                    tooltip: l10n.purchaseLineExpiryDatePickerTooltip,
-                    onPressed: widget.enabled ? _pickExpiryDate : null,
-                    icon: const Icon(Icons.calendar_month_outlined),
-                  ),
-                  errorText: _expiryErrorText(l10n),
-                ),
-                onChanged: _handleExpiryInputChanged,
-              ),
-            ),
-          )
-        : null;
-
     final selectionColors = context.pointyColors;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -2477,10 +2416,6 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                   ],
                 ),
               ],
-              if (expiryField != null) ...[
-                const SizedBox(height: 12),
-                expiryField,
-              ],
               // Said on the line, before the buyer submits: an order carries a
               // count, and the numbers are scanned off the boxes at receipt.
               if (line.variant.trackingMode.isTracked) ...[
@@ -2498,9 +2433,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        line.variant.trackingMode.tracksUnits
-                            ? l10n.purchaseLineUnitsAtReceipt
-                            : l10n.purchaseLineLotsAtReceipt,
+                        _receiptHint(l10n, line.variant),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colors.mutedInk,
                         ),
@@ -2514,23 +2447,6 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
         ),
       ),
     );
-  }
-
-  void _handleExpiryInputChanged(String value) {
-    final text = value.trim();
-    if (text.isEmpty) {
-      setState(() => _expiryInputInvalid = false);
-      widget.onExpiryDateChanged(null);
-      return;
-    }
-    final parsed = _parseDateInputValue(text);
-    if (parsed == null) {
-      setState(() => _expiryInputInvalid = true);
-      widget.onExpiryDateChanged(null);
-      return;
-    }
-    setState(() => _expiryInputInvalid = false);
-    widget.onExpiryDateChanged(parsed);
   }
 
   /// Tap-to-type quantity entry on the stepper. Any product may be purchased in
@@ -2582,37 +2498,6 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     if (submitted != null) {
       widget.onLineTotalEntry?.call(submitted);
     }
-  }
-
-  Future<void> _pickExpiryDate() async {
-    final current = widget.line.expiryDate ?? DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: current,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (selected == null || !mounted) {
-      return;
-    }
-    final value = DateTime(selected.year, selected.month, selected.day);
-    _expiryController.text = _formatDateInputValue(value);
-    setState(() => _expiryInputInvalid = false);
-    widget.onExpiryDateChanged(value);
-  }
-
-  String? _expiryErrorText(AppLocalizations l10n) {
-    if (_expiryInputInvalid) {
-      return l10n.purchaseLineExpiryDateInvalid;
-    }
-    if (widget.line.variant.tracksExpiry && widget.line.expiryDate == null) {
-      return l10n.purchaseLineExpiryDateRequired;
-    }
-    return null;
-  }
-
-  String _formatNullableDate(DateTime? date) {
-    return date == null ? '' : _formatDateInputValue(date);
   }
 }
 
@@ -2668,4 +2553,22 @@ class _DestinationField extends StatelessWidget {
       },
     );
   }
+}
+
+/// What the receiver will be asked for when this line's goods arrive — said
+/// on the order line, because the order itself carries only a count. A lot of
+/// paint is named but never dated, so only goods whose lots must expire say so.
+String _receiptHint(AppLocalizations l10n, ProductVariant variant) {
+  return switch (variant.trackingMode) {
+    TrackingMode.serial => l10n.purchaseLineUnitsAtReceipt,
+    TrackingMode.serialBatch =>
+      variant.expiryRequired
+          ? l10n.purchaseLineSerialLotExpiryAtReceipt
+          : l10n.purchaseLineSerialLotAtReceipt,
+    TrackingMode.batch =>
+      variant.expiryRequired
+          ? l10n.purchaseLineLotsAtReceipt
+          : l10n.purchaseLineLotsNoExpiryAtReceipt,
+    TrackingMode.quantity => '',
+  };
 }

@@ -175,10 +175,9 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('صحة البطارية 92% · درجة الحالة ممتاز + · الشاحن مرفق'),
-      findsOneWidget,
-    );
+    // Values, not label-value pairs: they read on their own, and the labels
+    // filled a phone-width row before the third fact.
+    expect(find.text('92% · ممتاز + · الشاحن مرفق'), findsOneWidget);
     expect(find.byType(ProductImageThumbnail), findsOneWidget);
   });
 
@@ -228,7 +227,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The row says what was recorded, on one line.
-      expect(find.textContaining('صحة البطارية 91%'), findsOneWidget);
+      expect(find.textContaining('91%'), findsOneWidget);
 
       await tester.tap(find.text('تأكيد المعرّفات').last);
       await tester.pumpAndSettle();

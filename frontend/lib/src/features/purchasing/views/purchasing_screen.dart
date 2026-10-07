@@ -296,6 +296,7 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
                 contactRepository: widget.contactRepository,
                 submitController: _submitController,
                 onSubmitSuccess: widget.onSaved,
+                capabilities: widget.capabilities,
               ),
             );
           }
@@ -377,6 +378,7 @@ class _CompactPurchasingWorkspace extends StatelessWidget {
             return PurchaseDraftPane(
               viewModel: viewModel,
               contactRepository: contactRepository,
+              capabilities: capabilities,
               onSubmitSuccess: () {
                 Navigator.of(sheetContext).pop();
                 onSaved?.call();

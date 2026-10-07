@@ -9,10 +9,12 @@ part of 'purchase_order_details_screen.dart';
 Future<PurchaseReceiveDraft?> showPurchaseReceiveCaptureDialog(
   BuildContext context, {
   required PurchaseOrder order,
+  UnitIntakePermissions permissions = UnitIntakePermissions.none,
 }) async {
   final result = await showDialog<_PurchaseReceiveDialogResult>(
     context: context,
-    builder: (context) => _PurchaseReceiveDialog(order: order),
+    builder: (context) =>
+        _PurchaseReceiveDialog(order: order, permissions: permissions),
   );
   if (result == null || result.lines.isEmpty) {
     return null;
@@ -21,9 +23,13 @@ Future<PurchaseReceiveDraft?> showPurchaseReceiveCaptureDialog(
 }
 
 class _PurchaseReceiveDialog extends StatefulWidget {
-  const _PurchaseReceiveDialog({required this.order});
+  const _PurchaseReceiveDialog({
+    required this.order,
+    this.permissions = UnitIntakePermissions.none,
+  });
 
   final PurchaseOrder order;
+  final UnitIntakePermissions permissions;
 
   @override
   State<_PurchaseReceiveDialog> createState() => _PurchaseReceiveDialogState();
@@ -47,20 +53,12 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     for (final line in _receivableLines)
       line.id: TextEditingController(text: '0'),
   };
-  late final Map<int, TextEditingController> _expiryControllers = {
-    for (final line in _receivableLines)
-      if (line.tracksExpiry)
-        line.id: TextEditingController(
-          text: _formatReceiveDate(line.expiryDate),
-        ),
-  };
   final TextEditingController _noteController = TextEditingController();
 
   /// What the receiver captured per line, with the goods in front of them.
   /// Empty for every delivery of everything a shop counts rather than names.
   final Map<int, ReceiptLineCapture> _captures = {};
   bool _showQuantityError = false;
-  bool _showExpiryError = false;
   bool _showCaptureError = false;
 
   @override
@@ -74,19 +72,28 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     for (final controller in _rejectedControllers.values) {
       controller.dispose();
     }
-    for (final controller in _expiryControllers.values) {
-      controller.dispose();
-    }
     _noteController.dispose();
     super.dispose();
   }
+
+  double _quantity(Map<int, TextEditingController> controllers, int lineId) =>
+      double.tryParse(controllers[lineId]!.text.trim()) ?? 0;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
+    final compact = MediaQuery.sizeOf(context).width < 600;
 
     return AlertDialog(
+      // A phone gives the three quantity boxes every pixel it has: the
+      // default 40-point inset cut their labels to «مستلم…» and «مرفو…».
+      insetPadding: compact
+          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 24)
+          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      contentPadding: compact
+          ? const EdgeInsets.fromLTRB(16, 16, 16, 0)
+          : const EdgeInsets.fromLTRB(24, 16, 24, 0),
       icon: const Icon(Icons.inventory_2_outlined),
       title: Text(l10n.purchaseReceiveTitle),
       content: ConstrainedBox(
@@ -101,17 +108,16 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                 for (final line in _receivableLines)
                   _PurchaseReceiveLineInput(
                     line: line,
+                    stackQuantities: compact,
                     receivedController: _receivedControllers[line.id]!,
                     damagedController: _damagedControllers[line.id]!,
                     rejectedController: _rejectedControllers[line.id]!,
-                    expiryController: _expiryControllers[line.id],
                     capture: _captures[line.id],
                     onCapture: line.trackingMode.isTracked
                         ? () => _captureFor(line)
                         : null,
                     onChanged: () => setState(() {
                       _showQuantityError = false;
-                      _showExpiryError = false;
                       _showCaptureError = false;
                     }),
                   ),
@@ -125,22 +131,13 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                   ),
                 ),
               ],
-              if (_showExpiryError) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    l10n.purchaseLineExpiryDateRequired,
-                    style: TextStyle(color: colors.danger),
-                  ),
-                ),
-              ],
               if (_showCaptureError) ...[
                 const SizedBox(height: 8),
                 Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     l10n.purchaseReceiveCaptureRequired,
+                    key: const ValueKey('purchase-receive-capture-error'),
                     style: TextStyle(color: colors.danger),
                   ),
                 ),
@@ -178,13 +175,11 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
   ///
   /// ``serial_batch`` asks for both, in the order a receiver actually works: the
   /// lot header once — it is printed once on the carton — then the scan loop for
-  /// each pack beneath it.
+  /// each pack beneath it, which names that lot above its scan field.
   Future<void> _captureFor(PurchaseOrderLine line) async {
     final mode = line.trackingMode;
-    final received =
-        double.tryParse(_receivedControllers[line.id]!.text.trim()) ?? 0;
-    final damaged =
-        double.tryParse(_damagedControllers[line.id]!.text.trim()) ?? 0;
+    final received = _quantity(_receivedControllers, line.id);
+    final damaged = _quantity(_damagedControllers, line.id);
     if (received + damaged <= 0) {
       return;
     }
@@ -211,20 +206,14 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         suggestedExpiry: line.expiryDate,
         // A serialised pack's lot is one header over the whole scan loop.
         singleLot: mode.tracksUnits,
+        // `tracks_expiry` on a purchase line is the product's
+        // `expiry_required`: these lots must each say when they go off.
+        expiryRequired: line.tracksExpiry,
       );
       if (captured == null || !mounted) {
         return;
       }
       batches = captured;
-      // The lots carry their own dates. A line that also asks for one gets
-      // the first to expire, rather than making the receiver type it twice.
-      final expiryController = _expiryControllers[line.id];
-      final earliest = earliestLotExpiry(batches);
-      if (expiryController != null &&
-          earliest != null &&
-          _parseReceiveDate(expiryController.text.trim()) == null) {
-        expiryController.text = _formatReceiveDate(earliest);
-      }
     }
 
     var units = existing?.units ?? const <ReceiptUnitCapture>[];
@@ -242,6 +231,10 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         // missing-identifier list.
         allowCaptureLater: TrackingFeaturesScope.of(context).captureLater,
         assetTypeId: line.assetTypeId,
+        identifierKind: line.identifierKind,
+        lot: batches.isEmpty ? null : batches.first,
+        canSetPrice: widget.permissions.canSetPrice,
+        canSetWarranty: widget.permissions.canSetWarranty,
       );
       if (captured == null || !mounted) {
         return;
@@ -253,6 +246,29 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
       _captures[line.id] = ReceiptLineCapture(units: units, batches: batches);
       _showCaptureError = false;
     });
+  }
+
+  /// Whether this line's identifiers cover exactly what is being received —
+  /// rechecked at confirm, because the quantities can change after a capture.
+  bool _captureCovers(PurchaseOrderLine line, double received, double damaged) {
+    final mode = line.trackingMode;
+    final capture = _captures[line.id];
+    if (mode.tracksLots) {
+      final expected = line.toBaseQuantity(received);
+      final captured = capture?.capturedBatchQuantity ?? 0;
+      if (expected > 0 && (captured - expected).abs() >= 0.0005) {
+        return false;
+      }
+    }
+    if (mode.tracksUnits) {
+      final expected = line.toBaseQuantity(received + damaged).round();
+      final captured = capture?.units.length ?? 0;
+      final captureLater = TrackingFeaturesScope.of(context).captureLater;
+      if (captured > expected || (!captureLater && captured != expected)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _submit() {
@@ -276,15 +292,6 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         setState(() => _showQuantityError = true);
         return;
       }
-      DateTime? expiryDate;
-      if (line.tracksExpiry && received > 0) {
-        final expiryText = _expiryControllers[line.id]!.text.trim();
-        expiryDate = _parseReceiveDate(expiryText);
-        if (expiryDate == null) {
-          setState(() => _showExpiryError = true);
-          return;
-        }
-      }
       if (received > 0 || damaged > 0 || rejected > 0) {
         final capture = _captures[line.id];
         // Identifiers are captured where the goods physically are. A line that
@@ -293,11 +300,9 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         // unless the shop receives articles first and names them later. A lot
         // is never left to later: one the server invents has no number to
         // recall by.
-        final owesLots = line.trackingMode.tracksLots;
-        final owesUnits =
-            line.trackingMode.tracksUnits &&
-            !TrackingFeaturesScope.of(context).captureLater;
-        if ((owesLots || owesUnits) && (capture == null || capture.isEmpty)) {
+        if (line.trackingMode.isTracked &&
+            (received > 0 || damaged > 0) &&
+            !_captureCovers(line, received, damaged)) {
           setState(() => _showCaptureError = true);
           return;
         }
@@ -307,7 +312,9 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
             quantityReceived: received,
             quantityDamaged: damaged,
             quantityRejected: rejected,
-            expiryDate: expiryDate,
+            // Dates belong to lots: the line records the first of them to
+            // expire, and a line without lots records none.
+            expiryDate: earliestLotExpiry(capture?.batches ?? const []),
             capture: capture,
           ),
         );
@@ -318,7 +325,6 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
       return;
     }
     _showQuantityError = false;
-    _showExpiryError = false;
     _showCaptureError = false;
     Navigator.of(context).pop(
       _PurchaseReceiveDialogResult(
@@ -335,17 +341,21 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
     required this.receivedController,
     required this.damagedController,
     required this.rejectedController,
-    this.expiryController,
     this.capture,
     this.onCapture,
     required this.onChanged,
+    this.stackQuantities = false,
   });
 
   final PurchaseOrderLine line;
+
+  /// What arrived on its own row, the other two beneath it. Decided from the
+  /// screen, not a LayoutBuilder: an AlertDialog sizes its content by asking
+  /// for its intrinsic width, which a LayoutBuilder cannot answer.
+  final bool stackQuantities;
   final TextEditingController receivedController;
   final TextEditingController damagedController;
   final TextEditingController rejectedController;
-  final TextEditingController? expiryController;
 
   /// What has been captured for this line so far, so the row can say whether
   /// the identifiers are still owed. Null for an untracked line.
@@ -365,12 +375,41 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
         line.receivedQuantity + line.damagedQuantity + received + damaged;
     final afterOpen = line.receivableQuantity - received - damaged - rejected;
     final afterVariance = afterDelivered - line.quantity;
-    final expiryController = this.expiryController;
-    final expiryText = expiryController?.text.trim() ?? '';
-    final expiryInvalid =
-        line.tracksExpiry &&
-        received > 0 &&
-        _parseReceiveDate(expiryText) == null;
+
+    Widget quantityField(
+      TextEditingController controller,
+      String label, {
+      bool tutor = false,
+    }) {
+      final field = TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(labelText: label, isDense: true),
+        onChanged: (_) => onChanged(),
+      );
+      if (!tutor) return field;
+      return TutorTarget(
+        anchor: TutorAnchor.purchaseReceiveQuantityField,
+        // A delivery that came up short is the point of the lesson, so the
+        // step has to name the line that is short.
+        id: line.variantSku,
+        child: field,
+      );
+    }
+
+    final receivedField = quantityField(
+      receivedController,
+      l10n.purchaseReceiveReceivedLabel,
+      tutor: true,
+    );
+    final damagedField = quantityField(
+      damagedController,
+      l10n.purchaseReceiveDamagedLabel,
+    );
+    final rejectedField = quantityField(
+      rejectedController,
+      l10n.purchaseReceiveRejectedLabel,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -415,80 +454,28 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TutorTarget(
-                  anchor: TutorAnchor.purchaseReceiveQuantityField,
-                  // A delivery that came up short is the point of the lesson,
-                  // so the step has to name the line that is short.
-                  id: line.variantSku,
-                  child: TextField(
-                    controller: receivedController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: l10n.purchaseReceiveReceivedLabel,
-                      isDense: true,
-                    ),
-                    onChanged: (_) => onChanged(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: damagedController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: l10n.purchaseReceiveDamagedLabel,
-                    isDense: true,
-                  ),
-                  onChanged: (_) => onChanged(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: rejectedController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: l10n.purchaseReceiveRejectedLabel,
-                    isDense: true,
-                  ),
-                  onChanged: (_) => onChanged(),
-                ),
-              ),
-            ],
-          ),
-          if (line.tracksExpiry && expiryController != null) ...[
+          // Three boxes side by side need ~130 points each before their
+          // labels fit; on a phone, what arrived gets its own row.
+          if (stackQuantities) ...[
+            receivedField,
             const SizedBox(height: 8),
-            TextField(
-              controller: expiryController,
-              keyboardType: TextInputType.datetime,
-              inputFormatters: const [_ReceiveDateDashInputFormatter()],
-              decoration: InputDecoration(
-                labelText: l10n.purchaseLineExpiryDateLabel,
-                hintText: l10n.purchaseLineExpiryDateHint,
-                isDense: true,
-                prefixIcon: const Icon(Icons.event_busy_outlined),
-                suffixIcon: IconButton(
-                  tooltip: l10n.purchaseLineExpiryDatePickerTooltip,
-                  onPressed: () => _pickExpiryDate(context),
-                  icon: const Icon(Icons.calendar_month_outlined),
-                ),
-                errorText: expiryInvalid
-                    ? l10n.purchaseLineExpiryDateInvalid
-                    : null,
-              ),
-              onChanged: (_) => onChanged(),
+            Row(
+              children: [
+                Expanded(child: damagedField),
+                const SizedBox(width: 8),
+                Expanded(child: rejectedField),
+              ],
             ),
-          ],
+          ] else
+            Row(
+              children: [
+                Expanded(child: receivedField),
+                const SizedBox(width: 8),
+                Expanded(child: damagedField),
+                const SizedBox(width: 8),
+                Expanded(child: rejectedField),
+              ],
+            ),
           if (onCapture != null) ...[
             const SizedBox(height: 8),
             _CaptureRow(
@@ -497,33 +484,14 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
               // Base units, because that is what the sheet captures and what
               // the backend counts — the row must read «12 من 12», not
               // «1 من 12», for a carton of twelve.
-              expectedCount: line.toBaseQuantity(received + damaged),
+              unitCount: line.toBaseQuantity(received + damaged),
+              lotQuantity: line.toBaseQuantity(received),
               onCapture: onCapture!,
             ),
           ],
         ],
       ),
     );
-  }
-
-  Future<void> _pickExpiryDate(BuildContext context) async {
-    final controller = expiryController;
-    if (controller == null) {
-      return;
-    }
-    final parsed = _parseReceiveDate(controller.text.trim());
-    final current = parsed ?? line.expiryDate ?? DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: current,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (selected == null || !context.mounted) {
-      return;
-    }
-    controller.text = _formatReceiveDate(selected);
-    onChanged();
   }
 }
 
@@ -532,18 +500,21 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
 ///
 /// Reads as a residual rather than a tick, because that is the question the
 /// receiver is actually answering: *how many of these forty boxes have I
-/// scanned?*
+/// scanned?* Then what else is known: how many handsets are described, the
+/// first lot to expire — the dates the line used to ask for separately.
 class _CaptureRow extends StatelessWidget {
   const _CaptureRow({
     required this.line,
     required this.capture,
-    required this.expectedCount,
+    required this.unitCount,
+    required this.lotQuantity,
     required this.onCapture,
   });
 
   final PurchaseOrderLine line;
   final ReceiptLineCapture? capture;
-  final double expectedCount;
+  final double unitCount;
+  final double lotQuantity;
   final VoidCallback onCapture;
 
   @override
@@ -553,43 +524,71 @@ class _CaptureRow extends StatelessWidget {
     final colors = context.pointyColors;
     final mode = line.trackingMode;
     final captured = capture;
-    final done = mode.tracksUnits
-        ? (captured?.units.length ?? 0) >= expectedCount.round()
-        : (captured?.capturedBatchQuantity ?? 0) >= expectedCount;
+    final units = captured?.units ?? const <ReceiptUnitCapture>[];
+    final lotsDone =
+        !mode.tracksLots ||
+        ((captured?.capturedBatchQuantity ?? 0) - lotQuantity).abs() < 0.0005;
+    final unitsDone = !mode.tracksUnits || units.length >= unitCount.round();
+    final done = lotsDone && unitsDone && unitCount > 0;
+    final earliest = earliestLotExpiry(captured?.batches ?? const []);
+    final described = units.where((unit) => unit.attributes.isNotEmpty).length;
 
-    return Row(
+    final status = [
+      mode.tracksUnits
+          ? l10n.purchaseReceiveUnitsCaptured(units.length, unitCount.round())
+          : l10n.purchaseReceiveLotsCaptured(
+              formatQuantity(captured?.capturedBatchQuantity ?? 0),
+              formatQuantity(lotQuantity),
+            ),
+      if (mode.tracksUnits && line.assetTypeId != null && units.isNotEmpty)
+        l10n.purchaseReceiveDetailsCaptured(described, units.length),
+      if (earliest != null)
+        l10n.purchaseReceiveEarliestExpiry(formatDate(earliest)),
+    ].join(' · ');
+
+    final hasCapture = captured != null && !captured.isEmpty;
+    final buttonLabel = mode.tracksUnits
+        ? (hasCapture
+              ? l10n.purchaseReceiveCaptureUnitsEdit
+              : l10n.purchaseReceiveCaptureUnits)
+        : (hasCapture
+              ? l10n.purchaseReceiveCaptureLotsEdit
+              : l10n.purchaseReceiveCaptureLots);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(
-          done ? Icons.check_circle_outline : Icons.error_outline,
-          size: 18,
-          color: done ? colors.primaryStrong : colors.warning,
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            mode.tracksUnits
-                ? l10n.purchaseReceiveUnitsCaptured(
-                    captured?.units.length ?? 0,
-                    expectedCount.round(),
-                  )
-                : l10n.purchaseReceiveLotsCaptured(
-                    formatQuantity(captured?.capturedBatchQuantity ?? 0),
-                    formatQuantity(expectedCount),
-                  ),
-            style: theme.textTheme.bodySmall?.copyWith(
+        Row(
+          children: [
+            Icon(
+              done ? Icons.check_circle_outline : Icons.error_outline,
+              size: 18,
               color: done ? colors.primaryStrong : colors.warning,
             ),
-          ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                status,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: done ? colors.primaryStrong : colors.warning,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              key: ValueKey('purchase-receive-capture-${line.id}'),
+              onPressed: unitCount > 0 ? onCapture : null,
+              icon: const Icon(Icons.qr_code_scanner_outlined, size: 18),
+              label: Text(buttonLabel),
+            ),
+          ],
         ),
-        TextButton.icon(
-          onPressed: expectedCount > 0 ? onCapture : null,
-          icon: const Icon(Icons.qr_code_scanner_outlined, size: 18),
-          label: Text(
-            mode.tracksUnits
-                ? l10n.purchaseReceiveCaptureUnits
-                : l10n.purchaseReceiveCaptureLots,
+        // The line used to ask for one date beside the lots' own; a delivery
+        // of two lots has two, so they are typed where the lots are.
+        if (mode.tracksLots && line.tracksExpiry && earliest == null)
+          Text(
+            l10n.purchaseReceiveExpiryOnLots,
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
           ),
-        ),
       ],
     );
   }
@@ -600,50 +599,4 @@ class _PurchaseReceiveDialogResult {
 
   final List<PurchaseReceiveLineDraft> lines;
   final String note;
-}
-
-String _formatReceiveDate(DateTime? date) {
-  if (date == null) {
-    return '';
-  }
-  final month = date.month.toString().padLeft(2, '0');
-  final day = date.day.toString().padLeft(2, '0');
-  return '${date.year}-$month-$day';
-}
-
-DateTime? _parseReceiveDate(String text) {
-  if (text.length != 10) {
-    return null;
-  }
-  final parsed = DateTime.tryParse(text);
-  if (parsed == null) {
-    return null;
-  }
-  final date = DateTime(parsed.year, parsed.month, parsed.day);
-  return _formatReceiveDate(date) == text ? date : null;
-}
-
-class _ReceiveDateDashInputFormatter extends TextInputFormatter {
-  const _ReceiveDateDashInputFormatter();
-
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final limited = digits.length > 8 ? digits.substring(0, 8) : digits;
-    final buffer = StringBuffer();
-    for (var index = 0; index < limited.length; index += 1) {
-      if (index == 4 || index == 6) {
-        buffer.write('-');
-      }
-      buffer.write(limited[index]);
-    }
-    final text = buffer.toString();
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/analytics_interaction_tracker.dart';
 import '../data/models/product.dart';
 import '../data/models/product_variant.dart';
+import '../data/models/tracking_mode.dart';
 import 'formatters.dart';
 import 'catalog/pointy_catalog_row.dart';
 import 'catalog/pointy_catalog_table.dart';
@@ -10,6 +11,7 @@ import 'catalog/pointy_product_card.dart';
 import 'catalog/pointy_product_row.dart';
 import 'catalog/stock_status_label.dart';
 import 'product_status_pill.dart';
+import 'tracking/tracked_product_marker.dart';
 
 class ProductTile extends StatelessWidget {
   ProductTile({
@@ -28,7 +30,9 @@ class ProductTile extends StatelessWidget {
        _showStock = false,
        _product = product,
        _presentation = _ProductTilePresentation.card,
-       _tableLayout = false;
+       _tableLayout = false,
+       _trackingMode = TrackingMode.quantity,
+       _expiryRequired = false;
 
   ProductTile.variant({
     super.key,
@@ -49,7 +53,11 @@ class ProductTile extends StatelessWidget {
        _showStock = showStock,
        _product = null,
        _presentation = _ProductTilePresentation.card,
-       _tableLayout = false;
+       _tableLayout = false,
+       // The buyer learns which goods will be scanned or named in lots before
+       // ordering them, not when the receiving dialog asks.
+       _trackingMode = variant.trackingMode,
+       _expiryRequired = variant.expiryRequired;
 
   /// The default card as a row of a [PointyCatalogTable], for a catalog
   /// browser switched to its table layout. It adds the stock the card leaves
@@ -73,7 +81,9 @@ class ProductTile extends StatelessWidget {
        _showStock = !product.isService && !product.isPrepared,
        _product = product,
        _presentation = _ProductTilePresentation.row,
-       _tableLayout = false;
+       _tableLayout = false,
+       _trackingMode = TrackingMode.quantity,
+       _expiryRequired = false;
 
   ProductTile.catalogRow({
     super.key,
@@ -92,7 +102,9 @@ class ProductTile extends StatelessWidget {
        _showStock = false,
        _product = product,
        _presentation = _ProductTilePresentation.catalogRow,
-       _tableLayout = tableLayout;
+       _tableLayout = tableLayout,
+       _trackingMode = TrackingMode.quantity,
+       _expiryRequired = false;
 
   final VoidCallback? onTap;
   final bool showPrice;
@@ -111,6 +123,8 @@ class ProductTile extends StatelessWidget {
   final Product? _product;
   final _ProductTilePresentation _presentation;
   final bool _tableLayout;
+  final TrackingMode _trackingMode;
+  final bool _expiryRequired;
 
   /// The price line on the card.
   ///
@@ -177,6 +191,12 @@ class ProductTile extends StatelessWidget {
       imageUrl: imageUrl,
       fallbackText: title,
       status: status,
+      marker: _trackingMode.isTracked
+          ? TrackedProductMarker(
+              mode: _trackingMode,
+              expiryRequired: _expiryRequired,
+            )
+          : null,
       stockLabel: _showStock
           ? StockStatusLabel(
               quantity: quantityOnHand,

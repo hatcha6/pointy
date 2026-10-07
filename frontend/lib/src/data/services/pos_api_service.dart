@@ -84,6 +84,7 @@ import '../models/consignment.dart';
 import '../models/consignor_statement.dart';
 import '../models/stock_unit.dart';
 import '../models/unit_attribute.dart';
+import '../models/unit_checklist_kind.dart';
 import '../models/unit_photo.dart';
 import '../models/tracked_scan.dart';
 import '../models/stock_movement.dart';
@@ -160,6 +161,7 @@ import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
 import 'consignment_api_client.dart';
 import 'tracked_stock_api_client.dart';
+import 'unit_checklist_api_client.dart';
 import 'unit_detail_api_client.dart';
 import 'user_api_client.dart';
 import '../../core/app_version.dart';
@@ -217,6 +219,7 @@ class PosApiService {
     _stockCounts = StockCountApiClient(_session);
     _trackedStock = TrackedStockApiClient(_session);
     _unitDetail = UnitDetailApiClient(_session);
+    _unitChecklists = UnitChecklistApiClient(_session);
     _consignment = ConsignmentApiClient(_session);
     _ai = AiApiClient(_session);
     _companion = CompanionApiClient(_session);
@@ -308,6 +311,7 @@ class PosApiService {
   late final StockCountApiClient _stockCounts;
   late final TrackedStockApiClient _trackedStock;
   late final UnitDetailApiClient _unitDetail;
+  late final UnitChecklistApiClient _unitChecklists;
   late final ConsignmentApiClient _consignment;
   late final AiApiClient _ai;
   late final CompanionApiClient _companion;
@@ -1715,6 +1719,25 @@ class PosApiService {
   Future<List<UnitAttributeDefinition>> fetchUnitAttributeDefinitions(
     int assetTypeId,
   ) => _unitDetail.fetchAttributeDefinitions(assetTypeId);
+
+  Future<List<UnitChecklistKind>> fetchUnitChecklistKinds() =>
+      _unitChecklists.fetchKinds();
+
+  Future<UnitAttributeDefinition> createUnitAttributeDefinition(
+    UnitAttributeDefinition definition,
+  ) => _unitChecklists.create(definition);
+
+  Future<UnitAttributeDefinition> updateUnitAttributeDefinition(
+    UnitAttributeDefinition definition,
+  ) => _unitChecklists.update(definition);
+
+  Future<void> deleteUnitAttributeDefinition(int definitionId) =>
+      _unitChecklists.delete(definitionId);
+
+  Future<List<UnitAttributeDefinition>> reorderUnitAttributeDefinitions(
+    int assetTypeId,
+    List<int> definitionIds,
+  ) => _unitChecklists.reorder(assetTypeId, definitionIds);
 
   Future<StockUnit> saveStockUnitAttributes(
     int unitId,

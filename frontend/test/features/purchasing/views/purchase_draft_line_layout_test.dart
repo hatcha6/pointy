@@ -61,7 +61,6 @@ void main() {
                 onAdd: () async {},
                 onRemove: () {},
                 onCostChanged: (_) {},
-                onExpiryDateChanged: (_) {},
                 onUnitChanged: (_, _, _, _) {},
                 onChangePrices: () {},
               ),

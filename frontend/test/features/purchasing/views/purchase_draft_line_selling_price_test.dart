@@ -34,7 +34,6 @@ void main() {
             onAdd: () async {},
             onRemove: () {},
             onCostChanged: (_) {},
-            onExpiryDateChanged: (_) {},
           ),
         ),
       ),

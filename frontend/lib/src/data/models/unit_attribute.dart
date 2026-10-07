@@ -15,6 +15,8 @@ class UnitAttributeDefinition {
     this.suffix = '',
     this.isRequired = false,
     this.showInPicker = true,
+    this.showOnLabel = false,
+    this.showOnReceipt = false,
     this.displayOrder = 0,
   });
 
@@ -30,6 +32,10 @@ class UnitAttributeDefinition {
   final String suffix;
   final bool isRequired;
   final bool showInPicker;
+
+  /// Printed on the article's shelf label / on the sale receipt.
+  final bool showOnLabel;
+  final bool showOnReceipt;
   final int displayOrder;
 
   bool get isNumeric =>
@@ -62,7 +68,50 @@ class UnitAttributeDefinition {
       suffix: json['suffix']?.toString() ?? '',
       isRequired: json['is_required'] == true,
       showInPicker: json['show_in_picker'] != false,
+      showOnLabel: json['show_on_label'] == true,
+      showOnReceipt: json['show_on_receipt'] == true,
       displayOrder: _int(json['display_order']) ?? 0,
+    );
+  }
+
+  /// What the checklist editor sends. Neither `key` (the server derives it
+  /// from the label and never changes it) nor `display_order` (moved by the
+  /// reorder call alone, so a save cannot undo somebody's drag) ride along.
+  Map<String, Object?> toJson() => {
+    if (assetTypeId != null) 'asset_type': assetTypeId,
+    'label': label.trim(),
+    'data_type': dataType,
+    'choices': [for (final choice in choices) choice.toJson()],
+    'suffix': suffix.trim(),
+    'is_required': isRequired,
+    'show_in_picker': showInPicker,
+    'show_on_label': showOnLabel,
+    'show_on_receipt': showOnReceipt,
+  };
+
+  UnitAttributeDefinition copyWith({
+    String? label,
+    String? dataType,
+    List<UnitAttributeChoice>? choices,
+    String? suffix,
+    bool? isRequired,
+    bool? showInPicker,
+    bool? showOnLabel,
+    bool? showOnReceipt,
+  }) {
+    return UnitAttributeDefinition(
+      id: id,
+      assetTypeId: assetTypeId,
+      key: key,
+      label: label ?? this.label,
+      dataType: dataType ?? this.dataType,
+      choices: choices ?? this.choices,
+      suffix: suffix ?? this.suffix,
+      isRequired: isRequired ?? this.isRequired,
+      showInPicker: showInPicker ?? this.showInPicker,
+      showOnLabel: showOnLabel ?? this.showOnLabel,
+      showOnReceipt: showOnReceipt ?? this.showOnReceipt,
+      displayOrder: displayOrder,
     );
   }
 }
@@ -81,6 +130,10 @@ class UnitAttributeChoice {
       label: label.isEmpty ? value : label,
     );
   }
+
+  /// An empty [value] asks the server to mint one; an existing one is kept,
+  /// because units recorded it.
+  Map<String, Object?> toJson() => {'value': value, 'label': label.trim()};
 }
 
 /// Mirrors `UnitAttributeDefinition.DataType` on the backend.

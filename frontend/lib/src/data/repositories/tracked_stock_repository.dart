@@ -5,6 +5,7 @@ import '../models/stock_batch.dart';
 import '../models/stock_unit.dart';
 import '../models/tracked_scan.dart';
 import '../models/unit_attribute.dart';
+import '../models/unit_checklist_kind.dart';
 import '../models/unit_photo.dart';
 import '../services/pos_api_service.dart';
 
@@ -118,6 +119,41 @@ class TrackedStockRepository {
   ) {
     return Result.guard(
       () => _service.fetchUnitAttributeDefinitions(assetTypeId),
+    );
+  }
+
+  // -- condition checklists («قوائم فحص الأجهزة») ---------------------------
+
+  /// Every active kind of device, with how many facts its checklist records.
+  Future<Result<List<UnitChecklistKind>>> loadChecklistKinds() {
+    return Result.guard(_service.fetchUnitChecklistKinds);
+  }
+
+  /// Adds a field (no [UnitAttributeDefinition.id]) or edits one.
+  Future<Result<UnitAttributeDefinition>> saveAttributeDefinition(
+    UnitAttributeDefinition definition,
+  ) {
+    return Result.guard(
+      () => definition.id == 0
+          ? _service.createUnitAttributeDefinition(definition)
+          : _service.updateUnitAttributeDefinition(definition),
+    );
+  }
+
+  /// Values units recorded under it stay on them; they just stop showing.
+  Future<Result<void>> deleteAttributeDefinition(int definitionId) {
+    return Result.guard(
+      () => _service.deleteUnitAttributeDefinition(definitionId),
+    );
+  }
+
+  Future<Result<List<UnitAttributeDefinition>>> reorderAttributeDefinitions(
+    int assetTypeId,
+    List<int> definitionIds,
+  ) {
+    return Result.guard(
+      () =>
+          _service.reorderUnitAttributeDefinitions(assetTypeId, definitionIds),
     );
   }
 

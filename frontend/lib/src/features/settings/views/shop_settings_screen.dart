@@ -1953,8 +1953,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   Future<void> _openIdentifiedStockSettings(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (routeContext) =>
-            IdentifiedStockSettingsPage(viewModel: widget.viewModel),
+        builder: (routeContext) => IdentifiedStockSettingsPage(
+          viewModel: widget.viewModel,
+          checklistRepository: widget.capabilities.canManageUnitAttributes
+              ? widget.trackedStockRepository
+              : null,
+        ),
       ),
     );
   }
