@@ -14,6 +14,9 @@ import '../../../data/repositories/tracked_stock_repository.dart';
 /// searchable list of identified things with a detail behind each row. Splitting
 /// them would duplicate the paging, the filters and the refresh, and the two
 /// would drift.
+/// One of a product's variants, as a filter chip names it.
+typedef VariantChoice = ({int id, String label});
+
 class TrackedStockViewModel extends ChangeNotifier {
   TrackedStockViewModel(this._repository);
 
@@ -52,6 +55,15 @@ class TrackedStockViewModel extends ChangeNotifier {
   int? _productId;
   String _productName = '';
 
+  /// A product's variants, offered as chips once the lists are narrowed to it:
+  /// four iPhone 13s in one list are four lookalike columns of IMEIs.
+  List<VariantChoice> _variantChoices = const [];
+  int? _variantId;
+
+  /// One lot's articles — a serial-in-lot carton opened from the lots list.
+  int? _batchId;
+  String _batchLabel = '';
+
   List<StockUnit> get units => _units;
   List<StockBatch> get batches => _batches;
   StockUnitSummary get summary => _summary;
@@ -72,6 +84,10 @@ class TrackedStockViewModel extends ChangeNotifier {
   bool get missingOnly => _missingOnly;
   int? get productId => _productId;
   String get productName => _productName;
+  List<VariantChoice> get variantChoices => _variantChoices;
+  int? get variantId => _variantId;
+  int? get batchId => _batchId;
+  String get batchLabel => _batchLabel;
 
   /// Articles the shop still owes an identifier for — the *capture later*
   /// worklist. Counted rather than listed here, because the point of the number
@@ -125,6 +141,8 @@ class TrackedStockViewModel extends ChangeNotifier {
       status: _missingOnly ? '' : _unitStatus,
       code: _unitSearch,
       productId: _productId,
+      variantId: _variantId,
+      batchId: _batchId,
       isIdentified: _missingOnly ? false : null,
       inStock: _missingOnly ? true : null,
       page: page,
@@ -147,6 +165,7 @@ class TrackedStockViewModel extends ChangeNotifier {
       status: _batchStatus,
       isExpired: _batchExpiredOnly ? true : null,
       productId: _productId,
+      variantId: _variantId,
       page: _batchPage,
     );
     switch (result) {
@@ -171,6 +190,7 @@ class TrackedStockViewModel extends ChangeNotifier {
       status: _batchStatus,
       isExpired: _batchExpiredOnly ? true : null,
       productId: _productId,
+      variantId: _variantId,
       page: _batchPage + 1,
     );
     switch (result) {
@@ -211,9 +231,21 @@ class TrackedStockViewModel extends ChangeNotifier {
 
   /// Narrow both lists to one product's stock — set once, by whoever opens
   /// the lists from that product's page, before the first load.
-  void setProductFilter(int? productId, {String name = ''}) {
+  ///
+  /// [variants] become the chips that narrow it further; [variantId] opens it
+  /// already narrowed — the list a variant's own page opens.
+  void setProductFilter(
+    int? productId, {
+    String name = '',
+    List<VariantChoice> variants = const [],
+    int? variantId,
+  }) {
     _productId = productId;
     _productName = productId == null ? '' : name;
+    _variantChoices = productId == null || variants.length < 2
+        ? const []
+        : variants;
+    _variantId = productId == null ? null : variantId;
   }
 
   /// Back to every product's stock.
@@ -223,8 +255,35 @@ class TrackedStockViewModel extends ChangeNotifier {
     }
     _productId = null;
     _productName = '';
+    _variantChoices = const [];
+    _variantId = null;
     unawaited(loadUnits());
     unawaited(loadBatches());
+  }
+
+  /// One variant of the chosen product, or all of them. Reloads the list the
+  /// caller shows: [units] for the articles, otherwise the lots.
+  void setVariantFilter(int? variantId, {required bool units}) {
+    if (_variantId == variantId) {
+      return;
+    }
+    _variantId = variantId;
+    unawaited(units ? loadUnits() : loadBatches());
+  }
+
+  /// Narrow the articles to one lot, set before the first load.
+  void setBatchFilter(int? batchId, {String label = ''}) {
+    _batchId = batchId;
+    _batchLabel = batchId == null ? '' : label;
+  }
+
+  void clearBatchFilter() {
+    if (_batchId == null) {
+      return;
+    }
+    _batchId = null;
+    _batchLabel = '';
+    unawaited(loadUnits());
   }
 
   /// Give a placeholder article the number it has been owing.

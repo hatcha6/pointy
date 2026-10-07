@@ -89,6 +89,7 @@ class _FakeTrackedStockRepository extends TrackedStockRepository {
 
   @override
   Future<Result<StockUnitPage>> loadUnits({
+    int? batchId,
     int? variantId,
     int? productId,
     int? warehouseId,

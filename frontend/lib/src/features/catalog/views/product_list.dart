@@ -187,18 +187,30 @@ class ProductList extends StatelessWidget {
               selectedIds: viewModel.selectedIds,
               onToggleSelect: (product) =>
                   viewModel.toggleSelection(product.id),
-              emptyBuilder: (context) => CatalogEmptyState(
-                query: viewModel.query,
-                emptyMessage: l10n.emptyCatalog,
-                onClear: viewModel.applyQuery,
-                emptyAction: capabilities.canCreateProduct
-                    ? FilledButton.icon(
-                        onPressed: onCreateProduct,
-                        icon: const Icon(Icons.add),
-                        label: Text(l10n.addProductButton),
-                      )
-                    : null,
-              ),
+              emptyBuilder: (context) {
+                Widget empty() => CatalogEmptyState(
+                  query: viewModel.query,
+                  emptyMessage: l10n.emptyCatalog,
+                  onClear: viewModel.applyQuery,
+                  emptyAction: capabilities.canCreateProduct
+                      ? FilledButton.icon(
+                          onPressed: onCreateProduct,
+                          icon: const Icon(Icons.add),
+                          label: Text(l10n.addProductButton),
+                        )
+                      : null,
+                );
+                // An IMEI matches no product name, and saying «no results»
+                // under the article it did find told the shop the search
+                // had failed.
+                final lookup = viewModel.unitSearch;
+                if (lookup == null) return empty();
+                return ListenableBuilder(
+                  listenable: lookup,
+                  builder: (context, _) =>
+                      lookup.match != null ? const SizedBox.shrink() : empty(),
+                );
+              },
               onOpenProduct: (product) =>
                   (onOpenProduct ?? (p) => _openProduct(context, p))(product),
             ),

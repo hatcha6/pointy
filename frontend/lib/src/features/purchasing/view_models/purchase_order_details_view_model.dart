@@ -40,6 +40,9 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
 
   final PurchaseRepository _purchaseRepository;
   final PrintingRepository _printingRepository;
+
+  /// Where a receipt's stickers go — each handset's own, each lot's dated.
+  PrintingRepository get printingRepository => _printingRepository;
   final ShopSettingsRepository _shopSettingsRepository;
   final AuthorizationCapabilities _capabilities;
 

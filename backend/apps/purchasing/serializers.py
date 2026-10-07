@@ -380,6 +380,16 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    # What a shelf sticker printed on receipt carries: the product's own scan
+    # code and its selling price (a handset's own price, set at intake, wins
+    # on its label).
+    variant_barcode = serializers.CharField(source="variant.barcode", read_only=True)
+    selling_price = serializers.DecimalField(
+        source="variant.unit_price",
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
     # The key keeps its name because the client's question has not changed —
     # "must this line carry an expiry date?" — but the answer now comes from
     # ``expiry_required`` rather than from a flag that, since §18.4, means
@@ -499,6 +509,8 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "product_name",
             "variant_sku",
             "variant_name",
+            "variant_barcode",
+            "selling_price",
             "tracks_expiry",
             "tracking_mode",
             "identifier_kind",

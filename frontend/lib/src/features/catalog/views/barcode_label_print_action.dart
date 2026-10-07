@@ -9,11 +9,13 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/barcode_label.dart';
+import '../../../data/models/stock_batch.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/services/barcode_label_print_preferences.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/units.dart';
 import '../../../shared/printing/print_paper_mismatch_message.dart';
 import '../../../shared/components/pointy_progress.dart';
 
@@ -40,17 +42,27 @@ class BarcodeLabelPrintDialogResult {
   }
 }
 
+/// [tracksExpiry] is whether the goods can carry a date at all — they keep
+/// lots. Without it the expiry switch is not offered: a phone has no date to
+/// print. [lots] are the variant's own; choosing one stamps its date (and
+/// offers its quantity as the copies) instead of a date typed from the box.
 Future<BarcodeLabelPrintDialogResult?> showBarcodeLabelPrintDialog({
   required BuildContext context,
   required BarcodeLabelDraft label,
   required bool tracksExpiry,
+  int initialCopies = 1,
+  DateTime? initialExpiry,
+  List<StockBatch> lots = const [],
 }) {
   return showDialog<BarcodeLabelPrintDialogResult>(
     context: context,
     builder: (dialogContext) {
       return _BarcodeLabelPrintOptionsDialog(
         label: label,
-        tracksExpiry: tracksExpiry,
+        tracksExpiry: tracksExpiry || initialExpiry != null,
+        initialCopies: initialCopies,
+        initialExpiry: initialExpiry,
+        lots: lots,
       );
     },
   );
@@ -70,6 +82,7 @@ class BarcodeLabelPrintButton extends StatefulWidget {
     required this.source,
     this.variantId,
     this.tracksExpiry = false,
+    this.loadLots,
     this.analyticsEngine,
     this.style = BarcodeLabelPrintButtonStyle.filled,
     this.labelText,
@@ -86,6 +99,10 @@ class BarcodeLabelPrintButton extends StatefulWidget {
   final int entityId;
   final String source;
   final bool tracksExpiry;
+
+  /// The variant's lots, read when the dialog opens, so a sticker can carry
+  /// the date of the lot it goes on. Null for goods without lots.
+  final Future<List<StockBatch>> Function()? loadLots;
   final AnalyticsEngine? analyticsEngine;
   final BarcodeLabelPrintButtonStyle style;
   final String? labelText;
@@ -144,10 +161,16 @@ class _BarcodeLabelPrintButtonState extends State<BarcodeLabelPrintButton> {
   }
 
   Future<void> _printLabel() async {
+    final loadLots = widget.loadLots;
+    final lots = loadLots == null ? const <StockBatch>[] : await loadLots();
+    if (!mounted) {
+      return;
+    }
     final options = await showBarcodeLabelPrintDialog(
       context: context,
       label: widget.label,
       tracksExpiry: widget.tracksExpiry,
+      lots: lots,
     );
     if (options == null) {
       return;
@@ -219,10 +242,16 @@ class _BarcodeLabelPrintOptionsDialog extends StatefulWidget {
   const _BarcodeLabelPrintOptionsDialog({
     required this.label,
     required this.tracksExpiry,
+    this.initialCopies = 1,
+    this.initialExpiry,
+    this.lots = const [],
   });
 
   final BarcodeLabelDraft label;
   final bool tracksExpiry;
+  final int initialCopies;
+  final DateTime? initialExpiry;
+  final List<StockBatch> lots;
 
   @override
   State<_BarcodeLabelPrintOptionsDialog> createState() =>
@@ -232,17 +261,48 @@ class _BarcodeLabelPrintOptionsDialog extends StatefulWidget {
 class _BarcodeLabelPrintOptionsDialogState
     extends State<_BarcodeLabelPrintOptionsDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _copiesController = TextEditingController(text: '1');
+  late final _copiesController = TextEditingController(
+    text: '${widget.initialCopies}',
+  );
   final _expiryController = TextEditingController();
   bool _includePrice = true;
   late bool _includeExpiryDate;
   DateTime? _expiryDate;
+  int? _lotId;
+
+  /// The variant's lots that have goods and a date to print.
+  late final List<StockBatch> _datedLots = [
+    for (final lot in widget.lots)
+      if (lot.expiryDate != null && lot.onHand > 0) lot,
+  ];
 
   @override
   void initState() {
     super.initState();
-    _includeExpiryDate = widget.tracksExpiry;
+    _includeExpiryDate =
+        widget.initialExpiry != null ||
+        (widget.tracksExpiry && _datedLots.isNotEmpty);
+    final initial = widget.initialExpiry;
+    if (initial != null) {
+      _expiryDate = initial;
+      _expiryController.text = formatDate(initial);
+    }
     _loadIncludePriceDefault();
+  }
+
+  void _chooseLot(StockBatch? lot) {
+    setState(() {
+      _lotId = lot?.id;
+      final expiry = lot?.expiryDate;
+      if (lot == null || expiry == null) {
+        return;
+      }
+      _includeExpiryDate = true;
+      _expiryDate = expiry;
+      _expiryController.text = formatDate(expiry);
+      // A lot's stickers are usually printed for the whole lot.
+      _copiesController.text = '${lot.onHand.round().clamp(1, 999)}';
+    });
   }
 
   /// The switch opens on whatever this counter chose last time.
@@ -311,45 +371,79 @@ class _BarcodeLabelPrintOptionsDialogState
                     title: Text(l10n.barcodeLabelIncludePriceLabel),
                     subtitle: Text(l10n.barcodeLabelIncludePriceHint),
                   ),
-                  const Divider(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _includeExpiryDate,
-                    onChanged: (value) {
-                      setState(() {
-                        _includeExpiryDate = value;
-                        if (!value) {
-                          _expiryDate = null;
-                          _expiryController.clear();
-                        }
-                      });
-                    },
-                    secondary: const Icon(Icons.event_available_outlined),
-                    title: Text(l10n.barcodeLabelIncludeExpiryLabel),
-                    subtitle: Text(l10n.barcodeLabelIncludeExpiryHint),
-                  ),
-                  if (_includeExpiryDate) ...[
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _expiryController,
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: l10n.barcodeLabelExpiryDateLabel,
-                        prefixIcon: const Icon(Icons.calendar_month_outlined),
-                        suffixIcon: IconButton(
-                          tooltip: l10n.barcodeLabelExpiryDatePickerTooltip,
-                          onPressed: _pickExpiryDate,
-                          icon: const Icon(Icons.edit_calendar_outlined),
+                  if (widget.tracksExpiry) ...[
+                    const Divider(height: 8),
+                    if (_datedLots.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int?>(
+                        key: const ValueKey('barcode-label-lot'),
+                        initialValue: _lotId,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: l10n.barcodeLabelLotLabel,
+                          prefixIcon: const Icon(Icons.inventory_2_outlined),
+                        ),
+                        items: [
+                          for (final lot in _datedLots)
+                            DropdownMenuItem<int?>(
+                              value: lot.id,
+                              child: Text(
+                                l10n.barcodeLabelLotOption(
+                                  lot.label.isEmpty
+                                      ? l10n.stockBatchNoCode
+                                      : lot.label,
+                                  formatDate(lot.expiryDate!),
+                                  formatQuantity(lot.onHand),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (id) => _chooseLot(
+                          _datedLots.where((lot) => lot.id == id).firstOrNull,
                         ),
                       ),
-                      validator: (_) {
-                        if (_includeExpiryDate && _expiryDate == null) {
-                          return l10n.barcodeLabelExpiryDateRequired;
-                        }
-                        return null;
+                    ],
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _includeExpiryDate,
+                      onChanged: (value) {
+                        setState(() {
+                          _includeExpiryDate = value;
+                          if (!value) {
+                            _expiryDate = null;
+                            _expiryController.clear();
+                          }
+                        });
                       },
-                      onTap: _pickExpiryDate,
+                      secondary: const Icon(Icons.event_available_outlined),
+                      title: Text(l10n.barcodeLabelIncludeExpiryLabel),
+                      subtitle: Text(l10n.barcodeLabelIncludeExpiryHint),
                     ),
+                    if (_includeExpiryDate) ...[
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _expiryController,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: l10n.barcodeLabelExpiryDateLabel,
+                          prefixIcon: const Icon(Icons.calendar_month_outlined),
+                          suffixIcon: IconButton(
+                            tooltip: l10n.barcodeLabelExpiryDatePickerTooltip,
+                            onPressed: _pickExpiryDate,
+                            icon: const Icon(Icons.edit_calendar_outlined),
+                          ),
+                        ),
+                        validator: (_) {
+                          if (_includeExpiryDate && _expiryDate == null) {
+                            return l10n.barcodeLabelExpiryDateRequired;
+                          }
+                          return null;
+                        },
+                        onTap: _pickExpiryDate,
+                      ),
+                    ],
                   ],
                   const SizedBox(height: 16),
                   _BarcodeLabelPreview(

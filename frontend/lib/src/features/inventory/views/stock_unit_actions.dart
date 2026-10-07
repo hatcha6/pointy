@@ -18,6 +18,7 @@ class StockUnitActionBar extends StatelessWidget {
     required this.onWriteOff,
     required this.onReportIncident,
     required this.onEditWarranty,
+    this.onPrintLabel,
   });
 
   final StockUnit unit;
@@ -27,6 +28,10 @@ class StockUnitActionBar extends StatelessWidget {
   final VoidCallback onWriteOff;
   final VoidCallback onReportIncident;
   final VoidCallback onEditWarranty;
+
+  /// This article's own sticker: its number as the barcode, its own price.
+  /// Null when there is no label printer to send it to.
+  final VoidCallback? onPrintLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +53,15 @@ class StockUnitActionBar extends StatelessWidget {
     final canReprice = capabilities.canRepriceStockUnit && unit.isOnHand;
     final canEditWarranty = capabilities.canChangeStockUnitWarranty;
 
+    final onPrintLabel = this.onPrintLabel;
     final buttons = <Widget>[
+      if (onPrintLabel != null && unit.isIdentified && unit.isOnHand)
+        OutlinedButton.icon(
+          key: const ValueKey('stock_unit_detail_print_label'),
+          onPressed: onPrintLabel,
+          icon: const Icon(Icons.print_outlined),
+          label: Text(l10n.stockUnitPrintLabel),
+        ),
       if (canIdentify)
         FilledButton.icon(
           key: const ValueKey('stock_unit_detail_identify'),

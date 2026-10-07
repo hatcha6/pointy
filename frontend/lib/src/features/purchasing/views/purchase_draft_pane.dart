@@ -18,6 +18,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../data/models/tracking_mode.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/components/components.dart';
@@ -39,6 +40,7 @@ import 'purchase_cost_warning_dialog.dart';
 import 'purchase_order_details_screen.dart'
     show showPurchaseReceiveCaptureDialog;
 import 'purchase_suggestion_strip.dart';
+import 'receipt_labels.dart';
 
 /// Lets the draft pane publish its footer actions to the workspace above it, so
 /// the global keyboard handler can run the very same flows — Ctrl/Cmd+Enter to
@@ -63,6 +65,7 @@ class PurchaseDraftPane extends StatefulWidget {
     this.submitController,
     this.onSubmitSuccess,
     this.capabilities,
+    this.printingRepository,
   });
 
   final PurchaseViewModel viewModel;
@@ -74,6 +77,10 @@ class PurchaseDraftPane extends StatefulWidget {
   /// Who is buying. The receiving dialog a submit can open asks it whether a
   /// scanned article may be priced or given its own warranty there.
   final AuthorizationCapabilities? capabilities;
+
+  /// Stickers for what a submit-and-receive just brought. Null skips the
+  /// offer.
+  final PrintingRepository? printingRepository;
   final VoidCallback? onSubmitSuccess;
 
   @override
@@ -454,19 +461,21 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     }
     switch (received) {
       case Ok<PurchaseOrder>(:final value):
-        messenger
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                l10n.purchaseOrderReceiveSuccess(
-                  value.orderNumber.isEmpty
-                      ? submission.draftNumber
-                      : value.orderNumber,
-                ),
-              ),
-            ),
-          );
+        showReceiptDoneSnackBar(
+          context,
+          messenger: messenger,
+          message: l10n.purchaseOrderReceiveSuccess(
+            value.orderNumber.isEmpty
+                ? submission.draftNumber
+                : value.orderNumber,
+          ),
+          entries: receiptLabelEntries(
+            orderLines: loaded.value.lines,
+            received: draft.lines,
+            l10n: l10n,
+          ),
+          printingRepository: widget.printingRepository,
+        );
       case Error<PurchaseOrder>(:final exception):
         deferred(errorMessageFor(exception, l10n));
     }

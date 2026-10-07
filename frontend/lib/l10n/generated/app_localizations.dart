@@ -26632,6 +26632,174 @@ abstract class AppLocalizations {
   /// **'مجموع كميات الدفعات {captured} ويجب أن يساوي {expected}.'**
   String batchCaptureBlockedResidual(String captured, String expected);
 
+  /// Label of the lot picker in the barcode label dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة'**
+  String get barcodeLabelLotLabel;
+
+  /// One lot in the barcode label dialog's lot picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'{code} · تنتهي {date} · {quantity} بالمخزون'**
+  String barcodeLabelLotOption(String code, String date, String quantity);
+
+  /// Caption under a handset's selling price in the handsets list.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع'**
+  String get stockUnitPriceCaption;
+
+  /// A handset's cost, for readers allowed to see costs.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة {amount}'**
+  String stockUnitCostCaption(String amount);
+
+  /// Chip that shows every variant of the chosen product.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الخيارات'**
+  String get stockUnitsAllVariants;
+
+  /// Chip naming the lot the handsets list is narrowed to.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة {code}'**
+  String stockUnitsBatchFilter(String code);
+
+  /// App-bar action that starts choosing handsets to print labels for.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد لطباعة الملصقات'**
+  String get stockUnitsSelectForLabels;
+
+  /// How many handsets are selected for label printing.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} محدد'**
+  String stockUnitsSelectedCount(int count);
+
+  /// Selects every handset in the list for label printing.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد الكل'**
+  String get stockUnitsSelectAll;
+
+  /// Prints labels for the selected handsets.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الملصقات'**
+  String get stockUnitsPrintSelected;
+
+  /// Leaves label-selection mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get stockUnitsCancelSelection;
+
+  /// Prints this handset's own label: its number as the barcode and its own price.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصق'**
+  String get stockUnitPrintLabel;
+
+  /// Prints shelf stickers for one lot, dated with its expiry.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصقات'**
+  String get stockBatchPrintLabels;
+
+  /// Opens the handsets inside a serial-in-lot carton.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة'**
+  String get stockBatchOpenUnits;
+
+  /// Why a lot's stickers cannot be printed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد باركود لهذا الصنف — أضف باركودًا لطباعة ملصقاته.'**
+  String get stockBatchNoBarcodeForLabel;
+
+  /// Opens this variant's handsets.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجهزة هذا الخيار'**
+  String get variantOpenUnits;
+
+  /// Opens this variant's lots.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات هذا الخيار'**
+  String get variantOpenLots;
+
+  /// Explains variant labels versus per-handset labels.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصق الخيار يحمل باركود المنتج وسعره. لملصق يحمل رقم كل جهاز وسعره الخاص، اطبع من «أجهزة هذا الخيار».'**
+  String get variantUnitLabelsHint;
+
+  /// Title of the sheet printing labels for chosen handsets.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات الأجهزة'**
+  String get labelBatchUnitsTitle;
+
+  /// Title of the sheet offered after a receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات ما استُلم'**
+  String get receiptLabelsTitle;
+
+  /// What the receipt label sheet prints.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصق لكل جهاز برقمه وسعره، وملصقات الدفعات بتاريخ صلاحيتها.'**
+  String get receiptLabelsSubtitle;
+
+  /// Snackbar action offering labels after a receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الملصقات'**
+  String get receiptLabelsAction;
+
+  /// Print button naming how many stickers will print.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{طباعة} =1{طباعة ملصق واحد} =2{طباعة ملصقين} few{طباعة {count} ملصقات} many{طباعة {count} ملصقًا} other{طباعة {count} ملصق}}'**
+  String labelBatchPrintCount(int count);
+
+  /// One handset line in a label batch.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{جهاز واحد — ملصق برقمه وسعره} =2{جهازان — ملصق لكل جهاز برقمه وسعره} few{{count} أجهزة — ملصق لكل جهاز برقمه وسعره} many{{count} جهازًا — ملصق لكل جهاز برقمه وسعره} other{{count} جهاز — ملصق لكل جهاز برقمه وسعره}}'**
+  String labelBatchUnitsEntry(int count);
+
+  /// One lot in a label batch.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة {code} · تنتهي {date}'**
+  String labelBatchLotEntry(String code, String date);
+
+  /// One undated lot in a label batch.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة {code}'**
+  String labelBatchLotEntryNoDate(String code);
+
+  /// A label batch entry that cannot print.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا باركود — لا يمكن طباعة ملصقه'**
+  String get labelBatchNoBarcode;
+
+  /// Copies stepper label in a label batch.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخ'**
+  String get labelBatchCopies;
+
   /// Title of the identified-articles list.
   ///
   /// In ar, this message translates to:

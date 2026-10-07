@@ -1,3 +1,5 @@
+import 'tracking_mode.dart';
+
 /// A production lot, and where its goods currently are.
 ///
 /// The lot is an **identity**, never a place and never a quantity: one lot code
@@ -23,6 +25,10 @@ class StockBatch {
     this.supplierId,
     this.productName = '',
     this.variantName = '',
+    this.variantSku = '',
+    this.variantBarcode = '',
+    this.variantPrice,
+    this.trackingMode = TrackingMode.batch,
     this.balances = const [],
     this.onHand = 0,
     this.notes = '',
@@ -55,6 +61,16 @@ class StockBatch {
   final int? supplierId;
   final String productName;
   final String variantName;
+
+  /// What a shelf sticker for this lot prints beside its date: the product's
+  /// own scan code and selling price. [barcode] above is the supplier's GS1
+  /// label, which the till does not scan.
+  final String variantSku;
+  final String variantBarcode;
+  final double? variantPrice;
+
+  /// `serial_batch` lots hold handsets one can open; `batch` lots hold a count.
+  final TrackingMode trackingMode;
   final List<StockBatchBalance> balances;
 
   /// Across every place it sits.
@@ -119,6 +135,12 @@ class StockBatch {
       supplierId: _intOrNull(json['supplier']),
       productName: json['product_name']?.toString() ?? '',
       variantName: json['variant_name']?.toString() ?? '',
+      variantSku: json['variant_sku']?.toString() ?? '',
+      variantBarcode: json['variant_barcode']?.toString() ?? '',
+      variantPrice: _doubleOrNull(json['variant_price']),
+      trackingMode: json.containsKey('tracking_mode')
+          ? TrackingMode.fromWire(json['tracking_mode'])
+          : TrackingMode.batch,
       balances: balancesJson is List<Object?>
           ? balancesJson
                 .whereType<Map<String, Object?>>()

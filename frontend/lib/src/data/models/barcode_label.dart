@@ -1,5 +1,7 @@
 import 'product.dart';
 import 'product_variant.dart';
+import 'stock_batch.dart';
+import 'stock_unit.dart';
 
 class BarcodeLabelDraft {
   const BarcodeLabelDraft({
@@ -32,6 +34,41 @@ class BarcodeLabelDraft {
       sku: variant.sku,
       barcode: variant.barcode,
       unitPrice: variant.unitPrice,
+    );
+  }
+
+  /// One identified article. Its own number is the barcode — scanned at the
+  /// till, the IMEI lookup selects exactly this handset rather than asking
+  /// which one — and its own asking price is the price, because two used
+  /// handsets of one variant rarely sell for the same money.
+  factory BarcodeLabelDraft.fromStockUnit(StockUnit unit) {
+    final name = unit.variantName.isNotEmpty
+        ? unit.variantName
+        : unit.productName;
+    return BarcodeLabelDraft(
+      variantId: unit.variantId,
+      displayName: name,
+      productName: unit.productName,
+      variantName: name,
+      sku: unit.code,
+      barcode: unit.code,
+      unitPrice: unit.listPrice ?? unit.askingPrice ?? 0,
+    );
+  }
+
+  /// A lot's shelf sticker: the product's own scan code and price. The lot's
+  /// date rides on the print line ([BarcodeLabelPrintLine.lot]).
+  factory BarcodeLabelDraft.fromStockBatch(StockBatch batch) {
+    return BarcodeLabelDraft(
+      variantId: batch.variantId,
+      displayName: batch.variantName.isNotEmpty
+          ? batch.variantName
+          : batch.productName,
+      productName: batch.productName,
+      variantName: batch.variantName,
+      sku: batch.variantSku,
+      barcode: batch.variantBarcode,
+      unitPrice: batch.variantPrice ?? 0,
     );
   }
 
@@ -101,6 +138,34 @@ class BarcodeLabelPrintLine {
       copies: copies,
       includePrice: includePrice,
       expiryDate: expiryDate,
+    );
+  }
+
+  /// A handset's sticker; a serial-in-lot pack also carries its lot's date.
+  factory BarcodeLabelPrintLine.unit(
+    StockUnit unit, {
+    int copies = 1,
+    bool includePrice = true,
+  }) {
+    return BarcodeLabelPrintLine(
+      label: BarcodeLabelDraft.fromStockUnit(unit),
+      copies: copies,
+      includePrice: includePrice,
+      expiryDate: unit.batchExpiryDate,
+    );
+  }
+
+  /// Stickers for a lot's goods, dated with the lot's own expiry.
+  factory BarcodeLabelPrintLine.lot(
+    StockBatch batch, {
+    required int copies,
+    bool includePrice = true,
+  }) {
+    return BarcodeLabelPrintLine(
+      label: BarcodeLabelDraft.fromStockBatch(batch),
+      copies: copies,
+      includePrice: includePrice,
+      expiryDate: batch.expiryDate,
     );
   }
 }

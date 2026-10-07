@@ -7,6 +7,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
@@ -32,6 +33,7 @@ class PurchasingScreen extends StatelessWidget {
     required this.navigation,
     this.showBackButton = false,
     this.onSaved,
+    this.printingRepository,
   });
 
   final PurchaseViewModel viewModel;
@@ -39,6 +41,9 @@ class PurchasingScreen extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
   final bool showBackButton;
+
+  /// Stickers for what a submit-and-receive brings in.
+  final PrintingRepository? printingRepository;
 
   /// Invoked after the draft is saved/submitted from this workspace. The edit
   /// flow uses it to return to the order it reopened; null in the create flow.
@@ -100,6 +105,7 @@ class PurchasingScreen extends StatelessWidget {
               contactRepository: contactRepository,
               capabilities: capabilities,
               onSaved: onSaved,
+              printingRepository: printingRepository,
             ),
           ),
         );
@@ -114,10 +120,12 @@ class _PurchasingWorkspace extends StatefulWidget {
     required this.contactRepository,
     required this.capabilities,
     this.onSaved,
+    this.printingRepository,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+  final PrintingRepository? printingRepository;
   final AuthorizationCapabilities capabilities;
   final VoidCallback? onSaved;
 
@@ -297,6 +305,7 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
                 submitController: _submitController,
                 onSubmitSuccess: widget.onSaved,
                 capabilities: widget.capabilities,
+                printingRepository: widget.printingRepository,
               ),
             );
           }
@@ -306,6 +315,7 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
             contactRepository: widget.contactRepository,
             capabilities: widget.capabilities,
             onSaved: widget.onSaved,
+            printingRepository: widget.printingRepository,
           );
         },
       ),
@@ -326,10 +336,12 @@ class _CompactPurchasingWorkspace extends StatelessWidget {
     required this.contactRepository,
     required this.capabilities,
     this.onSaved,
+    this.printingRepository,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+  final PrintingRepository? printingRepository;
   final AuthorizationCapabilities capabilities;
   final VoidCallback? onSaved;
 
@@ -379,6 +391,7 @@ class _CompactPurchasingWorkspace extends StatelessWidget {
               viewModel: viewModel,
               contactRepository: contactRepository,
               capabilities: capabilities,
+              printingRepository: printingRepository,
               onSubmitSuccess: () {
                 Navigator.of(sheetContext).pop();
                 onSaved?.call();

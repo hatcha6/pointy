@@ -160,6 +160,24 @@ class StockBatchSerializer(serializers.ModelSerializer):
         source="variant.product.name", read_only=True
     )
     variant_name = serializers.CharField(source="variant.full_name", read_only=True)
+    # What a shelf sticker for this lot carries beside its date: the product's
+    # own scan code and selling price. The lot's ``barcode`` is the supplier's
+    # GS1 label, not what the till scans.
+    variant_sku = serializers.CharField(source="variant.sku", read_only=True)
+    variant_barcode = serializers.CharField(
+        source="variant.barcode", read_only=True
+    )
+    variant_price = serializers.DecimalField(
+        source="variant.unit_price",
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
+    # A serial-in-lot carton opens onto the handsets inside it; a plain lot
+    # has none to open.
+    tracking_mode = serializers.CharField(
+        source="variant.product.tracking_mode", read_only=True
+    )
 
     class Meta:
         model = StockBatch
@@ -168,6 +186,10 @@ class StockBatchSerializer(serializers.ModelSerializer):
             "variant",
             "product_name",
             "variant_name",
+            "variant_sku",
+            "variant_barcode",
+            "variant_price",
+            "tracking_mode",
             "code",
             "display_code",
             "code_is_generated",

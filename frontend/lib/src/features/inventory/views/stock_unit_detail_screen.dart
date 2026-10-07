@@ -5,12 +5,15 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/error_messages.dart';
+import '../../../data/models/barcode_label.dart';
 import '../../../data/models/stock_unit.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/models/unit_photo.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/printing/print_paper_mismatch_message.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/product_image_viewer.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -18,6 +21,7 @@ import '../../../shared/shell/shell.dart';
 import '../../../shared/tracking/tracking_labels.dart';
 import '../../../shared/tracking/unit_details_sheet.dart';
 import '../../../shared/tracking/unit_sale_band.dart';
+import '../../catalog/views/barcode_label_print_action.dart';
 import '../view_models/stock_unit_detail_view_model.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'consignment_incident_sheet.dart';
@@ -42,9 +46,13 @@ class StockUnitDetailScreen extends StatefulWidget {
     required this.capabilities,
     this.detailViewModel,
     this.onOpenRecord,
+    this.printingRepository,
   });
 
   final TrackedStockViewModel viewModel;
+
+  /// Where its own label goes. Null hides the print button.
+  final PrintingRepository? printingRepository;
   final StockUnit unit;
   final AuthorizationCapabilities capabilities;
 
@@ -187,6 +195,7 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
         onWriteOff: _writeOff,
         onReportIncident: _reportIncident,
         onEditWarranty: _editWarranty,
+        onPrintLabel: widget.printingRepository == null ? null : _printLabel,
       ),
       if (_detail.incidents.isNotEmpty) _incidentsSection(context, l10n),
       StockUnitTimelineSection(
@@ -208,7 +217,9 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
       leading: cover == null
           ? null
           : _HeroCover(cover: cover, onTap: _openCover),
-      title: unit.productName.isNotEmpty ? unit.productName : unit.variantName,
+      // The variant, not just the product: «آيفون 13» is four different
+      // phones in a shop that sells four of them.
+      title: _name(unit),
       // Gone: what it went for. On the shelf: what it would go for.
       value: formatMoney(
         sold
@@ -277,7 +288,7 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
       initialIndex: photos
           .indexWhere((photo) => photo.id == cover.id)
           .clamp(0, urls.length - 1),
-      title: _detail.unit.productName,
+      title: _name(_detail.unit),
     );
   }
 
@@ -422,7 +433,7 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
     }
     return UnitPhotosSection(
       photos: _detail.photos,
-      title: _detail.unit.productName,
+      title: _name(_detail.unit),
       canManage: _can.canManageStockUnitPhotos,
       loadFailed: _detail.photosFailed,
       isUploading: _detail.isUploading,
@@ -596,6 +607,48 @@ class _StockUnitDetailScreenState extends State<StockUnitDetailScreen> {
       return;
     }
     _detail.replaceUnit(updated);
+  }
+
+  static String _name(StockUnit unit) =>
+      unit.variantName.isNotEmpty ? unit.variantName : unit.productName;
+
+  /// This article's own sticker — its number and its own price — so the till's
+  /// scan selects exactly this handset. A serial-in-lot pack carries its
+  /// lot's date as well.
+  Future<void> _printLabel() async {
+    final printing = widget.printingRepository;
+    if (printing == null) return;
+    final unit = _detail.unit;
+    final draft = BarcodeLabelDraft.fromStockUnit(unit);
+    final options = await showBarcodeLabelPrintDialog(
+      context: context,
+      label: draft,
+      tracksExpiry: unit.batchExpiryDate != null,
+      initialExpiry: unit.batchExpiryDate,
+    );
+    if (options == null || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await printing.printBarcodeLabels([
+      options.toPrintLine(draft),
+    ]);
+    if (!mounted) return;
+    final mismatch = result.paperMismatch;
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            mismatch != null
+                ? printPaperMismatchMessage(l10n, mismatch)
+                : result.isSuccess
+                ? l10n.barcodeLabelPrintSuccess(options.copies)
+                : result.unassignedRole != null
+                ? l10n.barcodeLabelNoPrinter
+                : l10n.barcodeLabelPrintError,
+          ),
+        ),
+      );
   }
 
   Future<void> _writeOff() async {

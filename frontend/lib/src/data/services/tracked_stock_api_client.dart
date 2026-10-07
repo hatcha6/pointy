@@ -32,6 +32,7 @@ class TrackedStockApiClient {
   Future<StockUnitPage> fetchUnits({
     int? variantId,
     int? productId,
+    int? batchId,
     int? warehouseId,
     String status = '',
     String code = '',
@@ -47,6 +48,7 @@ class TrackedStockApiClient {
         if (forSale) 'for_sale': '1',
         if (variantId != null) 'variant': '$variantId',
         if (productId != null) 'product': '$productId',
+        if (batchId != null) 'batch': '$batchId',
         if (warehouseId != null) 'warehouse': '$warehouseId',
         if (status.isNotEmpty) 'status': status,
         if (code.isNotEmpty) 'code': code,

@@ -8,7 +8,9 @@ import '../../../core/result.dart';
 import '../../../data/models/customer_asset.dart';
 import '../../../data/models/missing_lot.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/tracking/tracking_labels.dart';
@@ -29,6 +31,8 @@ class ProductTrackingCard extends StatefulWidget {
     required this.capabilities,
     required this.catalogRepository,
     this.trackedStockRepository,
+    this.printingRepository,
+    this.variants = const [],
   });
 
   final Product product;
@@ -38,6 +42,12 @@ class ProductTrackingCard extends StatefulWidget {
   /// What the two buttons open. Without it the card still says how the
   /// product is tracked.
   final TrackedStockRepository? trackedStockRepository;
+
+  /// Labels from the lists the card opens. Null hides that action there.
+  final PrintingRepository? printingRepository;
+
+  /// The product's variants, offered as filter chips on those lists.
+  final List<ProductVariant> variants;
 
   @override
   State<ProductTrackingCard> createState() => _ProductTrackingCardState();
@@ -227,6 +237,17 @@ class _ProductTrackingCardState extends State<ProductTrackingCard> {
     );
   }
 
+  /// This product's variants as the lists' filter chips.
+  List<VariantChoice> get _variantChoices => [
+    for (final variant in widget.variants)
+      (
+        id: variant.id,
+        label: variant.variantLabel.isNotEmpty
+            ? variant.variantLabel
+            : variant.displayLabel,
+      ),
+  ];
+
   /// A list of this product's articles, on a view model of its own: the
   /// app-wide one behind the drawer entry must not come back filtered.
   Future<void> _openUnits(
@@ -234,13 +255,18 @@ class _ProductTrackingCardState extends State<ProductTrackingCard> {
     TrackedStockRepository repository,
   ) async {
     final viewModel = TrackedStockViewModel(repository)
-      ..setProductFilter(widget.product.id, name: widget.product.name);
+      ..setProductFilter(
+        widget.product.id,
+        name: widget.product.name,
+        variants: _variantChoices,
+      );
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => StockUnitsScreen(
           viewModel: viewModel,
           capabilities: widget.capabilities,
           repository: repository,
+          printingRepository: widget.printingRepository,
         ),
       ),
     );
@@ -252,7 +278,11 @@ class _ProductTrackingCardState extends State<ProductTrackingCard> {
     TrackedStockRepository repository,
   ) async {
     final viewModel = TrackedStockViewModel(repository)
-      ..setProductFilter(widget.product.id, name: widget.product.name);
+      ..setProductFilter(
+        widget.product.id,
+        name: widget.product.name,
+        variants: _variantChoices,
+      );
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => StockBatchesScreen(
@@ -260,6 +290,8 @@ class _ProductTrackingCardState extends State<ProductTrackingCard> {
           repository: repository,
           canQuarantine: widget.capabilities.canQuarantineBatch,
           canIdentify: widget.capabilities.canIdentifyStockUnits,
+          printingRepository: widget.printingRepository,
+          capabilities: widget.capabilities,
         ),
       ),
     );

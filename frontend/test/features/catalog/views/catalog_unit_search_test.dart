@@ -19,6 +19,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/catalog_view_model.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/unit_search_lookup.dart';
 import 'package:pointy_frontend/src/features/catalog/views/catalog_screen.dart';
+import 'package:pointy_frontend/src/shared/catalog/catalog_empty_state.dart';
 import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
 import 'package:pointy_frontend/src/shared/barcode/barcode_scan_listener.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
@@ -208,6 +209,24 @@ void main() {
       findsOneWidget,
     );
     expect(openedUnits, isEmpty);
+  });
+
+  testWidgets('a found article is not followed by «no results»', (
+    tester,
+  ) async {
+    await pumpCatalog(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('catalog_product_lookup_field')),
+      imei,
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester);
+
+    expect(
+      find.byKey(const ValueKey('unit_search_match_card')),
+      findsOneWidget,
+    );
+    expect(find.byType(CatalogEmptyState), findsNothing);
   });
 
   testWidgets('a shop that tracks no articles asks nothing', (tester) async {

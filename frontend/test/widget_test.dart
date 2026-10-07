@@ -4821,7 +4821,8 @@ void main() {
     expect(find.text('طباعة ملصقات الباركود'), findsOneWidget);
     expect(find.text('عدد النسخ'), findsOneWidget);
     expect(find.text('طباعة السعر'), findsOneWidget);
-    expect(find.text('طباعة تاريخ الانتهاء'), findsOneWidget);
+    // Coffee has no lots, so there is no expiry date to print.
+    expect(find.text('طباعة تاريخ الانتهاء'), findsNothing);
     expect(find.text('معاينة الملصق'), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField).last, '3');

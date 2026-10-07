@@ -4,22 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/barcode_label.dart';
 import '../../../data/models/stock_unit.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/components/components.dart';
-import '../../../shared/date_formatters.dart';
-import '../../../shared/design/design.dart';
-import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/tracking/tracking_labels.dart';
+import '../../catalog/views/label_batch_print_sheet.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'identify_unit_dialog.dart';
 import 'missing_lots_screen.dart';
 import 'opening_identification_screen.dart';
 import 'stock_unit_detail_screen.dart';
+import 'stock_unit_row.dart';
+import 'variant_filter_chips.dart';
 
 /// Every article this shop has identified, and what became of it.
 ///
@@ -33,6 +35,7 @@ class StockUnitsScreen extends StatefulWidget {
     required this.capabilities,
     this.navigation,
     this.repository,
+    this.printingRepository,
     this.onOpenRecord,
   });
 
@@ -47,6 +50,10 @@ class StockUnitsScreen extends StatefulWidget {
   /// shop with nothing anonymous on the shelf pays nothing for it.
   final TrackedStockRepository? repository;
 
+  /// Labels for chosen articles — each one's own number and price. Null hides
+  /// the action.
+  final PrintingRepository? printingRepository;
+
   /// Handed to each article's page, for its invoice and buyer links.
   final Future<bool> Function(BuildContext context, String type, int id)?
   onOpenRecord;
@@ -57,6 +64,53 @@ class StockUnitsScreen extends StatefulWidget {
 
 class _StockUnitsScreenState extends State<StockUnitsScreen> {
   final TextEditingController _search = TextEditingController();
+
+  /// Choosing articles to print labels for. Null when not choosing.
+  Set<int>? _selected;
+
+  bool get _selecting => _selected != null;
+
+  void _toggle(StockUnit unit) {
+    setState(() {
+      final selected = _selected!;
+      selected.contains(unit.id)
+          ? selected.remove(unit.id)
+          : selected.add(unit.id);
+    });
+  }
+
+  Future<void> _printSelected() async {
+    final printing = widget.printingRepository;
+    final selected = _selected;
+    if (printing == null || selected == null || selected.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+    final units = [
+      for (final unit in widget.viewModel.units)
+        if (selected.contains(unit.id) && unit.isIdentified) unit,
+    ];
+    // One row per variant: the sheet stays short, and each row still prints
+    // one sticker per handset, each with its own number and price.
+    final byVariant = <int, List<StockUnit>>{};
+    for (final unit in units) {
+      byVariant.putIfAbsent(unit.variantId, () => []).add(unit);
+    }
+    await showLabelBatchPrintSheet(
+      context,
+      title: l10n.labelBatchUnitsTitle,
+      printingRepository: printing,
+      entries: [
+        for (final group in byVariant.values)
+          LabelBatchEntry(
+            title: group.first.variantName.isNotEmpty
+                ? group.first.variantName
+                : group.first.productName,
+            subtitle: l10n.labelBatchUnitsEntry(group.length),
+            lines: [for (final unit in group) BarcodeLabelPrintLine.unit(unit)],
+          ),
+      ],
+    );
+    if (mounted) setState(() => _selected = null);
+  }
 
   @override
   void initState() {
@@ -97,6 +151,13 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
             title: Text(l10n.stockUnitsTitle),
             isLoading: viewModel.isLoadingUnits,
             actions: [
+              if (widget.printingRepository != null && !_selecting)
+                IconButton(
+                  key: const ValueKey('stock_units_select_for_labels'),
+                  tooltip: l10n.stockUnitsSelectForLabels,
+                  onPressed: () => setState(() => _selected = <int>{}),
+                  icon: const Icon(Icons.print_outlined),
+                ),
               if (widget.repository != null &&
                   widget.capabilities.canIdentifyStockUnits)
                 IconButton(
@@ -114,8 +175,47 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
             ],
           ),
           body: _body(context, l10n, viewModel),
+          bottomNavigationBar: _selecting ? _selectionBar(l10n) : null,
         );
       },
+    );
+  }
+
+  Widget _selectionBar(AppLocalizations l10n) {
+    final selected = _selected!;
+    final identified = [
+      for (final unit in widget.viewModel.units)
+        if (unit.isIdentified) unit.id,
+    ];
+    return SafeArea(
+      child: Material(
+        elevation: 6,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Text(l10n.stockUnitsSelectedCount(selected.length)),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => setState(() => selected.addAll(identified)),
+                child: Text(l10n.stockUnitsSelectAll),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => setState(() => _selected = null),
+                child: Text(l10n.stockUnitsCancelSelection),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                key: const ValueKey('stock_units_print_selected'),
+                onPressed: selected.isEmpty ? null : _printSelected,
+                icon: const Icon(Icons.print_outlined),
+                label: Text(l10n.stockUnitsPrintSelected),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -186,6 +286,28 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
                     avatar: const Icon(Icons.inventory_2_outlined, size: 18),
                     label: Text(viewModel.productName),
                     onDeleted: viewModel.clearProductFilter,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (viewModel.variantChoices.isNotEmpty) ...[
+                VariantFilterChips(
+                  viewModel: viewModel,
+                  onSelected: (id) =>
+                      viewModel.setVariantFilter(id, units: true),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (viewModel.batchId != null) ...[
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: InputChip(
+                    key: const ValueKey('stock_units_batch_filter'),
+                    avatar: const Icon(Icons.inventory_2_outlined, size: 18),
+                    label: Text(
+                      l10n.stockUnitsBatchFilter(viewModel.batchLabel),
+                    ),
+                    onDeleted: viewModel.clearBatchFilter,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -304,9 +426,13 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
         title: l10n.stockUnitsEmptyTitle,
         message: l10n.stockUnitsEmptyBody,
       ),
-      itemBuilder: (context, unit) => _UnitRow(
+      itemBuilder: (context, unit) => StockUnitRow(
         unit: unit,
-        onTap: () => _openDetail(context, unit),
+        selecting: _selecting,
+        selected: _selected?.contains(unit.id) ?? false,
+        onTap: () => _selecting
+            ? (unit.isIdentified ? _toggle(unit) : null)
+            : _openDetail(context, unit),
         onIdentify:
             !unit.isIdentified &&
                 unit.isOnHand &&
@@ -345,76 +471,12 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
           unit: unit,
           capabilities: widget.capabilities,
           onOpenRecord: widget.onOpenRecord,
+          printingRepository: widget.printingRepository,
         ),
       ),
     );
     if (context.mounted) {
       unawaited(widget.viewModel.loadUnits());
     }
-  }
-}
-
-class _UnitRow extends StatelessWidget {
-  const _UnitRow({required this.unit, required this.onTap, this.onIdentify});
-
-  final StockUnit unit;
-  final VoidCallback onTap;
-
-  /// Names a placeholder article, from the row itself: the worklist is worked
-  /// one box after another, and a detail page per box is a trip too many.
-  final VoidCallback? onIdentify;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colors = context.pointyColors;
-    final days = unit.daysInStock;
-
-    return ListTile(
-      onTap: onTap,
-      leading: Icon(
-        unit.isIdentified ? Icons.qr_code_2_outlined : Icons.help_outline,
-        color: unit.isIdentified ? null : colors.warning,
-      ),
-      title: Text(
-        unit.isIdentified ? unit.code : l10n.stockUnitsAwaitingIdentifier,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontStyle: unit.isIdentified ? FontStyle.normal : FontStyle.italic,
-        ),
-      ),
-      subtitle: Text(
-        [
-          if (unit.productName.isNotEmpty) unit.productName,
-          if (unit.batchCode.isNotEmpty)
-            l10n.posCartLineBatchBadge(unit.batchCode),
-          if (unit.isOnHand && days != null)
-            l10n.posUnitPickerDaysInStock(days),
-          if (unit.soldAt != null) formatDate(unit.soldAt!),
-        ].join(' · '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: onIdentify != null
-          ? TextButton.icon(
-              key: ValueKey('stock_unit_identify_${unit.id}'),
-              onPressed: onIdentify,
-              icon: const Icon(Icons.qr_code_scanner_outlined, size: 18),
-              label: Text(l10n.stockUnitIdentifyAction),
-            )
-          : unit.showsCost
-          ? Text(
-              formatMoney(unit.totalCost!),
-              style: theme.textTheme.titleSmall,
-            )
-          : (unit.listPrice == null
-                ? null
-                : Text(
-                    formatMoney(unit.listPrice!),
-                    style: theme.textTheme.titleSmall,
-                  )),
-    );
   }
 }

@@ -1448,6 +1448,7 @@ class PosApiService {
   Future<StockUnitPage> fetchStockUnits({
     int? variantId,
     int? productId,
+    int? batchId,
     int? warehouseId,
     String status = '',
     String code = '',
@@ -1459,6 +1460,7 @@ class PosApiService {
     return _trackedStock.fetchUnits(
       variantId: variantId,
       productId: productId,
+      batchId: batchId,
       warehouseId: warehouseId,
       status: status,
       code: code,

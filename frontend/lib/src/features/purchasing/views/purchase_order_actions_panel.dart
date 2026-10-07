@@ -793,6 +793,9 @@ Future<void> _showReceivingDialog(
     return;
   }
 
+  // Read before the receipt: the order refreshes after it, and these lines
+  // carry the barcode and price the stickers need either way.
+  final orderLines = viewModel.order.lines;
   final didReceive = await viewModel.receiveLines(
     lines: result.lines,
     note: result.note,
@@ -800,15 +803,17 @@ Future<void> _showReceivingDialog(
   if (!context.mounted || !didReceive) {
     return;
   }
-  messenger
-    ..clearSnackBars()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(
-          l10n.purchaseOrderReceiveSuccess(viewModel.order.orderNumber),
-        ),
-      ),
-    );
+  showReceiptDoneSnackBar(
+    context,
+    messenger: messenger,
+    message: l10n.purchaseOrderReceiveSuccess(viewModel.order.orderNumber),
+    entries: receiptLabelEntries(
+      orderLines: orderLines,
+      received: result.lines,
+      l10n: l10n,
+    ),
+    printingRepository: viewModel.printingRepository,
+  );
 }
 
 Future<void> _showPurchaseAdjustmentDialog(

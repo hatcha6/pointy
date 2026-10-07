@@ -370,3 +370,58 @@ class LineTellsTheScanLoopWhatItReadsTests(_ReceiptApiCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertTrue(response.data["tracks_expiry"])
         self.assertTrue(response.data["expiry_required"])
+
+class StickersHaveWhatTheyPrintTests(_ReceiptApiCase):
+    """A sticker printed on receipt, or for a lot, needs the product's own
+    barcode and selling price — and a lot sticker needs its own date."""
+
+    def test_an_order_line_carries_the_barcode_and_the_selling_price(self):
+        product = tracked_product(
+            name="حليب", sku="MILK-9", mode=Product.TrackingMode.BATCH,
+            unit_price="48.00",
+        )
+        variant = product.default_variant
+        variant.barcode = "6221000000017"
+        variant.save(update_fields=["barcode"])
+        order_id, _ = self._submitted_order(variant, 2, "36.00")
+
+        line = self.manager.get(
+            reverse("purchaseorder-detail", args=[order_id])
+        ).data["lines"][0]
+
+        self.assertEqual(line["variant_barcode"], "6221000000017")
+        self.assertEqual(line["selling_price"], "48.00")
+
+    def test_a_lot_carries_its_products_barcode_price_and_mode(self):
+        product = tracked_product(
+            name="قلم إنسولين",
+            sku="PEN-9",
+            mode=Product.TrackingMode.SERIAL_BATCH,
+            unit_price="62.00",
+        )
+        Product.objects.filter(pk=product.pk).update(expiry_required=True)
+        variant = product.default_variant
+        variant.barcode = "6221000000024"
+        variant.save(update_fields=["barcode"])
+        order_id, line_id = self._submitted_order(variant, 1, "45.00")
+        received = self._receive(
+            order_id,
+            {
+                "line": line_id,
+                "quantity": 1,
+                "units": [{"code": "PEN-9-0001"}],
+                "batches": [{"code": "NV-9", "expiry_date": "2027-09-30"}],
+            },
+        )
+        self.assertEqual(received.status_code, status.HTTP_200_OK, received.data)
+
+        lots = self.manager.get(
+            reverse("stock-batch-list"), {"variant": variant.pk}
+        ).data
+        lot = (lots["results"] if isinstance(lots, dict) else lots)[0]
+
+        self.assertEqual(lot["variant_barcode"], "6221000000024")
+        self.assertEqual(lot["variant_sku"], "PEN-9")
+        self.assertEqual(lot["variant_price"], "62.00")
+        self.assertEqual(lot["tracking_mode"], "serial_batch")
+        self.assertEqual(lot["expiry_date"], "2027-09-30")

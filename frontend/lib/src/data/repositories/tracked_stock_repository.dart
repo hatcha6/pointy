@@ -38,6 +38,7 @@ class TrackedStockRepository {
   Future<Result<StockUnitPage>> loadUnits({
     int? variantId,
     int? productId,
+    int? batchId,
     int? warehouseId,
     String status = '',
     String code = '',
@@ -50,6 +51,7 @@ class TrackedStockRepository {
       () => _service.fetchStockUnits(
         variantId: variantId,
         productId: productId,
+        batchId: batchId,
         warehouseId: warehouseId,
         status: status,
         code: code,

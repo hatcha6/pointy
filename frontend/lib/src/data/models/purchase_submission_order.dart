@@ -368,6 +368,8 @@ class PurchaseOrderLine {
     this.productName,
     this.variantName,
     this.variantSku,
+    this.variantBarcode = '',
+    this.sellingPrice,
     this.tracksExpiry = false,
     this.trackingMode = TrackingMode.quantity,
     this.identifierKind = '',
@@ -389,6 +391,11 @@ class PurchaseOrderLine {
   final String? productName;
   final String? variantName;
   final String? variantSku;
+
+  /// What a sticker printed on receipt carries: the product's scan code and
+  /// its selling price.
+  final String variantBarcode;
+  final double? sellingPrice;
   final bool tracksExpiry;
 
   /// How closely these goods are identified, so the receiving sheet knows
@@ -516,6 +523,8 @@ class PurchaseOrderLine {
       tracksExpiry: _boolFromJson(json['tracks_expiry']),
       trackingMode: TrackingMode.fromWire(json['tracking_mode']),
       identifierKind: json['identifier_kind']?.toString() ?? '',
+      variantBarcode: json['variant_barcode']?.toString() ?? '',
+      sellingPrice: _nullableMoneyFromJson(json['selling_price']),
       assetTypeId: switch (json['asset_type']) {
         final num id => id.toInt(),
         _ => null,
@@ -593,6 +602,8 @@ class PurchaseOrderLine {
       tracksExpiry: tracksExpiry,
       trackingMode: trackingMode,
       identifierKind: identifierKind,
+      variantBarcode: variantBarcode,
+      sellingPrice: sellingPrice,
       assetTypeId: assetTypeId,
       expiryDate: expiryDate,
       quantity: quantity,

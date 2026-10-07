@@ -3,10 +3,12 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
+import '../../../core/result.dart';
 import '../../../data/models/barcode_label.dart';
 import '../../../data/models/bought_together_product.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
+import '../../../data/models/stock_batch.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
@@ -223,6 +225,8 @@ class ProductDetailsView extends StatelessWidget {
                 capabilities: capabilities,
                 catalogRepository: viewModel.catalogRepository,
                 trackedStockRepository: trackedStockRepository,
+                printingRepository: printingRepository,
+                variants: viewModel.variants,
               ),
             ],
             if (capabilities.canAccessPurchasing) ...[
@@ -241,6 +245,7 @@ class ProductDetailsView extends StatelessWidget {
               capabilities: capabilities,
               printingRepository: printingRepository,
               analyticsEngine: analyticsEngine,
+              loadLots: product.trackingMode.tracksLots ? _lotsLoader() : null,
               onAddVariant: () => _showVariantEditor(context),
               onGenerateVariants: () => _showVariantGenerator(context),
               onEditVariant: (variant) =>
@@ -378,6 +383,22 @@ class ProductDetailsView extends StatelessWidget {
     );
   }
 
+  /// A variant's lots that still hold goods, for its label's date.
+  Future<List<StockBatch>> Function(int variantId)? _lotsLoader() {
+    final repository = trackedStockRepository;
+    if (repository == null) return null;
+    return (variantId) async {
+      final result = await repository.loadBatches(variantId: variantId);
+      return switch (result) {
+        Ok(:final value) => [
+          for (final lot in value.batches)
+            if (lot.onHand > 0) lot,
+        ],
+        Error() => const <StockBatch>[],
+      };
+    };
+  }
+
   Future<void> _openVariantDetails(
     BuildContext context,
     Product product,
@@ -401,6 +422,7 @@ class ProductDetailsView extends StatelessWidget {
             isSystem: viewModel.product.isSystem,
           ),
           analyticsEngine: analyticsEngine,
+          trackedStockRepository: trackedStockRepository,
         ),
       ),
     );
@@ -659,7 +681,7 @@ class _ParentSummaryCard extends StatelessWidget {
                 _SummaryChip(
                   icon: Icons.inventory_2_outlined,
                   label: l10n.productTotalStockLabel,
-                  value: '${product.quantityOnHand}',
+                  value: formatQuantity(product.quantityOnHand),
                 ),
                 _SummaryChip(
                   icon: Icons.tune_outlined,
@@ -831,6 +853,7 @@ class _VariantsSection extends StatelessWidget {
     required this.capabilities,
     required this.printingRepository,
     this.analyticsEngine,
+    this.loadLots,
     required this.onAddVariant,
     required this.onGenerateVariants,
     required this.onEditVariant,
@@ -842,6 +865,7 @@ class _VariantsSection extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final PrintingRepository printingRepository;
   final AnalyticsEngine? analyticsEngine;
+  final Future<List<StockBatch>> Function(int variantId)? loadLots;
   final VoidCallback onAddVariant;
   final VoidCallback onGenerateVariants;
   final ValueChanged<ProductVariant> onEditVariant;
@@ -892,6 +916,7 @@ class _VariantsSection extends StatelessWidget {
                     capabilities: capabilities,
                     printingRepository: printingRepository,
                     analyticsEngine: analyticsEngine,
+                    loadLots: loadLots,
                     onEditVariant: onEditVariant,
                     onOpenVariant: onOpenVariant,
                   );
@@ -905,6 +930,7 @@ class _VariantsSection extends StatelessWidget {
                         capabilities: capabilities,
                         printingRepository: printingRepository,
                         analyticsEngine: analyticsEngine,
+                        loadLots: loadLots,
                         onEdit: () => onEditVariant(variant),
                         onOpen: () => onOpenVariant(variant),
                       ),
@@ -927,6 +953,7 @@ class _VariantDataTable extends StatelessWidget {
     required this.capabilities,
     required this.printingRepository,
     this.analyticsEngine,
+    this.loadLots,
     required this.onEditVariant,
     required this.onOpenVariant,
   });
@@ -936,6 +963,7 @@ class _VariantDataTable extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final PrintingRepository printingRepository;
   final AnalyticsEngine? analyticsEngine;
+  final Future<List<StockBatch>> Function(int variantId)? loadLots;
   final ValueChanged<ProductVariant> onEditVariant;
   final ValueChanged<ProductVariant> onOpenVariant;
 
@@ -968,7 +996,7 @@ class _VariantDataTable extends StatelessWidget {
                   onSelectChanged: (_) => onOpenVariant(variant),
                   cells: [
                     DataCell(_VariantNameLabel(variant: variant)),
-                    DataCell(Text('${variant.quantityOnHand}')),
+                    DataCell(Text(formatQuantity(variant.quantityOnHand))),
                     DataCell(Text(formatMoney(variant.unitPrice))),
                     DataCell(Text(variant.sku)),
                     DataCell(
@@ -988,6 +1016,7 @@ class _VariantDataTable extends StatelessWidget {
                             variant: variant,
                             printingRepository: printingRepository,
                             analyticsEngine: analyticsEngine,
+                            loadLots: loadLots,
                           ),
                           IconButton(
                             tooltip: l10n.openVariantDetailsTooltip,
@@ -1022,6 +1051,7 @@ class _VariantListTile extends StatelessWidget {
     required this.capabilities,
     required this.printingRepository,
     this.analyticsEngine,
+    this.loadLots,
     required this.onEdit,
     required this.onOpen,
   });
@@ -1031,6 +1061,7 @@ class _VariantListTile extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final PrintingRepository printingRepository;
   final AnalyticsEngine? analyticsEngine;
+  final Future<List<StockBatch>> Function(int variantId)? loadLots;
   final VoidCallback onEdit;
   final VoidCallback onOpen;
 
@@ -1061,6 +1092,7 @@ class _VariantListTile extends StatelessWidget {
             variant: variant,
             printingRepository: printingRepository,
             analyticsEngine: analyticsEngine,
+            loadLots: loadLots,
           ),
           IconButton(
             tooltip: l10n.openVariantDetailsTooltip,
@@ -1088,12 +1120,14 @@ class _VariantBarcodeLabelPrintButton extends StatelessWidget {
     required this.variant,
     required this.printingRepository,
     this.analyticsEngine,
+    this.loadLots,
   });
 
   final Product product;
   final ProductVariant variant;
   final PrintingRepository printingRepository;
   final AnalyticsEngine? analyticsEngine;
+  final Future<List<StockBatch>> Function(int variantId)? loadLots;
 
   @override
   Widget build(BuildContext context) {
@@ -1108,7 +1142,9 @@ class _VariantBarcodeLabelPrintButton extends StatelessWidget {
       entityType: 'product_variant',
       entityId: variant.id,
       source: 'product_detail_variants',
-      tracksExpiry: labelVariant.tracksExpiry,
+      // Only goods kept in lots carry a date; the date comes from a lot.
+      tracksExpiry: labelVariant.trackingMode.tracksLots,
+      loadLots: loadLots == null ? null : () => loadLots!(variant.id),
       analyticsEngine: analyticsEngine,
       style: BarcodeLabelPrintButtonStyle.icon,
       tooltip: l10n.barcodeLabelPrintVariantTooltip,

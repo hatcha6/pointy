@@ -1428,6 +1428,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         repository: dependencies.trackedStockRepository,
+        printingRepository: dependencies.printingRepository,
         onOpenRecord: _openEntityDeepLink,
       ),
     );
@@ -1442,6 +1443,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         repository: dependencies.trackedStockRepository,
         canQuarantine: capabilities.canQuarantineBatch,
         canIdentify: capabilities.canIdentifyStockUnits,
+        printingRepository: dependencies.printingRepository,
+        capabilities: capabilities,
       ),
     );
   }
@@ -1486,6 +1489,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         showBackButton: true,
+        printingRepository: dependencies.printingRepository,
       ),
     );
   }
@@ -2452,6 +2456,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           unit: unit,
           capabilities: capabilities,
           onOpenRecord: _openEntityDeepLink,
+          printingRepository: dependencies.printingRepository,
         ),
       ),
     );

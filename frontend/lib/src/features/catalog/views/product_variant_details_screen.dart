@@ -6,7 +6,9 @@ import '../../../core/authorization.dart';
 import '../../../data/models/barcode_label.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/stock_batch.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -17,6 +19,11 @@ import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../data/models/warehouse.dart';
+import '../../../core/result.dart';
+import '../../inventory/view_models/tracked_stock_view_model.dart';
+import '../../inventory/views/stock_batches_screen.dart';
+import '../../inventory/views/stock_units_screen.dart';
+import '../../../shared/tracking/tracking_labels.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'barcode_label_print_action.dart';
 import 'product_details_hero.dart';
@@ -31,12 +38,17 @@ class ProductVariantDetailsScreen extends StatelessWidget {
     required this.printingRepository,
     required this.capabilities,
     this.analyticsEngine,
+    this.trackedStockRepository,
   });
 
   final ProductStockViewModel viewModel;
   final PrintingRepository printingRepository;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
+
+  /// Opens this variant's own articles and lots, and dates its labels from a
+  /// lot. Null for an untracked shop.
+  final TrackedStockRepository? trackedStockRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +78,16 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                     ),
                   ),
                   if (capabilities.canViewStock) const SizedBox(height: 12),
+                  if (trackedStockRepository case final repository?
+                      when product.trackingMode.isTracked) ...[
+                    _VariantTrackingSection(
+                      product: product,
+                      repository: repository,
+                      capabilities: capabilities,
+                      printingRepository: printingRepository,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   PointyDetailSection(
                     title: l10n.productAvailabilityTitle,
                     icon: product.isActive
@@ -126,6 +148,7 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                       product: product,
                       printingRepository: printingRepository,
                       analyticsEngine: analyticsEngine,
+                      trackedStockRepository: trackedStockRepository,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -429,11 +452,27 @@ class _BarcodeLabelPrintSection extends StatelessWidget {
     required this.product,
     required this.printingRepository,
     this.analyticsEngine,
+    this.trackedStockRepository,
   });
 
   final Product product;
   final PrintingRepository printingRepository;
   final AnalyticsEngine? analyticsEngine;
+  final TrackedStockRepository? trackedStockRepository;
+
+  /// The variant's lots that still hold goods, for the label's date.
+  Future<List<StockBatch>> _lots(int variantId) async {
+    final repository = trackedStockRepository;
+    if (repository == null) return const [];
+    final result = await repository.loadBatches(variantId: variantId);
+    return switch (result) {
+      Ok(:final value) => [
+        for (final lot in value.batches)
+          if (lot.onHand > 0) lot,
+      ],
+      Error() => const [],
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -451,6 +490,18 @@ class _BarcodeLabelPrintSection extends StatelessWidget {
           PointyInlineMessage.error(message: l10n.barcodeLabelPrintNoBarcode),
           const SizedBox(height: 12),
         ],
+        // A phone's own sticker carries its IMEI and its own price; this one
+        // carries the variant's. Said here, where somebody looking for the
+        // first is about to print the second.
+        if (product.trackingMode.tracksUnits) ...[
+          Text(
+            l10n.variantUnitLabelsHint,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: context.pointyColors.mutedInk,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: BarcodeLabelPrintButton(
@@ -465,8 +516,14 @@ class _BarcodeLabelPrintSection extends StatelessWidget {
             entityType: variant == null ? 'product' : 'product_variant',
             entityId: variant?.id ?? product.id,
             source: 'barcode_label_panel',
-            tracksExpiry:
-                product.tracksExpiry || (variant?.tracksExpiry ?? false),
+            // Only goods kept in lots carry a date at all.
+            tracksExpiry: product.trackingMode.tracksLots,
+            loadLots:
+                variant != null &&
+                    product.trackingMode.tracksLots &&
+                    trackedStockRepository != null
+                ? () => _lots(variant.id)
+                : null,
             analyticsEngine: analyticsEngine,
             tooltip: l10n.barcodeLabelPrintButton,
           ),
@@ -727,5 +784,84 @@ class _StockByPlacePanel extends StatelessWidget {
       case WarehouseKind.transit:
         return Icons.route_outlined;
     }
+  }
+}
+
+/// This variant's own articles and lots — the list a variant's page opens is
+/// that variant's, not the whole product's.
+class _VariantTrackingSection extends StatelessWidget {
+  const _VariantTrackingSection({
+    required this.product,
+    required this.repository,
+    required this.capabilities,
+    required this.printingRepository,
+  });
+
+  final Product product;
+  final TrackedStockRepository repository;
+  final AuthorizationCapabilities capabilities;
+  final PrintingRepository printingRepository;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final mode = product.trackingMode;
+    final canUnits = mode.tracksUnits && capabilities.canViewStockUnits;
+    final canLots = mode.tracksLots && capabilities.canViewStockBatches;
+    if (!canUnits && !canLots) return const SizedBox.shrink();
+    return PointyDetailSection(
+      title: l10n.productTrackingSectionTitle,
+      icon: trackingModeIcon(mode),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (canUnits)
+            OutlinedButton.icon(
+              key: const ValueKey('variant_open_units'),
+              onPressed: () => _open(context, units: true),
+              icon: const Icon(Icons.qr_code_2_outlined),
+              label: Text(l10n.variantOpenUnits),
+            ),
+          if (canLots)
+            OutlinedButton.icon(
+              key: const ValueKey('variant_open_lots'),
+              onPressed: () => _open(context, units: false),
+              icon: const Icon(Icons.event_available_outlined),
+              label: Text(l10n.variantOpenLots),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _open(BuildContext context, {required bool units}) async {
+    final variant = product.defaultVariant;
+    final viewModel = TrackedStockViewModel(repository)
+      ..setProductFilter(
+        product.id,
+        name: variant?.displayLabel ?? product.name,
+        variantId: variant?.id,
+      );
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => units
+            ? StockUnitsScreen(
+                viewModel: viewModel,
+                capabilities: capabilities,
+                repository: repository,
+                printingRepository: printingRepository,
+              )
+            : StockBatchesScreen(
+                viewModel: viewModel,
+                repository: repository,
+                canQuarantine: capabilities.canQuarantineBatch,
+                canIdentify: capabilities.canIdentifyStockUnits,
+                printingRepository: printingRepository,
+                capabilities: capabilities,
+              ),
+      ),
+    );
+    viewModel.dispose();
   }
 }

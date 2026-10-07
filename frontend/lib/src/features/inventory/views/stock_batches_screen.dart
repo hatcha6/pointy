@@ -3,18 +3,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
+import '../../../data/models/barcode_label.dart';
 import '../../../data/models/stock_batch.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/printing/print_paper_mismatch_message.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/units.dart';
+import '../../catalog/views/barcode_label_print_action.dart';
 import '../view_models/tracked_stock_view_model.dart';
 import 'batch_recall_screen.dart';
 import 'opening_identification_screen.dart';
+import 'stock_units_screen.dart';
+import 'variant_filter_chips.dart';
 
 /// The lots this shop has held, and where their goods are now.
 ///
@@ -30,6 +37,8 @@ class StockBatchesScreen extends StatefulWidget {
     this.repository,
     this.canQuarantine = false,
     this.canIdentify = false,
+    this.printingRepository,
+    this.capabilities,
   });
 
   final TrackedStockViewModel viewModel;
@@ -46,6 +55,12 @@ class StockBatchesScreen extends StatefulWidget {
   /// recalls anything pays nothing for it.
   final TrackedStockRepository? repository;
   final bool canQuarantine;
+
+  /// Shelf stickers for a lot, dated with its expiry. Null hides the action.
+  final PrintingRepository? printingRepository;
+
+  /// Opens a serial-in-lot carton's handsets. Null hides the action.
+  final AuthorizationCapabilities? capabilities;
 
   @override
   State<StockBatchesScreen> createState() => _StockBatchesScreenState();
@@ -145,6 +160,14 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
               ),
             ),
           ),
+        if (viewModel.variantChoices.isNotEmpty)
+          Padding(
+            padding: spacing.pagePadding.copyWith(bottom: 0),
+            child: VariantFilterChips(
+              viewModel: viewModel,
+              onSelected: (id) => viewModel.setVariantFilter(id, units: false),
+            ),
+          ),
         Padding(
           padding: spacing.pagePadding,
           child: SingleChildScrollView(
@@ -227,8 +250,82 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
         onOpenRecall: widget.repository == null
             ? null
             : () => _openRecall(context, batch),
+        onPrintLabels: widget.printingRepository == null
+            ? null
+            : () => _printLabels(context, batch),
+        onOpenUnits:
+            widget.repository != null &&
+                widget.capabilities != null &&
+                batch.trackingMode.tracksUnits
+            ? () => _openUnits(context, batch)
+            : null,
       ),
     );
+  }
+
+  /// Stickers for this lot's goods: the product's own barcode and price, and
+  /// the lot's own date — read off the lot, never typed from the box.
+  Future<void> _printLabels(BuildContext context, StockBatch batch) async {
+    final printing = widget.printingRepository;
+    if (printing == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    if (batch.variantBarcode.trim().isEmpty) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.stockBatchNoBarcodeForLabel)),
+        );
+      return;
+    }
+    final draft = BarcodeLabelDraft.fromStockBatch(batch);
+    final options = await showBarcodeLabelPrintDialog(
+      context: context,
+      label: draft,
+      tracksExpiry: true,
+      initialExpiry: batch.expiryDate,
+      initialCopies: batch.onHand.round().clamp(1, 999),
+    );
+    if (options == null || !context.mounted) return;
+    final result = await printing.printBarcodeLabels([
+      options.toPrintLine(draft),
+    ]);
+    final mismatch = result.paperMismatch;
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            mismatch != null
+                ? printPaperMismatchMessage(l10n, mismatch)
+                : result.isSuccess
+                ? l10n.barcodeLabelPrintSuccess(options.copies)
+                : result.unassignedRole != null
+                ? l10n.barcodeLabelNoPrinter
+                : l10n.barcodeLabelPrintError,
+          ),
+        ),
+      );
+  }
+
+  /// The handsets inside a serial-in-lot carton, on a list of their own.
+  Future<void> _openUnits(BuildContext context, StockBatch batch) async {
+    final repository = widget.repository;
+    final capabilities = widget.capabilities;
+    if (repository == null || capabilities == null) return;
+    final viewModel = TrackedStockViewModel(repository)
+      ..setBatchFilter(batch.id, label: batch.label);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StockUnitsScreen(
+          viewModel: viewModel,
+          capabilities: capabilities,
+          repository: repository,
+          printingRepository: widget.printingRepository,
+        ),
+      ),
+    );
+    viewModel.dispose();
   }
 
   /// Where this lot came from, where it is, and who has the rest (§6.8.1).
@@ -322,11 +419,15 @@ class _BatchCard extends StatelessWidget {
     required this.batch,
     required this.onToggleQuarantine,
     this.onOpenRecall,
+    this.onPrintLabels,
+    this.onOpenUnits,
   });
 
   final StockBatch batch;
   final VoidCallback onToggleQuarantine;
   final VoidCallback? onOpenRecall;
+  final VoidCallback? onPrintLabels;
+  final VoidCallback? onOpenUnits;
 
   @override
   Widget build(BuildContext context) {
@@ -368,9 +469,13 @@ class _BatchCard extends StatelessWidget {
                   ),
               ],
             ),
-            if (batch.productName.isNotEmpty)
+            // The variant, not just the product: a 400 g and an 800 g tin of
+            // the same formula are different lots on different shelves.
+            if (batch.variantName.isNotEmpty || batch.productName.isNotEmpty)
               Text(
-                batch.productName,
+                batch.variantName.isNotEmpty
+                    ? batch.variantName
+                    : batch.productName,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.hintColor,
                 ),
@@ -403,7 +508,28 @@ class _BatchCard extends StatelessWidget {
                   formatQuantity(batch.onHand),
                   style: theme.textTheme.bodySmall,
                 ),
-                const Spacer(),
+              ],
+            ),
+            // A wrap, not a row: four actions do not fit beside the date on a
+            // phone, and a row clipped the last one away.
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 4,
+              children: [
+                if (onOpenUnits != null)
+                  TextButton.icon(
+                    key: ValueKey('stock_batch_units_${batch.id}'),
+                    onPressed: onOpenUnits,
+                    icon: const Icon(Icons.qr_code_2_outlined, size: 18),
+                    label: Text(l10n.stockBatchOpenUnits),
+                  ),
+                if (onPrintLabels != null && batch.onHand > 0)
+                  TextButton.icon(
+                    key: ValueKey('stock_batch_labels_${batch.id}'),
+                    onPressed: onPrintLabels,
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: Text(l10n.stockBatchPrintLabels),
+                  ),
                 if (onOpenRecall != null)
                   TextButton(
                     onPressed: onOpenRecall,

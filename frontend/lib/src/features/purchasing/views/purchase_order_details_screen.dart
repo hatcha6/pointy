@@ -32,6 +32,7 @@ import '../../../shared/tracking/unit_pick_sheet.dart';
 import '../../printing/views/print_audit_sheet.dart';
 import '../view_models/purchase_order_details_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
+import 'receipt_labels.dart';
 
 import '../../../data/models/receipt_capture.dart';
 import '../../inventory/views/batch_capture_sheet.dart';

@@ -10306,6 +10306,167 @@
       }
     }
   },
+  "barcodeLabelLotLabel": "الدفعة",
+  "@barcodeLabelLotLabel": {
+    "description": "Label of the lot picker in the barcode label dialog."
+  },
+  "barcodeLabelLotOption": "{code} · تنتهي {date} · {quantity} بالمخزون",
+  "@barcodeLabelLotOption": {
+    "description": "One lot in the barcode label dialog's lot picker.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "stockUnitPriceCaption": "سعر البيع",
+  "@stockUnitPriceCaption": {
+    "description": "Caption under a handset's selling price in the handsets list."
+  },
+  "stockUnitCostCaption": "التكلفة {amount}",
+  "@stockUnitCostCaption": {
+    "description": "A handset's cost, for readers allowed to see costs.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "stockUnitsAllVariants": "كل الخيارات",
+  "@stockUnitsAllVariants": {
+    "description": "Chip that shows every variant of the chosen product."
+  },
+  "stockUnitsBatchFilter": "الدفعة {code}",
+  "@stockUnitsBatchFilter": {
+    "description": "Chip naming the lot the handsets list is narrowed to.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "stockUnitsSelectForLabels": "تحديد لطباعة الملصقات",
+  "@stockUnitsSelectForLabels": {
+    "description": "App-bar action that starts choosing handsets to print labels for."
+  },
+  "stockUnitsSelectedCount": "{count} محدد",
+  "@stockUnitsSelectedCount": {
+    "description": "How many handsets are selected for label printing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stockUnitsSelectAll": "تحديد الكل",
+  "@stockUnitsSelectAll": {
+    "description": "Selects every handset in the list for label printing."
+  },
+  "stockUnitsPrintSelected": "طباعة الملصقات",
+  "@stockUnitsPrintSelected": {
+    "description": "Prints labels for the selected handsets."
+  },
+  "stockUnitsCancelSelection": "إلغاء",
+  "@stockUnitsCancelSelection": {
+    "description": "Leaves label-selection mode."
+  },
+  "stockUnitPrintLabel": "طباعة ملصق",
+  "@stockUnitPrintLabel": {
+    "description": "Prints this handset's own label: its number as the barcode and its own price."
+  },
+  "stockBatchPrintLabels": "ملصقات",
+  "@stockBatchPrintLabels": {
+    "description": "Prints shelf stickers for one lot, dated with its expiry."
+  },
+  "stockBatchOpenUnits": "الأجهزة",
+  "@stockBatchOpenUnits": {
+    "description": "Opens the handsets inside a serial-in-lot carton."
+  },
+  "stockBatchNoBarcodeForLabel": "لا يوجد باركود لهذا الصنف — أضف باركودًا لطباعة ملصقاته.",
+  "@stockBatchNoBarcodeForLabel": {
+    "description": "Why a lot's stickers cannot be printed."
+  },
+  "variantOpenUnits": "أجهزة هذا الخيار",
+  "@variantOpenUnits": {
+    "description": "Opens this variant's handsets."
+  },
+  "variantOpenLots": "دفعات هذا الخيار",
+  "@variantOpenLots": {
+    "description": "Opens this variant's lots."
+  },
+  "variantUnitLabelsHint": "ملصق الخيار يحمل باركود المنتج وسعره. لملصق يحمل رقم كل جهاز وسعره الخاص، اطبع من «أجهزة هذا الخيار».",
+  "@variantUnitLabelsHint": {
+    "description": "Explains variant labels versus per-handset labels."
+  },
+  "labelBatchUnitsTitle": "طباعة ملصقات الأجهزة",
+  "@labelBatchUnitsTitle": {
+    "description": "Title of the sheet printing labels for chosen handsets."
+  },
+  "receiptLabelsTitle": "طباعة ملصقات ما استُلم",
+  "@receiptLabelsTitle": {
+    "description": "Title of the sheet offered after a receipt."
+  },
+  "receiptLabelsSubtitle": "ملصق لكل جهاز برقمه وسعره، وملصقات الدفعات بتاريخ صلاحيتها.",
+  "@receiptLabelsSubtitle": {
+    "description": "What the receipt label sheet prints."
+  },
+  "receiptLabelsAction": "طباعة الملصقات",
+  "@receiptLabelsAction": {
+    "description": "Snackbar action offering labels after a receipt."
+  },
+  "labelBatchPrintCount": "{count, plural, =0{طباعة} =1{طباعة ملصق واحد} =2{طباعة ملصقين} few{طباعة {count} ملصقات} many{طباعة {count} ملصقًا} other{طباعة {count} ملصق}}",
+  "@labelBatchPrintCount": {
+    "description": "Print button naming how many stickers will print.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "labelBatchUnitsEntry": "{count, plural, =1{جهاز واحد — ملصق برقمه وسعره} =2{جهازان — ملصق لكل جهاز برقمه وسعره} few{{count} أجهزة — ملصق لكل جهاز برقمه وسعره} many{{count} جهازًا — ملصق لكل جهاز برقمه وسعره} other{{count} جهاز — ملصق لكل جهاز برقمه وسعره}}",
+  "@labelBatchUnitsEntry": {
+    "description": "One handset line in a label batch.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "labelBatchLotEntry": "الدفعة {code} · تنتهي {date}",
+  "@labelBatchLotEntry": {
+    "description": "One lot in a label batch.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "labelBatchLotEntryNoDate": "الدفعة {code}",
+  "@labelBatchLotEntryNoDate": {
+    "description": "One undated lot in a label batch.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "labelBatchNoBarcode": "بلا باركود — لا يمكن طباعة ملصقه",
+  "@labelBatchNoBarcode": {
+    "description": "A label batch entry that cannot print."
+  },
+  "labelBatchCopies": "النسخ",
+  "@labelBatchCopies": {
+    "description": "Copies stepper label in a label batch."
+  },
   "stockUnitsTitle": "الأجهزة المسلسلة",
   "@stockUnitsTitle": {
     "description": "Title of the identified-articles list."

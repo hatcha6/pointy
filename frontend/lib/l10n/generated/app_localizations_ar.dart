@@ -15600,6 +15600,128 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get barcodeLabelLotLabel => 'الدفعة';
+
+  @override
+  String barcodeLabelLotOption(String code, String date, String quantity) {
+    return '$code · تنتهي $date · $quantity بالمخزون';
+  }
+
+  @override
+  String get stockUnitPriceCaption => 'سعر البيع';
+
+  @override
+  String stockUnitCostCaption(String amount) {
+    return 'التكلفة $amount';
+  }
+
+  @override
+  String get stockUnitsAllVariants => 'كل الخيارات';
+
+  @override
+  String stockUnitsBatchFilter(String code) {
+    return 'الدفعة $code';
+  }
+
+  @override
+  String get stockUnitsSelectForLabels => 'تحديد لطباعة الملصقات';
+
+  @override
+  String stockUnitsSelectedCount(int count) {
+    return '$count محدد';
+  }
+
+  @override
+  String get stockUnitsSelectAll => 'تحديد الكل';
+
+  @override
+  String get stockUnitsPrintSelected => 'طباعة الملصقات';
+
+  @override
+  String get stockUnitsCancelSelection => 'إلغاء';
+
+  @override
+  String get stockUnitPrintLabel => 'طباعة ملصق';
+
+  @override
+  String get stockBatchPrintLabels => 'ملصقات';
+
+  @override
+  String get stockBatchOpenUnits => 'الأجهزة';
+
+  @override
+  String get stockBatchNoBarcodeForLabel =>
+      'لا يوجد باركود لهذا الصنف — أضف باركودًا لطباعة ملصقاته.';
+
+  @override
+  String get variantOpenUnits => 'أجهزة هذا الخيار';
+
+  @override
+  String get variantOpenLots => 'دفعات هذا الخيار';
+
+  @override
+  String get variantUnitLabelsHint =>
+      'ملصق الخيار يحمل باركود المنتج وسعره. لملصق يحمل رقم كل جهاز وسعره الخاص، اطبع من «أجهزة هذا الخيار».';
+
+  @override
+  String get labelBatchUnitsTitle => 'طباعة ملصقات الأجهزة';
+
+  @override
+  String get receiptLabelsTitle => 'طباعة ملصقات ما استُلم';
+
+  @override
+  String get receiptLabelsSubtitle =>
+      'ملصق لكل جهاز برقمه وسعره، وملصقات الدفعات بتاريخ صلاحيتها.';
+
+  @override
+  String get receiptLabelsAction => 'طباعة الملصقات';
+
+  @override
+  String labelBatchPrintCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'طباعة $count ملصق',
+      many: 'طباعة $count ملصقًا',
+      few: 'طباعة $count ملصقات',
+      two: 'طباعة ملصقين',
+      one: 'طباعة ملصق واحد',
+      zero: 'طباعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String labelBatchUnitsEntry(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count جهاز — ملصق لكل جهاز برقمه وسعره',
+      many: '$count جهازًا — ملصق لكل جهاز برقمه وسعره',
+      few: '$count أجهزة — ملصق لكل جهاز برقمه وسعره',
+      two: 'جهازان — ملصق لكل جهاز برقمه وسعره',
+      one: 'جهاز واحد — ملصق برقمه وسعره',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String labelBatchLotEntry(String code, String date) {
+    return 'الدفعة $code · تنتهي $date';
+  }
+
+  @override
+  String labelBatchLotEntryNoDate(String code) {
+    return 'الدفعة $code';
+  }
+
+  @override
+  String get labelBatchNoBarcode => 'بلا باركود — لا يمكن طباعة ملصقه';
+
+  @override
+  String get labelBatchCopies => 'النسخ';
+
+  @override
   String get stockUnitsTitle => 'الأجهزة المسلسلة';
 
   @override
