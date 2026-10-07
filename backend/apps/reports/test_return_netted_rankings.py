@@ -20,8 +20,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -33,20 +32,8 @@ from apps.reports.services import generate_report_payload
 from apps.sales.models import Order, OrderLine
 
 
-@override_settings(
-    CACHES={
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "return-netted-ranking-tests",
-        }
-    }
-)
 class ReturnNettedRankingTests(TestCase):
     def setUp(self):
-        # Dashboard sections are cached under a key that names neither the
-        # database nor the test, so a sibling's payload is served to this one
-        # unless the cache is isolated and emptied.
-        cache.clear()
         ensure_role_groups()
         User = get_user_model()
         self.manager = User.objects.create_user(
@@ -119,7 +106,6 @@ class ReturnNettedRankingTests(TestCase):
         self.fail("sales_summary has no top_products section")
 
     def _dashboard(self):
-        cache.clear()
         response = self.client.get(reverse("dashboard"), {"sections": "sales"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         return response.data["sections"]["sales"]

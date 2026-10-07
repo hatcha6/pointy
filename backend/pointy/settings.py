@@ -1172,6 +1172,13 @@ POINTY_AI_USAGE_CACHE_TTL = (
 POINTY_REGISTER_SUMMARY_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_REGISTER_SUMMARY_CACHE_TTL", default=30)
 )
+# Dashboard sections (apps.core.dashboard) and the beat that warms them: a plain
+# time box under FIXED keys — ``dashboard:v1:purchasing:global:days:30`` is the
+# same string in every test, and no write invalidates it. Under the test runner
+# an entry outlives its test's rolled-back rows, so the next test to load the
+# dashboard asserts against the previous test's figures. Off under tests;
+# DashboardApiTests opts back in to test the cache itself.
+POINTY_DASHBOARD_CACHE_ENABLED = not TESTING
 # A burst of risky actions queues ONE targeted fraud sweep per window instead
 # of one per action (0 = enqueue every time, forced under tests).
 POINTY_FRAUD_SWEEP_DEBOUNCE_SECONDS = (

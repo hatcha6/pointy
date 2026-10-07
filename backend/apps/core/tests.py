@@ -2333,7 +2333,10 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "dashboard-tests",
         }
-    }
+    },
+    # The section cache is off under tests (see settings); these test it, in a
+    # private LocMem that setUp/tearDown clear.
+    POINTY_DASHBOARD_CACHE_ENABLED=True,
 )
 class DashboardApiTests(TestCase):
     def setUp(self):

@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.db.models import (
     Count,
     DecimalField,
@@ -208,6 +209,10 @@ def warm_dashboard_cache(*, days=30):
     (build_dashboard_snapshot) is deliberately untouched."""
     request = _DashboardWarmRequest(days=days)
     period = _period_from_request(request)
+    if not settings.POINTY_DASHBOARD_CACHE_ENABLED:
+        # Nothing reads these keys, so the heavy aggregates would be wasted —
+        # and under tests a 20-minute entry would outlive the run that wrote it.
+        return {"warmed": 0, "days": period["days"]}
     # (name, builder, scope) mirroring build_dashboard_snapshot. A section that
     # drifts out of this list is simply served cold, never wrong.
     specs = (
@@ -256,6 +261,8 @@ def _period_from_request(request):
 
 
 def _cached_dashboard_section(section, request, period, builder, *, scope=None):
+    if not settings.POINTY_DASHBOARD_CACHE_ENABLED:
+        return builder()
     # Single-flight: section entries expire together every
     # DASHBOARD_SECTION_CACHE_SECONDS, so several dashboards refreshing at
     # once would otherwise each re-run the same heavy aggregates.
