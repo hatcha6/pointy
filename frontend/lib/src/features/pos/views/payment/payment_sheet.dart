@@ -15,6 +15,7 @@ import '../../../../shared/responsive/responsive.dart';
 import '../../../../shared/tutor/anchors.dart';
 import '../../../../shared/tutor/tutor_target.dart';
 import '../../../../shared/components/components.dart';
+import '../../../../shared/payment_labels.dart';
 import '../../../../shared/payments/bank_account_picker.dart';
 import '../../models/split_tender_payment.dart';
 import 'card_receipt_validation_dialog.dart';
@@ -429,12 +430,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
                     ],
                     primaryAction: TutorTarget(
                       anchor: TutorAnchor.paymentConfirmButton,
-                      child: FilledButton.icon(
-                        key: const ValueKey('payment_confirm_button'),
-                        onPressed: _canSubmit ? _submit : null,
-                        icon: const Icon(Icons.check),
-                        label: Text(l10n.confirmPaymentButton),
-                      ),
+                      child: _buildConfirmButton(l10n),
                     ),
                   ),
                 ],
@@ -584,19 +580,83 @@ class _PaymentSheetState extends State<PaymentSheet> {
   ) {
     final spacing = AdaptiveSpacing.of(context);
 
+    // The method tiles come first on a phone too, above the amounts: below
+    // them they sat at the fold, and an unseen choice is an unmade one.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ..._buildMethodPicker(l10n),
         _buildSummaryPanel(l10n, summary),
         SizedBox(height: spacing.lg),
-        _buildPaymentControls(l10n, includeKeypad: false),
+        _buildPaymentControls(
+          l10n,
+          includeKeypad: false,
+          includeMethodPicker: false,
+        ),
       ],
+    );
+  }
+
+  /// The method tiles, for a paid-in-full (standard) sale only: the quick
+  /// selector sets the tender to the full total, and a credit down-payment is
+  /// entered per line — showing it for credit would overwrite the amount.
+  List<Widget> _buildMethodPicker(AppLocalizations l10n) {
+    final activeTender = _activeTender;
+    if (_isCredit || activeTender == null || _enabledMethods.isEmpty) {
+      return const [];
+    }
+    return [
+      PaymentMethodSegmentedControl(
+        label: l10n.paymentMethodLabel,
+        enabledMethods: _enabledMethods,
+        selectedMethod: activeTender.method,
+        onSelected: _selectSinglePaymentMethod,
+      ),
+      SizedBox(height: AdaptiveSpacing.of(context).md),
+    ];
+  }
+
+  /// The one method the whole sale is about to be recorded under: a standard
+  /// sale whose every payment line uses it. Null for a split across methods,
+  /// a credit sale or a quotation.
+  PaymentMethod? get _confirmMethod {
+    if (_isCredit || _isQuotation || _tenders.isEmpty) {
+      return null;
+    }
+    final method = _tenders.first.method;
+    return _tenders.every((tender) => tender.method == method) ? method : null;
+  }
+
+  /// Confirm names the method and wears its colour, so the last thing a
+  /// cashier sees before recording a card sale as cash is «نقدًا» in green.
+  Widget _buildConfirmButton(AppLocalizations l10n) {
+    final method = _confirmMethod;
+    final hue = method == null
+        ? null
+        : paymentMethodColor(context.pointyColors, method);
+    return FilledButton.icon(
+      key: const ValueKey('payment_confirm_button'),
+      onPressed: _canSubmit ? _submit : null,
+      style: hue == null
+          ? null
+          : FilledButton.styleFrom(
+              backgroundColor: hue,
+              foregroundColor: onPaymentMethodColor(hue),
+            ),
+      icon: Icon(method == null ? Icons.check : paymentMethodIcon(method)),
+      label: Text(switch (method) {
+        PaymentMethod.cash => l10n.confirmPaymentCashButton,
+        PaymentMethod.card => l10n.confirmPaymentCardButton,
+        PaymentMethod.transfer => l10n.confirmPaymentTransferButton,
+        _ => l10n.confirmPaymentButton,
+      }),
     );
   }
 
   Widget _buildPaymentControls(
     AppLocalizations l10n, {
     bool includeKeypad = true,
+    bool includeMethodPicker = true,
   }) {
     final spacing = AdaptiveSpacing.of(context);
     final activeTender = _activeTender;
@@ -613,18 +673,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // The single-method quick selector sets the tender to the full total, so
-        // it's only for paid-in-full (standard) sales. A credit down-payment is
-        // entered per line; showing it for credit would overwrite the amount.
-        if (!_isCredit && activeTender != null) ...[
-          PaymentMethodSegmentedControl(
-            label: l10n.paymentMethodLabel,
-            enabledMethods: _enabledMethods,
-            selectedMethod: activeTender.method,
-            onSelected: _selectSinglePaymentMethod,
-          ),
-          SizedBox(height: spacing.md),
-        ],
+        if (includeMethodPicker) ..._buildMethodPicker(l10n),
         if (activeTender?.method == PaymentMethod.cash) ...[
           QuickAmountBar(
             label: l10n.paymentQuickAmountsLabel,

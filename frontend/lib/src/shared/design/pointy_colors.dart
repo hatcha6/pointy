@@ -19,6 +19,13 @@ abstract final class PointyColors {
   static const Color surfaceSunken = Color(0xFFF1EFEA);
   static const Color primaryContainer = Color(0xFFE0F2EF);
   static const Color amberContainer = Color(0xFFFFF4E3);
+
+  /// One hue per till payment method, so the method a sale is about to be
+  /// recorded under reads at a glance — a card sale never looks like the cash
+  /// one beside it. Deep enough to carry white text as a fill.
+  static const Color paymentCash = Color(0xFF15803D);
+  static const Color paymentCard = Color(0xFF1D4ED8);
+  static const Color paymentTransfer = Color(0xFF7E22CE);
 }
 
 /// Dark-mode palette, mirroring [PointyColors] token-for-token so the theme
@@ -48,4 +55,10 @@ abstract final class PointyColorsDark {
   static const Color surfaceSunken = Color(0xFF10161D);
   static const Color primaryContainer = Color(0xFF0C3A34);
   static const Color amberContainer = Color(0xFF332A1A);
+
+  /// Lifted so outlines and icons read on dark surfaces; a fill of one of these
+  /// carries dark text instead of white.
+  static const Color paymentCash = Color(0xFF4ADE80);
+  static const Color paymentCard = Color(0xFF60A5FA);
+  static const Color paymentTransfer = Color(0xFFC084FC);
 }

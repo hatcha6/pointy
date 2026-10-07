@@ -19309,6 +19309,24 @@ abstract class AppLocalizations {
   /// **'تأكيد الدفع'**
   String get confirmPaymentButton;
 
+  /// Payment sheet confirm button when the whole sale is paid in cash: names the method so a cashier sees what is being recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الدفع نقدًا'**
+  String get confirmPaymentCashButton;
+
+  /// Payment sheet confirm button when the whole sale is paid by card.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الدفع بالبطاقة'**
+  String get confirmPaymentCardButton;
+
+  /// Payment sheet confirm button when the whole sale is paid by bank transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الدفع بالتحويل'**
+  String get confirmPaymentTransferButton;
+
   /// No description provided for @saleTypeLabel.
   ///
   /// In ar, this message translates to:

@@ -1326,7 +1326,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('قهوة البيت: الخسارة 1.00 د.ل'), findsOneWidget);
-    expect(find.text('تأكيد الدفع'), findsNothing);
+    expect(find.byKey(const ValueKey('payment_confirm_button')), findsNothing);
     expect(checkoutBody, isNull);
   });
 
@@ -1428,7 +1428,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('تأكيد الدفع'), findsNothing);
+    expect(find.byKey(const ValueKey('payment_confirm_button')), findsNothing);
     expect(checkoutBody, isNull);
   });
 
@@ -5241,7 +5241,8 @@ Future<void> _openPosFromDashboard(WidgetTester tester) async {
 
 Future<void> _confirmPayment(WidgetTester tester) async {
   expect(find.text('إتمام الدفع'), findsOneWidget);
-  await tester.tap(find.text('تأكيد الدفع'));
+  // By key: the button names the method it is about to record.
+  await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
   await tester.pumpAndSettle(const Duration(seconds: 1));
 }
 

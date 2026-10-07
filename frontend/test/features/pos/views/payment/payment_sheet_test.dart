@@ -147,6 +147,77 @@ void main() {
     expect(submitted?.payments.single.method, PaymentMethod.card);
   });
 
+  group('the method a sale is recorded under is hard to miss', () {
+    // Cashiers confirmed card and transfer sales on the preselected cash:
+    // every method looked the same, and so did the button that recorded it.
+    String confirmLabel(WidgetTester tester) => tester
+        .widget<Text>(
+          find.descendant(
+            of: find.byKey(const ValueKey('payment_confirm_button')),
+            matching: find.byType(Text),
+          ),
+        )
+        .data!;
+
+    Color? tileColor(WidgetTester tester, String method) => tester
+        .widget<Material>(find.byKey(ValueKey('payment_method_tile_$method')))
+        .color;
+
+    testWidgets('the confirm button names the method and follows it', (
+      tester,
+    ) async {
+      await _pumpPaymentSheet(tester, width: 1366, height: 768);
+      expect(confirmLabel(tester), 'تأكيد الدفع نقدًا');
+
+      await _tapKey(tester, 'payment_method_card');
+      expect(confirmLabel(tester), 'تأكيد الدفع بالبطاقة');
+
+      await _tapKey(tester, 'payment_method_transfer');
+      expect(confirmLabel(tester), 'تأكيد الدفع بالتحويل');
+    });
+
+    testWidgets('a split across methods, or a credit sale, names none', (
+      tester,
+    ) async {
+      await _pumpPaymentSheet(tester, width: 1366, height: 768);
+
+      // The second line takes the next method, so the sale is cash + card.
+      await _tapKey(tester, 'payment_add_tender');
+      expect(_tenderMethod(tester, 1), PaymentMethod.card);
+      expect(confirmLabel(tester), 'تأكيد الدفع');
+
+      await _tapKey(tester, 'sale_type_credit');
+      expect(confirmLabel(tester), 'تأكيد الدفع');
+    });
+
+    testWidgets('the chosen method is filled in its own colour', (
+      tester,
+    ) async {
+      await _pumpPaymentSheet(tester, width: 1366, height: 768);
+      const palette = PointySemanticColors.light();
+      expect(tileColor(tester, 'cash'), palette.paymentCash);
+      expect(tileColor(tester, 'card'), palette.surface);
+
+      await _tapKey(tester, 'payment_method_card');
+      expect(tileColor(tester, 'card'), palette.paymentCard);
+      expect(tileColor(tester, 'cash'), palette.surface);
+    });
+
+    testWidgets('on a phone the methods come before the amounts', (
+      tester,
+    ) async {
+      // Below the three amount boxes they sat at the fold.
+      await _pumpPaymentSheet(tester);
+      final methods = tester.getTopLeft(
+        find.byKey(const ValueKey('payment_method_tile_cash')),
+      );
+      final amounts = tester.getTopLeft(
+        find.byKey(const ValueKey('payment_amount_display')),
+      );
+      expect(methods.dy, lessThan(amounts.dy));
+    });
+  });
+
   testWidgets('split tender removal rebalances the remaining tender', (
     tester,
   ) async {

@@ -7212,6 +7212,18 @@
   "changeDueLabel": "الباقي للعميل",
   "paymentTotalTooLowError": "يجب أن يغطي مجموع الدفعات إجمالي البيع.",
   "confirmPaymentButton": "تأكيد الدفع",
+  "confirmPaymentCashButton": "تأكيد الدفع نقدًا",
+  "@confirmPaymentCashButton": {
+    "description": "Payment sheet confirm button when the whole sale is paid in cash: names the method so a cashier sees what is being recorded."
+  },
+  "confirmPaymentCardButton": "تأكيد الدفع بالبطاقة",
+  "@confirmPaymentCardButton": {
+    "description": "Payment sheet confirm button when the whole sale is paid by card."
+  },
+  "confirmPaymentTransferButton": "تأكيد الدفع بالتحويل",
+  "@confirmPaymentTransferButton": {
+    "description": "Payment sheet confirm button when the whole sale is paid by bank transfer."
+  },
   "saleTypeLabel": "نوع البيع",
   "saleTypeStandardLabel": "عادي",
   "saleTypeCreditLabel": "آجل",

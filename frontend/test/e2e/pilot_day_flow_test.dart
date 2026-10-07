@@ -88,8 +88,9 @@ void main() {
       );
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('تأكيد الدفع'));
-      await tester.tap(find.text('تأكيد الدفع'));
+      final confirm = find.byKey(const ValueKey('payment_confirm_button'));
+      await tester.ensureVisible(confirm);
+      await tester.tap(confirm);
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       expect(apiService.checkoutDrafts, hasLength(1));

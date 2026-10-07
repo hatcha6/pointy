@@ -11257,6 +11257,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get confirmPaymentButton => 'تأكيد الدفع';
 
   @override
+  String get confirmPaymentCashButton => 'تأكيد الدفع نقدًا';
+
+  @override
+  String get confirmPaymentCardButton => 'تأكيد الدفع بالبطاقة';
+
+  @override
+  String get confirmPaymentTransferButton => 'تأكيد الدفع بالتحويل';
+
+  @override
   String get saleTypeLabel => 'نوع البيع';
 
   @override

@@ -120,10 +120,25 @@ class TenderLineEditor extends StatelessWidget {
                 initialValue: method,
                 decoration: InputDecoration(labelText: methodLabel),
                 items: [
+                  // Each method in its own colour, as on the method tiles,
+                  // so a split line shows what it records at a glance.
                   for (final paymentMethod in enabledMethods)
                     DropdownMenuItem(
                       value: paymentMethod,
-                      child: Text(paymentMethodLabel(l10n, paymentMethod)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            paymentMethodIcon(paymentMethod),
+                            size: 20,
+                            color: paymentMethodColor(colors, paymentMethod),
+                          ),
+                          SizedBox(width: spacing.sm),
+                          // No Flexible: a dropdown lays its items out
+                          // unbounded, and a flex child there throws.
+                          Text(paymentMethodLabel(l10n, paymentMethod)),
+                        ],
+                      ),
                     ),
                 ],
                 onChanged: (nextMethod) {

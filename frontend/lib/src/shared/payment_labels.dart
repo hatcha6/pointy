@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../data/models/purchase_submission.dart';
 import '../data/models/sale_order.dart';
+import 'design/design.dart';
 
 String paymentMethodLabel(AppLocalizations l10n, PaymentMethod method) {
   return switch (method) {
@@ -23,6 +24,27 @@ IconData paymentMethodIcon(PaymentMethod method) {
     PaymentMethod.accountCredit => Icons.savings_outlined,
   };
 }
+
+/// The method's own colour. The till's method tiles, its confirm button and
+/// each tender line wear it, so the method a sale is about to be recorded
+/// under is visible at a glance — cashiers left the preselected cash on card
+/// sales because every method looked the same.
+Color paymentMethodColor(PointySemanticColors colors, PaymentMethod method) {
+  return switch (method) {
+    PaymentMethod.cash => colors.paymentCash,
+    PaymentMethod.card => colors.paymentCard,
+    PaymentMethod.transfer => colors.paymentTransfer,
+    PaymentMethod.salaryDeduction ||
+    PaymentMethod.accountCredit => colors.primaryStrong,
+  };
+}
+
+/// Text and icons on a [paymentMethodColor] fill: white on the deep light-mode
+/// hues, ink on the lifted dark-mode ones.
+Color onPaymentMethodColor(Color fill) =>
+    ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
+    ? PointyColors.surface
+    : PointyColors.ink;
 
 String supplierPaymentMethodLabel(
   AppLocalizations l10n,

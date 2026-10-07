@@ -25,6 +25,9 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
     required this.subtleFill,
     required this.onDarkTopBar,
     required this.shadow,
+    required this.paymentCash,
+    required this.paymentCard,
+    required this.paymentTransfer,
   });
 
   const PointySemanticColors.light()
@@ -47,7 +50,10 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       surfaceSunken = PointyColors.surfaceSunken,
       subtleFill = PointyColors.subtleFill,
       onDarkTopBar = PointyColors.surface,
-      shadow = PointyColors.ink;
+      shadow = PointyColors.ink,
+      paymentCash = PointyColors.paymentCash,
+      paymentCard = PointyColors.paymentCard,
+      paymentTransfer = PointyColors.paymentTransfer;
 
   const PointySemanticColors.dark()
     : primary = PointyColorsDark.primary,
@@ -69,7 +75,10 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       surfaceSunken = PointyColorsDark.surfaceSunken,
       subtleFill = PointyColorsDark.subtleFill,
       onDarkTopBar = PointyColors.surface,
-      shadow = const Color(0xFF000000);
+      shadow = const Color(0xFF000000),
+      paymentCash = PointyColorsDark.paymentCash,
+      paymentCard = PointyColorsDark.paymentCard,
+      paymentTransfer = PointyColorsDark.paymentTransfer;
 
   final Color primary;
   final Color primaryStrong;
@@ -91,6 +100,11 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
   final Color subtleFill;
   final Color onDarkTopBar;
   final Color shadow;
+
+  /// The till's payment methods, one hue each (see [PointyColors.paymentCash]).
+  final Color paymentCash;
+  final Color paymentCard;
+  final Color paymentTransfer;
 
   @override
   PointySemanticColors copyWith({
@@ -114,6 +128,9 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
     Color? subtleFill,
     Color? onDarkTopBar,
     Color? shadow,
+    Color? paymentCash,
+    Color? paymentCard,
+    Color? paymentTransfer,
   }) {
     return PointySemanticColors(
       primary: primary ?? this.primary,
@@ -136,6 +153,9 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       subtleFill: subtleFill ?? this.subtleFill,
       onDarkTopBar: onDarkTopBar ?? this.onDarkTopBar,
       shadow: shadow ?? this.shadow,
+      paymentCash: paymentCash ?? this.paymentCash,
+      paymentCard: paymentCard ?? this.paymentCard,
+      paymentTransfer: paymentTransfer ?? this.paymentTransfer,
     );
   }
 
@@ -172,6 +192,9 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       subtleFill: Color.lerp(subtleFill, other.subtleFill, t)!,
       onDarkTopBar: Color.lerp(onDarkTopBar, other.onDarkTopBar, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,
+      paymentCash: Color.lerp(paymentCash, other.paymentCash, t)!,
+      paymentCard: Color.lerp(paymentCard, other.paymentCard, t)!,
+      paymentTransfer: Color.lerp(paymentTransfer, other.paymentTransfer, t)!,
     );
   }
 }
