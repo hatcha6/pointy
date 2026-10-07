@@ -137,7 +137,7 @@ ENDURANCE_WORKERS ?= 4
 	marketing-site marketing-site-capture \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
-	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check \
+	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check android-release-key \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
 
 help: ## Show available commands.
@@ -766,6 +766,9 @@ upgrade-rehearsal: postgres-ready ## Upgrade a POPULATED shop from the last rele
 
 upgrade-check: postgres-ready ## Could the last release's backend write to this release's schema? (live-update safety)
 	$(VENV)/bin/python scripts/check_upgrade_compatibility.py $(UPGRADE_FROM)
+
+android-release-key: ## ONE-TIME: create the Android release key, store its GitHub secrets, pin its certificate (see README).
+	bash scripts/android-release-key.sh
 
 format: frontend-l10n frontend-format relay-format ## Format all currently scaffolded code.
 

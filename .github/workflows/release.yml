@@ -133,6 +133,20 @@ jobs:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
 
+      # Android installs an update over the app on a till only when both are
+      # signed with the same key; anything else fails with "App not installed
+      # as package conflicts with an existing package". Without the secrets the
+      # build falls back to a debug key the runner invents on the spot — a
+      # different one every run — which is how every update used to fail. A
+      # manual test build may still go out debug-signed; a release may not.
+      # One-time setup: `make android-release-key`.
+      - name: Require the release signing key
+        if: ${{ github.event_name == 'release' && env.ANDROID_KEYSTORE_BASE64 == '' }}
+        shell: bash
+        run: |
+          echo "::error title=No Android release key::A release APK must be signed with the one release key, or it cannot update the app already installed on tills. Run 'make android-release-key' once (it stores the signing secrets and pins the certificate), commit frontend/android/release-signing-cert.sha256, then re-run this release."
+          exit 1
+
       - name: Configure release signing
         if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
         working-directory: frontend/android
@@ -172,6 +186,37 @@ jobs:
           --build-name=${{ needs.version.outputs.version }}
           --build-number=${{ needs.version.outputs.build_number }}
           --dart-define=POINTY_VERSION=${{ needs.version.outputs.version }}
+
+      # "Signed with a key" is not enough; it must be THE key. The pin is the
+      # release certificate's SHA-256, committed by `make android-release-key`,
+      # so a signing secret replaced by mistake fails here instead of shipping an
+      # APK that no till can install over the one it has.
+      - name: Verify the APK signer
+        working-directory: frontend
+        shell: bash
+        env:
+          IS_RELEASE: ${{ needs.version.outputs.is_release }}
+        run: |
+          set -euo pipefail
+          apksigner="$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          report="$("$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)"
+          actual="$(printf '%s\n' "$report" | awk -F': ' '/^Signer #1 certificate SHA-256 digest/ && !seen {print $2; seen = 1}')"
+          echo "APK signer certificate SHA-256: ${actual}"
+          pin=android/release-signing-cert.sha256
+          if [ -f "$pin" ]; then
+            expected="$(tr -d '[:space:]:' < "$pin" | tr 'A-F' 'a-f')"
+            if [ "$actual" = "$expected" ]; then
+              echo "Signed with the pinned release key."
+            elif [ "$IS_RELEASE" = "true" ] || [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+              echo "::error title=Wrong Android signing key::The APK is signed by ${actual}, but releases are pinned to ${expected} (${pin}). Tills could not install it over their current app. Restore the original keystore in the ANDROID_KEYSTORE_* secrets."
+              exit 1
+            else
+              echo "::warning title=Debug-signed test build::This APK is not signed with the release key, so it cannot update a till running a release build."
+            fi
+          elif [ "$IS_RELEASE" = "true" ]; then
+            echo "::error title=Signing certificate not pinned::Commit frontend/${pin} (written by 'make android-release-key') so every release is checked against the one key."
+            exit 1
+          fi
 
       # Obfuscation symbols: the only way to read a stack trace from a shop once
       # the binary is obfuscated. A PRIVATE Actions artifact, never a release

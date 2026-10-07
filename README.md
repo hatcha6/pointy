@@ -1254,21 +1254,49 @@ images). Bump them there when the project upgrades.
 
 ### Android signing
 
-The APK is **debug-signed by default** so the workflow works out of the box. To
-ship production-signed builds, add these repository secrets — the build then
-signs with your upload key automatically (see
-`frontend/android/app/build.gradle.kts`):
+Android installs an update over the app on a till **only when both APKs are
+signed with the same key**. Anything else fails with "App not installed as
+package conflicts with an existing package". Without signing secrets, the build
+falls back to a debug key that each CI runner generates on the spot, so it is
+different on every run. That is why updates used to fail: v0.7.8 and v0.7.9
+carry two different "Android Debug" certificates.
+
+Set the key up once:
+
+```bash
+make android-release-key
+```
+
+The target generates the release keystore in `~/.pointy/android-release/`,
+outside the repo, with a random password stored in `key.properties` beside it.
+**Back that folder up.** The target also stores the four secrets below in the
+repository and writes the certificate's SHA-256 to
+`frontend/android/release-signing-cert.sha256`, which you commit. The target
+refuses to replace an existing key unless you pass `--force`, because a new key
+breaks updates on every till again.
 
 | Secret                        | Value |
 | ----------------------------- | ----- |
-| `ANDROID_KEYSTORE_BASE64`     | `base64 -w0 upload-keystore.jks` |
+| `ANDROID_KEYSTORE_BASE64`     | The keystore, base64 |
 | `ANDROID_KEYSTORE_PASSWORD`   | Keystore password |
-| `ANDROID_KEY_ALIAS`           | Key alias |
+| `ANDROID_KEY_ALIAS`           | Key alias (`pointy`) |
 | `ANDROID_KEY_PASSWORD`        | Key password |
 
-> The default `applicationId`/`namespace` is still `com.example.frontend`. Change
-> it to a real, owned id before publishing to the Play Store (sideloaded APKs are
-> unaffected).
+`release.yml` enforces the key. A **release** fails when the secrets are
+missing, and it fails when the APK's signer does not match the pinned
+certificate. A manual test build without secrets still goes out debug-signed,
+with a warning that it cannot update a release build.
+
+**One-time migration:** tills running an APK from before the key existed have to
+uninstall the app once and install the next release from the shop's `/clients/`
+page. Android offers no way to move an installed app to a new key without the
+old one, and the old keys were discarded with their CI runners. After that,
+every update installs in place. Uninstalling clears the app's local data on
+that device, including its printers and device settings, so finish open sales
+first.
+
+The application id is `ly.daftr`. Changing it also makes Android treat the
+app as a different one.
 
 ### Windows installer signing
 
