@@ -179,6 +179,45 @@ class FactoryResetBehaviourTests(TestCase):
 
         self.assertTrue(Warehouse.objects.filter(is_default=True).exists())
 
+    def test_card_prices_go_with_the_catalog_but_markups_stay(self):
+        from decimal import Decimal
+
+        from apps.catalog.models import ProductVariant
+        from apps.integrations.models import IntegrationAccount, IntegrationPriceRule
+
+        account = IntegrationAccount.objects.create(provider="pointy")
+        IntegrationPriceRule.objects.create(
+            account=account, scope="default", mode="custom", markup_percent=Decimal("5")
+        )
+        IntegrationPriceRule.objects.create(
+            account=account,
+            scope="service",
+            service_key="airtime",
+            mode="custom",
+            markup_percent=Decimal("10"),
+        )
+        IntegrationPriceRule.objects.create(
+            account=account,
+            scope="variant",
+            variant=ProductVariant.objects.first(),
+            mode="custom",
+            price=Decimal("12.00"),
+        )
+
+        factory_reset.perform_factory_reset(admin=self.admin)
+
+        self.assertEqual(
+            sorted(
+                IntegrationPriceRule.objects.values_list(
+                    "account_id", "scope", "service_key", "markup_percent"
+                )
+            ),
+            [
+                (account.pk, "default", "", Decimal("5.00")),
+                (account.pk, "service", "airtime", Decimal("10.00")),
+            ],
+        )
+
     def test_the_admin_keeps_an_employee_record(self):
         """Staff records go with the staff; the owner's is put back.
 

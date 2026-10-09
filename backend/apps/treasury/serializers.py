@@ -80,6 +80,13 @@ class MoneyAccountSerializer(serializers.ModelSerializer):
         # ``_take_default`` below, which moves the flag rather than refusing the
         # save, and the database constraint is still there behind it.
         extra_kwargs = {"kind": {"validators": []}}
+        # DRF 3.18 goes further and turns every conditional single-field
+        # constraint — the default flag, the open clearing account per bank —
+        # into a serializer-level unique-together check, which refused moving
+        # the default ("kind must make a unique set") and demanded
+        # ``settles_into`` on every bank and cash box. The same invariants are
+        # kept by ``_take_default`` and ``_validate_clearing``.
+        validators = []
 
     def get_is_routed(self, account) -> bool:
         return account_is_routed(account)

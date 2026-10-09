@@ -180,6 +180,11 @@ WIPED_MODELS = (
     # account's claim to have covered it is cleared with it (see
     # perform_factory_reset).
     "integrations.providerpayment",
+    # How the shop prices the company's cards. Per-card rules point at catalog
+    # variants that go with the catalog, so the table is truncated with it;
+    # the shop-wide and per-service markups are configuration and are put
+    # back afterwards (see perform_factory_reset).
+    "integrations.integrationpricerule",
     # inventory — all of it: quantities, ledgers, counts, transfers, batches,
     # serial units, consignment. The warehouses themselves are configuration.
     "inventory.consignmentagreement",
@@ -352,6 +357,8 @@ KEPT_MODELS = {
     "attendance.biotimeconnection": "Attendance device credentials.",
     "integrations.integrationaccount": "Provider credentials and float.",
     "integrations.integrationoptionprice": "The provider's price list.",
+    "integrations.integrationservicelogo": "Operator logos copied from the "
+    "relay; a cache of the provider account's pictures, not shop work.",
     "attachments.storagevolume": "Where attachments are stored on disk.",
     "attachments.attachmentstoragestate": "Storage bookkeeping for that.",
 }
@@ -538,6 +545,7 @@ def perform_factory_reset(*, admin, connection=None) -> ResetSummary:
     doomed_files = _stored_files_to_discard()
 
     with transaction.atomic():
+        kept_price_rules = _price_rules_to_keep()
         statements = connection.ops.sql_flush(
             no_style(),
             wiped_tables(),
@@ -578,10 +586,28 @@ def perform_factory_reset(*, admin, connection=None) -> ResetSummary:
             payments_synced_at=None, payments_covered_since=None
         )
 
+        from apps.integrations.models import IntegrationPriceRule
+
+        IntegrationPriceRule.objects.bulk_create(kept_price_rules)
+
         _reseed(admin=admin)
 
     _delete_quietly(doomed_files)
     return summary
+
+
+def _price_rules_to_keep() -> list:
+    """The owner's shop-wide and per-service markups, unsaved, to put back.
+
+    Only per-card rules belong to the catalog being emptied.
+    """
+    from apps.integrations.models import IntegrationPriceRule
+
+    rules = list(IntegrationPriceRule.objects.filter(variant__isnull=True))
+    for rule in rules:
+        rule.pk = None
+        rule._state.adding = True
+    return rules
 
 
 def _stored_files_to_discard() -> list:
