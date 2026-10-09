@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/money_source.dart';
 import '../../../data/models/balance_entry.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/purchase_submission.dart';
@@ -20,6 +21,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
 import '../view_models/supplier_details_view_model.dart';
+import 'account_money_actions.dart';
 import 'balance_entries_section.dart';
 
 class SupplierDetailsScreen extends StatefulWidget {
@@ -151,7 +153,21 @@ class SupplierDetailsView extends StatelessWidget {
                 icon: Icons.summarize_outlined,
                 child: _SupplierTotals(
                   viewModel: viewModel,
-                  canRecordPayment: capabilities.canRecordSupplierPayment,
+                  // Whoever sees the account's section pays there; anyone
+                  // else who may pay suppliers still pays from here.
+                  payment: capabilities.canViewSupplierBalances
+                      ? null
+                      : supplierPaymentFlow(
+                          l10n,
+                          viewModel,
+                          canRecordPayment:
+                              capabilities.canRecordSupplierPayment,
+                        ),
+                  cashSources: {
+                    if (capabilities.canCreateRegisterCashMovement)
+                      MoneySource.drawer,
+                    if (capabilities.canViewMoneyAccounts) MoneySource.treasury,
+                  },
                 ),
               ),
               if (capabilities.canViewSupplierBalances) ...[
@@ -163,12 +179,14 @@ class SupplierDetailsView extends StatelessWidget {
                   partyId: supplier.id,
                   canManage: capabilities.canManageSupplierBalances,
                   canCancel: capabilities.canCancelSupplierBalances,
-                  // The cash comes into a drawer, so it takes the drawer's
-                  // own movement right as well.
-                  canSettleInCash:
-                      capabilities.canManageSupplierBalances &&
-                      capabilities.canCreateRegisterCashMovement,
+                  canUseDrawer: capabilities.canCreateRegisterCashMovement,
+                  canUseTreasury: capabilities.canViewMoneyAccounts,
                   cashCollectable: supplier.creditBalance,
+                  pay: supplierPaymentFlow(
+                    l10n,
+                    viewModel,
+                    canRecordPayment: capabilities.canRecordSupplierPayment,
+                  ),
                   // An entry moves what the shop owes this supplier; the
                   // figures above are the server's, so re-read them.
                   onChanged: viewModel.loadSupplier,
@@ -299,12 +317,19 @@ class _SupplierHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // The headline is what is open between the shop and the supplier, not
+    // the lifetime purchase total — that one sits in the summary below.
+    final net = supplier.netBalance;
 
     return PointyDetailHero(
       icon: Icons.local_shipping_outlined,
       title: supplier.name,
-      value: formatMoney(supplier.totalBought),
-      valueSubtitle: l10n.supplierPurchaseCountValue(supplier.purchaseCount),
+      value: formatMoney(net.abs()),
+      valueSubtitle: net > 0.005
+          ? l10n.supplierHeroWeOweCaption
+          : net < -0.005
+          ? l10n.supplierHeroTheyOweCaption
+          : l10n.contactHeroSettledCaption,
       pills: [
         PointyHeroPill(
           label: supplier.isActive
@@ -326,63 +351,63 @@ class _SupplierHero extends StatelessWidget {
   }
 }
 
+/// Paying the supplier on account: split by the server across what the shop
+/// owes them, oldest first. «دفع مبلغ» on their account; null for a user who
+/// may not pay suppliers.
+AccountMoneyFlow? supplierPaymentFlow(
+  AppLocalizations l10n,
+  SupplierDetailsViewModel viewModel, {
+  required bool canRecordPayment,
+}) {
+  if (!canRecordPayment) {
+    return null;
+  }
+  final supplier = viewModel.supplier;
+  return AccountMoneyFlow(
+    available: supplier.payableBalance,
+    availableLabel: l10n.supplierAccountPaymentBalanceValue(
+      formatMoney(supplier.payableBalance),
+    ),
+    methods: supplierPaymentMethodOptions(l10n)
+        .where(
+          (option) =>
+              option.apiValue !=
+                  SupplierPaymentMethod.supplierCredit.apiValue ||
+              supplier.creditBalance > 0.005,
+        )
+        .toList(),
+    showReference: true,
+    showNotes: true,
+    proofToggleLabel: viewModel.canPrintPaymentProof
+        ? l10n.supplierPaymentPrintProofLabel
+        : null,
+    onSubmit: (result) async {
+      final ok = await viewModel.recordAccountPayment(
+        method: SupplierPaymentMethod.fromApiValue(result.methodApiValue),
+        amount: result.amount,
+        reference: result.reference,
+        notes: result.notes,
+        moneyAccountId: result.moneyAccountId,
+        source: result.source,
+        printProof: result.printProof,
+      );
+      return ok ? null : l10n.supplierAccountPaymentError;
+    },
+  );
+}
+
 class _SupplierTotals extends StatelessWidget {
   const _SupplierTotals({
     required this.viewModel,
-    required this.canRecordPayment,
+    this.payment,
+    this.cashSources = const {MoneySource.drawer},
   });
 
   final SupplierDetailsViewModel viewModel;
-  final bool canRecordPayment;
 
-  Future<void> _recordPayment(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final supplier = viewModel.supplier;
-    final result = await showRecordPaymentDialog(
-      context,
-      title: l10n.supplierAccountPaymentTitle,
-      maxAmount: supplier.payableBalance,
-      balanceLabel: l10n.supplierAccountPaymentBalanceValue(
-        formatMoney(supplier.payableBalance),
-      ),
-      methods: supplierPaymentMethodOptions(l10n)
-          .where(
-            (option) =>
-                option.apiValue !=
-                    SupplierPaymentMethod.supplierCredit.apiValue ||
-                supplier.creditBalance > 0.005,
-          )
-          .toList(),
-      showReference: true,
-      showNotes: true,
-      proofToggleLabel: viewModel.canPrintPaymentProof
-          ? l10n.supplierPaymentPrintProofLabel
-          : null,
-    );
-    if (result == null || !context.mounted) {
-      return;
-    }
-    final ok = await viewModel.recordAccountPayment(
-      method: SupplierPaymentMethod.fromApiValue(result.methodApiValue),
-      amount: result.amount,
-      reference: result.reference,
-      notes: result.notes,
-      moneyAccountId: result.moneyAccountId,
-      printProof: result.printProof,
-    );
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            ok
-                ? l10n.supplierAccountPaymentSuccess
-                : l10n.supplierAccountPaymentError,
-          ),
-        ),
-      );
-  }
+  /// «دفع مبلغ» here, or null when the account's section carries it.
+  final AccountMoneyFlow? payment;
+  final Set<MoneySource> cashSources;
 
   @override
   Widget build(BuildContext context) {
@@ -404,17 +429,6 @@ class _SupplierTotals extends StatelessWidget {
           minTileWidth: 170,
           gap: PointyMetricGridGap.compact,
           metrics: [
-            PointyMetricGridItem(
-              label: l10n.supplierTotalBoughtLabel,
-              value: formatMoney(supplier.totalBought),
-              icon: Icons.shopping_bag_outlined,
-              accentColor: colors.primaryStrong,
-            ),
-            PointyMetricGridItem(
-              label: l10n.supplierPurchaseCountLabel,
-              value: supplier.purchaseCount.toString(),
-              icon: Icons.receipt_long_outlined,
-            ),
             PointyMetricGridItem(
               label: l10n.purchaseOrderBalanceDueLabel,
               value: formatMoney(supplier.payableBalance),
@@ -442,30 +456,27 @@ class _SupplierTotals extends StatelessWidget {
                 icon: Icons.balance_outlined,
                 accentColor: net > 0 ? colors.danger : colors.success,
               ),
+            PointyMetricGridItem(
+              label: l10n.supplierTotalBoughtLabel,
+              value: formatMoney(supplier.totalBought),
+              icon: Icons.shopping_bag_outlined,
+              accentColor: colors.primaryStrong,
+            ),
+            PointyMetricGridItem(
+              label: l10n.supplierPurchaseCountLabel,
+              value: supplier.purchaseCount.toString(),
+              icon: Icons.receipt_long_outlined,
+            ),
           ],
         ),
-        if (canRecordPayment && supplier.payableBalance > 0.005) ...[
+        if (payment case final flow? when flow.canMove) ...[
           SizedBox(height: spacing.sm),
-          if (viewModel.hasPaymentError) ...[
-            PointyInlineMessage.error(
-              message: l10n.supplierAccountPaymentError,
-            ),
-            SizedBox(height: spacing.sm),
-          ],
           Align(
             alignment: AlignmentDirectional.centerStart,
-            child: FilledButton.icon(
-              key: const ValueKey('record_supplier_account_payment_button'),
-              onPressed: viewModel.isRecordingPayment
-                  ? null
-                  : () => _recordPayment(context),
-              icon: viewModel.isRecordingPayment
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: PointySpinner(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.payments_outlined),
-              label: Text(l10n.recordSupplierAccountPaymentButton),
+            child: AccountMoneyActions(
+              pay: flow,
+              cashSources: cashSources,
+              busy: viewModel.isRecordingPayment,
             ),
           ),
           SizedBox(height: spacing.xs),

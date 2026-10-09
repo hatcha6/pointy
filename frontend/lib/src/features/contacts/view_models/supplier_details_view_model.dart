@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/money_source.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/purchase_submission.dart';
@@ -114,6 +115,7 @@ class SupplierDetailsViewModel extends ChangeNotifier {
     String reference = '',
     String notes = '',
     int? moneyAccountId,
+    MoneySource source = MoneySource.treasury,
     bool printProof = false,
   }) async {
     if (_isRecordingPayment) {
@@ -131,6 +133,7 @@ class SupplierDetailsViewModel extends ChangeNotifier {
       reference.trim(),
       notes.trim(),
       moneyAccountId ?? '',
+      source.apiValue,
     ].join(':');
     final result = await _contactRepository.recordSupplierAccountPayment(
       _supplier.id,
@@ -139,6 +142,7 @@ class SupplierDetailsViewModel extends ChangeNotifier {
       reference: reference,
       notes: notes,
       moneyAccountId: moneyAccountId,
+      source: source,
       idempotencyKey: _idempotencyKeys.putIfAbsent(
         signature,
         () => 'supplier-account-payment:${generateAnalyticsEventId()}',

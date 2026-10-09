@@ -164,19 +164,30 @@ def _create_carrier(entry, *, actor):
 
 
 @transaction.atomic
-def refund_customer_credit(*, customer, amount, note="", actor=None):
+def refund_customer_credit(
+    *,
+    customer,
+    amount,
+    note="",
+    actor=None,
+    method=common.METHOD_CASH,
+    source=common.SOURCE_DRAWER,
+    money_account=None,
+):
     """Hand a customer, in cash, credit the shop owes them.
 
     Three things, in one transaction, each through the machinery that already
     owns it: a debt of ``amount`` written onto the account — the customer has
     been paid — settled at once from their credit, exactly as a collection
     would spend it; and the cash leaving the actor's own drawer as a pay-out,
-    which the drawer count, the Z-report and the money position all read.
+    which the drawer count, the Z-report and the money position all read —
+    or, when the money is paid from the treasury (``source``/``method``, see
+    :func:`common.money_route`), straight out of the cash box or a bank.
 
     Refused when the customer is owed less than ``amount`` once their debts
-    have taken what the credit already owed them, and refused without an open
-    register session — cash leaves a drawer, and the drawer is how the shop
-    will know it did.
+    have taken what the credit already owed them, and refused through a drawer
+    without an open register session — the drawer is how the shop will know
+    the cash left.
     """
     from apps.customers.models import Customer
 
@@ -186,7 +197,9 @@ def refund_customer_credit(*, customer, amount, note="", actor=None):
         amount=amount,
         note=note,
     )
-    session = common.open_drawer_for(actor)
+    route = common.money_route(
+        actor, method=method, source=source, money_account=money_account
+    )
     customer = Customer.objects.select_for_update().get(pk=customer.pk)
     # The credit settles what the customer owes first; only what is left of it
     # is theirs to take away in cash.
@@ -215,10 +228,10 @@ def refund_customer_credit(*, customer, amount, note="", actor=None):
     )
     common.allocate_number(entry)
     entry.order = _create_carrier(entry, actor=actor)
-    entry.cash_movement = common.drawer_movement(
-        session,
+    common.settle_money(
+        entry,
+        route,
         outgoing=True,
-        amount=entry.amount,
         reason=f"رد رصيد للعميل {customer.full_name} ({entry.number})",
         actor=actor,
     )
@@ -244,7 +257,8 @@ def refund_customer_credit(*, customer, amount, note="", actor=None):
         attributes={
             "number": entry.number,
             "customer_id": customer.pk,
-            "register_session_id": session.pk,
+            "register_session_id": getattr(route.session, "pk", None),
+            "money_account_id": getattr(route.money_account, "pk", None),
         },
         metrics={"amount": float(entry.amount)},
     )

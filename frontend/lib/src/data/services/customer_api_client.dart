@@ -1,3 +1,4 @@
+import '../models/money_source.dart';
 import '../models/customer_activity.dart';
 import '../models/contact.dart';
 import '../models/messaging_gateway.dart';
@@ -103,6 +104,8 @@ class CustomerApiClient {
     required String method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
+    MoneySource source = MoneySource.drawer,
     String? idempotencyKey,
   }) async {
     final response = await _session.post(
@@ -111,6 +114,8 @@ class CustomerApiClient {
         'method': method,
         'amount': amount.toStringAsFixed(2),
         if (cardReceiptUrl.isNotEmpty) 'card_receipt_url': cardReceiptUrl,
+        'money_account': ?moneyAccountId,
+        'source': source.apiValue,
       },
       idempotencyKey: idempotencyKey,
     );

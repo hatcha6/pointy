@@ -5,8 +5,8 @@ import '../data/models/balance_entry.dart';
 import '../data/services/api_error_detail.dart';
 import '../data/services/api_session.dart';
 
-/// "عليه لنا" / "له علينا" — the words a shop ledger has always used, the same
-/// for a customer, a supplier and an employee.
+/// «دين عليه» / «رصيد له»: which way a balance written without money runs —
+/// the same for a customer, a supplier and an employee.
 String balanceDirectionLabel(
   AppLocalizations l10n,
   BalanceDirection direction,
@@ -39,75 +39,35 @@ String balanceDirectionHint(
   };
 }
 
-/// What an entry's row is called. A cash settlement names the money moving
-/// — for an employee, whose account runs both ways, which way it moved.
+/// What an entry's row is called, in the words of the buttons that write it:
+/// money moving is «استلام مبلغ» or «دفع مبلغ», named from the shop's side —
+/// a refund written `theyOweUs` paid the party, `weOweThem` took their money
+/// in. An adjustment is the same action recorded without money; an opening
+/// balance says which way it runs.
 String balanceEntryTitle(
   AppLocalizations l10n,
   BalanceParty party,
   BalanceEntry entry,
 ) {
-  if (entry.isRefund) {
-    if (party == BalanceParty.employee) {
-      // A settlement is written the opposite way to what it settles: cash
-      // paid to the employee is a debit on their account.
-      return entry.direction == BalanceDirection.theyOweUs
-          ? l10n.balanceKindEmployeePaidOut
-          : l10n.balanceKindEmployeeCollected;
-    }
-    return balanceKindLabel(l10n, entry.kind);
+  if (entry.isOpening) {
+    return '${l10n.balanceKindOpening} • '
+        '${balanceDirectionLabel(l10n, entry.direction)}';
   }
-  return '${balanceKindLabel(l10n, entry.kind)} • '
-      '${balanceDirectionLabel(l10n, entry.direction)}';
+  final action = entry.direction == BalanceDirection.theyOweUs
+      ? l10n.accountPayMoneyButton
+      : l10n.accountReceiveMoneyButton;
+  return entry.isRefund ? action : '$action • ${l10n.balanceRowAccountOnly}';
 }
 
-/// The words for settling one side of an account in cash: [settles] is the
-/// side being settled — `weOweThem` pays the party, `theyOweUs` takes their
-/// money in.
-class BalanceCashWords {
-  const BalanceCashWords({
-    required this.button,
-    required this.title,
-    required this.hint,
-    required this.saved,
-  });
-
-  final String button;
-  final String title;
-  final String hint;
-  final String saved;
-
-  factory BalanceCashWords.of(
-    AppLocalizations l10n,
-    BalanceParty party,
-    BalanceDirection settles,
-  ) {
-    return switch ((party, settles)) {
-      (BalanceParty.employee, BalanceDirection.weOweThem) => BalanceCashWords(
-        button: l10n.employeePayOutButton,
-        title: l10n.employeePayOutTitle,
-        hint: l10n.employeePayOutHint,
-        saved: l10n.employeePayOutSaved,
-      ),
-      (BalanceParty.employee, BalanceDirection.theyOweUs) => BalanceCashWords(
-        button: l10n.employeeCollectButton,
-        title: l10n.employeeCollectTitle,
-        hint: l10n.employeeCollectHint,
-        saved: l10n.employeeCollectSaved,
-      ),
-      (BalanceParty.supplier, _) => BalanceCashWords(
-        button: l10n.supplierRefundButton,
-        title: l10n.supplierRefundTitle,
-        hint: l10n.supplierRefundHint,
-        saved: l10n.supplierRefundSaved,
-      ),
-      (BalanceParty.customer, _) => BalanceCashWords(
-        button: l10n.customerRefundButton,
-        title: l10n.customerRefundTitle,
-        hint: l10n.customerRefundHint,
-        saved: l10n.customerRefundSaved,
-      ),
-    };
-  }
+/// Where a refund's money moved, for its row; null for an entry that moved
+/// none.
+String? balanceSettledThrough(AppLocalizations l10n, BalanceEntry entry) {
+  return switch (entry.settledThrough) {
+    'drawer' => l10n.balanceSettledThroughDrawer,
+    'cash_box' => l10n.balanceSettledThroughCashBox,
+    'bank' => l10n.balanceSettledThroughBank(entry.moneyAccountName),
+    _ => null,
+  };
 }
 
 IconData balanceDirectionIcon(BalanceDirection direction) {

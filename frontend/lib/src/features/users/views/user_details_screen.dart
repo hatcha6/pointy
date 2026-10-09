@@ -11,6 +11,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
+import '../../register_sessions/views/session_cash_variance.dart';
 import '../role_presentation.dart';
 import '../view_models/user_details_view_model.dart';
 
@@ -541,9 +542,7 @@ class _RecentSessionsSection extends StatelessWidget {
                   formatMoney(session.openingCash),
                 ),
                 if (session.hasCashVariance)
-                  l10n.sessionVarianceFlag(
-                    formatMoney(session.cashVariance ?? 0),
-                  ),
+                  sessionCashVarianceFlag(l10n, session.cashVariance ?? 0),
               ]),
               trailing: session.closingCash == null
                   ? null

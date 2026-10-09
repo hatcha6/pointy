@@ -45,13 +45,13 @@ void main() {
     expect(find.byKey(const ValueKey('balance_entry_11')), findsOneWidget);
     expect(find.textContaining('يُخصم حتى 100.00'), findsOneWidget);
     expect(find.textContaining('مُدرج في مسير رواتب لم يُصرف'), findsOneWidget);
-    // Both cash actions, since the account runs both ways.
+    // Both actions, since the account runs both ways.
     expect(
-      find.byKey(const ValueKey('balance_pay_out_button')),
+      find.byKey(const ValueKey('account_pay_money_button')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('balance_take_in_button')),
+      find.byKey(const ValueKey('account_receive_money_button')),
       findsOneWidget,
     );
   });
@@ -66,21 +66,24 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('employee_row_5')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('balance_take_in_button')));
+    await tester.tap(
+      find.byKey(const ValueKey('account_receive_money_button')),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('تحصيل مبلغ من الموظف'), findsOneWidget);
     await tester.enterText(
-      find.byKey(const ValueKey('balance_refund_amount')),
+      find.byKey(const ValueKey('record_payment_amount_field')),
       '120',
     );
-    await tester.tap(find.byKey(const ValueKey('balance_refund_confirm')));
+    await tester.tap(find.byKey(const ValueKey('record_payment_confirm')));
     await tester.pumpAndSettle();
 
     final body = api.refundBodies.single;
     expect(body['employee'], 5);
     expect(body['amount'], '120.00');
     expect(body['settles'], 'they_owe_us');
-    expect(find.text('تم استلام المبلغ من الموظف.'), findsOneWidget);
+    expect(body['method'], 'cash');
+    expect(body['source'], 'drawer');
+    expect(find.text('تم تسجيل المبلغ'), findsOneWidget);
   });
 
   testWidgets('a debt the employee owes can be spread over payroll runs', (
@@ -93,39 +96,54 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('employee_row_5')));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('add_balance_adjustment_button')),
-    );
+    Future<void> recordWithoutMoney() async {
+      await tester.tap(
+        find.byKey(const ValueKey('record_payment_method_field')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('بدون مبلغ نقدي (تسجيل على الحساب)').last);
+      await tester.pumpAndSettle();
+    }
+
+    // «دفع مبلغ» without money: the employee now owes it, and the limit is
+    // offered.
+    await tester.tap(find.byKey(const ValueKey('account_pay_money_button')));
     await tester.pumpAndSettle();
-    // "عليه لنا" is the default: the limit is offered.
-    expect(find.byKey(const ValueKey('balance_entry_limit')), findsOneWidget);
+    await recordWithoutMoney();
+    expect(
+      find.byKey(const ValueKey('record_payment_limit_field')),
+      findsOneWidget,
+    );
     await tester.enterText(
-      find.byKey(const ValueKey('balance_entry_amount')),
+      find.byKey(const ValueKey('record_payment_amount_field')),
       '600',
     );
     await tester.enterText(
-      find.byKey(const ValueKey('balance_entry_limit')),
+      find.byKey(const ValueKey('record_payment_limit_field')),
       '150',
     );
     await tester.enterText(
-      find.byKey(const ValueKey('balance_entry_note')),
+      find.byKey(const ValueKey('record_payment_notes_field')),
       'عجز في الدرج',
     );
-    await tester.tap(find.byKey(const ValueKey('balance_entry_save')));
+    await tester.tap(find.byKey(const ValueKey('record_payment_confirm')));
     await tester.pumpAndSettle();
 
     final body = api.entryBodies.single;
+    expect(body['kind'], 'adjustment');
     expect(body['direction'], 'they_owe_us');
     expect(body['payroll_deduction_limit'], '150.00');
 
     // What the shop owes is paid in full with the next wage: no limit.
     await tester.tap(
-      find.byKey(const ValueKey('add_balance_adjustment_button')),
+      find.byKey(const ValueKey('account_receive_money_button')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('له علينا'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('balance_entry_limit')), findsNothing);
+    await recordWithoutMoney();
+    expect(
+      find.byKey(const ValueKey('record_payment_limit_field')),
+      findsNothing,
+    );
   });
 
   test('a loan paid by transfer names its bank; cash names none', () {

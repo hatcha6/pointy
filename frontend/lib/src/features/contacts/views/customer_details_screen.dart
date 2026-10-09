@@ -6,6 +6,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/balance_entry.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
+import '../../../data/models/money_source.dart';
 import '../../../data/models/payment_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
@@ -23,6 +24,7 @@ import '../../register_sessions/views/sale_order_details_sheet.dart';
 import '../../inventory/views/consignor_statement_launcher.dart';
 import '../../inventory/views/consignor_summary_section.dart';
 import '../view_models/customer_details_view_model.dart';
+import 'account_money_actions.dart';
 import 'balance_entries_section.dart';
 import '../../settings/views/messaging_presentation.dart';
 
@@ -146,11 +148,17 @@ class CustomerDetailsView extends StatelessWidget {
           child: ListView(
             padding: EdgeInsets.all(spacing.lg),
             children: [
-              _CustomerHero(customer: customer),
+              _CustomerHero(viewModel: viewModel),
               SizedBox(height: spacing.md),
               if (viewModel.outstandingBalance > 0.005) ...[
                 _OutstandingBalanceCallout(
                   viewModel: viewModel,
+                  // Whoever sees the account's section takes the money there;
+                  // anyone else (a cashier) still collects from here.
+                  collection: (capabilities?.canViewCustomerBalances ?? false)
+                      ? null
+                      : customerCollectionFlow(l10n, viewModel),
+                  cashSources: _cashSources(capabilities),
                   // A colleague's debt comes off payroll: no text for it.
                   canTextBalance:
                       (capabilities?.canSendSms ?? false) &&
@@ -199,12 +207,10 @@ class CustomerDetailsView extends StatelessWidget {
                   partyId: customer.id,
                   canManage: capabilities!.canManageCustomerBalances,
                   canCancel: capabilities!.canCancelCustomerBalances,
-                  // The cash leaves a drawer, so it takes the drawer's own
-                  // pay-out right as well.
-                  canSettleInCash:
-                      capabilities!.canManageCustomerBalances &&
-                      capabilities!.canCreateRegisterCashMovement,
+                  canUseDrawer: capabilities!.canCreateRegisterCashMovement,
+                  canUseTreasury: capabilities!.canViewMoneyAccounts,
                   cashPayable: viewModel.creditBalance,
+                  receive: customerCollectionFlow(l10n, viewModel),
                   // An entry moves what the customer owes and the credit they
                   // hold; the callouts above read the server's figures again.
                   onChanged: viewModel.loadSummary,
@@ -675,19 +681,39 @@ class _CustomerConsent extends StatelessWidget {
 }
 
 class _CustomerHero extends StatelessWidget {
-  const _CustomerHero({required this.customer});
+  const _CustomerHero({required this.viewModel});
 
-  final Customer customer;
+  final CustomerDetailsViewModel viewModel;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final customer = viewModel.customer;
+    final summary = viewModel.summary;
+    // The headline is what is open on the account, never the lifetime sales
+    // total. Hidden until the summary arrives so a debtor never flashes as
+    // settled.
+    final summaryReady =
+        !viewModel.hasSummaryError &&
+        !(viewModel.isLoadingSummary && summary.invoiceCount == 0);
+    final owes = viewModel.outstandingBalance > 0.005;
+    final holdsCredit = viewModel.creditBalance > 0.005;
 
     return PointyDetailHero(
       icon: customer.marketingConsent
           ? Icons.campaign_outlined
           : Icons.person_outline,
       title: customer.fullName,
+      value: summaryReady
+          ? formatMoney(
+              owes ? viewModel.outstandingBalance : viewModel.creditBalance,
+            )
+          : null,
+      valueSubtitle: owes
+          ? l10n.customerHeroOwesCaption
+          : holdsCredit
+          ? l10n.customerCreditBalanceLabel
+          : l10n.contactHeroSettledCaption,
       pills: [
         PointyHeroPill(
           label: customer.isActive
@@ -810,15 +836,57 @@ class _UnclaimedCardCallout extends StatelessWidget {
   }
 }
 
-/// Prominent "you owe X" callout + a primary [recordPayment] action, shown only
-/// while the customer carries an outstanding balance on their account.
+/// Where this user's cash may move: their drawer — the till's, as a
+/// collection always has — and the treasury for whoever may see it.
+Set<MoneySource> _cashSources(AuthorizationCapabilities? capabilities) => {
+  MoneySource.drawer,
+  if (capabilities?.canViewMoneyAccounts ?? false) MoneySource.treasury,
+};
+
+/// Taking the customer's money in: split by the server across what they owe,
+/// oldest first. «استلام مبلغ» on their account.
+AccountMoneyFlow customerCollectionFlow(
+  AppLocalizations l10n,
+  CustomerDetailsViewModel viewModel,
+) {
+  return AccountMoneyFlow(
+    available: viewModel.outstandingBalance,
+    availableLabel: l10n.customerAccountPaymentOutstandingValue(
+      formatMoney(viewModel.outstandingBalance),
+    ),
+    methods: customerPaymentMethodOptions(l10n),
+    proofToggleLabel: l10n.invoicePaymentPrintProofLabel,
+    loadTrustedCardTerminalIds: viewModel.loadTrustedCardTerminalIds,
+    onSubmit: (result) async {
+      final ok = await viewModel.recordAccountPayment(
+        method: PaymentMethod.fromApiValue(result.methodApiValue),
+        amount: result.amount,
+        cardReceiptUrl: result.cardReceiptUrl,
+        moneyAccountId: result.moneyAccountId,
+        source: result.source,
+        printProof: result.printProof,
+      );
+      return ok ? null : l10n.customerAccountPaymentError;
+    },
+  );
+}
+
+/// Prominent "you owe X" callout, shown only while the customer carries an
+/// outstanding balance on their account — with «استلام مبلغ» for a user who
+/// does not see the account's own section.
 class _OutstandingBalanceCallout extends StatelessWidget {
   const _OutstandingBalanceCallout({
     required this.viewModel,
+    this.collection,
+    this.cashSources = const {MoneySource.drawer},
     this.canTextBalance = false,
   });
 
   final CustomerDetailsViewModel viewModel;
+
+  /// «استلام مبلغ» here, or null when the account's section carries it.
+  final AccountMoneyFlow? collection;
+  final Set<MoneySource> cashSources;
 
   /// Offer to text the customer what they owe (SMS on, a phone to text).
   final bool canTextBalance;
@@ -848,18 +916,14 @@ class _OutstandingBalanceCallout extends StatelessWidget {
           SizedBox(height: spacing.sm),
           PointyInlineMessage.error(message: l10n.customerAccountPaymentError),
         ],
-        SizedBox(height: spacing.sm),
-        FilledButton.icon(
-          key: const ValueKey('record_customer_payment_button'),
-          onPressed: busy ? null : () => _recordPayment(context),
-          icon: busy
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: PointySpinner(strokeWidth: 2),
-                )
-              : const Icon(Icons.add_card_outlined),
-          label: Text(l10n.recordCustomerPaymentButton),
-        ),
+        if (collection case final flow?) ...[
+          SizedBox(height: spacing.sm),
+          AccountMoneyActions(
+            receive: flow,
+            cashSources: cashSources,
+            busy: busy,
+          ),
+        ],
         if (canTextBalance) ...[
           SizedBox(height: spacing.xs),
           OutlinedButton.icon(
@@ -894,44 +958,6 @@ class _OutstandingBalanceCallout extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _recordPayment(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final trustedTerminalIds = await viewModel.loadTrustedCardTerminalIds();
-    if (!context.mounted) {
-      return;
-    }
-    final result = await showRecordPaymentDialog(
-      context,
-      title: l10n.customerAccountPaymentTitle,
-      maxAmount: viewModel.outstandingBalance,
-      balanceLabel: l10n.customerAccountPaymentOutstandingValue(
-        formatMoney(viewModel.outstandingBalance),
-      ),
-      methods: customerPaymentMethodOptions(l10n),
-      proofToggleLabel: l10n.invoicePaymentPrintProofLabel,
-      trustedCardTerminalIds: trustedTerminalIds,
-    );
-    if (result == null) {
-      return;
-    }
-
-    final didRecord = await viewModel.recordAccountPayment(
-      method: PaymentMethod.fromApiValue(result.methodApiValue),
-      amount: result.amount,
-      cardReceiptUrl: result.cardReceiptUrl,
-      printProof: result.printProof,
-    );
-    if (!context.mounted || !didRecord) {
-      return;
-    }
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(content: Text(l10n.customerAccountPaymentSuccess)),
-      );
   }
 }
 
@@ -1191,18 +1217,6 @@ class _CustomerSalesSummary extends StatelessWidget {
           gap: PointyMetricGridGap.compact,
           metrics: [
             PointyMetricGridItem(
-              label: l10n.customerTotalInvoicedLabel,
-              value: formatMoney(summary.totalInvoiced),
-              icon: Icons.receipt_long_outlined,
-              accentColor: colors.primaryStrong,
-            ),
-            PointyMetricGridItem(
-              label: l10n.customerNetSalesLabel,
-              value: formatMoney(summary.netSales),
-              icon: Icons.payments_outlined,
-              accentColor: colors.success,
-            ),
-            PointyMetricGridItem(
               label: l10n.customerOutstandingBalanceLabel,
               value: formatMoney(summary.outstandingBalance),
               icon: Icons.account_balance_wallet_outlined,
@@ -1217,6 +1231,18 @@ class _CustomerSalesSummary extends StatelessWidget {
                 icon: Icons.savings_outlined,
                 accentColor: colors.success,
               ),
+            PointyMetricGridItem(
+              label: l10n.customerTotalInvoicedLabel,
+              value: formatMoney(summary.totalInvoiced),
+              icon: Icons.receipt_long_outlined,
+              accentColor: colors.primaryStrong,
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerNetSalesLabel,
+              value: formatMoney(summary.netSales),
+              icon: Icons.payments_outlined,
+              accentColor: colors.success,
+            ),
             PointyMetricGridItem(
               label: l10n.customerInvoiceCountLabel,
               value: summary.invoiceCount.toString(),

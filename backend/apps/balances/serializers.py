@@ -5,6 +5,7 @@ from rest_framework import serializers
 from apps.documents.serializers import DocumentLifecycleFields
 from apps.treasury.models import MoneyAccount
 
+from . import common
 from . import customers as customer_balances
 from . import employees as employee_balances
 from . import suppliers as supplier_balances
@@ -69,13 +70,25 @@ class EmployeeBalanceEntryInputSerializer(BalanceEntryInputSerializer):
 
 
 class RefundInputSerializer(serializers.Serializer):
-    """A balance settled with cash through the actor's drawer."""
+    """A balance settled with money: cash through the actor's drawer (the
+    default), or through the treasury — cash from the cash box, or a transfer
+    through a bank account (``common.money_route``)."""
 
     amount = serializers.DecimalField(
         max_digits=10, decimal_places=2, min_value=Decimal("0.01")
     )
     note = serializers.CharField(
         required=False, allow_blank=True, max_length=2000, trim_whitespace=True
+    )
+    method = serializers.ChoiceField(
+        choices=[common.METHOD_CASH, common.METHOD_TRANSFER],
+        default=common.METHOD_CASH,
+    )
+    source = serializers.ChoiceField(
+        choices=common.SOURCES, default=common.SOURCE_DRAWER
+    )
+    money_account = serializers.PrimaryKeyRelatedField(
+        queryset=MoneyAccount.objects.all(), required=False, allow_null=True
     )
 
 
@@ -92,6 +105,12 @@ class _BalanceEntrySerializer(DocumentLifecycleFields, serializers.ModelSerializ
     can still be withdrawn."""
 
     created_by_username = serializers.SerializerMethodField()
+    money_account_name = serializers.CharField(
+        source="money_account.name", read_only=True, default=""
+    )
+    #: Where a refund's money moved: ``drawer``, ``cash_box`` or ``bank``.
+    #: Empty for every other entry, which moved no money.
+    settled_through = serializers.SerializerMethodField()
     settled_amount = serializers.SerializerMethodField()
     remaining_amount = serializers.SerializerMethodField()
     can_cancel = serializers.SerializerMethodField()
@@ -107,6 +126,9 @@ class _BalanceEntrySerializer(DocumentLifecycleFields, serializers.ModelSerializ
         "created_by",
         "created_by_username",
         "created_at",
+        "money_account",
+        "money_account_name",
+        "settled_through",
         "settled_amount",
         "remaining_amount",
         "can_cancel",
@@ -118,6 +140,15 @@ class _BalanceEntrySerializer(DocumentLifecycleFields, serializers.ModelSerializ
 
     def get_created_by_username(self, entry) -> str | None:
         return entry.created_by.username if entry.created_by_id else None
+
+    def get_settled_through(self, entry) -> str:
+        if entry.kind != BalanceEntry.Kind.REFUND:
+            return ""
+        if entry.money_account_id is None:
+            return "drawer"
+        if entry.money_account.kind == MoneyAccount.Kind.CASH:
+            return "cash_box"
+        return "bank"
 
     def _settled(self, entry) -> Decimal:
         cache = getattr(entry, "_settled_cache", None)
@@ -213,6 +244,11 @@ class SupplierAccountPaymentSerializer(serializers.Serializer):
     paid_at = serializers.DateTimeField(required=False)
     money_account = serializers.PrimaryKeyRelatedField(
         queryset=MoneyAccount.objects.all(), required=False, allow_null=True
+    )
+    #: Where cash leaves: the cash box (the default, as every account payment
+    #: did before) or the payer's own drawer.
+    source = serializers.ChoiceField(
+        choices=common.SOURCES, default=common.SOURCE_TREASURY
     )
 
     def __init__(self, *args, **kwargs):

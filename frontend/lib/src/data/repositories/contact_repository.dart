@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/money_source.dart';
 import '../models/balance_entry.dart';
 import '../models/contact.dart';
 import '../models/customer_activity.dart';
@@ -77,6 +78,8 @@ class ContactRepository {
     required String method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
+    MoneySource source = MoneySource.drawer,
     String? idempotencyKey,
   }) async {
     return Result.guard(
@@ -85,6 +88,8 @@ class ContactRepository {
         method: method,
         amount: amount,
         cardReceiptUrl: cardReceiptUrl,
+        moneyAccountId: moneyAccountId,
+        source: source,
         idempotencyKey: idempotencyKey,
       ),
     );
@@ -134,14 +139,18 @@ class ContactRepository {
     );
   }
 
-  /// Settles a balance with cash through the caller's open drawer. [settles]
-  /// names the side for an employee, whose account runs both ways.
+  /// Settles a balance with money, through the caller's open drawer or the
+  /// treasury. [settles] names the side for an employee, whose account runs
+  /// both ways.
   Future<Result<BalanceEntry>> refundBalance({
     required BalanceParty party,
     required int partyId,
     required double amount,
     String note = '',
     BalanceDirection? settles,
+    String method = 'cash',
+    MoneySource source = MoneySource.drawer,
+    int? moneyAccountId,
     String? idempotencyKey,
   }) async {
     return Result.guard(
@@ -151,6 +160,9 @@ class ContactRepository {
         amount: amount,
         note: note,
         settles: settles,
+        method: method,
+        source: source,
+        moneyAccountId: moneyAccountId,
         idempotencyKey: idempotencyKey,
       ),
     );
@@ -181,6 +193,7 @@ class ContactRepository {
     String reference = '',
     String notes = '',
     int? moneyAccountId,
+    MoneySource source = MoneySource.treasury,
     String? idempotencyKey,
   }) async {
     return Result.guard(
@@ -191,6 +204,7 @@ class ContactRepository {
         reference: reference,
         notes: notes,
         moneyAccountId: moneyAccountId,
+        source: source,
         idempotencyKey: idempotencyKey,
       ),
     );

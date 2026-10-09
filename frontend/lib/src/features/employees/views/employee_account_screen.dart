@@ -93,11 +93,8 @@ class _EmployeeAccountScreenState extends State<EmployeeAccountScreen> {
                       partyId: employee.id,
                       canManage: capabilities.canManageEmployeeBalances,
                       canCancel: capabilities.canCancelEmployeeBalances,
-                      // Cash moves through the user's own drawer, so it takes
-                      // the drawer's own right as well.
-                      canSettleInCash:
-                          capabilities.canManageEmployeeBalances &&
-                          capabilities.canCreateRegisterCashMovement,
+                      canUseDrawer: capabilities.canCreateRegisterCashMovement,
+                      canUseTreasury: capabilities.canViewMoneyAccounts,
                       cashPayable: balance?.owedToEmployee ?? 0,
                       cashCollectable: balance?.owedByEmployee ?? 0,
                       // An entry moves what the next payroll run pays or

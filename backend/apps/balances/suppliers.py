@@ -114,14 +114,24 @@ def create_supplier_entry(
 
 
 @transaction.atomic
-def receive_supplier_refund(*, supplier, amount, note="", actor=None):
+def receive_supplier_refund(
+    *,
+    supplier,
+    amount,
+    note="",
+    actor=None,
+    method=common.METHOD_CASH,
+    source=common.SOURCE_DRAWER,
+    money_account=None,
+):
     """Take in, in cash, money a supplier owed the shop.
 
     The mirror of paying them: what the shop owes on the account goes up by
     ``amount`` — the supplier has paid it back — and is settled at once from
     their credit note, by the same supplier-credit payment an order is settled
     with; the cash comes into the actor's own drawer as a pay-in, which the
-    drawer count, the Z-report and the money position all read.
+    drawer count, the Z-report and the money position all read — or straight
+    into the cash box or a bank, through the treasury (:func:`common.money_route`).
     """
     from apps.purchasing.models import Supplier, SupplierPayment
     from apps.purchasing.services import (
@@ -135,7 +145,9 @@ def receive_supplier_refund(*, supplier, amount, note="", actor=None):
         amount=amount,
         note=note,
     )
-    session = common.open_drawer_for(actor)
+    route = common.money_route(
+        actor, method=method, source=source, money_account=money_account
+    )
     supplier = Supplier.objects.select_for_update().get(pk=supplier.pk)
     available = supplier_available_credit(supplier)
     if cleaned.amount > available:
@@ -163,10 +175,10 @@ def receive_supplier_refund(*, supplier, amount, note="", actor=None):
     # entry is issued once, link and all — it is frozen from the moment it
     # exists.
     common.allocate_number(entry)
-    entry.cash_movement = common.drawer_movement(
-        session,
+    common.settle_money(
+        entry,
+        route,
         outgoing=False,
-        amount=entry.amount,
         reason=f"مبلغ مسترد من المورد {supplier.name} ({entry.number})",
         actor=actor,
     )
@@ -189,7 +201,8 @@ def receive_supplier_refund(*, supplier, amount, note="", actor=None):
         attributes={
             "number": entry.number,
             "supplier_id": supplier.pk,
-            "register_session_id": session.pk,
+            "register_session_id": getattr(route.session, "pk", None),
+            "money_account_id": getattr(route.money_account, "pk", None),
         },
         metrics={"amount": float(entry.amount)},
     )
@@ -386,6 +399,7 @@ def record_supplier_account_payment(
     paid_at=None,
     money_account=None,
     created_by=None,
+    source=common.SOURCE_TREASURY,
 ):
     """Pay a supplier against their account rather than one document.
 
@@ -398,6 +412,10 @@ def record_supplier_account_payment(
     Payments made on account before this existed (naming no document at all)
     are read the way the payables report reads them: as having already paid
     the oldest debts. This payment starts where they stopped.
+
+    Cash leaves the cash box unless ``source`` says the drawer: then each
+    payment carries a pay-out from the payer's own open drawer, as a POS cash
+    purchase does, so the drawer count and the Z-report see it.
     """
     from apps.purchasing.models import Supplier, SupplierPayment
     from apps.purchasing.services import (
@@ -405,6 +423,12 @@ def record_supplier_account_payment(
         supplier_available_credit,
     )
 
+    session = None
+    if source == common.SOURCE_DRAWER and method == SupplierPayment.Method.CASH:
+        common.require_permission(
+            created_by, common.DRAWER_PERMISSION, "drawer_forbidden"
+        )
+        session = common.open_drawer_for(created_by)
     supplier = Supplier.objects.select_for_update().get(pk=supplier.pk)
     try:
         amount = Decimal(str(amount)).quantize(Decimal("0.01"))
@@ -457,6 +481,15 @@ def record_supplier_account_payment(
             fields["paid_at"] = paid_at
         if money_account is not None:
             fields["money_account"] = money_account
+        if session is not None:
+            fields["register_session"] = session
+            fields["cash_movement"] = common.drawer_movement(
+                session,
+                outgoing=True,
+                amount=portion,
+                reason=f"دفعة للمورد {supplier.name}",
+                actor=created_by,
+            )
         if isinstance(document, SupplierBalanceEntry):
             fields["balance_entry"] = document
         else:

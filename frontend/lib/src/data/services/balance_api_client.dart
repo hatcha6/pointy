@@ -1,6 +1,7 @@
 import '../models/balance_entry.dart';
 import '../models/contact.dart';
 import '../models/customer_activity.dart';
+import '../models/money_source.dart';
 import 'api_session.dart';
 
 /// Opening balances and adjustments on customers' and suppliers' accounts,
@@ -41,16 +42,20 @@ class BalanceApiClient {
     );
   }
 
-  /// Settles a balance with cash through the caller's open drawer: pays a
-  /// customer what the shop owes them, takes in what a supplier owes it, or —
-  /// for an employee, whose account runs both ways — whichever side
-  /// [settles] names.
+  /// Settles a balance with money: pays a customer what the shop owes them,
+  /// takes in what a supplier owes it, or — for an employee, whose account
+  /// runs both ways — whichever side [settles] names. Cash through the
+  /// caller's open drawer or the treasury's cash box ([source]); a transfer
+  /// through a bank account.
   Future<BalanceEntry> refund({
     required BalanceParty party,
     required int partyId,
     required double amount,
     String note = '',
     BalanceDirection? settles,
+    String method = 'cash',
+    MoneySource source = MoneySource.drawer,
+    int? moneyAccountId,
     String? idempotencyKey,
   }) async {
     final response = await _session.post(
@@ -60,6 +65,9 @@ class BalanceApiClient {
         'amount': amount.toStringAsFixed(2),
         if (note.trim().isNotEmpty) 'note': note.trim(),
         'settles': ?settles?.apiValue,
+        'method': method,
+        'source': source.apiValue,
+        'money_account': ?moneyAccountId,
       },
       idempotencyKey: idempotencyKey,
     );
@@ -116,6 +124,7 @@ class BalanceApiClient {
     String reference = '',
     String notes = '',
     int? moneyAccountId,
+    MoneySource source = MoneySource.treasury,
     String? idempotencyKey,
   }) async {
     final response = await _session.post(
@@ -126,6 +135,7 @@ class BalanceApiClient {
         if (reference.trim().isNotEmpty) 'reference': reference.trim(),
         if (notes.trim().isNotEmpty) 'notes': notes.trim(),
         'money_account': ?moneyAccountId,
+        'source': source.apiValue,
       },
       idempotencyKey: idempotencyKey,
     );

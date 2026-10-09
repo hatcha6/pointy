@@ -13,6 +13,8 @@ this is "what moved through this account".
 
 from decimal import Decimal
 
+from django.db.models import Q
+
 from apps.core.money_dates import money_date_field, money_period
 from apps.expenses.models import Expense
 from apps.payments.models import Payment
@@ -24,6 +26,8 @@ from .models import MoneyAccount, MoneyTransfer
 from .position import (
     BANK_METHODS,
     CASH_METHODS,
+    COMPONENT_ACCOUNT_PAYOUTS,
+    COMPONENT_ACCOUNT_RECEIPTS,
     COMPONENT_COMMISSION,
     COMPONENT_DRAWER_IN,
     COMPONENT_DRAWER_OUT,
@@ -40,9 +44,11 @@ from .position import (
     COMPONENT_TRANSFER_OUT,
     NON_CASH_SUPPLIER_METHODS,
     account_is_routed,
+    account_settlements,
     bank_account_filter,
     claimed_by_live,
     loan_disbursements,
+    provider_expenses,
 )
 
 # Same ceiling as the expense ledger: enough for a month of a busy shop, and
@@ -252,6 +258,37 @@ def _cash_rows(*, start, end):
 
     yield from _payroll_rows(start=start, end=end)
     yield from _loan_rows("cash", start=start, end=end)
+    yield from _account_settlement_rows(
+        Q(money_account__kind=MoneyAccount.Kind.CASH), start=start, end=end
+    )
+
+
+def _account_settlement_rows(account_filter, *, start, end):
+    """Customers', suppliers' and employees' accounts settled through the
+    treasury — the rows behind the two ``account_*`` components."""
+    from apps.balances.models import BalanceEntry
+    from apps.core.money_dates import day_range_end, day_range_start
+
+    for queryset in account_settlements(
+        day_range_start(start), day_range_end(end), account_filter
+    ):
+        party = next(
+            name
+            for name in ("customer", "supplier", "employee")
+            if hasattr(queryset.model, name)
+        )
+        for entry in _newest(queryset.select_related(party)):
+            received = entry.direction == BalanceEntry.Direction.WE_OWE_THEM
+            yield _row(
+                source=(
+                    COMPONENT_ACCOUNT_RECEIPTS if received else COMPONENT_ACCOUNT_PAYOUTS
+                ),
+                date=entry.created_at.date(),
+                amount=entry.amount if received else -entry.amount,
+                description=str(getattr(entry, party)),
+                reference=entry.number,
+                related_id=entry.pk,
+            )
 
 
 def _loan_rows(method, *, start, end, account_filter=None):
@@ -310,6 +347,9 @@ def _bank_rows(*, start, end, account, is_default, held=None):
         account_filter=owned,
     )
     yield from _loan_rows("transfer", start=start, end=end, account_filter=owned)
+    yield from _account_settlement_rows(
+        Q(money_account=account), start=start, end=end
+    )
 
 
 def _settlement_rows(settlements):
@@ -371,14 +411,27 @@ def _clearing_rows(account, *, start, end):
 
 
 def _provider_rows(account, *, start, end):
-    """What the provider drew from a float: one row per top-up it performed.
+    """What left a provider-kind account: a float's draws, one row per top-up
+    the provider performed, and the expenses paid from it.
 
-    Read from ``float_ledger.draws``, the rows its ``drawn`` sums, so these and
-    the ``integration_draw`` component cannot describe different money. A float
-    with no integration account behind it has no draws to list.
+    Read from ``float_ledger.draws`` and ``position.provider_expenses``, the
+    rows the balance's ``integration_draw`` and ``expenses`` components sum, so
+    the two cannot describe different money. A float with no integration
+    account behind it (the Daftar wallet) has no draws to list.
     """
     from apps.integrations import float_ledger
 
+    for expense in _newest(
+        money_period(provider_expenses(account).select_related("category"), start, end)
+    ):
+        yield _row(
+            source=COMPONENT_EXPENSES,
+            date=expense.spent_at,
+            amount=-expense.amount,
+            description=f"{expense.category.name} · {expense.description}",
+            reference=expense.reference,
+            related_id=expense.pk,
+        )
     integration = getattr(account, "integration_account", None)
     if integration is None:
         return

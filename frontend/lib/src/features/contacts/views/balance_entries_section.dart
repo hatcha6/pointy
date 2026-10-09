@@ -2,19 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/balance_entry.dart';
+import '../../../data/models/money_source.dart';
+import '../../../data/models/sale_order.dart' show PaymentMethod;
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/balance_labels.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/payment_labels.dart';
+import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/balance_entries_view_model.dart';
+import 'account_money_actions.dart';
 import 'balance_entry_dialogs.dart';
 
-/// The opening balance and adjustments on one customer's, supplier's or
-/// employee's account — listed for anyone who may see them, written and
-/// withdrawn by whoever may — and the cash that settles a side of it.
+/// One customer's, supplier's or employee's account: «استلام مبلغ» and
+/// «دفع مبلغ», the opening balance, and every entry written on it — listed for
+/// anyone who may see them, withdrawn by whoever may.
 ///
 /// Owns its view model: the details screens only need to know when the
 /// account changed, which [onChanged] tells them.
@@ -26,9 +31,12 @@ class BalanceEntriesSection extends StatefulWidget {
     required this.partyId,
     required this.canManage,
     required this.canCancel,
-    this.canSettleInCash = false,
+    this.canUseDrawer = false,
+    this.canUseTreasury = false,
     this.cashPayable = 0,
     this.cashCollectable = 0,
+    this.receive,
+    this.pay,
     this.onChanged,
   });
 
@@ -38,9 +46,12 @@ class BalanceEntriesSection extends StatefulWidget {
   final bool canManage;
   final bool canCancel;
 
-  /// Whether this user may settle a side of the account in cash, through
-  /// their own drawer.
-  final bool canSettleInCash;
+  /// Whether this user may move cash through their own drawer.
+  final bool canUseDrawer;
+
+  /// Whether this user may move money through the treasury: the cash box, or
+  /// a bank account by transfer.
+  final bool canUseTreasury;
 
   /// What the shop can pay out now: a customer's credit, an employee's dues.
   /// Read by the host screen from its own figures, which [onChanged]
@@ -49,6 +60,13 @@ class BalanceEntriesSection extends StatefulWidget {
 
   /// What the shop can take in now: a supplier's credit, an employee's debt.
   final double cashCollectable;
+
+  /// The host's own way of moving money on this side, when the account has
+  /// one — a customer's collection, a supplier's account payment. Otherwise
+  /// the side is settled as a balance refund ([cashPayable] /
+  /// [cashCollectable]) where the party has one.
+  final AccountMoneyFlow? receive;
+  final AccountMoneyFlow? pay;
   final Future<void> Function()? onChanged;
 
   @override
@@ -69,36 +87,76 @@ class _BalanceEntriesSectionState extends State<BalanceEntriesSection> {
     super.dispose();
   }
 
-  Future<void> _write(BalanceEntryKind kind) async {
+  Set<MoneySource> get _cashSources => {
+    if (widget.canUseDrawer) MoneySource.drawer,
+    if (widget.canUseTreasury) MoneySource.treasury,
+  };
+
+  /// A side settled as a balance refund. Only where the party has such a
+  /// side: a customer's credit paid out, a supplier paying back, an employee
+  /// either way. Needs the right to write balances, and somewhere for the
+  /// money to go.
+  AccountMoneyFlow? _refundFlow(AppLocalizations l10n, {required bool paying}) {
+    final available = paying ? widget.cashPayable : widget.cashCollectable;
+    final hasSide = switch (widget.party) {
+      BalanceParty.customer => paying,
+      BalanceParty.supplier => !paying,
+      BalanceParty.employee => true,
+    };
+    if (!hasSide || !widget.canManage || _cashSources.isEmpty) {
+      return null;
+    }
+    final settles = paying
+        ? BalanceDirection.weOweThem
+        : BalanceDirection.theyOweUs;
+    return AccountMoneyFlow(
+      available: available,
+      methods: [
+        for (final method in [
+          PaymentMethod.cash,
+          // A transfer never passes a drawer: it is the treasury's.
+          if (widget.canUseTreasury) PaymentMethod.transfer,
+        ])
+          RecordPaymentMethodOption(
+            apiValue: method.apiValue,
+            label: paymentMethodLabel(l10n, method),
+            icon: paymentMethodIcon(method),
+            usesBankAccount: method != PaymentMethod.cash,
+          ),
+      ],
+      showNotes: true,
+      onSubmit: (result) async {
+        final failure = await _viewModel.refund(
+          result.amount,
+          note: result.notes,
+          // Only an employee's account runs both ways; for the others the
+          // side is the only one there is.
+          settles: widget.party == BalanceParty.employee ? settles : null,
+          method: result.methodApiValue,
+          source: result.source,
+          moneyAccountId: result.moneyAccountId,
+        );
+        return failure == null
+            ? null
+            : balanceFailureMessage(
+                l10n,
+                failure,
+                fallback: l10n.accountMoneyError,
+              );
+      },
+    );
+  }
+
+  Future<void> _writeOpening() async {
     final l10n = AppLocalizations.of(context)!;
     final saved = await showBalanceEntryDialog(
       context,
       party: widget.party,
-      kind: kind,
+      kind: BalanceEntryKind.opening,
       onSubmit: _viewModel.create,
     );
     if (saved && mounted) {
       _snack(l10n.balanceEntrySaved);
-    }
-  }
-
-  Future<void> _settle(BalanceDirection settles, double available) async {
-    final l10n = AppLocalizations.of(context)!;
-    final saved = await showBalanceRefundDialog(
-      context,
-      party: widget.party,
-      settles: settles,
-      available: available,
-      onSubmit: (amount, note) => _viewModel.refund(
-        amount,
-        note: note,
-        // Only an employee's account runs both ways; for the others the side
-        // is the only one there is.
-        settles: widget.party == BalanceParty.employee ? settles : null,
-      ),
-    );
-    if (saved && mounted) {
-      _snack(BalanceCashWords.of(l10n, widget.party, settles).saved);
     }
   }
 
@@ -130,75 +188,37 @@ class _BalanceEntriesSectionState extends State<BalanceEntriesSection> {
       builder: (context, _) {
         final viewModel = _viewModel;
         final busy = viewModel.isSaving || viewModel.isLoading;
-        final canPay = widget.canSettleInCash && widget.cashPayable > 0.005;
-        final canTakeIn =
-            widget.canSettleInCash && widget.cashCollectable > 0.005;
+        final money = AccountMoneyActions(
+          receive: widget.receive ?? _refundFlow(l10n, paying: false),
+          pay: widget.pay ?? _refundFlow(l10n, paying: true),
+          cashSources: _cashSources,
+          onAccountOnly: widget.canManage ? viewModel.create : null,
+          offersDeductionLimit: widget.party == BalanceParty.employee,
+          busy: busy,
+        );
+        final offersOpening =
+            widget.canManage &&
+            !viewModel.hasLiveOpening &&
+            !viewModel.isLoading;
         return PointyDetailSection(
           title: l10n.balanceEntriesTitle,
           icon: Icons.account_balance_wallet_outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (widget.canManage || canPay || canTakeIn) ...[
+              if (money.hasActions || offersOpening) ...[
                 Wrap(
                   spacing: spacing.sm,
                   runSpacing: spacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    if (widget.canManage &&
-                        !viewModel.hasLiveOpening &&
-                        !viewModel.isLoading)
-                      FilledButton.tonalIcon(
+                    if (money.hasActions) money,
+                    if (offersOpening)
+                      OutlinedButton.icon(
                         key: const ValueKey('add_opening_balance_button'),
-                        onPressed: busy
-                            ? null
-                            : () => _write(BalanceEntryKind.opening),
+                        onPressed: busy ? null : _writeOpening,
                         icon: const Icon(Icons.flag_outlined),
                         label: Text(l10n.addOpeningBalanceButton),
-                      ),
-                    if (widget.canManage)
-                      OutlinedButton.icon(
-                        key: const ValueKey('add_balance_adjustment_button'),
-                        onPressed: busy
-                            ? null
-                            : () => _write(BalanceEntryKind.adjustment),
-                        icon: const Icon(Icons.tune_outlined),
-                        label: Text(l10n.addBalanceAdjustmentButton),
-                      ),
-                    if (canPay)
-                      OutlinedButton.icon(
-                        key: const ValueKey('balance_pay_out_button'),
-                        onPressed: busy
-                            ? null
-                            : () => _settle(
-                                BalanceDirection.weOweThem,
-                                widget.cashPayable,
-                              ),
-                        icon: const Icon(Icons.payments_outlined),
-                        label: Text(
-                          BalanceCashWords.of(
-                            l10n,
-                            widget.party,
-                            BalanceDirection.weOweThem,
-                          ).button,
-                        ),
-                      ),
-                    if (canTakeIn)
-                      OutlinedButton.icon(
-                        key: const ValueKey('balance_take_in_button'),
-                        onPressed: busy
-                            ? null
-                            : () => _settle(
-                                BalanceDirection.theyOweUs,
-                                widget.cashCollectable,
-                              ),
-                        icon: const Icon(Icons.savings_outlined),
-                        label: Text(
-                          BalanceCashWords.of(
-                            l10n,
-                            widget.party,
-                            BalanceDirection.theyOweUs,
-                          ).button,
-                        ),
                       ),
                   ],
                 ),
@@ -311,11 +331,10 @@ class _BalanceEntryRow extends StatelessWidget {
             : balanceDirectionIcon(entry.direction),
         color: tone,
       ),
-      // A refund is cash that already changed hands, in whichever direction
-      // its kind says; "they owe us" or "we owe them" would misdescribe it.
       title: balanceEntryTitle(l10n, party, entry),
       subtitle: [
         entry.number,
+        ?balanceSettledThrough(l10n, entry),
         if (entry.effectiveDate != null)
           l10n.balanceEntryEffectiveValue(formatDate(entry.effectiveDate!)),
         if (entry.note.isNotEmpty) entry.note,

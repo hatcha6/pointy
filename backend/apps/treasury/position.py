@@ -29,11 +29,11 @@ total they cannot see inside.
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import DecimalField, Exists, OuterRef, Q, Sum, Value
+from django.db.models import DecimalField, Exists, OuterRef, Q, Subquery, Sum, Value
 from django.utils import timezone
 from django.db.models.functions import Coalesce
 
-from apps.core.money_dates import day_range_end, day_range_start
+from apps.core.money_dates import day_range_end, day_range_start, money_period
 from apps.expenses.models import Expense
 from apps.payments.models import Payment
 from apps.purchasing.models import SupplierPayment
@@ -85,6 +85,13 @@ COMPONENT_SETTLEMENT_OUT = "settlement_out"
 # kept short of it (positive). Its own line on the clearing account so a fee
 # the shop was not told about is seen, never folded into the takings.
 COMPONENT_SETTLEMENT_DIFFERENCE = "settlement_difference"
+# Money a customer's, supplier's or employee's account was settled with through
+# the treasury rather than a drawer («استلام مبلغ» / «دفع مبلغ» on the account):
+# a supplier or employee paying the shop back, a customer's credit or an
+# employee's dues paid out. Through a drawer the same money is a drawer
+# movement, and is counted there.
+COMPONENT_ACCOUNT_RECEIPTS = "account_receipts"
+COMPONENT_ACCOUNT_PAYOUTS = "account_payouts"
 
 # Which payment methods land in which kind of account. Method decides the
 # *kind* of account; ``money_account`` — when a row carries one — decides WHICH
@@ -197,6 +204,9 @@ def _cash_components(*, start, end):
         _component(COMPONENT_PAYROLL, -payroll, direction="out"),
         _component(COMPONENT_CONSIGNOR_PAYOUT, -consignors, direction="out"),
         _component(COMPONENT_STAFF_LOANS, -loans, direction="out"),
+        *_account_settlement_components(
+            start_dt, end_dt, Q(kind=MoneyAccount.Kind.CASH)
+        ),
     ]
 
 
@@ -283,6 +293,7 @@ def _bank_components(
         _component(COMPONENT_SUPPLIERS, -suppliers, direction="out"),
         _component(COMPONENT_EXPENSES, -expenses, direction="out"),
         _component(COMPONENT_STAFF_LOANS, -loans, direction="out"),
+        *_account_settlement_components(start_dt, end_dt, Q(pk=account.pk)),
     ]
     if receives_settlements:
         settled = _sum(
@@ -421,6 +432,71 @@ def _supplier_outflow(methods, start_dt, end_dt, *, account_filter=None):
     )
 
 
+def account_settlements(start_dt, end_dt, account_filter):
+    """The treasury-routed refunds of every party's account inside a window,
+    one queryset per party. Shared by the balance and the drill-down, so the
+    two can never disagree about which rows are an account's."""
+    from apps.balances.models import (
+        BalanceEntry,
+        CustomerBalanceEntry,
+        EmployeeBalanceEntry,
+        SupplierBalanceEntry,
+    )
+
+    for model in (CustomerBalanceEntry, SupplierBalanceEntry, EmployeeBalanceEntry):
+        yield model.objects.live().filter(
+            account_filter,
+            kind=BalanceEntry.Kind.REFUND,
+            money_account__isnull=False,
+            created_at__gte=start_dt,
+            created_at__lt=end_dt,
+        )
+
+
+def _account_settlement_components(start_dt, end_dt, accounts):
+    """Money in and out of ``accounts`` through party settlements, in one
+    query. A refund written ``we_owe_them`` brought money in; ``they_owe_us``
+    paid it out. ``accounts`` filters ``MoneyAccount``: the cash kind (all cash
+    settlements land in the box) or one bank account."""
+    from apps.balances.models import BalanceEntry
+
+    sums = {}
+    for index, queryset in enumerate(
+        account_settlements(start_dt, end_dt, Q(money_account=OuterRef("pk")))
+    ):
+        for direction in BalanceEntry.Direction.values:
+            sums[f"s{index}_{direction}"] = Coalesce(
+                Subquery(
+                    queryset.filter(direction=direction)
+                    .order_by()
+                    .values("money_account")
+                    .annotate(total=Sum("amount"))
+                    .values("total"),
+                    output_field=MONEY_FIELD,
+                ),
+                Value(ZERO),
+                output_field=MONEY_FIELD,
+            )
+    totals = (
+        MoneyAccount.objects.filter(accounts)
+        .annotate(**sums)
+        .aggregate(**{f"total_{name}": Sum(name) for name in sums})
+    )
+
+    def total(direction):
+        return sum(
+            (value or ZERO for name, value in totals.items() if name.endswith(direction)),
+            ZERO,
+        )
+
+    received = total(BalanceEntry.Direction.WE_OWE_THEM)
+    paid = total(BalanceEntry.Direction.THEY_OWE_US)
+    return [
+        _component(COMPONENT_ACCOUNT_RECEIPTS, received, direction="in"),
+        _component(COMPONENT_ACCOUNT_PAYOUTS, -paid, direction="out"),
+    ]
+
+
 def _payroll_outflow(start, end):
     """Paid payroll.
 
@@ -502,22 +578,48 @@ def _transfer_components(account, *, incoming, outgoing):
     ]
 
 
-def _provider_components(money_account, *, end, start=None):
-    """What a provider has drawn out of its float, for one float account.
+def provider_expenses(money_account):
+    """The live expenses paid FROM a provider-kind account.
 
-    Every draw up to ``end``, not only those since ``opening_at`` as for a
-    bank. A float's account is created on the day its first top-up is written
-    down, and that top-up may be dated earlier and followed by draws (a payment
-    on LNET's website is dated when LNET took it); ``float_ledger`` counts
-    those, so this row must too. ``start`` narrows to a window, for a statement.
+    The Daftar wallet is such an account («محفظة دفتر», ``apps.wallet.books``):
+    the shop's SMS balance and its plans are spent out of it, and each is an
+    expense naming it. Shared by the balance and the drill-down
+    (``movements``) so the two can never disagree about which rows are its.
+    Only a card or transfer method can name an account at all; cash left a
+    drawer. No bank owns these rows: a bank owns what names it, and the default
+    bank only what names no account.
+    """
+    return Expense.objects.live().filter(
+        money_account=money_account,
+        payment_method__in=[Expense.PaymentMethod.CARD, Expense.PaymentMethod.TRANSFER],
+    )
+
+
+def _provider_components(money_account, *, end, start=None):
+    """What has left a provider-kind account, for one such account.
+
+    A float's draws: every draw up to ``end``, not only those since
+    ``opening_at`` as for a bank. A float's account is created on the day its
+    first top-up is written down, and that top-up may be dated earlier and
+    followed by draws (a payment on LNET's website is dated when LNET took
+    it); ``float_ledger`` counts those, so this row must too. ``start`` narrows
+    to a window, for a statement.
+
+    And the expenses paid from it (``provider_expenses``), on the same rule —
+    for any provider-kind account, linked to a provider or not: the Daftar
+    wallet is one with no provider behind it.
     """
     from apps.integrations import float_ledger
 
+    components = []
     integration = getattr(money_account, "integration_account", None)
-    if integration is None:
-        return []
-    drawn = float_ledger.drawn(integration, start=start, end=end)
-    return [_component(COMPONENT_INTEGRATION_DRAW, -drawn, direction="out")]
+    if integration is not None:
+        drawn = float_ledger.drawn(integration, start=start, end=end)
+        components.append(_component(COMPONENT_INTEGRATION_DRAW, -drawn, direction="out"))
+    expenses = _sum(money_period(provider_expenses(money_account), start, end))
+    if expenses:
+        components.append(_component(COMPONENT_EXPENSES, -expenses, direction="out"))
+    return components
 
 
 def _default_account_ids(accounts):
@@ -988,6 +1090,7 @@ __all__ = [
     "account_position",
     "expected_balance_for",
     "outside_money_totals",
+    "provider_expenses",
     "record_count",
     "routed_account",
     "treasury_position",

@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../data/models/balance_entry.dart';
 import 'balance_labels.dart';
+import 'components/components.dart';
 import 'responsive/responsive.dart';
 
 /// What the opening-balance section of a create form holds. Owned by the form
@@ -133,8 +134,9 @@ class _OpeningBalanceFieldsState extends State<OpeningBalanceFields> {
   }
 }
 
-/// "عليه لنا" / "له علينا", with a line underneath saying what that means on
-/// this party's account.
+/// «دين عليه» / «رصيد له» as two buttons, with a line underneath saying what
+/// that means on this party's account. Only for balances written without
+/// money — an opening balance; money moving is «استلام مبلغ» / «دفع مبلغ».
 class BalanceDirectionPicker extends StatelessWidget {
   const BalanceDirectionPicker({
     super.key,
@@ -157,19 +159,18 @@ class BalanceDirectionPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SegmentedButton<BalanceDirection>(
-          segments: [
+        PointyChoiceButtons<BalanceDirection>(
+          options: [
             for (final direction in BalanceDirection.values)
-              ButtonSegment(
+              PointyChoiceOption(
                 value: direction,
-                icon: Icon(balanceDirectionIcon(direction)),
-                label: Text(balanceDirectionLabel(l10n, direction)),
+                label: balanceDirectionLabel(l10n, direction),
+                icon: balanceDirectionIcon(direction),
               ),
           ],
-          selected: {value},
-          onSelectionChanged: enabled
-              ? (selection) => onChanged(selection.first)
-              : null,
+          value: value,
+          enabled: enabled,
+          onChanged: onChanged,
         ),
         SizedBox(height: spacing.xs),
         Text(

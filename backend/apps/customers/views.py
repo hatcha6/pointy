@@ -266,12 +266,26 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="record-payment")
     def record_payment(self, request, pk=None):
+        from apps.balances import common as balance_common
+
         customer = self.get_object()
         session = RegisterSession.objects.filter(
             owner_key=f"user:{request.user.pk}",
             status=RegisterSession.Status.OPEN,
         ).first()
-        if session is None:
+        if request.data.get("source") == balance_common.SOURCE_TREASURY:
+            # Taken in by the treasury rather than a drawer. Cash goes straight
+            # into the cash box, so it must not land in a drawer's count; card
+            # and transfer money reaches a bank either way, and keeps the open
+            # drawer, if there is one, only for the Z-report's attribution.
+            balance_common.require_permission(
+                request.user,
+                balance_common.TREASURY_PERMISSION,
+                "treasury_forbidden",
+            )
+            if request.data.get("method") == balance_common.METHOD_CASH:
+                session = None
+        elif session is None:
             return Response(
                 {"detail": "No open register session for this request owner."},
                 status=status.HTTP_400_BAD_REQUEST,

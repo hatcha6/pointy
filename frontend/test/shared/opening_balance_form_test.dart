@@ -51,7 +51,7 @@ void main() {
     expect(opening?.amount, 320);
   });
 
-  testWidgets('a new supplier the shop owes: "له علينا"', (tester) async {
+  testWidgets('a new supplier the shop owes: «رصيد له»', (tester) async {
     final repository = _FakeCreateRepository();
     await _pumpHost(
       tester,
@@ -67,7 +67,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, 'شركة الحسن');
     await tester.tap(find.byKey(const ValueKey('opening_balance_toggle')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('له علينا'));
+    await tester.tap(find.text('رصيد له'));
     await tester.enterText(
       find.byKey(const ValueKey('opening_balance_amount')),
       '1500',

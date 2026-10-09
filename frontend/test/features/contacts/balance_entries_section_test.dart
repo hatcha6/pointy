@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/balance_entry.dart';
+import 'package:pointy_frontend/src/data/models/money_source.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/contacts/view_models/balance_entries_view_model.dart';
@@ -72,8 +73,13 @@ void main() {
       find.byKey(const ValueKey('add_opening_balance_button')),
       findsNothing,
     );
+    // Whoever writes balances can always record an amount on the account.
     expect(
-      find.byKey(const ValueKey('add_balance_adjustment_button')),
+      find.byKey(const ValueKey('account_receive_money_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('account_pay_money_button')),
       findsOneWidget,
     );
     // The untouched opening can be withdrawn; the refund never can — the
@@ -83,10 +89,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('cancel_balance_entry_3')), findsNothing);
-    // A refund is cash that changed hands: its row names the kind alone.
-    expect(find.text('رد مبلغ نقدًا'), findsOneWidget);
-    // Nothing credit-side is refundable here.
-    expect(find.byKey(const ValueKey('balance_pay_out_button')), findsNothing);
+    // Money that left the shop is named by the button that sent it.
+    expect(find.text('دفع مبلغ'), findsWidgets);
+    expect(find.text('رصيد افتتاحي • دين عليه'), findsOneWidget);
   });
 
   testWidgets('a read-only user sees the list and nothing to press', (
@@ -98,7 +103,6 @@ void main() {
       repository: repository,
       canManage: false,
       canCancel: false,
-      canRefund: false,
       refundableAmount: 50,
     );
 
@@ -108,15 +112,20 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('add_balance_adjustment_button')),
+      find.byKey(const ValueKey('account_receive_money_button')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('balance_pay_out_button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('account_pay_money_button')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('cancel_balance_entry_2')), findsNothing);
+    // A debt written without money says so.
+    expect(find.text('دفع مبلغ • تسجيل على الحساب'), findsOneWidget);
   });
 
-  testWidgets('an adjustment needs a reason, then writes and refreshes the '
-      'account', (tester) async {
+  testWidgets('an amount recorded without money needs a reason, then writes '
+      'and refreshes the account', (tester) async {
     final repository = _FakeBalanceRepository(entries: []);
     var refreshed = 0;
     await _pumpSection(
@@ -127,41 +136,41 @@ void main() {
       onChanged: () async => refreshed += 1,
     );
 
+    await tester.tap(
+      find.byKey(const ValueKey('account_receive_money_button')),
+    );
+    await tester.pumpAndSettle();
+
+    // Nothing is due, so recording on the account is all there is.
     expect(
-      find.text('لا يوجد رصيد افتتاحي أو تسويات على هذا الحساب.'),
+      find.text('لا يوجد مبلغ مستحق الآن، فيمكن التسجيل على الحساب فقط.'),
       findsOneWidget,
     );
-    await tester.tap(
-      find.byKey(const ValueKey('add_balance_adjustment_button')),
-    );
-    await tester.pumpAndSettle();
-
-    // "له علينا": the shop owes this customer.
-    await tester.tap(find.text('له علينا'));
     await tester.enterText(
-      find.byKey(const ValueKey('balance_entry_amount')),
+      find.byKey(const ValueKey('record_payment_amount_field')),
       '75.5',
     );
-    await tester.tap(find.byKey(const ValueKey('balance_entry_save')));
+    await tester.tap(find.byKey(const ValueKey('record_payment_confirm')));
     await tester.pumpAndSettle();
 
-    expect(find.text('اكتب سبب التسوية.'), findsOneWidget);
+    expect(find.text('اكتب السبب.'), findsOneWidget);
     expect(repository.createdDrafts, isEmpty);
 
     await tester.enterText(
-      find.byKey(const ValueKey('balance_entry_note')),
+      find.byKey(const ValueKey('record_payment_notes_field')),
       'عربون لم يُسجّل',
     );
-    await tester.tap(find.byKey(const ValueKey('balance_entry_save')));
+    await tester.tap(find.byKey(const ValueKey('record_payment_confirm')));
     await tester.pumpAndSettle();
 
+    // The shop received value, so the customer is owed it.
     final draft = repository.createdDrafts.single;
     expect(draft.kind, BalanceEntryKind.adjustment);
     expect(draft.direction, BalanceDirection.weOweThem);
     expect(draft.amount, 75.5);
     expect(draft.note, 'عربون لم يُسجّل');
     expect(refreshed, 1);
-    expect(find.text('تم تسجيل الرصيد.'), findsOneWidget);
+    expect(find.text('تم تسجيل المبلغ'), findsOneWidget);
   });
 
   testWidgets('a second opening balance is refused in words, and the dialog '
@@ -195,8 +204,8 @@ void main() {
     expect(find.byKey(const ValueKey('balance_entry_amount')), findsOneWidget);
   });
 
-  testWidgets('a refund is capped at what is refundable and goes through '
-      'the drawer', (tester) async {
+  testWidgets('paying out is capped at what is owed and can come from the '
+      'treasury', (tester) async {
     final repository = _FakeBalanceRepository(entries: []);
     var refreshed = 0;
     await _pumpSection(
@@ -204,44 +213,47 @@ void main() {
       repository: repository,
       canManage: true,
       canCancel: true,
-      canRefund: true,
+      canUseDrawer: true,
+      canUseTreasury: true,
       refundableAmount: 50,
       onChanged: () async => refreshed += 1,
     );
 
-    await tester.tap(find.byKey(const ValueKey('balance_pay_out_button')));
+    await tester.tap(find.byKey(const ValueKey('account_pay_money_button')));
     await tester.pumpAndSettle();
 
-    // Prefilled with everything that can be refunded.
+    // Prefilled with everything that can be paid, from the drawer unless
+    // the treasury is chosen.
     expect(find.text('50.00'), findsOneWidget);
+    await tester.tap(find.text('الخزينة'));
     await tester.enterText(
-      find.byKey(const ValueKey('balance_refund_amount')),
+      find.byKey(const ValueKey('record_payment_amount_field')),
       '60',
     );
-    await tester.tap(find.byKey(const ValueKey('balance_refund_confirm')));
+    await tester.tap(find.byKey(const ValueKey('record_payment_confirm')));
     await tester.pumpAndSettle();
     expect(repository.refunds, isEmpty);
-    expect(find.textContaining('المبلغ أكبر من المتاح'), findsOneWidget);
+    expect(find.textContaining('لا يتجاوز 50'), findsOneWidget);
 
     await tester.enterText(
-      find.byKey(const ValueKey('balance_refund_amount')),
+      find.byKey(const ValueKey('record_payment_amount_field')),
       '20',
     );
     await tester.enterText(
-      find.byKey(const ValueKey('balance_refund_note')),
+      find.byKey(const ValueKey('record_payment_notes_field')),
       'طلب رد العربون',
     );
-    await tester.tap(find.byKey(const ValueKey('balance_refund_confirm')));
+    await tester.tap(find.byKey(const ValueKey('record_payment_confirm')));
     await tester.pumpAndSettle();
 
     expect(repository.refunds.single, (20.0, 'طلب رد العربون'));
+    expect(repository.lastSource, MoneySource.treasury);
     expect(refreshed, 1);
-    expect(find.text('تم صرف المبلغ للعميل.'), findsOneWidget);
+    expect(find.text('تم تسجيل المبلغ'), findsOneWidget);
   });
 
-  testWidgets('a refund without an open shift says so and stays open', (
-    tester,
-  ) async {
+  testWidgets('a cashier pays through the drawer with no treasury choice, and '
+      'is told to open a shift', (tester) async {
     final repository = _FakeBalanceRepository(
       entries: [],
       refundFailure: _refusal('register_session_required'),
@@ -252,22 +264,21 @@ void main() {
       party: BalanceParty.supplier,
       canManage: true,
       canCancel: true,
-      canRefund: true,
+      canUseDrawer: true,
       refundableAmount: 30,
     );
 
-    expect(find.text('استلام المبلغ من المورد'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('balance_take_in_button')));
+    await tester.tap(
+      find.byKey(const ValueKey('account_receive_money_button')),
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('balance_refund_confirm')));
+    expect(find.text('الخزينة'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('record_payment_confirm')));
     await tester.pumpAndSettle();
 
+    expect(repository.lastSource, MoneySource.drawer);
     expect(
       find.text('افتح وردية أولًا — المبلغ يُصرف أو يُستلم عبر درج الوردية.'),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('balance_refund_confirm')),
       findsOneWidget,
     );
   });
@@ -360,7 +371,8 @@ Future<void> _pumpSection(
   BalanceParty party = BalanceParty.customer,
   required bool canManage,
   required bool canCancel,
-  bool canRefund = false,
+  bool canUseDrawer = false,
+  bool canUseTreasury = false,
   double refundableAmount = 0,
   Future<void> Function()? onChanged,
 }) async {
@@ -387,7 +399,8 @@ Future<void> _pumpSection(
             partyId: 7,
             canManage: canManage,
             canCancel: canCancel,
-            canSettleInCash: canRefund,
+            canUseDrawer: canUseDrawer,
+            canUseTreasury: canUseTreasury,
             cashPayable: party == BalanceParty.supplier ? 0 : refundableAmount,
             cashCollectable: party == BalanceParty.supplier
                 ? refundableAmount
@@ -416,6 +429,7 @@ class _FakeBalanceRepository extends ContactRepository {
   final List<String?> createKeys = [];
   final List<(double, String)> refunds = [];
   BalanceDirection? lastSettles;
+  MoneySource? lastSource;
   final List<(int, String)> cancelled = [];
 
   @override
@@ -460,9 +474,13 @@ class _FakeBalanceRepository extends ContactRepository {
     required double amount,
     String note = '',
     BalanceDirection? settles,
+    String method = 'cash',
+    MoneySource source = MoneySource.drawer,
+    int? moneyAccountId,
     String? idempotencyKey,
   }) async {
     lastSettles = settles;
+    lastSource = source;
     final failure = refundFailure;
     if (failure != null) {
       return Error(failure is Exception ? failure : Exception('$failure'));

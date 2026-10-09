@@ -34,6 +34,8 @@ String treasuryComponentLabel(AppLocalizations l10n, String code) {
     'settlement_in' => l10n.treasuryComponentSettlementIn,
     'settlement_out' => l10n.treasuryComponentSettlementOut,
     'settlement_difference' => l10n.treasuryComponentSettlementDifference,
+    'account_receipts' => l10n.treasuryComponentAccountReceipts,
+    'account_payouts' => l10n.treasuryComponentAccountPayouts,
     _ => code,
   };
 }
@@ -56,6 +58,8 @@ IconData treasuryComponentIcon(String code) {
     'settlement_in' => Icons.credit_score_outlined,
     'settlement_out' => Icons.credit_score_outlined,
     'settlement_difference' => Icons.percent,
+    'account_receipts' => Icons.south_west,
+    'account_payouts' => Icons.north_east,
     _ => Icons.circle_outlined,
   };
 }

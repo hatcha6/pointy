@@ -46,7 +46,9 @@ next invoice: a **refund** entry hands a customer the credit the shop holds
 for them in cash, or takes in the cash a supplier pays back. It is the one
 kind of entry that moves money, so it carries the drawer movement that moved
 it (``cash_movement``) — the drawer, the money position and the Z-report all
-see the cash through that row — and, like any payment, it is final once made.
+see the cash through that row — or, when it went through the treasury
+instead, the account it moved through (``money_account``), which the money
+position reads directly. Like any payment, it is final once made.
 """
 
 from decimal import Decimal
@@ -181,6 +183,16 @@ class CustomerBalanceEntry(BalanceEntry):
         blank=True,
         null=True,
     )
+    # A settlement paid or received through the treasury rather than a drawer:
+    # the cash box or the bank account the money moved through. A refund sets
+    # exactly one of this and ``cash_movement``.
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.PROTECT,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
 
     objects = BalanceEntryQuerySet.as_manager()
 
@@ -255,6 +267,16 @@ class SupplierBalanceEntry(BalanceEntry):
         blank=True,
         null=True,
     )
+    # A settlement paid or received through the treasury rather than a drawer:
+    # the cash box or the bank account the money moved through. A refund sets
+    # exactly one of this and ``cash_movement``.
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.PROTECT,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
 
     objects = BalanceEntryQuerySet.as_manager()
 
@@ -306,6 +328,16 @@ class EmployeeBalanceEntry(BalanceEntry):
         "sales.RegisterCashMovement",
         on_delete=models.PROTECT,
         related_name="employee_balance_entry",
+        blank=True,
+        null=True,
+    )
+    # A settlement paid or received through the treasury rather than a drawer:
+    # the cash box or the bank account the money moved through. A refund sets
+    # exactly one of this and ``cash_movement``.
+    money_account = models.ForeignKey(
+        "treasury.MoneyAccount",
+        on_delete=models.PROTECT,
+        related_name="+",
         blank=True,
         null=True,
     )

@@ -47,7 +47,9 @@ class _BalanceEntryViewSet(
     def get_queryset(self):
         return (
             self.balances.entries_with_settlement(
-                super().get_queryset().select_related(self.party_field)
+                super().get_queryset().select_related(
+                    self.party_field, "money_account"
+                )
             )
             .with_lifecycle_relations()
             .order_by("-effective_date", "-id")
@@ -122,12 +124,9 @@ class CustomerBalanceEntryViewSet(_BalanceEntryViewSet):
         "list": ("balances.view_customerbalanceentry",),
         "retrieve": ("balances.view_customerbalanceentry",),
         "create": ("balances.add_customerbalanceentry",),
-        # Cash leaves a drawer: the right to write the balance, and the right
-        # every drawer pay-out already asks for.
-        "refund": (
-            "balances.add_customerbalanceentry",
-            "sales.add_registercashmovement",
-        ),
+        # The money's route asks for its own right: a drawer pay-out's, or the
+        # treasury's (``common.money_route``).
+        "refund": ("balances.add_customerbalanceentry",),
         "cancel": ("balances.cancel_customerbalanceentry",),
     }
     filterset_fields = ("customer", "kind", "direction", "doc_status")
@@ -158,10 +157,7 @@ class SupplierBalanceEntryViewSet(_BalanceEntryViewSet):
         "list": ("balances.view_supplierbalanceentry",),
         "retrieve": ("balances.view_supplierbalanceentry",),
         "create": ("balances.add_supplierbalanceentry",),
-        "refund": (
-            "balances.add_supplierbalanceentry",
-            "sales.add_registercashmovement",
-        ),
+        "refund": ("balances.add_supplierbalanceentry",),
         "cancel": ("balances.cancel_supplierbalanceentry",),
     }
     filterset_fields = ("supplier", "kind", "direction", "doc_status")
@@ -196,11 +192,8 @@ class EmployeeBalanceEntryViewSet(_BalanceEntryViewSet):
         "list": ("balances.view_employeebalanceentry",),
         "retrieve": ("balances.view_employeebalanceentry",),
         "create": ("balances.add_employeebalanceentry",),
-        # Cash moves through a drawer, either way.
-        "refund": (
-            "balances.add_employeebalanceentry",
-            "sales.add_registercashmovement",
-        ),
+        # Through a drawer or the treasury, either way (``common.money_route``).
+        "refund": ("balances.add_employeebalanceentry",),
         "cancel": ("balances.cancel_employeebalanceentry",),
     }
     filterset_fields = ("employee", "kind", "direction", "doc_status")

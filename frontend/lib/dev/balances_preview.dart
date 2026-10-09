@@ -30,6 +30,7 @@ import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/data/models/balance_entry.dart';
 import 'package:pointy_frontend/src/data/models/contact.dart';
 import 'package:pointy_frontend/src/data/models/employee.dart';
+import 'package:pointy_frontend/src/data/models/money_source.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
@@ -45,6 +46,7 @@ import 'package:pointy_frontend/src/features/employees/views/employee_account_sc
 import 'package:pointy_frontend/src/features/employees/views/employee_loan_review_actions.dart';
 import 'package:pointy_frontend/src/shared/contact_picker_sheet.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
+import 'package:pointy_frontend/src/shared/payments/record_payment_dialog.dart';
 
 void main() => runApp(const _PreviewApp());
 
@@ -133,17 +135,38 @@ class _PreviewAppState extends State<_PreviewApp> {
           open: (context) => showBalanceEntryDialog(
             context,
             party: BalanceParty.customer,
-            kind: BalanceEntryKind.adjustment,
+            kind: BalanceEntryKind.opening,
             onSubmit: (_) async => null,
           ),
         ),
-        'refund' => _OpenOnLoad(
-          open: (context) => showBalanceRefundDialog(
+        // «استلام مبلغ» as an owner sees it: money through the drawer or the
+        // treasury, or recorded on the account without any.
+        'receive' => _OpenOnLoad(
+          open: (context) => showRecordPaymentDialog(
             context,
-            party: BalanceParty.customer,
-            settles: BalanceDirection.weOweThem,
-            available: 35,
-            onSubmit: (amount, note) async => null,
+            title: AppLocalizations.of(context)!.accountReceiveMoneyButton,
+            maxAmount: 120,
+            methods: [
+              ...customerPaymentMethodOptions(AppLocalizations.of(context)!),
+              RecordPaymentMethodOption.accountOnly(
+                AppLocalizations.of(context)!,
+              ),
+            ],
+            cashSources: const {MoneySource.drawer, MoneySource.treasury},
+          ),
+        ),
+        // Nothing due either way: only an amount on the account is left.
+        'record' => _OpenOnLoad(
+          open: (context) => showRecordPaymentDialog(
+            context,
+            title: AppLocalizations.of(context)!.accountPayMoneyButton,
+            maxAmount: 0,
+            balanceLabel: AppLocalizations.of(context)!.accountMoneyNothingDue,
+            methods: [
+              RecordPaymentMethodOption.accountOnly(
+                AppLocalizations.of(context)!,
+              ),
+            ],
           ),
         ),
         'create' => _OpenOnLoad(

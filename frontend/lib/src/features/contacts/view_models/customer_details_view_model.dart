@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/money_source.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
@@ -424,6 +425,8 @@ class CustomerDetailsViewModel extends ChangeNotifier {
     required PaymentMethod method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
+    MoneySource source = MoneySource.drawer,
     bool printProof = false,
   }) async {
     if (_isRecordingPayment) {
@@ -434,16 +437,22 @@ class CustomerDetailsViewModel extends ChangeNotifier {
     _hasPaymentError = false;
     notifyListeners();
 
-    final signature = _accountPaymentSignature(
-      method: method,
-      amount: amount,
-      cardReceiptUrl: cardReceiptUrl,
-    );
+    final signature = [
+      _accountPaymentSignature(
+        method: method,
+        amount: amount,
+        cardReceiptUrl: cardReceiptUrl,
+      ),
+      moneyAccountId ?? '',
+      source.apiValue,
+    ].join(':');
     final result = await _contactRepository.recordCustomerAccountPayment(
       _customer.id,
       method: method.apiValue,
       amount: amount,
       cardReceiptUrl: cardReceiptUrl,
+      moneyAccountId: moneyAccountId,
+      source: source,
       idempotencyKey: _idempotencyKeyFor(signature),
     );
     final didRecord = result is Ok<CustomerSalesSummary>;

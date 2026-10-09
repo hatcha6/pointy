@@ -83,6 +83,8 @@ class BalanceEntry {
     this.cancelledByUsername = '',
     this.payrollDeductionLimit,
     this.scheduledAmount = 0,
+    this.settledThrough = '',
+    this.moneyAccountName = '',
   });
 
   final int id;
@@ -115,6 +117,13 @@ class BalanceEntry {
   /// already carry of it.
   final double scheduledAmount;
 
+  /// Where a refund's money moved: `drawer`, `cash_box` or `bank`. Empty for
+  /// every entry that moved no money.
+  final String settledThrough;
+
+  /// The treasury account it moved through, when it did not pass a drawer.
+  final String moneyAccountName;
+
   bool get isOpening => kind == BalanceEntryKind.opening;
   bool get isRefund => kind == BalanceEntryKind.refund;
 
@@ -140,6 +149,8 @@ class BalanceEntry {
           ? null
           : _moneyFromJson(json['payroll_deduction_limit']),
       scheduledAmount: _moneyFromJson(json['scheduled_amount']),
+      settledThrough: json['settled_through']?.toString() ?? '',
+      moneyAccountName: json['money_account_name']?.toString() ?? '',
     );
   }
 }

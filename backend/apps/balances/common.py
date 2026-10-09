@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from apps.core.money_dates import day_range_start
 from apps.core.period_lock import assert_period_open
@@ -244,6 +245,77 @@ def open_drawer_for(actor):
     return session
 
 
+METHOD_CASH = "cash"
+METHOD_TRANSFER = "transfer"
+SOURCE_DRAWER = "drawer"
+SOURCE_TREASURY = "treasury"
+SOURCES = (SOURCE_DRAWER, SOURCE_TREASURY)
+
+#: What lets someone move money through the treasury instead of their own
+#: drawer: the right to see it (the permission editor's «عرض الخزينة»). Anyone
+#: without it settles through their drawer, exactly as before.
+TREASURY_PERMISSION = "treasury.view_moneyaccount"
+DRAWER_PERMISSION = "sales.add_registercashmovement"
+
+
+def require_permission(actor, permission, code):
+    if actor is None or not actor.has_perm(permission):
+        raise PermissionDenied({"code": code, "detail": "Not allowed."})
+
+
+@dataclass(frozen=True)
+class MoneyRoute:
+    """Where a settlement's money moves: a drawer, or a treasury account."""
+
+    session: object = None
+    money_account: object = None
+
+
+def money_route(actor, *, method=METHOD_CASH, source=SOURCE_DRAWER, money_account=None):
+    """Decide, and check, where a settlement's money moves.
+
+    Cash goes through the actor's own drawer — the default, and what every
+    settlement did before — or straight into or out of the cash box. A transfer
+    goes through a bank account: the one named, or the one untagged bank money
+    lands in. Anything but the drawer needs the treasury permission.
+    """
+    from apps.payments.serializers import validate_bank_money_account
+    from apps.treasury.models import MoneyAccount
+    from apps.treasury.position import routed_account
+
+    if method == METHOD_CASH and source == SOURCE_DRAWER:
+        require_permission(actor, DRAWER_PERMISSION, "drawer_forbidden")
+        return MoneyRoute(session=open_drawer_for(actor))
+
+    require_permission(actor, TREASURY_PERMISSION, "treasury_forbidden")
+    if method == METHOD_CASH:
+        account = routed_account(MoneyAccount.Kind.CASH)
+    else:
+        account = validate_bank_money_account(money_account, method) or (
+            routed_account(MoneyAccount.Kind.BANK)
+        )
+    if account is None:
+        raise serializers.ValidationError(
+            {"code": "money_account_missing", "money_account": "No such account."}
+        )
+    return MoneyRoute(money_account=account)
+
+
+def settle_money(entry, route, *, outgoing, reason, actor):
+    """Move a refund's money the way ``route`` says: a drawer movement, or the
+    treasury account it went through."""
+    if route.session is not None:
+        entry.cash_movement = drawer_movement(
+            route.session,
+            outgoing=outgoing,
+            amount=entry.amount,
+            reason=reason,
+            actor=actor,
+        )
+    else:
+        entry.money_account = route.money_account
+
+
 def drawer_movement(session, *, outgoing, amount, reason, actor):
     """The refund's cash, as the drawer records every other pay-in and
     pay-out — so the count, the Z-report and the money position see it
@@ -290,6 +362,8 @@ __all__ = [
     "blocked",
     "clean_entry_input",
     "drawer_movement",
+    "money_route",
+    "settle_money",
     "effective_datetime",
     "latest_allowed_date",
     "open_drawer_for",

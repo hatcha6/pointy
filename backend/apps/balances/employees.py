@@ -177,8 +177,19 @@ def _opposite(direction):
 
 
 @transaction.atomic
-def settle_employee_balance(*, employee, settles, amount, note="", actor=None):
-    """Settle an employee's balance with cash, through the actor's own drawer.
+def settle_employee_balance(
+    *,
+    employee,
+    settles,
+    amount,
+    note="",
+    actor=None,
+    method=common.METHOD_CASH,
+    source=common.SOURCE_DRAWER,
+    money_account=None,
+):
+    """Settle an employee's balance with money: through the actor's own drawer,
+    or through the treasury (:func:`common.money_route`).
 
     ``settles`` names the side being settled: ``we_owe_them`` pays the employee
     what the shop owes them (a pay-out), ``they_owe_us`` takes in what they owe
@@ -200,7 +211,9 @@ def settle_employee_balance(*, employee, settles, amount, note="", actor=None):
         amount=amount,
         note=note,
     )
-    session = common.open_drawer_for(actor)
+    route = common.money_route(
+        actor, method=method, source=source, money_account=money_account
+    )
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     targets = _open_entries(employee_ids=[employee.pk], direction=settles, lock=True)
     available = sum((left for _entry, left in targets), ZERO)
@@ -229,10 +242,10 @@ def settle_employee_balance(*, employee, settles, amount, note="", actor=None):
     # entry is frozen from the moment it exists.
     common.allocate_number(entry)
     name = employee.display_name
-    entry.cash_movement = common.drawer_movement(
-        session,
+    common.settle_money(
+        entry,
+        route,
         outgoing=paying,
-        amount=entry.amount,
         reason=(
             f"صرف مستحقات للموظف {name} ({entry.number})"
             if paying
@@ -268,7 +281,8 @@ def settle_employee_balance(*, employee, settles, amount, note="", actor=None):
         attributes={
             "number": entry.number,
             "employee_id": employee.pk,
-            "register_session_id": session.pk,
+            "register_session_id": getattr(route.session, "pk", None),
+            "money_account_id": getattr(route.money_account, "pk", None),
             "settles": settles,
         },
         metrics={"amount": float(entry.amount)},

@@ -36,12 +36,13 @@ from .models import MoneyAccount, MoneyTransfer
 from .movements import account_movements
 from .position import treasury_position
 
-# Four aggregates per bank account: sales+commission in one pass over
-# ``Payment``, supplier payments, expenses, and employee loans paid by transfer
-# (which name their account, like the other three). Consignor payouts and
+# Five aggregates per bank account: sales+commission in one pass over
+# ``Payment``, supplier payments, expenses, employee loans paid by transfer
+# (which name their account, like the other three), and the customers',
+# suppliers' and employees' accounts settled through it, in one pass. Consignor payouts and
 # payroll carry no account, so they stay with the default and are not paid for
 # again per account.
-QUERIES_PER_BANK_ACCOUNT = 4
+QUERIES_PER_BANK_ACCOUNT = 5
 
 BASE_ROWS = 6
 
@@ -140,9 +141,11 @@ class TreasuryQueryScalingTests(TestCase):
         different months cannot share a range — so the guard is no longer "flat"
         but "a small constant per account, and never a query per ROW".
 
-        Four is the budget: the payments aggregate (sales and commission in
-        one pass), the supplier-payments aggregate, the expenses aggregate and
-        the aggregate of employee loans transferred from the account.
+        Five is the budget: the payments aggregate (sales and commission in
+        one pass), the supplier-payments aggregate, the expenses aggregate,
+        the aggregate of employee loans transferred from the account, and the
+        accounts settled through it (customers, suppliers and employees in one
+        pass).
         Anything more means a per-account lookup crept back in — a
         ``select_related`` that was dropped, or a last-count fetch that stopped
         being batched.
@@ -212,7 +215,9 @@ class TreasuryQueryScalingTests(TestCase):
         only in a shop's slow screen."""
         self._seed_movements(BASE_ROWS)
 
-        # 2 kinds x 6 aggregates, plus the account list, the counts per account
+        # 2 kinds x 7 aggregates, plus the account list, the counts per account
         # and the transfer pair per account.
         self.assertLessEqual(self._position_queries(), 25)
-        self.assertLessEqual(self._movement_queries(), 10)
+        # The cash drill-down also lists the customers', suppliers' and
+        # employees' accounts settled through the box: one query per party.
+        self.assertLessEqual(self._movement_queries(), 13)

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/money_source.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/balance_entry.dart';
 import '../../../data/repositories/contact_repository.dart';
@@ -147,13 +148,17 @@ class BalanceEntriesViewModel extends ChangeNotifier {
     return failure;
   }
 
-  /// Settles a balance with cash through the caller's own open drawer — for an
+  /// Settles a balance with money — cash through the caller's own open drawer
+  /// or the treasury's cash box, or a transfer through a bank — for an
   /// employee, the side [settles] names. Returns null on success, or why it
   /// was refused.
   Future<BalanceFailure?> refund(
     double amount, {
     String note = '',
     BalanceDirection? settles,
+    String method = 'cash',
+    MoneySource source = MoneySource.drawer,
+    int? moneyAccountId,
   }) async {
     if (_isSaving) {
       return BalanceFailure.generic;
@@ -168,6 +173,9 @@ class BalanceEntriesViewModel extends ChangeNotifier {
       settles?.apiValue ?? '',
       amount.toStringAsFixed(2),
       note.trim(),
+      method,
+      source.apiValue,
+      moneyAccountId ?? '',
     ].join(':');
     final result = await _repository.refundBalance(
       party: party,
@@ -175,6 +183,9 @@ class BalanceEntriesViewModel extends ChangeNotifier {
       amount: amount,
       note: note,
       settles: settles,
+      method: method,
+      source: source,
+      moneyAccountId: moneyAccountId,
       idempotencyKey: _keyFor(signature),
     );
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../core/parsing.dart';
+import '../../data/models/money_source.dart';
 import '../../data/models/purchase_submission.dart' show SupplierPaymentMethod;
 import '../../data/models/money_position.dart';
 import '../../data/models/sale_order.dart' show PaymentMethod;
@@ -9,6 +10,9 @@ import '../../features/pos/views/payment/card_receipt_validation_dialog.dart';
 import '../formatters.dart';
 import '../payment_labels.dart';
 import '../../features/treasury/view_models/bank_routing.dart';
+import '../components/pointy_choice_buttons.dart';
+import '../opening_balance_fields.dart'
+    show DeductionLimitField, parseDeductionLimit;
 import 'bank_account_picker.dart';
 import '../tutor/anchors.dart';
 import '../tutor/tutor_target.dart';
@@ -23,7 +27,22 @@ class RecordPaymentMethodOption {
     required this.icon,
     this.allowsCardReceipt = false,
     this.usesBankAccount = false,
+    this.accountOnly = false,
   });
+
+  /// «بدون مبلغ نقدي»: nothing changes hands, the amount is only written on
+  /// the account. Uncapped (there is no money to run out of), and it must say
+  /// why, the way an adjustment always has.
+  factory RecordPaymentMethodOption.accountOnly(AppLocalizations l10n) {
+    return RecordPaymentMethodOption(
+      apiValue: accountOnlyMethodApiValue,
+      label: l10n.paymentMethodAccountOnly,
+      icon: Icons.edit_note_outlined,
+      accountOnly: true,
+    );
+  }
+
+  static const accountOnlyMethodApiValue = 'account_only';
 
   final String apiValue;
   final String label;
@@ -39,6 +58,12 @@ class RecordPaymentMethodOption {
   /// Cash never does (it is the drawer), and neither does supplier credit,
   /// which is a promise rather than a payment.
   final bool usesBankAccount;
+
+  /// No money moves; see [RecordPaymentMethodOption.accountOnly].
+  final bool accountOnly;
+
+  /// Notes and coins: the one method that can go through a drawer.
+  bool get isCash => !usesBankAccount && !accountOnly && apiValue == 'cash';
 }
 
 /// The cashier's intent from [RecordPaymentDialog]. Printing/idempotency are the
@@ -52,7 +77,13 @@ class RecordPaymentResult {
     this.cardReceiptUrl = '',
     this.printProof = false,
     this.moneyAccountId,
+    this.source = MoneySource.drawer,
+    this.payrollDeductionLimit,
   });
+
+  /// Nothing changed hands: the amount is only written on the account.
+  bool get isAccountOnly =>
+      methodApiValue == RecordPaymentMethodOption.accountOnlyMethodApiValue;
 
   final String methodApiValue;
   final double amount;
@@ -64,6 +95,14 @@ class RecordPaymentResult {
   /// Which of the shop's bank accounts the money moved through. Null on cash,
   /// and whenever the shop has not configured accounts worth choosing between.
   final int? moneyAccountId;
+
+  /// Through the payer's own drawer, or the treasury. Cash takes what was
+  /// chosen; bank money is the treasury's whenever the user may use it.
+  final MoneySource source;
+
+  /// An employee's debt recorded without money: the most one payroll run
+  /// takes of it. Null means as much as the pay can carry.
+  final double? payrollDeductionLimit;
 }
 
 /// The single record-payment dialog shared by every flow (customer per-invoice,
@@ -80,6 +119,8 @@ Future<RecordPaymentResult?> showRecordPaymentDialog(
   bool showNotes = false,
   String? proofToggleLabel,
   List<String> trustedCardTerminalIds = const [],
+  Set<MoneySource> cashSources = const {MoneySource.drawer},
+  bool offersDeductionLimit = false,
 }) {
   // The shop's bank accounts, read from the ambient routing store. Absent in
   // previews and tests, and empty until an owner configures more than the one
@@ -98,6 +139,8 @@ Future<RecordPaymentResult?> showRecordPaymentDialog(
       proofToggleLabel: proofToggleLabel,
       trustedCardTerminalIds: trustedCardTerminalIds,
       bankAccounts: bankAccounts,
+      cashSources: cashSources,
+      offersDeductionLimit: offersDeductionLimit,
     ),
   );
 }
@@ -113,6 +156,8 @@ class _RecordPaymentDialog extends StatefulWidget {
     required this.proofToggleLabel,
     required this.trustedCardTerminalIds,
     required this.bankAccounts,
+    required this.cashSources,
+    required this.offersDeductionLimit,
   });
 
   final String title;
@@ -125,6 +170,14 @@ class _RecordPaymentDialog extends StatefulWidget {
   final List<String> trustedCardTerminalIds;
   final List<MoneyAccount> bankAccounts;
 
+  /// Where cash may move. Both offered only to someone who may use the
+  /// treasury; a cashier sees no choice and pays through their drawer.
+  final Set<MoneySource> cashSources;
+
+  /// An employee's debt recorded without money comes off their wage, so it
+  /// may say how much one payroll run takes.
+  final bool offersDeductionLimit;
+
   @override
   State<_RecordPaymentDialog> createState() => _RecordPaymentDialogState();
 }
@@ -132,12 +185,17 @@ class _RecordPaymentDialog extends StatefulWidget {
 class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
   late String _method = widget.methods.first.apiValue;
   late final TextEditingController _amountController = TextEditingController(
-    text: widget.maxAmount.toStringAsFixed(2),
+    text: widget.maxAmount > 0.005 ? widget.maxAmount.toStringAsFixed(2) : '',
   );
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _limitController = TextEditingController();
   bool _showAmountError = false;
   bool _printProof = false;
+  bool _showNotesError = false;
+  late MoneySource _source = widget.cashSources.contains(MoneySource.drawer)
+      ? MoneySource.drawer
+      : MoneySource.treasury;
   late int? _moneyAccountId = BankAccountPicker.initialSelection(
     widget.bankAccounts,
   );
@@ -150,6 +208,7 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
     _amountController.dispose();
     _referenceController.dispose();
     _notesController.dispose();
+    _limitController.dispose();
     super.dispose();
   }
 
@@ -177,17 +236,22 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
               DropdownButtonFormField<String>(
                 key: const ValueKey('record_payment_method_field'),
                 initialValue: _method,
+                isExpanded: true,
                 decoration: InputDecoration(labelText: l10n.paymentMethodLabel),
                 items: [
                   for (final option in widget.methods)
                     DropdownMenuItem(
                       value: option.apiValue,
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(option.icon, size: 18),
                           const SizedBox(width: 8),
-                          Text(option.label),
+                          Flexible(
+                            child: Text(
+                              option.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -199,6 +263,38 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
                   setState(() => _method = method);
                 },
               ),
+              if (_selectedMethod.accountOnly) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.accountOnlyHint,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              if (_selectedMethod.isCash && widget.cashSources.length > 1) ...[
+                const SizedBox(height: 12),
+                Text(
+                  l10n.moneySourceLabel,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 6),
+                PointyChoiceButtons<MoneySource>(
+                  key: const ValueKey('record_payment_source'),
+                  options: [
+                    PointyChoiceOption(
+                      value: MoneySource.drawer,
+                      label: l10n.moneySourceDrawer,
+                      icon: Icons.point_of_sale_outlined,
+                    ),
+                    PointyChoiceOption(
+                      value: MoneySource.treasury,
+                      label: l10n.moneySourceTreasury,
+                      icon: Icons.savings_outlined,
+                    ),
+                  ],
+                  value: _source,
+                  onChanged: (source) => setState(() => _source = source),
+                ),
+              ],
               // Only for the methods that reach a bank. A cash collection has
               // no account to name, and offering one would invite an answer
               // the server is right to refuse.
@@ -227,11 +323,13 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
                   // shown.
                   decoration: InputDecoration(
                     labelText: l10n.invoicePaymentAmountLabel,
-                    errorText: _showAmountError
-                        ? l10n.recordPaymentAmountMaxError(
+                    errorText: !_showAmountError
+                        ? null
+                        : _selectedMethod.accountOnly
+                        ? l10n.balanceEntryAmountInvalid
+                        : l10n.recordPaymentAmountMaxError(
                             formatMoney(widget.maxAmount),
-                          )
-                        : null,
+                          ),
                   ),
                   onChanged: (_) {
                     if (_showAmountError) {
@@ -249,18 +347,40 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
                   ),
                 ),
               ],
-              if (widget.showNotes) ...[
+              // Required without money: an amount written on an account with
+              // no reason is exactly what somebody later asks about.
+              if (widget.showNotes || _selectedMethod.accountOnly) ...[
                 const SizedBox(height: 12),
                 TextField(
+                  key: const ValueKey('record_payment_notes_field'),
                   controller: _notesController,
                   minLines: 1,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    labelText: l10n.supplierPaymentNotesLabel,
+                    labelText: _selectedMethod.accountOnly
+                        ? l10n.balanceEntryNoteLabel
+                        : l10n.supplierPaymentNotesLabel,
+                    errorText: _showNotesError
+                        ? l10n.balanceEntryNoteRequired
+                        : null,
                   ),
+                  onChanged: (_) {
+                    if (_showNotesError) {
+                      setState(() => _showNotesError = false);
+                    }
+                  },
                 ),
               ],
-              if (widget.proofToggleLabel != null) ...[
+              if (widget.offersDeductionLimit &&
+                  _selectedMethod.accountOnly) ...[
+                const SizedBox(height: 12),
+                DeductionLimitField(
+                  key: const ValueKey('record_payment_limit_field'),
+                  controller: _limitController,
+                ),
+              ],
+              if (widget.proofToggleLabel != null &&
+                  !_selectedMethod.accountOnly) ...[
                 const SizedBox(height: 4),
                 SwitchListTile(
                   key: const ValueKey('record_payment_print_proof_toggle'),
@@ -283,6 +403,7 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
         TutorTarget(
           anchor: TutorAnchor.recordPaymentConfirmButton,
           child: FilledButton(
+            key: const ValueKey('record_payment_confirm'),
             onPressed: _submit,
             child: Text(l10n.confirmButton),
           ),
@@ -292,9 +413,16 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
   }
 
   Future<void> _submit() async {
+    final method = _selectedMethod;
     final amount = parseDecimal(_amountController.text);
-    if (amount == null || amount <= 0 || amount > widget.maxAmount + 0.005) {
+    if (amount == null ||
+        amount <= 0 ||
+        (!method.accountOnly && amount > widget.maxAmount + 0.005)) {
       setState(() => _showAmountError = true);
+      return;
+    }
+    if (method.accountOnly && _notesController.text.trim().isEmpty) {
+      setState(() => _showNotesError = true);
       return;
     }
 
@@ -323,10 +451,19 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
         reference: _referenceController.text.trim(),
         notes: _notesController.text.trim(),
         cardReceiptUrl: cardReceiptUrl,
-        printProof: widget.proofToggleLabel != null && _printProof,
-        moneyAccountId: _selectedMethod.usesBankAccount
-            ? _moneyAccountId
+        printProof:
+            widget.proofToggleLabel != null &&
+            _printProof &&
+            !method.accountOnly,
+        moneyAccountId: method.usesBankAccount ? _moneyAccountId : null,
+        payrollDeductionLimit: widget.offersDeductionLimit && method.accountOnly
+            ? parseDeductionLimit(_limitController.text)
             : null,
+        source: method.isCash
+            ? _source
+            : widget.cashSources.contains(MoneySource.treasury)
+            ? MoneySource.treasury
+            : MoneySource.drawer,
       ),
     );
   }

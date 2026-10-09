@@ -17,6 +17,7 @@ import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.d
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/contacts/view_models/customer_details_view_model.dart';
 import 'package:pointy_frontend/src/features/contacts/views/customer_details_screen.dart';
+import 'package:pointy_frontend/src/shared/components/components.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
 /// A customer who owes the shop can be texted what their account stands at,
@@ -118,10 +119,7 @@ void main() {
     await pump(tester, customer: _customer(phone: ' '));
     expect(find.byKey(button), findsNothing);
     // The callout itself is still there: it is about the money, not the text.
-    expect(
-      find.byKey(const ValueKey('record_customer_payment_button')),
-      findsOneWidget,
-    );
+    expect(find.byType(PointyDetailCallout), findsWidgets);
 
     await pump(tester, user: _manager(sms: false));
     expect(find.byKey(button), findsNothing);

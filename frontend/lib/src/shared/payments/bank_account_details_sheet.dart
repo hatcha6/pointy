@@ -139,14 +139,14 @@ class _BankAccountDetailsSheetState extends State<_BankAccountDetailsSheet> {
               ),
               SizedBox(height: spacing.md),
               if (_hasIban)
-                _IdentifierField(
+                BankIdentifierField(
                   label: l10n.bankAccountIbanLabel,
                   value: formatIban(widget.account.iban),
                   copyValue: widget.account.iban,
                 ),
               if (_hasIban && _hasAccountNumber) SizedBox(height: spacing.sm),
               if (_hasAccountNumber)
-                _IdentifierField(
+                BankIdentifierField(
                   label: l10n.bankAccountNumberLabel,
                   value: widget.account.accountNumber,
                   copyValue: widget.account.accountNumber,
@@ -165,8 +165,9 @@ class _BankAccountDetailsSheetState extends State<_BankAccountDetailsSheet> {
 }
 
 /// One number, big, LTR-isolated, with a copy button.
-class _IdentifierField extends StatelessWidget {
-  const _IdentifierField({
+class BankIdentifierField extends StatelessWidget {
+  const BankIdentifierField({
+    super.key,
     required this.label,
     required this.value,
     required this.copyValue,

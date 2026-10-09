@@ -20,6 +20,8 @@ class BankPickerField extends StatelessWidget {
     required this.selectedSlug,
     required this.onChanged,
     this.enabled = true,
+    this.label,
+    this.errorText,
   });
 
   /// The Central Bank slug, or blank for "not said". Blank is a legitimate
@@ -28,6 +30,10 @@ class BankPickerField extends StatelessWidget {
   final String selectedSlug;
   final ValueChanged<String> onChanged;
   final bool enabled;
+
+  /// The field's label; the treasury's "bank" when not given.
+  final String? label;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +48,10 @@ class BankPickerField extends StatelessWidget {
       borderRadius: BorderRadius.circular(PointyRadii.card),
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: l10n.treasuryAccountBankLabel,
+          labelText: label ?? l10n.treasuryAccountBankLabel,
           suffixIcon: const Icon(Icons.expand_more),
           enabled: enabled,
+          errorText: errorText,
         ),
         child: bank == null
             ? Text(
