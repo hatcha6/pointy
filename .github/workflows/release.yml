@@ -200,8 +200,16 @@ jobs:
           set -euo pipefail
           apksigner="$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
           report="$("$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)"
-          actual="$(printf '%s\n' "$report" | awk -F': ' '/^Signer #1 certificate SHA-256 digest/ && !seen {print $2; seen = 1}')"
+          # build-tools 36 prints "Signer #1 certificate SHA-256 digest: <hex>",
+          # 37 prints "V2 Signer: certificate SHA-256 digest: <hex>"; take the
+          # first certificate digest whatever the label in front of it.
+          actual="$(printf '%s\n' "$report" | sed -n 's/^.*certificate SHA-256 digest: *\([0-9a-fA-F]*\).*$/\1/p' | head -n 1 | tr 'A-F' 'a-f')"
           echo "APK signer certificate SHA-256: ${actual}"
+          if [ -z "$actual" ]; then
+            echo "::error title=Unreadable APK signer report::$(basename "$(dirname "$apksigner")") printed no certificate digest. Its report follows."
+            printf '%s\n' "$report"
+            exit 1
+          fi
           pin=android/release-signing-cert.sha256
           if [ -f "$pin" ]; then
             expected="$(tr -d '[:space:]:' < "$pin" | tr 'A-F' 'a-f')"
