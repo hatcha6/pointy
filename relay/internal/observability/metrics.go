@@ -69,7 +69,7 @@ type Snapshot struct {
 	// putting a line per probe in the log.
 	ConnectorHandshakeRejections map[string]uint64 `json:"connector_handshake_rejections"`
 	// SMSSendsByOutcome counts POST /v1/sms/send answers by outcome ("sent",
-	// "replayed", "monthly_limit", "provider_credit", ...).
+	// "replayed", "insufficient_balance", "provider_credit", ...).
 	SMSSendsByOutcome map[string]uint64 `json:"sms_sends_by_outcome"`
 	// SMSDeliveriesByOutcome counts delivery reports the sent-log sync applied
 	// ("delivered", "undelivered", "sent").
