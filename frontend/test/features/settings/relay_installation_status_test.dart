@@ -14,7 +14,7 @@ void main() {
         'relay_enabled': true,
         'subscription_active': true,
         'ai_enabled': true,
-        'sms_enabled': true,
+        'sms_available': true,
         'subscription_ends_at': '2999-01-01T00:00:00Z',
         'last_synced_at': '2026-06-25T10:00:00Z',
         'connector_last_seen_at': '2026-06-25T09:59:00Z',
@@ -28,7 +28,7 @@ void main() {
       expect(status.relayEnabled, isTrue);
       expect(status.subscriptionActive, isTrue);
       expect(status.aiEnabled, isTrue);
-      expect(status.smsEnabled, isTrue);
+      expect(status.smsAvailable, isTrue);
       expect(status.connectorVersion, '1.4.0');
       expect(status.subscriptionEndsAt, isNotNull);
       expect(status.lastSyncedAt, isNotNull);
@@ -39,7 +39,7 @@ void main() {
       final status = RelayInstallationStatus.fromJson(const {});
 
       expect(status.configured, isFalse);
-      expect(status.smsEnabled, isFalse);
+      expect(status.smsAvailable, isFalse);
       expect(status.installationId, isEmpty);
       expect(status.hasInstallationId, isFalse);
       expect(status.subscriptionEndsAt, isNull);
@@ -52,7 +52,7 @@ void main() {
       bool relayEnabled = true,
       bool subscriptionActive = true,
       bool aiEnabled = true,
-      bool smsEnabled = true,
+      bool? smsAvailable,
       DateTime? endsAt,
     }) {
       return RelayInstallationStatus(
@@ -65,7 +65,7 @@ void main() {
         relayEnabled: relayEnabled,
         subscriptionActive: subscriptionActive,
         aiEnabled: aiEnabled,
-        smsEnabled: smsEnabled,
+        smsAvailable: smsAvailable,
         subscriptionEndsAt: endsAt,
       );
     }
@@ -101,18 +101,16 @@ void main() {
       );
     });
 
-    test('smsAvailable requires the SMS flag, an active and unexpired sub', () {
-      expect(build().smsAvailable, isTrue);
-      expect(build(smsEnabled: false).smsAvailable, isFalse);
-      expect(build(subscriptionActive: false).smsAvailable, isFalse);
+    test('smsAvailable is what the backend says, never the subscription', () {
+      expect(build(smsAvailable: true).smsAvailable, isTrue);
+      expect(build(smsAvailable: false).smsAvailable, isFalse);
+      // An active subscription does not make SMS available by itself.
+      expect(build().smsAvailable, isFalse);
       expect(
-        build(
-          endsAt: DateTime.now().subtract(const Duration(days: 1)),
-        ).smsAvailable,
-        isFalse,
+        build(smsAvailable: true, subscriptionActive: false).smsAvailable,
+        isTrue,
       );
-      // Its own flag: a shop can have the assistant without SMS.
-      expect(build(smsEnabled: false).aiAvailable, isTrue);
+      expect(build(smsAvailable: false).aiAvailable, isTrue);
     });
 
     test('daysUntilExpiry is null without an end date', () {

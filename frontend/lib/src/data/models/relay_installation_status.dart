@@ -15,7 +15,6 @@ class RelayInstallationStatus {
     required this.relayEnabled,
     required this.subscriptionActive,
     required this.aiEnabled,
-    this.smsEnabled = false,
     this.subscriptionEndsAt,
     this.remoteAccessUntil,
     this.aiUntil,
@@ -49,10 +48,6 @@ class RelayInstallationStatus {
 
   /// AI-assistant feature flag on the installation.
   final bool aiEnabled;
-
-  /// SMS feature flag on the installation (messages go out through the relay
-  /// on the company's provider account, so the subscription carries them).
-  final bool smsEnabled;
 
   /// When the shared subscription lapses. Null means no expiry (perpetual).
   final DateTime? subscriptionEndsAt;
@@ -88,12 +83,9 @@ class RelayInstallationStatus {
   bool get aiAvailable =>
       _aiAvailable ?? (aiEnabled && subscriptionActive && !subscriptionExpired);
 
-  /// Whether SMS can be sent: the SMS balance pays for a message (or, from a
-  /// backend before the SMS balance, the subscription includes SMS). The shop
-  /// can still have switched SMS off.
-  bool get smsAvailable =>
-      _smsAvailable ??
-      (smsEnabled && subscriptionActive && !subscriptionExpired);
+  /// Whether SMS can be sent: the SMS balance pays for a message. SMS is not
+  /// part of the subscription. The shop can still have switched SMS off.
+  bool get smsAvailable => _smsAvailable ?? false;
 
   /// Remote access or the assistant runs right now, whoever pays for it.
   bool get anyPlanActive => remoteAccessSupported || aiAvailable;
@@ -120,7 +112,6 @@ class RelayInstallationStatus {
       relayEnabled: _bool(json['relay_enabled']),
       subscriptionActive: _bool(json['subscription_active']),
       aiEnabled: _bool(json['ai_enabled']),
-      smsEnabled: _bool(json['sms_enabled']),
       subscriptionEndsAt: _dateTime(json['subscription_ends_at']),
       remoteAccessUntil: _dateTime(json['remote_access_until']),
       aiUntil: _dateTime(json['ai_until']),

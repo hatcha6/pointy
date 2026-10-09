@@ -603,7 +603,9 @@ class _SmsSection extends StatelessWidget {
       icon: Icons.sms_outlined,
       title: l10n.subscriptionSmsTitle,
       child: PointyDetailCallout(
-        icon: available ? Icons.sms_outlined : Icons.lock_outlined,
+        icon: available
+            ? Icons.sms_outlined
+            : Icons.account_balance_wallet_outlined,
         tone: available ? PointyCalloutTone.success : PointyCalloutTone.neutral,
         title: available
             ? l10n.subscriptionSmsActiveTitle

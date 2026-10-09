@@ -50,15 +50,13 @@ var usageSections = []usageSection{
 		name:     "subscription",
 		synopsis: []string{"pointy-relay subscription <set|update|enable|disable|extend|audit> <id> [flags]"},
 		detail: `  subscription   Fast subscription changes over the admin API (audited):
-                   set <id> --months N [--ai|--no-ai] [--sms|--no-sms]
-                          [--sms-monthly-limit N] [--remote|--no-remote]
+                   set <id> --months N [--ai|--no-ai] [--remote|--no-remote]
                                              give an N-month subscription + add-ons
                    enable <id>               turn relay + subscription on
                    disable <id>              turn relay + subscription off
                    extend <id> --days N      set the end date N days out, active
                    update <id> [flags]       explicit field-by-field control
-                                             (--ai-enabled, --sms-enabled,
-                                             --sms-monthly-limit, ...)
+                                             (--ai-enabled, --relay-enabled, ...)
                    audit <id>                change history (alias)`,
 		adminAPI: true,
 	},
@@ -115,6 +113,64 @@ var usageSections = []usageSection{
 		adminAPI: true,
 	},
 	{
+		name:     "vouchers",
+		synopsis: []string{"pointy-relay vouchers <catalog|settings|offers|compare|purchases|check|resolve|bnplus|reloadly|config> [args]"},
+		detail: `  vouchers       The company's card shop (BN Plus and Reloadly) over the admin API:
+                   catalog example           a starter catalog.json
+                   catalog check <file>      validate a catalog and its images locally
+                   catalog push <file> [--note "..."]
+                                             upload its images, then publish it
+                   catalog show [--json]     what shops see: order, prices, promos, supply
+                   catalog history           published versions, newest first
+                   settings show [--json]    pricing of direct top-up and bills: the dollar
+                                             rate, markups, retail step; marks the knobs
+                                             still at a demo default nobody decided
+                   settings set [--file F] [--usd-rate N] [--funding-percent N]
+                                [--airtime-shop-markup N] [--airtime-retail-markup N]
+                                [--airtime-order-mode usd|local] [--airtime-usd-buffer N] [--airtime-service-fee N]
+                                [--bills-shop-markup N] [--bills-retail-markup N]
+                                [--bills-order-mode auto|local] [--bills-usd-buffer N]
+                                [--retail-step N] [--min-shop-margin N] [--popular NE,ML,..]
+                                [--note "..."] [--dry-run]
+                                             publish new settings; flags override the
+                                             published ones (or --file); a blank value is
+                                             the default (--usd-rate "" unsets the rate)
+                   settings history          published versions, newest first
+                   offers [--supplier S] [--sync]   what suppliers sell the company, in their
+                                             own currency and in dinars (bnplus, reloadly)
+                   compare [--brand KEY]     every item with two or more suppliers: each one's
+                                             cost in dinars, who wins, the saving, the margin
+                   purchases [--installation ID] [--status S] [--kind K] [--held] [--limit N]
+                   check <purchase id>       ask the supplier about an open purchase now
+                   resolve <purchase id> (--refund | --found ORDER) --reason "..."
+                                             settle a purchase the reconciler could not
+                   bnplus wallets|groups [--type T]|companies [--group N]|cards --branch N|orders|order <id>
+                                             read BN Plus with the company's credentials
+                   reloadly balance          the company's gift card balance at Reloadly
+                   config                    suppliers, test mode, limits (no secrets)`,
+		adminAPI: true,
+	},
+	{
+		name:     "services",
+		synopsis: []string{"pointy-relay services <directory|quote|names|balance|status> [flags]"},
+		detail: `  services       Direct top-up and bill payments (Reloadly) over the admin API:
+                   directory [--country ML,NE] [--refresh [--accept]] [--json]
+                                             countries, operators, billers and what each
+                                             amount costs the shop and the customer;
+                                             --accept believes a far smaller directory
+                                             after a reading was REJECTED (see status)
+                   quote --kind airtime --operator ID --amount N [--currency C]
+                   quote --kind bill --biller ID --amount N [--amount-id PLAN]
+                                             one price, and how it is ordered from Reloadly
+                   names --missing           operators, billers and plans with no Arabic
+                                             spelling yet (shown in Latin until added)
+                   balance                   the company's balance at Reloadly, per product
+                   status                    configured? test mode or sandbox? when the directory was
+                                             read, stale? a reading rejected?
+                 Orders are listed with: vouchers purchases --kind airtime|bill`,
+		adminAPI: true,
+	},
+	{
 		name:     "integrations",
 		synopsis: []string{"pointy-relay integrations <status|disable|enable> [provider] [flags]"},
 		detail: `  integrations   Fleet-wide switch per provider integration (hdbox, lnet, qareeb):
@@ -122,6 +178,27 @@ var usageSections = []usageSection{
                    disable <provider> --reason "..."
                                              off in every shop (a cease-and-desist)
                    enable <provider> [--reason "..."]   back on in every shop`,
+		adminAPI: true,
+	},
+	{
+		name:     "alerts",
+		synopsis: []string{"pointy-relay alerts <setup|rotate|status|test> [flags]"},
+		detail: `  alerts         The company's ntfy alert channel (low balances, supplier refusals, wallet payments):
+                   setup                     generate the topic once; prints where to subscribe
+                   rotate                    replace the topic (cuts off every subscribed phone)
+                   status [--json]           the topic and its subscribe link
+                   test                      send a test notification`,
+		adminAPI: true,
+	},
+	{
+		name:     "console",
+		synopsis: []string{"pointy-relay console <invite|operators|disable|enable> [args]"},
+		detail: `  console        The operator web console (/console/, passkeys only):
+                   invite --name "..." [--ttl-hours 24]
+                                             one-time link that registers a passkey;
+                                             an existing name adds another device
+                   operators [--json]        who can sign in, devices, open sessions
+                   disable <id> / enable <id>    lock an operator out (signs them out)`,
 		adminAPI: true,
 	},
 	{

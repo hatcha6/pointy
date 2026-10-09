@@ -25,7 +25,6 @@ type smsSettings struct {
 	Templates            string
 	TestMode             bool
 	Price                string
-	MonthlyLimit         int
 	RateLimit            string
 	RequestTimeout       time.Duration
 	MaxVariableRunes     int
@@ -43,9 +42,6 @@ func buildSMSConfig(settings smsSettings) (relayserver.SMSConfig, []string, erro
 	rate, err := ratelimit.ParsePolicy(settings.RateLimit)
 	if err != nil {
 		return relayserver.SMSConfig{}, nil, fmt.Errorf("POINTY_RELAY_SMS_RATE_LIMIT: %w", err)
-	}
-	if settings.MonthlyLimit < 0 {
-		return relayserver.SMSConfig{}, nil, fmt.Errorf("POINTY_RELAY_SMS_MONTHLY_LIMIT must be 0 (no brake) or positive")
 	}
 	price := strings.TrimSpace(settings.Price)
 	if price != "" {
@@ -76,7 +72,6 @@ func buildSMSConfig(settings smsSettings) (relayserver.SMSConfig, []string, erro
 		Templates:            templates,
 		TestMode:             settings.TestMode,
 		Price:                price,
-		MonthlyLimit:         settings.MonthlyLimit,
 		RateLimit:            rate,
 		RequestTimeout:       timeout,
 		MaxVariableRunes:     settings.MaxVariableRunes,
@@ -386,7 +381,6 @@ type smsConfigResponse struct {
 	BaseURL              string            `json:"base_url"`
 	Templates            map[string]string `json:"templates"`
 	Price                string            `json:"price"`
-	MonthlyLimitDefault  int               `json:"monthly_limit_default"`
 	RateLimit            string            `json:"rate_limit"`
 	RequestTimeout       string            `json:"request_timeout"`
 	MaxVariableRunes     int               `json:"max_variable_runes"`
@@ -424,17 +418,12 @@ func runSMSConfig(args []string) error {
 }
 
 func renderSMSConfig(response smsConfigResponse) error {
-	monthly := strconv.Itoa(response.MonthlyLimitDefault)
-	if response.MonthlyLimitDefault == 0 {
-		monthly = "unlimited"
-	}
 	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 	for _, row := range [][2]string{
 		{"configured", onOff(response.Configured)},
 		{"test mode", onOff(response.TestMode)},
 		{"base url", dashIfEmpty(response.BaseURL)},
 		{"price per SMS part", dashIfEmpty(response.Price)},
-		{"monthly limit (default)", monthly},
 		{"rate limit", dashIfEmpty(response.RateLimit)},
 		{"request timeout", dashIfEmpty(response.RequestTimeout)},
 		{"max variable length", strconv.Itoa(response.MaxVariableRunes)},

@@ -71,7 +71,6 @@ const (
 	smsCodeUnknownKind           = "unknown_kind"
 	smsCodeTemplateNotConfigured = "template_not_configured"
 	smsCodeRateLimited           = "rate_limited"
-	smsCodeMonthlyLimit          = "monthly_limit"
 	// smsCodeInsufficientBalance is an SMS balance that cannot pay for this
 	// message's parts; the shop moves money into it from its wallet.
 	smsCodeInsufficientBalance  = "insufficient_balance"
@@ -101,11 +100,8 @@ type SMSConfig struct {
 	// message pays it once per part it goes out as. Empty or invalid means
 	// defaultSMSPrice.
 	Price string
-	// MonthlyLimit is the operator's brake for shops whose own
-	// sms_monthly_limit is 0. Zero here means none: the SMS balance is what
-	// limits sending.
-	MonthlyLimit int
-	// RateLimit is the per-shop burst guard, separate from the monthly cap.
+	// RateLimit is the per-shop burst guard. Beyond it, the SMS balance is
+	// what limits sending: there is no monthly allowance.
 	RateLimit        ratelimit.Policy
 	RequestTimeout   time.Duration
 	MaxVariableRunes int
@@ -151,15 +147,6 @@ func (s HTTPServer) smsMaxVariableRunes() int {
 
 func (s HTTPServer) smsStaleAfter() time.Duration {
 	return max(smsMinimumStaleAfter, s.smsRequestTimeout()+30*time.Second)
-}
-
-// smsMonthlyLimit is the shop's own cap when set, else the relay default.
-// Zero means unlimited.
-func (s HTTPServer) smsMonthlyLimit(installation control.Installation) int {
-	if installation.SMSMonthlyLimit > 0 {
-		return installation.SMSMonthlyLimit
-	}
-	return max(s.SMS.MonthlyLimit, 0)
 }
 
 func (s HTTPServer) smsStore() (control.SMSStore, bool) {
@@ -234,8 +221,8 @@ type smsSendTrace struct {
 }
 
 // handleSMSSend serves POST /v1/sms/send. The checks run in the contract's
-// order — configured, identity, body, burst limit, idempotency, monthly brake,
-// template — and only then is a ledger row claimed, the price of its parts
+// order — configured, identity, body, burst limit, idempotency, template —
+// and only then is a ledger row claimed, the price of its parts
 // taken from the shop's SMS balance in the same step, and Resala called. The
 // answer settles the parts. A retry of a key that was already claimed never
 // reaches Resala again, nor pays again: it replays what the ledger recorded.
@@ -275,9 +262,6 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	periodStart, resetsAt := control.SMSMonthlyPeriod(now)
-	limit := s.smsMonthlyLimit(installation)
-
 	existing, found, err := store.FindSMSByKey(ctx, installation.ID, request.IdempotencyKey)
 	if err != nil {
 		s.writeSMSInternalError(w, trace, "sms idempotency lookup failed", err)
@@ -288,16 +272,6 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	used, err := store.CountBillableSMSSince(ctx, installation.ID, periodStart)
-	if err != nil {
-		s.writeSMSInternalError(w, trace, "sms usage count failed", err)
-		return
-	}
-	if !testMode && limit > 0 && used >= limit {
-		trace.outcome = smsCodeMonthlyLimit
-		writeSMSMonthlyLimit(w, limit, used, resetsAt)
-		return
-	}
 	templateID, templateProblem := s.smsTemplateFor(request.Kind)
 	if templateProblem != "" {
 		trace.outcome = templateProblem
@@ -311,9 +285,8 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 
 	plan := s.planSMS(ctx, store, templateID, request.Variables)
 	held := plan.Parts
-	terms := control.SMSClaimTerms{Since: periodStart, Parts: held}
+	terms := control.SMSClaimTerms{Parts: held}
 	if !testMode {
-		terms.Limit = limit
 		terms.Price = control.FormatWalletAmount(s.SMS.price())
 		terms.ChargeDescription = smsChargeDescription(request.Kind, held)
 	}
@@ -329,15 +302,8 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		TestMode:       testMode,
 		CreatedAt:      now,
 	}, terms)
-	var limitErr *control.SMSLimitError
 	var balanceErr *control.WalletBalanceError
 	switch {
-	case errors.As(err, &limitErr):
-		// Another send took the last message of the month between the count
-		// above and this claim.
-		trace.outcome = smsCodeMonthlyLimit
-		writeSMSMonthlyLimit(w, limitErr.Limit, limitErr.Used, resetsAt)
-		return
 	case errors.As(err, &balanceErr):
 		trace.outcome = smsCodeInsufficientBalance
 		s.writeSMSInsufficientBalance(w, balanceErr, held)
@@ -408,15 +374,18 @@ func (s HTTPServer) handleSMSSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trace.outcome = "sent"
-	if smsCountsAgainstAllowance(finished) {
-		used++
+	// This month's sends, this one included: shown to the shop, never a cap.
+	periodStart, resetsAt := control.SMSMonthlyPeriod(now)
+	used, err := store.CountBillableSMSSince(detached, installation.ID, periodStart)
+	if err != nil {
+		s.logger().Warn("sms usage count failed", "installation_id", installation.ID, "error", err)
 	}
 	status := http.StatusCreated
 	if !applied {
 		trace.outcome = "replayed"
 		status = http.StatusOK
 	}
-	body := smsSuccessBody(finished, content, smsUsageBlock(used, limit, periodStart, resetsAt), !applied)
+	body := smsSuccessBody(finished, content, smsUsageBlock(used, periodStart, resetsAt), !applied)
 	s.addSMSBalance(detached, body, installation.ID)
 	writeJSON(w, status, body)
 }
@@ -691,7 +660,6 @@ func (s HTTPServer) replaySMS(
 		return
 	}
 	periodStart, resetsAt := control.SMSMonthlyPeriod(now)
-	limit := s.smsMonthlyLimit(installation)
 	used, err := store.CountBillableSMSSince(r.Context(), installation.ID, periodStart)
 	if err != nil {
 		s.writeSMSInternalError(w, trace, "sms usage count failed", err)
@@ -700,7 +668,7 @@ func (s HTTPServer) replaySMS(
 	body := smsSuccessBody(
 		message,
 		smsReplayContent(message, request.Variables),
-		smsUsageBlock(used, limit, periodStart, resetsAt),
+		smsUsageBlock(used, periodStart, resetsAt),
 		true,
 	)
 	s.addSMSBalance(r.Context(), body, installation.ID)
@@ -829,7 +797,6 @@ func (s HTTPServer) handleSMSUsageSelf(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.clock().Now()
 	periodStart, resetsAt := control.SMSMonthlyPeriod(now)
-	limit := s.smsMonthlyLimit(installation)
 	used := 0
 	if store, ok := s.smsStore(); ok {
 		count, err := store.CountBillableSMSSince(r.Context(), installation.ID, periodStart)
@@ -840,14 +807,13 @@ func (s HTTPServer) handleSMSUsageSelf(w http.ResponseWriter, r *http.Request) {
 		}
 		used = count
 	}
-	body := smsUsageBlock(used, limit, periodStart, resetsAt)
+	body := smsUsageBlock(used, periodStart, resetsAt)
 	wallet := s.smsWalletPayload(s.smsBalance(r.Context(), installation.ID))
 	for key, value := range wallet {
 		body[key] = value
 	}
 	// "entitled" is what a backend from before the SMS balance reads.
 	body["entitled"] = wallet["available"]
-	body["sms_enabled"] = installation.SMSEnabled
 	body["test_mode"] = s.SMS.TestMode
 	body["kinds"] = s.smsConfiguredKinds()
 	writeJSON(w, http.StatusOK, body)
@@ -1025,6 +991,7 @@ func (s HTTPServer) handleSMSAdminConfig(w http.ResponseWriter, r *http.Request)
 		}
 		catalog = append(catalog, map[string]any{
 			"kind":          kind.Kind,
+			"title":         kind.Title,
 			"consent_class": kind.ConsentClass,
 			"variables":     kind.Variables,
 			"configured":    configured,
@@ -1037,7 +1004,6 @@ func (s HTTPServer) handleSMSAdminConfig(w http.ResponseWriter, r *http.Request)
 		"base_url":               s.SMS.baseURL(),
 		"templates":              templates,
 		"price":                  control.FormatWalletAmount(s.SMS.price()),
-		"monthly_limit_default":  max(s.SMS.MonthlyLimit, 0),
 		"rate_limit":             s.SMS.RateLimit.String(),
 		"request_timeout":        s.smsRequestTimeout().String(),
 		"max_variable_runes":     s.smsMaxVariableRunes(),
@@ -1250,14 +1216,6 @@ func writeSMSError(w http.ResponseWriter, status int, code, message string, extr
 	writeJSON(w, status, body)
 }
 
-func writeSMSMonthlyLimit(w http.ResponseWriter, limit, used int, resetsAt time.Time) {
-	writeSMSError(w, http.StatusTooManyRequests, smsCodeMonthlyLimit, "monthly SMS limit reached", map[string]any{
-		"limit":     limit,
-		"used":      used,
-		"resets_at": resetsAt,
-	})
-}
-
 // writeSMSStoredFailure answers with a failure the ledger recorded. A replay
 // gets exactly the response the first attempt got.
 // writeSMSStoredFailure answers a send that failed. held says its price is
@@ -1318,29 +1276,17 @@ func smsSuccessBody(message control.SMSMessage, content string, usage map[string
 
 // smsUsageBlock is the allowance as the app shows it. A limit of 0 means
 // unlimited, reported as remaining -1.
-func smsUsageBlock(used, limit int, periodStart, resetsAt time.Time) map[string]any {
-	remaining := -1
-	if limit > 0 {
-		remaining = max(limit-used, 0)
-	}
+// smsUsageBlock is this month's sends. There is no allowance: "limit" 0 and
+// "remaining" -1 ("no limit") stay only because shop backends from before
+// the SMS balance read them.
+func smsUsageBlock(used int, periodStart, resetsAt time.Time) map[string]any {
 	return map[string]any{
 		"used":         used,
-		"limit":        limit,
-		"remaining":    remaining,
+		"limit":        0,
+		"remaining":    -1,
 		"period_start": periodStart,
 		"resets_at":    resetsAt,
 	}
-}
-
-func smsCountsAgainstAllowance(message control.SMSMessage) bool {
-	if message.TestMode {
-		return false
-	}
-	switch message.Status {
-	case control.SMSStatusPending, control.SMSStatusSent, control.SMSStatusDelivered, control.SMSStatusUndelivered:
-		return true
-	}
-	return false
 }
 
 // smsReplayContent re-renders the stored template with the replay's variables

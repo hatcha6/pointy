@@ -140,7 +140,6 @@ func newSMSHarness(t *testing.T) *smsHarness {
 					"test":      "tpl-test",
 					"marketing": "tpl-marketing",
 				},
-				MonthlyLimit: 500,
 			},
 		},
 	}
@@ -149,7 +148,6 @@ func newSMSHarness(t *testing.T) *smsHarness {
 type smsShop struct {
 	// funded puts smsShopBalance in the shop's SMS balance: a hundred messages.
 	funded bool
-	limit  int
 	name   string
 }
 
@@ -158,8 +156,7 @@ const smsShopBalance = "15.000"
 func (h *smsHarness) provision(t *testing.T, shop smsShop) control.ProvisionedInstallation {
 	t.Helper()
 	provisioned, err := h.store.ProvisionInstallation(context.Background(), control.ProvisionInstallationRequest{
-		ShopName:        shop.name,
-		SMSMonthlyLimit: shop.limit,
+		ShopName: shop.name,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -298,7 +295,7 @@ func TestSMSSendDeliversThroughResala(t *testing.T) {
 		t.Fatalf("unexpected success body %v", body)
 	}
 	usage := body["usage"].(map[string]any)
-	if usage["used"] != float64(1) || usage["limit"] != float64(500) || usage["remaining"] != float64(499) ||
+	if usage["used"] != float64(1) || usage["limit"] != float64(0) || usage["remaining"] != float64(-1) ||
 		usage["period_start"] != "2026-09-01T00:00:00+02:00" || usage["resets_at"] != "2026-10-01T00:00:00+02:00" {
 		t.Fatalf("unexpected usage %v", usage)
 	}
@@ -511,27 +508,26 @@ func TestSMSSendValidatesTheBody(t *testing.T) {
 	}
 }
 
-func TestSMSSendEnforcesTheMonthlyLimit(t *testing.T) {
+func TestSMSSendHasNoMonthlyAllowance(t *testing.T) {
 	h := newSMSHarness(t)
-	shop := h.provision(t, smsShop{funded: true, limit: 2})
-	for i := 0; i < 2; i++ {
+	shop := h.provision(t, smsShop{funded: true})
+	for i := 0; i < 5; i++ {
 		if status, body := h.send(t, shop.AccessToken, invoiceSend(fmt.Sprintf("k%d", i))); status != http.StatusCreated {
 			t.Fatalf("send %d: %d %v", i, status, body)
 		}
 	}
-	status, body := h.send(t, shop.AccessToken, invoiceSend("k-over"))
-	expectSMSCode(t, status, body, http.StatusTooManyRequests, "monthly_limit")
-	if body["limit"] != float64(2) || body["used"] != float64(2) || body["resets_at"] != "2026-10-01T00:00:00+02:00" {
-		t.Fatalf("the refusal must say how much and until when: %v", body)
-	}
-	if len(h.resala.calls()) != 2 {
+	// The SMS balance is the only gate: an empty one refuses the next send.
+	empty := h.provision(t, smsShop{funded: false})
+	status, body := h.send(t, empty.AccessToken, invoiceSend("k-empty"))
+	expectSMSCode(t, status, body, http.StatusPaymentRequired, "insufficient_balance")
+	if len(h.resala.calls()) != 5 {
 		t.Fatalf("the refused message must not be sent, got %d calls", len(h.resala.calls()))
 	}
 }
 
-func TestSMSSendTestModeDoesNotCountTowardTheCap(t *testing.T) {
+func TestSMSSendTestModeIsFreeAndUncounted(t *testing.T) {
 	h := newSMSHarness(t)
-	shop := h.provision(t, smsShop{funded: true, limit: 1})
+	shop := h.provision(t, smsShop{funded: true})
 	for i := 0; i < 3; i++ {
 		body := smsSendJSON("invoice", "0912345678", fmt.Sprintf("test-%d", i), true, "a", "b", "c")
 		status, decoded := h.send(t, shop.AccessToken, body)
@@ -547,14 +543,13 @@ func TestSMSSendTestModeDoesNotCountTowardTheCap(t *testing.T) {
 			t.Fatal("a test send must carry Resala's test flag")
 		}
 	}
-	if status, body := h.send(t, shop.AccessToken, invoiceSend("real-1")); status != http.StatusCreated {
-		t.Fatalf("the real allowance must be untouched: %d %v", status, body)
+	status, body := h.send(t, shop.AccessToken, invoiceSend("real-1"))
+	if status != http.StatusCreated || body["usage"].(map[string]any)["used"] != float64(1) || body["balance"] != "14.850" {
+		t.Fatalf("test sends must cost and count nothing: %d %v", status, body)
 	}
-	status, body := h.send(t, shop.AccessToken, invoiceSend("real-2"))
-	expectSMSCode(t, status, body, http.StatusTooManyRequests, "monthly_limit")
 
 	// The relay-wide test mode forces the flag even when the shop asks for a
-	// real send, and such sends are never capped either.
+	// real send.
 	h.server.SMS.TestMode = true
 	status, body = h.send(t, shop.AccessToken, invoiceSend("forced"))
 	if status != http.StatusCreated || body["test_mode"] != true {
@@ -644,7 +639,7 @@ func TestSMSSendPendingKeyIsInFlightThenOutcomeUnknown(t *testing.T) {
 
 func TestSMSSendEmptyWalletIsProviderCreditAndReplays(t *testing.T) {
 	h := newSMSHarness(t)
-	shop := h.provision(t, smsShop{funded: true, limit: 1})
+	shop := h.provision(t, smsShop{funded: true})
 	h.resala.respond(http.StatusBadRequest,
 		`{"status":400,"type":"BadRequest","message":"wallet must have at least 0.15 LYD to send an sms","request_id":"r-1"}`)
 
@@ -661,10 +656,10 @@ func TestSMSSendEmptyWalletIsProviderCreditAndReplays(t *testing.T) {
 	if len(h.resala.calls()) != 1 {
 		t.Fatalf("the replay must not call Resala, got %d calls", len(h.resala.calls()))
 	}
-	// A failure is free: the shop's single message is still available.
+	// A failure is free: the shop is not charged for it.
 	h.resala.respond(http.StatusCreated, resalaSendBody(invoiceTemplateBody, 0, true, "0.1"))
 	if status, body := h.send(t, shop.AccessToken, invoiceSend("k2")); status != http.StatusCreated {
-		t.Fatalf("a failed send must not use the allowance: %d %v", status, body)
+		t.Fatalf("a failed send must not block the next: %d %v", status, body)
 	}
 }
 
@@ -764,8 +759,8 @@ func TestSMSUsageSelfAnswersAShopWithoutSMSMoney(t *testing.T) {
 	kinds, _ := body["kinds"].([]any)
 	if body["entitled"] != false || body["available"] != false || body["balance"] != "0.000" ||
 		body["price"] != "0.150" || body["messages_left"] != float64(0) || body["configured"] != true ||
-		body["test_mode"] != false || body["used"] != float64(0) || body["limit"] != float64(500) ||
-		body["remaining"] != float64(500) || len(kinds) != 3 || kinds[0] != "invoice" ||
+		body["test_mode"] != false || body["used"] != float64(0) || body["limit"] != float64(0) ||
+		body["remaining"] != float64(-1) || len(kinds) != 3 || kinds[0] != "invoice" ||
 		body["period_start"] != "2026-09-01T00:00:00+02:00" {
 		t.Fatalf("unexpected usage %v", body)
 	}
@@ -782,7 +777,6 @@ func TestSMSUsageSelfAnswersAShopWithoutSMSMoney(t *testing.T) {
 
 func TestSMSUsageSelfCountsAndReportsUnlimited(t *testing.T) {
 	h := newSMSHarness(t)
-	h.server.SMS.MonthlyLimit = 0
 	shop := h.provision(t, smsShop{funded: true})
 	if status, body := h.send(t, shop.AccessToken, invoiceSend("k")); status != http.StatusCreated {
 		t.Fatalf("send: %d %v", status, body)
@@ -790,19 +784,10 @@ func TestSMSUsageSelfCountsAndReportsUnlimited(t *testing.T) {
 	_, body, _ := h.do(t, http.MethodGet, "/v1/sms/usage/self", shop.AccessToken, "")
 	if body["entitled"] != true || body["used"] != float64(1) || body["limit"] != float64(0) || body["remaining"] != float64(-1) ||
 		body["balance"] != "14.850" || body["messages_left"] != float64(99) {
-		t.Fatalf("unlimited is limit 0, remaining -1: %v", body)
+		t.Fatalf("there is no allowance: limit 0, remaining -1: %v", body)
 	}
-
-	// The shop's own limit wins over the relay default.
-	limit := 7
-	if _, err := h.store.UpdateSubscription(context.Background(), shop.Installation.ID, control.SubscriptionUpdate{
-		SMSMonthlyLimit: &limit,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	_, body, _ = h.do(t, http.MethodGet, "/v1/sms/usage/self", shop.AccessToken, "")
-	if body["limit"] != float64(7) || body["remaining"] != float64(6) {
-		t.Fatalf("expected the shop's own limit, got %v", body)
+	if _, ok := body["sms_enabled"]; ok {
+		t.Fatalf("SMS is not a subscription entitlement any more: %v", body)
 	}
 }
 
@@ -914,7 +899,7 @@ func TestSMSAdminMessagesAndConfig(t *testing.T) {
 	}
 	templates := config["templates"].(map[string]any)
 	if config["configured"] != true || config["test_mode"] != false || config["base_url"] != h.resala.server.URL ||
-		templates["invoice"] != "tpl-invoice" || config["monthly_limit_default"] != float64(500) ||
+		templates["invoice"] != "tpl-invoice" || config["monthly_limit_default"] != nil ||
 		config["rate_limit"] != "60/minute" || config["delivery_sync_interval"] != "5m0s" {
 		t.Fatalf("unexpected config %v", config)
 	}
@@ -971,86 +956,38 @@ func TestSMSRoutesRespectTheListenerSplit(t *testing.T) {
 	}
 }
 
-func TestAdminSubscriptionManagesTheSMSBrake(t *testing.T) {
+func TestAdminSubscriptionIgnoresTheOldSMSFields(t *testing.T) {
 	h := newSMSHarness(t)
 	shop := h.provision(t, smsShop{funded: true})
-	patch := func(body string) (int, map[string]any) {
-		request := httptest.NewRequest(
-			http.MethodPatch,
-			"http://relay.test/v1/installations/"+shop.Installation.ID+"/subscription",
-			strings.NewReader(body),
-		)
-		request.Header.Set("Authorization", "Bearer admin-token")
-		recorder := httptest.NewRecorder()
-		h.server.ServeHTTP(recorder, request)
-		var decoded map[string]any
-		_ = json.Unmarshal(recorder.Body.Bytes(), &decoded)
-		return recorder.Code, decoded
-	}
-
-	status, body := patch(`{"sms_enabled":true,"sms_monthly_limit":1,"actor":"ops","reason":"sms brake"}`)
-	if status != http.StatusOK {
-		t.Fatalf("expected 200, got %d %v", status, body)
+	request := httptest.NewRequest(
+		http.MethodPatch,
+		"http://relay.test/v1/installations/"+shop.Installation.ID+"/subscription",
+		strings.NewReader(`{"ai_enabled":true,"sms_enabled":false,"sms_monthly_limit":1,"actor":"ops","reason":"old tool"}`),
+	)
+	request.Header.Set("Authorization", "Bearer admin-token")
+	recorder := httptest.NewRecorder()
+	h.server.ServeHTTP(recorder, request)
+	var body map[string]any
+	_ = json.Unmarshal(recorder.Body.Bytes(), &body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d %v", recorder.Code, body)
 	}
 	installation := body["installation"].(map[string]any)
-	if installation["sms_enabled"] != true || installation["sms_monthly_limit"] != float64(1) {
-		t.Fatalf("unexpected installation %v", installation)
-	}
-	after := body["audit_event"].(map[string]any)["after"].(map[string]any)
-	if after["sms_enabled"] != true || after["sms_monthly_limit"] != float64(1) {
-		t.Fatalf("the audit trail must record SMS changes: %v", after)
-	}
-	if status, _ := patch(`{"sms_monthly_limit":-1,"actor":"ops","reason":"typo"}`); status != http.StatusBadRequest {
-		t.Fatalf("a negative cap is a 400, got %d", status)
+	if _, ok := installation["sms_enabled"]; ok || installation["ai_enabled"] != true {
+		t.Fatalf("SMS is not part of the subscription: %v", installation)
 	}
 
-	// The shop reads its own brake, and its SMS balance, through the
-	// self-serviceable route its backend syncs from.
+	// The shop reads its SMS balance through the self-serviceable route its
+	// backend syncs from, and sends as long as the balance pays.
 	status, self, _ := h.do(t, http.MethodGet, "/v1/installations/"+shop.Installation.ID, shop.AccessToken, "")
-	if status != http.StatusOK || self["sms_monthly_limit"] != float64(1) {
-		t.Fatalf("unexpected self view %d %v", status, self)
-	}
 	sms, _ := self["sms"].(map[string]any)
-	if sms["balance"] != smsShopBalance || sms["price"] != "0.150" || sms["messages_left"] != float64(100) || sms["available"] != true {
-		t.Fatalf("the self view must carry the SMS balance: %v", self["sms"])
+	if status != http.StatusOK || sms["balance"] != smsShopBalance || sms["available"] != true {
+		t.Fatalf("the self view must carry the SMS balance: %d %v", status, self)
 	}
-	// The brake takes effect at once, whatever the balance holds.
-	if status, body := h.send(t, shop.AccessToken, invoiceSend("k")); status != http.StatusCreated {
-		t.Fatalf("the first message of the month goes out: %d %v", status, body)
-	}
-	status, body = h.send(t, shop.AccessToken, invoiceSend("k-2"))
-	expectSMSCode(t, status, body, http.StatusTooManyRequests, "monthly_limit")
-}
-
-func TestAdminConsoleFormSetsSMSFields(t *testing.T) {
-	h := newSMSHarness(t)
-	shop := h.provision(t, smsShop{funded: false})
-	form := url.Values{
-		"csrf_token":        {h.server.adminCSRFToken(h.now)},
-		"installation_id":   {shop.Installation.ID},
-		"actor":             {"ops"},
-		"reason":            {"sms via console"},
-		"sms_enabled":       {"true"},
-		"sms_monthly_limit": {"1200"},
-	}
-	post := func(values url.Values) int {
-		request := httptest.NewRequest(http.MethodPost, "http://relay.test/admin/subscription", strings.NewReader(values.Encode()))
-		request.Header.Set("Authorization", "Bearer admin-token")
-		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		recorder := httptest.NewRecorder()
-		h.server.ServeHTTP(recorder, request)
-		return recorder.Code
-	}
-	if status := post(form); status != http.StatusOK {
-		t.Fatalf("expected 200, got %d", status)
-	}
-	installation, _ := h.store.GetInstallation(context.Background(), shop.Installation.ID)
-	if !installation.SMSEnabled || installation.SMSMonthlyLimit != 1200 {
-		t.Fatalf("the console did not apply the SMS fields: %+v", installation)
-	}
-	form.Set("sms_monthly_limit", "lots")
-	if status := post(form); status != http.StatusBadRequest {
-		t.Fatalf("a non-numeric cap is a 400, got %d", status)
+	for _, key := range []string{"k", "k-2"} {
+		if status, body := h.send(t, shop.AccessToken, invoiceSend(key)); status != http.StatusCreated {
+			t.Fatalf("send %s: %d %v", key, status, body)
+		}
 	}
 }
 

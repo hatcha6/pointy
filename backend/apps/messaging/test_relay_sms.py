@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import timedelta
+from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -43,14 +44,17 @@ _DRIVER = "apps.messaging.transports.relay.scoped_relay_client"
 
 
 def entitle(*, sms=True, active=True, ends_at=None):
+    """A synced shop. ``sms`` funds its SMS balance (SMS is paid by the part
+    from that balance, never part of the subscription)."""
     return RelayInstallation.objects.create(
         installation_id="inst-1",
         relay_public_api_url="https://relay.example",
         connector_token="c",
         access_token="access-token",
         subscription_active=active,
-        sms_enabled=sms,
         subscription_ends_at=ends_at,
+        sms_balance=Decimal("15.000") if sms else Decimal("0"),
+        sms_price=Decimal("0.150"),
     )
 
 
@@ -253,19 +257,19 @@ class RelayEntitlementTests(TestCase):
     def setUp(self):
         cache.clear()
 
-    def test_a_shop_without_sms_in_its_plan_queues_nothing(self):
+    def test_a_shop_with_an_empty_sms_balance_queues_nothing(self):
         entitle(sms=False)
         relay_gateway()
         with self.assertRaises(NoGatewayConfigured) as caught:
             enqueue_message(to="0912345678", template=sms_template("test", "محل"))
-        self.assertEqual(caught.exception.code, "not_entitled")
+        self.assertEqual(caught.exception.code, "insufficient_balance")
         self.assertFalse(OutboundMessage.objects.exists())
 
-    def test_an_expired_subscription_is_not_entitled(self):
-        entitle(ends_at=timezone.now() - timedelta(days=1))
+    def test_sms_does_not_depend_on_the_subscription(self):
+        entitle(active=False, ends_at=timezone.now() - timedelta(days=1))
         relay_gateway()
-        with self.assertRaises(NoGatewayConfigured):
-            enqueue_message(to="0912345678", template=sms_template("test", "محل"))
+        message = enqueue_message(to="0912345678", template=sms_template("test", "محل"))
+        self.assertEqual(message.gateway.provider, MessagingGateway.Provider.RELAY)
 
     def test_the_relay_gateway_provisions_itself(self):
         entitle()
@@ -570,14 +574,13 @@ class SmsAvailabilityPropagationTests(TestCase):
             "shop_name": "",
             "relay_enabled": False,
             "subscription_active": True,
-            "ai_enabled": False,
-            "sms_enabled": True,
+            "ai_enabled": True,
         }
         with mock.patch("apps.core.caching.bump_perm_version") as bump:
             sync_relay_installation(installation, client=relay, push_shop_name=False)
             bump.assert_called_once()
             installation.refresh_from_db()
-            self.assertTrue(installation.sms_enabled)
+            self.assertTrue(installation.ai_enabled)
             bump.reset_mock()
             sync_relay_installation(installation, client=relay, push_shop_name=False)
             bump.assert_not_called()

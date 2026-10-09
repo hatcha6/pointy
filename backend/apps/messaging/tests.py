@@ -330,7 +330,7 @@ class GatewayApiTests(TestCase):
         self.assertEqual(fake.SENT_MESSAGES[0]["kind"], "test")
         self.assertNotIn("free text", fake.SENT_MESSAGES[0]["body"])
 
-    def test_test_send_explains_a_missing_subscription(self):
+    def test_test_send_explains_sms_is_not_available(self):
         gateway = make_gateway(provider=MessagingGateway.Provider.RELAY)
         self.client.force_authenticate(self.manager)
         resp = self.client.post(
@@ -340,7 +340,8 @@ class GatewayApiTests(TestCase):
         )
         self.assertEqual(resp.status_code, 400, resp.content)
         self.assertEqual(resp.data["code"], "not_entitled")
-        self.assertIn("اشتراك", resp.data["detail"])
+        # SMS is not part of the subscription: the message must not say it is.
+        self.assertNotIn("اشتراك", resp.data["detail"])
 
     def test_cashier_cannot_manage_gateways(self):
         self.client.force_authenticate(self.cashier)

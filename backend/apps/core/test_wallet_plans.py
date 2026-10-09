@@ -86,14 +86,13 @@ class SmsBalanceGateTests(TestCase):
     def test_a_prepaid_shop_sends_while_its_balance_pays_for_a_message(self):
         self.assertTrue(relay_sms_available(installation(sms_balance=Decimal("0.150"), sms_price=Decimal("0.150"))))
         self.assertFalse(relay_sms_available(installation(sms_balance=Decimal("0.149"), sms_price=Decimal("0.150"))))
-        # The subscription has nothing to do with it any more.
+        # The subscription has nothing to do with it.
         self.assertFalse(relay_sms_available(installation(
-            sms_enabled=True, subscription_active=True, sms_balance=Decimal("0"), sms_price=Decimal("0.150"),
+            subscription_active=True, sms_balance=Decimal("0"), sms_price=Decimal("0.150"),
         )))
 
-    def test_a_relay_from_before_the_sms_balance_keeps_the_old_gate(self):
-        self.assertTrue(relay_sms_available(installation(sms_enabled=True, subscription_active=True)))
-        self.assertFalse(relay_sms_available(installation(sms_enabled=True)))
+    def test_nothing_is_sent_until_the_relay_reports_a_price(self):
+        self.assertFalse(relay_sms_available(installation(subscription_active=True, sms_balance=Decimal("5"))))
         self.assertFalse(relay_sms_available(None))
 
 
@@ -108,7 +107,7 @@ class WalletMirrorTests(TestCase):
 
     def status(self, **overrides):
         status = {"shop_name": "", "relay_enabled": False, "subscription_active": False,
-                  "ai_enabled": False, "sms_enabled": False}
+                  "ai_enabled": False}
         status.update(overrides)
         return status
 

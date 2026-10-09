@@ -22,24 +22,9 @@ const (
 )
 
 var (
-	ErrSMSNotFound = errors.New("sms message not found")
-	// ErrSMSMonthlyLimit is returned (as *SMSLimitError) when a claim would
-	// take a shop past its monthly allowance.
-	ErrSMSMonthlyLimit = errors.New("sms monthly limit reached")
-	errSMSUnsupported  = errors.New("sms ledger is not supported by the underlying store")
+	ErrSMSNotFound    = errors.New("sms message not found")
+	errSMSUnsupported = errors.New("sms ledger is not supported by the underlying store")
 )
-
-// SMSLimitError is ErrSMSMonthlyLimit carrying the numbers the shop is shown.
-type SMSLimitError struct {
-	Limit int
-	Used  int
-}
-
-func (e *SMSLimitError) Error() string {
-	return fmt.Sprintf("sms monthly limit reached (%d of %d used)", e.Used, e.Limit)
-}
-
-func (e *SMSLimitError) Is(target error) bool { return target == ErrSMSMonthlyLimit }
 
 // SMSMessage is one ledger row: one send of one message to one recipient.
 //
@@ -91,13 +76,10 @@ type SMSMessage struct {
 	HeldSince *time.Time `json:"held_since,omitempty"`
 }
 
-// SMSClaimTerms is what a new claim is checked and charged against. Both run
-// under the same lock as the insert, so two sends racing for a shop's last
-// message — or its last 0.150 — cannot both get it.
+// SMSClaimTerms is what a new claim is charged. The charge runs under the
+// same lock as the insert, so two sends racing for a shop's last 0.150
+// cannot both get it.
 type SMSClaimTerms struct {
-	// Limit is the operator's monthly brake; 0 means none.
-	Limit int
-	Since time.Time
 	// Price is what one SMS part costs the shop, and Parts how many parts the
 	// message is held for (at least one). Their product is taken from the
 	// shop's SMS balance for a real (non-test) message; a price of "" or zero
@@ -408,9 +390,8 @@ type SMSStore interface {
 	// as a pending row and returned with created=true; a key that was already
 	// claimed returns the stored row with created=false, so two racing requests
 	// for the same message can never both reach the provider. A new, non-test
-	// claim is refused with *SMSLimitError once the limit is used up, and with
-	// *WalletBalanceError when the SMS balance cannot cover its price, which
-	// is otherwise charged in the same step.
+	// claim is refused with *WalletBalanceError when the SMS balance cannot
+	// cover its price, which is otherwise charged in the same step.
 	BeginSMS(ctx context.Context, message SMSMessage, terms SMSClaimTerms) (SMSMessage, bool, error)
 	// FindSMSByKey returns the row an idempotency key already claimed.
 	FindSMSByKey(ctx context.Context, installationID, idempotencyKey string) (SMSMessage, bool, error)
@@ -685,11 +666,6 @@ func (s *FileStore) BeginSMS(
 	}
 	if existing, ok := s.findSMSByKeyLocked(claim.InstallationID, claim.IdempotencyKey); ok {
 		return existing, false, nil
-	}
-	if terms.Limit > 0 && !claim.TestMode {
-		if used := s.countBillableSMSLocked(claim.InstallationID, terms.Since); used >= terms.Limit {
-			return SMSMessage{}, false, &SMSLimitError{Limit: terms.Limit, Used: used}
-		}
 	}
 	var charge WalletEntry
 	if price := smsClaimCharge(&claim, terms); price != nil {

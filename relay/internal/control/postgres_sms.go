@@ -95,15 +95,6 @@ func (s *PostgresStore) BeginSMS(
 	if !errors.Is(err, ErrSMSNotFound) {
 		return SMSMessage{}, false, err
 	}
-	if terms.Limit > 0 && !claim.TestMode {
-		var used int
-		if err := tx.QueryRow(ctx, countBillableSMSSQL, claim.InstallationID, terms.Since).Scan(&used); err != nil {
-			return SMSMessage{}, false, err
-		}
-		if used >= terms.Limit {
-			return SMSMessage{}, false, &SMSLimitError{Limit: terms.Limit, Used: used}
-		}
-	}
 	if price := smsClaimCharge(&claim, terms); price != nil {
 		posting, err := prepareWalletPosting(smsChargePosting(claim, price, terms.ChargeDescription))
 		if err != nil {
