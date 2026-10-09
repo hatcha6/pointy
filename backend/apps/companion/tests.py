@@ -443,6 +443,45 @@ class CaptureTests(CompanionTestCase):
         self.assertIn("content_url", capture["attachment_detail"])
 
 
+class DocumentCaptureTests(CompanionTestCase):
+    """A till asking for a transfer receipt takes the bank's PDF as it is."""
+
+    def ask(self, accept_documents):
+        response = self.till.post(
+            reverse("companion:capture-request"),
+            {"till_key": TILL, "prompt": "أرسل إيصال التحويل", "accept_documents": accept_documents},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        return response.data["id"]
+
+    def send_pdf(self, token, request_id):
+        pdf = SimpleUploadedFile("receipt.pdf", b"%PDF-1.7\n" + b"x" * 64, content_type="application/pdf")
+        return self.phone.post(
+            reverse("companion:capture"),
+            {"file": pdf, "capture_request": request_id},
+            format="multipart",
+            **self.as_phone(token),
+        )
+
+    def test_the_phone_is_told_documents_are_welcome_and_a_pdf_is_kept(self):
+        token = self.pair_phone()
+        request_id = self.ask(True)
+        context = self.phone.get(reverse("companion:context"), **self.as_phone(token))
+        self.assertTrue(context.data["capture_request"]["accept_documents"])
+
+        response = self.send_pdf(token, request_id)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        attachment = Attachment.objects.get(pk=response.data["attachment_id"])
+        self.assertEqual(attachment.content_type, "application/pdf")
+        self.assertEqual(attachment.metadata["capture_request_id"], request_id)
+
+    def test_a_photo_request_still_refuses_a_pdf(self):
+        token = self.pair_phone()
+        response = self.send_pdf(token, self.ask(False))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class DeviceManagementTests(CompanionTestCase):
     def test_the_till_lists_and_unpairs_its_phones(self):
         self.pair_phone()

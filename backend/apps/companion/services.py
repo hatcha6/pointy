@@ -8,8 +8,10 @@ publish the cursor* — is stated once rather than in every view.
 import json
 import logging
 import time
+from pathlib import Path
 
 from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import close_old_connections, connection, transaction
 from django.utils import timezone
@@ -190,6 +192,26 @@ def record_device_state(device, *, state: str):
     )
 
 
+#: A transfer receipt's PDF; bigger than any bank's is not one.
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+
+def is_pdf_upload(uploaded_file) -> bool:
+    uploaded_file.seek(0)
+    head = uploaded_file.read(5)
+    uploaded_file.seek(0)
+    return head == b"%PDF-"
+
+
+def pdf_upload(uploaded_file):
+    """The PDF under a truthful name and type, or ``None`` when it is too big."""
+    if getattr(uploaded_file, "size", 0) > MAX_DOCUMENT_BYTES:
+        raise ValidationError({"file": "الملف أكبر من 10 ميغابايت."})
+    uploaded_file.seek(0)
+    stem = Path(getattr(uploaded_file, "name", "") or "receipt").stem or "receipt"
+    return SimpleUploadedFile(f"{stem}.pdf", uploaded_file.read(), content_type="application/pdf")
+
+
 def record_capture(*, device, uploaded_file, capture_request=None, note: str = ""):
     """Store a photo and put it in the till's inbox.
 
@@ -198,7 +220,11 @@ def record_capture(*, device, uploaded_file, capture_request=None, note: str = "
     destination. A free capture is parked on the device and the till decides
     later.
     """
-    normalized = normalize_uploaded_image(uploaded_file)
+    if capture_request is not None and capture_request.accept_documents and is_pdf_upload(uploaded_file):
+        # The bank's own PDF, kept as it is: re-drawing it would lose its text.
+        normalized = pdf_upload(uploaded_file)
+    else:
+        normalized = normalize_uploaded_image(uploaded_file)
     if normalized is None:
         raise ValidationError({"file": "That photo is not an image we can read."})
 

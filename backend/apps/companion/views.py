@@ -228,6 +228,7 @@ class CompanionCaptureRequestView(views.APIView):
             role=serializer.validated_data.get("role", ""),
             is_primary=serializer.validated_data.get("is_primary", False),
             allow_multiple=serializer.validated_data.get("allow_multiple", False),
+            accept_documents=serializer.validated_data.get("accept_documents", False),
             created_by=request.user,
             expires_at=timezone.now() + timezone.timedelta(seconds=ttl),
         )

@@ -69,6 +69,7 @@ class CompanionRepository {
     String role = '',
     bool isPrimary = false,
     bool allowMultiple = false,
+    bool acceptDocuments = false,
   }) {
     return Result.guard(
       () => _service.requestCompanionCapture(
@@ -79,6 +80,7 @@ class CompanionRepository {
         role: role,
         isPrimary: isPrimary,
         allowMultiple: allowMultiple,
+        acceptDocuments: acceptDocuments,
       ),
     );
   }

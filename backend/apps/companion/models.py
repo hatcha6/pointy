@@ -191,6 +191,11 @@ class CompanionCaptureRequest(TimeStampedModel):
     role = models.CharField(max_length=64, blank=True)
     is_primary = models.BooleanField(default=False)
     allow_multiple = models.BooleanField(default=False)
+    # A document the phone already holds — a transfer receipt's screenshot or
+    # the bank's PDF — rather than something in front of its camera: the page
+    # offers its photo library and files, and a PDF is kept as it is.
+    # ``db_default`` too: the release before this one inserts without it.
+    accept_documents = models.BooleanField(default=False, db_default=False)
     status = models.CharField(
         max_length=12,
         choices=Status.choices,

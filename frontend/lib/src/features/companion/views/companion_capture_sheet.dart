@@ -25,6 +25,7 @@ Future<int?> showCompanionCaptureSheet(
   int? ownerId,
   String role = '',
   bool isPrimary = false,
+  bool acceptDocuments = false,
 }) async {
   final scope = CompanionScope.maybeOf(context);
   final bridge = scope?.bridge;
@@ -56,6 +57,7 @@ Future<int?> showCompanionCaptureSheet(
       ownerId: ownerId,
       role: role,
       isPrimary: isPrimary,
+      acceptDocuments: acceptDocuments,
     ),
   );
 }
@@ -69,6 +71,7 @@ class _CompanionCaptureSheet extends StatefulWidget {
     required this.ownerId,
     required this.role,
     required this.isPrimary,
+    this.acceptDocuments = false,
   });
 
   final CompanionRepository repository;
@@ -78,6 +81,7 @@ class _CompanionCaptureSheet extends StatefulWidget {
   final int? ownerId;
   final String role;
   final bool isPrimary;
+  final bool acceptDocuments;
 
   @override
   State<_CompanionCaptureSheet> createState() => _CompanionCaptureSheetState();
@@ -117,6 +121,7 @@ class _CompanionCaptureSheetState extends State<_CompanionCaptureSheet> {
       ownerId: widget.ownerId,
       role: widget.role,
       isPrimary: widget.isPrimary,
+      acceptDocuments: widget.acceptDocuments,
     );
     if (!mounted) return;
     setState(() {

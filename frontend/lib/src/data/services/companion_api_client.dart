@@ -103,6 +103,7 @@ class CompanionApiClient {
     String role = '',
     bool isPrimary = false,
     bool allowMultiple = false,
+    bool acceptDocuments = false,
   }) async {
     final response = await _session.post(
       'companion/capture-requests/',
@@ -116,6 +117,9 @@ class CompanionApiClient {
         if (role.isNotEmpty) 'role': role,
         'is_primary': isPrimary,
         'allow_multiple': allowMultiple,
+        // A document already on the phone (a transfer receipt): the page
+        // offers its photos and files, and keeps a PDF as it is.
+        if (acceptDocuments) 'accept_documents': true,
       },
     );
     _session.ensureSuccess(

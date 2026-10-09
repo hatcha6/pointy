@@ -76,6 +76,13 @@
     <div class="shutter-wrap">
       <button class="shutter" id="shutter" type="button" aria-label="التقاط"></button>
       <span class="shutter-hint" id="shutter-hint">اضغط للالتقاط</span>
+      <!-- Shown when the till asks for a document (a transfer receipt): a
+           screenshot or a bank's PDF is already on the phone, not in front of
+           its camera. -->
+      <button class="pick-file" id="pick-file" type="button" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm4 18H6V4h7v5h5v11ZM8 13h8v2H8v-2Zm0 4h8v2H8v-2Z"/></svg>
+        اختر من الصور أو الملفات
+      </button>
     </div>
   </section>
 </main>
@@ -90,6 +97,8 @@
      opens the camera instead of paying for a layout. `capture` asks Android for
      the camera directly; iOS shows its own sheet, which is fine. -->
 <input id="camera" type="file" accept="image/*" capture="environment" hidden>
+<!-- No `capture`: this one opens the photo library and the files app. -->
+<input id="document" type="file" accept="image/*,application/pdf" hidden>
 
 <script src="./vendor/jsQR.js"></script>
 <script src="./app.js"></script>

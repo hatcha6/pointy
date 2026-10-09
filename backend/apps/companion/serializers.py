@@ -89,6 +89,7 @@ class CompanionCaptureRequestSerializer(serializers.ModelSerializer):
             "role",
             "is_primary",
             "allow_multiple",
+            "accept_documents",
             "status",
             "expires_at",
             "created_at",
@@ -143,5 +144,6 @@ class CompanionContextSerializer(serializers.Serializer):
             "id": request.pk,
             "prompt": request.prompt,
             "allow_multiple": request.allow_multiple,
+            "accept_documents": request.accept_documents,
             "expires_at": request.expires_at,
         }

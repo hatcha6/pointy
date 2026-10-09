@@ -31,6 +31,10 @@
   // path of a scan.
   var PHOTO_MAX_EDGE = 1600;
   var PHOTO_QUALITY = 0.82;
+  // A receipt is read by a person checking small print: kept sharper.
+  var DOCUMENT_MAX_EDGE = 2400;
+  var DOCUMENT_QUALITY = 0.88;
+  var MAX_PDF_BYTES = 10 * 1024 * 1024;
   var DECODE_UPLOAD_EDGE = 1400;
   var DECODE_UPLOAD_QUALITY = 0.75;
 
@@ -50,7 +54,7 @@
    "code-input","pair-submit","pair-error","ask","ask-prompt","paused","modes",
    "mode-scan","mode-photo","stage","stage-title","stage-hint","viewfinder",
    "result","result-icon","result-label","result-value","shutter","shutter-hint",
-   "leave","camera","flash"].forEach(function (id) {
+   "leave","camera","flash","pick-file","document"].forEach(function (id) {
     el[id.replace(/-(.)/g, function (_, c) { return c.toUpperCase(); })] =
       document.getElementById(id);
   });
@@ -64,6 +68,7 @@
     busy: false,
     modeLocked: false,
     captureRequestId: null,
+    acceptDocuments: false,
     pollTimer: null,
     audio: null
   };
@@ -163,7 +168,9 @@
 
     var ask = context.capture_request;
     state.captureRequestId = ask ? ask.id : null;
+    state.acceptDocuments = !!(ask && ask.accept_documents);
     el.ask.hidden = !ask;
+    el.pickFile.hidden = !state.acceptDocuments;
     if (ask) {
       el.askPrompt.textContent = ask.prompt || "التقط صورة وأرسلها";
       // A named request overrides the mode: the till has already said what it
@@ -199,6 +206,10 @@
       el.stageTitle.textContent = "وجّه الكاميرا نحو الرمز";
       el.stageHint.textContent = "اضغط الزر، صوّر الرمز، وسيصل إلى الصندوق فورًا";
       el.shutterHint.textContent = "اضغط للالتقاط";
+    } else if (state.acceptDocuments) {
+      el.stageTitle.textContent = "أرسل الإيصال";
+      el.stageHint.textContent = "صوّره بالكاميرا، أو اختر لقطة الشاشة أو ملف PDF من هاتفك";
+      el.shutterHint.textContent = "اضغط للتصوير";
     } else {
       el.stageTitle.textContent = "التقط صورة";
       el.stageHint.textContent = "ستصل الصورة إلى الصندوق مباشرة";
@@ -221,6 +232,34 @@
     if (state.mode === "scan") handleScan(file);
     else handlePhoto(file);
   });
+
+  el.pickFile.addEventListener("click", function () {
+    if (state.busy) return;
+    primeAudio();
+    el.document.value = "";
+    el.document.click();
+  });
+
+  el.document.addEventListener("change", function () {
+    var file = el.document.files && el.document.files[0];
+    if (!file) return;
+    if (isPdf(file)) handleDocument(file);
+    else handlePhoto(file);
+  });
+
+  function isPdf(file) {
+    return file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+  }
+
+  // A PDF goes as it is: it is the bank's own document, and re-drawing it
+  // would lose the text an operator reads.
+  function handleDocument(file) {
+    if (file.size > MAX_PDF_BYTES) {
+      showResult("failed", "الملف أكبر من 10 ميغابايت", "");
+      return;
+    }
+    send(file, file.name || "receipt.pdf");
+  }
 
   function handleScan(file) {
     setBusy(true, "جارٍ القراءة…");
@@ -268,24 +307,35 @@
   }
 
   function handlePhoto(file) {
+    var edge = state.acceptDocuments ? DOCUMENT_MAX_EDGE : PHOTO_MAX_EDGE;
+    var quality = state.acceptDocuments ? DOCUMENT_QUALITY : PHOTO_QUALITY;
     setBusy(true, "جارٍ الإرسال…");
     loadBitmap(file)
-      .then(function (bitmap) { return toJpegBlob(bitmap, PHOTO_MAX_EDGE, PHOTO_QUALITY); })
-      .then(function (blob) {
-        var form = new FormData();
-        form.append("file", blob, "companion-" + Date.now() + ".jpg");
-        if (state.captureRequestId) form.append("capture_request", String(state.captureRequestId));
-        return api("/captures/", { method: "POST", body: form });
-      })
+      .then(function (bitmap) { return toJpegBlob(bitmap, edge, quality); })
+      .then(function (blob) { return upload(blob, "companion-" + Date.now() + ".jpg"); })
+      .catch(reportError)
+      .then(function () { setBusy(false); });
+  }
+
+  function send(blob, name) {
+    setBusy(true, "جارٍ الإرسال…");
+    upload(blob, name)
+      .catch(reportError)
+      .then(function () { setBusy(false); });
+  }
+
+  function upload(blob, name) {
+    var form = new FormData();
+    form.append("file", blob, name);
+    if (state.captureRequestId) form.append("capture_request", String(state.captureRequestId));
+    return api("/captures/", { method: "POST", body: form })
       .then(function () {
         signalHit();
-        showResult("ok", "وصلت الصورة إلى الصندوق", "");
+        showResult("ok", state.acceptDocuments ? "وصل الإيصال إلى الصندوق" : "وصلت الصورة إلى الصندوق", "");
         state.captureRequestId = null;
         state.modeLocked = false;
         return refreshContext();
-      })
-      .catch(reportError)
-      .then(function () { setBusy(false); });
+      });
   }
 
   function reportError(error) {

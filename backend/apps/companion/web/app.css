@@ -285,6 +285,24 @@ main {
 .shutter:disabled { opacity: 0.5; }
 .shutter-hint { font-size: 0.82rem; color: var(--muted); }
 
+.pick-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+  padding: 0.7rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+}
+
+.pick-file[hidden] { display: none; }
+
+.pick-file svg { width: 1.2rem; height: 1.2rem; fill: currentColor; }
+
 /* -------------------------------------------------------------- pair screen */
 
 .pair {
