@@ -16,6 +16,7 @@ class PointyProductImageFrame extends StatelessWidget {
     this.padding = const EdgeInsets.all(8),
     this.backgroundColor,
     this.border,
+    this.fallback,
   });
 
   final String? imageUrl;
@@ -28,9 +29,20 @@ class PointyProductImageFrame extends StatelessWidget {
   final Color? backgroundColor;
   final BoxBorder? border;
 
+  /// Drawn instead of [fallbackText]'s initial when there is no image, while
+  /// it loads, and when it fails — so a card's art keeps its look either way.
+  final Widget? fallback;
+
+  /// Dev only: draws an image URL from bytes instead of the network, for the
+  /// preview harnesses and capture tests, which have no server to fetch
+  /// product art from. Null — always, in the app — means every image comes
+  /// off the network through the cache.
+  static ImageProvider? Function(String url)? debugImageOverride;
+
   @override
   Widget build(BuildContext context) {
     final url = imageUrl?.trim() ?? '';
+    final fallback = this.fallback ?? _FallbackLabel(text: fallbackText);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
@@ -43,7 +55,7 @@ class PointyProductImageFrame extends StatelessWidget {
             border: border,
           ),
           child: url.isEmpty
-              ? _FallbackLabel(text: fallbackText)
+              ? fallback
               : Padding(
                   padding: padding,
                   child: LayoutBuilder(
@@ -63,17 +75,22 @@ class PointyProductImageFrame extends StatelessWidget {
                       final cacheWidth = logical > 0
                           ? (logical * dpr).round()
                           : null;
+                      final override = debugImageOverride?.call(url);
+                      if (override != null) {
+                        return Image(
+                          image: override,
+                          fit: fit,
+                          gaplessPlayback: true,
+                          errorBuilder: (_, _, _) => fallback,
+                        );
+                      }
                       return CachedNetworkImage(
                         imageUrl: url,
                         cacheKey: stableImageCacheKey(url),
                         fit: fit,
                         memCacheWidth: cacheWidth,
-                        errorWidget: (context, imageUrl, error) {
-                          return _FallbackLabel(text: fallbackText);
-                        },
-                        placeholder: (context, imageUrl) {
-                          return _FallbackLabel(text: fallbackText);
-                        },
+                        errorWidget: (context, imageUrl, error) => fallback,
+                        placeholder: (context, imageUrl) => fallback,
                       );
                     },
                   ),

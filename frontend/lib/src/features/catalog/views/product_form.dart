@@ -65,6 +65,7 @@ class ProductForm extends StatefulWidget {
     required this.viewModel,
     this.onCreated,
     this.offerAddAnother = false,
+    this.onCreatedAnother,
     this.onOpenCreated,
     this.initialBarcode,
     this.showOpeningStock = false,
@@ -75,14 +76,17 @@ class ProductForm extends StatefulWidget {
   final CatalogViewModel viewModel;
 
   /// Called with the freshly created product once a plain create succeeds.
-  /// The catalog closes its sheet; the purchasing workspace also adds the
-  /// product's default variant to the current purchase order.
+  /// The panel closes on it (see `showProductCreateSurface`).
   final void Function(Product product)? onCreated;
 
   /// Offers «إنشاء وإضافة آخر», which creates the product and starts the next
-  /// one in the same panel instead of calling [onCreated]. Off where a created
-  /// product has somewhere to go (a purchase order adds it and closes).
+  /// one in the same panel instead of calling [onCreated]. Off where the form
+  /// was opened for one scanned code: that scan wants its product and no more.
   final bool offerAddAnother;
+
+  /// Called with each product «إنشاء وإضافة آخر» creates, while the panel
+  /// stays open for the next — a purchase order puts every one on the order.
+  final ValueChanged<Product>? onCreatedAnother;
 
   /// Opens a product created by «إنشاء وإضافة آخر» — the panel's way back to
   /// the one just saved, to fix it without losing the run.
@@ -1340,6 +1344,7 @@ class _ProductFormState extends State<ProductForm> {
     final imageFailed =
         result.outcome == ProductCreateOutcome.createdWithImageError;
     if (continueAdding) {
+      widget.onCreatedAnother?.call(createdProduct);
       _startNextProduct(createdProduct, imageFailed: imageFailed);
       return;
     }

@@ -9,7 +9,7 @@
 //
 // Screens:
 //   po-draft | po-submitted | po-partial | po-received-due | po-complete |
-//   po-cancelled | nav-drawer | nav-rail | nav-rail-collapsed
+//   po-cancelled | po-labels | nav-drawer | nav-rail | nav-rail-collapsed
 //
 // Not part of the shipping app. Safe to delete.
 import 'package:flutter/material.dart';
@@ -26,6 +26,7 @@ import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.d
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_details_screen.dart';
+import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_labels.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_list_screen.dart';
 import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
@@ -90,6 +91,8 @@ class _Router extends StatelessWidget {
         return _po(_completeOrder);
       case 'po-cancelled':
         return _po(_cancelledOrder);
+      case 'po-labels':
+        return _poLabels(_partialOrder);
       case 'po-list':
         return _poList();
       case 'nav-drawer':
@@ -116,6 +119,23 @@ Widget _po(PurchaseOrder order) {
     shopSettingsRepository: ShopSettingsRepository(PosApiService()),
     initialOrder: order,
     capabilities: _managerCaps,
+  );
+}
+
+/// The order's barcode-label sheet, opened on load over the partial order.
+Widget _poLabels(PurchaseOrder order) {
+  return Builder(
+    builder: (context) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        showPurchaseOrderLabelsSheet(
+          context,
+          lines: order.lines,
+          printingRepository: PrintingRepository(PosApiService()),
+        );
+      });
+      return _po(order);
+    },
   );
 }
 
@@ -282,7 +302,9 @@ PurchaseOrderLine _line({
   return PurchaseOrderLine(
     id: id,
     productId: id,
-    variantId: 0,
+    variantId: id,
+    variantBarcode: '628100000001$id',
+    sellingPrice: unitCost * 1.4,
     quantity: quantity,
     adjustedQuantity: 0,
     adjustableQuantity: received,

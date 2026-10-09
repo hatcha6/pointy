@@ -11,6 +11,7 @@ class ProductCategory {
     this.isQuickAccess = false,
     this.displayOrder = 0,
     this.isSystem = false,
+    this.systemKey = '',
   });
 
   final int id;
@@ -34,6 +35,15 @@ class ProductCategory {
   /// The shop may rename, move, switch off, unpin or reorder it, but not
   /// delete it — the next sync would only make it again.
   final bool isSystem;
+
+  /// Which feature keeps a system category — see [ProductCategorySystemKey].
+  /// Blank for every category a shop made, and from a server that predates it.
+  final String systemKey;
+
+  /// The «كروت دفتر» shelf: the till shows its own voucher menu for it
+  /// instead of the product grid.
+  bool get isPointyVouchers =>
+      systemKey == ProductCategorySystemKey.pointyVouchers;
 
   bool get isRoot => parentId == null;
 
@@ -65,6 +75,7 @@ class ProductCategory {
       isQuickAccess: isQuickAccess ?? this.isQuickAccess,
       displayOrder: displayOrder ?? this.displayOrder,
       isSystem: isSystem,
+      systemKey: systemKey,
     );
   }
 
@@ -81,8 +92,15 @@ class ProductCategory {
       isQuickAccess: (json['is_quick_access'] as bool?) ?? false,
       displayOrder: (json['display_order'] as num?)?.toInt() ?? 0,
       isSystem: (json['is_system'] as bool?) ?? false,
+      systemKey: json['system_key']?.toString() ?? '',
     );
   }
+}
+
+/// The stable codes the server uses for [ProductCategory.systemKey].
+abstract final class ProductCategorySystemKey {
+  /// The company's own prepaid cards («كروت دفتر»).
+  static const pointyVouchers = 'vouchers:pointy';
 }
 
 class ProductCategoryDraft {

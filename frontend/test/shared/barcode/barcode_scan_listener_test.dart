@@ -13,18 +13,18 @@ class _FakeClock {
   void advance(Duration duration) => now = now.add(duration);
 }
 
+/// What a pumped listener reported, and the clock that times its bursts.
+typedef _Events = ({
+  List<String> scanned,
+  List<LogicalKeyboardKey> arrows,
+  List<LogicalKeyboardKey> functionKeys,
+  List<LogicalKeyboardKey> pageKeys,
+  List<int> commandEnters,
+  _FakeClock clock,
+});
+
 void main() {
-  Future<
-    ({
-      List<String> scanned,
-      List<LogicalKeyboardKey> arrows,
-      List<LogicalKeyboardKey> functionKeys,
-      List<LogicalKeyboardKey> pageKeys,
-      List<int> commandEnters,
-      _FakeClock clock,
-    })
-  >
-  pumpListener(
+  Future<_Events> pumpListener(
     WidgetTester tester, {
     bool enabled = true,
     Widget child = const SizedBox.expand(),
@@ -359,6 +359,92 @@ void main() {
       );
     },
   );
+
+  group('inside a ScanWedgeTarget field the till keys still work', () {
+    Future<({TextEditingController controller, _Events events})> pumpWedge(
+      WidgetTester tester,
+    ) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      final events = await pumpListener(
+        tester,
+        child: Material(
+          child: ScanWedgeTarget(
+            child: TextField(controller: controller, autofocus: true),
+          ),
+        ),
+      );
+      return (controller: controller, events: events);
+    }
+
+    testWidgets('function keys fire', (tester) async {
+      final pumped = await pumpWedge(tester);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+      pumped.events.clock.advance(const Duration(milliseconds: 500));
+      await tester.sendKeyEvent(LogicalKeyboardKey.f7);
+      await tester.pump();
+
+      expect(pumped.events.functionKeys, [
+        LogicalKeyboardKey.f2,
+        LogicalKeyboardKey.f7,
+      ]);
+      expect(pumped.events.scanned, isEmpty);
+    });
+
+    testWidgets('page keys fire', (tester) async {
+      final pumped = await pumpWedge(tester);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+      await tester.pump();
+
+      expect(pumped.events.pageKeys, [LogicalKeyboardKey.pageDown]);
+    });
+
+    testWidgets('Ctrl+Enter finishes the sale from the keyboard', (
+      tester,
+    ) async {
+      final pumped = await pumpWedge(tester);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(pumped.events.commandEnters, hasLength(1));
+      expect(pumped.events.scanned, isEmpty);
+    });
+
+    testWidgets('Cmd+Enter does too', (tester) async {
+      final pumped = await pumpWedge(tester);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+
+      expect(pumped.events.commandEnters, hasLength(1));
+    });
+
+    testWidgets('typing and a wedge burst are still left alone', (
+      tester,
+    ) async {
+      final pumped = await pumpWedge(tester);
+
+      await sendBurst(
+        tester,
+        pumped.events.clock,
+        digits12345678,
+        typeInto: pumped.controller,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.f3);
+      await tester.pump();
+
+      expect(pumped.controller.text, '12345678');
+      expect(pumped.events.scanned, isEmpty);
+      expect(pumped.events.functionKeys, [LogicalKeyboardKey.f3]);
+    });
+  });
 
   testWidgets('function keys fire globally — with or without a focused text '
       'field', (tester) async {

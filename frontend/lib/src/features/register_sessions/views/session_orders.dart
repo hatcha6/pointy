@@ -16,6 +16,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'card_receipt_verification_section.dart';
 import 'sale_order_details_sheet.dart';
+import 'session_cash_variance.dart';
 import 'session_integrations_section.dart';
 
 class SessionOrders extends StatelessWidget {
@@ -517,12 +518,12 @@ class _CashReconciliationSection extends StatelessWidget {
                 ),
               if (variance != null)
                 PointySummaryRow(
-                  label: l10n.sessionCashVarianceMetric,
-                  value: formatMoney(variance),
+                  label: sessionCashVarianceMetric(l10n, variance),
+                  value: cash.hasCashVariance
+                      ? formatMoney(variance.abs())
+                      : l10n.sessionCashMatchedValue,
                   emphasized: true,
-                  valueColor: cash.hasCashVariance
-                      ? colors.danger
-                      : colors.primaryStrong,
+                  valueColor: sessionCashVarianceColor(context, variance),
                 ),
             ],
           ),

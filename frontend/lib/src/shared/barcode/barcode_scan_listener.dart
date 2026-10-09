@@ -31,7 +31,9 @@ class ScanWedgeTarget extends StatelessWidget {
 ///   terminator is consumed (no onSubmitted) and the payload is reported as a
 ///   scan. Slow human typing never matches the burst timing and is untouched.
 ///   Fields wrapped in [ScanWedgeTarget] opt out and receive the raw wedge
-///   input, as before.
+///   input, as before — but the keys that never type (F-keys, Page Up/Down,
+///   Ctrl/Cmd+Enter) still reach their callbacks there, so a cashier in the
+///   middle of a phone number can finish the sale from the keyboard.
 /// - **Being disabled does not open a hole.** While [enabled] is false (mid
 ///   checkout, mid barcode-resolve) bursts are still tracked, fields still
 ///   restored, and terminators still consumed — only the payload is dropped,
@@ -175,11 +177,7 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
     }
 
     final focusedEditable = _focusedEditable();
-    if (focusedEditable != null && _isExemptWedgeTarget()) {
-      // The user focused this field to scan into it — stay out of the way.
-      _reset();
-      return false;
-    }
+    final isExempt = focusedEditable != null && _isExemptWedgeTarget();
 
     final now = widget.clock();
     final hardware = HardwareKeyboard.instance;
@@ -187,8 +185,11 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
         hardware.isControlPressed || hardware.isMetaPressed;
 
     // Legacy till shortcuts, dispatched here (not via focus-tree Shortcuts)
-    // so they work regardless of what has focus. A function key also ends any
-    // scan burst in flight.
+    // so they work regardless of what has focus — a wedge-target field
+    // included: none of these keys types a character, so they never disturb
+    // what is being scanned into it, and a cashier in the middle of a number
+    // must still be able to finish the sale from the keyboard. A function key
+    // also ends any scan burst in flight.
     if (_functionKeys.contains(event.logicalKey) &&
         !hasCommandModifier &&
         !hardware.isAltPressed) {
@@ -214,6 +215,12 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
         onCommandEnter();
         return true;
       }
+      return false;
+    }
+
+    if (isExempt) {
+      // The user focused this field to scan into it — stay out of the way.
+      _reset();
       return false;
     }
 

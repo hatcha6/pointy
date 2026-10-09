@@ -24,6 +24,7 @@ void main() {
   late List<Map<String, Object?>> posted;
   late List<Product> closedWith;
   late List<Product> opened;
+  late List<Product> addedAnother;
 
   CatalogViewModel buildViewModel() {
     var nextSku = 1042;
@@ -77,6 +78,7 @@ void main() {
       offerAddAnother: offerAddAnother,
       showOpeningStock: true,
       onCreated: closedWith.add,
+      onCreatedAnother: addedAnother.add,
       onOpenCreated: opened.add,
     );
   }
@@ -88,6 +90,7 @@ void main() {
     posted = [];
     closedWith = [];
     opened = [];
+    addedAnother = [];
     await tester.binding.setSurfaceSize(const Size(900, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
@@ -178,6 +181,8 @@ void main() {
     expect(posted, hasLength(1));
     expect(posted.single['name'], 'كفر ايفون 13');
     expect(closedWith, isEmpty, reason: 'the panel stays open');
+    // Reported as it is made: a purchase order puts it on the order now.
+    expect(addedAnother.single.name, 'كفر ايفون 13');
     expect(
       find.text(l10n.productEntryLastCreated('كفر ايفون 13')),
       findsOneWidget,
@@ -493,7 +498,9 @@ void main() {
     expect(opened.single.name, 'عسل');
   });
 
-  testWidgets('a purchase order is not offered adding another', (tester) async {
+  testWidgets('a form opened for one scan is not offered adding another', (
+    tester,
+  ) async {
     final l10n = await pumpForm(tester, offerAddAnother: false);
 
     expect(find.byKey(addAnotherButton), findsNothing);

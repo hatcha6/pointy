@@ -34,7 +34,7 @@ import '../view_models/product_details_view_model.dart';
 import '../view_models/scale_rules_view_model.dart';
 import '../view_models/units_management_view_model.dart';
 import 'product_details_screen.dart';
-import 'product_form.dart';
+import 'product_create_surface.dart';
 import 'product_list.dart';
 import 'scale_rules_screen.dart';
 import 'units_management_screen.dart';
@@ -481,42 +481,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
     BuildContext context, {
     String? initialBarcode,
     Product? similarTo,
-  }) {
-    return showAdaptiveFormSurface<void>(
-      context: context,
-      size: AdaptiveModalSize.standard,
-      desktopPresentation: AdaptiveFormPresentation.sidePanel,
-      maxHeightFactor: 0.9,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: ProductForm(
-            viewModel: viewModel,
-            initialBarcode: initialBarcode,
-            similarTo: similarTo,
-            // A shop typing in a product it already owns says so here rather
-            // than raising a purchase order against a supplier it never
-            // bought from. Gated on the stock permission, which the server
-            // checks again.
-            showOpeningStock: capabilities.canCreateStockMovement,
-            onCreated: (created) {
-              Navigator.of(sheetContext).pop();
-              if (similarTo != null && context.mounted) {
-                _showCreatedSimilar(context, created);
-              }
-            },
-            // A shop entering its shelves creates product after product.
-            offerAddAnother: true,
-            // Opens over the panel, so the run carries on when it closes. No
-            // «منتج مشابه» there: a second form over this one helps nobody.
-            onOpenCreated: (product) =>
-                _openDetails(sheetContext, product, offerSimilar: false),
-          ),
-        );
-      },
+  }) async {
+    final created = await showProductCreateSurface(
+      context,
+      viewModel: viewModel,
+      initialBarcode: initialBarcode,
+      similarTo: similarTo,
+      // A shop typing in a product it already owns says so here rather than
+      // raising a purchase order against a supplier it never bought from.
+      // Gated on the stock permission, which the server checks again.
+      showOpeningStock: capabilities.canCreateStockMovement,
+      // Opens over the panel, so the run carries on when it closes. No
+      // «منتج مشابه» there: a second form over this one helps nobody.
+      onOpenCreated: (panelContext, product) =>
+          _openDetails(panelContext, product, offerSimilar: false),
     );
+    if (created != null && similarTo != null && context.mounted) {
+      _showCreatedSimilar(context, created);
+    }
   }
 
   /// «منتج مشابه»: a new-product panel opened on [source]'s values.

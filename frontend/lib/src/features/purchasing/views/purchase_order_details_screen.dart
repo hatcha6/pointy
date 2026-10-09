@@ -32,6 +32,7 @@ import '../../../shared/tracking/unit_pick_sheet.dart';
 import '../../printing/views/print_audit_sheet.dart';
 import '../view_models/purchase_order_details_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
+import 'purchase_order_labels.dart';
 import 'receipt_labels.dart';
 
 import '../../../data/models/receipt_capture.dart';
@@ -117,6 +118,18 @@ class _PurchaseOrderDetailsScreenState
                 tooltip: l10n.refreshPurchaseOrderDetailsTooltip,
                 onPressed: _viewModel.isLoading ? null : _viewModel.loadOrder,
                 icon: const Icon(Icons.sync),
+              ),
+              IconButton(
+                key: const ValueKey('purchase-order-labels'),
+                tooltip: l10n.purchaseOrderLabelsAction,
+                onPressed: order.lines.isEmpty
+                    ? null
+                    : () => showPurchaseOrderLabelsSheet(
+                        context,
+                        lines: order.lines,
+                        printingRepository: widget.printingRepository,
+                      ),
+                icon: const Icon(Icons.qr_code_2_outlined),
               ),
               _PurchaseOrderDocumentMenu(
                 viewModel: _viewModel,

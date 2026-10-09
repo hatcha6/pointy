@@ -7,9 +7,8 @@ import '../../../core/result.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';
-import '../../../shared/responsive/responsive.dart';
 import '../../catalog/view_models/catalog_view_model.dart';
-import '../../catalog/views/product_form.dart';
+import '../../catalog/views/product_create_surface.dart';
 import '../view_models/purchase_view_model.dart';
 
 /// Resolves a scanned code — variant barcode or packaging (unit) barcode — or
@@ -108,90 +107,67 @@ Future<void> addScannedPurchaseBarcode(
 
 /// Opens the product-creation workflow from the purchasing workspace with
 /// nothing scanned, and drops whatever it creates onto the open order. The
-/// buyer reaches for this because the box in their hands is not in the catalog
-/// yet — so creating the product and ordering it is one action, not two.
+/// buyer reaches for this because the boxes in their hands are not in the
+/// catalog yet — so creating the products and ordering them is one action, not
+/// two, and «إنشاء وإضافة آخر» puts each one on the order as it is created.
 Future<void> createPurchaseProduct(
   BuildContext context, {
   required PurchaseViewModel viewModel,
 }) async {
-  final created = await showPurchaseProductForm(context, viewModel: viewModel);
-  if (created == null) {
-    return;
+  final created = await showPurchaseProductForm(
+    context,
+    viewModel: viewModel,
+    onCreatedAnother: (variant) => unawaited(
+      viewModel.addVariant(variant, source: 'purchase_new_product'),
+    ),
+  );
+  if (created != null) {
+    await viewModel.addVariant(created, source: 'purchase_new_product');
   }
-  await viewModel.addVariant(created, source: 'purchase_new_product');
   // Same resting focus the scan path leaves behind: the buyer is back at the
   // search field, ready for the next item off the pallet.
   viewModel.requestSearchFocus();
 }
 
-/// Presents the full product-creation workflow — the same robust wizard used in
-/// the catalog — prefilled with [barcode] when a scan opened it, and returns the
-/// created product's default variant so the caller can drop it straight into
-/// the purchase order.
+/// Presents the catalog's own new-product panel (see
+/// [showProductCreateSurface]) prefilled with [barcode] when a scan opened it,
+/// and returns the created product's default variant so the caller can drop it
+/// straight into the purchase order.
 ///
-/// Backs the form with its own [CatalogViewModel] over the shared catalog
-/// repository (the wizard is written against that view model); the instance is
-/// disposed with the sheet.
+/// A scan wants exactly its own product, so «إنشاء وإضافة آخر» is offered only
+/// when nothing was scanned; each product it creates goes to
+/// [onCreatedAnother]. No opening stock: the order itself is about to bring
+/// the stock in, and entering it twice would double the shelf.
 Future<ProductVariant?> showPurchaseProductForm(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   String? barcode,
-}) {
-  return showAdaptiveFormSurface<ProductVariant?>(
-    context: context,
-    size: AdaptiveModalSize.standard,
-    desktopPresentation: AdaptiveFormPresentation.sidePanel,
-    maxHeightFactor: 0.9,
-    builder: (sheetContext) {
-      return _PurchaseProductFormSheet(
-        barcode: barcode,
-        purchaseViewModel: viewModel,
-      );
+  ValueChanged<ProductVariant>? onCreatedAnother,
+}) async {
+  void refreshCatalog() => unawaited(viewModel.loadCatalog());
+  final created = await showProductCreateSurface(
+    context,
+    // The form is written against a catalog view model; this one lives and
+    // dies with the panel.
+    viewModel: CatalogViewModel(
+      viewModel.catalogRepository,
+      analyticsEngine: viewModel.analyticsEngine,
+    ),
+    disposeViewModel: true,
+    initialBarcode: barcode,
+    offerAddAnother: barcode == null && onCreatedAnother != null,
+    onCreatedAnother: (product) {
+      // Surfaces the fresh product in the purchase catalog grid too.
+      refreshCatalog();
+      final variant = product.defaultVariant;
+      if (variant != null) {
+        onCreatedAnother?.call(variant);
+      }
     },
   );
-}
-
-class _PurchaseProductFormSheet extends StatefulWidget {
-  const _PurchaseProductFormSheet({
-    required this.barcode,
-    required this.purchaseViewModel,
-  });
-
-  final String? barcode;
-  final PurchaseViewModel purchaseViewModel;
-
-  @override
-  State<_PurchaseProductFormSheet> createState() =>
-      _PurchaseProductFormSheetState();
-}
-
-class _PurchaseProductFormSheetState extends State<_PurchaseProductFormSheet> {
-  late final CatalogViewModel _catalogViewModel = CatalogViewModel(
-    widget.purchaseViewModel.catalogRepository,
-    analyticsEngine: widget.purchaseViewModel.analyticsEngine,
-  );
-
-  @override
-  void dispose() {
-    _catalogViewModel.dispose();
-    super.dispose();
+  if (created == null) {
+    return null;
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: ProductForm(
-        viewModel: _catalogViewModel,
-        initialBarcode: widget.barcode,
-        onCreated: (product) {
-          // Refresh the purchase catalog so the fresh product surfaces in the
-          // grid, then hand its default variant back to the caller to add to
-          // the current purchase order.
-          unawaited(widget.purchaseViewModel.loadCatalog());
-          Navigator.of(context).pop<ProductVariant?>(product.defaultVariant);
-        },
-      ),
-    );
-  }
+  refreshCatalog();
+  return created.defaultVariant;
 }

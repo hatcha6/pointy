@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/barcode_label.dart';
@@ -17,6 +18,7 @@ class LabelBatchEntry {
     required this.subtitle,
     required this.lines,
     this.copiesEditable = false,
+    this.unavailableReason,
   });
 
   final String title;
@@ -27,8 +29,14 @@ class LabelBatchEntry {
   final List<BarcodeLabelPrintLine> lines;
   final bool copiesEditable;
 
+  /// Why this row cannot print here, shown in place of [subtitle] — for goods
+  /// whose stickers come from somewhere else (a handset carries its own
+  /// number, not the variant's barcode).
+  final String? unavailableReason;
+
   /// A sticker without a barcode would be a sticker the till cannot scan.
   bool get printable =>
+      unavailableReason == null &&
       lines.isNotEmpty &&
       lines.every((line) => line.label.barcode.trim().isNotEmpty);
 
@@ -81,10 +89,7 @@ class _LabelBatchPrintSheet extends StatefulWidget {
 }
 
 class _LabelBatchPrintSheetState extends State<_LabelBatchPrintSheet> {
-  late final Set<int> _selected = {
-    for (var index = 0; index < widget.entries.length; index++)
-      if (widget.entries[index].printable) index,
-  };
+  late final Set<int> _selected = {..._printableIndexes};
   late final List<int> _copies = [
     for (final entry in widget.entries) entry.stickerCount,
   ];
@@ -103,6 +108,11 @@ class _LabelBatchPrintSheetState extends State<_LabelBatchPrintSheet> {
       setState(() => _includePrice = remembered);
     }
   }
+
+  late final List<int> _printableIndexes = [
+    for (var index = 0; index < widget.entries.length; index++)
+      if (widget.entries[index].printable) index,
+  ];
 
   int get _total => [
     for (final index in _selected) _copies[index],
@@ -186,6 +196,26 @@ class _LabelBatchPrintSheetState extends State<_LabelBatchPrintSheet> {
             ),
           ],
           const SizedBox(height: 8),
+          if (_printableIndexes.length > 1)
+            CheckboxListTile(
+              key: const ValueKey('label-batch-select-all'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              controlAffinity: ListTileControlAffinity.leading,
+              tristate: true,
+              value: _selected.isEmpty
+                  ? false
+                  : _selected.length == _printableIndexes.length
+                  ? true
+                  : null,
+              onChanged: (_) => setState(() {
+                final selectAll = _selected.length < _printableIndexes.length;
+                _selected
+                  ..clear()
+                  ..addAll(selectAll ? _printableIndexes : const <int>[]);
+              }),
+              title: Text(l10n.labelBatchSelectAll),
+            ),
           Flexible(
             child: ListView.separated(
               shrinkWrap: true,
@@ -284,7 +314,9 @@ class _EntryRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  printable ? entry.subtitle : l10n.labelBatchNoBarcode,
+                  printable
+                      ? entry.subtitle
+                      : entry.unavailableReason ?? l10n.labelBatchNoBarcode,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -309,7 +341,7 @@ class _EntryRow extends StatelessWidget {
   }
 }
 
-class _CopiesStepper extends StatelessWidget {
+class _CopiesStepper extends StatefulWidget {
   const _CopiesStepper({
     required this.value,
     required this.enabled,
@@ -326,19 +358,58 @@ class _CopiesStepper extends StatelessWidget {
   /// Shows the count alone, keeping the buttons' room.
   final bool fixed;
 
+  static const max = 999;
+
+  @override
+  State<_CopiesStepper> createState() => _CopiesStepperState();
+}
+
+/// The count is typed as well as stepped: a carton of 48 is one entry, not 47
+/// taps.
+class _CopiesStepperState extends State<_CopiesStepper> {
+  late final _controller = TextEditingController(text: '${widget.value}');
+
+  @override
+  void didUpdateWidget(covariant _CopiesStepper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A step from the buttons, not the person typing: show the new count.
+    if (int.tryParse(_controller.text) != widget.value) {
+      _controller.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTyped(String text) {
+    final typed = int.tryParse(text);
+    if (typed == null || typed < 1) {
+      return;
+    }
+    widget.onChanged(typed.clamp(1, _CopiesStepper.max));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final value = widget.value;
+    final enabled = widget.enabled;
+    final style = theme.textTheme.titleSmall?.copyWith(
+      color: enabled ? colors.ink : colors.mutedInk,
+    );
     Widget button(Widget child) => Visibility(
-      visible: !fixed,
+      visible: !widget.fixed,
       maintainSize: true,
       maintainAnimation: true,
       maintainState: true,
       child: child,
     );
     return Semantics(
-      label: label,
+      label: widget.label,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -346,26 +417,42 @@ class _CopiesStepper extends StatelessWidget {
             IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: enabled && value > 1
-                  ? () => onChanged(value - 1)
+                  ? () => widget.onChanged(value - 1)
                   : null,
               icon: const Icon(Icons.remove, size: 18),
             ),
           ),
           SizedBox(
-            width: 36,
-            child: Text(
-              '$value',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: enabled ? colors.ink : colors.mutedInk,
-              ),
-            ),
+            width: 44,
+            child: widget.fixed
+                ? Text('$value', textAlign: TextAlign.center, style: style)
+                : TextField(
+                    controller: _controller,
+                    enabled: enabled,
+                    textAlign: TextAlign.center,
+                    style: style,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(3),
+                    ],
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 6),
+                    ),
+                    onChanged: _onTyped,
+                    // An emptied field goes back to the count it stands for.
+                    onEditingComplete: () {
+                      _controller.text = '${widget.value}';
+                      FocusScope.of(context).unfocus();
+                    },
+                  ),
           ),
           button(
             IconButton(
               visualDensity: VisualDensity.compact,
-              onPressed: enabled && value < 999
-                  ? () => onChanged(value + 1)
+              onPressed: enabled && value < _CopiesStepper.max
+                  ? () => widget.onChanged(value + 1)
                   : null,
               icon: const Icon(Icons.add, size: 18),
             ),

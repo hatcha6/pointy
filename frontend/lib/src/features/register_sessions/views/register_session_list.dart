@@ -12,6 +12,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
+import 'session_cash_variance.dart';
 
 class RegisterSessionList extends StatelessWidget {
   const RegisterSessionList({
@@ -153,18 +154,18 @@ class _VarianceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
+    final color = sessionCashVarianceColor(context, amount);
 
     return Tooltip(
-      message: l10n.sessionCashVarianceMetric,
+      message: sessionCashVarianceMetric(l10n, amount),
       child: Chip(
-        avatar: Icon(
-          Icons.warning_amber_outlined,
-          size: 18,
-          color: colors.danger,
+        // No avatar: the row is tight, and the word plus its colour already
+        // say which way the count went.
+        label: Text(
+          sessionCashVarianceFlag(l10n, amount),
+          style: TextStyle(color: color),
         ),
-        label: Text(l10n.sessionVarianceFlag(formatMoney(amount))),
-        side: BorderSide(color: colors.danger),
+        side: BorderSide(color: color),
         visualDensity: VisualDensity.compact,
       ),
     );

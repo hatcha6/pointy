@@ -465,13 +465,20 @@ class RegisterZReportPdfService {
           ),
         if (cash.cashVariance != null)
           PointyPdfFieldRow(
-            label: 'الفرق',
-            value: formatMoney(cash.cashVariance!),
+            label: _varianceLabel(cash.cashVariance!),
+            value: formatMoney(cash.cashVariance!.abs()),
             strong: true,
             highlighted: cash.hasCashVariance,
           ),
       ],
     );
+  }
+
+  /// Named, not signed: a bare "-12.00" reads the same as "12.00" on paper.
+  String _varianceLabel(double variance) {
+    if (variance < -0.005) return 'العجز';
+    if (variance > 0.005) return 'الزيادة';
+    return 'الفرق';
   }
 
   String _methodLabel(String method) {
