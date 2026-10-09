@@ -1,0 +1,138 @@
+/* Daftar's palette (marketing/BRAND.md): warm paper neutrals, the brand teal
+   for action, amber only for money. */
+
+:root {
+  --font: "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+
+  --page: #f8f7f4;
+  --surface: #ffffff;
+  --surface-2: #fbfaf8;
+  --sunken: #f1efea;
+  --subtle: #f2f4f2;
+  --line: #e5e0d8;
+  --line-strong: #d5cfc4;
+
+  --ink: #101828;
+  --ink-2: #344054;
+  --muted: #667085;
+  --faint: #98a2b3;
+
+  --primary: #0f766e;
+  --primary-strong: #006c53;
+  --primary-ink: #ffffff;
+  --primary-wash: #e0f2ef;
+  --primary-line: #a7d8d1;
+
+  --amber: #c98a3b;
+  --amber-ink: #8a5a1c;
+  --amber-wash: #fff4e3;
+
+  --success: #0e6b4e;
+  --success-wash: #e3f4ec;
+  --warning: #b65f2a;
+  --warning-wash: #fdf0e6;
+  --danger: #b42318;
+  --danger-wash: #fdecea;
+  --info: #175cd3;
+  --info-wash: #eaf1fd;
+
+  --rail: #0b111c;
+  --rail-2: #131b29;
+  --rail-ink: #e6e9ee;
+  --rail-muted: #8a94a6;
+  --rail-active: #2dd4bf;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 24px 48px -12px rgba(16, 24, 40, 0.22);
+  --ring: 0 0 0 3px rgba(15, 118, 110, 0.22);
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0b0f16;
+    --surface: #121925;
+    --surface-2: #151d2a;
+    --sunken: #0e141e;
+    --subtle: #18212f;
+    --line: #232d3c;
+    --line-strong: #2f3b4d;
+
+    --ink: #eef1f5;
+    --ink-2: #c9d0da;
+    --muted: #9aa4b2;
+    --faint: #6b7686;
+
+    --primary: #2dd4bf;
+    --primary-strong: #5eead4;
+    --primary-ink: #04201c;
+    --primary-wash: #0f2e2b;
+    --primary-line: #1d5a53;
+
+    --amber: #e0a85c;
+    --amber-ink: #f1c58a;
+    --amber-wash: #2b2216;
+
+    --success: #4ade80;
+    --success-wash: #10291d;
+    --warning: #f0a36b;
+    --warning-wash: #2c1d13;
+    --danger: #f97066;
+    --danger-wash: #2d1513;
+    --info: #84adff;
+    --info-wash: #142038;
+
+    --rail: #070a10;
+    --rail-2: #0f1520;
+
+    --shadow-sm: none;
+    --shadow: 0 0 0 1px rgba(255, 255, 255, 0.02);
+    --shadow-lg: 0 24px 48px -12px rgba(0, 0, 0, 0.6);
+    --ring: 0 0 0 3px rgba(45, 212, 191, 0.3);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --page: #0b0f16;
+  --surface: #121925;
+  --surface-2: #151d2a;
+  --sunken: #0e141e;
+  --subtle: #18212f;
+  --line: #232d3c;
+  --line-strong: #2f3b4d;
+  --ink: #eef1f5;
+  --ink-2: #c9d0da;
+  --muted: #9aa4b2;
+  --faint: #6b7686;
+  --primary: #2dd4bf;
+  --primary-strong: #5eead4;
+  --primary-ink: #04201c;
+  --primary-wash: #0f2e2b;
+  --primary-line: #1d5a53;
+  --amber: #e0a85c;
+  --amber-ink: #f1c58a;
+  --amber-wash: #2b2216;
+  --success: #4ade80;
+  --success-wash: #10291d;
+  --warning: #f0a36b;
+  --warning-wash: #2c1d13;
+  --danger: #f97066;
+  --danger-wash: #2d1513;
+  --info: #84adff;
+  --info-wash: #142038;
+  --rail: #070a10;
+  --rail-2: #0f1520;
+  --shadow-sm: none;
+  --shadow: 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow-lg: 0 24px 48px -12px rgba(0, 0, 0, 0.6);
+  --ring: 0 0 0 3px rgba(45, 212, 191, 0.3);
+  color-scheme: dark;
+}
