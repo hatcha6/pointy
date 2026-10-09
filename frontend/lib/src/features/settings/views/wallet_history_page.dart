@@ -11,8 +11,9 @@ import '../view_models/wallet_view_model.dart';
 import 'wallet_rows.dart';
 
 /// Everything the wallet has done: its top-ups (with whether each went into
-/// the books), every movement of the main balance, and — where SMS is paid
-/// from it — every movement of the SMS balance, newest first, paged.
+/// the books), every movement of the main balance, and — where SMS or the
+/// till's cards are paid from it — every movement of those balances, newest
+/// first, paged.
 class WalletHistoryPage extends StatefulWidget {
   const WalletHistoryPage({super.key, required this.viewModel});
 
@@ -35,17 +36,26 @@ class _WalletHistoryPageState extends State<WalletHistoryPage> {
       if (_showsSms) {
         unawaited(widget.viewModel.spending.loadSmsEntries(reset: true));
       }
+      if (_showsVouchers) {
+        unawaited(widget.viewModel.spending.loadVoucherEntries(reset: true));
+      }
     });
   }
 
   bool get _showsSms => widget.viewModel.overview?.sms != null;
 
+  /// The same rule as the wallet's own card: only once the owner switched
+  /// «كروت دفتر» on.
+  bool get _showsVouchers =>
+      widget.viewModel.overview?.vouchers?.enabled ?? false;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final showsSms = _showsSms;
+    final showsVouchers = _showsVouchers;
     return DefaultTabController(
-      length: showsSms ? 3 : 2,
+      length: 2 + (showsSms ? 1 : 0) + (showsVouchers ? 1 : 0),
       child: PointyScaffold(
         appBar: PointyAppBar(
           title: Text(l10n.walletHistoryTitle),
@@ -54,6 +64,7 @@ class _WalletHistoryPageState extends State<WalletHistoryPage> {
               Tab(text: l10n.walletHistoryTopUpsTab),
               Tab(text: l10n.walletHistoryEntriesTab),
               if (showsSms) Tab(text: l10n.walletHistorySmsTab),
+              if (showsVouchers) Tab(text: l10n.walletHistoryVouchersTab),
             ],
           ),
         ),
@@ -103,6 +114,19 @@ class _WalletHistoryPageState extends State<WalletHistoryPage> {
                     emptyTitle: l10n.walletHistoryEmptySms,
                     onLoadMore: spending.loadSmsEntries,
                     onRefresh: () => spending.loadSmsEntries(reset: true),
+                  ),
+                if (showsVouchers)
+                  _HistoryList(
+                    itemCount: spending.voucherEntries.length,
+                    itemBuilder: (index) =>
+                        WalletEntryTile(entry: spending.voucherEntries[index]),
+                    isLoading: spending.isLoadingVoucherEntries,
+                    hasMore: spending.voucherEntriesHasMore,
+                    failed: spending.voucherEntriesFailed,
+                    emptyIcon: Icons.card_giftcard_outlined,
+                    emptyTitle: l10n.walletHistoryEmptyVouchers,
+                    onLoadMore: spending.loadVoucherEntries,
+                    onRefresh: () => spending.loadVoucherEntries(reset: true),
                   ),
               ],
             );

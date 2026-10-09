@@ -95,6 +95,7 @@ func (g walletGateway) settleFromPayment(
 	}
 	if applied {
 		logWalletTopUpEvent(g.logger, settled.InstallationID, settled, "paid_"+source, "")
+		alertWalletTopUp(g.config.Alerts, settled, "paid_"+source, "")
 	}
 	return settled, applied, nil
 }
@@ -117,6 +118,7 @@ func (g walletGateway) hold(
 			"top_up_id", topUp.ID, "status", closed.Status, "reason", code, "detail", detail)
 	}
 	logWalletTopUpEvent(g.logger, closed.InstallationID, closed, "held_"+source, detail)
+	alertWalletTopUp(g.config.Alerts, closed, "held_"+source, detail)
 	return closed, false, nil
 }
 

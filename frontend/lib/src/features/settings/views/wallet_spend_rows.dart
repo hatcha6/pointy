@@ -9,6 +9,7 @@ import '../view_models/wallet_view_model.dart';
 import 'wallet_plan_sheet.dart';
 import 'wallet_presentation.dart';
 import 'wallet_sms_sheet.dart';
+import 'wallet_vouchers_sheet.dart';
 
 /// The SMS balance, as a sub-wallet inside the wallet: what it holds, how many
 /// messages that is, what one costs, and the transfer that fills it from the
@@ -83,6 +84,94 @@ class WalletSmsBalanceCard extends StatelessWidget {
             : null,
         icon: const Icon(Icons.swap_horiz, size: 18),
         label: Text(l10n.walletSmsAllocateButton),
+      ),
+    );
+  }
+}
+
+/// The voucher balance, as a sub-wallet inside the wallet: what it holds,
+/// what it is for — the «كروت دفتر» the till sells are paid from it — and the
+/// transfer that fills it from the main wallet.
+class WalletVoucherBalanceCard extends StatelessWidget {
+  const WalletVoucherBalanceCard({
+    super.key,
+    required this.wallet,
+    required this.vouchers,
+    this.onMoved,
+  });
+
+  final WalletViewModel wallet;
+  final VoucherWallet vouchers;
+
+  /// Told once money moved in, for the page around it to re-read.
+  final VoidCallback? onMoved;
+
+  Future<void> _allocate(BuildContext context) async {
+    final moved = await showVoucherAllocationSheet(
+      context: context,
+      wallet: wallet,
+    );
+    if (moved) {
+      onMoved?.call();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final empty = vouchers.balance <= 0;
+    final accent = empty || !vouchers.configured
+        ? colors.warning
+        : colors.primary;
+    final summary = !vouchers.configured
+        ? l10n.walletVouchersNotReady
+        : (vouchers.testMode
+              ? l10n.walletVouchersTestMode
+              : l10n.walletVouchersSummary);
+
+    return _SpendTile(
+      key: const ValueKey('wallet_voucher_balance'),
+      leading: CircleAvatar(
+        radius: 20,
+        backgroundColor: accent.withValues(alpha: 0.12),
+        child: Icon(Icons.card_giftcard_outlined, color: accent, size: 20),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.walletVouchersBalanceTitle,
+            style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+          Text(
+            formatWalletMoney(vouchers.balance),
+            style: PointyTypography.numeric(
+              (textTheme.titleLarge ?? const TextStyle()).copyWith(
+                fontWeight: FontWeight.w800,
+                color: colors.ink,
+              ),
+            ),
+          ),
+          Text(
+            summary,
+            style: textTheme.bodySmall?.copyWith(
+              color: vouchers.configured && !vouchers.testMode
+                  ? colors.mutedInk
+                  : colors.warning,
+            ),
+          ),
+        ],
+      ),
+      action: OutlinedButton.icon(
+        key: const ValueKey('wallet_voucher_allocate'),
+        onPressed:
+            (wallet.overview?.available ?? false) && vouchers.acceptsTransfers
+            ? () => _allocate(context)
+            : null,
+        icon: const Icon(Icons.swap_horiz, size: 18),
+        label: Text(l10n.walletVouchersAllocateButton),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/result.dart';
 import '../../../data/models/wallet.dart';
 import '../../../data/repositories/wallet_repository.dart';
+import 'wallet_bank_transfer_view_model.dart';
 import 'wallet_spending_view_model.dart';
 
 /// Opens the gateway's payment page. Injected so tests and the preview never
@@ -49,6 +50,16 @@ enum WalletTopUpStage {
   /// No verdict came back in time. The payment may still land: the relay
   /// credits a late one, and the backend's sync books it.
   unconfirmed,
+
+  /// A bank transfer: our account to send to, the owner's account and the
+  /// receipt.
+  bankTransfer,
+
+  /// The receipt went up; the company's team is checking the transfer.
+  awaitingReview,
+
+  /// The team rejected the transfer, with its reason.
+  rejected,
 }
 
 /// Drives the wallet on the subscription page: the balance, the top-up flow
@@ -78,6 +89,16 @@ class WalletViewModel extends ChangeNotifier {
     _repository,
     wallet: this,
   );
+
+  /// The bank-transfer step of a top-up.
+  late final WalletBankTransferViewModel transfer = WalletBankTransferViewModel(
+    _repository,
+    onSent: _followTransfer,
+  );
+  double? _transferAmount;
+
+  /// The amount the owner is transferring, while the transfer step is open.
+  double? get transferAmount => _transferAmount;
 
   /// While the payer is most likely on the payment page, ask often; after
   /// that, ask less — a card payment that has not landed in minutes is rare.
@@ -116,12 +137,22 @@ class WalletViewModel extends ChangeNotifier {
   }
 
   /// Shows what a spend left at once, before the reload that follows it.
-  void applySpending({double? balance, SmsWallet? sms, WalletPlan? plan}) {
+  void applySpending({
+    double? balance,
+    SmsWallet? sms,
+    VoucherWallet? vouchers,
+    WalletPlan? plan,
+  }) {
     final overview = _overview;
     if (overview == null) {
       return;
     }
-    _overview = overview.copyWith(balance: balance, sms: sms, plan: plan);
+    _overview = overview.copyWith(
+      balance: balance,
+      sms: sms,
+      vouchers: vouchers,
+      plan: plan,
+    );
     _notify();
   }
 
@@ -436,15 +467,13 @@ class WalletViewModel extends ChangeNotifier {
   /// sheet when the app comes back to the front after the browser.
   Future<void> checkActiveTopUp() async {
     final topUp = _activeTopUp;
-    if (topUp == null ||
-        _isChecking ||
-        _stage != WalletTopUpStage.awaitingPayment) {
+    if (topUp == null || _isChecking || !_following) {
       return;
     }
     _isChecking = true;
     final result = await _repository.loadTopUp(topUp.id);
     _isChecking = false;
-    if (_disposed || _stage != WalletTopUpStage.awaitingPayment) {
+    if (_disposed || !_following) {
       return;
     }
     switch (result) {
@@ -467,6 +496,54 @@ class WalletViewModel extends ChangeNotifier {
     _notify();
   }
 
+  /// Waiting on someone else's verdict: the gateway's, or the company's team.
+  bool get _following =>
+      _stage == WalletTopUpStage.awaitingPayment ||
+      _stage == WalletTopUpStage.awaitingReview;
+
+  /// From the amount to the transfer step: our account, the owner's, and the
+  /// receipt.
+  void beginBankTransfer(double amount) {
+    if (_stage != WalletTopUpStage.form) {
+      return;
+    }
+    _transferAmount = amount;
+    _topUpError = null;
+    transfer.prepare(_overview?.topUpOptions?.bankTransfer);
+    _stage = WalletTopUpStage.bankTransfer;
+    _notify();
+  }
+
+  /// Back from the transfer step to change the amount or the method.
+  void backToTopUpForm() {
+    if (_stage != WalletTopUpStage.bankTransfer) {
+      return;
+    }
+    _stage = WalletTopUpStage.form;
+    _notify();
+  }
+
+  /// The amount as the transfer is sent: the wallet's decimals.
+  String transferAmountText() => walletAmountText(
+    _transferAmount ?? 0,
+    _overview?.topUpOptions?.maxDecimals ?? 2,
+  );
+
+  void _followTransfer(WalletTopUp topUp, bool recordAsExpense) {
+    if (_disposed) {
+      return;
+    }
+    _activeTopUp = topUp;
+    _recordAsExpense = recordAsExpense;
+    _rememberSettingChoice();
+    if (!_settleFrom(topUp)) {
+      _stage = WalletTopUpStage.awaitingReview;
+      _awaitingSince = _clock();
+      _startPolling();
+    }
+    _notify();
+  }
+
   /// Leaves the flow: stops asking. A payment still under way is not lost —
   /// the backend's sync books it, and the wallet shows it on the next load. A
   /// payment still waiting for its code is called off.
@@ -474,7 +551,9 @@ class WalletViewModel extends ChangeNotifier {
     // Past the form, a top-up exists: reload so the wallet shows where it
     // stands (paid, or still waiting on the gateway).
     final topUpStarted =
-        _stage != WalletTopUpStage.form && _stage != WalletTopUpStage.starting;
+        _stage != WalletTopUpStage.form &&
+        _stage != WalletTopUpStage.starting &&
+        _stage != WalletTopUpStage.bankTransfer;
     if (_stage == WalletTopUpStage.awaitingCode) {
       _cancelWaitingCode();
     }
@@ -532,7 +611,11 @@ class WalletViewModel extends ChangeNotifier {
       case WalletTopUpStatus.expired:
         _stage = WalletTopUpStage.unconfirmed;
         return true;
+      case WalletTopUpStatus.rejected:
+        _stage = WalletTopUpStage.rejected;
+        return true;
       case WalletTopUpStatus.pending:
+      case WalletTopUpStatus.review:
       case WalletTopUpStatus.unknown:
         return false;
     }
@@ -564,7 +647,7 @@ class WalletViewModel extends ChangeNotifier {
 
   void _startPolling() {
     _stopPolling();
-    if (_disposed || _stage != WalletTopUpStage.awaitingPayment) {
+    if (_disposed || !_following) {
       return;
     }
     _pollTimer = Timer.periodic(_currentPollInterval, (_) {
@@ -576,6 +659,10 @@ class WalletViewModel extends ChangeNotifier {
   bool _pollingSlowly = false;
 
   Duration get _currentPollInterval {
+    // A person checks a transfer; there is no point asking every 3 seconds.
+    if (_stage == WalletTopUpStage.awaitingReview) {
+      return slowPollInterval;
+    }
     final since = _awaitingSince;
     if (since == null || _clock().difference(since) < fastPollFor) {
       return fastPollInterval;
@@ -691,6 +778,7 @@ class WalletViewModel extends ChangeNotifier {
     _disposed = true;
     _stopPolling();
     spending.dispose();
+    transfer.dispose();
     super.dispose();
   }
 }

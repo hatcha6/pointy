@@ -51,6 +51,8 @@ String walletTopUpStatusLabel(WalletTopUpStatus status, AppLocalizations l10n) {
     WalletTopUpStatus.canceled => l10n.walletTopUpStatusCanceled,
     WalletTopUpStatus.failed => l10n.walletTopUpStatusFailed,
     WalletTopUpStatus.expired => l10n.walletTopUpStatusExpired,
+    WalletTopUpStatus.review => l10n.walletTopUpStatusReview,
+    WalletTopUpStatus.rejected => l10n.walletTopUpStatusRejected,
     WalletTopUpStatus.unknown => l10n.walletTopUpStatusUnknown,
   };
 }
@@ -61,9 +63,10 @@ Color walletTopUpStatusColor(
 ) {
   return switch (status) {
     WalletTopUpStatus.paid => colors.success,
-    WalletTopUpStatus.pending => colors.primaryStrong,
+    WalletTopUpStatus.pending ||
+    WalletTopUpStatus.review => colors.primaryStrong,
     WalletTopUpStatus.expired => colors.warning,
-    WalletTopUpStatus.failed => colors.danger,
+    WalletTopUpStatus.failed || WalletTopUpStatus.rejected => colors.danger,
     WalletTopUpStatus.canceled || WalletTopUpStatus.unknown => colors.mutedInk,
   };
 }
@@ -72,8 +75,10 @@ IconData walletTopUpStatusIcon(WalletTopUpStatus status) {
   return switch (status) {
     WalletTopUpStatus.paid => Icons.check_circle_outline,
     WalletTopUpStatus.pending => Icons.hourglass_top_outlined,
+    WalletTopUpStatus.review => Icons.fact_check_outlined,
     WalletTopUpStatus.expired => Icons.help_outline,
     WalletTopUpStatus.failed => Icons.error_outline,
+    WalletTopUpStatus.rejected => Icons.block_outlined,
     WalletTopUpStatus.canceled => Icons.cancel_outlined,
     WalletTopUpStatus.unknown => Icons.help_outline,
   };
@@ -91,6 +96,7 @@ String walletMethodLabel(String method, AppLocalizations l10n) {
     'dafa_yussor_pay' => l10n.walletMethodYussorPay,
     'dafa_masrafi_pay' => l10n.walletMethodMasrafiPay,
     'dafa_sahara_pay' => l10n.walletMethodSaharaPay,
+    WalletTopUpMethod.bankTransfer => l10n.walletMethodBankTransfer,
     _ => l10n.walletTopUpMethodTitle,
   };
 }
@@ -112,7 +118,7 @@ String walletMethodProvider(String methodKey, {String provider = ''}) {
 /// and are drawn as a card.
 String? walletMethodLogoAsset(String methodKey, {String provider = ''}) {
   final id = walletMethodProvider(methodKey, provider: provider);
-  if (id.isEmpty || id == 'moamalat') {
+  if (id.isEmpty || id == 'moamalat' || id == WalletTopUpMethod.bankTransfer) {
     return null;
   }
   return 'assets/payment_methods/$id.png';
@@ -128,6 +134,9 @@ IconData walletMethodIcon(WalletPayer payer) {
 
 /// What the payer will be asked for, under the method's name.
 String walletMethodHint(WalletTopUpMethod method, AppLocalizations l10n) {
+  if (method.isBankTransfer) {
+    return l10n.walletMethodHintBankTransfer;
+  }
   if (!method.confirmsWithCode) {
     return l10n.walletMethodHintHostedPage;
   }
@@ -165,7 +174,9 @@ class WalletMethodMark extends StatelessWidget {
   Widget build(BuildContext context) {
     return PointyBrandMark(
       asset: walletMethodLogoAsset(methodKey, provider: provider),
-      fallbackIcon: walletMethodIcon(payer),
+      fallbackIcon: methodKey == WalletTopUpMethod.bankTransfer
+          ? Icons.account_balance_outlined
+          : walletMethodIcon(payer),
       size: size,
     );
   }
@@ -267,6 +278,8 @@ String walletErrorMessage(
     case 'topups_unconfigured':
     case 'wallet_unavailable':
       return l10n.walletTopUpsUnavailable;
+    case 'vouchers_unconfigured':
+      return l10n.walletVouchersNotReady;
     case 'invalid_amount':
       if (minAmount != null && maxAmount != null) {
         return l10n.walletErrorAmountRange(
@@ -317,6 +330,20 @@ String walletErrorMessage(
       return l10n.walletErrorNetwork;
     case 'forbidden':
       return l10n.walletErrorForbidden;
+    case 'invalid_iban':
+      return l10n.walletTransferIbanInvalid;
+    case 'invalid_payer_account':
+      return l10n.walletTransferAccountInvalid;
+    case 'invalid_payer_bank':
+      return l10n.walletTransferPayerBankRequired;
+    case 'invalid_receipt':
+      return l10n.walletTransferReceiptUnreadable;
+    case 'receipt_too_large':
+      return l10n.walletTransferReceiptTooLarge;
+    case 'too_many_reviews':
+      return l10n.walletTransferTooManyReviews;
+    case 'bank_transfer_unavailable':
+      return l10n.walletTransferUnavailable;
   }
   return message.trim().isNotEmpty ? message.trim() : l10n.walletErrorGeneric;
 }

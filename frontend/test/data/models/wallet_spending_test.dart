@@ -212,10 +212,10 @@ void main() {
         ...base(),
         'subscription_active': true,
         'ai_enabled': true,
-        'sms_enabled': true,
       });
       expect(status.aiAvailable, isTrue);
-      expect(status.smsAvailable, isTrue);
+      // SMS is never read off the subscription's flags.
+      expect(status.smsAvailable, isFalse);
       expect(
         RelayInstallationStatus.fromJson({
           ...base(),

@@ -1,6 +1,9 @@
 import '../../core/result.dart';
 import '../models/wallet.dart';
 import '../services/pos_api_service.dart';
+import '../services/wallet_api_client.dart';
+
+export '../services/wallet_api_client.dart' show WalletBankTransferRequest;
 
 /// The Daftar wallet, wrapped in [Result] so view models branch without
 /// try/catch. A backend refusal arrives as a [WalletException] error.
@@ -27,6 +30,16 @@ class WalletRepository {
     required String idempotencyKey,
   }) => Result.guard(
     () => _service.wallet.allocateToSms(
+      amount: amount,
+      idempotencyKey: idempotencyKey,
+    ),
+  );
+
+  Future<Result<WalletVoucherAllocation>> allocateToVouchers({
+    required String amount,
+    required String idempotencyKey,
+  }) => Result.guard(
+    () => _service.wallet.allocateToVouchers(
       amount: amount,
       idempotencyKey: idempotencyKey,
     ),
@@ -60,6 +73,13 @@ class WalletRepository {
       userIdentifier: userIdentifier,
       birthYear: birthYear,
     ),
+  );
+
+  Future<Result<WalletTopUpStart>> startBankTransfer(
+    WalletBankTransferRequest request, {
+    void Function(int sent, int total)? onProgress,
+  }) => Result.guard(
+    () => _service.wallet.startBankTransfer(request, onProgress: onProgress),
   );
 
   Future<Result<WalletTopUp>> loadTopUp(String id) =>

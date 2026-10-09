@@ -1,5 +1,9 @@
 import 'dart:convert';
 
+import 'wallet_bank_transfer.dart';
+
+export 'wallet_bank_transfer.dart';
+
 part 'wallet_spending.dart';
 
 /// The shop's Daftar wallet: its prepaid balance with the company, topped up
@@ -7,8 +11,10 @@ part 'wallet_spending.dart';
 /// relay holds the ledger; the shop's backend adds what only the shop knows —
 /// who started a top-up and which expense it became.
 ///
-/// The money sits in two places: the main wallet, which top-ups credit and
-/// the plans are paid from, and the [sms] balance each message is paid from.
+/// The money sits in up to three places: the main wallet, which top-ups credit
+/// and the plans are paid from; the [sms] balance each message is paid from;
+/// and the [vouchers] balance the till's «كروت دفتر» are paid from. The last
+/// two are filled by moving money out of the main wallet.
 class WalletOverview {
   const WalletOverview({
     required this.available,
@@ -20,6 +26,7 @@ class WalletOverview {
     required this.recentEntries,
     required this.settings,
     this.sms,
+    this.vouchers,
     this.plans = const [],
     this.error,
   });
@@ -29,6 +36,7 @@ class WalletOverview {
     final options = json['topups'];
     final settings = json['settings'];
     final sms = json['sms'];
+    final vouchers = json['vouchers'];
     return WalletOverview(
       available: json['available'] == true,
       balance: _amountOrNull(json['balance']),
@@ -43,6 +51,9 @@ class WalletOverview {
           ? WalletSettings.fromJson(settings)
           : const WalletSettings(recordTopUpsAsExpenses: true),
       sms: sms is Map<String, Object?> ? SmsWallet.fromJson(sms) : null,
+      vouchers: vouchers is Map<String, Object?>
+          ? VoucherWallet.fromJson(vouchers)
+          : null,
       plans: _list(
         json['plans'],
         WalletPlan.fromJson,
@@ -74,6 +85,9 @@ class WalletOverview {
   /// The SMS balance; null from a relay that does not sell SMS by the message.
   final SmsWallet? sms;
 
+  /// The voucher balance; null from a relay that sells no cards of its own.
+  final VoucherWallet? vouchers;
+
   /// The plans the wallet pays for, in the order the app shows them.
   final List<WalletPlan> plans;
   final WalletError? error;
@@ -96,6 +110,7 @@ class WalletOverview {
     WalletSettings? settings,
     double? balance,
     SmsWallet? sms,
+    VoucherWallet? vouchers,
     WalletPlan? plan,
   }) {
     return WalletOverview(
@@ -108,6 +123,7 @@ class WalletOverview {
       recentEntries: recentEntries,
       settings: settings ?? this.settings,
       sms: sms ?? this.sms,
+      vouchers: vouchers ?? this.vouchers,
       plans: plan == null
           ? plans
           : [for (final known in plans) known.key == plan.key ? plan : known],
@@ -127,16 +143,26 @@ class WalletTopUpOptions {
     required this.quickAmounts,
     required this.pendingTtl,
     this.maxOtpAttempts = 5,
+    this.bankTransfer,
   });
 
   factory WalletTopUpOptions.fromJson(Map<String, Object?> json) {
     final quick = json['quick_amounts'];
+    final bankTransfer = WalletBankTransferOffer.fromJson(
+      json['bank_transfer'],
+    );
     return WalletTopUpOptions(
       available: json['available'] == true,
-      methods: _list(
-        json['methods'],
-        WalletTopUpMethod.fromJson,
-      ).where((method) => method.key.isNotEmpty).toList(),
+      methods: [
+        ..._list(
+          json['methods'],
+          WalletTopUpMethod.fromJson,
+        ).where((method) => method.key.isNotEmpty),
+        // Offered beside the gateway's methods, never among them: an older
+        // app that met it in that list would try to start it at the gateway.
+        if (bankTransfer != null) WalletTopUpMethod.bankTransferMethod,
+      ],
+      bankTransfer: bankTransfer,
       minAmount: _amount(json['min_amount']),
       maxAmount: _amount(json['max_amount']),
       maxDecimals: _int(json['max_decimals'], fallback: 2).clamp(0, 3),
@@ -162,6 +188,9 @@ class WalletTopUpOptions {
 
   /// Codes the payer may try on one top-up.
   final int maxOtpAttempts;
+
+  /// The company's accounts to transfer to, when it takes transfers.
+  final WalletBankTransferOffer? bankTransfer;
 }
 
 /// What a method asks of the payer before the payment starts.
@@ -296,6 +325,16 @@ class WalletTopUpMethod {
 
   static const kindOtp = 'otp';
   static const kindHostedPage = 'hosted_page';
+  static const kindBankTransfer = 'bank_transfer';
+
+  /// A transfer to the company's own account, checked by its team.
+  static const bankTransfer = 'bank_transfer';
+  static const bankTransferMethod = WalletTopUpMethod(
+    key: bankTransfer,
+    gateway: 'bank',
+    kind: kindBankTransfer,
+    provider: bankTransfer,
+  );
 
   final String key;
   final String gateway;
@@ -313,6 +352,9 @@ class WalletTopUpMethod {
 
   /// The payer confirms with a code texted to them.
   bool get confirmsWithCode => kind == kindOtp;
+
+  /// The payer transfers from their bank and sends the receipt.
+  bool get isBankTransfer => key == bankTransfer;
 }
 
 enum WalletTopUpStatus {
@@ -321,6 +363,12 @@ enum WalletTopUpStatus {
   canceled,
   failed,
   expired,
+
+  /// A bank transfer the company's team is checking against its statement.
+  review,
+
+  /// A bank transfer the team turned down, with its reason.
+  rejected,
   unknown;
 
   static WalletTopUpStatus parse(Object? raw) {
@@ -330,12 +378,15 @@ enum WalletTopUpStatus {
       'canceled' => canceled,
       'failed' => failed,
       'expired' => expired,
+      'review' => review,
+      'rejected' => rejected,
       _ => unknown,
     };
   }
 
-  /// The relay can still move it: a checkout can be paid late.
-  bool get isOpen => this == pending || this == expired;
+  /// The relay can still move it: a checkout can be paid late, a transfer is
+  /// still being checked.
+  bool get isOpen => this == pending || this == expired || this == review;
 }
 
 class WalletTopUp {
@@ -359,6 +410,8 @@ class WalletTopUp {
     this.recordAsExpense,
     this.expenseId,
     this.expenseError = '',
+    this.errorDetail = '',
+    this.transfer,
   });
 
   factory WalletTopUp.fromJson(Map<String, Object?> json) {
@@ -386,6 +439,8 @@ class WalletTopUp {
       recordAsExpense: record is bool ? record : null,
       expenseId: expenseId is num ? expenseId.toInt() : null,
       expenseError: _string(json['expense_error']),
+      errorDetail: _string(json['error_detail']),
+      transfer: WalletTransferDetails.fromJson(json['transfer']),
     );
   }
 
@@ -428,7 +483,15 @@ class WalletTopUp {
   /// Why booking the expense failed (a closed period), when it did.
   final String expenseError;
 
+  /// Why the company's team rejected a bank transfer, as they wrote it.
+  final String errorDetail;
+
+  /// What the shop said about its bank transfer; null for gateway payments.
+  final WalletTransferDetails? transfer;
+
   bool get isBookedAsExpense => expenseId != null;
+  bool get isBankTransfer =>
+      transfer != null || method == WalletTopUpMethod.bankTransfer;
 }
 
 enum WalletEntryKind {
@@ -438,7 +501,7 @@ enum WalletEntryKind {
   adjustment,
 
   /// The shop moving its own money between its accounts: out of the main
-  /// wallet and into the SMS balance.
+  /// wallet and into the SMS or the voucher balance.
   transfer,
   unknown;
 
@@ -454,16 +517,21 @@ enum WalletEntryKind {
   }
 }
 
-/// Where money sits: the main wallet, or the SMS balance.
+/// Where money sits: the main wallet, the SMS balance, or the voucher balance.
 enum WalletAccount {
   main('main'),
-  sms('sms');
+  sms('sms'),
+  vouchers('vouchers');
 
   const WalletAccount(this.key);
 
   final String key;
 
-  static WalletAccount parse(Object? raw) => raw == 'sms' ? sms : main;
+  static WalletAccount parse(Object? raw) => switch (raw) {
+    'sms' => sms,
+    'vouchers' => vouchers,
+    _ => main,
+  };
 }
 
 /// One movement of the balance.

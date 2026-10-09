@@ -19,11 +19,16 @@ class NotificationCenterDrawer extends StatelessWidget {
     super.key,
     required this.viewModel,
     this.onOpenAlert,
+    this.onSecondaryAlertAction,
   });
 
   final NotificationCenterViewModel viewModel;
   final Future<void> Function(BuildContext context, BusinessAlert alert)?
   onOpenAlert;
+
+  /// The alert's second button, where it has one («استخدام تسعير الشركة»).
+  final Future<void> Function(BuildContext context, BusinessAlert alert)?
+  onSecondaryAlertAction;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +42,7 @@ class NotificationCenterDrawer extends StatelessWidget {
             return _NotificationCenterBody(
               viewModel: viewModel,
               onOpenAlert: onOpenAlert,
+              onSecondaryAlertAction: onSecondaryAlertAction,
             );
           },
         ),
@@ -49,11 +55,14 @@ class _NotificationCenterBody extends StatelessWidget {
   const _NotificationCenterBody({
     required this.viewModel,
     required this.onOpenAlert,
+    required this.onSecondaryAlertAction,
   });
 
   final NotificationCenterViewModel viewModel;
   final Future<void> Function(BuildContext context, BusinessAlert alert)?
   onOpenAlert;
+  final Future<void> Function(BuildContext context, BusinessAlert alert)?
+  onSecondaryAlertAction;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +174,11 @@ class _NotificationCenterBody extends StatelessWidget {
                     onReview: onOpenAlert == null
                         ? null
                         : () => unawaited(onOpenAlert!(context, alerts[index])),
+                    onSecondary: onSecondaryAlertAction == null
+                        ? null
+                        : () => unawaited(
+                            onSecondaryAlertAction!(context, alerts[index]),
+                          ),
                     onDismiss: () =>
                         unawaited(viewModel.dismissAlert(alerts[index].id)),
                     onSnooze: () =>
@@ -212,12 +226,14 @@ class _NotificationAlertRow extends StatelessWidget {
   const _NotificationAlertRow({
     required this.alert,
     required this.onReview,
+    required this.onSecondary,
     required this.onDismiss,
     required this.onSnooze,
   });
 
   final BusinessAlert alert;
   final VoidCallback? onReview;
+  final VoidCallback? onSecondary;
   final VoidCallback onDismiss;
   final VoidCallback onSnooze;
 
@@ -294,22 +310,38 @@ class _NotificationAlertRow extends StatelessWidget {
             ),
             _detailWidget(context, l10n),
             SizedBox(height: spacing.sm),
-            Row(
+            Wrap(
+              spacing: spacing.xs,
+              runSpacing: spacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                if (_canReview && onReview != null) ...[
+                if (_canReview && onReview != null)
                   FilledButton.tonalIcon(
                     onPressed: onReview,
-                    icon: const Icon(Icons.manage_search_outlined),
-                    label: Text(l10n.smartNotificationReviewAction),
+                    icon: Icon(
+                      alert.type == BusinessAlertType.belowCostCards
+                          ? Icons.edit_outlined
+                          : Icons.manage_search_outlined,
+                    ),
+                    label: Text(
+                      alert.type == BusinessAlertType.belowCostCards
+                          ? l10n.smartNotificationBelowCostEditAction
+                          : l10n.smartNotificationReviewAction,
+                    ),
                   ),
-                  SizedBox(width: spacing.xs),
-                ],
+                if (alert.type == BusinessAlertType.belowCostCards &&
+                    onSecondary != null)
+                  OutlinedButton.icon(
+                    key: const ValueKey('alert_use_company_pricing'),
+                    onPressed: onSecondary,
+                    icon: const Icon(Icons.undo_rounded),
+                    label: Text(l10n.smartNotificationBelowCostCompanyAction),
+                  ),
                 TextButton.icon(
                   onPressed: onSnooze,
                   icon: const Icon(Icons.schedule_outlined),
                   label: Text(l10n.smartNotificationSnoozeAction),
                 ),
-                const Spacer(),
                 IconButton(
                   tooltip: l10n.smartNotificationDismissTooltip,
                   onPressed: onDismiss,
@@ -347,7 +379,10 @@ class _NotificationAlertRow extends StatelessWidget {
   bool get _canReview {
     return alert.hasInvestigationQuery ||
         alert.type == BusinessAlertType.payrollReady ||
-        alert.type == BusinessAlertType.cardSettlementOverdue;
+        alert.type == BusinessAlertType.cardSettlementOverdue ||
+        alert.type == BusinessAlertType.belowCostCards ||
+        alert.type == BusinessAlertType.walletTransferConfirmed ||
+        alert.type == BusinessAlertType.walletTransferRejected;
   }
 
   IconData _icon() {
@@ -376,6 +411,10 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.offbookRecharge => Icons.receipt_long_outlined,
       BusinessAlertType.providerFloatDrift => Icons.balance_outlined,
       BusinessAlertType.cardSettlementOverdue => Icons.credit_score_outlined,
+      BusinessAlertType.belowCostCards => Icons.price_change_outlined,
+      BusinessAlertType.walletTransferConfirmed =>
+        Icons.account_balance_wallet_outlined,
+      BusinessAlertType.walletTransferRejected => Icons.money_off_outlined,
       BusinessAlertType.unknown => Icons.notifications_outlined,
     };
   }
@@ -452,6 +491,11 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationProviderFloatDriftTitle,
       BusinessAlertType.cardSettlementOverdue =>
         l10n.smartNotificationCardSettlementOverdueTitle,
+      BusinessAlertType.belowCostCards => l10n.smartNotificationBelowCostTitle,
+      BusinessAlertType.walletTransferConfirmed =>
+        l10n.notificationWalletTransferConfirmedTitle,
+      BusinessAlertType.walletTransferRejected =>
+        l10n.notificationWalletTransferRejectedTitle,
       BusinessAlertType.unknown => l10n.smartNotificationUnknownTitle,
     };
   }
@@ -564,6 +608,17 @@ class _NotificationAlertRow extends StatelessWidget {
           formatMoney(_doublePayload(alert, 'amount')),
           alert.occurredAt == null ? '' : formatDate(alert.occurredAt!),
         ),
+      BusinessAlertType.belowCostCards =>
+        l10n.smartNotificationBelowCostMessage(alert.count, alert.detailLabel),
+      BusinessAlertType.walletTransferConfirmed =>
+        l10n.notificationWalletTransferConfirmedMessage(
+          formatMoney(_doublePayload(alert, 'amount')),
+        ),
+      BusinessAlertType.walletTransferRejected =>
+        l10n.notificationWalletTransferRejectedMessage(
+          formatMoney(_doublePayload(alert, 'amount')),
+          alert.detailLabel,
+        ),
       BusinessAlertType.unknown => l10n.smartNotificationUnknownMessage,
     };
   }
@@ -609,23 +664,26 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.operationsError => alert.detailLabel,
       // How old the float figure is. A shop that reads "220 left" has to know
       // whether that was measured this hour or before it opened.
-      BusinessAlertType.lowProviderFloat => alert.occurredAt == null
-          ? ''
-          : l10n.smartNotificationProviderFloatAsOf(
-              formatDateTime(alert.occurredAt!),
-            ),
+      BusinessAlertType.lowProviderFloat =>
+        alert.occurredAt == null
+            ? ''
+            : l10n.smartNotificationProviderFloatAsOf(
+                formatDateTime(alert.occurredAt!),
+              ),
       // How long the customer has been waiting, and how long the unknown has
       // stood. Both are what decides whether this is today's problem.
-      BusinessAlertType.unperformedRecharge => alert.occurredAt == null
-          ? ''
-          : l10n.smartNotificationRechargeSoldAt(
-              formatDateTime(alert.occurredAt!),
-            ),
-      BusinessAlertType.unresolvedRecharge => alert.occurredAt == null
-          ? ''
-          : l10n.smartNotificationRechargeSentAt(
-              formatDateTime(alert.occurredAt!),
-            ),
+      BusinessAlertType.unperformedRecharge =>
+        alert.occurredAt == null
+            ? ''
+            : l10n.smartNotificationRechargeSoldAt(
+                formatDateTime(alert.occurredAt!),
+              ),
+      BusinessAlertType.unresolvedRecharge =>
+        alert.occurredAt == null
+            ? ''
+            : l10n.smartNotificationRechargeSentAt(
+                formatDateTime(alert.occurredAt!),
+              ),
       BusinessAlertType.stalePrintAgents ||
       BusinessAlertType.registerVariance ||
       BusinessAlertType.stockPositionUntrusted ||
@@ -633,6 +691,10 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.offbookRecharge ||
       BusinessAlertType.providerFloatDrift ||
       BusinessAlertType.cardSettlementOverdue ||
+      BusinessAlertType.belowCostCards ||
+      // The reason is the message itself; the amount is in the title line.
+      BusinessAlertType.walletTransferConfirmed ||
+      BusinessAlertType.walletTransferRejected ||
       BusinessAlertType.unknown => '',
     };
   }

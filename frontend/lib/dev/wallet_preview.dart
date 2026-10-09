@@ -12,10 +12,21 @@
 //            payer_dialog | payer_dialog_card | sheet_error | code |
 //            code_error | code_test | waiting | paid | declined | canceled |
 //            unconfirmed | history | sms_empty | sms_sheet | sms_sheet_poor |
-//            plan_sheet | renew_sheet
+//            plan_sheet | renew_sheet | vouchers | vouchers_sheet |
+//            transfer | transfer_onepay | transfer_receipt | transfer_review |
+//            transfer_rejected
+//
+// The `transfer*` scenarios are the bank transfer: our account (a made-up
+// one), the payer's saved account, the receipt, then the team's verdict.
+//
+// `vouchers` is the page with «كروت دفتر» switched on, so the voucher balance
+// sits under the SMS one; `vouchers_sheet` opens the transfer into it, and
+// `history` then carries the voucher statement tab too.
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -33,6 +44,7 @@ import 'package:pointy_frontend/src/features/settings/views/wallet_payer_dialog.
 import 'package:pointy_frontend/src/features/settings/views/wallet_plan_sheet.dart';
 import 'package:pointy_frontend/src/features/settings/views/wallet_sms_sheet.dart';
 import 'package:pointy_frontend/src/features/settings/views/wallet_top_up_sheet.dart';
+import 'package:pointy_frontend/src/features/settings/views/wallet_vouchers_sheet.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
@@ -99,11 +111,25 @@ class _PreviewApp extends StatelessWidget {
         'paid' ||
         'declined' ||
         'canceled' ||
-        'unconfirmed' => _SheetHost(wallet: wallet, page: page, screen: screen),
+        'unconfirmed' ||
+        'transfer' ||
+        'transfer_onepay' ||
+        'transfer_receipt' ||
+        'transfer_review' ||
+        'transfer_rejected' => _SheetHost(
+          wallet: wallet,
+          page: page,
+          screen: screen,
+        ),
         'sms_sheet' ||
         'sms_sheet_poor' ||
         'plan_sheet' ||
-        'renew_sheet' => _SpendHost(wallet: wallet, page: page, screen: screen),
+        'renew_sheet' ||
+        'vouchers_sheet' => _SpendHost(
+          wallet: wallet,
+          page: page,
+          screen: screen,
+        ),
         _ => page,
       },
     );
@@ -182,6 +208,33 @@ class _SheetHostState extends State<_SheetHost> {
         case 'waiting' || 'canceled' || 'unconfirmed':
           wallet.selectMethod('dafa_moamalat');
           await wallet.startTopUp(100);
+        case 'transfer' ||
+            'transfer_onepay' ||
+            'transfer_receipt' ||
+            'transfer_review' ||
+            'transfer_rejected':
+          wallet.selectMethod(WalletTopUpMethod.bankTransfer);
+          wallet.beginBankTransfer(150);
+          if (widget.screen == 'transfer_onepay') {
+            wallet.transfer.selectChannel(WalletTransferChannel.onePay);
+          }
+          if (widget.screen != 'transfer' &&
+              widget.screen != 'transfer_onepay') {
+            wallet.transfer.attachReceipt(
+              WalletTransferReceipt.file(
+                bytes: _receiptPng,
+                name: 'Screenshot_2026-10-09.png',
+                contentType: 'image/png',
+              ),
+            );
+          }
+          if (widget.screen == 'transfer_review' ||
+              widget.screen == 'transfer_rejected') {
+            await wallet.transfer.send(amount: '150', recordAsExpense: true);
+            if (widget.screen == 'transfer_rejected') {
+              await wallet.checkActiveTopUp();
+            }
+          }
       }
       await sheet;
     });
@@ -230,6 +283,11 @@ class _SpendHostState extends State<_SpendHost> {
             context: context,
             wallet: widget.wallet,
             planKey: WalletPlan.remoteAccess,
+          );
+        case 'vouchers_sheet':
+          await showVoucherAllocationSheet(
+            context: context,
+            wallet: widget.wallet,
           );
       }
     });
@@ -289,6 +347,47 @@ WalletTopUp _topUp(
         : null,
   );
 }
+
+WalletTopUp _transfer(
+  WalletTopUpStatus status, {
+  Duration ago = Duration.zero,
+}) {
+  return WalletTopUp(
+    id: 'bt-${status.name}',
+    invoiceNo: 'DFW-TRANSFER0${status.index}',
+    method: WalletTopUpMethod.bankTransfer,
+    kind: WalletTopUpMethod.kindBankTransfer,
+    amount: 150,
+    status: status,
+    testMode: false,
+    createdAt: _now.subtract(ago),
+    requestedBy: 'حاتم',
+    errorCode: status == WalletTopUpStatus.rejected ? 'rejected' : '',
+    errorDetail: status == WalletTopUpStatus.rejected
+        ? 'لم يصل المبلغ إلى حسابنا. تأكد من رقم IBAN وأرسل الإيصال من جديد.'
+        : '',
+    transfer: const WalletTransferDetails(
+      channel: WalletTransferChannel.lyPay,
+      payerBank: 'jbank',
+      payerAccount: '000011122233344',
+      payerIban: 'LY75001002000011122233344',
+    ),
+  );
+}
+
+/// A small PNG standing in for a transfer receipt.
+final _receiptPng = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAHgAAADICAIAAACszLLwAAAB3klEQVR42u3cMW7CQBCG0R+L'
+  'OgdJmcpHQVQ5EIegzFGoKDkKQlS0kVIgbBONd99XIgr0NFqhWcPmY3+I3t+AADRogQYNWqBB'
+  'CzRo0AINWqBBgxZo0AINGrRAgxZo0KAFGrRAgwYt0KAFumCb6+1OwUSDFmjQoAUatECDBi3Q'
+  'oAUadMdtV/RZx5/vvy+edsfYR7+VeF3c1aGfEq+Fe2hGecL7QU9XK2s9tKRc2drXu46h549k'
+  'waE20b1CLzWM1YbaRIMGLdCgQSPoFHqpDVy1TZ6J7hh6/jAWXEyb6L6h54xkzXuWuhM9zavs'
+  'bVbpo+NVtcp3hm7BQXuuQ77egQaNADRogQYNWqBBKwv/huV0vjD63fj1aaIdHQINGrRi8W+i'
+  'BRo0aIGOXUca2FeYaEeHQIMGrdh1mGiBBg1aoEELNGjQAg1aiadJ8193Nyba0QFaoEHHDYsb'
+  'FhMNWqBBg1bsOtLMs6Ym2tEBWqBBx67DrsNEgxZo0KAVu440sxgx0Y4O0AINOnYddh0mGrRA'
+  'gwat2HVkRf8DZqJBgxZo0Ipdh4kGLdCgBRo0aIEGLdCg44Yl8TRp/EuYo0OgQYNW3LCYaIEG'
+  'DVqgQQs0aNACDVqgQYMWaNACDRq0QIMWaNBN9wCLVGpPMsAwEQAAAABJRU5ErkJggg==',
+);
 
 const _methods = [
   WalletTopUpMethod(
@@ -363,6 +462,8 @@ class _FakeWalletRepository extends WalletRepository {
             booked: true,
             testMode: _testMode,
           ),
+          _transfer(WalletTopUpStatus.review, ago: const Duration(minutes: 8)),
+          _transfer(WalletTopUpStatus.rejected, ago: const Duration(hours: 6)),
           _topUp(
             'dcln3m9q2x4',
             50,
@@ -391,13 +492,49 @@ class _FakeWalletRepository extends WalletRepository {
 
   WalletTopUpOptions get _options => const WalletTopUpOptions(
     available: true,
-    methods: _methods,
+    methods: [..._methods, WalletTopUpMethod.bankTransferMethod],
     minAmount: 10,
     maxAmount: 5000,
     maxDecimals: 2,
     quickAmounts: [50, 100, 200, 500],
     pendingTtl: Duration(minutes: 30),
+    bankTransfer: WalletBankTransferOffer(
+      // Made up: the real account is set in the operator console.
+      accounts: [
+        WalletBankAccount(
+          id: 'acc-1',
+          bank: 'nab',
+          bankName: 'مصرف شمال أفريقيا',
+          holder: 'شركة دفتر للتقنية',
+          accountNumber: '000020100120361',
+          iban: 'LY83002048000020100120361',
+        ),
+      ],
+      savedPayers: [
+        WalletPayerAccount(
+          bank: 'jbank',
+          accountNumber: '000011122233344',
+          iban: 'LY75001002000011122233344',
+        ),
+      ],
+    ),
   );
+
+  @override
+  Future<Result<WalletTopUpStart>> startBankTransfer(
+    WalletBankTransferRequest request, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return Ok(
+      WalletTopUpStart(
+        topUp: _transfer(WalletTopUpStatus.review),
+        checkoutUrl: '',
+        nextAction: 'bank_transfer',
+        replayed: false,
+      ),
+    );
+  }
 
   @override
   Future<Result<WalletOverview>> loadWallet() async {
@@ -440,6 +577,12 @@ class _FakeWalletRepository extends WalletRepository {
           price: 0.15,
           messagesLeft: (_sms * 1000).round() ~/ 150,
         ),
+        // «كروت دفتر» switched on only where the voucher balance is the point
+        // of the screen; elsewhere the page stays as a shop without cards
+        // sees it.
+        vouchers: _showsVouchers
+            ? VoucherWallet(balance: _vouchers, enabled: true)
+            : const VoucherWallet(balance: 0),
         plans: [
           WalletPlan(
             key: WalletPlan.remoteAccess,
@@ -460,8 +603,14 @@ class _FakeWalletRepository extends WalletRepository {
     );
   }
 
+  bool get _showsVouchers =>
+      scenario == 'vouchers' ||
+      scenario == 'vouchers_sheet' ||
+      scenario == 'history';
+
   // What the spending sheets move, so the page shows it after them.
   double _balance = 245.5;
+  double _vouchers = 122;
   late double _sms = scenario == 'sms_empty' || scenario == 'empty' ? 0 : 4.5;
   DateTime? _aiUntil;
 
@@ -482,6 +631,24 @@ class _FakeWalletRepository extends WalletRepository {
           price: 0.15,
           messagesLeft: (_sms * 1000).round() ~/ 150,
         ),
+        replayed: false,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<WalletVoucherAllocation>> allocateToVouchers({
+    required String amount,
+    required String idempotencyKey,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final value = double.parse(amount);
+    _balance -= value;
+    _vouchers += value;
+    return Ok(
+      WalletVoucherAllocation(
+        balance: _balance,
+        vouchers: VoucherWallet(balance: _vouchers, enabled: true),
         replayed: false,
       ),
     );
@@ -612,6 +779,15 @@ class _FakeWalletRepository extends WalletRepository {
   Future<Result<WalletTopUp>> loadTopUp(String id) async {
     _polls++;
     await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (scenario.startsWith('transfer')) {
+      return Ok(
+        _transfer(
+          scenario == 'transfer_rejected'
+              ? WalletTopUpStatus.rejected
+              : WalletTopUpStatus.review,
+        ),
+      );
+    }
     final status = switch (scenario) {
       'paid' => WalletTopUpStatus.paid,
       'canceled' => WalletTopUpStatus.canceled,
@@ -642,6 +818,57 @@ class _FakeWalletRepository extends WalletRepository {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (before != null) {
       return const Ok(WalletPage(items: [], hasMore: false));
+    }
+    if (account == WalletAccount.vouchers) {
+      // Newest first, each balance following from the one before it: money
+      // moved in, a card bought, a card the supplier could not deliver given
+      // back, another card bought.
+      return Ok(
+        WalletPage(
+          items: [
+            WalletEntry(
+              id: 'v4',
+              account: WalletAccount.vouchers,
+              kind: WalletEntryKind.charge,
+              service: 'vouchers',
+              amount: -128,
+              balanceAfter: 122,
+              createdAt: _now.subtract(const Duration(minutes: 35)),
+              description: 'آيتونز · الولايات المتحدة · 25 دولار',
+            ),
+            WalletEntry(
+              id: 'v3',
+              account: WalletAccount.vouchers,
+              kind: WalletEntryKind.refund,
+              service: 'vouchers',
+              amount: 9.7,
+              balanceAfter: 250,
+              createdAt: _now.subtract(const Duration(hours: 4)),
+              description: 'استرداد: ليبيانا · ليبيا · 10 دينار',
+            ),
+            WalletEntry(
+              id: 'v2',
+              account: WalletAccount.vouchers,
+              kind: WalletEntryKind.charge,
+              service: 'vouchers',
+              amount: -9.7,
+              balanceAfter: 240.3,
+              createdAt: _now.subtract(const Duration(hours: 4, minutes: 1)),
+              description: 'ليبيانا · ليبيا · 10 دينار',
+            ),
+            WalletEntry(
+              id: 'v1',
+              account: WalletAccount.vouchers,
+              kind: WalletEntryKind.transfer,
+              amount: 250,
+              balanceAfter: 250,
+              createdAt: _now.subtract(const Duration(days: 1)),
+              description: 'تحويل من المحفظة',
+            ),
+          ],
+          hasMore: false,
+        ),
+      );
     }
     if (account == WalletAccount.sms) {
       return Ok(

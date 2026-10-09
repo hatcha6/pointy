@@ -9,8 +9,9 @@ import '../../../data/repositories/wallet_repository.dart';
 import 'wallet_view_model.dart';
 
 /// Spending the Daftar wallet: moving money from the main wallet into the SMS
-/// balance each message is paid from, paying for a plan (remote access, the
-/// assistant) a period at a time, and the SMS balance's own statement.
+/// balance each message is paid from — or into the voucher balance the till's
+/// «كروت دفتر» are paid from — paying for a plan (remote access, the
+/// assistant) a period at a time, and those balances' own statements.
 ///
 /// The balances themselves are the [wallet]'s; a spend patches them at once
 /// and reloads the wallet, so every screen showing them moves together.
@@ -27,12 +28,18 @@ class WalletSpendingViewModel extends ChangeNotifier {
 
   bool _disposed = false;
 
-  // --- the SMS balance ------------------------------------------------------
+  // --- moving money into the SMS or the voucher balance ---------------------
+  //
+  // One transfer at a time, whichever balance it fills: the sheets that start
+  // them are modal, and each clears the last refusal when it opens.
 
   bool _isAllocating = false;
   WalletException? _allocationError;
-  String? _allocationKey;
-  String? _allocationAmount;
+
+  /// The key and amount of the last attempt per balance: a retry after a lost
+  /// answer resends the same key, so the money moves once.
+  final Map<WalletAccount, ({String key, String amount})> _allocationAttempts =
+      {};
 
   bool get isAllocating => _isAllocating;
 
@@ -49,37 +56,72 @@ class WalletSpendingViewModel extends ChangeNotifier {
   }
 
   /// Moves [amount] dinars into the SMS balance. True once it is there.
-  Future<bool> allocateToSms(double amount) async {
+  Future<bool> allocateToSms(double amount) {
+    return _allocate<WalletSmsAllocation>(
+      account: WalletAccount.sms,
+      // Dirhams: a message costs 0.150.
+      amountText: walletAmountText(amount, 3),
+      purpose: 'sms',
+      send: (amount, key) =>
+          _repository.allocateToSms(amount: amount, idempotencyKey: key),
+      apply: (allocation) => wallet.applySpending(
+        balance: allocation.balance,
+        sms: allocation.sms,
+      ),
+    );
+  }
+
+  /// Moves [amount] dinars into the voucher balance the till's cards are paid
+  /// from. True once it is there.
+  Future<bool> allocateToVouchers(double amount) {
+    return _allocate<WalletVoucherAllocation>(
+      account: WalletAccount.vouchers,
+      // Two places, like every amount the shop's books keep for the cards.
+      amountText: walletAmountText(amount, 2),
+      purpose: 'vouchers',
+      send: (amount, key) =>
+          _repository.allocateToVouchers(amount: amount, idempotencyKey: key),
+      apply: (allocation) => wallet.applySpending(
+        balance: allocation.balance,
+        vouchers: allocation.vouchers,
+      ),
+    );
+  }
+
+  Future<bool> _allocate<T>({
+    required WalletAccount account,
+    required String amountText,
+    required String purpose,
+    required Future<Result<T>> Function(String amount, String key) send,
+    required void Function(T allocation) apply,
+  }) async {
     if (_isAllocating) {
       return false;
     }
-    final amountText = walletAmountText(amount, 3);
     // One attempt, one key: a retry after a lost answer moves the money once.
-    if (_allocationKey == null || _allocationAmount != amountText) {
-      _allocationKey = _newAttemptKey('sms');
-      _allocationAmount = amountText;
-    }
+    final previous = _allocationAttempts[account];
+    final attempt = previous != null && previous.amount == amountText
+        ? previous
+        : (key: _newAttemptKey(purpose), amount: amountText);
+    _allocationAttempts[account] = attempt;
     _isAllocating = true;
     _allocationError = null;
     _notify();
-    final result = await _repository.allocateToSms(
-      amount: amountText,
-      idempotencyKey: _allocationKey!,
-    );
+    final result = await send(amountText, attempt.key);
     if (_disposed) {
       return false;
     }
     var ok = false;
     switch (result) {
-      case Ok<WalletSmsAllocation>(value: final allocation):
-        _allocationKey = null;
-        wallet.applySpending(balance: allocation.balance, sms: allocation.sms);
+      case Ok<T>(value: final allocation):
+        _allocationAttempts.remove(account);
+        apply(allocation);
         unawaited(wallet.load());
         ok = true;
-      case Error<WalletSmsAllocation>(exception: final exception):
+      case Error<T>(exception: final exception):
         final error = _walletError(exception);
         if (!error.isRetryable) {
-          _allocationKey = null;
+          _allocationAttempts.remove(account);
         }
         _allocationError = error;
     }
@@ -155,29 +197,45 @@ class WalletSpendingViewModel extends ChangeNotifier {
     return bought;
   }
 
-  // --- the SMS statement ------------------------------------------------------
+  // --- the SMS and voucher statements ----------------------------------------
 
-  final List<WalletEntry> _smsEntries = [];
-  bool _smsEntriesHasMore = true;
-  bool _isLoadingSmsEntries = false;
-  bool _smsEntriesFailed = false;
+  final _smsStatement = _EntryStatement();
+  final _voucherStatement = _EntryStatement();
 
-  List<WalletEntry> get smsEntries => List.unmodifiable(_smsEntries);
-  bool get smsEntriesHasMore => _smsEntriesHasMore;
-  bool get isLoadingSmsEntries => _isLoadingSmsEntries;
-  bool get smsEntriesFailed => _smsEntriesFailed;
+  List<WalletEntry> get smsEntries => List.unmodifiable(_smsStatement.entries);
+  bool get smsEntriesHasMore => _smsStatement.hasMore;
+  bool get isLoadingSmsEntries => _smsStatement.isLoading;
+  bool get smsEntriesFailed => _smsStatement.failed;
 
-  Future<void> loadSmsEntries({bool reset = false}) async {
-    if (_isLoadingSmsEntries || (!reset && !_smsEntriesHasMore)) {
+  Future<void> loadSmsEntries({bool reset = false}) =>
+      _loadStatement(_smsStatement, WalletAccount.sms, reset: reset);
+
+  List<WalletEntry> get voucherEntries =>
+      List.unmodifiable(_voucherStatement.entries);
+  bool get voucherEntriesHasMore => _voucherStatement.hasMore;
+  bool get isLoadingVoucherEntries => _voucherStatement.isLoading;
+  bool get voucherEntriesFailed => _voucherStatement.failed;
+
+  Future<void> loadVoucherEntries({bool reset = false}) =>
+      _loadStatement(_voucherStatement, WalletAccount.vouchers, reset: reset);
+
+  Future<void> _loadStatement(
+    _EntryStatement statement,
+    WalletAccount account, {
+    required bool reset,
+  }) async {
+    if (statement.isLoading || (!reset && !statement.hasMore)) {
       return;
     }
-    _isLoadingSmsEntries = true;
-    _smsEntriesFailed = false;
+    statement
+      ..isLoading = true
+      ..failed = false;
     _notify();
-    final before = reset || _smsEntries.isEmpty ? null : _smsEntries.last.id;
+    final entries = statement.entries;
+    final before = reset || entries.isEmpty ? null : entries.last.id;
     final result = await _repository.loadEntries(
       before: before,
-      account: WalletAccount.sms,
+      account: account,
     );
     if (_disposed) {
       return;
@@ -185,15 +243,15 @@ class WalletSpendingViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<WalletPage<WalletEntry>>(value: final page):
         if (reset) {
-          _smsEntries.clear();
+          entries.clear();
         }
-        _smsEntries.addAll(page.items);
-        _smsEntriesHasMore = page.hasMore;
+        entries.addAll(page.items);
+        statement.hasMore = page.hasMore;
       case Error<WalletPage<WalletEntry>>():
         // A failed page keeps "more" on, so the next scroll retries it.
-        _smsEntriesFailed = true;
+        statement.failed = true;
     }
-    _isLoadingSmsEntries = false;
+    statement.isLoading = false;
     _notify();
   }
 
@@ -208,6 +266,14 @@ class WalletSpendingViewModel extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
+}
+
+/// One balance's statement, paged newest first.
+class _EntryStatement {
+  final List<WalletEntry> entries = [];
+  bool hasMore = true;
+  bool isLoading = false;
+  bool failed = false;
 }
 
 WalletException _walletError(Object exception) {

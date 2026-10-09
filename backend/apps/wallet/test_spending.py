@@ -1,5 +1,6 @@
-"""Spending the Daftar wallet: money into the SMS balance, and the plans paid
-from the main wallet."""
+"""Spending the Daftar wallet: money into the SMS and voucher balances, and the
+plans paid from the main wallet — and what each becomes in the shop's books
+(``apps.wallet.books``)."""
 
 from __future__ import annotations
 
@@ -17,9 +18,17 @@ from apps.analytics.models import AnalyticsEvent
 from apps.core.models import RelayInstallation
 from apps.core.relay import relay_ai_available, relay_sms_available
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
-from apps.expenses.models import Expense
+from apps.expenses.models import Expense, ExpenseCategory
+from apps.integrations.models import IntegrationAccount
+from apps.treasury.models import MoneyTransfer
 
+from .books import WALLET_ACCOUNT_NAME, WALLET_EXPENSE_CATEGORY_NAME
+from .models import WalletSettings, WalletSpend
 from .tests import _CLIENT, _LOCMEM, link_relay, relay_refusal, wallet_payload
+
+
+def vouchers_block(balance="25.00", configured=True):
+    return {"balance": balance, "configured": configured, "test_mode": False}
 
 
 def sms_block(balance="15.000", price="0.150"):
@@ -41,7 +50,6 @@ def relay_status(**overrides):
         "relay_enabled": False,
         "subscription_active": False,
         "ai_enabled": False,
-        "sms_enabled": False,
         "subscription_ends_at": None,
         "remote_access_paid_until": None,
         "ai_paid_until": None,
@@ -134,8 +142,40 @@ class WalletSpendingTests(TestCase):
         )
         self.assertTrue(relay_sms_available(self.installation()))
         self.assertTrue(AnalyticsEvent.objects.filter(name="wallet.sms.allocated").exists())
-        # Nothing is booked: the money left the shop when it was paid in.
+        # Spent: an expense paid from the wallet's account, not from a bank.
+        expense = Expense.objects.select_related("money_account", "category").get()
+        self.assertEqual(expense.amount, Decimal("15.00"))
+        self.assertEqual(expense.description, "رصيد الرسائل")
+        self.assertEqual(expense.payment_method, Expense.PaymentMethod.TRANSFER)
+        self.assertEqual(expense.money_account.name, WALLET_ACCOUNT_NAME)
+        self.assertEqual(expense.category.name, WALLET_EXPENSE_CATEGORY_NAME)
+        self.assertEqual(expense.reference, "transfer:alloc-1")
+        spend = WalletSpend.objects.get()
+        self.assertEqual((spend.kind, spend.expense, spend.requested_by), ("sms", expense, self.manager))
+        # The same movement answered again books nothing more.
+        with self.captureOnCommitCallbacks(execute=True):
+            self.api.post(
+                "/api/wallet/sms/allocations/", {"amount": "15", "idempotency_key": "alloc-1"}, format="json"
+            )
+        self.assertEqual(Expense.objects.count(), 1)
+
+    def test_the_owners_category_files_the_wallets_spending(self):
+        category = ExpenseCategory.objects.create(name="اشتراكات")
+        WalletSettings.objects.update_or_create(pk=1, defaults={"expense_category": category})
+        self.relay.allocate_wallet_sms.return_value = {
+            "balance": "85.000", "sms": sms_block(), "transfer": {}, "replayed": False,
+        }
+        self.api.post("/api/wallet/sms/allocations/", {"amount": "15"}, format="json")
+        self.assertEqual(Expense.objects.get().category, category)
+
+    def test_a_wallet_kept_out_of_the_books_books_no_spending(self):
+        WalletSettings.objects.update_or_create(pk=1, defaults={"record_topups_as_expenses": False})
+        self.relay.allocate_wallet_sms.return_value = {
+            "balance": "85.000", "sms": sms_block(), "transfer": {}, "replayed": False,
+        }
+        self.api.post("/api/wallet/sms/allocations/", {"amount": "15"}, format="json")
         self.assertFalse(Expense.objects.exists())
+        self.assertFalse(WalletSpend.objects.get().record_in_books)
 
     def test_a_replayed_allocation_answers_ok_and_is_not_counted_again(self):
         self.relay.allocate_wallet_sms.return_value = {
@@ -213,6 +253,23 @@ class WalletSpendingTests(TestCase):
         bump.assert_called()  # every device re-reads ai_available now
         event = AnalyticsEvent.objects.get(name="wallet.plan.purchased")
         self.assertEqual(event.attributes["plan"], "ai")
+        # The period it bought is spending, paid from the wallet.
+        expense = Expense.objects.select_related("money_account").get()
+        self.assertEqual(expense.amount, Decimal("30.00"))
+        self.assertEqual(expense.description, "اشتراك المساعد الذكي حتى 2026-11-01")
+        self.assertEqual(expense.money_account.name, WALLET_ACCOUNT_NAME)
+        self.assertEqual(expense.reference, "plan:buy-1")
+
+    def test_a_plan_entry_that_names_itself_keeps_its_own_words(self):
+        self.relay.purchase_wallet_plan.return_value = {
+            "plan": {"key": "remote_access", "active": True},
+            "balance": "50.000",
+            "entry": {"amount": "-50.000", "description": "اشتراك الوصول عن بُعد حتى 2026-11-07"},
+            "replayed": False,
+        }
+        self.relay.get_installation.return_value = relay_status()
+        self.api.post("/api/wallet/subscriptions/", {"plan": "remote_access"}, format="json")
+        self.assertEqual(Expense.objects.get().description, "اشتراك الوصول عن بُعد حتى 2026-11-07")
 
     def test_a_purchase_whose_reread_fails_is_still_paid(self):
         self.relay.purchase_wallet_plan.return_value = {
@@ -241,3 +298,108 @@ class WalletSpendingTests(TestCase):
             with self.subTest(body=body):
                 self.assertEqual(self.api.post("/api/wallet/subscriptions/", body, format="json").status_code, 400)
         self.relay.purchase_wallet_plan.assert_not_called()
+
+
+@override_settings(CACHES=_LOCMEM)
+class WalletVoucherAllocationTests(TestCase):
+    """Money into the voucher balance the till's «كروت دفتر» are paid from."""
+
+    def setUp(self):
+        cache.clear()
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="owner", password="x")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="csh", password="x")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.api = APIClient()
+        self.api.force_authenticate(self.manager)
+        self.relay = mock.Mock()
+        patcher = mock.patch(_CLIENT, return_value=self.relay)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        link_relay()
+
+    def allocate(self, amount="25", key="vouchers-1"):
+        self.relay.allocate_wallet_vouchers.return_value = {
+            "balance": "75.000",
+            "vouchers": vouchers_block("25.00"),
+            "transfer": {"out": {"amount": "-25.000"}, "in": {"amount": "25.000"}},
+            "replayed": False,
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.api.post(
+                "/api/wallet/vouchers/allocations/",
+                {"amount": amount, "idempotency_key": key},
+                format="json",
+            )
+
+    def test_moving_money_into_the_voucher_balance_moves_it_into_the_float(self):
+        resp = self.allocate()
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["balance"], "75.000")
+        self.assertEqual(
+            resp.data["vouchers"],
+            {"balance": "25.00", "configured": True, "test_mode": False, "enabled": False},
+        )
+        self.relay.allocate_wallet_vouchers.assert_called_once_with(
+            access_token="access-token", amount=Decimal("25.00"), idempotency_key="vouchers-1",
+            requested_by="owner", timeout=mock.ANY,
+        )
+        transfer = MoneyTransfer.objects.select_related("from_account", "to_account").get()
+        self.assertEqual(transfer.amount, Decimal("25.00"))
+        self.assertEqual(transfer.from_account.name, WALLET_ACCOUNT_NAME)
+        self.assertEqual(transfer.to_account.name, "رصيد كروت دفتر")
+        self.assertEqual(transfer.reason, "تحويل إلى رصيد كروت دفتر")
+        self.assertEqual(transfer.reference, "transfer:vouchers-1")
+        # Not spent yet, so no expense; and moving money in starts no selling.
+        self.assertFalse(Expense.objects.exists())
+        account = IntegrationAccount.objects.get(provider="pointy")
+        self.assertFalse(account.is_active)
+        self.assertEqual(account.money_account, transfer.to_account)
+        self.assertEqual(account.balance, Decimal("25.00"))
+        self.assertTrue(AnalyticsEvent.objects.filter(name="wallet.vouchers.allocated").exists())
+        # Answered again: booked once.
+        self.allocate()
+        self.assertEqual(MoneyTransfer.objects.count(), 1)
+
+    def test_the_overview_carries_the_voucher_balance_and_the_shops_switch(self):
+        IntegrationAccount.objects.create(provider="pointy", is_active=True)
+        self.relay.get_wallet.return_value = wallet_payload(vouchers=vouchers_block("12.50"))
+        resp = self.api.get("/api/wallet/")
+        self.assertEqual(
+            resp.data["vouchers"],
+            {"balance": "12.50", "configured": True, "test_mode": False, "enabled": True},
+        )
+        self.assertEqual(IntegrationAccount.objects.get(provider="pointy").balance, Decimal("12.50"))
+        self.relay.get_wallet.return_value = wallet_payload()
+        self.assertIsNone(self.api.get("/api/wallet/").data["vouchers"])
+
+    def test_the_voucher_statement_is_its_own_account(self):
+        self.relay.list_wallet_entries.return_value = {"entries": [], "has_more": False}
+        self.api.get("/api/wallet/entries/?account=vouchers")
+        self.assertEqual(self.relay.list_wallet_entries.call_args.kwargs["account"], "vouchers")
+
+    def test_refusals_reach_the_app_as_codes(self):
+        cases = [
+            (relay_refusal(409, "insufficient_balance", balance="5.000", amount="25.000"), 409),
+            (relay_refusal(422, "invalid_amount", max_decimals=3), 422),
+            (relay_refusal(503, "vouchers_unconfigured"), 503),
+        ]
+        for refusal, status in cases:
+            with self.subTest(status=status):
+                self.relay.allocate_wallet_vouchers.side_effect = refusal
+                resp = self.api.post("/api/wallet/vouchers/allocations/", {"amount": "25"}, format="json")
+                self.assertEqual(resp.status_code, status, resp.content)
+                self.assertTrue(resp.data["detail"])
+        self.assertFalse(MoneyTransfer.objects.exists())
+
+    def test_amounts_and_permissions_are_checked_before_the_relay(self):
+        for amount in ("0", "-5", "12.345", "abc"):
+            with self.subTest(amount=amount):
+                resp = self.api.post("/api/wallet/vouchers/allocations/", {"amount": amount}, format="json")
+                self.assertEqual(resp.status_code, 400, resp.content)
+        self.api.force_authenticate(self.cashier)
+        resp = self.api.post("/api/wallet/vouchers/allocations/", {"amount": "25"}, format="json")
+        self.assertEqual(resp.status_code, 403)
+        self.relay.allocate_wallet_vouchers.assert_not_called()

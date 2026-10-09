@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from datetime import timedelta
 from decimal import Decimal
@@ -45,6 +46,10 @@ from .models import BusinessNotification, BusinessNotificationUserState
 logger = logging.getLogger(__name__)
 
 MANAGED_CODES = (
+    # The company's verdict on a bank transfer the shop sent to fill its
+    # wallet: shown for a few days after it was decided.
+    "wallet.transfer_confirmed",
+    "wallet.transfer_rejected",
     "inventory.out_of_stock",
     "inventory.low_stock",
     "inventory.position_untrusted",
@@ -75,6 +80,7 @@ MANAGED_CODES = (
     # The float is nearly out. The one alert here that arrives before a sale
     # has failed rather than after — see _low_float_notification.
     "integrations.low_float",
+    "integrations.below_cost_cards",
     "discounts.expiring_rule",
     "employees.payroll_ready",
     "operations.backend_error",
@@ -86,6 +92,15 @@ MANAGED_CODES = (
 )
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
 NOTIFICATION_AUDIENCE_RULES = {
+    # Whoever may see and fill the wallet (the subscription page it lives on).
+    "wallet.transfer_confirmed": {
+        "permissions": ("core.change_shopsettings",),
+        "manager_only": False,
+    },
+    "wallet.transfer_rejected": {
+        "permissions": ("core.change_shopsettings",),
+        "manager_only": False,
+    },
     "inventory.out_of_stock": {
         "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
         "manager_only": True,
@@ -180,6 +195,12 @@ NOTIFICATION_AUDIENCE_RULES = {
         ),
         "manager_only": False,
     },
+    "integrations.below_cost_cards": {
+        # The owner's pricing call: a card price they set is now under what the
+        # shop pays the company, and the card is blocked until they fix it.
+        "permissions": ("integrations.manage_integrations",),
+        "manager_only": True,
+    },
     "discounts.expiring_rule": {
         "permissions": ("discounts.view_discountrule",),
         "manager_only": True,
@@ -217,6 +238,7 @@ def sync_business_notifications(now=None):
     desired.extend(_payroll_notifications(now))
     desired.extend(_backup_notifications(now))
     desired.extend(_card_settlement_notifications(now))
+    desired.extend(_wallet_transfer_notifications(now))
 
     fingerprints = set()
     changed = 0
@@ -1114,6 +1136,47 @@ def _card_settlement_notifications(now):
     return specs
 
 
+#: How long the company's verdict on a bank transfer stays in the bell.
+WALLET_TRANSFER_NOTICE_DAYS = 3
+
+
+def _wallet_transfer_notifications(now):
+    """One notice per bank transfer the company decided in the last few days:
+    confirmed (the wallet was credited) or rejected (with the reason its
+    operator wrote, which is what the owner needs to act on)."""
+    from apps.wallet.models import WalletTopUp
+
+    decided = WalletTopUp.objects.filter(
+        method=WalletTopUp.METHOD_BANK_TRANSFER,
+        status__in=(WalletTopUp.Status.PAID, WalletTopUp.Status.REJECTED),
+        decided_at__gte=now - timedelta(days=WALLET_TRANSFER_NOTICE_DAYS),
+    ).only("relay_id", "invoice_no", "amount", "status", "error_detail", "decided_at")
+    specs = []
+    for topup in decided:
+        confirmed = topup.status == WalletTopUp.Status.PAID
+        specs.append(
+            _spec(
+                code="wallet.transfer_confirmed" if confirmed else "wallet.transfer_rejected",
+                category=BusinessNotification.Category.OPERATIONS,
+                severity=(
+                    BusinessNotification.Severity.INFO
+                    if confirmed
+                    else BusinessNotification.Severity.WARNING
+                ),
+                fingerprint=f"wallet.transfer:{topup.relay_id}",
+                entity_type="wallet.wallettopup",
+                entity_id=topup.relay_id,
+                payload={
+                    "amount": _money(topup.amount),
+                    "invoice_no": topup.invoice_no,
+                    "reason": topup.error_detail,
+                    "decided_at": topup.decided_at.isoformat(),
+                },
+            )
+        )
+    return specs
+
+
 def _backup_notifications(now):
     """Escalate when the shop has no recent, verified way back.
 
@@ -1387,6 +1450,8 @@ def _integration_notifications(now):
     from apps.integrations import float_ledger, switches
 
     for account in switches.running(IntegrationAccount.objects.filter(is_active=True)):
+        # Nothing to do with the float, so before it is judged.
+        specs.extend(_below_cost_cards_notification(account))
         if account.balance is None:
             # Never probed, or probed and refused. Nothing below can say
             # anything honest about a float nobody has read.
@@ -1429,6 +1494,43 @@ def _integration_notifications(now):
         #    by it.
         specs.extend(_low_float_notification(account))
     return specs
+
+
+def _below_cost_cards_notification(account):
+    """«كروت دفتر» cards whose own price the company's cost has overtaken.
+
+    One alert per *set* of affected cards: the fingerprint names the set, so a
+    card joining it raises a new alert, a price change within the same set only
+    refreshes the figures, and the managed-code sweep resolves it by itself the
+    day nobody is below cost any more.
+    """
+    from apps.integrations import catalog as provider_catalog
+    from apps.integrations.pricing_rules import below_cost_vouchers
+
+    if account.provider != provider_catalog.POINTY.key:
+        return []
+    affected = below_cost_vouchers(account)
+    if not affected:
+        return []
+    ids = sorted(row.variant_id for row in affected)
+    digest = hashlib.sha1(",".join(map(str, ids)).encode("ascii")).hexdigest()[:12]
+    return [
+        _spec(
+            code="integrations.below_cost_cards",
+            category=BusinessNotification.Category.SALES,
+            severity=BusinessNotification.Severity.WARNING,
+            fingerprint=f"integrations.below_cost_cards:{account.pk}:{digest}",
+            entity_type="integrations.integrationaccount",
+            entity_id=str(account.pk),
+            payload={
+                "provider": account.provider,
+                "count": len(ids),
+                # A few names, so the alert says which cards without a list screen.
+                "cards": [f"{row.brand.name} {row.label}".strip() for row in affected[:5]],
+                "variant_ids": ids[:200],
+            },
+        )
+    ]
 
 
 def _low_float_notification(account):

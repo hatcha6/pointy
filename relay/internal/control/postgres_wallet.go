@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -50,7 +51,8 @@ const walletTopUpColumns = `t.id,
 	t.confirmed_by,
 	t.created_at,
 	t.updated_at,
-	t.paid_at`
+	t.paid_at,
+	t.transfer`
 
 const selectWalletEntryWithShopSQL = `SELECT ` + walletEntryColumns + `, COALESCE(i.shop_name, '')
 FROM relay_wallet_entries e
@@ -501,6 +503,10 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 		if err != nil {
 			return WalletTopUp{}, false, err
 		}
+		transfer, err := transferJSON(prepared.Transfer)
+		if err != nil {
+			return WalletTopUp{}, false, err
+		}
 		inserted, err := scanWalletTopUp(s.pool.QueryRow(
 			ctx,
 			`INSERT INTO relay_wallet_topups AS t (
@@ -508,13 +514,13 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 				provider_transaction_id, checkout_url, idempotency_key, requested_by,
 				payer_hint, otp_attempts,
 				test_mode, error_code, error_detail, entry_id, confirmed_by,
-				created_at, updated_at, paid_at
+				created_at, updated_at, paid_at, transfer
 			) VALUES (
 				$1, $2, $3, $4::text::numeric, $5, $6,
 				'', '', $7, $8,
 				$9, 0,
 				$10, '', '', '', '',
-				$11::timestamptz, $11::timestamptz, NULL
+				$11::timestamptz, $11::timestamptz, NULL, $12::jsonb
 			)
 			ON CONFLICT (installation_id, idempotency_key) DO NOTHING
 			RETURNING `+walletTopUpColumns,
@@ -529,6 +535,7 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 			prepared.PayerHint,
 			prepared.TestMode,
 			prepared.CreatedAt,
+			transfer,
 		), false)
 		switch code, constraint := pgErrorCode(err); {
 		case err == nil:
@@ -732,11 +739,18 @@ func (s *PostgresStore) SettleWalletTopUp(
 		return WalletTopUp{}, false, err
 	}
 	now := s.clock.Now().UTC()
+	settled := applySettledAmount(existing, settlement)
+	transfer, err := transferJSON(settled.Transfer)
+	if err != nil {
+		return WalletTopUp{}, false, err
+	}
 	updated, err := scanWalletTopUp(tx.QueryRow(
 		ctx,
 		`UPDATE relay_wallet_topups AS t
 		SET
 			status = 'paid',
+			amount = $6::text::numeric,
+			transfer = $7::jsonb,
 			provider_transaction_id = COALESCE(NULLIF($2, ''), t.provider_transaction_id),
 			confirmed_by = $3,
 			entry_id = $4,
@@ -751,6 +765,8 @@ func (s *PostgresStore) SettleWalletTopUp(
 		strings.TrimSpace(settlement.ConfirmedBy),
 		entry.ID,
 		now,
+		settled.Amount,
+		transfer,
 	), false)
 	if err != nil {
 		return WalletTopUp{}, false, err
@@ -844,6 +860,7 @@ func scanWalletEntry(row pgx.Row, withShop bool) (WalletEntry, error) {
 func scanWalletTopUp(row pgx.Row, withShop bool) (WalletTopUp, error) {
 	var topUp WalletTopUp
 	var paidAt pgtype.Timestamptz
+	var transfer []byte
 	dest := []any{
 		&topUp.ID,
 		&topUp.InstallationID,
@@ -865,6 +882,7 @@ func scanWalletTopUp(row pgx.Row, withShop bool) (WalletTopUp, error) {
 		&topUp.CreatedAt,
 		&topUp.UpdatedAt,
 		&paidAt,
+		&transfer,
 	}
 	if withShop {
 		dest = append(dest, &topUp.ShopName)
@@ -881,6 +899,13 @@ func scanWalletTopUp(row pgx.Row, withShop bool) (WalletTopUp, error) {
 	if paidAt.Valid {
 		value := paidAt.Time.UTC()
 		topUp.PaidAt = &value
+	}
+	if len(transfer) > 0 && string(transfer) != "null" {
+		var details WalletBankTransfer
+		if err := json.Unmarshal(transfer, &details); err != nil {
+			return WalletTopUp{}, err
+		}
+		topUp.Transfer = &details
 	}
 	return topUp, nil
 }

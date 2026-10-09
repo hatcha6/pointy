@@ -1,17 +1,22 @@
 """The Daftar wallet, as the shop's backend serves it to the app.
 
 The balance and its ledger live on the relay; this module reads them for the
-app, starts top-ups, sends the payer's code, and keeps the shop's own books. A
-paid top-up becomes one expense («خدمات دفتر») when the shop wants that —
-exactly once, however many times the top-up is read back: by the confirm that
-paid it, by the app polling while the owner pays on the gateway's page, by the
-owner opening the wallet later, or by the sync task catching a payment nobody
-was watching (the owner closed the app; the company confirmed it by hand).
+app, starts top-ups, sends the payer's code, spends the wallet, and keeps the
+shop's own books through :mod:`apps.wallet.books` — the one place that decides
+what each movement becomes there (the wallet is an asset: a paid top-up moves
+money from the bank into «محفظة دفتر»; spending it is an expense paid from it;
+money moved into the voucher balance moves into the «كروت دفتر» float).
 
-Spending the wallet books nothing: the money left the shop when it was paid
-in. The owner moves some of it into the SMS balance, which every message is
-paid from, and pays for the plans — remote access, the assistant — from the
-main wallet, a period at a time.
+Every booking happens exactly once, however many times a movement is read
+back: a top-up by the confirm that paid it, by the app polling while the owner
+pays on the gateway's page, by the owner opening the wallet later, or by the
+sync task catching a payment nobody was watching (the owner closed the app;
+the company confirmed it by hand); a spend right after the relay answers it.
+
+The owner moves money from the main wallet into the SMS balance, which every
+message is paid from, and into the voucher balance, which every «كروت دفتر»
+card is paid from, and pays for the plans — remote access, the assistant — from
+the main wallet, a period at a time.
 """
 
 from __future__ import annotations
@@ -23,44 +28,36 @@ from datetime import timedelta, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ImproperlyConfigured
-from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from apps.core.models import RelayInstallation
-from apps.core.period_lock import period_is_locked
 from apps.core.relay import (
     RelayControlError,
     mirror_sms_wallet,
     scoped_relay_client,
     sync_relay_installation,
 )
-from apps.expenses.models import Expense, ExpenseCategory
-from apps.expenses.services import create_expense
 
-from .models import WalletSettings, WalletTopUp
+from . import books
+from .books import (  # noqa: F401 - the app's names for them, kept here
+    TOPUP_METHOD_BANK_CARDS,
+    TOPUP_METHOD_PLUTU_CARDS,
+    WALLET_EXPENSE_CATEGORY_NAME,
+)
+from .models import WalletSettings, WalletSpend, WalletTopUp
 
 logger = logging.getLogger(__name__)
 
-#: Where top-ups are filed unless the owner picked another category.
-WALLET_EXPENSE_CATEGORY_NAME = "خدمات دفتر"
-#: Local bank cards through Dafa: what a request without a method means, as
-#: it did when Plutu's card checkout was the only way to pay.
-TOPUP_METHOD_BANK_CARDS = "dafa_moamalat"
-#: Plutu's card checkout, which Dafa replaced. Old top-ups keep the name.
-TOPUP_METHOD_PLUTU_CARDS = "plutu_localbankcards"
-#: How each method is named in the books, and how the money left the shop: a
-#: bank card is a card payment, a mobile wallet or bank app is a transfer.
-_METHOD_BOOKING = {
-    TOPUP_METHOD_BANK_CARDS: ("بطاقة مصرفية محلية", Expense.PaymentMethod.CARD),
-    TOPUP_METHOD_PLUTU_CARDS: ("بطاقة مصرفية محلية", Expense.PaymentMethod.CARD),
-    "dafa_sadad": ("سداد", Expense.PaymentMethod.TRANSFER),
-    "dafa_edfali": ("إدفعلي", Expense.PaymentMethod.TRANSFER),
-    "dafa_mobicash": ("موبي كاش", Expense.PaymentMethod.TRANSFER),
-    "dafa_yussor_pay": ("يسر باي", Expense.PaymentMethod.TRANSFER),
-    "dafa_masrafi_pay": ("مصرفي باي", Expense.PaymentMethod.TRANSFER),
-    "dafa_sahara_pay": ("صحارى باي", Expense.PaymentMethod.TRANSFER),
+#: The plans as the books name them (the relay's own titles).
+PLAN_TITLES = {
+    "remote_access": "الوصول عن بُعد",
+    "ai": "المساعد الذكي",
 }
+#: What moving money into the SMS balance, and into the voucher balance, is
+#: called in the books.
+SMS_SPEND_DESCRIPTION = "رصيد الرسائل"
+VOUCHERS_SPEND_DESCRIPTION = "تحويل إلى رصيد كروت دفتر"
 #: Relay calls that wait on the gateway. Starting a payment can take the
 #: provider a while; a confirm may be followed by reading the payment back. The
 #: relay gives each gateway call 20 seconds, so these outlast it.
@@ -70,7 +67,6 @@ READ_TIMEOUT = 25
 #: How far back the sync keeps asking about top-ups that could still change.
 SYNC_LOOKBACK = timedelta(days=7)
 PAGE_LIMIT = 50
-_MONEY_PLACES = Decimal("0.01")
 
 # The Arabic sentence behind every code the app can meet. The app maps the
 # codes it knows to its own strings; this is the fallback it shows otherwise.
@@ -108,6 +104,14 @@ _MESSAGES = {
     "plan_included": "هذه الخدمة مشمولة في اشتراكك بلا تاريخ انتهاء، فلا حاجة للدفع.",
     "invalid_periods": "عدد الأشهر غير مقبول.",
     "relay_error": "تعذر على خدمات دفتر إتمام الطلب. أعد المحاولة.",
+    "bank_transfer_unavailable": "التحويل المصرفي غير متاح حالياً.",
+    "invalid_channel": "اختر التطبيق الذي حوّلت به: لي باي أو ون باي.",
+    "invalid_payer_bank": "اختر المصرف الذي حوّلت منه.",
+    "invalid_payer_account": "رقم الحساب غير صحيح. أدخل الأرقام فقط.",
+    "invalid_iban": "رقم IBAN غير صحيح. يبدأ بـ LY ويليه 23 رقماً.",
+    "invalid_receipt": "أرفق إيصال التحويل: صورة أو ملف PDF.",
+    "receipt_too_large": "الإيصال أكبر من 10 ميغابايت.",
+    "too_many_reviews": "لديك تحويلات بانتظار التحقق. انتظر حتى نتحقق منها.",
 }
 
 
@@ -163,6 +167,7 @@ _RELAY_EXTRA_KEYS = (
     "balance",
     "amount",
     "max_periods",
+    "max_receipt_bytes",
 )
 
 
@@ -178,7 +183,7 @@ def _wallet_error(exc: RelayControlError) -> WalletError:
         return WalletError("relay_error", status=502, extra=extra)
     # The relay's status is meaningful to the app (409 retry, 422 fix the
     # amount, 503 later); anything else it did not expect is a bad gateway.
-    status = exc.status_code if exc.status_code in (404, 409, 422, 429, 503) else 502
+    status = exc.status_code if exc.status_code in (404, 409, 413, 422, 429, 503) else 502
     return WalletError(code, status=status, extra=extra)
 
 
@@ -228,6 +233,7 @@ def _mirror(remote, *, user=None, record_as_expense=None):
         "provider_transaction_id": str(remote.get("provider_transaction_id") or "")[:128],
         "test_mode": bool(remote.get("test_mode")),
         "error_code": str(remote.get("error_code") or "")[:64],
+        "error_detail": str(remote.get("error_detail") or "")[:500],
         "paid_at": _instant(remote.get("paid_at")),
     }
     created_at = _instant(remote.get("created_at")) or timezone.now()
@@ -256,14 +262,40 @@ def _mirror(remote, *, user=None, record_as_expense=None):
         setattr(topup, name, fields[name])
     topup.synced_at = timezone.now()
     topup.save(update_fields=[*changed, "synced_at", "updated_at"])
+    if "status" in changed:
+        _note_decision(topup)
     return topup
+
+
+#: What the company decided about a bank transfer.
+_DECIDED = (WalletTopUp.Status.PAID, WalletTopUp.Status.REJECTED)
+
+
+def _note_decision(topup):
+    """Stamp the moment this shop learned the company decided a bank transfer,
+    and bring the owner's notifications up to date so the bell says so
+    without waiting for its next sweep."""
+    if topup.method != WalletTopUp.METHOD_BANK_TRANSFER or topup.status not in _DECIDED:
+        return
+    # Restamped on every decision: a rejected transfer the company later
+    # confirms (the money turned up after all) is news again.
+    now = timezone.now()
+    WalletTopUp.objects.filter(pk=topup.pk).update(decided_at=now)
+    topup.decided_at = now
+    try:
+        from apps.core.dispatch import enqueue_best_effort
+        from apps.notifications.tasks import sync_business_notifications_task
+
+        enqueue_best_effort(sync_business_notifications_task)
+    except Exception:  # noqa: BLE001 - the sweep catches up on its own
+        logger.warning("could not hurry the notification sweep", exc_info=True)
 
 
 def _refresh(remote, **mirror_kwargs):
     """Mirror a relay top-up and, when it is paid, settle the books."""
     topup = _mirror(remote, **mirror_kwargs)
     if topup.status == WalletTopUp.Status.PAID:
-        topup = book_topup_expense(topup.pk)
+        topup = books.book_topup(topup.pk)
     return topup
 
 
@@ -281,20 +313,27 @@ def topup_payload(remote, topup=None):
         "requested_by": remote.get("requested_by", ""),
         "provider_transaction_id": remote.get("provider_transaction_id", ""),
         "error_code": remote.get("error_code", ""),
+        "error_detail": remote.get("error_detail", ""),
         "confirmed_by": remote.get("confirmed_by", ""),
         "created_at": remote.get("created_at"),
         "paid_at": remote.get("paid_at"),
         "record_as_expense": None,
         "expense_id": None,
+        "transfer_id": None,
         "expense_error": "",
     }
     if remote.get("checkout_url"):
         payload["checkout_url"] = remote["checkout_url"]
+    if isinstance(remote.get("transfer"), dict):
+        payload["transfer"] = remote["transfer"]
     if remote.get("otp_attempts_left") is not None:
         payload["otp_attempts_left"] = remote["otp_attempts_left"]
     if topup is not None:
         payload["record_as_expense"] = topup.record_as_expense
+        # A top-up booked before the wallet was an account in the books
+        # carries its expense; one booked since, the money moved into it.
         payload["expense_id"] = topup.expense_id
+        payload["transfer_id"] = topup.transfer_id
         payload["expense_error"] = topup.expense_error
     return payload
 
@@ -313,11 +352,13 @@ def _local_payload(topup):
         "requested_by": getattr(topup.requested_by, "username", "") or "",
         "provider_transaction_id": topup.provider_transaction_id,
         "error_code": topup.error_code,
+        "error_detail": topup.error_detail,
         "confirmed_by": "",
         "created_at": topup.relay_created_at.isoformat(),
         "paid_at": topup.paid_at.isoformat() if topup.paid_at else None,
         "record_as_expense": topup.record_as_expense,
         "expense_id": topup.expense_id,
+        "transfer_id": topup.transfer_id,
         "expense_error": topup.expense_error,
     }
 
@@ -338,12 +379,19 @@ def _payloads_with_books(remotes):
 def wallet_settings_payload(settings=None):
     settings = settings or WalletSettings.load()
     category = settings.expense_category
+    account = settings.money_account
     return {
+        # The app's name for it: whether the wallet is kept in the shop's
+        # books at all (``apps.wallet.books``).
         "record_topups_as_expenses": settings.record_topups_as_expenses,
         "expense_category": (
             {"id": category.pk, "name": category.name} if category is not None else None
         ),
         "default_expense_category_name": WALLET_EXPENSE_CATEGORY_NAME,
+        # «محفظة دفتر» in the money position, once anything was booked to it.
+        "money_account": (
+            {"id": account.pk, "name": account.name} if account is not None else None
+        ),
     }
 
 
@@ -359,86 +407,6 @@ def update_wallet_settings(*, record_topups_as_expenses=None, expense_category=.
     if fields:
         settings.save(update_fields=[*fields, "updated_at"])
     return settings
-
-
-def _expense_category():
-    """The category a top-up is filed under, made on first use."""
-    settings = WalletSettings.objects.select_for_update().get_or_create(pk=1)[0]
-    if settings.expense_category is not None:
-        return settings.expense_category
-    category, _ = ExpenseCategory.objects.get_or_create(
-        name=WALLET_EXPENSE_CATEGORY_NAME,
-        defaults={"display_order": 9},
-    )
-    settings.expense_category = category
-    settings.save(update_fields=["expense_category", "updated_at"])
-    return category
-
-
-def book_topup_expense(topup_id):
-    """Book a paid top-up as an expense, once: a card payment for a bank card,
-    a transfer for a mobile wallet or bank app.
-
-    The money left the shop's account on the day the gateway took it, so that
-    is the expense's day — unless that day is in a closed period, in which case
-    the expense is dated today (and says why) rather than reopening books that
-    were reported. When today is closed too, nothing is booked and the reason
-    is kept for the next sync.
-    """
-    try:
-        with transaction.atomic():
-            topup = WalletTopUp.objects.select_for_update().get(pk=topup_id)
-            if (
-                topup.status != WalletTopUp.Status.PAID
-                or not topup.record_as_expense
-                or topup.expense_booked_at is not None
-            ):
-                return topup
-            paid_on = timezone.localdate(topup.paid_at or timezone.now())
-            spent_at = paid_on
-            method_name, payment_method = _METHOD_BOOKING.get(
-                topup.method, ("بوابة الدفع", Expense.PaymentMethod.TRANSFER)
-            )
-            notes = [f"شحن محفظة دفتر، رقم العملية {topup.invoice_no}."]
-            if topup.payer_hint:
-                notes.append(f"دُفع من {method_name} {topup.payer_hint}.")
-            if topup.provider_transaction_id:
-                notes.append(f"رقم عملية بوابة الدفع: {topup.provider_transaction_id}.")
-            if period_is_locked(spent_at):
-                today = timezone.localdate()
-                if period_is_locked(today):
-                    topup.expense_error = "period_locked"
-                    topup.save(update_fields=["expense_error", "updated_at"])
-                    return topup
-                notes.append(
-                    f"دُفع في {paid_on:%Y-%m-%d} ضمن فترة مغلقة، فسُجّل بتاريخ اليوم."
-                )
-                spent_at = today
-            description = f"شحن محفظة دفتر — {method_name}"
-            if topup.test_mode:
-                description += " (تجريبي)"
-            expense = create_expense(
-                user=topup.requested_by,
-                category=_expense_category(),
-                description=description,
-                amount=topup.amount.quantize(_MONEY_PLACES),
-                payment_method=payment_method,
-                spent_at=spent_at,
-                reference=topup.invoice_no,
-                notes="\n".join(notes),
-            )
-            topup.expense = expense
-            topup.expense_booked_at = timezone.now()
-            topup.expense_error = ""
-            topup.save(update_fields=["expense", "expense_booked_at", "expense_error", "updated_at"])
-            return topup
-    except Exception:
-        # The top-up is paid either way; the books catch up on the next sync.
-        logger.exception("booking wallet top-up %s as an expense failed", topup_id)
-        WalletTopUp.objects.filter(pk=topup_id, expense_booked_at__isnull=True).update(
-            expense_error="booking_failed", updated_at=timezone.now()
-        )
-        return WalletTopUp.objects.get(pk=topup_id)
 
 
 # --- what the views call ----------------------------------------------------------
@@ -462,6 +430,7 @@ def wallet_overview():
             "test_mode": False,
             "topups": None,
             "sms": None,
+            "vouchers": None,
             "plans": [],
             "recent_topups": [_local_payload(topup) for topup in recent],
             "recent_entries": [],
@@ -479,11 +448,59 @@ def wallet_overview():
         "topups": payload.get("topups"),
         # A relay from before the SMS balance and the plans sends neither.
         "sms": sms if isinstance(sms, dict) else None,
+        # Nor, from before the voucher shop, the voucher balance.
+        "vouchers": _vouchers_block(payload.get("vouchers")),
         "plans": [plan for plan in payload.get("plans") or [] if isinstance(plan, dict)],
         "recent_topups": _payloads_with_books(payload.get("recent_topups") or []),
         "recent_entries": payload.get("recent_entries") or [],
         "settings": wallet_settings_payload(settings),
     }
+
+
+def read_main_balance():
+    """The main wallet's balance, as the relay holds it now. Raises ``WalletError``."""
+    installation, client = _relay()
+    payload = _call(lambda: client.get_wallet(access_token=installation.access_token))
+    balance = _decimal(payload.get("balance"), default=None)
+    if balance is None:
+        raise WalletError("relay_error")
+    return balance
+
+
+def _vouchers_block(vouchers):
+    """The voucher balance as the app shows it, or ``None`` from a relay that
+    sells no cards of its own. ``enabled`` is the shop's own switch: the owner
+    turned «كروت دفتر» on in Integrations."""
+    if not isinstance(vouchers, dict):
+        return None
+    _mirror_vouchers(vouchers)
+    from apps.integrations.models import IntegrationAccount
+
+    return {
+        "balance": vouchers.get("balance"),
+        "configured": bool(vouchers.get("configured")),
+        "test_mode": bool(vouchers.get("test_mode")),
+        "enabled": IntegrationAccount.objects.filter(
+            provider=books.VOUCHERS_PROVIDER, is_active=True
+        ).exists(),
+    }
+
+
+def _mirror_vouchers(vouchers):
+    """Keep the «كروت دفتر» account's balance — the voucher balance — in step,
+    so the till warns about a card the balance cannot pay for. Best-effort,
+    and a plain update: a balance moving is not a settings change."""
+    balance = _decimal((vouchers or {}).get("balance"), default=None)
+    if balance is None:
+        return
+    from apps.integrations.models import IntegrationAccount
+
+    try:
+        IntegrationAccount.objects.filter(provider=books.VOUCHERS_PROVIDER).exclude(
+            balance=balance.quantize(Decimal("0.01"))
+        ).update(balance=balance.quantize(Decimal("0.01")), balance_at=timezone.now())
+    except Exception:  # noqa: BLE001 - the answer the app waits for matters more
+        logger.exception("mirroring the voucher balance failed")
 
 
 def list_topups(*, before="", limit=PAGE_LIMIT):
@@ -562,6 +579,136 @@ def start_topup(*, user, amount, method=TOPUP_METHOD_BANK_CARDS, idempotency_key
     }
 
 
+#: Receipts the relay keeps: a photo or the bank's PDF.
+MAX_RECEIPT_BYTES = 10 * 1024 * 1024
+#: How old a receipt the phone sent may be when it is attached to a transfer.
+COMPANION_RECEIPT_MAX_AGE = timedelta(hours=2)
+
+
+def start_bank_transfer(
+    *,
+    user,
+    amount,
+    channel,
+    payer_bank,
+    payer_account,
+    payer_iban,
+    to_account="",
+    receipt_file=None,
+    receipt_attachment_id=None,
+    idempotency_key="",
+    record_as_expense=None,
+):
+    """Send a transfer the shop made to the company's account, with its receipt.
+
+    The receipt is a file the app uploaded, or what the paired phone sent
+    (``receipt_attachment_id``). Photos are re-encoded from their bytes (a HEIC
+    from an iPhone becomes a JPEG an operator's browser can show); a PDF goes
+    as it is. The relay keeps the top-up in review until the company finds the
+    money; the app shows it waiting, and the owner is told the outcome.
+    """
+    installation, client = _relay()
+    receipt, name, content_type = _receipt_bytes(
+        user=user, receipt_file=receipt_file, attachment_id=receipt_attachment_id
+    )
+    if record_as_expense is not None:
+        update_wallet_settings(record_topups_as_expenses=record_as_expense)
+    else:
+        record_as_expense = WalletSettings.load().record_topups_as_expenses
+    key = idempotency_key or f"transfer-{uuid.uuid4()}"
+    fields = {
+        "amount": str(amount),
+        "idempotency_key": key,
+        "requested_by": _requested_by(user),
+        "channel": channel,
+        "payer_bank": payer_bank,
+        "payer_account": payer_account,
+        "payer_iban": payer_iban,
+    }
+    if to_account:
+        fields["to_account"] = to_account
+    payload = _call(
+        lambda: client.create_wallet_bank_transfer(
+            access_token=installation.access_token,
+            fields=fields,
+            receipt=receipt,
+            receipt_name=name,
+            receipt_type=content_type,
+            timeout=START_TIMEOUT,
+        )
+    )
+    remote = payload.get("top_up") or {}
+    topup = _mirror(
+        remote,
+        user=user if getattr(user, "is_authenticated", False) else None,
+        record_as_expense=record_as_expense,
+    )
+    return {
+        "top_up": topup_payload(remote, topup),
+        "next_action": payload.get("next_action") or "bank_transfer",
+        "replayed": bool(payload.get("replayed")),
+    }
+
+
+def _receipt_bytes(*, user, receipt_file, attachment_id):
+    """The receipt as (bytes, name, content type), or ``WalletError``."""
+    from apps.attachments.image_normalization import normalize_uploaded_image
+
+    if receipt_file is None and attachment_id:
+        receipt_file = _companion_receipt(user, attachment_id)
+    if receipt_file is None:
+        raise WalletError("invalid_receipt", status=422)
+    if getattr(receipt_file, "size", 0) > MAX_RECEIPT_BYTES:
+        raise WalletError("receipt_too_large", status=413, extra={"max_receipt_bytes": MAX_RECEIPT_BYTES})
+    receipt_file.seek(0)
+    head = receipt_file.read(5)
+    receipt_file.seek(0)
+    name = str(getattr(receipt_file, "name", "") or "receipt")
+    if head == b"%PDF-":
+        return receipt_file.read(), name, "application/pdf"
+    normalized = normalize_uploaded_image(receipt_file)
+    if normalized is None:
+        raise WalletError("invalid_receipt", status=422)
+    data = normalized.read()
+    if len(data) > MAX_RECEIPT_BYTES:
+        raise WalletError("receipt_too_large", status=413, extra={"max_receipt_bytes": MAX_RECEIPT_BYTES})
+    return data, normalized.name, normalized.content_type
+
+
+def _companion_receipt(user, attachment_id):
+    """What this user's paired phone just sent for this transfer.
+
+    Only a capture this user asked their phone for, in the last two hours: an
+    attachment id is not a way to send the company any file in the shop.
+    """
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.attachments.models import Attachment
+    from apps.attachments.services import open_attachment
+    from apps.companion.models import CompanionCaptureRequest
+
+    try:
+        attachment = Attachment.objects.get(pk=int(attachment_id), status=Attachment.Status.ACTIVE)
+    except (Attachment.DoesNotExist, TypeError, ValueError):
+        raise WalletError("invalid_receipt", status=422) from None
+    metadata = attachment.metadata or {}
+    request_id = metadata.get("capture_request_id")
+    asked = (
+        metadata.get("source") == "companion"
+        and request_id
+        and CompanionCaptureRequest.objects.filter(
+            pk=request_id, created_by_id=getattr(user, "pk", None)
+        ).exists()
+    )
+    if not asked or attachment.created_at < timezone.now() - COMPANION_RECEIPT_MAX_AGE:
+        raise WalletError("invalid_receipt", status=422)
+    with open_attachment(attachment) as handle:
+        data = handle.read(MAX_RECEIPT_BYTES + 1)
+    return SimpleUploadedFile(
+        attachment.original_filename or "receipt", data, content_type=attachment.content_type
+    )
+
+
 def _requested_by(user):
     """Who the relay records as having asked, as the shop names them."""
     if user is None or not getattr(user, "is_authenticated", False):
@@ -594,12 +741,67 @@ def allocate_to_sms(*, user, amount, idempotency_key=""):
     )
     sms = payload.get("sms")
     _mirror_sms(sms, installation)
+    transfer = payload.get("transfer") or {}
+    books.record_spend(
+        kind=WalletSpend.Kind.SMS,
+        relay_reference=_transfer_reference(key),
+        amount=amount,
+        description=SMS_SPEND_DESCRIPTION,
+        happened_on=_happened_on((transfer.get("out") or {}).get("created_at")),
+        user=user,
+        main_balance=_decimal(payload.get("balance"), default=None),
+    )
     return {
         "balance": payload.get("balance"),
         "sms": sms if isinstance(sms, dict) else None,
-        "transfer": payload.get("transfer") or {},
+        "transfer": transfer,
         "replayed": bool(payload.get("replayed")),
     }
+
+
+def allocate_to_vouchers(*, user, amount, idempotency_key=""):
+    """Move money from the main wallet into the voucher balance, which every
+    «كروت دفتر» card is paid from. Returns both balances and the transfer; a
+    retry with the same key moves nothing again. In the books it moves money
+    from «محفظة دفتر» into the «كروت دفتر» float (``apps.wallet.books``)."""
+    installation, client = _relay()
+    key = idempotency_key or f"vouchers-{uuid.uuid4()}"
+    payload = _call(
+        lambda: client.allocate_wallet_vouchers(
+            access_token=installation.access_token,
+            amount=amount,
+            idempotency_key=key,
+            requested_by=_requested_by(user),
+            timeout=READ_TIMEOUT,
+        )
+    )
+    transfer = payload.get("transfer") or {}
+    books.record_spend(
+        kind=WalletSpend.Kind.VOUCHERS,
+        relay_reference=_transfer_reference(key),
+        amount=amount,
+        description=VOUCHERS_SPEND_DESCRIPTION,
+        happened_on=_happened_on((transfer.get("out") or {}).get("created_at")),
+        user=user,
+        main_balance=_decimal(payload.get("balance"), default=None),
+    )
+    return {
+        "balance": payload.get("balance"),
+        "vouchers": _vouchers_block(payload.get("vouchers")),
+        "transfer": transfer,
+        "replayed": bool(payload.get("replayed")),
+    }
+
+
+def _transfer_reference(key):
+    """The relay's own reference for a transfer made under ``key`` — the one its
+    statement prints, and the one both of its entries carry."""
+    return f"transfer:{key}"
+
+
+def _happened_on(value):
+    """The business day a relay movement happened, or today when it does not say."""
+    return timezone.localdate(_instant(value) or timezone.now())
 
 
 def purchase_plan(*, user, plan, periods=1, idempotency_key=""):
@@ -623,12 +825,42 @@ def purchase_plan(*, user, plan, periods=1, idempotency_key=""):
     except (RelayControlError, ImproperlyConfigured) as exc:
         # Paid either way; the periodic sync brings the entitlement down.
         logger.warning("re-reading entitlements after a plan purchase failed: %s", exc)
+    entry = payload.get("entry") or {}
+    _book_plan(plan, payload.get("plan") or {}, entry, key=key, user=user, balance=payload.get("balance"))
     return {
         "plan": payload.get("plan") or {},
         "balance": payload.get("balance"),
-        "entry": payload.get("entry") or {},
+        "entry": entry,
         "replayed": bool(payload.get("replayed")),
     }
+
+
+def _book_plan(plan, bought, entry, *, key, user, balance):
+    """Book a plan paid from the wallet as the expense it is.
+
+    The price is the relay's charge (``entry.amount``, negative): a relay answer
+    without it cannot be booked from here, and is left to the owner.
+    """
+    charged = _decimal(entry.get("amount"), default=None)
+    if charged is None or charged == 0:
+        logger.warning("plan purchase %s answered without its charge; not booked", key)
+        return
+    description = str(entry.get("description") or "").strip()
+    if not description:
+        until = _instant(bought.get("until"))
+        title = PLAN_TITLES.get(plan, plan)
+        description = f"اشتراك {title}" + (
+            f" حتى {timezone.localdate(until):%Y-%m-%d}" if until else ""
+        )
+    books.record_spend(
+        kind=WalletSpend.Kind.PLAN,
+        relay_reference=f"plan:{key}",
+        amount=abs(charged),
+        description=description,
+        happened_on=_happened_on(entry.get("created_at")),
+        user=user,
+        main_balance=_decimal(balance, default=None),
+    )
 
 
 def refresh_topup(relay_id):
@@ -671,22 +903,18 @@ def cancel_topup(relay_id):
 
 
 def sync_topups():
-    """Catch payments nobody was watching. Asks the relay only when the shop has
-    a top-up that could still change, or a paid one whose expense is owed."""
+    """Catch payments nobody was watching, and bookings that failed. Asks the
+    relay only when the shop has a top-up that could still change."""
     since = timezone.now() - SYNC_LOOKBACK
     open_topups = WalletTopUp.objects.filter(
         status__in=WalletTopUp.OPEN_STATUSES, relay_created_at__gte=since
     )
     # Retried for as long as the relay is asked about open ones: past that the
     # top-up shows its expense_error in the app and the owner records it.
-    owed = WalletTopUp.objects.filter(
-        status=WalletTopUp.Status.PAID,
-        record_as_expense=True,
-        expense_booked_at__isnull=True,
-        relay_created_at__gte=since,
-    )
-    for topup in owed.only("pk"):
-        book_topup_expense(topup.pk)
+    for topup in books.owed_topups(since=since).only("pk"):
+        books.book_topup(topup.pk)
+    for spend in books.owed_spends(since=since).only("pk"):
+        books.book_spend(spend.pk)
     if not open_topups.exists():
         return {"asked_relay": False, "refreshed": 0}
     try:

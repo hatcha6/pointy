@@ -9,11 +9,13 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/wallet_view_model.dart';
+import 'wallet_bank_transfer_step.dart';
 import 'wallet_code_step.dart';
 import 'wallet_method_picker.dart';
 import 'wallet_payer_dialog.dart';
 import 'wallet_presentation.dart';
 import 'wallet_top_up_outcome.dart';
+import 'wallet_transfer_review.dart';
 
 /// Top up the Daftar wallet: pick an amount and a way to pay, press pay, then
 /// either give the payer's number in a dialog and type the code the provider
@@ -83,6 +85,10 @@ class _WalletTopUpFlowState extends State<WalletTopUpFlow> {
     if (amount == null || method == null) {
       return;
     }
+    if (method.isBankTransfer) {
+      widget.viewModel.beginBankTransfer(amount);
+      return;
+    }
     if (!walletMethodNeedsPayer(method)) {
       await widget.viewModel.startTopUp(amount);
       return;
@@ -122,6 +128,13 @@ class _WalletTopUpFlowState extends State<WalletTopUpFlow> {
           WalletTopUpStage.awaitingCode || WalletTopUpStage.confirmingCode =>
             WalletCodeStep(viewModel: viewModel),
           WalletTopUpStage.awaitingPayment => WalletAwaitingPayment(
+            viewModel: viewModel,
+            onClose: _close,
+          ),
+          WalletTopUpStage.bankTransfer => WalletBankTransferStep(
+            viewModel: viewModel,
+          ),
+          WalletTopUpStage.awaitingReview => WalletTransferReview(
             viewModel: viewModel,
             onClose: _close,
           ),
@@ -178,6 +191,7 @@ class _TopUpForm extends StatelessWidget {
     final maximum = options?.maxAmount ?? 0;
     final method = viewModel.selectedMethod;
     final byCode = method?.confirmsWithCode ?? false;
+    final byTransfer = method?.isBankTransfer ?? false;
 
     return Form(
       key: formKey,
@@ -274,14 +288,20 @@ class _TopUpForm extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(
-                          byCode ? Icons.sms_outlined : Icons.lock_outline,
+                          byTransfer
+                              ? Icons.fact_check_outlined
+                              : byCode
+                              ? Icons.sms_outlined
+                              : Icons.lock_outline,
                           size: 16,
                           color: colors.mutedInk,
                         ),
                         SizedBox(width: spacing.xs),
                         Expanded(
                           child: Text(
-                            byCode
+                            byTransfer
+                                ? l10n.walletTransferNote
+                                : byCode
                                 ? l10n.walletTopUpCodeNote
                                 : l10n.walletTopUpBrowserNote,
                             style: textTheme.bodySmall?.copyWith(
@@ -315,7 +335,9 @@ class _TopUpForm extends StatelessWidget {
                         // A code method continues to the payer dialog; a
                         // bank card leaves for the browser.
                         : Icon(
-                            byCode ? Icons.arrow_forward : Icons.open_in_new,
+                            byCode || byTransfer
+                                ? Icons.arrow_forward
+                                : Icons.open_in_new,
                           ),
                     label: Text(switch ((starting, byCode)) {
                       (true, true) => l10n.walletTopUpSendingCode,

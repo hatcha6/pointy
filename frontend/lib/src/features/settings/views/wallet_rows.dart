@@ -25,7 +25,10 @@ class WalletTopUpTile extends StatelessWidget {
     final statusColor = walletTopUpStatusColor(topUp.status, colors);
     final method = [
       walletMethodLabel(topUp.method, l10n),
-      if (topUp.payerHint.isNotEmpty) ltrIsolated(topUp.payerHint),
+      if (topUp.transfer case final transfer?)
+        ltrIsolated(LibyanIban.masked(transfer.payerIban))
+      else if (topUp.payerHint.isNotEmpty)
+        ltrIsolated(topUp.payerHint),
     ].join(' ');
     final facts = <String>[
       formatDateTime(topUp.paidAt ?? topUp.createdAt),
@@ -57,6 +60,15 @@ class WalletTopUpTile extends StatelessWidget {
                   facts.join(' · '),
                   style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                 ),
+                // The team's reason is what the owner acts on: shown in full.
+                if (topUp.status == WalletTopUpStatus.rejected &&
+                    topUp.errorDetail.isNotEmpty) ...[
+                  SizedBox(height: spacing.xs),
+                  Text(
+                    l10n.walletTransferRejectedReason(topUp.errorDetail),
+                    style: textTheme.bodySmall?.copyWith(color: colors.danger),
+                  ),
+                ],
                 SizedBox(height: spacing.xs),
                 Wrap(
                   spacing: spacing.xs,
@@ -177,6 +189,34 @@ class WalletEntryTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One balance as a line in a transfer sheet: its mark and what it holds.
+class WalletBalanceLine extends StatelessWidget {
+  const WalletBalanceLine({super.key, required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: colors.mutedInk),
+        SizedBox(width: spacing.xs),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -46,11 +46,48 @@ class TopUpRequestSerializer(serializers.Serializer):
     )
 
 
+class BankTransferRequestSerializer(serializers.Serializer):
+    """A transfer the shop made to the company's account. The receipt is the
+    uploaded ``receipt``, or what the paired phone sent (``receipt_attachment_id``)."""
+
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0.01")
+    )
+    channel = serializers.ChoiceField(choices=("lypay", "onepay"))
+    payer_bank = serializers.RegexField(r"^[a-z0-9_-]{1,32}$")
+    payer_account = serializers.CharField(max_length=40, trim_whitespace=True)
+    payer_iban = serializers.CharField(max_length=40, trim_whitespace=True)
+    to_account = serializers.CharField(required=False, allow_blank=True, default="", max_length=40)
+    idempotency_key = serializers.RegexField(
+        r"^[A-Za-z0-9:_./=-]{1,100}$", required=False, allow_blank=True
+    )
+    record_as_expense = serializers.BooleanField(required=False, allow_null=True, default=None)
+    receipt = serializers.FileField(required=False, allow_empty_file=False)
+    receipt_attachment_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs):
+        if attrs.get("receipt") is None and not attrs.get("receipt_attachment_id"):
+            raise serializers.ValidationError({"receipt": "أرفق إيصال التحويل."})
+        return attrs
+
+
 class SmsAllocationSerializer(serializers.Serializer):
     # The dirham's three places: nothing is booked, and a message costs 0.150.
     # The relay holds the real floor (one message) and answers with it.
     amount = serializers.DecimalField(
         max_digits=12, decimal_places=3, min_value=Decimal("0.001")
+    )
+    idempotency_key = serializers.RegexField(
+        r"^[A-Za-z0-9:_./=-]{1,100}$", required=False, allow_blank=True
+    )
+
+
+class VoucherAllocationSerializer(serializers.Serializer):
+    # Two places, not the dirham's three: the move is booked into the
+    # «كروت دفتر» float, which keeps two, and every card it pays for is priced
+    # in two. The relay holds the real bounds and answers with them.
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0.01")
     )
     idempotency_key = serializers.RegexField(
         r"^[A-Za-z0-9:_./=-]{1,100}$", required=False, allow_blank=True
@@ -161,6 +198,48 @@ class WalletTopUpListView(WalletAPIView):
         )
 
 
+class WalletBankTransferView(WalletAPIView):
+    """POST a bank transfer with its receipt (multipart)."""
+
+    def post(self, request):
+        serializer = BankTransferRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        key = data.get("idempotency_key") or request.headers.get(IDEMPOTENCY_HEADER, "")
+        try:
+            result = services.start_bank_transfer(
+                user=request.user,
+                amount=data["amount"],
+                channel=data["channel"],
+                payer_bank=data["payer_bank"],
+                payer_account=data["payer_account"],
+                payer_iban=data["payer_iban"],
+                to_account=data["to_account"],
+                receipt_file=data.get("receipt"),
+                receipt_attachment_id=data.get("receipt_attachment_id"),
+                idempotency_key=str(key)[:100],
+                record_as_expense=data.get("record_as_expense"),
+            )
+        except services.WalletError as error:
+            return self.error_response(error)
+        if not result["replayed"]:
+            record_domain_event(
+                name="wallet.topup.started",
+                user=request.user,
+                entity_type="wallet_topup",
+                attributes={
+                    "invoice_no": result["top_up"]["invoice_no"],
+                    "method": result["top_up"]["method"],
+                    "test_mode": result["top_up"]["test_mode"],
+                },
+                metrics={"amount": float(data["amount"])},
+            )
+        return Response(
+            result,
+            status=status.HTTP_200_OK if result["replayed"] else status.HTTP_201_CREATED,
+        )
+
+
 class WalletTopUpDetailView(WalletAPIView):
     def get(self, request, relay_id):
         try:
@@ -237,6 +316,33 @@ class WalletSmsAllocationView(WalletAPIView):
         if not result["replayed"]:
             record_domain_event(
                 name="wallet.sms.allocated",
+                user=request.user,
+                entity_type="wallet_transfer",
+                metrics={"amount": float(data["amount"])},
+            )
+        return Response(
+            result,
+            status=status.HTTP_200_OK if result["replayed"] else status.HTTP_201_CREATED,
+        )
+
+
+class WalletVoucherAllocationView(WalletAPIView):
+    """Moving money from the main wallet into the voucher balance («كروت دفتر»)."""
+
+    def post(self, request):
+        serializer = VoucherAllocationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        key = data.get("idempotency_key") or request.headers.get(IDEMPOTENCY_HEADER, "")
+        try:
+            result = services.allocate_to_vouchers(
+                user=request.user, amount=data["amount"], idempotency_key=str(key)[:100]
+            )
+        except services.WalletError as error:
+            return self.error_response(error)
+        if not result["replayed"]:
+            record_domain_event(
+                name="wallet.vouchers.allocated",
                 user=request.user,
                 entity_type="wallet_transfer",
                 metrics={"amount": float(data["amount"])},

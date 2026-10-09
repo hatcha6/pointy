@@ -21,6 +21,7 @@ import 'package:pointy_frontend/src/data/models/wallet.dart';
 import 'package:pointy_frontend/src/features/settings/view_models/wallet_view_model.dart';
 import 'package:pointy_frontend/src/features/settings/views/wallet_section.dart';
 import 'package:pointy_frontend/src/features/settings/views/wallet_top_up_sheet.dart';
+import 'package:pointy_frontend/src/features/settings/views/wallet_vouchers_sheet.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
@@ -104,7 +105,7 @@ const _marks = [
   'assets/payment_methods/sahara-pay.png',
 ];
 
-WalletOverview _overview({bool testMode = false}) {
+WalletOverview _overview({bool testMode = false, VoucherWallet? vouchers}) {
   final base = overview(methods: _methods);
   return WalletOverview(
     available: true,
@@ -130,6 +131,11 @@ WalletOverview _overview({bool testMode = false}) {
     ],
     recentEntries: const [],
     settings: base.settings,
+    // The voucher balance sits under the SMS one, as in a shop that has both.
+    sms: vouchers == null
+        ? null
+        : const SmsWallet(balance: 4.5, price: 0.15, messagesLeft: 30),
+    vouchers: vouchers,
   );
 }
 
@@ -165,6 +171,8 @@ void main() {
     required Size size,
     bool testMode = false,
     bool section = false,
+    VoucherWallet? vouchers,
+    Widget Function(WalletViewModel viewModel)? body,
     Future<void> Function(WalletViewModel viewModel, FakeWalletRepository repo)?
     setUp,
     Future<void> Function(WidgetTester tester, FakeWalletRepository repo)?
@@ -178,7 +186,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final repo = FakeWalletRepository()
-      ..walletResult = Ok(_overview(testMode: testMode));
+      ..walletResult = Ok(_overview(testMode: testMode, vouchers: vouchers));
     final viewModel = WalletViewModel(
       repo,
       launchCheckout: (_) async => true,
@@ -210,7 +218,14 @@ void main() {
           child: inner ?? const SizedBox.shrink(),
         ),
         home: Scaffold(
-          body: section
+          body: body != null
+              ? Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Material(child: body(viewModel)),
+                  ),
+                )
+              : section
               ? SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: WalletSection(viewModel: viewModel),
@@ -434,5 +449,47 @@ void main() {
     tester,
   ) async {
     await shoot(tester, name: 'section_wide', size: wide, section: true);
+  }, skip: !_capture);
+
+  const vouchers = VoucherWallet(balance: 122, enabled: true);
+
+  testWidgets('the wallet section with the voucher balance, phone', (
+    tester,
+  ) async {
+    await shoot(
+      tester,
+      name: 'section_vouchers_phone',
+      size: phone,
+      section: true,
+      vouchers: vouchers,
+    );
+  }, skip: !_capture);
+
+  testWidgets('the wallet section with the voucher balance, wide', (
+    tester,
+  ) async {
+    await shoot(
+      tester,
+      name: 'section_vouchers_wide',
+      size: wide,
+      section: true,
+      vouchers: vouchers,
+    );
+  }, skip: !_capture);
+
+  testWidgets('moving money into the voucher balance', (tester) async {
+    await shoot(
+      tester,
+      name: 'vouchers_sheet_phone',
+      size: phone,
+      vouchers: vouchers,
+      body: (viewModel) => VoucherAllocationForm(wallet: viewModel),
+      interact: (tester, _) async {
+        await tester.enterText(
+          find.byKey(const ValueKey('voucher_allocation_amount')),
+          '100',
+        );
+      },
+    );
   }, skip: !_capture);
 }

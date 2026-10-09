@@ -133,7 +133,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
         method = attrs.get(
             "payment_method", getattr(self.instance, "payment_method", None)
         )
-        if "money_account" in attrs:
+        if "money_account" in attrs and not _keeps_its_own_account(
+            self.instance, attrs["money_account"], method
+        ):
             from apps.payments.serializers import validate_bank_money_account
 
             validate_bank_money_account(attrs["money_account"], method)
@@ -170,3 +172,20 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
 def _spent_at(expense):
     return expense.spent_at if expense is not None else None
+
+
+def _keeps_its_own_account(expense, account, method) -> bool:
+    """An edit that sends back the account the expense already names.
+
+    A form round-trips every field, and an expense the wallet booked is paid
+    from «محفظة دفتر» — a provider-kind account no person may name (see
+    ``apps.wallet.books``). Re-saving its description must not be refused for
+    it, nor clear it; naming a different such account still is refused, and
+    so is keeping it while switching to cash, which left a drawer instead.
+    """
+    if expense is None or account is None:
+        return False
+    return (
+        account.pk == expense.money_account_id
+        and method != Expense.PaymentMethod.CASH
+    )

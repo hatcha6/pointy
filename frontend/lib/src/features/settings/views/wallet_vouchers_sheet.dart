@@ -13,16 +13,17 @@ import 'wallet_rows.dart';
 import 'wallet_top_up_sheet.dart';
 
 /// What the transfer sheet came to.
-enum _SmsSheetResult { moved, topUpFirst }
+enum _VoucherSheetResult { moved, topUpFirst }
 
-/// The one-tap amounts offered, when the wallet holds them.
-const _quickAmounts = [5.0, 10.0, 20.0, 50.0];
+/// The one-tap amounts offered, when the wallet holds them. Cards cost tens
+/// of dinars, so these are larger than the SMS sheet's.
+const _quickAmounts = [50.0, 100.0, 200.0, 500.0];
 
-/// Move money from the main wallet into the SMS balance, which every message
-/// is then paid from. The sheet says what the wallet holds, what a message
-/// costs and how many messages the amount pays for; a wallet that cannot pay
-/// for one message is sent to top up first. True once the money moved.
-Future<bool> showSmsAllocationSheet({
+/// Move money from the main wallet into the voucher balance, which every
+/// «كروت دفتر» card the till sells is paid from. The sheet says what the
+/// wallet holds and what the voucher balance will hold after; a wallet with
+/// nothing in it is sent to top up first. True once the money moved.
+Future<bool> showVoucherAllocationSheet({
   required BuildContext context,
   required WalletViewModel wallet,
 }) async {
@@ -33,27 +34,27 @@ Future<bool> showSmsAllocationSheet({
     unawaited(wallet.load());
   }
   final moved = <double>[];
-  final result = await showAdaptiveFormSurface<_SmsSheetResult>(
+  final result = await showAdaptiveFormSurface<_VoucherSheetResult>(
     context: context,
-    title: l10n.walletSmsAllocateTitle,
-    builder: (_) => SmsAllocationForm(wallet: wallet, onMoved: moved.add),
+    title: l10n.walletVouchersAllocateTitle,
+    builder: (_) => VoucherAllocationForm(wallet: wallet, onMoved: moved.add),
   );
   if (!context.mounted) {
-    return result == _SmsSheetResult.moved;
+    return result == _VoucherSheetResult.moved;
   }
   switch (result) {
-    case _SmsSheetResult.moved:
+    case _VoucherSheetResult.moved:
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            l10n.walletSmsAllocateDone(
+            l10n.walletVouchersAllocateDone(
               formatWalletMoney(moved.firstOrNull ?? 0),
             ),
           ),
         ),
       );
       return true;
-    case _SmsSheetResult.topUpFirst:
+    case _VoucherSheetResult.topUpFirst:
       await showWalletTopUpSheet(context: context, viewModel: wallet);
       return false;
     case null:
@@ -61,8 +62,8 @@ Future<bool> showSmsAllocationSheet({
   }
 }
 
-class SmsAllocationForm extends StatefulWidget {
-  const SmsAllocationForm({super.key, required this.wallet, this.onMoved});
+class VoucherAllocationForm extends StatefulWidget {
+  const VoucherAllocationForm({super.key, required this.wallet, this.onMoved});
 
   final WalletViewModel wallet;
 
@@ -70,15 +71,15 @@ class SmsAllocationForm extends StatefulWidget {
   final ValueChanged<double>? onMoved;
 
   @override
-  State<SmsAllocationForm> createState() => _SmsAllocationFormState();
+  State<VoucherAllocationForm> createState() => _VoucherAllocationFormState();
 }
 
-class _SmsAllocationFormState extends State<SmsAllocationForm> {
+class _VoucherAllocationFormState extends State<VoucherAllocationForm> {
   final _formKey = GlobalKey<FormState>();
   final _amount = TextEditingController();
 
   /// Once a submit was refused, every keystroke re-checks the amount, so the
-  /// error goes the moment it is fixed (and the message count comes back).
+  /// error goes the moment it is fixed.
   bool _checking = false;
 
   @override
@@ -98,7 +99,7 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
   void _redraw() => setState(() {});
 
   void _pick(double amount) {
-    _amount.text = walletAmountText(amount, 3);
+    _amount.text = walletAmountText(amount, 2);
     _formKey.currentState?.validate();
   }
 
@@ -111,10 +112,10 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
     if (amount == null) {
       return;
     }
-    final ok = await widget.wallet.spending.allocateToSms(amount);
+    final ok = await widget.wallet.spending.allocateToVouchers(amount);
     if (ok && mounted) {
       widget.onMoved?.call(amount);
-      Navigator.of(context).pop(_SmsSheetResult.moved);
+      Navigator.of(context).pop(_VoucherSheetResult.moved);
     }
   }
 
@@ -137,16 +138,17 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
             ),
           );
         }
-        final sms = overview.sms;
-        final price = sms?.price ?? 0;
+        final vouchers = overview.vouchers;
         final balance = overview.balance ?? 0;
         final busy = wallet.spending.isAllocating;
         final error = wallet.spending.allocationError;
         final typed = parseWalletAmount(_amount.text);
-        final canAffordOne = price > 0 && balance + 0.0005 >= price;
+        // A dirham is the least a transfer can move.
+        final hasMoney = balance >= 0.01;
+        final ready = vouchers?.configured ?? false;
         final quick = [
           for (final amount in _quickAmounts)
-            if (amount >= price && amount <= balance) amount,
+            if (amount <= balance) amount,
         ];
 
         return Form(
@@ -172,7 +174,7 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          l10n.walletSmsAllocateIntro(formatWalletMoney(price)),
+                          l10n.walletVouchersAllocateIntro,
                           style: textTheme.bodyMedium?.copyWith(
                             color: colors.mutedInk,
                           ),
@@ -180,21 +182,26 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                         SizedBox(height: spacing.sm),
                         WalletBalanceLine(
                           icon: Icons.account_balance_wallet_outlined,
-                          text: l10n.walletSmsAllocateAvailable(
+                          text: l10n.walletVouchersAllocateAvailable(
                             formatWalletMoney(balance),
                           ),
                         ),
-                        if (sms != null) ...[
+                        if (vouchers != null) ...[
                           SizedBox(height: spacing.xs),
                           WalletBalanceLine(
-                            icon: Icons.sms_outlined,
-                            text:
-                                '${l10n.walletSmsBalanceTitle}: '
-                                '${formatWalletMoney(sms.balance)}',
+                            icon: Icons.card_giftcard_outlined,
+                            text: l10n.walletVouchersAllocateCurrent(
+                              formatWalletMoney(vouchers.balance),
+                            ),
                           ),
                         ],
                         SizedBox(height: spacing.md),
-                        if (!canAffordOne)
+                        if (!ready)
+                          PointyInlineMessage.warning(
+                            message: l10n.walletVouchersNotReady,
+                            compact: true,
+                          )
+                        else if (!hasMoney)
                           PointyDetailCallout(
                             icon: Icons.account_balance_wallet_outlined,
                             tone: PointyCalloutTone.warning,
@@ -204,7 +211,7 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                                 ? TextButton(
                                     onPressed: () => Navigator.of(
                                       context,
-                                    ).pop(_SmsSheetResult.topUpFirst),
+                                    ).pop(_VoucherSheetResult.topUpFirst),
                                     child: Text(l10n.walletTopUpButton),
                                   )
                                 : null,
@@ -218,7 +225,7 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                             SizedBox(height: spacing.sm),
                           ],
                           TextFormField(
-                            key: const ValueKey('sms_allocation_amount'),
+                            key: const ValueKey('voucher_allocation_amount'),
                             controller: _amount,
                             autofocus: true,
                             enabled: !busy,
@@ -226,26 +233,27 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                                 ? AutovalidateMode.always
                                 : AutovalidateMode.disabled,
                             // Typed left to right, shown on the right like the
-                            // rest of the Arabic form (the top-up field does
-                            // the same).
+                            // rest of the Arabic form.
                             textDirection: TextDirection.ltr,
                             textAlign: TextAlign.right,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            inputFormatters: [WalletAmountFormatter(3)],
+                            inputFormatters: [WalletAmountFormatter(2)],
                             style: PointyTypography.numeric(
                               (textTheme.headlineSmall ?? const TextStyle())
                                   .copyWith(fontWeight: FontWeight.w800),
                             ),
                             decoration: InputDecoration(
-                              labelText: l10n.walletSmsAllocateAmountLabel,
+                              labelText: l10n.walletVouchersAllocateAmountLabel,
                               prefixIcon: const Icon(Icons.payments_outlined),
                               suffixText: currencySymbol,
                               helperText: typed == null || typed <= 0
                                   ? null
-                                  : l10n.walletSmsMessagesLeft(
-                                      sms?.messagesFor(typed) ?? 0,
+                                  : l10n.walletVouchersAllocateAfter(
+                                      formatWalletMoney(
+                                        (vouchers?.balance ?? 0) + typed,
+                                      ),
                                     ),
                             ),
                             onFieldSubmitted: (_) => _submit(),
@@ -254,13 +262,8 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                               if (amount == null || amount <= 0) {
                                 return l10n.walletTopUpAmountRequired;
                               }
-                              if (amount + 0.0005 < price) {
-                                return l10n.walletSmsAllocateTooLittle(
-                                  formatWalletMoney(price),
-                                );
-                              }
                               if (amount > balance + 0.0005) {
-                                return l10n.walletSmsAllocateTooMuch;
+                                return l10n.walletVouchersAllocateTooMuch;
                               }
                               return null;
                             },
@@ -288,7 +291,7 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                                     Icons.select_all,
                                     size: 18,
                                   ),
-                                  label: Text(l10n.walletSmsAllocateAll),
+                                  label: Text(l10n.walletVouchersAllocateAll),
                                   onPressed: busy ? null : () => _pick(balance),
                                 ),
                             ],
@@ -313,8 +316,8 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                         child: Text(l10n.walletSpendCancel),
                       ),
                       FilledButton.icon(
-                        key: const ValueKey('sms_allocation_confirm'),
-                        onPressed: busy || !canAffordOne ? null : _submit,
+                        key: const ValueKey('voucher_allocation_confirm'),
+                        onPressed: busy || !hasMoney || !ready ? null : _submit,
                         icon: busy
                             ? const SizedBox.square(
                                 dimension: 16,
@@ -323,10 +326,10 @@ class _SmsAllocationFormState extends State<SmsAllocationForm> {
                             : const Icon(Icons.swap_horiz),
                         label: Text(
                           typed != null && typed > 0
-                              ? l10n.walletSmsAllocateConfirm(
+                              ? l10n.walletVouchersAllocateConfirm(
                                   formatWalletMoney(typed),
                                 )
-                              : l10n.walletSmsAllocateButton,
+                              : l10n.walletVouchersAllocateButton,
                         ),
                       ),
                     ],

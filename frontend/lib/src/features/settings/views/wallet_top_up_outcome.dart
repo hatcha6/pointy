@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/wallet.dart';
+
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
@@ -158,7 +160,9 @@ class WalletTopUpVerdict extends StatelessWidget {
         success = true;
         icon = Icons.check_circle;
         tone = colors.success;
-        title = l10n.walletPaidTitle;
+        title = (topUp?.isBankTransfer ?? false)
+            ? l10n.walletTransferPaidTitle
+            : l10n.walletPaidTitle;
         if (topUp != null) {
           lines.add(l10n.walletPaidMessage(formatWalletMoney(topUp.amount)));
         }
@@ -173,6 +177,15 @@ class WalletTopUpVerdict extends StatelessWidget {
             ),
           );
         }
+      case WalletTopUpStage.rejected:
+        icon = Icons.block_outlined;
+        tone = colors.danger;
+        title = l10n.walletTransferRejectedTitle;
+        final reason = topUp?.errorDetail.trim() ?? '';
+        if (reason.isNotEmpty) {
+          lines.add(l10n.walletTransferRejectedReason(reason));
+        }
+        lines.add(l10n.walletTransferRejectedHelp);
       case WalletTopUpStage.canceled:
         icon = Icons.cancel_outlined;
         tone = colors.mutedInk;
@@ -241,7 +254,10 @@ class WalletTopUpVerdict extends StatelessWidget {
             Text(
               [
                 walletMethodLabel(topUp.method, l10n),
-                if (topUp.payerHint.isNotEmpty) ltrIsolated(topUp.payerHint),
+                if (topUp.transfer case final transfer?)
+                  ltrIsolated(LibyanIban.masked(transfer.payerIban))
+                else if (topUp.payerHint.isNotEmpty)
+                  ltrIsolated(topUp.payerHint),
               ].join(' · '),
               textAlign: TextAlign.center,
               style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
@@ -272,7 +288,11 @@ class WalletTopUpVerdict extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onTryAgain,
                 icon: const Icon(Icons.refresh),
-                label: Text(l10n.walletTryAgain),
+                label: Text(
+                  viewModel.topUpStage == WalletTopUpStage.rejected
+                      ? l10n.walletTransferSendAgain
+                      : l10n.walletTryAgain,
+                ),
               ),
             TextButton(onPressed: onClose, child: Text(l10n.walletClose)),
           ],

@@ -72,6 +72,7 @@ WalletOverview overview({
   Duration ttl = const Duration(minutes: 30),
   List<WalletTopUpMethod> methods = const [bankCards, sadad, yussor],
   SmsWallet? sms,
+  VoucherWallet? vouchers,
   List<WalletPlan> plans = const [],
 }) {
   return WalletOverview(
@@ -95,6 +96,7 @@ WalletOverview overview({
       defaultExpenseCategoryName: 'خدمات دفتر',
     ),
     sms: sms,
+    vouchers: vouchers,
     plans: plans,
   );
 }
@@ -201,6 +203,14 @@ class FakeWalletRepository extends WalletRepository {
   final List<WalletAccount> entryAccounts = [];
   final List<Map<String, Object?>> allocations = [];
   final List<Map<String, Object?>> purchases = [];
+  final List<Map<String, Object?>> voucherAllocations = [];
+  Result<WalletVoucherAllocation> voucherAllocationResult = const Ok(
+    WalletVoucherAllocation(
+      balance: 50,
+      vouchers: VoucherWallet(balance: 150, enabled: true),
+      replayed: false,
+    ),
+  );
   Result<WalletSmsAllocation> allocationResult = const Ok(
     WalletSmsAllocation(
       balance: 85,
@@ -229,6 +239,15 @@ class FakeWalletRepository extends WalletRepository {
   }) async {
     allocations.add({'amount': amount, 'key': idempotencyKey});
     return allocationResult;
+  }
+
+  @override
+  Future<Result<WalletVoucherAllocation>> allocateToVouchers({
+    required String amount,
+    required String idempotencyKey,
+  }) async {
+    voucherAllocations.add({'amount': amount, 'key': idempotencyKey});
+    return voucherAllocationResult;
   }
 
   @override

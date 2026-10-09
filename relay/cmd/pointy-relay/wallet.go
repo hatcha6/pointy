@@ -238,16 +238,17 @@ type walletRow struct {
 	UpdatedAt      *string `json:"updated_at"`
 }
 
-// walletAccountFlag registers --account: the main wallet, or the SMS balance
-// each message is paid from.
+// walletAccountFlag registers --account: the main wallet, the SMS balance each
+// message is paid from, or the voucher balance each card is paid from.
 func walletAccountFlag(flags *flag.FlagSet) *string {
-	return flags.String("account", control.WalletAccountMain, "which balance: main (the wallet) or sms (paid per message)")
+	return flags.String("account", control.WalletAccountMain,
+		"which balance: main (the wallet), sms (paid per message) or vouchers (paid per card)")
 }
 
 func checkWalletAccount(raw string) (string, error) {
 	account := control.NormalizeWalletAccount(raw)
 	if !control.ValidWalletAccount(account) {
-		return "", usageError("--account must be main or sms")
+		return "", usageError("--account must be main, sms or vouchers")
 	}
 	return account, nil
 }

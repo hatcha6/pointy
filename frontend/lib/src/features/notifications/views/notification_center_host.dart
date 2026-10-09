@@ -12,12 +12,15 @@ class NotificationCenterHost extends StatefulWidget {
     required this.viewModel,
     required this.child,
     this.onOpenAlert,
+    this.onSecondaryAlertAction,
   });
 
   final NotificationCenterViewModel viewModel;
   final Widget child;
   final Future<void> Function(BuildContext context, BusinessAlert alert)?
   onOpenAlert;
+  final Future<void> Function(BuildContext context, BusinessAlert alert)?
+  onSecondaryAlertAction;
 
   @override
   State<NotificationCenterHost> createState() => _NotificationCenterHostState();
@@ -48,6 +51,7 @@ class _NotificationCenterHostState extends State<NotificationCenterHost> {
         return NotificationCenterDrawer(
           viewModel: widget.viewModel,
           onOpenAlert: widget.onOpenAlert,
+          onSecondaryAlertAction: widget.onSecondaryAlertAction,
         );
       },
       child: widget.child,

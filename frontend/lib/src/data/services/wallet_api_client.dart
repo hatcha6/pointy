@@ -3,6 +3,31 @@ import 'package:http/http.dart' as http;
 import '../models/wallet.dart';
 import 'api_session.dart';
 
+/// What the shop says about a bank transfer it made to the company.
+class WalletBankTransferRequest {
+  const WalletBankTransferRequest({
+    required this.amount,
+    required this.channel,
+    required this.payerBank,
+    required this.payerAccount,
+    required this.payerIban,
+    required this.receipt,
+    required this.idempotencyKey,
+    this.toAccount = '',
+    this.recordAsExpense,
+  });
+
+  final String amount;
+  final WalletTransferChannel channel;
+  final String payerBank;
+  final String payerAccount;
+  final String payerIban;
+  final WalletTransferReceipt receipt;
+  final String idempotencyKey;
+  final String toAccount;
+  final bool? recordAsExpense;
+}
+
 /// The Daftar wallet endpoints. A refusal comes back as a [WalletException]
 /// carrying the backend's code, so the app can say what happened in Arabic
 /// and whether trying again can help.
@@ -42,7 +67,7 @@ class WalletApiClient {
     );
   }
 
-  /// One account's statement: the main wallet, or the SMS balance.
+  /// One account's statement: the main wallet, the SMS or the voucher balance.
   Future<WalletPage<WalletEntry>> fetchEntries({
     String? before,
     int limit = 30,
@@ -97,6 +122,48 @@ class WalletApiClient {
     return WalletTopUpStart.fromJson(_map(response));
   }
 
+  /// Sends a bank transfer and its receipt for the company's team to check.
+  /// The receipt goes up with it, or — when the paired phone sent it — by its
+  /// attachment id on the shop's server. [onProgress] follows the upload.
+  Future<WalletTopUpStart> startBankTransfer(
+    WalletBankTransferRequest request, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final receipt = request.receipt;
+    final response = await _session.postMultipart(
+      'wallet/topups/bank-transfer/',
+      fields: {
+        'amount': request.amount,
+        'channel': request.channel.key,
+        'payer_bank': request.payerBank,
+        'payer_account': request.payerAccount,
+        'payer_iban': request.payerIban,
+        'idempotency_key': request.idempotencyKey,
+        if (request.toAccount.isNotEmpty) 'to_account': request.toAccount,
+        if (request.recordAsExpense != null)
+          'record_as_expense': '${request.recordAsExpense}',
+        if (receipt.attachmentId != null)
+          'receipt_attachment_id': '${receipt.attachmentId}',
+      },
+      files: [
+        if (receipt.bytes != null)
+          ApiMultipartFile(
+            fieldName: 'receipt',
+            filename: receipt.name.isEmpty ? 'receipt' : receipt.name,
+            bytes: receipt.bytes!,
+            contentType: receipt.contentType.isEmpty
+                ? 'application/octet-stream'
+                : receipt.contentType,
+          ),
+      ],
+      // A phone photo over a slow uplink: longer than a JSON call.
+      timeout: const Duration(minutes: 2),
+      onProgress: onProgress,
+    );
+    _ensure(response);
+    return WalletTopUpStart.fromJson(_map(response));
+  }
+
   /// Sends the code the payer's provider texted them.
   Future<WalletTopUpConfirmation> confirmTopUp({
     required String id,
@@ -146,6 +213,21 @@ class WalletApiClient {
     );
     _ensure(response);
     return WalletSmsAllocation.fromJson(_map(response));
+  }
+
+  /// Moves [amount] dinars from the main wallet into the voucher balance the
+  /// till's cards are paid from. The same [idempotencyKey] sent again returns
+  /// the first transfer.
+  Future<WalletVoucherAllocation> allocateToVouchers({
+    required String amount,
+    required String idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'wallet/vouchers/allocations/',
+      body: {'amount': amount, 'idempotency_key': idempotencyKey},
+    );
+    _ensure(response);
+    return WalletVoucherAllocation.fromJson(_map(response));
   }
 
   /// Pays for [periods] periods of [plan] from the main wallet.

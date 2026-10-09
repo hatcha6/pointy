@@ -17,7 +17,8 @@ import (
 )
 
 // Spending the wallet. A shop moves money from its main wallet into its SMS
-// balance, which every message is then paid from, and pays for its plans —
+// balance, which every message is then paid from, and into its voucher
+// balance, which every card its till sells is paid from; and pays for its plans —
 // remote access, the assistant — from the main wallet, a period at a time.
 // Nothing here talks to the payment gateway: the money is already the
 // company's, held for the shop.
@@ -223,6 +224,90 @@ func (s HTTPServer) validateSMSAllocation(raw json.RawMessage) (*big.Rat, string
 	return amount, ""
 }
 
+// minVoucherAllocation is the smallest move into the voucher balance.
+var minVoucherAllocation = big.NewRat(1, 1)
+
+// handleWalletVouchersAllocate serves POST /v1/wallet/vouchers/allocations:
+// the shop moves money from its main wallet into its voucher balance, which
+// every card its till sells is then paid from — the SMS balance's twin. Both
+// sides move in one step, and a retry with the same key returns the first
+// transfer.
+func (s HTTPServer) handleWalletVouchersAllocate(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.requireWalletStore(w)
+	if !ok {
+		return
+	}
+	installation, _, ok := s.authenticateInstallation(w, r)
+	if !ok {
+		return
+	}
+	request, ok := decodeWalletSpend(w, r)
+	if !ok {
+		return
+	}
+	if !s.Vouchers.Configured() {
+		writeWalletError(w, http.StatusServiceUnavailable, voucherCodeUnconfigured, "this relay sells no cards", nil)
+		return
+	}
+	amount, rejection := validateVoucherAllocation(request.Amount)
+	if rejection != "" {
+		writeWalletError(w, http.StatusUnprocessableEntity, walletCodeInvalidAmount, rejection, map[string]any{
+			"min_amount":   control.FormatWalletAmount(minVoucherAllocation),
+			"max_decimals": 2,
+		})
+		return
+	}
+	ctx := r.Context()
+	transfer, created, err := store.TransferWalletFunds(ctx, control.WalletTransfer{
+		InstallationID: installation.ID,
+		From:           control.WalletAccountMain,
+		To:             control.WalletAccountVouchers,
+		Amount:         control.FormatWalletAmount(amount),
+		IdempotencyKey: request.IdempotencyKey,
+		Actor:          request.RequestedBy,
+	})
+	if !s.answerWalletSpendError(w, installation.ID, "voucher allocation", err) {
+		return
+	}
+	balances, ok := s.walletBalances(w, ctx, store, installation.ID)
+	if !ok {
+		return
+	}
+	s.logger().Info("wallet money moved to the voucher balance",
+		"installation_id", installation.ID,
+		"amount", transfer.In.Amount,
+		"requested_by", request.RequestedBy,
+		"replayed", !created)
+	status := http.StatusCreated
+	if !created {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, map[string]any{
+		"balance":  balances.main,
+		"vouchers": s.voucherWalletPayload(balances.vouchers),
+		"transfer": map[string]any{"out": walletEntryPayload(transfer.Out), "in": walletEntryPayload(transfer.In)},
+		"replayed": !created,
+	})
+}
+
+// validateVoucherAllocation accepts a JSON string or number of dinars with at
+// most two places — the shop books the move, and its books keep two — and at
+// least minVoucherAllocation. It returns the reason for a refusal, or "".
+func validateVoucherAllocation(raw json.RawMessage) (*big.Rat, string) {
+	text := strings.TrimSpace(string(raw))
+	if unquoted, err := strconv.Unquote(text); err == nil {
+		text = strings.TrimSpace(unquoted)
+	}
+	amount, err := control.ParseWalletAmount(text)
+	if err != nil || amount.Sign() <= 0 || control.WalletAmountDecimals(text) > 2 {
+		return nil, "amount must be a positive number of dinars with at most two places"
+	}
+	if amount.Cmp(minVoucherAllocation) < 0 {
+		return nil, "amount must be at least one dinar"
+	}
+	return amount, ""
+}
+
 // handleWalletPlanPurchase serves POST /v1/wallet/subscriptions: the shop pays
 // for one or more periods of a plan from its main wallet. The periods start
 // where its current coverage ends, so renewing early loses nothing.
@@ -324,11 +409,12 @@ func (s HTTPServer) answerWalletSpendError(w http.ResponseWriter, installationID
 }
 
 type walletBalances struct {
-	main string
-	sms  string
+	main     string
+	sms      string
+	vouchers string
 }
 
-// walletBalances reads both of a shop's balances. It has already answered
+// walletBalances reads all of a shop's balances. It has already answered
 // when ok is false.
 func (s HTTPServer) walletBalances(
 	w http.ResponseWriter,
@@ -346,5 +432,10 @@ func (s HTTPServer) walletBalances(
 		s.writeWalletInternalError(w, "sms balance read failed", installationID, err)
 		return walletBalances{}, false
 	}
-	return walletBalances{main: main.Balance, sms: sms.Balance}, true
+	cards, err := store.GetWalletAccount(ctx, installationID, control.WalletAccountVouchers)
+	if err != nil {
+		s.writeWalletInternalError(w, "voucher balance read failed", installationID, err)
+		return walletBalances{}, false
+	}
+	return walletBalances{main: main.Balance, sms: sms.Balance, vouchers: cards.Balance}, true
 }

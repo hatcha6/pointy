@@ -22,13 +22,15 @@ import (
 //
 // The money sits in accounts. The main wallet is what top-ups credit and the
 // subscriptions draw on; the SMS balance is money the shop set aside for text
-// messages, which each message draws on. Moving money from one to the other is
-// the shop's own transfer, never a sale.
+// messages, which each message draws on; the voucher balance is money set aside
+// for the company's cards, which each card the till sells draws on. Moving
+// money from one to another is the shop's own transfer, never a sale.
 
 // Accounts of a shop's wallet.
 const (
-	WalletAccountMain = "main"
-	WalletAccountSMS  = "sms"
+	WalletAccountMain     = "main"
+	WalletAccountSMS      = "sms"
+	WalletAccountVouchers = "vouchers"
 )
 
 // Ledger entry kinds.
@@ -67,8 +69,9 @@ const (
 
 // walletAccountTitles name the accounts on the shop's Arabic statement.
 var walletAccountTitles = map[string]string{
-	WalletAccountMain: "المحفظة",
-	WalletAccountSMS:  "رصيد الرسائل",
+	WalletAccountMain:     "المحفظة",
+	WalletAccountSMS:      "رصيد الرسائل",
+	WalletAccountVouchers: "رصيد الكروت",
 }
 
 // walletPlanTitles name the plans on the shop's Arabic statement.
@@ -88,6 +91,11 @@ const (
 	// final: a payment the gateway proves later still credits the wallet,
 	// because the payer's money has left their account either way.
 	WalletTopUpExpired = "expired"
+	// WalletTopUpReview is a bank transfer the shop says it made, waiting for
+	// the company to find the money on its own statement. Only an operator
+	// moves it on: to paid, or to rejected with the reason the shop is shown.
+	WalletTopUpReview   = "review"
+	WalletTopUpRejected = "rejected"
 )
 
 // Top-up methods name the gateway and the way the payer pays: "dafa_sadad" is
@@ -104,6 +112,10 @@ const (
 	// WalletTopUpMethodPlutuLocalBankCards is Plutu's hosted checkout, which
 	// Dafa replaced. Old top-ups keep the name.
 	WalletTopUpMethodPlutuLocalBankCards = "plutu_localbankcards"
+	// WalletTopUpMethodBankTransfer is a transfer to the company's own bank
+	// account (LYPay to its IBAN, or OnePay to its bank and account number),
+	// proven by an operator who sees it land, never by the receipt.
+	WalletTopUpMethodBankTransfer = "bank_transfer"
 )
 
 // maxWalletPayerHintRunes bounds the masked payer shown beside a top-up.
@@ -225,10 +237,13 @@ type WalletTopUp struct {
 	EntryID string `json:"entry_id,omitempty"`
 	// ConfirmedBy is what proved the payment: "dafa" for the gateway's own
 	// answer to the relay, or "operator:<name>" for a hand reconciliation.
-	ConfirmedBy string     `json:"confirmed_by,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	PaidAt      *time.Time `json:"paid_at,omitempty"`
+	ConfirmedBy string `json:"confirmed_by,omitempty"`
+	// Transfer is what the payer told us about a bank transfer; nil for every
+	// gateway method.
+	Transfer  *WalletBankTransfer `json:"transfer,omitempty"`
+	CreatedAt time.Time           `json:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at"`
+	PaidAt    *time.Time          `json:"paid_at,omitempty"`
 }
 
 // WalletTopUpSettlement is the proof a top-up was paid.
@@ -238,6 +253,10 @@ type WalletTopUpSettlement struct {
 	ProviderTransactionID string
 	ConfirmedBy           string
 	Description           string
+	// Amount, when set, is what actually arrived: an operator crediting a
+	// bank transfer for less (or more) than the shop declared. The declared
+	// amount is kept on the transfer.
+	Amount string
 }
 
 // WalletEntryFilter narrows a ledger listing. BeforeID pages: entries older
@@ -439,7 +458,8 @@ func WalletAmountDecimals(raw string) int {
 // ValidWalletTopUpStatus reports whether status is a top-up status.
 func ValidWalletTopUpStatus(status string) bool {
 	switch status {
-	case WalletTopUpPending, WalletTopUpPaid, WalletTopUpCanceled, WalletTopUpFailed, WalletTopUpExpired:
+	case WalletTopUpPending, WalletTopUpPaid, WalletTopUpCanceled, WalletTopUpFailed, WalletTopUpExpired,
+		WalletTopUpReview, WalletTopUpRejected:
 		return true
 	}
 	return false
@@ -665,7 +685,8 @@ func walletTopUpClosable(status string) bool {
 }
 
 // WalletTopUpOpen reports whether a payment may still land on a top-up with
-// this status — what the relay keeps asking the gateway about.
+// this status — what the relay keeps asking the gateway about. A bank
+// transfer in review is not: no gateway knows of it.
 func WalletTopUpOpen(status string) bool {
 	return walletTopUpClosable(status)
 }
@@ -840,6 +861,18 @@ func prepareWalletTopUp(topUp WalletTopUp, now time.Time) (WalletTopUp, error) {
 	topUp.InvoiceNo = invoiceNo
 	topUp.Amount = FormatWalletAmount(amount)
 	topUp.Status = WalletTopUpPending
+	if topUp.Method == WalletTopUpMethodBankTransfer {
+		if topUp.Transfer == nil {
+			return WalletTopUp{}, errors.New("a bank transfer top-up needs the transfer's details")
+		}
+		// Nothing to start at a gateway: it waits for the company's eyes.
+		topUp.Status = WalletTopUpReview
+		transfer := *topUp.Transfer
+		transfer.DeclaredAmount = topUp.Amount
+		topUp.Transfer = &transfer
+	} else {
+		topUp.Transfer = nil
+	}
 	topUp.ProviderTransactionID = ""
 	topUp.CheckoutURL = ""
 	topUp.OTPAttempts = 0
@@ -863,10 +896,14 @@ func walletTopUpCredit(topUp WalletTopUp, settlement WalletTopUpSettlement) Wall
 		// The shop reads this on its Arabic statement.
 		description = "شحن المحفظة " + topUp.InvoiceNo
 	}
+	amount := topUp.Amount
+	if credited := strings.TrimSpace(settlement.Amount); credited != "" {
+		amount = credited
+	}
 	return WalletPosting{
 		InstallationID: topUp.InstallationID,
 		Kind:           WalletEntryTopUp,
-		Amount:         topUp.Amount,
+		Amount:         amount,
 		Reference:      topUp.ID,
 		Description:    description,
 		IdempotencyKey: "topup:" + topUp.ID,
@@ -1386,6 +1423,7 @@ func (s *FileStore) SettleWalletTopUp(
 	}
 	now := s.clock.Now().UTC()
 	updated := existing
+	updated = applySettledAmount(updated, settlement)
 	updated.Status = WalletTopUpPaid
 	updated.ProviderTransactionID = settledProviderTransactionID(existing.ProviderTransactionID, settlement)
 	updated.ConfirmedBy = strings.TrimSpace(settlement.ConfirmedBy)

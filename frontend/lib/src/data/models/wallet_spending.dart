@@ -49,6 +49,42 @@ class SmsWallet {
   }
 }
 
+/// The voucher balance: money the owner moved there from the main wallet,
+/// which every «كروت دفتر» card the till sells is paid from.
+class VoucherWallet {
+  const VoucherWallet({
+    required this.balance,
+    this.configured = true,
+    this.testMode = false,
+    this.enabled = false,
+  });
+
+  factory VoucherWallet.fromJson(Map<String, Object?> json) {
+    return VoucherWallet(
+      balance: _amount(json['balance']),
+      configured: json['configured'] != false,
+      testMode: json['test_mode'] == true,
+      enabled: json['enabled'] == true,
+    );
+  }
+
+  final double balance;
+
+  /// The company can buy cards right now; false means nothing can be sold
+  /// yet, and nothing moved in.
+  final bool configured;
+
+  /// The company buys from its test supplier: cards sold now are not real.
+  final bool testMode;
+
+  /// The owner switched «كروت دفتر» on in Integrations. The wallet shows the
+  /// balance only then.
+  final bool enabled;
+
+  /// Whether money can be moved in now.
+  bool get acceptsTransfers => enabled && configured;
+}
+
 /// A plan the shop pays for from its main wallet — remote access, or the
 /// assistant — and where it stands.
 class WalletPlan {
@@ -130,6 +166,31 @@ class WalletSmsAllocation {
   /// The main wallet after the transfer.
   final double? balance;
   final SmsWallet? sms;
+  final bool replayed;
+}
+
+/// What moving money into the voucher balance came to.
+class WalletVoucherAllocation {
+  const WalletVoucherAllocation({
+    required this.balance,
+    required this.vouchers,
+    required this.replayed,
+  });
+
+  factory WalletVoucherAllocation.fromJson(Map<String, Object?> json) {
+    final vouchers = json['vouchers'];
+    return WalletVoucherAllocation(
+      balance: _amountOrNull(json['balance']),
+      vouchers: vouchers is Map<String, Object?>
+          ? VoucherWallet.fromJson(vouchers)
+          : null,
+      replayed: json['replayed'] == true,
+    );
+  }
+
+  /// The main wallet after the transfer.
+  final double? balance;
+  final VoucherWallet? vouchers;
   final bool replayed;
 }
 

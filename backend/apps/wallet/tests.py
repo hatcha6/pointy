@@ -1,4 +1,8 @@
-"""The Daftar wallet's shop side: the relay proxy, top-ups, and the books."""
+"""The Daftar wallet's shop side: the relay proxy, top-ups, and the books.
+
+A paid top-up is booked as money moved from the bank into «محفظة دفتر» (the
+wallet is an asset — see ``apps.wallet.books``), never as an expense.
+"""
 
 from __future__ import annotations
 
@@ -18,9 +22,11 @@ from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.relay import RelayControlError
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.expenses.models import Expense, ExpenseCategory
+from apps.treasury.models import MoneyAccount, MoneyTransfer
 
+from .books import WALLET_ACCOUNT_NAME, book_topup
 from .models import WalletSettings, WalletTopUp
-from .services import WALLET_EXPENSE_CATEGORY_NAME, book_topup_expense, sync_topups
+from .services import sync_topups
 
 _LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 _CLIENT = "apps.wallet.services.scoped_relay_client"
@@ -80,6 +86,15 @@ def paid(**overrides):
     topup = remote_topup(**values)
     topup.pop("checkout_url", None)
     return topup
+
+
+def bank():
+    """The shop's routed bank account, which a card or transfer payment leaves."""
+    return MoneyAccount.objects.get(kind=MoneyAccount.Kind.BANK, is_default=True)
+
+
+def wallet_account():
+    return WalletSettings.load().money_account
 
 
 def relay_refusal(status, code="", **extra):
@@ -173,21 +188,24 @@ class WalletApiTests(TestCase):
         self.assertEqual(resp.data["balance"], "100.000")
         self.assertEqual(resp.data["topups"]["min_amount"], "10.00")
         topup = resp.data["recent_topups"][0]
-        self.assertEqual(Expense.objects.count(), 1, "three reads, one expense")
-        expense = Expense.objects.get()
-        self.assertEqual(topup["expense_id"], expense.pk)
-        self.assertEqual(expense.amount, Decimal("100.00"))
-        self.assertEqual(expense.payment_method, Expense.PaymentMethod.CARD)
-        self.assertEqual(expense.description, "شحن محفظة دفتر — بطاقة مصرفية محلية")
-        self.assertEqual(expense.category.name, WALLET_EXPENSE_CATEGORY_NAME)
-        self.assertEqual(expense.reference, "DFW-ABCDEFGH23")
+        self.assertEqual(MoneyTransfer.objects.count(), 1, "three reads, one booking")
+        self.assertFalse(Expense.objects.exists(), "money moved, nothing spent")
+        transfer = MoneyTransfer.objects.select_related("to_account").get()
+        self.assertEqual(topup["transfer_id"], transfer.pk)
+        self.assertIsNone(topup["expense_id"])
+        self.assertEqual(transfer.amount, Decimal("100.00"))
+        self.assertEqual(transfer.from_account, bank())
+        self.assertEqual(transfer.to_account.name, WALLET_ACCOUNT_NAME)
+        self.assertEqual(transfer.to_account.kind, MoneyAccount.Kind.PROVIDER)
+        self.assertFalse(transfer.to_account.is_default)
+        self.assertEqual(transfer.reason, "شحن محفظة دفتر — بطاقة مصرفية محلية")
+        self.assertEqual(transfer.reference, "DFW-ABCDEFGH23")
         self.assertEqual(
-            expense.spent_at,
+            transfer.moved_at,
             timezone.localdate(datetime(2026, 9, 30, 8, 3, tzinfo=dt_timezone.utc)),
         )
-        self.assertIn("pay-1", expense.notes)
-        self.assertNotIn("تجريبي", expense.description)
-        self.assertEqual(WalletSettings.load().expense_category, expense.category)
+        self.assertEqual(wallet_account(), transfer.to_account)
+        self.assertEqual(resp.data["settings"]["money_account"]["name"], WALLET_ACCOUNT_NAME)
 
     def test_a_topup_first_seen_already_paid_is_not_back_dated_into_the_books(self):
         # After a factory reset (or an old backup restored) the shop's copy is
@@ -199,9 +217,9 @@ class WalletApiTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.content)
         topup = resp.data["recent_topups"][0]
         self.assertEqual(topup["status"], "paid")
-        self.assertIsNone(topup["expense_id"])
+        self.assertIsNone(topup["transfer_id"])
         self.assertFalse(topup["record_as_expense"])
-        self.assertFalse(Expense.objects.exists())
+        self.assertFalse(MoneyTransfer.objects.exists())
 
     def test_a_topup_first_seen_while_open_follows_the_setting(self):
         # Pending when first seen: the payment, if it comes, is new money
@@ -211,7 +229,7 @@ class WalletApiTests(TestCase):
         self.assertTrue(WalletTopUp.objects.get(relay_id="topup-1").record_as_expense)
         self.relay.get_wallet_topup.return_value = {"top_up": paid()}
         resp = self.api.get("/api/wallet/topups/topup-1/")
-        self.assertIsNotNone(resp.data["top_up"]["expense_id"])
+        self.assertIsNotNone(resp.data["top_up"]["transfer_id"])
 
     def test_an_unreachable_relay_still_shows_the_shops_own_history(self):
         WalletTopUp.objects.create(
@@ -282,7 +300,7 @@ class WalletApiTests(TestCase):
         mirrored = WalletTopUp.objects.get(relay_id="topup-1")
         self.assertEqual(mirrored.requested_by, self.manager)
         self.assertEqual(mirrored.status, "pending")
-        self.assertFalse(Expense.objects.exists(), "nothing is booked before it is paid")
+        self.assertFalse(MoneyTransfer.objects.exists(), "nothing is booked before it is paid")
 
     def test_an_app_from_before_dafa_still_tops_up_with_a_card(self):
         # It sends Plutu's method name; the relay serves it as Dafa's bank cards.
@@ -328,11 +346,10 @@ class WalletApiTests(TestCase):
         call = self.relay.confirm_wallet_topup.call_args.kwargs
         self.assertEqual((call["topup_id"], call["otp"]), ("topup-1", "111111"))
         self.assertGreater(call["timeout"], 40, "a confirm may be followed by reading the payment back")
-        expense = Expense.objects.get()
-        self.assertEqual(resp.data["top_up"]["expense_id"], expense.pk)
-        self.assertEqual(expense.payment_method, Expense.PaymentMethod.TRANSFER)
-        self.assertEqual(expense.description, "شحن محفظة دفتر — سداد")
-        self.assertIn("091•••678", expense.notes)
+        transfer = MoneyTransfer.objects.get()
+        self.assertEqual(resp.data["top_up"]["transfer_id"], transfer.pk)
+        self.assertEqual(transfer.reason, "شحن محفظة دفتر — سداد")
+        self.assertFalse(Expense.objects.exists())
 
     def test_a_wrong_code_reaches_the_app_with_what_is_left(self):
         self.start_sadad()
@@ -410,11 +427,12 @@ class WalletApiTests(TestCase):
         self.assertFalse(WalletSettings.load().record_topups_as_expenses)
         topup = WalletTopUp.objects.get(relay_id="topup-1")
         self.assertFalse(topup.record_as_expense)
-        # Paid later: the owner said no, so no expense.
+        # Paid later: the owner said no, so nothing is booked anywhere.
         self.relay.get_wallet_topup.return_value = {"top_up": paid()}
         resp = self.api.get("/api/wallet/topups/topup-1/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIsNone(resp.data["top_up"]["expense_id"])
+        self.assertIsNone(resp.data["top_up"]["transfer_id"])
+        self.assertFalse(MoneyTransfer.objects.exists())
         self.assertFalse(Expense.objects.exists())
 
     def test_flipping_the_setting_later_does_not_change_a_topup_under_way(self):
@@ -423,8 +441,8 @@ class WalletApiTests(TestCase):
         self.api.patch("/api/wallet/settings/", {"record_topups_as_expenses": False}, format="json")
         self.relay.get_wallet_topup.return_value = {"top_up": paid()}
         resp = self.api.get("/api/wallet/topups/topup-1/")
-        self.assertIsNotNone(resp.data["top_up"]["expense_id"])
-        self.assertEqual(Expense.objects.count(), 1)
+        self.assertIsNotNone(resp.data["top_up"]["transfer_id"])
+        self.assertEqual(MoneyTransfer.objects.count(), 1)
 
     def test_relay_refusals_reach_the_app_as_codes(self):
         self.relay.create_wallet_topup.side_effect = relay_refusal(
@@ -467,33 +485,47 @@ class WalletApiTests(TestCase):
         first = self.api.get("/api/wallet/topups/topup-1/")
         second = self.api.get("/api/wallet/topups/topup-1/")
         self.assertEqual(first.status_code, 200, first.content)
-        self.assertEqual(first.data["top_up"]["expense_id"], second.data["top_up"]["expense_id"])
-        self.assertEqual(Expense.objects.count(), 1)
+        self.assertEqual(first.data["top_up"]["transfer_id"], second.data["top_up"]["transfer_id"])
+        self.assertEqual(MoneyTransfer.objects.count(), 1)
 
-    def test_a_cancelled_expense_is_not_booked_again(self):
+    def test_a_deleted_booking_is_not_booked_again(self):
         self.start()
         self.relay.get_wallet_topup.return_value = {"top_up": paid()}
         self.api.get("/api/wallet/topups/topup-1/")
-        Expense.objects.all().delete()
+        MoneyTransfer.objects.all().delete()
         self.api.get("/api/wallet/topups/topup-1/")
-        self.assertFalse(Expense.objects.exists())
+        self.assertFalse(MoneyTransfer.objects.exists())
 
     def test_a_test_payment_says_so_in_the_books(self):
         self.start(test_mode=True)
         self.relay.get_wallet_topup.return_value = {"top_up": paid(test_mode=True)}
         self.api.get("/api/wallet/topups/topup-1/")
-        self.assertIn("تجريبي", Expense.objects.get().description)
+        self.assertIn("تجريبي", MoneyTransfer.objects.get().reason)
 
-    def test_the_owners_category_is_used_when_chosen(self):
+    def test_a_shop_without_a_bank_account_paid_from_outside(self):
+        MoneyAccount.objects.filter(kind=MoneyAccount.Kind.BANK).update(is_active=False)
+        self.start()
+        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
+        self.api.get("/api/wallet/topups/topup-1/")
+        self.assertIsNone(MoneyTransfer.objects.get().from_account)
+
+    def test_the_owners_category_is_kept_for_the_wallets_spending(self):
         category = ExpenseCategory.objects.create(name="اشتراكات")
         resp = self.api.patch("/api/wallet/settings/", {"expense_category": category.pk}, format="json")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["expense_category"]["name"], "اشتراكات")
-        self.start()
-        self.relay.get_wallet_topup.return_value = {"top_up": paid()}
-        self.api.get("/api/wallet/topups/topup-1/")
-        self.assertEqual(Expense.objects.get().category, category)
-        self.assertFalse(ExpenseCategory.objects.filter(name=WALLET_EXPENSE_CATEGORY_NAME).exists())
+        self.assertEqual(WalletSettings.load().expense_category, category)
+
+    def test_a_topup_booked_as_an_expense_before_stays_as_it_was(self):
+        legacy = WalletTopUp.objects.create(
+            relay_id="topup-old", invoice_no="DFW-OLD", method="dafa_sadad",
+            amount=Decimal("40"), status="paid", paid_at=timezone.now(),
+            relay_created_at=timezone.now(), expense_booked_at=timezone.now(),
+        )
+        book_topup(legacy.pk)
+        legacy.refresh_from_db()
+        self.assertIsNone(legacy.transfer)
+        self.assertFalse(MoneyTransfer.objects.exists())
 
     def test_a_payment_dated_in_a_closed_period_is_booked_today(self):
         paid_at = timezone.now() - timedelta(days=40)
@@ -504,9 +536,9 @@ class WalletApiTests(TestCase):
         self.start()
         self.relay.get_wallet_topup.return_value = {"top_up": paid(paid_at=paid_at.isoformat())}
         self.api.get("/api/wallet/topups/topup-1/")
-        expense = Expense.objects.get()
-        self.assertEqual(expense.spent_at, timezone.localdate())
-        self.assertIn("فترة مغلقة", expense.notes)
+        transfer = MoneyTransfer.objects.get()
+        self.assertEqual(transfer.moved_at, timezone.localdate())
+        self.assertIn("فترة مغلقة", transfer.reason)
 
     def test_when_today_is_closed_too_nothing_is_booked_and_the_reason_is_kept(self):
         settings = ShopSettings.load()
@@ -517,7 +549,7 @@ class WalletApiTests(TestCase):
         self.relay.get_wallet_topup.return_value = {"top_up": paid()}
         resp = self.api.get("/api/wallet/topups/topup-1/")
         self.assertEqual(resp.data["top_up"]["expense_error"], "period_locked")
-        self.assertFalse(Expense.objects.exists())
+        self.assertFalse(MoneyTransfer.objects.exists())
 
 
 @override_settings(CACHES=_LOCMEM)
@@ -555,18 +587,18 @@ class WalletSyncTests(TestCase):
         self.assertTrue(result["asked_relay"])
         topup = WalletTopUp.objects.get(relay_id="topup-1")
         self.assertEqual(topup.status, "paid")
-        self.assertIsNotNone(topup.expense)
+        self.assertIsNotNone(topup.transfer)
         # The next sweep finds nothing open and asks nothing.
         self.relay.list_wallet_topups.reset_mock()
         self.assertFalse(sync_topups()["asked_relay"])
 
-    def test_an_owed_expense_is_retried_without_the_relay(self):
+    def test_an_owed_booking_is_retried_without_the_relay(self):
         topup = self._mirror(
             status="paid", paid_at=timezone.now(), expense_error="booking_failed"
         )
         sync_topups()
         topup.refresh_from_db()
-        self.assertIsNotNone(topup.expense)
+        self.assertIsNotNone(topup.transfer)
         self.assertEqual(topup.expense_error, "")
 
     def test_a_relay_outage_is_not_an_error(self):
@@ -575,15 +607,13 @@ class WalletSyncTests(TestCase):
         result = sync_topups()
         self.assertEqual(result["error"], "relay_unreachable")
 
-    def test_a_paid_plutu_topup_from_before_dafa_is_still_booked_as_a_card(self):
+    def test_a_paid_plutu_topup_from_before_dafa_is_still_named_a_card(self):
         topup = self._mirror(method="plutu_localbankcards", status="paid", paid_at=timezone.now())
-        book_topup_expense(topup.pk)
-        expense = Expense.objects.get()
-        self.assertEqual(expense.payment_method, Expense.PaymentMethod.CARD)
-        self.assertEqual(expense.description, "شحن محفظة دفتر — بطاقة مصرفية محلية")
+        book_topup(topup.pk)
+        self.assertEqual(MoneyTransfer.objects.get().reason, "شحن محفظة دفتر — بطاقة مصرفية محلية")
 
     def test_booking_is_idempotent_even_when_called_directly(self):
         topup = self._mirror(status="paid", paid_at=timezone.now())
-        book_topup_expense(topup.pk)
-        book_topup_expense(topup.pk)
-        self.assertEqual(Expense.objects.count(), 1)
+        book_topup(topup.pk)
+        book_topup(topup.pk)
+        self.assertEqual(MoneyTransfer.objects.count(), 1)

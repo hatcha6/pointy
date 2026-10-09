@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/dafa"
 	"pointy/relay/internal/ratelimit"
@@ -133,6 +134,8 @@ type WalletConfig struct {
 	// (control.WalletPlanRemoteAccess, control.WalletPlanAI). A plan missing
 	// here, or without a price, is not sold through the wallet.
 	Plans map[string]WalletPlan
+	// Alerts tells the company's phones about each top-up; nil sends nothing.
+	Alerts *alerts.Ntfy
 }
 
 // TopUpsConfigured reports whether top-ups can run: a Dafa key whose
@@ -264,8 +267,12 @@ func (s HTTPServer) handleWalletShopRoutes(w http.ResponseWriter, r *http.Reques
 		s.handleWalletTopUpsSelf(w, r)
 	case path == "/v1/wallet/topups" && r.Method == http.MethodPost:
 		s.handleWalletTopUpCreate(w, r)
+	case path == "/v1/wallet/topups/bank-transfer" && r.Method == http.MethodPost:
+		s.handleWalletBankTransferCreate(w, r)
 	case path == "/v1/wallet/sms/allocations" && r.Method == http.MethodPost:
 		s.handleWalletSMSAllocate(w, r)
+	case path == "/v1/wallet/vouchers/allocations" && r.Method == http.MethodPost:
+		s.handleWalletVouchersAllocate(w, r)
 	case path == "/v1/wallet/subscriptions" && r.Method == http.MethodPost:
 		s.handleWalletPlanPurchase(w, r)
 	case topUpID != "" && action == "" && r.Method == http.MethodGet:
@@ -304,8 +311,16 @@ func (s HTTPServer) handleWalletAdminRoutes(w http.ResponseWriter, r *http.Reque
 		s.handleWalletAdminPostEntry(w, r)
 	case path == "/v1/wallet/admin/topups" && r.Method == http.MethodGet:
 		s.handleWalletAdminTopUps(w, r)
+	case topUpID != "" && action == "" && r.Method == http.MethodGet:
+		s.handleWalletAdminTopUp(w, r, topUpID)
+	case topUpID != "" && action == "receipt" && r.Method == http.MethodGet:
+		s.handleWalletAdminReceipt(w, r, topUpID)
 	case topUpID != "" && action == "confirm" && r.Method == http.MethodPost:
 		s.handleWalletAdminConfirmTopUp(w, r, topUpID)
+	case topUpID != "" && action == "reject" && r.Method == http.MethodPost:
+		s.handleWalletAdminRejectTopUp(w, r, topUpID)
+	case path == "/v1/wallet/admin/bank-accounts" && (r.Method == http.MethodGet || r.Method == http.MethodPut):
+		s.handleWalletAdminBankAccounts(w, r)
 	case topUpID != "" && action == "check" && r.Method == http.MethodPost:
 		s.handleWalletAdminCheckTopUp(w, r, topUpID)
 	case path == "/v1/wallet/admin/config" && r.Method == http.MethodGet:
@@ -317,8 +332,8 @@ func (s HTTPServer) handleWalletAdminRoutes(w http.ResponseWriter, r *http.Reque
 
 // --- a shop's own wallet ---
 
-// handleWalletSelf serves GET /v1/wallet: the balance, the SMS balance, the
-// plans the wallet pays for, what a top-up may be, and the main wallet's latest
+// handleWalletSelf serves GET /v1/wallet: the balance, the SMS and voucher
+// balances, the plans the wallet pays for, what a top-up may be, and the main wallet's latest
 // movements, in one call so the app's wallet card needs no second round trip.
 func (s HTTPServer) handleWalletSelf(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.requireWalletStore(w)
@@ -340,6 +355,11 @@ func (s HTTPServer) handleWalletSelf(w http.ResponseWriter, r *http.Request) {
 		s.writeWalletInternalError(w, "sms balance read failed", installation.ID, err)
 		return
 	}
+	cards, err := store.GetWalletAccount(ctx, installation.ID, control.WalletAccountVouchers)
+	if err != nil {
+		s.writeWalletInternalError(w, "voucher balance read failed", installation.ID, err)
+		return
+	}
 	topUps, err := store.ListWalletTopUps(ctx, control.WalletTopUpFilter{InstallationID: installation.ID, Limit: walletRecentTopUps})
 	if err != nil {
 		s.writeWalletInternalError(w, "wallet top-up listing failed", installation.ID, err)
@@ -354,13 +374,22 @@ func (s HTTPServer) handleWalletSelf(w http.ResponseWriter, r *http.Request) {
 		s.writeWalletInternalError(w, "wallet ledger listing failed", installation.ID, err)
 		return
 	}
+	options := s.walletTopUpOptions()
+	bankOffer := s.walletBankOffer(ctx, installation.ID, topUps)
+	options["bank_transfer"] = bankOffer
+	if bankOffer["available"] == true {
+		// A bank transfer needs no gateway: the wallet can be filled even
+		// where Dafa is not set up.
+		options["available"] = true
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"balance":        wallet.Balance,
 		"currency":       walletCurrency,
 		"updated_at":     wallet.UpdatedAt,
 		"test_mode":      s.Wallet.TestMode,
-		"topups":         s.walletTopUpOptions(),
+		"topups":         options,
 		"sms":            s.smsWalletPayload(sms.Balance),
+		"vouchers":       s.voucherWalletPayload(cards.Balance),
 		"plans":          s.walletPlansPayload(installation, s.clock().Now()),
 		"recent_topups":  walletTopUpPayloads(topUps),
 		"recent_entries": walletEntryPayloads(entries),
@@ -396,7 +425,7 @@ func (s HTTPServer) walletTopUpOptions() map[string]any {
 }
 
 // handleWalletEntriesSelf serves GET /v1/wallet/entries: one account's
-// statement (?account=main, the default, or sms), newest first, paged by
+// statement (?account=main, the default, sms or vouchers), newest first, paged by
 // ?before=<entry id>.
 func (s HTTPServer) handleWalletEntriesSelf(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.requireWalletStore(w)
@@ -464,7 +493,7 @@ func (s HTTPServer) handleWalletTopUpsSelf(w http.ResponseWriter, r *http.Reques
 	status := strings.ToLower(strings.TrimSpace(query.Get("status")))
 	if status != "" && !control.ValidWalletTopUpStatus(status) {
 		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest,
-			"status must be pending, paid, canceled, failed or expired", nil)
+			"status must be pending, review, paid, rejected, canceled, failed or expired", nil)
 		return
 	}
 	topUps, err := store.ListWalletTopUps(r.Context(), control.WalletTopUpFilter{
@@ -722,7 +751,7 @@ func (s HTTPServer) handleWalletAdminTopUps(w http.ResponseWriter, r *http.Reque
 	status := strings.ToLower(strings.TrimSpace(query.Get("status")))
 	if status != "" && !control.ValidWalletTopUpStatus(status) {
 		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest,
-			"status must be pending, paid, canceled, failed or expired", nil)
+			"status must be pending, review, paid, rejected, canceled, failed or expired", nil)
 		return
 	}
 	topUps, err := store.ListWalletTopUps(r.Context(), control.WalletTopUpFilter{
@@ -746,6 +775,9 @@ type walletAdminConfirmRequest struct {
 	ProviderTransactionID string `json:"provider_transaction_id"`
 	Actor                 string `json:"actor"`
 	Reason                string `json:"reason"`
+	// Amount is what actually arrived, for a bank transfer whose sum differs
+	// from what the shop declared. Empty credits the declared amount.
+	Amount string `json:"amount"`
 }
 
 // handleWalletAdminConfirmTopUp serves POST /v1/wallet/admin/topups/{id}/confirm:
@@ -765,6 +797,11 @@ func (s HTTPServer) handleWalletAdminConfirmTopUp(w http.ResponseWriter, r *http
 	actor := strings.TrimSpace(request.Actor)
 	reason := strings.TrimSpace(request.Reason)
 	transactionID := strings.TrimSpace(request.ProviderTransactionID)
+	if existing, err := store.GetWalletTopUp(r.Context(), id); err == nil &&
+		existing.Method == control.WalletTopUpMethodBankTransfer {
+		s.confirmBankTransfer(w, r, store, existing, request, actor)
+		return
+	}
 	if actor == "" || reason == "" || transactionID == "" {
 		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest,
 			"provider_transaction_id, actor and reason are required: check the gateway's dashboard first", nil)
@@ -840,7 +877,7 @@ func walletAccountParam(w http.ResponseWriter, query url.Values) (string, bool) 
 	}
 	account := control.NormalizeWalletAccount(raw)
 	if !control.ValidWalletAccount(account) {
-		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest, "account must be main or sms", nil)
+		writeWalletError(w, http.StatusBadRequest, walletCodeInvalidRequest, "account must be main, sms or vouchers", nil)
 		return "", false
 	}
 	return account, true
@@ -882,7 +919,19 @@ func walletTopUpPayload(topUp control.WalletTopUp) map[string]any {
 		"paid_at":                 topUp.PaidAt,
 	}
 	method, known := lookupWalletMethod(topUp.Method)
-	if known {
+	if transfer := topUp.Transfer; transfer != nil {
+		payload["kind"] = walletKindBankTransfer
+		payload["transfer"] = map[string]any{
+			"channel":         transfer.Channel,
+			"payer_bank":      transfer.PayerBank,
+			"payer_account":   transfer.PayerAccount,
+			"payer_iban":      transfer.PayerIBAN,
+			"to_account":      transfer.ToAccount,
+			"declared_amount": transfer.DeclaredAmount,
+			"receipt_name":    transfer.Receipt.Name,
+			"receipt_type":    transfer.Receipt.ContentType,
+		}
+	} else if known {
 		payload["kind"] = method.kind()
 	} else if topUp.Method == control.WalletTopUpMethodPlutuLocalBankCards {
 		payload["kind"] = walletKindHostedPage
@@ -946,6 +995,7 @@ func (s HTTPServer) writeWalletInternalError(w http.ResponseWriter, message, ins
 // page, the payer's number, a code or a webhook token.
 func (s HTTPServer) logWalletTopUp(installationID string, topUp control.WalletTopUp, event, detail string) {
 	logWalletTopUpEvent(s.logger(), installationID, topUp, event, detail)
+	alertWalletTopUp(s.Wallet.Alerts, topUp, event, detail)
 }
 
 func logWalletTopUpEvent(logger *slog.Logger, installationID string, topUp control.WalletTopUp, event, detail string) {
